@@ -14,27 +14,23 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.core;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+/**
+ * Base sealed interface for all JavaScript values.
+ * Implements the value representation using sealed interfaces for type safety.
+ */
+public sealed interface JSValue permits
+        JSUndefined, JSNull, JSBoolean, JSNumber, JSString,
+        JSObject, JSSymbol, JSBigInt, JSFunction {
 
-repositories {
-    mavenCentral()
-}
+    /**
+     * Get the type of this value.
+     */
+    JSValueType type();
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
-
-tasks.test {
-    useJUnitPlatform()
+    /**
+     * Convert to Java object representation.
+     */
+    Object toJavaObject();
 }

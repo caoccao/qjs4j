@@ -14,27 +14,31 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.memory;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+/**
+ * Reference counting for deterministic cleanup of external resources.
+ */
+public final class ReferenceCounter {
+    private int refCount;
 
-repositories {
-    mavenCentral()
-}
+    public ReferenceCounter() {
+        this.refCount = 1;
+    }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+    public void addRef() {
+        refCount++;
+    }
 
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
+    public void release() {
+        refCount--;
+    }
 
-tasks.test {
-    useJUnitPlatform()
+    public int getRefCount() {
+        return refCount;
+    }
+
+    public boolean isAlive() {
+        return refCount > 0;
+    }
 }

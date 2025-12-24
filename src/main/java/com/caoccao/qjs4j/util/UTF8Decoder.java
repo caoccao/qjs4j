@@ -14,27 +14,28 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.util;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.StandardCharsets;
 
-repositories {
-    mavenCentral()
-}
+/**
+ * UTF-8 encoder/decoder utilities.
+ */
+public final class UTF8Decoder {
+    private static final CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+    public static String decode(byte[] bytes) {
+        return null;
+    }
 
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
+    public static byte[] encode(String str) {
+        return null;
+    }
 
-tasks.test {
-    useJUnitPlatform()
+    public static int getCodePoint(byte[] bytes, int offset) {
+        return 0;
+    }
 }

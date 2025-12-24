@@ -14,27 +14,19 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.compiler.ast;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
-
-repositories {
-    mavenCentral()
-}
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
-
-tasks.test {
-    useJUnitPlatform()
+/**
+ * Represents a member access expression.
+ */
+public record MemberExpression(
+        Expression object,
+        Expression property,
+        boolean computed,
+        SourceLocation location
+) implements Expression {
+    @Override
+    public SourceLocation getLocation() {
+        return location;
+    }
 }

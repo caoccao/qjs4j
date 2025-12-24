@@ -14,27 +14,25 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.regexp;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+/**
+ * Represents a character class in a regex.
+ */
+public final class CharacterClass {
+    private final boolean inverted;
+    private final int[] ranges;
 
-repositories {
-    mavenCentral()
-}
+    public CharacterClass(boolean inverted, int[] ranges) {
+        this.inverted = inverted;
+        this.ranges = ranges;
+    }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+    public boolean matches(int codePoint) {
+        return false;
+    }
 
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
-
-tasks.test {
-    useJUnitPlatform()
+    public boolean isInverted() {
+        return inverted;
+    }
 }

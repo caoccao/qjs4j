@@ -14,27 +14,27 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.util;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+/**
+ * Double-to-ASCII converter.
+ * Implements proper JavaScript number-to-string conversion.
+ */
+public final class DtoaConverter {
 
-repositories {
-    mavenCentral()
-}
+    public static String convert(double value) {
+        return null;
+    }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+    public static String convertWithPrecision(double value, int precision) {
+        return null;
+    }
 
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
+    public static String convertExponential(double value, int fractionDigits) {
+        return null;
+    }
 
-tasks.test {
-    useJUnitPlatform()
+    public static String convertFixed(double value, int fractionDigits) {
+        return null;
+    }
 }

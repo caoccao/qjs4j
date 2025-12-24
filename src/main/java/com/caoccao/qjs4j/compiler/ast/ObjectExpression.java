@@ -14,27 +14,28 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.compiler.ast;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+import java.util.List;
 
-repositories {
-    mavenCentral()
-}
+/**
+ * Represents an object literal expression.
+ */
+public record ObjectExpression(
+        List<Property> properties,
+        SourceLocation location
+) implements Expression {
+    @Override
+    public SourceLocation getLocation() {
+        return location;
+    }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
-
-tasks.test {
-    useJUnitPlatform()
+    public record Property(
+            Expression key,
+            Expression value,
+            String kind,
+            boolean computed,
+            boolean shorthand
+    ) {
+    }
 }

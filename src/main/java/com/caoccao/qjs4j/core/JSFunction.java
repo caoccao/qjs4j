@@ -14,27 +14,26 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.core;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+/**
+ * Sealed interface for JavaScript function types.
+ */
+public sealed interface JSFunction extends JSValue
+        permits JSBytecodeFunction, JSNativeFunction, JSBoundFunction {
 
-repositories {
-    mavenCentral()
-}
+    /**
+     * Call this function with the given context, this value, and arguments.
+     */
+    JSValue call(JSContext ctx, JSValue thisArg, JSValue[] args);
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+    /**
+     * Get the function name.
+     */
+    String getName();
 
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
-
-tasks.test {
-    useJUnitPlatform()
+    /**
+     * Get the number of formal parameters.
+     */
+    int getLength();
 }

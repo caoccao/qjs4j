@@ -14,27 +14,27 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.vm;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+import com.caoccao.qjs4j.core.JSContext;
 
-repositories {
-    mavenCentral()
-}
+/**
+ * Represents the current execution context.
+ */
+public final class ExecutionContext {
+    private final JSContext jsContext;
+    private final StackFrame currentFrame;
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+    public ExecutionContext(JSContext jsContext, StackFrame currentFrame) {
+        this.jsContext = jsContext;
+        this.currentFrame = currentFrame;
+    }
 
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
+    public JSContext getJSContext() {
+        return jsContext;
+    }
 
-tasks.test {
-    useJUnitPlatform()
+    public StackFrame getCurrentFrame() {
+        return currentFrame;
+    }
 }

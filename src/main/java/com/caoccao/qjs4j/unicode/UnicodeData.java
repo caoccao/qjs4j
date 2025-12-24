@@ -14,27 +14,30 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.unicode;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+/**
+ * Unicode character property tables and lookups.
+ */
+public final class UnicodeData {
 
-repositories {
-    mavenCentral()
-}
+    public static boolean isWhiteSpace(int codePoint) {
+        return false;
+    }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+    public static boolean isIdentifierStart(int codePoint) {
+        return false;
+    }
 
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
+    public static boolean isIdentifierPart(int codePoint) {
+        return false;
+    }
 
-tasks.test {
-    useJUnitPlatform()
+    public static boolean isLineTerminator(int codePoint) {
+        return false;
+    }
+
+    public static boolean isDigit(int codePoint) {
+        return false;
+    }
 }

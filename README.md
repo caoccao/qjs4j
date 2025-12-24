@@ -1,2 +1,3 @@
 # qjs4j
-Native Java implementation of QuickJS
+
+qjs4j is a native Java implementation of QuickJS.

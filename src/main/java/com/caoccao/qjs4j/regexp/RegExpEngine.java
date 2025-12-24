@@ -14,27 +14,32 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.regexp;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+/**
+ * Regular expression bytecode executor.
+ * Implements ES2020 regex semantics.
+ */
+public final class RegExpEngine {
+    private final RegExpBytecode bytecode;
 
-repositories {
-    mavenCentral()
-}
+    public RegExpEngine(RegExpBytecode bytecode) {
+        this.bytecode = bytecode;
+    }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+    public MatchResult exec(String input, int startIndex) {
+        return null;
+    }
 
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
+    public boolean test(String input) {
+        return false;
+    }
 
-tasks.test {
-    useJUnitPlatform()
+    public record MatchResult(
+            boolean matched,
+            int startIndex,
+            int endIndex,
+            String[] captures
+    ) {
+    }
 }

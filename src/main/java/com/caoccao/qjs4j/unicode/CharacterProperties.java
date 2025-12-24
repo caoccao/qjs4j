@@ -14,27 +14,26 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.unicode;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+/**
+ * Unicode character properties and categories.
+ */
+public final class CharacterProperties {
 
-repositories {
-    mavenCentral()
-}
+    public static int toUpperCase(int codePoint) {
+        return 0;
+    }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+    public static int toLowerCase(int codePoint) {
+        return 0;
+    }
 
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
+    public static int caseFold(int codePoint) {
+        return 0;
+    }
 
-tasks.test {
-    useJUnitPlatform()
+    public static String getCategory(int codePoint) {
+        return null;
+    }
 }

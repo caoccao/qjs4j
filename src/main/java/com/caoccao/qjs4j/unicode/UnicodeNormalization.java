@@ -14,27 +14,26 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.unicode;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+/**
+ * Unicode normalization algorithms (NFC, NFD, NFKC, NFKD).
+ */
+public final class UnicodeNormalization {
 
-repositories {
-    mavenCentral()
-}
+    public enum Form {
+        NFC, NFD, NFKC, NFKD
+    }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+    public static String normalize(String input, Form form) {
+        return null;
+    }
 
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
+    public static String toNFC(String input) {
+        return null;
+    }
 
-tasks.test {
-    useJUnitPlatform()
+    public static String toNFD(String input) {
+        return null;
+    }
 }

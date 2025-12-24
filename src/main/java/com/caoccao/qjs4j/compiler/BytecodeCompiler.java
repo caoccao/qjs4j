@@ -14,27 +14,22 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.compiler;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+import com.caoccao.qjs4j.compiler.ast.ASTNode;
+import com.caoccao.qjs4j.vm.Bytecode;
 
-repositories {
-    mavenCentral()
-}
+/**
+ * Compiles AST into bytecode.
+ */
+public final class BytecodeCompiler {
+    private final BytecodeEmitter emitter;
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+    public BytecodeCompiler() {
+        this.emitter = new BytecodeEmitter();
+    }
 
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
-
-tasks.test {
-    useJUnitPlatform()
+    public Bytecode compile(ASTNode ast) {
+        return null;
+    }
 }

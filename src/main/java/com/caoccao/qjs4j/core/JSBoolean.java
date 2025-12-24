@@ -14,27 +14,26 @@
  * limitations under the License.
  */
 
-plugins {
-    java
-}
+package com.caoccao.qjs4j.core;
 
-group = "com.caoccao.qjs4j"
-version = "1.0-SNAPSHOT"
+/**
+ * Represents a JavaScript boolean value.
+ */
+public record JSBoolean(boolean value) implements JSValue {
+    public static final JSBoolean TRUE = new JSBoolean(true);
+    public static final JSBoolean FALSE = new JSBoolean(false);
 
-repositories {
-    mavenCentral()
-}
+    public static JSBoolean valueOf(boolean value) {
+        return value ? TRUE : FALSE;
+    }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
+    @Override
+    public JSValueType type() {
+        return JSValueType.BOOLEAN;
+    }
 
-dependencies {
-    // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
-}
-
-tasks.test {
-    useJUnitPlatform()
+    @Override
+    public Object toJavaObject() {
+        return value;
+    }
 }
