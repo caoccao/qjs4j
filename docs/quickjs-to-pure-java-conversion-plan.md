@@ -208,7 +208,7 @@ public enum Opcode {
 
 #### 1.1 Unicode Support (Week 1)
 - **Input:** `libunicode.c/h`, `libunicode-table.h`
-- **Output:** `com.quickjs.unicode.*`
+- **Output:** `com.caoccao.qjs4j.unicode.*`
 
 **Tasks:**
 1. Port Unicode character property tables
@@ -237,7 +237,7 @@ public enum Opcode {
 
 #### 1.2 Utilities (Week 1)
 - **Input:** `cutils.c/h`, `dtoa.c/h`
-- **Output:** `com.quickjs.util.*`
+- **Output:** `com.caoccao.qjs4j.util.*`
 
 **Tasks:**
 1. Dynamic buffer implementation
@@ -268,7 +268,7 @@ public enum Opcode {
 
 #### 1.3 Regular Expression Engine (Weeks 2-3)
 - **Input:** `libregexp.c/h`, `libregexp-opcode.h`
-- **Output:** `com.quickjs.regexp.*`
+- **Output:** `com.caoccao.qjs4j.regexp.*`
 
 **Tasks:**
 1. RegExp bytecode compiler
@@ -305,7 +305,7 @@ public enum Opcode {
 
 #### 1.4 Core Value System (Week 4)
 - **Input:** `quickjs.h` (JSValue definitions)
-- **Output:** `com.quickjs.core.JSValue` and subtypes
+- **Output:** `com.caoccao.qjs4j.core.JSValue` and subtypes
 
 **Tasks:**
 1. Define JSValue type hierarchy
@@ -363,7 +363,7 @@ public final class AtomTable {
 
 #### 2.1 Object Representation (Week 5)
 - **Input:** `quickjs.c` (JSObject, JSShape structures)
-- **Output:** `com.quickjs.core.JSObject`
+- **Output:** `com.caoccao.qjs4j.core.JSObject`
 
 **Tasks:**
 1. Shape-based property storage
@@ -520,7 +520,7 @@ public final class JSBigInt implements JSValue {
 
 #### 3.1 Lexer (Weeks 9-10)
 - **Input:** `quickjs.c` (parsing functions)
-- **Output:** `com.quickjs.compiler.Lexer`
+- **Output:** `com.caoccao.qjs4j.compiler.Lexer`
 
 **Tasks:**
 1. Token types enumeration
@@ -575,7 +575,7 @@ public record Token(
 
 #### 3.2 Parser (Weeks 10-12)
 - **Input:** `quickjs.c` (parsing logic)
-- **Output:** `com.quickjs.compiler.Parser`, AST classes
+- **Output:** `com.caoccao.qjs4j.compiler.Parser`, AST classes
 
 **Tasks:**
 1. AST node hierarchy
@@ -629,7 +629,7 @@ public record BinaryExpression(
 
 #### 3.3 Bytecode Compiler (Weeks 12-14)
 - **Input:** `quickjs.c` (bytecode emission)
-- **Output:** `com.quickjs.compiler.BytecodeCompiler`
+- **Output:** `com.caoccao.qjs4j.compiler.BytecodeCompiler`
 
 **Tasks:**
 1. Bytecode emission
@@ -717,7 +717,7 @@ public final class StackFrame {
 
 #### 4.2 Bytecode Interpreter (Weeks 16-18)
 - **Input:** `quickjs.c` (VM execution loop)
-- **Output:** `com.quickjs.vm.VirtualMachine`
+- **Output:** `com.caoccao.qjs4j.vm.VirtualMachine`
 
 **Tasks:**
 1. Main execution loop
@@ -1059,7 +1059,7 @@ public final class EventLoop {
 
 #### 6.3 Standard Library Bindings (Weeks 30-31)
 - **Input:** `quickjs-libc.c`
-- **Output:** `com.quickjs.stdlib.*`
+- **Output:** `com.caoccao.qjs4j.stdlib.*`
 
 **File I/O:**
 ```java
@@ -1157,7 +1157,7 @@ public final class Timers {
 
 #### 7.1 Command-Line Interpreter (Week 33)
 - **Input:** `qjs.c`
-- **Output:** `com.quickjs.cli.QuickJSInterpreter`
+- **Output:** `com.caoccao.qjs4j.cli.QuickJSInterpreter`
 
 ```java
 public final class QuickJSInterpreter {
@@ -1183,7 +1183,7 @@ public final class QuickJSInterpreter {
 
 #### 7.2 REPL (Week 33)
 - **Input:** `repl.js`, `qjs.c`
-- **Output:** `com.quickjs.cli.REPL`
+- **Output:** `com.caoccao.qjs4j.cli.REPL`
 
 ```java
 public final class REPL {
@@ -1217,7 +1217,7 @@ Features:
 
 #### 7.3 Bytecode Compiler Tool (Week 34)
 - **Input:** `qjsc.c`
-- **Output:** `com.quickjs.cli.BytecodeCompiler`
+- **Output:** `com.caoccao.qjs4j.cli.BytecodeCompiler`
 
 ```java
 public final class BytecodeCompilerTool {
@@ -1245,7 +1245,7 @@ public final class BytecodeCompilerTool {
 
 #### 7.4 Test262 Runner (Week 35)
 - **Input:** `run-test262.c`
-- **Output:** `com.quickjs.test.Test262Runner`
+- **Output:** `com.caoccao.qjs4j.test.Test262Runner`
 
 ```java
 public final class Test262Runner {
@@ -1561,10 +1561,10 @@ find src -name "*.java" > sources.txt
 javac -d bin @sources.txt -source 17 -target 17
 
 # Create JAR
-jar cfe quickjs.jar com.quickjs.cli.QuickJSInterpreter -C bin .
+jar cfe quickjs.jar com.caoccao.qjs4j.cli.QuickJSInterpreter -C bin .
 
 # Run tests
-java -cp bin com.quickjs.test.TestRunner
+java -cp bin com.caoccao.qjs4j.test.TestRunner
 ```
 
 ### 5.2 Directory Layout
