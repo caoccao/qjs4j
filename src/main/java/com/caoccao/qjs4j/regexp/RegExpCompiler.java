@@ -89,8 +89,8 @@ public final class RegExpCompiler {
 
     private void compileAlternative(CompileContext ctx) {
         // An alternative is a sequence of terms
-        while (ctx.pos < ctx.pattern.length()) {
-            char ch = ctx.pattern.charAt(ctx.pos);
+        while (ctx.pos < ctx.codePoints.length) {
+            int ch = ctx.codePoints[ctx.pos];
 
             switch (ch) {
                 case '^' -> {
@@ -152,11 +152,11 @@ public final class RegExpCompiler {
     }
 
     private void compileEscape(CompileContext ctx) {
-        if (ctx.pos >= ctx.pattern.length()) {
+        if (ctx.pos >= ctx.codePoints.length) {
             throw new RegExpSyntaxException("Incomplete escape sequence");
         }
 
-        char ch = ctx.pattern.charAt(ctx.pos++);
+        int ch = ctx.codePoints[ctx.pos++];
         switch (ch) {
             case 'n' -> compileLiteralChar(ctx, '\n');
             case 'r' -> compileLiteralChar(ctx, '\r');
@@ -215,7 +215,7 @@ public final class RegExpCompiler {
         ctx.buffer.appendU8(RegExpOpcode.SAVE_END.getCode());
         ctx.buffer.appendU8(groupIndex);
 
-        if (ctx.pos >= ctx.pattern.length() || ctx.pattern.charAt(ctx.pos) != ')') {
+        if (ctx.pos >= ctx.codePoints.length || ctx.codePoints[ctx.pos] != ')') {
             throw new RegExpSyntaxException("Unclosed group");
         }
         ctx.pos++; // Skip ')'
@@ -223,12 +223,14 @@ public final class RegExpCompiler {
 
     private static class CompileContext {
         final String pattern;
+        final int[] codePoints;
         final int flags;
         final DynamicBuffer buffer;
         int pos;
 
         CompileContext(String pattern, int flags, DynamicBuffer buffer) {
             this.pattern = pattern;
+            this.codePoints = pattern.codePoints().toArray();
             this.flags = flags;
             this.buffer = buffer;
             this.pos = 0;

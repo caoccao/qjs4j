@@ -100,6 +100,22 @@ public final class RegExpEngine {
                     pc += 3;
                 }
 
+                case CHAR32 -> {
+                    int ch = readU32(bc, pc + 1);
+                    if (!ctx.matchChar(ch)) {
+                        return false;
+                    }
+                    pc += 5;
+                }
+
+                case CHAR32_I -> {
+                    int ch = readU32(bc, pc + 1);
+                    if (!ctx.matchCharIgnoreCase(ch)) {
+                        return false;
+                    }
+                    pc += 5;
+                }
+
                 case DOT -> {
                     if (!ctx.matchDot()) {
                         return false;
