@@ -45,3 +45,15 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
+
+tasks {
+    withType<JavaCompile> {
+        options.encoding = "UTF-8"
+    }
+    withType<Javadoc> {
+        options.encoding = "UTF-8"
+    }
+    withType<Test> {
+        systemProperty("file.encoding", "UTF-8")
+    }
+}
