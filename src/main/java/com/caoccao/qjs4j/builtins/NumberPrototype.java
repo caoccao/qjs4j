@@ -27,6 +27,7 @@ import java.math.RoundingMode;
  * Based on ES2020 Number.prototype specification.
  */
 public final class NumberPrototype {
+    public static final long MAX_SAFE_INTEGER = 9007199254740991L; // 2^53 - 1
 
     /**
      * Number.prototype.toFixed(fractionDigits)

@@ -69,7 +69,56 @@ public final class ObjectPrototype {
         }
 
         PropertyKey key = PropertyKey.fromValue(args[1]);
-        PropertyDescriptor desc = PropertyDescriptor.defaultData(args[2]);
+
+        // Parse the descriptor object
+        if (!(args[2] instanceof JSObject descObj)) {
+            return ctx.throwError("TypeError", "Property descriptor must be an object");
+        }
+
+        PropertyDescriptor desc = new PropertyDescriptor();
+
+        // Check for value
+        JSValue value = descObj.get("value");
+        if (value != null && !(value instanceof JSUndefined)) {
+            desc.setValue(value);
+        }
+
+        // Check for writable
+        JSValue writable = descObj.get("writable");
+        if (writable != null && !(writable instanceof JSUndefined)) {
+            desc.setWritable(JSTypeChecking.isTruthy(writable));
+        }
+
+        // Check for enumerable
+        JSValue enumerable = descObj.get("enumerable");
+        if (enumerable != null && !(enumerable instanceof JSUndefined)) {
+            desc.setEnumerable(JSTypeChecking.isTruthy(enumerable));
+        }
+
+        // Check for configurable
+        JSValue configurable = descObj.get("configurable");
+        if (configurable != null && !(configurable instanceof JSUndefined)) {
+            desc.setConfigurable(JSTypeChecking.isTruthy(configurable));
+        }
+
+        // Check for getter
+        JSValue getter = descObj.get("get");
+        if (getter != null && !(getter instanceof JSUndefined)) {
+            if (!(getter instanceof JSFunction)) {
+                return ctx.throwError("TypeError", "Getter must be a function");
+            }
+            desc.setGetter((JSFunction) getter);
+        }
+
+        // Check for setter
+        JSValue setter = descObj.get("set");
+        if (setter != null && !(setter instanceof JSUndefined)) {
+            if (!(setter instanceof JSFunction)) {
+                return ctx.throwError("TypeError", "Setter must be a function");
+            }
+            desc.setSetter((JSFunction) setter);
+        }
+
         obj.defineProperty(key, desc);
         return obj;
     }

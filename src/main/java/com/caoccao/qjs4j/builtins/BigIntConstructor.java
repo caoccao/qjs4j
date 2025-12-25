@@ -93,10 +93,11 @@ public final class BigIntConstructor {
             return ctx.throwError("TypeError", "Second argument must be a BigInt");
         }
 
-        int bits = (int) bitsNum.value();
-        if (bits < 0 || bits > 2147483647) {
+        double bitsDouble = bitsNum.value();
+        if (bitsDouble < 0 || bitsDouble > Integer.MAX_VALUE || bitsDouble != Math.floor(bitsDouble)) {
             return ctx.throwError("RangeError", "Invalid bit width");
         }
+        int bits = (int) bitsDouble;
 
         // Simplified implementation
         BigInteger value = bigInt.getValue();
@@ -133,10 +134,11 @@ public final class BigIntConstructor {
             return ctx.throwError("TypeError", "Second argument must be a BigInt");
         }
 
-        int bits = (int) bitsNum.value();
-        if (bits < 0 || bits > 2147483647) {
+        double bitsDouble = bitsNum.value();
+        if (bitsDouble < 0 || bitsDouble > Integer.MAX_VALUE || bitsDouble != Math.floor(bitsDouble)) {
             return ctx.throwError("RangeError", "Invalid bit width");
         }
+        int bits = (int) bitsDouble;
 
         // Simplified implementation
         BigInteger value = bigInt.getValue();

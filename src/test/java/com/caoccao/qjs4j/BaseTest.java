@@ -24,6 +24,24 @@ public abstract class BaseTest {
         }
     }
 
+    protected void assertRangeError(JSValue value) {
+        if (value instanceof JSObject jsObject) {
+            if (jsObject.get("name") instanceof JSString name && jsObject.get("message") instanceof JSString message) {
+                assertEquals("RangeError", name.getValue());
+                assertNotNull(message.getValue());
+            }
+        }
+    }
+
+    protected void assertSyntaxError(JSValue value) {
+        if (value instanceof JSObject jsObject) {
+            if (jsObject.get("name") instanceof JSString name && jsObject.get("message") instanceof JSString message) {
+                assertEquals("SyntaxError", name.getValue());
+                assertNotNull(message.getValue());
+            }
+        }
+    }
+
     @BeforeEach
     public void setUp() {
         ctx = new JSContext(new JSRuntime());
