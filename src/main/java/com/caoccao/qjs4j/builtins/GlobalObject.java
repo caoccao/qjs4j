@@ -58,6 +58,202 @@ public final class GlobalObject {
 
         // Global this reference
         global.set("globalThis", global);
+
+        // Built-in constructors and their prototypes
+        initializeArrayConstructor(ctx, global);
+        initializeStringConstructor(ctx, global);
+        initializeNumberConstructor(ctx, global);
+        initializeFunctionConstructor(ctx, global);
+        initializeMathObject(ctx, global);
+        initializeJSONObject(ctx, global);
+    }
+
+    /**
+     * Initialize Array constructor and prototype.
+     */
+    private static void initializeArrayConstructor(JSContext ctx, JSObject global) {
+        // Create Array.prototype
+        JSObject arrayPrototype = new JSObject();
+        arrayPrototype.set("push", createNativeFunction(ctx, "push", ArrayPrototype::push, 1));
+        arrayPrototype.set("pop", createNativeFunction(ctx, "pop", ArrayPrototype::pop, 0));
+        arrayPrototype.set("shift", createNativeFunction(ctx, "shift", ArrayPrototype::shift, 0));
+        arrayPrototype.set("unshift", createNativeFunction(ctx, "unshift", ArrayPrototype::unshift, 1));
+        arrayPrototype.set("slice", createNativeFunction(ctx, "slice", ArrayPrototype::slice, 2));
+        arrayPrototype.set("splice", createNativeFunction(ctx, "splice", ArrayPrototype::splice, 2));
+        arrayPrototype.set("concat", createNativeFunction(ctx, "concat", ArrayPrototype::concat, 1));
+        arrayPrototype.set("join", createNativeFunction(ctx, "join", ArrayPrototype::join, 1));
+        arrayPrototype.set("reverse", createNativeFunction(ctx, "reverse", ArrayPrototype::reverse, 0));
+        arrayPrototype.set("sort", createNativeFunction(ctx, "sort", ArrayPrototype::sort, 1));
+        arrayPrototype.set("indexOf", createNativeFunction(ctx, "indexOf", ArrayPrototype::indexOf, 1));
+        arrayPrototype.set("lastIndexOf", createNativeFunction(ctx, "lastIndexOf", ArrayPrototype::lastIndexOf, 1));
+        arrayPrototype.set("includes", createNativeFunction(ctx, "includes", ArrayPrototype::includes, 1));
+        arrayPrototype.set("map", createNativeFunction(ctx, "map", ArrayPrototype::map, 1));
+        arrayPrototype.set("filter", createNativeFunction(ctx, "filter", ArrayPrototype::filter, 1));
+        arrayPrototype.set("reduce", createNativeFunction(ctx, "reduce", ArrayPrototype::reduce, 1));
+        arrayPrototype.set("reduceRight", createNativeFunction(ctx, "reduceRight", ArrayPrototype::reduceRight, 1));
+        arrayPrototype.set("forEach", createNativeFunction(ctx, "forEach", ArrayPrototype::forEach, 1));
+        arrayPrototype.set("find", createNativeFunction(ctx, "find", ArrayPrototype::find, 1));
+        arrayPrototype.set("findIndex", createNativeFunction(ctx, "findIndex", ArrayPrototype::findIndex, 1));
+        arrayPrototype.set("every", createNativeFunction(ctx, "every", ArrayPrototype::every, 1));
+        arrayPrototype.set("some", createNativeFunction(ctx, "some", ArrayPrototype::some, 1));
+        arrayPrototype.set("flat", createNativeFunction(ctx, "flat", ArrayPrototype::flat, 0));
+        arrayPrototype.set("toString", createNativeFunction(ctx, "toString", ArrayPrototype::toString, 0));
+
+        // For now, Array constructor is a placeholder
+        JSObject arrayConstructor = new JSObject();
+        arrayConstructor.set("prototype", arrayPrototype);
+
+        global.set("Array", arrayConstructor);
+    }
+
+    /**
+     * Initialize String constructor and prototype.
+     */
+    private static void initializeStringConstructor(JSContext ctx, JSObject global) {
+        // Create String.prototype
+        JSObject stringPrototype = new JSObject();
+        stringPrototype.set("charAt", createNativeFunction(ctx, "charAt", StringPrototype::charAt, 1));
+        stringPrototype.set("charCodeAt", createNativeFunction(ctx, "charCodeAt", StringPrototype::charCodeAt, 1));
+        stringPrototype.set("codePointAt", createNativeFunction(ctx, "codePointAt", StringPrototype::codePointAt, 1));
+        stringPrototype.set("concat", createNativeFunction(ctx, "concat", StringPrototype::concat, 1));
+        stringPrototype.set("endsWith", createNativeFunction(ctx, "endsWith", StringPrototype::endsWith, 1));
+        stringPrototype.set("startsWith", createNativeFunction(ctx, "startsWith", StringPrototype::startsWith, 1));
+        stringPrototype.set("includes", createNativeFunction(ctx, "includes", StringPrototype::includes, 1));
+        stringPrototype.set("indexOf", createNativeFunction(ctx, "indexOf", StringPrototype::indexOf, 1));
+        stringPrototype.set("lastIndexOf", createNativeFunction(ctx, "lastIndexOf", StringPrototype::lastIndexOf, 1));
+        stringPrototype.set("padEnd", createNativeFunction(ctx, "padEnd", StringPrototype::padEnd, 1));
+        stringPrototype.set("padStart", createNativeFunction(ctx, "padStart", StringPrototype::padStart, 1));
+        stringPrototype.set("repeat", createNativeFunction(ctx, "repeat", StringPrototype::repeat, 1));
+        stringPrototype.set("replace", createNativeFunction(ctx, "replace", StringPrototype::replace, 2));
+        stringPrototype.set("replaceAll", createNativeFunction(ctx, "replaceAll", StringPrototype::replaceAll, 2));
+        stringPrototype.set("slice", createNativeFunction(ctx, "slice", StringPrototype::slice, 2));
+        stringPrototype.set("split", createNativeFunction(ctx, "split", StringPrototype::split, 2));
+        stringPrototype.set("substring", createNativeFunction(ctx, "substring", StringPrototype::substring, 2));
+        stringPrototype.set("substr", createNativeFunction(ctx, "substr", StringPrototype::substr, 2));
+        stringPrototype.set("toLowerCase", createNativeFunction(ctx, "toLowerCase", StringPrototype::toLowerCase, 0));
+        stringPrototype.set("toUpperCase", createNativeFunction(ctx, "toUpperCase", StringPrototype::toUpperCase, 0));
+        stringPrototype.set("trim", createNativeFunction(ctx, "trim", StringPrototype::trim, 0));
+        stringPrototype.set("trimStart", createNativeFunction(ctx, "trimStart", StringPrototype::trimStart, 0));
+        stringPrototype.set("trimEnd", createNativeFunction(ctx, "trimEnd", StringPrototype::trimEnd, 0));
+        stringPrototype.set("toString", createNativeFunction(ctx, "toString", StringPrototype::toStringMethod, 0));
+        stringPrototype.set("valueOf", createNativeFunction(ctx, "valueOf", StringPrototype::valueOf, 0));
+
+        // String constructor is a placeholder
+        JSObject stringConstructor = new JSObject();
+        stringConstructor.set("prototype", stringPrototype);
+
+        global.set("String", stringConstructor);
+    }
+
+    /**
+     * Initialize Number constructor and prototype.
+     */
+    private static void initializeNumberConstructor(JSContext ctx, JSObject global) {
+        // Create Number.prototype
+        JSObject numberPrototype = new JSObject();
+        numberPrototype.set("toFixed", createNativeFunction(ctx, "toFixed", NumberPrototype::toFixed, 1));
+        numberPrototype.set("toExponential", createNativeFunction(ctx, "toExponential", NumberPrototype::toExponential, 1));
+        numberPrototype.set("toPrecision", createNativeFunction(ctx, "toPrecision", NumberPrototype::toPrecision, 1));
+        numberPrototype.set("toString", createNativeFunction(ctx, "toString", NumberPrototype::toString, 1));
+        numberPrototype.set("toLocaleString", createNativeFunction(ctx, "toLocaleString", NumberPrototype::toLocaleString, 0));
+        numberPrototype.set("valueOf", createNativeFunction(ctx, "valueOf", NumberPrototype::valueOf, 0));
+
+        // Number constructor with static methods
+        JSObject numberConstructor = new JSObject();
+        numberConstructor.set("prototype", numberPrototype);
+        numberConstructor.set("isNaN", createNativeFunction(ctx, "isNaN", NumberPrototype::isNaN, 1));
+        numberConstructor.set("isFinite", createNativeFunction(ctx, "isFinite", NumberPrototype::isFinite, 1));
+        numberConstructor.set("isInteger", createNativeFunction(ctx, "isInteger", NumberPrototype::isInteger, 1));
+        numberConstructor.set("isSafeInteger", createNativeFunction(ctx, "isSafeInteger", NumberPrototype::isSafeInteger, 1));
+        numberConstructor.set("parseFloat", createNativeFunction(ctx, "parseFloat", NumberPrototype::parseFloat, 1));
+        numberConstructor.set("parseInt", createNativeFunction(ctx, "parseInt", NumberPrototype::parseInt, 2));
+
+        global.set("Number", numberConstructor);
+    }
+
+    /**
+     * Initialize Function constructor and prototype.
+     */
+    private static void initializeFunctionConstructor(JSContext ctx, JSObject global) {
+        // Create Function.prototype
+        JSObject functionPrototype = new JSObject();
+        functionPrototype.set("call", createNativeFunction(ctx, "call", FunctionPrototype::call, 1));
+        functionPrototype.set("apply", createNativeFunction(ctx, "apply", FunctionPrototype::apply, 2));
+        functionPrototype.set("bind", createNativeFunction(ctx, "bind", FunctionPrototype::bind, 1));
+        functionPrototype.set("toString", createNativeFunction(ctx, "toString", FunctionPrototype::toStringMethod, 0));
+
+        // Function constructor is a placeholder
+        JSObject functionConstructor = new JSObject();
+        functionConstructor.set("prototype", functionPrototype);
+
+        global.set("Function", functionConstructor);
+    }
+
+    /**
+     * Initialize Math object.
+     */
+    private static void initializeMathObject(JSContext ctx, JSObject global) {
+        JSObject math = new JSObject();
+
+        // Math constants
+        math.set("E", new JSNumber(MathObject.E));
+        math.set("LN10", new JSNumber(MathObject.LN10));
+        math.set("LN2", new JSNumber(MathObject.LN2));
+        math.set("LOG10E", new JSNumber(MathObject.LOG10E));
+        math.set("LOG2E", new JSNumber(MathObject.LOG2E));
+        math.set("PI", new JSNumber(MathObject.PI));
+        math.set("SQRT1_2", new JSNumber(MathObject.SQRT1_2));
+        math.set("SQRT2", new JSNumber(MathObject.SQRT2));
+
+        // Math methods
+        math.set("abs", createNativeFunction(ctx, "abs", MathObject::abs, 1));
+        math.set("acos", createNativeFunction(ctx, "acos", MathObject::acos, 1));
+        math.set("acosh", createNativeFunction(ctx, "acosh", MathObject::acosh, 1));
+        math.set("asin", createNativeFunction(ctx, "asin", MathObject::asin, 1));
+        math.set("asinh", createNativeFunction(ctx, "asinh", MathObject::asinh, 1));
+        math.set("atan", createNativeFunction(ctx, "atan", MathObject::atan, 1));
+        math.set("atanh", createNativeFunction(ctx, "atanh", MathObject::atanh, 1));
+        math.set("atan2", createNativeFunction(ctx, "atan2", MathObject::atan2, 2));
+        math.set("cbrt", createNativeFunction(ctx, "cbrt", MathObject::cbrt, 1));
+        math.set("ceil", createNativeFunction(ctx, "ceil", MathObject::ceil, 1));
+        math.set("clz32", createNativeFunction(ctx, "clz32", MathObject::clz32, 1));
+        math.set("cos", createNativeFunction(ctx, "cos", MathObject::cos, 1));
+        math.set("cosh", createNativeFunction(ctx, "cosh", MathObject::cosh, 1));
+        math.set("exp", createNativeFunction(ctx, "exp", MathObject::exp, 1));
+        math.set("expm1", createNativeFunction(ctx, "expm1", MathObject::expm1, 1));
+        math.set("floor", createNativeFunction(ctx, "floor", MathObject::floor, 1));
+        math.set("fround", createNativeFunction(ctx, "fround", MathObject::fround, 1));
+        math.set("hypot", createNativeFunction(ctx, "hypot", MathObject::hypot, 0));
+        math.set("imul", createNativeFunction(ctx, "imul", MathObject::imul, 2));
+        math.set("log", createNativeFunction(ctx, "log", MathObject::log, 1));
+        math.set("log1p", createNativeFunction(ctx, "log1p", MathObject::log1p, 1));
+        math.set("log10", createNativeFunction(ctx, "log10", MathObject::log10, 1));
+        math.set("log2", createNativeFunction(ctx, "log2", MathObject::log2, 1));
+        math.set("max", createNativeFunction(ctx, "max", MathObject::max, 2));
+        math.set("min", createNativeFunction(ctx, "min", MathObject::min, 2));
+        math.set("pow", createNativeFunction(ctx, "pow", MathObject::pow, 2));
+        math.set("random", createNativeFunction(ctx, "random", MathObject::random, 0));
+        math.set("round", createNativeFunction(ctx, "round", MathObject::round, 1));
+        math.set("sign", createNativeFunction(ctx, "sign", MathObject::sign, 1));
+        math.set("sin", createNativeFunction(ctx, "sin", MathObject::sin, 1));
+        math.set("sinh", createNativeFunction(ctx, "sinh", MathObject::sinh, 1));
+        math.set("sqrt", createNativeFunction(ctx, "sqrt", MathObject::sqrt, 1));
+        math.set("tan", createNativeFunction(ctx, "tan", MathObject::tan, 1));
+        math.set("tanh", createNativeFunction(ctx, "tanh", MathObject::tanh, 1));
+        math.set("trunc", createNativeFunction(ctx, "trunc", MathObject::trunc, 1));
+
+        global.set("Math", math);
+    }
+
+    /**
+     * Initialize JSON object.
+     */
+    private static void initializeJSONObject(JSContext ctx, JSObject global) {
+        JSObject json = new JSObject();
+        json.set("parse", createNativeFunction(ctx, "parse", JSONObject::parse, 1));
+        json.set("stringify", createNativeFunction(ctx, "stringify", JSONObject::stringify, 1));
+
+        global.set("JSON", json);
     }
 
     /**

@@ -125,14 +125,18 @@ public final class JSContext {
         }
 
         try {
-            // In full implementation:
-            // 1. Lexer: tokenize the source
-            // 2. Parser: build AST
-            // 3. Compiler: generate bytecode
-            // 4. VM: execute bytecode
-            //
-            // For now, return undefined as placeholder
-            return JSUndefined.INSTANCE;
+            // Phase 1-3: Lexer → Parser → Compiler (compile to bytecode)
+            JSBytecodeFunction func = com.caoccao.qjs4j.compiler.Compiler.compile(code, filename);
+
+            // Phase 4: Execute bytecode in the virtual machine
+            com.caoccao.qjs4j.vm.VirtualMachine vm = new com.caoccao.qjs4j.vm.VirtualMachine(this);
+            JSValue result = vm.execute(func, globalObject, new JSValue[0]);
+
+            return result != null ? result : JSUndefined.INSTANCE;
+        } catch (com.caoccao.qjs4j.compiler.Compiler.CompilerException e) {
+            return throwError("SyntaxError", e.getMessage());
+        } catch (Exception e) {
+            return throwError("Error", "Execution error: " + e.getMessage());
         } finally {
             popStackFrame();
         }
