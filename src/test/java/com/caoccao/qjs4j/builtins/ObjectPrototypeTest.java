@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Unit tests for Object constructor and methods.
  */
-public class ObjectTest extends BaseTest {
+public class ObjectPrototypeTest extends BaseTest {
     @Test
     public void testObjectKeys() {
         JSValue result = ctx.eval("var obj = {a: 1, b: 2, c: 3}; Object.keys(obj)");
