@@ -27,9 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for ArrayPrototype methods.
  */
 public class ArrayPrototypeTest extends BaseTest {
-
     private JSArray arr;
-    private JSContext ctx;
 
     // Helper method to create a simple test function
     private JSFunction createTestFunction(java.util.function.Function<JSValue[], JSValue> impl) {
@@ -37,9 +35,9 @@ public class ArrayPrototypeTest extends BaseTest {
     }
 
     @BeforeEach
+    @Override
     public void setUp() {
-        JSRuntime runtime = new JSRuntime();
-        ctx = new JSContext(runtime);
+        super.setUp();
         arr = new JSArray();
     }
 

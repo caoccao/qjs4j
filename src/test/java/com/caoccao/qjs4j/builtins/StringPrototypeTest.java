@@ -28,17 +28,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Unit tests for StringPrototype methods.
  */
 public class StringPrototypeTest extends BaseTest {
-
-    private JSContext ctx;
-    private JSString str;
-
-    @BeforeEach
-    public void setUp() {
-        JSRuntime runtime = new JSRuntime();
-        ctx = new JSContext(runtime);
-        str = new JSString("hello world");
-    }
-
     @Test
     public void testCharAt() {
         // Normal case

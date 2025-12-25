@@ -63,6 +63,8 @@ public final class GlobalObject {
         global.set("globalThis", global);
 
         // Built-in constructors and their prototypes
+        initializeObjectConstructor(ctx, global);
+        initializeBooleanConstructor(ctx, global);
         initializeArrayConstructor(ctx, global);
         initializeStringConstructor(ctx, global);
         initializeNumberConstructor(ctx, global);
@@ -72,6 +74,51 @@ public final class GlobalObject {
 
         // Error constructors
         initializeErrorConstructors(ctx, global);
+    }
+
+    /**
+     * Initialize Object constructor and static methods.
+     */
+    private static void initializeObjectConstructor(JSContext ctx, JSObject global) {
+        // Create Object.prototype
+        JSObject objectPrototype = new JSObject();
+        objectPrototype.set("hasOwnProperty", createNativeFunction(ctx, "hasOwnProperty", ObjectConstructor::hasOwnProperty, 1));
+        objectPrototype.set("toString", createNativeFunction(ctx, "toString", ObjectConstructor::hasOwnProperty, 0)); // TODO: implement proper toString
+
+        // Create Object constructor
+        JSObject objectConstructor = new JSObject();
+        objectConstructor.set("prototype", objectPrototype);
+
+        // Object static methods
+        objectConstructor.set("keys", createNativeFunction(ctx, "keys", ObjectConstructor::keys, 1));
+        objectConstructor.set("values", createNativeFunction(ctx, "values", ObjectConstructor::values, 1));
+        objectConstructor.set("entries", createNativeFunction(ctx, "entries", ObjectConstructor::entries, 1));
+        objectConstructor.set("assign", createNativeFunction(ctx, "assign", ObjectConstructor::assign, 2));
+        objectConstructor.set("create", createNativeFunction(ctx, "create", ObjectConstructor::create, 2));
+        objectConstructor.set("getPrototypeOf", createNativeFunction(ctx, "getPrototypeOf", ObjectConstructor::getPrototypeOf, 1));
+        objectConstructor.set("setPrototypeOf", createNativeFunction(ctx, "setPrototypeOf", ObjectConstructor::setPrototypeOf, 2));
+        objectConstructor.set("freeze", createNativeFunction(ctx, "freeze", ObjectConstructor::freeze, 1));
+        objectConstructor.set("seal", createNativeFunction(ctx, "seal", ObjectConstructor::seal, 1));
+        objectConstructor.set("isFrozen", createNativeFunction(ctx, "isFrozen", ObjectConstructor::isFrozen, 1));
+        objectConstructor.set("isSealed", createNativeFunction(ctx, "isSealed", ObjectConstructor::isSealed, 1));
+
+        global.set("Object", objectConstructor);
+    }
+
+    /**
+     * Initialize Boolean constructor and prototype.
+     */
+    private static void initializeBooleanConstructor(JSContext ctx, JSObject global) {
+        // Create Boolean.prototype
+        JSObject booleanPrototype = new JSObject();
+        booleanPrototype.set("toString", createNativeFunction(ctx, "toString", BooleanPrototype::toString, 0));
+        booleanPrototype.set("valueOf", createNativeFunction(ctx, "valueOf", BooleanPrototype::valueOf, 0));
+
+        // Create Boolean constructor (placeholder)
+        JSObject booleanConstructor = new JSObject();
+        booleanConstructor.set("prototype", booleanPrototype);
+
+        global.set("Boolean", booleanConstructor);
     }
 
     /**
@@ -105,9 +152,14 @@ public final class GlobalObject {
         arrayPrototype.set("flat", createNativeFunction(ctx, "flat", ArrayPrototype::flat, 0));
         arrayPrototype.set("toString", createNativeFunction(ctx, "toString", ArrayPrototype::toString, 0));
 
-        // For now, Array constructor is a placeholder
+        // Create Array constructor with static methods
         JSObject arrayConstructor = new JSObject();
         arrayConstructor.set("prototype", arrayPrototype);
+
+        // Array static methods
+        arrayConstructor.set("isArray", createNativeFunction(ctx, "isArray", ArrayConstructor::isArray, 1));
+        arrayConstructor.set("of", createNativeFunction(ctx, "of", ArrayConstructor::of, 0));
+        arrayConstructor.set("from", createNativeFunction(ctx, "from", ArrayConstructor::from, 1));
 
         global.set("Array", arrayConstructor);
     }

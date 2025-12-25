@@ -1,13 +1,15 @@
 package com.caoccao.qjs4j;
 
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSObject;
-import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public abstract class BaseTest {
+    protected JSContext ctx;
+    protected JSString str;
+
     protected void assertPendingException(JSContext ctx) {
         assertTrue(ctx.hasPendingException());
         ctx.clearPendingException();
@@ -20,5 +22,17 @@ public abstract class BaseTest {
                 assertNotNull(message.getValue());
             }
         }
+    }
+
+    @BeforeEach
+    public void setUp() {
+        ctx = new JSContext(new JSRuntime());
+        str = new JSString("hello world");
+    }
+
+    @AfterEach
+    public void tearDown() {
+        ctx.getRuntime().gc();
+        ctx.close();
     }
 }
