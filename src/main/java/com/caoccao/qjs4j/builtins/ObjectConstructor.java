@@ -38,8 +38,14 @@ public final class ObjectConstructor {
         }
 
         JSValue arg = args[0];
+
+        // Null and undefined throw TypeError
+        if (arg instanceof JSNull || arg instanceof JSUndefined) {
+            return ctx.throwError("TypeError", "Cannot convert undefined or null to object");
+        }
+
         if (!(arg instanceof JSObject obj)) {
-            // Primitive values are coerced to objects
+            // Other primitive values are coerced to objects (return empty array)
             return new JSArray();
         }
 
@@ -66,6 +72,12 @@ public final class ObjectConstructor {
         }
 
         JSValue arg = args[0];
+
+        // Null and undefined throw TypeError
+        if (arg instanceof JSNull || arg instanceof JSUndefined) {
+            return ctx.throwError("TypeError", "Cannot convert undefined or null to object");
+        }
+
         if (!(arg instanceof JSObject obj)) {
             return new JSArray();
         }
@@ -94,6 +106,12 @@ public final class ObjectConstructor {
         }
 
         JSValue arg = args[0];
+
+        // Null and undefined throw TypeError
+        if (arg instanceof JSNull || arg instanceof JSUndefined) {
+            return ctx.throwError("TypeError", "Cannot convert undefined or null to object");
+        }
+
         if (!(arg instanceof JSObject obj)) {
             return new JSArray();
         }
@@ -231,16 +249,15 @@ public final class ObjectConstructor {
      */
     public static JSValue freeze(JSContext ctx, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return JSUndefined.INSTANCE;
+            return ctx.throwError("TypeError", "Object.freeze called on non-object");
         }
 
         JSValue arg = args[0];
-        if (!(arg instanceof JSObject)) {
-            return arg;
+        if (!(arg instanceof JSObject obj)) {
+            return arg; // Primitives are returned as-is
         }
 
-        // TODO: Implement actual freezing mechanism
-        // For now, just return the object
+        obj.freeze();
         return arg;
     }
 
@@ -251,16 +268,15 @@ public final class ObjectConstructor {
      */
     public static JSValue seal(JSContext ctx, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return JSUndefined.INSTANCE;
+            return ctx.throwError("TypeError", "Object.seal called on non-object");
         }
 
         JSValue arg = args[0];
-        if (!(arg instanceof JSObject)) {
-            return arg;
+        if (!(arg instanceof JSObject obj)) {
+            return arg; // Primitives are returned as-is
         }
 
-        // TODO: Implement actual sealing mechanism
-        // For now, just return the object
+        obj.seal();
         return arg;
     }
 
@@ -269,12 +285,16 @@ public final class ObjectConstructor {
      * ES2020 19.1.2.12
      */
     public static JSValue isFrozen(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject)) {
-            return JSBoolean.TRUE;
+        if (args.length == 0) {
+            return ctx.throwError("TypeError", "Object.isFrozen called without arguments");
         }
 
-        // TODO: Implement actual frozen check
-        return JSBoolean.FALSE;
+        JSValue arg = args[0];
+        if (!(arg instanceof JSObject obj)) {
+            return JSBoolean.TRUE; // Primitives are always frozen
+        }
+
+        return JSBoolean.valueOf(obj.isFrozen());
     }
 
     /**
@@ -282,12 +302,16 @@ public final class ObjectConstructor {
      * ES2020 19.1.2.13
      */
     public static JSValue isSealed(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject)) {
-            return JSBoolean.TRUE;
+        if (args.length == 0) {
+            return ctx.throwError("TypeError", "Object.isSealed called without arguments");
         }
 
-        // TODO: Implement actual sealed check
-        return JSBoolean.FALSE;
+        JSValue arg = args[0];
+        if (!(arg instanceof JSObject obj)) {
+            return JSBoolean.TRUE; // Primitives are always sealed
+        }
+
+        return JSBoolean.valueOf(obj.isSealed());
     }
 
     /**
@@ -296,7 +320,7 @@ public final class ObjectConstructor {
      */
     public static JSValue hasOwnProperty(JSContext ctx, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject obj)) {
-            return JSBoolean.FALSE;
+            return ctx.throwError("TypeError", "hasOwnProperty called on non-object");
         }
 
         if (args.length == 0) {

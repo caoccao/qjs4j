@@ -845,7 +845,86 @@ public final class VirtualMachine {
 
             valueStack.push(newObj);
         } else if (constructor instanceof JSObject ctorObj) {
-            // Handle Error constructors (and other placeholder constructors)
+            // Check for Date constructor
+            JSValue isDateCtor = ctorObj.get("[[DateConstructor]]");
+            if (isDateCtor instanceof JSBoolean && ((JSBoolean) isDateCtor).value()) {
+                // Create Date object
+                long timeValue;
+                if (args.length == 0) {
+                    // No arguments: current time
+                    timeValue = System.currentTimeMillis();
+                } else if (args.length == 1) {
+                    // Single argument: timestamp or parseable string
+                    JSValue arg = args[0];
+                    if (arg instanceof JSNumber num) {
+                        timeValue = (long) num.value();
+                    } else {
+                        // Try to parse as string
+                        JSString str = JSTypeConversions.toString(arg);
+                        // Simplified: just use current time for now
+                        timeValue = System.currentTimeMillis();
+                    }
+                } else {
+                    // Multiple arguments: year, month, date, etc.
+                    // Simplified: just use current time for now
+                    timeValue = System.currentTimeMillis();
+                }
+
+                JSDate dateObj = new JSDate(timeValue);
+
+                // Set prototype
+                JSValue prototypeValue = ctorObj.get("prototype");
+                if (prototypeValue instanceof JSObject prototype) {
+                    dateObj.setPrototype(prototype);
+                }
+
+                valueStack.push(dateObj);
+                return;
+            }
+
+            // Check for RegExp constructor
+            JSValue isRegExpCtor = ctorObj.get("[[RegExpConstructor]]");
+            if (isRegExpCtor instanceof JSBoolean && ((JSBoolean) isRegExpCtor).value()) {
+                // Create RegExp object
+                String pattern = "";
+                String flags = "";
+
+                if (args.length > 0) {
+                    // First argument is the pattern
+                    JSValue patternArg = args[0];
+                    if (patternArg instanceof JSRegExp existingRegExp) {
+                        // Copy from existing RegExp
+                        pattern = existingRegExp.getPattern();
+                        flags = args.length > 1 && !(args[1] instanceof JSUndefined)
+                                ? JSTypeConversions.toString(args[1]).getValue()
+                                : existingRegExp.getFlags();
+                    } else if (!(patternArg instanceof JSUndefined)) {
+                        pattern = JSTypeConversions.toString(patternArg).getValue();
+                        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+                            flags = JSTypeConversions.toString(args[1]).getValue();
+                        }
+                    }
+                }
+
+                try {
+                    JSRegExp regexpObj = new JSRegExp(pattern, flags);
+
+                    // Set prototype
+                    JSValue prototypeValue = ctorObj.get("prototype");
+                    if (prototypeValue instanceof JSObject prototype) {
+                        regexpObj.setPrototype(prototype);
+                    }
+
+                    valueStack.push(regexpObj);
+                } catch (Exception e) {
+                    // Invalid regex - throw SyntaxError
+                    context.throwError("SyntaxError", "Invalid regular expression: " + e.getMessage());
+                    valueStack.push(JSUndefined.INSTANCE);
+                }
+                return;
+            }
+
+            // Handle Error constructors
             JSValue errorNameValue = ctorObj.get("[[ErrorName]]");
             if (errorNameValue instanceof JSString errorName) {
                 // Create Error object

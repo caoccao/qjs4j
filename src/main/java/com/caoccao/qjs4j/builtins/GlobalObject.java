@@ -69,6 +69,8 @@ public final class GlobalObject {
         initializeStringConstructor(ctx, global);
         initializeNumberConstructor(ctx, global);
         initializeFunctionConstructor(ctx, global);
+        initializeDateConstructor(ctx, global);
+        initializeRegExpConstructor(ctx, global);
         initializeMathObject(ctx, global);
         initializeJSONObject(ctx, global);
 
@@ -245,6 +247,61 @@ public final class GlobalObject {
         functionConstructor.set("prototype", functionPrototype);
 
         global.set("Function", functionConstructor);
+    }
+
+    /**
+     * Initialize Date constructor and prototype.
+     */
+    private static void initializeDateConstructor(JSContext ctx, JSObject global) {
+        // Create Date.prototype
+        JSObject datePrototype = new JSObject();
+        datePrototype.set("getTime", createNativeFunction(ctx, "getTime", DatePrototype::getTime, 0));
+        datePrototype.set("getFullYear", createNativeFunction(ctx, "getFullYear", DatePrototype::getFullYear, 0));
+        datePrototype.set("getMonth", createNativeFunction(ctx, "getMonth", DatePrototype::getMonth, 0));
+        datePrototype.set("getDate", createNativeFunction(ctx, "getDate", DatePrototype::getDate, 0));
+        datePrototype.set("getDay", createNativeFunction(ctx, "getDay", DatePrototype::getDay, 0));
+        datePrototype.set("getHours", createNativeFunction(ctx, "getHours", DatePrototype::getHours, 0));
+        datePrototype.set("getMinutes", createNativeFunction(ctx, "getMinutes", DatePrototype::getMinutes, 0));
+        datePrototype.set("getSeconds", createNativeFunction(ctx, "getSeconds", DatePrototype::getSeconds, 0));
+        datePrototype.set("getMilliseconds", createNativeFunction(ctx, "getMilliseconds", DatePrototype::getMilliseconds, 0));
+        datePrototype.set("getUTCFullYear", createNativeFunction(ctx, "getUTCFullYear", DatePrototype::getUTCFullYear, 0));
+        datePrototype.set("getUTCMonth", createNativeFunction(ctx, "getUTCMonth", DatePrototype::getUTCMonth, 0));
+        datePrototype.set("getUTCDate", createNativeFunction(ctx, "getUTCDate", DatePrototype::getUTCDate, 0));
+        datePrototype.set("getUTCHours", createNativeFunction(ctx, "getUTCHours", DatePrototype::getUTCHours, 0));
+        datePrototype.set("toISOString", createNativeFunction(ctx, "toISOString", DatePrototype::toISOString, 0));
+        datePrototype.set("toJSON", createNativeFunction(ctx, "toJSON", DatePrototype::toJSON, 0));
+        datePrototype.set("toString", createNativeFunction(ctx, "toString", DatePrototype::toStringMethod, 0));
+        datePrototype.set("valueOf", createNativeFunction(ctx, "valueOf", DatePrototype::valueOf, 0));
+
+        // Create Date constructor with static methods
+        JSObject dateConstructor = new JSObject();
+        dateConstructor.set("prototype", datePrototype);
+        dateConstructor.set("[[DateConstructor]]", JSBoolean.TRUE); // Mark as Date constructor
+
+        // Date static methods
+        dateConstructor.set("now", createNativeFunction(ctx, "now", DateConstructor::now, 0));
+        dateConstructor.set("parse", createNativeFunction(ctx, "parse", DateConstructor::parse, 1));
+        dateConstructor.set("UTC", createNativeFunction(ctx, "UTC", DateConstructor::UTC, 7));
+
+        global.set("Date", dateConstructor);
+    }
+
+    /**
+     * Initialize RegExp constructor and prototype.
+     */
+    private static void initializeRegExpConstructor(JSContext ctx, JSObject global) {
+        // Create RegExp.prototype
+        JSObject regexpPrototype = new JSObject();
+        regexpPrototype.set("test", createNativeFunction(ctx, "test", RegExpPrototype::test, 1));
+        regexpPrototype.set("exec", createNativeFunction(ctx, "exec", RegExpPrototype::exec, 1));
+        regexpPrototype.set("toString", createNativeFunction(ctx, "toString", RegExpPrototype::toStringMethod, 0));
+
+        // Create RegExp constructor
+        JSObject regexpConstructor = new JSObject();
+        regexpConstructor.set("prototype", regexpPrototype);
+        regexpConstructor.set("[[RegExpConstructor]]", JSBoolean.TRUE); // Mark as RegExp constructor
+
+        global.set("RegExp", regexpConstructor);
     }
 
     /**

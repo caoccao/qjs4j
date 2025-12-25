@@ -37,6 +37,8 @@ public non-sealed class JSObject implements JSValue {
     protected JSValue[] propertyValues;
     protected Map<Integer, JSValue> sparseProperties; // For array indices
     protected JSObject prototype;
+    protected boolean frozen = false;
+    protected boolean sealed = false;
 
     /**
      * Create an empty object with no prototype.
@@ -131,7 +133,7 @@ public non-sealed class JSObject implements JSValue {
         if (offset >= 0) {
             // Property exists, just update the value
             PropertyDescriptor desc = shape.getDescriptorAt(offset);
-            if (!desc.isWritable()) {
+            if (!desc.isWritable() || frozen) {
                 // In strict mode, this would throw TypeError
                 return;
             }
@@ -139,8 +141,10 @@ public non-sealed class JSObject implements JSValue {
             return;
         }
 
-        // Property doesn't exist, add it
-        defineProperty(key, PropertyDescriptor.defaultData(value));
+        // Property doesn't exist, add it (only if not sealed/frozen)
+        if (!sealed && !frozen) {
+            defineProperty(key, PropertyDescriptor.defaultData(value));
+        }
     }
 
     /**
@@ -237,6 +241,11 @@ public non-sealed class JSObject implements JSValue {
      * Delete a property by key.
      */
     public boolean delete(PropertyKey key) {
+        // Cannot delete from sealed or frozen objects
+        if (sealed || frozen) {
+            return false;
+        }
+
         // Check if property exists
         int offset = shape.getPropertyOffset(key);
         if (offset < 0) {
@@ -322,6 +331,40 @@ public non-sealed class JSObject implements JSValue {
 
     public void setPrototype(JSObject prototype) {
         this.prototype = prototype;
+    }
+
+    // Object integrity levels (ES5)
+
+    /**
+     * Freeze this object.
+     * Prevents adding new properties, deleting existing properties, and modifying existing properties.
+     */
+    public void freeze() {
+        this.frozen = true;
+        this.sealed = true; // Frozen objects are also sealed
+    }
+
+    /**
+     * Seal this object.
+     * Prevents adding new properties and deleting existing properties.
+     * Existing properties can still be modified.
+     */
+    public void seal() {
+        this.sealed = true;
+    }
+
+    /**
+     * Check if this object is frozen.
+     */
+    public boolean isFrozen() {
+        return frozen;
+    }
+
+    /**
+     * Check if this object is sealed.
+     */
+    public boolean isSealed() {
+        return sealed;
     }
 
     // JSValue implementation

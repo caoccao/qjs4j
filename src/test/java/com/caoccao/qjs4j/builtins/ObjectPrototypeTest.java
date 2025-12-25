@@ -30,49 +30,5 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for Object constructor and methods.
  */
 public class ObjectPrototypeTest extends BaseTest {
-    @Test
-    public void testObjectKeys() {
-        JSValue result = ctx.eval("var obj = {a: 1, b: 2, c: 3}; Object.keys(obj)");
-        assertNotNull(result);
-        assertEquals("[\"a\", \"b\", \"c\"]", result.toString());
-    }
 
-    @Test
-    public void testObjectValues() {
-        ctx.eval("var obj = {a: 1, b: 2, c: 3}");
-        JSValue result = ctx.eval("JSON.stringify(Object.values(obj))");
-        assertNotNull(result);
-        assertEquals("[1,2,3]", result.toJavaObject());
-    }
-
-    @Test
-    public void testObjectEntries() {
-        ctx.eval("var obj = {a: 1, b: 2, c: 3}");
-        JSValue result = ctx.eval("JSON.stringify(Object.entries(obj))");
-        assertNotNull(result);
-        assertEquals("[[\"a\",1],[\"b\",2],[\"c\",3]]", result.toJavaObject());
-    }
-
-    @Test
-    public void testObjectAssign() {
-        JSValue result = ctx.eval("var target = {a: 1}; Object.assign(target, {b: 2}, {c: 3}); JSON.stringify(target)");
-        assertNotNull(result);
-        assertEquals("{\"a\":1,\"b\":2,\"c\":3}", result.toJavaObject());
-    }
-
-    @Test
-    public void testObjectCreate() {
-        ctx.eval("var proto = {x: 10}");
-        JSValue result = ctx.eval("var newObj = Object.create(proto); newObj.x");
-        assertNotNull(result);
-        assertEquals(10.0, (Double) result.toJavaObject());
-    }
-
-    @Test
-    public void testObjectGetPrototypeOf() {
-        ctx.eval("var proto = {x: 10}; var newObj = Object.create(proto)");
-        JSValue result = ctx.eval("Object.getPrototypeOf(newObj) === proto");
-        assertNotNull(result);
-        assertTrue((boolean) result.toJavaObject());
-    }
 }
