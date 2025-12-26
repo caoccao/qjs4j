@@ -42,6 +42,15 @@ public abstract class BaseTest {
         }
     }
 
+    protected void assertError(JSValue value) {
+        if (value instanceof JSObject jsObject) {
+            if (jsObject.get("name") instanceof JSString name && jsObject.get("message") instanceof JSString message) {
+                assertEquals("Error", name.getValue());
+                assertNotNull(message.getValue());
+            }
+        }
+    }
+
     @BeforeEach
     public void setUp() {
         ctx = new JSContext(new JSRuntime());

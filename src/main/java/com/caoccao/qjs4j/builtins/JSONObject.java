@@ -65,6 +65,11 @@ public final class JSONObject {
 
         JSValue value = args[0];
 
+        // If value is undefined, return undefined
+        if (value instanceof JSUndefined) {
+            return JSUndefined.INSTANCE;
+        }
+
         // Handle space parameter for indentation (simplified)
         String indent = "";
         if (args.length > 2 && args[2] instanceof JSNumber num) {
@@ -76,6 +81,9 @@ public final class JSONObject {
 
         try {
             String result = stringifyValue(value, indent, "");
+            if (result == null) {
+                return JSUndefined.INSTANCE;
+            }
             return new JSString(result);
         } catch (Exception e) {
             return JSUndefined.INSTANCE;
