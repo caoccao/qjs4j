@@ -49,6 +49,7 @@ public final class GlobalObject {
         global.set("isNaN", createNativeFunction(ctx, "isNaN", GlobalObject::isNaN, 1));
         global.set("isFinite", createNativeFunction(ctx, "isFinite", GlobalObject::isFinite, 1));
         global.set("eval", createNativeFunction(ctx, "eval", GlobalObject::eval, 1));
+        global.set("queueMicrotask", createNativeFunction(ctx, "queueMicrotask", GlobalObject::queueMicrotask, 1));
 
         // URI handling functions
         global.set("encodeURI", createNativeFunction(ctx, "encodeURI", GlobalObject::encodeURI, 1));
@@ -1177,5 +1178,29 @@ public final class GlobalObject {
         }
 
         return new JSString(name + ": " + message);
+    }
+
+    /**
+     * queueMicrotask(callback)
+     * Queues a microtask to be executed.
+     *
+     * @see <a href="https://html.spec.whatwg.org/multipage/timers-and-user-prompts.html#microtask-queuing">HTML queueMicrotask</a>
+     */
+    public static JSValue queueMicrotask(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
+            return ctx.throwError("TypeError", "queueMicrotask requires a function argument");
+        }
+
+        // Enqueue the callback as a microtask
+        ctx.enqueueMicrotask(() -> {
+            try {
+                callback.call(ctx, JSUndefined.INSTANCE, new JSValue[0]);
+            } catch (Exception e) {
+                // In a full implementation, this would trigger the unhandled rejection handler
+                System.err.println("Microtask error: " + e.getMessage());
+            }
+        });
+
+        return JSUndefined.INSTANCE;
     }
 }

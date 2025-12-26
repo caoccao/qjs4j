@@ -72,25 +72,25 @@ public sealed interface JSValue permits
     }
 
     /**
+     * Attempt to cast this value to JSBytecodeFunction.
+     *
+     * @return Optional containing the JSBytecodeFunction if this value is a bytecode function, empty otherwise
+     */
+    default Optional<JSBytecodeFunction> asBytecodeFunction() {
+        return this instanceof JSBytecodeFunction v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
+     * Attempt to cast this value to JSFloat32Array.
+     *
+     * @return Optional containing the JSFloat32Array if this value is a Float32Array, empty otherwise
+     */
+    default Optional<JSFloat32Array> asFloat32Array() {
+        return this instanceof JSFloat32Array v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
      * Attempt to cast this value to JSDataView.
-     *
-     * @return Optional containing the JSDataView if this value is a DataView, empty otherwise
-     */
-    default Optional<JSDataView> asDataView() {
-        return this instanceof JSDataView v ? Optional.of(v) : Optional.empty();
-    }
-
-    /**
-     * Attempt to cast this value to JSDate.
-     *
-     * @return Optional containing the JSDate if this value is a Date, empty otherwise
-     */
-    default Optional<JSDate> asDate() {
-        return this instanceof JSDate v ? Optional.of(v) : Optional.empty();
-    }
-
-    /**
-     * Attempt to cast this value to JSFloat64Array.
      *
      * @return Optional containing the JSFloat64Array if this value is a Float64Array, empty otherwise
      */
@@ -99,7 +99,7 @@ public sealed interface JSValue permits
     }
 
     /**
-     * Attempt to cast this value to JSFunction.
+     * Attempt to cast this value to JSFunction.     *
      *
      * @return Optional containing the JSFunction if this value is a function, empty otherwise
      */
@@ -117,12 +117,30 @@ public sealed interface JSValue permits
     }
 
     /**
+     * Attempt to cast this value to JSInt16Array.
+     *
+     * @return Optional containing the JSInt16Array if this value is an Int16Array, empty otherwise
+     */
+    default Optional<JSInt16Array> asInt16Array() {
+        return this instanceof JSInt16Array v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
      * Attempt to cast this value to JSInt32Array.
      *
      * @return Optional containing the JSInt32Array if this value is an Int32Array, empty otherwise
      */
     default Optional<JSInt32Array> asInt32Array() {
         return this instanceof JSInt32Array v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
+     * Attempt to cast this value to JSInt8Array.
+     *
+     * @return Optional containing the JSInt8Array if this value is an Int8Array, empty otherwise
+     */
+    default Optional<JSInt8Array> asInt8Array() {
+        return this instanceof JSInt8Array v ? Optional.of(v) : Optional.empty();
     }
 
     /**
@@ -141,6 +159,15 @@ public sealed interface JSValue permits
      */
     default Optional<JSMap> asMap() {
         return this instanceof JSMap v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
+     * Attempt to cast this value to JSNativeFunction.
+     *
+     * @return Optional containing the JSNativeFunction if this value is a native function, empty otherwise
+     */
+    default Optional<JSNativeFunction> asNativeFunction() {
+        return this instanceof JSNativeFunction v ? Optional.of(v) : Optional.empty();
     }
 
     /**
@@ -234,12 +261,39 @@ public sealed interface JSValue permits
     }
 
     /**
+     * Attempt to cast this value to JSUint16Array.
+     *
+     * @return Optional containing the JSUint16Array if this value is a Uint16Array, empty otherwise
+     */
+    default Optional<JSUint16Array> asUint16Array() {
+        return this instanceof JSUint16Array v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
+     * Attempt to cast this value to JSUint32Array.
+     *
+     * @return Optional containing the JSUint32Array if this value is a Uint32Array, empty otherwise
+     */
+    default Optional<JSUint32Array> asUint32Array() {
+        return this instanceof JSUint32Array v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
      * Attempt to cast this value to JSUint8Array.
      *
      * @return Optional containing the JSUint8Array if this value is a Uint8Array, empty otherwise
      */
     default Optional<JSUint8Array> asUint8Array() {
         return this instanceof JSUint8Array v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
+     * Attempt to cast this value to JSUint8ClampedArray.
+     *
+     * @return Optional containing the JSUint8ClampedArray if this value is a Uint8ClampedArray, empty otherwise
+     */
+    default Optional<JSUint8ClampedArray> asUint8ClampedArray() {
+        return this instanceof JSUint8ClampedArray v ? Optional.of(v) : Optional.empty();
     }
 
     /**
@@ -333,6 +387,15 @@ public sealed interface JSValue permits
     }
 
     /**
+     * Check if this value is a bytecode function.
+     *
+     * @return true if this value is a bytecode function, false otherwise
+     */
+    default boolean isBytecodeFunction() {
+        return this instanceof JSBytecodeFunction;
+    }
+
+    /**
      * Check if this value is a DataView.
      *
      * @return true if this value is a DataView, false otherwise
@@ -351,6 +414,15 @@ public sealed interface JSValue permits
     }
 
     /**
+     * Check if this value is a Float32Array.
+     *
+     * @return true if this value is a Float32Array, false otherwise
+     */
+    default boolean isFloat32Array() {
+        return this instanceof JSFloat32Array;
+    }
+
+    /**
      * Check if this value is a Float64Array.
      *
      * @return true if this value is a Float64Array, false otherwise
@@ -361,14 +433,8 @@ public sealed interface JSValue permits
 
     /**
      * Check if this value is a function.
-     *
-     * @return true if this value is a function, false otherwise
-     */
-    default boolean isFunction() {
-        return this instanceof JSFunction;
-    }
-
-    /**
+     * <p>
+     * /**
      * Check if this value is a generator.
      *
      * @return true if this value is a generator, false otherwise
@@ -378,12 +444,30 @@ public sealed interface JSValue permits
     }
 
     /**
+     * Check if this value is an Int16Array.
+     *
+     * @return true if this value is an Int16Array, false otherwise
+     */
+    default boolean isInt16Array() {
+        return this instanceof JSInt16Array;
+    }
+
+    /**
      * Check if this value is an Int32Array.
      *
      * @return true if this value is an Int32Array, false otherwise
      */
     default boolean isInt32Array() {
         return this instanceof JSInt32Array;
+    }
+
+    /**
+     * Check if this value is an Int8Array.
+     *
+     * @return true if this value is an Int8Array, false otherwise
+     */
+    default boolean isInt8Array() {
+        return this instanceof JSInt8Array;
     }
 
     /**
@@ -402,6 +486,15 @@ public sealed interface JSValue permits
      */
     default boolean isMap() {
         return this instanceof JSMap;
+    }
+
+    /**
+     * Check if this value is a native function.
+     *
+     * @return true if this value is a native function, false otherwise
+     */
+    default boolean isNativeFunction() {
+        return this instanceof JSNativeFunction;
     }
 
     /**
@@ -495,12 +588,39 @@ public sealed interface JSValue permits
     }
 
     /**
+     * Check if this value is a Uint16Array.
+     *
+     * @return true if this value is a Uint16Array, false otherwise
+     */
+    default boolean isUint16Array() {
+        return this instanceof JSUint16Array;
+    }
+
+    /**
+     * Check if this value is a Uint32Array.
+     *
+     * @return true if this value is a Uint32Array, false otherwise
+     */
+    default boolean isUint32Array() {
+        return this instanceof JSUint32Array;
+    }
+
+    /**
      * Check if this value is a Uint8Array.
      *
      * @return true if this value is a Uint8Array, false otherwise
      */
     default boolean isUint8Array() {
         return this instanceof JSUint8Array;
+    }
+
+    /**
+     * Check if this value is a Uint8ClampedArray.
+     *
+     * @return true if this value is a Uint8ClampedArray, false otherwise
+     */
+    default boolean isUint8ClampedArray() {
+        return this instanceof JSUint8ClampedArray;
     }
 
     /**

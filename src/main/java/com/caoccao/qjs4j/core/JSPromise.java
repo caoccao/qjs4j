@@ -144,53 +144,55 @@ public final class JSPromise extends JSObject {
     }
 
     /**
-     * Trigger a reaction by calling the handler.
-     * Simplified: runs synchronously for now.
-     * In a full implementation, this would queue a microtask.
+     * Trigger a reaction by queueing a microtask.
+     * ES2020 requires promise reactions to run as microtasks.
      */
     private void triggerReaction(ReactionRecord reaction, JSValue value) {
-        if (reaction.handler != null) {
-            try {
-                JSValue[] args = new JSValue[]{value};
-                JSValue handlerResult = reaction.handler.call(reaction.context, JSUndefined.INSTANCE, args);
+        // Enqueue a microtask to execute the reaction
+        reaction.context.enqueueMicrotask(() -> {
+            if (reaction.handler != null) {
+                try {
+                    JSValue[] args = new JSValue[]{value};
+                    JSValue handlerResult = reaction.handler.call(reaction.context, JSUndefined.INSTANCE, args);
 
-                // If the handler returned a value, fulfill the chained promise
-                if (reaction.promise != null) {
-                    if (handlerResult instanceof JSPromise returnedPromise) {
-                        // If handler returns a promise, chain it
-                        returnedPromise.addReactions(
-                                new ReactionRecord(null, reaction.promise, reaction.context) {
-                                    {
-                                        // When the returned promise fulfills, fulfill the chained promise
+                    // If the handler returned a value, fulfill the chained promise
+                    if (reaction.promise != null) {
+                        if (handlerResult instanceof JSPromise returnedPromise) {
+                            // If handler returns a promise, chain it
+                            returnedPromise.addReactions(
+                                    new ReactionRecord(null, reaction.promise, reaction.context) {
+                                        {
+                                            // When the returned promise fulfills, fulfill the chained promise
+                                        }
+                                    },
+                                    new ReactionRecord(null, reaction.promise, reaction.context) {
+                                        {
+                                            // When the returned promise rejects, reject the chained promise
+                                        }
                                     }
-                                },
-                                new ReactionRecord(null, reaction.promise, reaction.context) {
-                                    {
-                                        // When the returned promise rejects, reject the chained promise
-                                    }
-                                }
-                        );
-                    } else {
-                        // Normal value, fulfill the chained promise
-                        reaction.promise.fulfill(handlerResult);
+                            );
+                        } else {
+                            // Normal value, fulfill the chained promise
+                            reaction.promise.fulfill(handlerResult);
+                        }
+                    }
+                } catch (Exception e) {
+                    // If handler throws, reject the chained promise
+                    if (reaction.promise != null) {
+                        reaction.promise.reject(new JSString("Error in promise handler: " + e.getMessage()));
                     }
                 }
-            } catch (Exception e) {
-                // If handler throws, reject the chained promise
+            } else {
+                // No handler, just pass the value through
                 if (reaction.promise != null) {
-                    reaction.promise.reject(new JSString("Error in promise handler: " + e.getMessage()));
+                    if (state == PromiseState.FULFILLED) {
+                        reaction.promise.fulfill(value);
+                    } else {
+                        reaction.promise.reject(value);
+                    }
                 }
             }
-        } else {
-            // No handler, just pass the value through
-            if (reaction.promise != null) {
-                if (state == PromiseState.FULFILLED) {
-                    reaction.promise.fulfill(value);
-                } else {
-                    reaction.promise.reject(value);
-                }
-            }
-        }
+        });
     }
 
     @Override

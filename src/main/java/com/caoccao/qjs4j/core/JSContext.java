@@ -49,6 +49,9 @@ public final class JSContext {
     private JSValue pendingException;
     private boolean inCatchHandler;
 
+    // Microtask queue for promise resolution and async operations
+    private final JSMicrotaskQueue microtaskQueue;
+
     // Execution state
     private boolean strictMode;
     private JSValue currentThis;
@@ -71,6 +74,7 @@ public final class JSContext {
         this.strictMode = false;
         this.currentThis = globalObject;
         this.errorStackTrace = new ArrayList<>();
+        this.microtaskQueue = new JSMicrotaskQueue();
 
         initializeGlobalObject();
     }
@@ -138,6 +142,9 @@ public final class JSContext {
                 clearPendingException();
                 throw new JSException(exception);
             }
+
+            // Process all pending microtasks before returning
+            processMicrotasks();
 
             return result != null ? result : JSUndefined.INSTANCE;
         } catch (JSException e) {
@@ -431,6 +438,32 @@ public final class JSContext {
 
     public JSObject getGlobalObject() {
         return globalObject;
+    }
+
+    // Microtask queue management
+
+    /**
+     * Get the microtask queue for this context.
+     */
+    public JSMicrotaskQueue getMicrotaskQueue() {
+        return microtaskQueue;
+    }
+
+    /**
+     * Process all pending microtasks.
+     * This should be called at the end of each task in the event loop.
+     */
+    public void processMicrotasks() {
+        microtaskQueue.processMicrotasks();
+    }
+
+    /**
+     * Enqueue a microtask to be executed.
+     *
+     * @param microtask The microtask to enqueue
+     */
+    public void enqueueMicrotask(JSMicrotaskQueue.Microtask microtask) {
+        microtaskQueue.enqueue(microtask);
     }
 
     // Cleanup
