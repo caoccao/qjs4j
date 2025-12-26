@@ -84,6 +84,11 @@ public final class GlobalObject {
         initializePromiseConstructor(ctx, global);
         initializeGeneratorPrototype(ctx, global);
 
+        // Binary data constructors
+        initializeArrayBufferConstructor(ctx, global);
+        initializeDataViewConstructor(ctx, global);
+        initializeTypedArrayConstructors(ctx, global);
+
         // Error constructors
         initializeErrorConstructors(ctx, global);
     }
@@ -611,6 +616,129 @@ public final class GlobalObject {
 
         // Store for use by generator instances
         global.set("GeneratorFunction", generatorFunction);
+    }
+
+    /**
+     * Initialize ArrayBuffer constructor and prototype.
+     */
+    private static void initializeArrayBufferConstructor(JSContext ctx, JSObject global) {
+        // Create ArrayBuffer.prototype
+        JSObject arrayBufferPrototype = new JSObject();
+        arrayBufferPrototype.set("slice", createNativeFunction(ctx, "slice", ArrayBufferPrototype::slice, 2));
+        // byteLength getter
+        JSNativeFunction byteLengthGetter = createNativeFunction(ctx, "get byteLength", ArrayBufferPrototype::getByteLength, 0);
+        arrayBufferPrototype.set("byteLength", byteLengthGetter); // Simplified: should be a getter
+
+        // Create ArrayBuffer constructor
+        JSObject arrayBufferConstructor = new JSObject();
+        arrayBufferConstructor.set("prototype", arrayBufferPrototype);
+        arrayBufferConstructor.set("[[ArrayBufferConstructor]]", JSBoolean.TRUE);
+
+        // Static methods
+        arrayBufferConstructor.set("isView", createNativeFunction(ctx, "isView", ArrayBufferConstructor::isView, 1));
+
+        global.set("ArrayBuffer", arrayBufferConstructor);
+    }
+
+    /**
+     * Initialize DataView constructor and prototype.
+     */
+    private static void initializeDataViewConstructor(JSContext ctx, JSObject global) {
+        // Create DataView.prototype
+        JSObject dataViewPrototype = new JSObject();
+
+        // Getters (simplified as regular properties)
+        dataViewPrototype.set("buffer", createNativeFunction(ctx, "get buffer", DataViewPrototype::getBuffer, 0));
+        dataViewPrototype.set("byteLength", createNativeFunction(ctx, "get byteLength", DataViewPrototype::getByteLength, 0));
+        dataViewPrototype.set("byteOffset", createNativeFunction(ctx, "get byteOffset", DataViewPrototype::getByteOffset, 0));
+
+        // Int8/Uint8 methods
+        dataViewPrototype.set("getInt8", createNativeFunction(ctx, "getInt8", DataViewPrototype::getInt8, 1));
+        dataViewPrototype.set("setInt8", createNativeFunction(ctx, "setInt8", DataViewPrototype::setInt8, 2));
+        dataViewPrototype.set("getUint8", createNativeFunction(ctx, "getUint8", DataViewPrototype::getUint8, 1));
+        dataViewPrototype.set("setUint8", createNativeFunction(ctx, "setUint8", DataViewPrototype::setUint8, 2));
+
+        // Int16 methods
+        dataViewPrototype.set("getInt16", createNativeFunction(ctx, "getInt16", DataViewPrototype::getInt16, 2));
+        dataViewPrototype.set("setInt16", createNativeFunction(ctx, "setInt16", DataViewPrototype::setInt16, 3));
+
+        // Int32 methods
+        dataViewPrototype.set("getInt32", createNativeFunction(ctx, "getInt32", DataViewPrototype::getInt32, 2));
+        dataViewPrototype.set("setInt32", createNativeFunction(ctx, "setInt32", DataViewPrototype::setInt32, 3));
+
+        // Float32 methods
+        dataViewPrototype.set("getFloat32", createNativeFunction(ctx, "getFloat32", DataViewPrototype::getFloat32, 2));
+        dataViewPrototype.set("setFloat32", createNativeFunction(ctx, "setFloat32", DataViewPrototype::setFloat32, 3));
+
+        // Float64 methods
+        dataViewPrototype.set("getFloat64", createNativeFunction(ctx, "getFloat64", DataViewPrototype::getFloat64, 2));
+        dataViewPrototype.set("setFloat64", createNativeFunction(ctx, "setFloat64", DataViewPrototype::setFloat64, 3));
+
+        // Create DataView constructor
+        JSObject dataViewConstructor = new JSObject();
+        dataViewConstructor.set("prototype", dataViewPrototype);
+        dataViewConstructor.set("[[DataViewConstructor]]", JSBoolean.TRUE);
+
+        global.set("DataView", dataViewConstructor);
+    }
+
+    /**
+     * Initialize all TypedArray constructors.
+     */
+    private static void initializeTypedArrayConstructors(JSContext ctx, JSObject global) {
+        // Int8Array
+        JSObject int8ArrayConstructor = new JSObject();
+        int8ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Int8Array"));
+        int8ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(1));
+        global.set("Int8Array", int8ArrayConstructor);
+
+        // Uint8Array
+        JSObject uint8ArrayConstructor = new JSObject();
+        uint8ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Uint8Array"));
+        uint8ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(1));
+        global.set("Uint8Array", uint8ArrayConstructor);
+
+        // Uint8ClampedArray
+        JSObject uint8ClampedArrayConstructor = new JSObject();
+        uint8ClampedArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Uint8ClampedArray"));
+        uint8ClampedArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(1));
+        global.set("Uint8ClampedArray", uint8ClampedArrayConstructor);
+
+        // Int16Array
+        JSObject int16ArrayConstructor = new JSObject();
+        int16ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Int16Array"));
+        int16ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(2));
+        global.set("Int16Array", int16ArrayConstructor);
+
+        // Uint16Array
+        JSObject uint16ArrayConstructor = new JSObject();
+        uint16ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Uint16Array"));
+        uint16ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(2));
+        global.set("Uint16Array", uint16ArrayConstructor);
+
+        // Int32Array
+        JSObject int32ArrayConstructor = new JSObject();
+        int32ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Int32Array"));
+        int32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(4));
+        global.set("Int32Array", int32ArrayConstructor);
+
+        // Uint32Array
+        JSObject uint32ArrayConstructor = new JSObject();
+        uint32ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Uint32Array"));
+        uint32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(4));
+        global.set("Uint32Array", uint32ArrayConstructor);
+
+        // Float32Array
+        JSObject float32ArrayConstructor = new JSObject();
+        float32ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Float32Array"));
+        float32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(4));
+        global.set("Float32Array", float32ArrayConstructor);
+
+        // Float64Array
+        JSObject float64ArrayConstructor = new JSObject();
+        float64ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Float64Array"));
+        float64ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(8));
+        global.set("Float64Array", float64ArrayConstructor);
     }
 
     /**
