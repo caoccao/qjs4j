@@ -87,6 +87,20 @@ public final class JSMap extends JSObject {
     }
 
     /**
+     * Get all keys as an iterable.
+     */
+    public Iterable<KeyWrapper> keys() {
+        return data.keySet();
+    }
+
+    /**
+     * Get all values as an iterable.
+     */
+    public Iterable<JSValue> values() {
+        return data.values();
+    }
+
+    /**
      * Wrapper class for Map keys to handle JSValue equality using SameValueZero.
      * SameValueZero is like === except NaN equals NaN.
      */

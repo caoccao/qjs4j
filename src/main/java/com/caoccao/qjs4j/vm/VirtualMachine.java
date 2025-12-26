@@ -1070,6 +1070,53 @@ public final class VirtualMachine {
                 return;
             }
 
+            // Check for Promise constructor
+            JSValue isPromiseCtor = ctorObj.get("[[PromiseConstructor]]");
+            if (isPromiseCtor instanceof JSBoolean && ((JSBoolean) isPromiseCtor).value()) {
+                // Promise requires an executor function
+                if (args.length == 0 || !(args[0] instanceof JSFunction executor)) {
+                    context.throwError("TypeError", "Promise constructor requires an executor function");
+                    valueStack.push(JSUndefined.INSTANCE);
+                    return;
+                }
+
+                // Create Promise object
+                JSPromise promiseObj = new JSPromise();
+
+                // Set prototype
+                JSValue prototypeValue = ctorObj.get("prototype");
+                if (prototypeValue instanceof JSObject prototype) {
+                    promiseObj.setPrototype(prototype);
+                }
+
+                // Create resolve and reject functions
+                JSNativeFunction resolveFunc = new JSNativeFunction("resolve", 1,
+                        (ctx, thisArg, funcArgs) -> {
+                            JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                            promiseObj.fulfill(value);
+                            return JSUndefined.INSTANCE;
+                        });
+
+                JSNativeFunction rejectFunc = new JSNativeFunction("reject", 1,
+                        (ctx, thisArg, funcArgs) -> {
+                            JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                            promiseObj.reject(reason);
+                            return JSUndefined.INSTANCE;
+                        });
+
+                // Call the executor with resolve and reject
+                try {
+                    JSValue[] executorArgs = new JSValue[]{resolveFunc, rejectFunc};
+                    executor.call(context, JSUndefined.INSTANCE, executorArgs);
+                } catch (Exception e) {
+                    // If executor throws, reject the promise
+                    promiseObj.reject(new JSString("Error in Promise executor: " + e.getMessage()));
+                }
+
+                valueStack.push(promiseObj);
+                return;
+            }
+
             // Handle Error constructors
             JSValue errorNameValue = ctorObj.get("[[ErrorName]]");
             if (errorNameValue instanceof JSString errorName) {

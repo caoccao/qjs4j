@@ -81,6 +81,8 @@ public final class GlobalObject {
         initializeJSONObject(ctx, global);
         initializeReflectObject(ctx, global);
         initializeProxyConstructor(ctx, global);
+        initializePromiseConstructor(ctx, global);
+        initializeGeneratorPrototype(ctx, global);
 
         // Error constructors
         initializeErrorConstructors(ctx, global);
@@ -155,6 +157,11 @@ public final class GlobalObject {
         arrayPrototype.set("reduce", createNativeFunction(ctx, "reduce", ArrayPrototype::reduce, 1));
         arrayPrototype.set("reduceRight", createNativeFunction(ctx, "reduceRight", ArrayPrototype::reduceRight, 1));
         arrayPrototype.set("forEach", createNativeFunction(ctx, "forEach", ArrayPrototype::forEach, 1));
+        arrayPrototype.set("values", createNativeFunction(ctx, "values", IteratorPrototype::arrayValues, 0));
+        arrayPrototype.set("keys", createNativeFunction(ctx, "keys", IteratorPrototype::arrayKeys, 0));
+        arrayPrototype.set("entries", createNativeFunction(ctx, "entries", IteratorPrototype::arrayEntries, 0));
+        // Array.prototype[Symbol.iterator] is the same as values()
+        arrayPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), createNativeFunction(ctx, "[Symbol.iterator]", IteratorPrototype::arrayValues, 0));
         arrayPrototype.set("find", createNativeFunction(ctx, "find", ArrayPrototype::find, 1));
         arrayPrototype.set("findIndex", createNativeFunction(ctx, "findIndex", ArrayPrototype::findIndex, 1));
         arrayPrototype.set("every", createNativeFunction(ctx, "every", ArrayPrototype::every, 1));
@@ -205,6 +212,8 @@ public final class GlobalObject {
         stringPrototype.set("trimEnd", createNativeFunction(ctx, "trimEnd", StringPrototype::trimEnd, 0));
         stringPrototype.set("toString", createNativeFunction(ctx, "toString", StringPrototype::toStringMethod, 0));
         stringPrototype.set("valueOf", createNativeFunction(ctx, "valueOf", StringPrototype::valueOf, 0));
+        // String.prototype[Symbol.iterator]
+        stringPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), createNativeFunction(ctx, "[Symbol.iterator]", IteratorPrototype::stringIterator, 0));
 
         // String constructor is a placeholder
         JSObject stringConstructor = new JSObject();
@@ -378,9 +387,11 @@ public final class GlobalObject {
         mapPrototype.set("delete", createNativeFunction(ctx, "delete", MapPrototype::delete, 1));
         mapPrototype.set("clear", createNativeFunction(ctx, "clear", MapPrototype::clear, 0));
         mapPrototype.set("forEach", createNativeFunction(ctx, "forEach", MapPrototype::forEach, 1));
-        mapPrototype.set("entries", createNativeFunction(ctx, "entries", MapPrototype::entries, 0));
-        mapPrototype.set("keys", createNativeFunction(ctx, "keys", MapPrototype::keys, 0));
-        mapPrototype.set("values", createNativeFunction(ctx, "values", MapPrototype::values, 0));
+        mapPrototype.set("entries", createNativeFunction(ctx, "entries", IteratorPrototype::mapEntriesIterator, 0));
+        mapPrototype.set("keys", createNativeFunction(ctx, "keys", IteratorPrototype::mapKeysIterator, 0));
+        mapPrototype.set("values", createNativeFunction(ctx, "values", IteratorPrototype::mapValuesIterator, 0));
+        // Map.prototype[Symbol.iterator] is the same as entries()
+        mapPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), createNativeFunction(ctx, "[Symbol.iterator]", IteratorPrototype::mapEntriesIterator, 0));
 
         // Create Map constructor
         JSObject mapConstructor = new JSObject();
@@ -401,9 +412,11 @@ public final class GlobalObject {
         setPrototype.set("delete", createNativeFunction(ctx, "delete", SetPrototype::delete, 1));
         setPrototype.set("clear", createNativeFunction(ctx, "clear", SetPrototype::clear, 0));
         setPrototype.set("forEach", createNativeFunction(ctx, "forEach", SetPrototype::forEach, 1));
-        setPrototype.set("entries", createNativeFunction(ctx, "entries", SetPrototype::entries, 0));
-        setPrototype.set("keys", createNativeFunction(ctx, "keys", SetPrototype::keys, 0));
-        setPrototype.set("values", createNativeFunction(ctx, "values", SetPrototype::values, 0));
+        setPrototype.set("entries", createNativeFunction(ctx, "entries", IteratorPrototype::setEntriesIterator, 0));
+        setPrototype.set("keys", createNativeFunction(ctx, "keys", IteratorPrototype::setKeysIterator, 0));
+        setPrototype.set("values", createNativeFunction(ctx, "values", IteratorPrototype::setValuesIterator, 0));
+        // Set.prototype[Symbol.iterator] is the same as values()
+        setPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), createNativeFunction(ctx, "[Symbol.iterator]", IteratorPrototype::setValuesIterator, 0));
 
         // Create Set constructor
         JSObject setConstructor = new JSObject();
@@ -549,6 +562,55 @@ public final class GlobalObject {
         proxyConstructor.set("revocable", createNativeFunction(ctx, "revocable", ProxyConstructor::revocable, 2));
 
         global.set("Proxy", proxyConstructor);
+    }
+
+    /**
+     * Initialize Promise constructor and prototype methods.
+     */
+    private static void initializePromiseConstructor(JSContext ctx, JSObject global) {
+        // Create Promise.prototype
+        JSObject promisePrototype = new JSObject();
+        promisePrototype.set("then", createNativeFunction(ctx, "then", PromisePrototype::then, 2));
+        promisePrototype.set("catch", createNativeFunction(ctx, "catch", PromisePrototype::catchMethod, 1));
+        promisePrototype.set("finally", createNativeFunction(ctx, "finally", PromisePrototype::finallyMethod, 1));
+
+        // Create Promise constructor
+        JSObject promiseConstructor = new JSObject();
+        promiseConstructor.set("prototype", promisePrototype);
+        promiseConstructor.set("[[PromiseConstructor]]", JSBoolean.TRUE); // Mark as Promise constructor
+
+        // Static methods
+        promiseConstructor.set("resolve", createNativeFunction(ctx, "resolve", PromiseConstructor::resolve, 1));
+        promiseConstructor.set("reject", createNativeFunction(ctx, "reject", PromiseConstructor::reject, 1));
+        promiseConstructor.set("all", createNativeFunction(ctx, "all", PromiseConstructor::all, 1));
+        promiseConstructor.set("race", createNativeFunction(ctx, "race", PromiseConstructor::race, 1));
+        promiseConstructor.set("allSettled", createNativeFunction(ctx, "allSettled", PromiseConstructor::allSettled, 1));
+        promiseConstructor.set("any", createNativeFunction(ctx, "any", PromiseConstructor::any, 1));
+
+        global.set("Promise", promiseConstructor);
+    }
+
+    /**
+     * Initialize Generator prototype methods.
+     * Note: Generator functions (function*) would require compiler support.
+     * This provides the prototype for manually created generators.
+     */
+    private static void initializeGeneratorPrototype(JSContext ctx, JSObject global) {
+        // Create Generator.prototype
+        JSObject generatorPrototype = new JSObject();
+        generatorPrototype.set("next", createNativeFunction(ctx, "next", GeneratorPrototype::next, 1));
+        generatorPrototype.set("return", createNativeFunction(ctx, "return", GeneratorPrototype::returnMethod, 1));
+        generatorPrototype.set("throw", createNativeFunction(ctx, "throw", GeneratorPrototype::throwMethod, 1));
+        // Generator.prototype[Symbol.iterator] returns this
+        generatorPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
+                createNativeFunction(ctx, "[Symbol.iterator]", (context, thisArg, args) -> thisArg, 0));
+
+        // Create GeneratorFunction constructor (placeholder)
+        JSObject generatorFunction = new JSObject();
+        generatorFunction.set("prototype", generatorPrototype);
+
+        // Store for use by generator instances
+        global.set("GeneratorFunction", generatorFunction);
     }
 
     /**

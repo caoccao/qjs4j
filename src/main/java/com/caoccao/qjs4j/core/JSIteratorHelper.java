@@ -1,0 +1,182 @@
+/*
+ * Copyright (c) 2025-2026. caoccao.com Sam Cao
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.caoccao.qjs4j.core;
+
+/**
+ * Helper utilities for working with iterators and the iteration protocols.
+ * Provides support for for...of loops and other iteration patterns.
+ */
+public final class JSIteratorHelper {
+
+    /**
+     * Get an iterator from an iterable object.
+     * Calls the object's [Symbol.iterator] method to get an iterator.
+     *
+     * @param iterable The iterable object
+     * @param ctx The execution context
+     * @return An iterator, or null if the object is not iterable
+     */
+    public static JSValue getIterator(JSValue iterable, JSContext ctx) {
+        if (!(iterable instanceof JSObject iterableObj)) {
+            return null;
+        }
+
+        // Get the [Symbol.iterator] method
+        JSValue iteratorMethod = iterableObj.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR));
+
+        if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
+            return null;
+        }
+
+        // Call the iterator method to get the iterator
+        JSValue iterator = iteratorFunc.call(ctx, iterable, new JSValue[0]);
+
+        // Verify it's an object with a next method
+        if (iterator instanceof JSObject iteratorObj) {
+            JSValue nextMethod = iteratorObj.get("next");
+            if (nextMethod instanceof JSFunction) {
+                return iterator;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Call next() on an iterator and return the result.
+     *
+     * @param iterator The iterator object
+     * @param ctx The execution context
+     * @return The iterator result object with {value, done}
+     */
+    public static JSObject iteratorNext(JSValue iterator, JSContext ctx) {
+        if (!(iterator instanceof JSObject iteratorObj)) {
+            return null;
+        }
+
+        // Handle JSIterator instances directly
+        if (iterator instanceof JSIterator jsIterator) {
+            return jsIterator.next();
+        }
+
+        // Handle JSGenerator instances directly
+        if (iterator instanceof JSGenerator jsGenerator) {
+            return jsGenerator.next(JSUndefined.INSTANCE);
+        }
+
+        // Generic iterator protocol: call the next() method
+        JSValue nextMethod = iteratorObj.get("next");
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            return null;
+        }
+
+        JSValue result = nextFunc.call(ctx, iterator, new JSValue[0]);
+
+        // Result should be an object with value and done properties
+        if (result instanceof JSObject resultObj) {
+            return resultObj;
+        }
+
+        return null;
+    }
+
+    /**
+     * Execute a for...of loop over an iterable.
+     * This is a helper for bytecode that implements for...of loops.
+     *
+     * @param iterable The iterable to loop over
+     * @param callback Function to call for each value
+     * @param ctx The execution context
+     */
+    public static void forOf(JSValue iterable, IterationCallback callback, JSContext ctx) {
+        // Get the iterator
+        JSValue iterator = getIterator(iterable, ctx);
+        if (iterator == null) {
+            ctx.throwError("TypeError", "Object is not iterable");
+            return;
+        }
+
+        // Iterate until done
+        while (true) {
+            JSObject result = iteratorNext(iterator, ctx);
+            if (result == null) {
+                break;
+            }
+
+            // Check if done
+            JSValue doneValue = result.get("done");
+            boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
+
+            if (done) {
+                break;
+            }
+
+            // Get the value and call the callback
+            JSValue value = result.get("value");
+            if (!callback.iterate(value)) {
+                // Callback returned false, break early
+                break;
+            }
+        }
+    }
+
+    /**
+     * Functional interface for iteration callbacks.
+     */
+    @FunctionalInterface
+    public interface IterationCallback {
+        /**
+         * Called for each iterated value.
+         * @param value The current value
+         * @return true to continue iteration, false to break
+         */
+        boolean iterate(JSValue value);
+    }
+
+    /**
+     * Convert an iterable to an array.
+     *
+     * @param iterable The iterable to convert
+     * @param ctx The execution context
+     * @return A JSArray containing all values from the iterable
+     */
+    public static JSArray toArray(JSValue iterable, JSContext ctx) {
+        JSArray result = new JSArray();
+
+        forOf(iterable, (value) -> {
+            result.push(value);
+            return true;
+        }, ctx);
+
+        return result;
+    }
+
+    /**
+     * Check if a value is iterable (has Symbol.iterator).
+     *
+     * @param value The value to check
+     * @return true if iterable, false otherwise
+     */
+    public static boolean isIterable(JSValue value) {
+        if (!(value instanceof JSObject obj)) {
+            return false;
+        }
+
+        JSValue iteratorMethod = obj.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR));
+        return iteratorMethod instanceof JSFunction;
+    }
+}
