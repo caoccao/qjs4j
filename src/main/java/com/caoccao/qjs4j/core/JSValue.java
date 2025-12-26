@@ -198,6 +198,15 @@ public sealed interface JSValue permits
     }
 
     /**
+     * Attempt to cast this value to JSClass.
+     *
+     * @return Optional containing the JSClass if this value is a class, empty otherwise
+     */
+    default Optional<JSClass> asClass() {
+        return this instanceof JSClass v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
      * Attempt to cast this value to JSPromise.
      *
      * @return Optional containing the JSPromise if this value is a Promise, empty otherwise
@@ -522,6 +531,15 @@ public sealed interface JSValue permits
      */
     default boolean isObject() {
         return this instanceof JSObject;
+    }
+
+    /**
+     * Check if this value is a class.
+     *
+     * @return true if this value is a class, false otherwise
+     */
+    default boolean isClass() {
+        return this instanceof JSClass;
     }
 
     /**

@@ -854,6 +854,14 @@ public final class VirtualMachine {
         // Pop constructor
         JSValue constructor = valueStack.pop();
 
+        // Check for ES6 class constructor
+        if (constructor instanceof JSClass classConstructor) {
+            // Use the class's construct() method
+            JSObject instance = classConstructor.construct(context, args);
+            valueStack.push(instance);
+            return;
+        }
+
         if (constructor instanceof JSFunction) {
             // Create new object
             JSObject newObj = new JSObject();
@@ -867,6 +875,13 @@ public final class VirtualMachine {
 
             valueStack.push(newObj);
         } else if (constructor instanceof JSObject ctorObj) {
+            // Check for ES6 class constructor marker
+            JSValue isClassCtor = ctorObj.get("[[ClassConstructor]]");
+            if (isClassCtor instanceof JSBoolean && ((JSBoolean) isClassCtor).value()) {
+                context.throwError("TypeError", "Class constructor cannot be invoked without 'new'");
+                valueStack.push(JSUndefined.INSTANCE);
+                return;
+            }
             // Check for Date constructor
             JSValue isDateCtor = ctorObj.get("[[DateConstructor]]");
             if (isDateCtor instanceof JSBoolean && ((JSBoolean) isDateCtor).value()) {

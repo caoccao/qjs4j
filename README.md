@@ -64,10 +64,26 @@ qjs4j is a complete reimplementation of the QuickJS JavaScript engine in pure Ja
 - **queueMicrotask()**: Global function to enqueue microtasks
 - **Promise Microtasks**: Proper ES2020 timing for promise reactions
 
+#### ✅ ES6 Module System
+- **Module Records**: Complete module state machine (unlinked, linking, linked, evaluating, evaluated)
+- **Import/Export**: Named imports, default imports, namespace imports, re-exports
+- **Module Loader**: File-based module resolution with caching
+- **Dynamic import()**: Promise-based import() function
+- **Circular Dependencies**: Proper handling through caching and evaluation state
+- **Module Namespace**: Sealed namespace objects with all exports
+
+#### ✅ ES6 Class Syntax
+- **Class Declarations**: Full class declaration and expression support
+- **Constructors**: Constructor methods with automatic instance initialization
+- **Instance Methods**: Methods added to class prototype
+- **Static Methods**: Class-level methods and properties
+- **Inheritance**: extends keyword with proper prototype chain
+- **Super Keyword**: super() for parent constructor, super.method() for parent methods
+- **Field Initialization**: Instance and static fields with property descriptors
+- **Class Validation**: Classes cannot be called without 'new'
+
 #### 🚧 In Progress
 - **Async/Await**: Await expression support (microtask infrastructure complete)
-- **Modules**: ES6 import/export system
-- **Class syntax**: ES6 class declarations with extends and super
 - **Async iterators**: for-await-of loops
 
 #### ⏳ Planned

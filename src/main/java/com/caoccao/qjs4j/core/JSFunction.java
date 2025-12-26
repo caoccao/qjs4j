@@ -20,7 +20,7 @@ package com.caoccao.qjs4j.core;
  * Sealed interface for JavaScript function types.
  */
 public sealed interface JSFunction extends JSValue
-        permits JSBytecodeFunction, JSNativeFunction, JSBoundFunction {
+        permits JSBytecodeFunction, JSNativeFunction, JSBoundFunction, JSClass {
 
     /**
      * Call this function with the given context, this value, and arguments.

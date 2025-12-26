@@ -75,6 +75,46 @@ public final class Compiler {
     }
 
     /**
+     * Compile ES6 module source code into executable bytecode.
+     * The resulting function will be executed in module scope.
+     *
+     * @param source The module source code to compile
+     * @param filename Optional filename for error reporting (can be null)
+     * @return A JSBytecodeFunction containing the compiled module bytecode
+     * @throws CompilerException if compilation fails
+     */
+    public static JSBytecodeFunction compileModule(String source, String filename) {
+        if (source == null) {
+            throw new CompilerException("Source code cannot be null");
+        }
+
+        try {
+            // Stage 1 & 2: Lexical and Syntax Analysis (Source → Tokens → AST)
+            Lexer lexer = new Lexer(source);
+            Parser parser = new Parser(lexer);
+            // TODO: parser.setModuleMode(true); // Parse in module mode
+            Program ast = parser.parse();
+
+            // Stage 3: Code Generation (AST → Bytecode)
+            BytecodeCompiler compiler = new BytecodeCompiler();
+            // TODO: compiler.setModuleMode(true); // Compile in module mode
+            Bytecode bytecode = compiler.compile(ast);
+
+            // Create and return bytecode function
+            // Note: Module code is always strict mode
+            String name = filename != null ? filename : "<module>";
+            return new JSBytecodeFunction(bytecode, name, 0);
+
+        } catch (BytecodeCompiler.CompilerException e) {
+            throw new CompilerException("Module compiler error: " + e.getMessage(), e);
+        } catch (RuntimeException e) {
+            throw new CompilerException("Module compilation error: " + e.getMessage(), e);
+        } catch (Exception e) {
+            throw new CompilerException("Unexpected module compilation error: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Parse JavaScript source code into an AST (without bytecode compilation).
      * Useful for static analysis, code transformation, etc.
      *

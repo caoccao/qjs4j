@@ -1,0 +1,151 @@
+/*
+ * Copyright (c) 2025-2026. caoccao.com Sam Cao
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.caoccao.qjs4j.core;
+
+/**
+ * Helper for implementing super keyword in ES6 classes.
+ * Provides access to parent class constructor and methods.
+ *
+ * The super keyword has two uses in JavaScript:
+ * 1. super() - calls parent constructor (must be called in derived class constructor)
+ * 2. super.method() - calls parent class method
+ */
+public final class SuperHelper {
+
+    /**
+     * Call the super constructor.
+     * Must be called in a derived class constructor before accessing 'this'.
+     *
+     * @param ctx The execution context
+     * @param derivedClass The derived class
+     * @param thisArg The instance being constructed
+     * @param args Arguments to pass to super constructor
+     * @return Undefined (super() doesn't return a value)
+     */
+    public static JSValue callSuperConstructor(JSContext ctx, JSClass derivedClass, JSObject thisArg, JSValue[] args) {
+        JSClass superClass = derivedClass.getSuperClass();
+        if (superClass == null) {
+            return ctx.throwError("ReferenceError", "super() called without a parent class");
+        }
+
+        // Call super constructor with the current instance as 'this'
+        JSFunction superConstructor = superClass.getConstructor();
+        superConstructor.call(ctx, thisArg, args);
+
+        // Initialize parent class instance fields
+        for (String fieldName : superClass.getInstanceMethods().keySet()) {
+            // Fields are already initialized via the prototype chain
+            // This is handled by JSClass.construct()
+        }
+
+        return JSUndefined.INSTANCE;
+    }
+
+    /**
+     * Get a method from the super class.
+     * Used for super.methodName() calls.
+     *
+     * @param derivedClass The derived class
+     * @param methodName The method name to look up
+     * @return The method from the parent class, or null if not found
+     */
+    public static JSValue getSuperMethod(JSClass derivedClass, String methodName) {
+        JSClass superClass = derivedClass.getSuperClass();
+        if (superClass == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        // Look up method in parent class prototype
+        JSObject superPrototype = superClass.getPrototypeObject();
+        JSValue method = superPrototype.get(methodName);
+
+        return method != null ? method : JSUndefined.INSTANCE;
+    }
+
+    /**
+     * Create a super reference object for use in bytecode.
+     * This object provides access to super constructor and methods.
+     *
+     * @param derivedClass The derived class
+     * @param instance The current instance
+     * @param ctx The execution context
+     * @return A super reference object
+     */
+    public static JSObject createSuperReference(JSClass derivedClass, JSObject instance, JSContext ctx) {
+        JSObject superRef = new JSObject();
+
+        // Add __call__ for super() constructor calls
+        superRef.set("__call__", new JSNativeFunction("super", 0, (context, thisArg, args) -> {
+            return callSuperConstructor(context, derivedClass, instance, args);
+        }));
+
+        // Add __get__ for super.method() calls
+        superRef.set("__get__", new JSNativeFunction("getSuperMethod", 1, (context, thisArg, args) -> {
+            if (args.length == 0) {
+                return JSUndefined.INSTANCE;
+            }
+            String methodName = JSTypeConversions.toString(args[0]).getValue();
+            JSValue method = getSuperMethod(derivedClass, methodName);
+
+            // If method is a function, bind it to the current instance
+            if (method instanceof JSFunction func) {
+                return new JSBoundFunction(func, instance, new JSValue[0]);
+            }
+
+            return method;
+        }));
+
+        return superRef;
+    }
+
+    /**
+     * Check if super constructor has been called.
+     * In ES6, 'this' cannot be accessed in a derived class constructor until super() is called.
+     *
+     * @param instance The instance being constructed
+     * @return True if super constructor has been called
+     */
+    public static boolean isSuperConstructorCalled(JSObject instance) {
+        // Check for a marker that indicates super() has been called
+        JSValue marker = instance.get("[[SuperConstructorCalled]]");
+        return marker instanceof JSBoolean && ((JSBoolean) marker).value();
+    }
+
+    /**
+     * Mark super constructor as called.
+     *
+     * @param instance The instance being constructed
+     */
+    public static void markSuperConstructorCalled(JSObject instance) {
+        instance.set("[[SuperConstructorCalled]]", JSBoolean.TRUE);
+    }
+
+    /**
+     * Validate that super constructor has been called before accessing 'this'.
+     *
+     * @param ctx The execution context
+     * @param instance The instance being constructed
+     * @param inDerivedConstructor Whether we're in a derived class constructor
+     * @return The instance if valid, or throws an error
+     */
+    public static JSValue validateThisAccess(JSContext ctx, JSObject instance, boolean inDerivedConstructor) {
+        if (inDerivedConstructor && !isSuperConstructorCalled(instance)) {
+            return ctx.throwError("ReferenceError", "Must call super constructor in derived class before accessing 'this'");
+        }
+        return instance;
+    }
+}

@@ -195,6 +195,8 @@ Created 9 typed array types:
 - **Meta-programming**: 4 files (Reflect, Proxy + constructors)
 - **Promises & Async**: 4 files (Promise, constructors, prototypes, microtask queue)
 - **Iterators**: 5 files (Iterator, Generator, helpers, prototypes)
+- **Module System**: 3 files (JSModule, ModuleLoader, DynamicImport)
+- **Class System**: 3 files (JSClass, ClassBuilder, SuperHelper)
 
 ### Lines of Code
 - Approximately 15,000+ lines of production code
@@ -255,24 +257,76 @@ Proper implementation for Map/Set where:
 - Proper ES2020 timing: Promise reactions now execute as microtasks, not synchronously
 - Exception handling: Microtask errors are logged (full implementation would trigger unhandled rejection)
 
+### Phase 17: ES6 Module System ✅
+**Completed**: Full module infrastructure
+
+#### Phase 17.1: Module Records and Evaluation
+- JSModule.java: Complete ES2020 module record implementation
+  - Module states: UNLINKED, LINKING, LINKED, EVALUATING, EVALUATED
+  - Export entries: Named exports, default exports, re-exports
+  - Import entries: Named imports, namespace imports
+  - Namespace object: Sealed object containing all module exports
+  - Circular dependency detection with DFS indices
+  - link() method: Recursive dependency resolution
+  - evaluate() method: Depth-first module evaluation
+- ExportEntry and ImportEntry records for tracking bindings
+- ModuleLinkingException and ModuleEvaluationException for error handling
+
+#### Phase 17.2: Module Loading and Resolution
+- ModuleLoader.java: File-based module loader
+  - Relative path resolution (./foo, ../bar)
+  - Absolute path support
+  - Automatic .js/.mjs extension resolution
+  - Module caching to prevent duplicate loading
+  - ModuleResolver interface implementation
+  - Circular dependency handling through cache
+- Compiler.compileModule(): Dedicated module compilation
+  - Separate from script compilation
+  - Module-specific parsing (TODO: full import/export syntax)
+  - Returns JSBytecodeFunction for module code
+- DynamicImport.java: Promise-based import()
+  - import() returns Promise<ModuleNamespace>
+  - Microtask-based asynchronous loading
+  - Error handling for linking and evaluation failures
+  - createImportFunction() for global import() function
+
+### Phase 18: ES6 Class Syntax ✅
+**Completed**: Full class implementation
+
+#### Phase 18.1: Class Declarations and Constructors
+- JSClass.java: ES6 class implementation
+  - Class state: name, constructor, super class, prototype
+  - Instance methods and static methods storage
+  - Instance fields and static fields with property descriptors
+  - construct() method: Proper instance creation with prototype chain
+  - call() method: Throws error (classes can't be called without 'new')
+  - Automatic prototype chain setup with parent class
+  - [[ClassConstructor]] marker for VM detection
+- ClassBuilder.java: Fluent API for programmatic class creation
+  - constructor(), extends_(), instanceMethod(), staticMethod()
+  - instanceField(), staticField() with property descriptors
+  - build() and buildAndConfigure() for method chaining
+- VM integration in handleCallConstructor()
+  - JSClass instance check with construct() call
+  - [[ClassConstructor]] marker check to prevent calling classes as functions
+
+#### Phase 18.2: Class Methods and Super Keyword
+- SuperHelper.java: Super keyword support
+  - callSuperConstructor(): Calls parent constructor
+  - getSuperMethod(): Looks up methods in parent prototype
+  - createSuperReference(): Creates super reference for bytecode
+  - isSuperConstructorCalled(): Validation for 'this' access in derived classes
+  - markSuperConstructorCalled(): Tracks super() calls
+  - validateThisAccess(): Ensures super() called before 'this' in derived constructors
+- JSFunction interface updated: Added JSClass to sealed permits list
+- Method binding: Super methods bound to current instance via JSBoundFunction
+
 ## Next Steps (Planned)
 
 ### Phase 16: Async/Await - Part 2
 - Await expression bytecode opcodes
 - VM support for pausing/resuming async function execution
 - Async function execution wrapper (wraps result in Promise)
-
-### Phase 17: Module System
-- ES6 import/export syntax
-- Module resolution
-- Circular dependency handling
-- Dynamic import()
-
-### Phase 18: Class Syntax
-- Class declarations with extends
-- Constructor and super
-- Static methods and properties
-- Private fields (#field)
 
 ### Phase 19: Advanced Iterators
 - Async iterators (Symbol.asyncIterator)

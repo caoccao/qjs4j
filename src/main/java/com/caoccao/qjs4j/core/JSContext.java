@@ -174,8 +174,10 @@ public final class JSContext {
      *
      * @param specifier Module specifier (file path or URL)
      * @return The loaded module
+     * @throws JSModule.ModuleLinkingException if module cannot be loaded or linked
+     * @throws JSModule.ModuleEvaluationException if module evaluation fails
      */
-    public JSModule loadModule(String specifier) {
+    public JSModule loadModule(String specifier) throws JSModule.ModuleLinkingException, JSModule.ModuleEvaluationException {
         // Check cache first
         JSModule cached = moduleCache.get(specifier);
         if (cached != null) {
@@ -190,7 +192,8 @@ public final class JSContext {
         // 5. Execute module code (if not already executed)
         // 6. Cache and return the module
 
-        // For now, return null
+        // For now, return null to indicate module not found
+        // A full implementation would load from filesystem or URL
         return null;
     }
 
