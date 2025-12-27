@@ -28,10 +28,19 @@ public final class PromiseConstructor {
      * Promise.all(iterable)
      * ES2020 25.6.4.1
      * Returns a Promise that fulfills when all promises fulfill, or rejects when any promise rejects.
-     * Simplified: takes an array for now.
      */
     public static JSValue all(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSArray array)) {
+        if (args.length == 0) {
+            return ctx.throwError("TypeError", "Promise.all requires an iterable");
+        }
+
+        // Convert iterable to array
+        JSArray array;
+        if (args[0] instanceof JSArray jsArray) {
+            array = jsArray;
+        } else if (JSIteratorHelper.isIterable(args[0])) {
+            array = JSIteratorHelper.toArray(args[0], ctx);
+        } else {
             return ctx.throwError("TypeError", "Promise.all requires an iterable");
         }
 
@@ -94,10 +103,19 @@ public final class PromiseConstructor {
      * Promise.allSettled(iterable)
      * ES2020 25.6.4.2
      * Returns a Promise that fulfills when all promises have settled (fulfilled or rejected).
-     * Simplified: takes an array for now.
      */
     public static JSValue allSettled(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSArray array)) {
+        if (args.length == 0) {
+            return ctx.throwError("TypeError", "Promise.allSettled requires an iterable");
+        }
+
+        // Convert iterable to array
+        JSArray array;
+        if (args[0] instanceof JSArray jsArray) {
+            array = jsArray;
+        } else if (JSIteratorHelper.isIterable(args[0])) {
+            array = JSIteratorHelper.toArray(args[0], ctx);
+        } else {
             return ctx.throwError("TypeError", "Promise.allSettled requires an iterable");
         }
 
@@ -172,10 +190,19 @@ public final class PromiseConstructor {
      * Promise.any(iterable)
      * ES2021 25.6.4.3
      * Returns a Promise that fulfills when any promise fulfills, or rejects when all promises reject.
-     * Simplified: takes an array for now.
      */
     public static JSValue any(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSArray array)) {
+        if (args.length == 0) {
+            return ctx.throwError("TypeError", "Promise.any requires an iterable");
+        }
+
+        // Convert iterable to array
+        JSArray array;
+        if (args[0] instanceof JSArray jsArray) {
+            array = jsArray;
+        } else if (JSIteratorHelper.isIterable(args[0])) {
+            array = JSIteratorHelper.toArray(args[0], ctx);
+        } else {
             return ctx.throwError("TypeError", "Promise.any requires an iterable");
         }
 
@@ -233,10 +260,19 @@ public final class PromiseConstructor {
      * Promise.race(iterable)
      * ES2020 25.6.4.5
      * Returns a Promise that settles as soon as any promise in the iterable settles.
-     * Simplified: takes an array for now.
      */
     public static JSValue race(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSArray array)) {
+        if (args.length == 0) {
+            return ctx.throwError("TypeError", "Promise.race requires an iterable");
+        }
+
+        // Convert iterable to array
+        JSArray array;
+        if (args[0] instanceof JSArray jsArray) {
+            array = jsArray;
+        } else if (JSIteratorHelper.isIterable(args[0])) {
+            array = JSIteratorHelper.toArray(args[0], ctx);
+        } else {
             return ctx.throwError("TypeError", "Promise.race requires an iterable");
         }
 

@@ -1441,6 +1441,150 @@ These changes improve ES2020 compliance and ensure correct JavaScript semantics 
 
 ---
 
+## Phase 37: Promise Methods Iterable Support
+
+### Overview
+Updated all Promise static methods (all, allSettled, race, any) to accept any iterable, not just arrays. This matches the ES2020/ES2021 specification and aligns with the iterable support added to collections in Phase 33.
+
+**Files Modified:**
+- `PromiseConstructor.java`: Updated 4 Promise methods to support iterables
+
+### Problem
+All Promise static methods were marked as "Simplified: takes an array for now" and would reject non-array iterables like Sets, Maps, or custom iterables with Symbol.iterator.
+
+**Before:**
+```java
+public static JSValue all(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    if (args.length == 0 || !(args[0] instanceof JSArray array)) {
+        return ctx.throwError("TypeError", "Promise.all requires an iterable");
+    }
+    // ... error message says "iterable" but only accepts JSArray
+}
+```
+
+### Solution
+Use `JSIteratorHelper.toArray()` to convert any iterable to an array before processing. This leverages the Symbol.iterator protocol.
+
+**After:**
+```java
+public static JSValue all(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    if (args.length == 0) {
+        return ctx.throwError("TypeError", "Promise.all requires an iterable");
+    }
+
+    // Convert iterable to array
+    JSArray array;
+    if (args[0] instanceof JSArray jsArray) {
+        array = jsArray;  // Fast path for arrays
+    } else if (JSIteratorHelper.isIterable(args[0])) {
+        array = JSIteratorHelper.toArray(args[0], ctx);  // Convert iterable
+    } else {
+        return ctx.throwError("TypeError", "Promise.all requires an iterable");
+    }
+
+    int length = (int) array.getLength();
+    // ... rest of implementation
+}
+```
+
+### Updated Methods
+
+#### 1. Promise.all(iterable)
+**File**: `PromiseConstructor.java:27-46`
+**Spec**: ES2020 25.6.4.1
+
+Now accepts any iterable and returns a promise that:
+- Fulfills when all promises fulfill (with array of results)
+- Rejects when any promise rejects (with that rejection reason)
+
+**Examples:**
+```javascript
+// Array (worked before)
+Promise.all([p1, p2, p3]).then(results => console.log(results));
+
+// Set (now works!)
+Promise.all(new Set([p1, p2, p3])).then(results => console.log(results));
+
+// Custom iterable (now works!)
+const iterable = {
+    *[Symbol.iterator]() {
+        yield p1;
+        yield p2;
+        yield p3;
+    }
+};
+Promise.all(iterable).then(results => console.log(results));
+```
+
+#### 2. Promise.allSettled(iterable)
+**File**: `PromiseConstructor.java:102-120`
+**Spec**: ES2020 25.6.4.2
+
+Now accepts any iterable and returns a promise that fulfills when all promises settle, with results containing:
+```javascript
+{ status: "fulfilled", value: result }  // for fulfilled promises
+{ status: "rejected", reason: error }   // for rejected promises
+```
+
+#### 3. Promise.race(iterable)
+**File**: `PromiseConstructor.java:250-268`
+**Spec**: ES2020 25.6.4.5
+
+Now accepts any iterable and returns a promise that settles as soon as the first promise settles (fulfills or rejects).
+
+#### 4. Promise.any(iterable)
+**File**: `PromiseConstructor.java:189-207`
+**Spec**: ES2021 25.6.4.3
+
+Now accepts any iterable and returns a promise that:
+- Fulfills when any promise fulfills (with that value)
+- Rejects when all promises reject (with AggregateError)
+
+### Implementation Pattern
+
+All four methods now follow the same pattern:
+
+1. **Fast path for arrays**: Check `instanceof JSArray` first (no conversion needed)
+2. **Iterable check**: Use `JSIteratorHelper.isIterable()` to check for Symbol.iterator
+3. **Conversion**: Use `JSIteratorHelper.toArray()` to materialize the iterable
+4. **Error handling**: Throw TypeError if argument is neither array nor iterable
+
+### Why This Matters
+
+1. **Spec Compliance**: ES2020/ES2021 specs require accepting iterables, not just arrays
+2. **Consistency**: Matches Map/Set/WeakMap/WeakSet iterable support from Phase 33
+3. **Flexibility**: Enables common patterns like:
+   ```javascript
+   Promise.all(new Set(promises))  // De-duplicate promises
+   Promise.all(map.values())       // Promise values from Map
+   Promise.race(generator())       // Lazy promise generation
+   ```
+
+### Testing and Validation
+
+✅ **Build Status**: Clean compilation with zero errors
+✅ **Test Suite**: All 260 tests passing
+✅ **Spec Compliance**: All Promise methods now accept any iterable per ES2020/ES2021
+
+### Performance Considerations
+
+- **Arrays**: Zero overhead - fast path skips conversion
+- **Iterables**: One-time materialization to array via iteration
+- **Memory**: Temporary array created only for non-array iterables
+
+### Summary
+
+Phase 37 completed iterable support for Promise static methods:
+
+1. **Promise.all** - Now accepts any iterable
+2. **Promise.allSettled** - Now accepts any iterable
+3. **Promise.race** - Now accepts any iterable
+4. **Promise.any** - Now accepts any iterable
+
+All methods maintain backward compatibility with arrays while adding support for Sets, Maps, custom iterables, and any object with Symbol.iterator.
+
+---
+
 ## Conclusion
 
 Successfully brought qjs4j from **ES2020 to ES2024 compliance** by implementing 16 new ECMAScript features across 4 specification versions, plus post-migration cleanup and enhancements. All implementations:
@@ -1460,6 +1604,7 @@ Successfully brought qjs4j from **ES2020 to ES2024 compliance** by implementing 
 - **Phase 34**: Object static method implementations (is, getOwnPropertyDescriptor, getOwnPropertyDescriptors, getOwnPropertyNames, getOwnPropertySymbols)
 - **Phase 35**: ES5.1 object extensibility and property definition (defineProperty registration, defineProperties, preventExtensions, isExtensible)
 - **Phase 36**: Reflect and Proxy enhancements, proper getters (Reflect.isExtensible/preventExtensions fixes, Proxy.revocable revoke function, buffer getter descriptors)
+- **Phase 37**: Promise methods iterable support (Promise.all, allSettled, race, any now accept any iterable)
 - **Total Tests**: 260 tests, all passing
 - **Build Status**: Clean build with zero errors
 
