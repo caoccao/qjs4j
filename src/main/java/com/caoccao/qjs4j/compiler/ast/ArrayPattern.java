@@ -16,16 +16,14 @@
 
 package com.caoccao.qjs4j.compiler.ast;
 
+import java.util.List;
+
 /**
- * Represents an identifier.
- * Identifiers can be used as expressions and as patterns in destructuring.
+ * Represents an array destructuring pattern.
+ * Example: [a, b] or [x, , z]
  */
-public record Identifier(
-        String name,
+public record ArrayPattern(
+        List<Pattern> elements,
         SourceLocation location
-) implements Expression, Pattern {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
-    }
+) implements Pattern {
 }

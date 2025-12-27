@@ -16,16 +16,27 @@
 
 package com.caoccao.qjs4j.compiler.ast;
 
+import java.util.List;
+
 /**
- * Represents an identifier.
- * Identifiers can be used as expressions and as patterns in destructuring.
+ * Represents an object destructuring pattern.
+ * Example: { proxy, revoke } or { x: a, y: b }
  */
-public record Identifier(
-        String name,
+public record ObjectPattern(
+        List<Property> properties,
         SourceLocation location
-) implements Expression, Pattern {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
+) implements Pattern {
+
+    /**
+     * Represents a property in an object pattern.
+     * key: the property name
+     * value: the pattern to bind to (can be Identifier or nested pattern)
+     * shorthand: true for { x } (equivalent to { x: x })
+     */
+    public record Property(
+            Expression key,
+            Pattern value,
+            boolean shorthand
+    ) {
     }
 }

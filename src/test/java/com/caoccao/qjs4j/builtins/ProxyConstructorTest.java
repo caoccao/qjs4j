@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.core.JSValue;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -28,7 +27,6 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class ProxyConstructorTest extends BaseTest {
 
-    @Disabled
     @Test
     public void testProxyRevocableAccessAfterRevoke() {
         // Test that accessing revoked proxy throws TypeError
@@ -50,7 +48,6 @@ public class ProxyConstructorTest extends BaseTest {
         }
     }
 
-    @Disabled
     @Test
     public void testProxyRevocableAccessBeforeRevoke() {
         // Test that proxy works normally before revocation
@@ -82,7 +79,6 @@ public class ProxyConstructorTest extends BaseTest {
         assertEquals("function", result.toJavaObject());
     }
 
-    @Disabled
     @Test
     public void testProxyRevocableRevokeMultipleTimes() {
         // Test that calling revoke multiple times doesn't cause issues
@@ -97,7 +93,6 @@ public class ProxyConstructorTest extends BaseTest {
         assertEquals("ok", result.toJavaObject());
     }
 
-    @Disabled
     @Test
     public void testProxyRevocableSetAfterRevoke() {
         // Test that setting on revoked proxy throws TypeError

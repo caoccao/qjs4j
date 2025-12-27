@@ -801,7 +801,7 @@ public final class Parser {
                 advance();
             }
 
-            Identifier id = parseIdentifier();
+            Pattern id = parsePattern();
             Expression init = null;
 
             if (match(TokenType.ASSIGN)) {
@@ -814,6 +814,76 @@ public final class Parser {
 
         consumeSemicolon();
         return new VariableDeclaration(declarations, kind, location);
+    }
+
+    private Pattern parsePattern() {
+        if (match(TokenType.LBRACE)) {
+            return parseObjectPattern();
+        } else if (match(TokenType.LBRACKET)) {
+            return parseArrayPattern();
+        } else {
+            return parseIdentifier();
+        }
+    }
+
+    private ObjectPattern parseObjectPattern() {
+        SourceLocation location = getLocation();
+        expect(TokenType.LBRACE);
+
+        List<ObjectPattern.Property> properties = new ArrayList<>();
+
+        while (!match(TokenType.RBRACE) && !match(TokenType.EOF)) {
+            if (!properties.isEmpty()) {
+                expect(TokenType.COMMA);
+                if (match(TokenType.RBRACE)) {
+                    break; // Trailing comma
+                }
+            }
+
+            Identifier key = parseIdentifier();
+            Pattern value;
+            boolean shorthand = false;
+
+            if (match(TokenType.COLON)) {
+                advance();
+                value = parsePattern();
+            } else {
+                // Shorthand: { x } means { x: x }
+                value = key;
+                shorthand = true;
+            }
+
+            properties.add(new ObjectPattern.Property(key, value, shorthand));
+        }
+
+        expect(TokenType.RBRACE);
+        return new ObjectPattern(properties, location);
+    }
+
+    private ArrayPattern parseArrayPattern() {
+        SourceLocation location = getLocation();
+        expect(TokenType.LBRACKET);
+
+        List<Pattern> elements = new ArrayList<>();
+
+        while (!match(TokenType.RBRACKET) && !match(TokenType.EOF)) {
+            if (!elements.isEmpty()) {
+                expect(TokenType.COMMA);
+                if (match(TokenType.RBRACKET)) {
+                    break; // Trailing comma
+                }
+            }
+
+            if (match(TokenType.COMMA)) {
+                // Hole in array pattern: [a, , c]
+                elements.add(null);
+            } else {
+                elements.add(parsePattern());
+            }
+        }
+
+        expect(TokenType.RBRACKET);
+        return new ArrayPattern(elements, location);
     }
 
     private Statement parseWhileStatement() {

@@ -32,7 +32,7 @@ public record VariableDeclaration(
     }
 
     public record VariableDeclarator(
-            Identifier id,
+            Pattern id,
             Expression init
     ) {
     }

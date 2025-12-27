@@ -17,15 +17,8 @@
 package com.caoccao.qjs4j.compiler.ast;
 
 /**
- * Represents an identifier.
- * Identifiers can be used as expressions and as patterns in destructuring.
+ * Base interface for destructuring patterns.
+ * Patterns can be used in variable declarations and assignment expressions.
  */
-public record Identifier(
-        String name,
-        SourceLocation location
-) implements Expression, Pattern {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
-    }
+public sealed interface Pattern permits Identifier, ObjectPattern, ArrayPattern {
 }
