@@ -812,6 +812,8 @@ public final class GlobalObject {
         objectConstructor.set("fromEntries", new JSNativeFunction("fromEntries", 1, ObjectConstructor::fromEntries));
         objectConstructor.set("assign", new JSNativeFunction("assign", 2, ObjectConstructor::assign));
         objectConstructor.set("create", new JSNativeFunction("create", 2, ObjectConstructor::create));
+        objectConstructor.set("defineProperty", new JSNativeFunction("defineProperty", 3, ObjectPrototype::defineProperty));
+        objectConstructor.set("defineProperties", new JSNativeFunction("defineProperties", 2, ObjectConstructor::defineProperties));
         objectConstructor.set("getOwnPropertyDescriptor", new JSNativeFunction("getOwnPropertyDescriptor", 2, ObjectConstructor::getOwnPropertyDescriptor));
         objectConstructor.set("getOwnPropertyDescriptors", new JSNativeFunction("getOwnPropertyDescriptors", 1, ObjectConstructor::getOwnPropertyDescriptors));
         objectConstructor.set("getOwnPropertyNames", new JSNativeFunction("getOwnPropertyNames", 1, ObjectConstructor::getOwnPropertyNames));
@@ -820,9 +822,11 @@ public final class GlobalObject {
         objectConstructor.set("setPrototypeOf", new JSNativeFunction("setPrototypeOf", 2, ObjectConstructor::setPrototypeOf));
         objectConstructor.set("freeze", new JSNativeFunction("freeze", 1, ObjectConstructor::freeze));
         objectConstructor.set("seal", new JSNativeFunction("seal", 1, ObjectConstructor::seal));
+        objectConstructor.set("preventExtensions", new JSNativeFunction("preventExtensions", 1, ObjectConstructor::preventExtensions));
         objectConstructor.set("isFrozen", new JSNativeFunction("isFrozen", 1, ObjectConstructor::isFrozen));
-        objectConstructor.set("is", new JSNativeFunction("is", 2, ObjectConstructor::is));
         objectConstructor.set("isSealed", new JSNativeFunction("isSealed", 1, ObjectConstructor::isSealed));
+        objectConstructor.set("isExtensible", new JSNativeFunction("isExtensible", 1, ObjectConstructor::isExtensible));
+        objectConstructor.set("is", new JSNativeFunction("is", 2, ObjectConstructor::is));
         objectConstructor.set("hasOwn", new JSNativeFunction("hasOwn", 2, ObjectConstructor::hasOwn));
         objectConstructor.set("groupBy", new JSNativeFunction("groupBy", 2, ObjectConstructor::groupBy));
 

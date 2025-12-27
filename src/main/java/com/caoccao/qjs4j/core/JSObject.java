@@ -33,6 +33,7 @@ import java.util.*;
  * - Optimized for objects with similar structure
  */
 public non-sealed class JSObject implements JSValue {
+    protected boolean extensible = true;
     protected boolean frozen = false;
     protected JSValue[] propertyValues;
     protected JSObject prototype;
@@ -154,6 +155,7 @@ public non-sealed class JSObject implements JSValue {
     public void freeze() {
         this.frozen = true;
         this.sealed = true; // Frozen objects are also sealed
+        this.extensible = false; // Frozen objects are not extensible
     }
 
     /**
@@ -282,6 +284,22 @@ public non-sealed class JSObject implements JSValue {
         return sealed;
     }
 
+    /**
+     * Check if this object is extensible.
+     * ES5.1 15.2.3.13
+     */
+    public boolean isExtensible() {
+        return extensible;
+    }
+
+    /**
+     * Prevent new properties from being added to this object.
+     * ES5.1 15.2.3.10
+     */
+    public void preventExtensions() {
+        this.extensible = false;
+    }
+
     // Prototype chain
 
     /**
@@ -311,6 +329,7 @@ public non-sealed class JSObject implements JSValue {
      */
     public void seal() {
         this.sealed = true;
+        this.extensible = false; // Sealed objects are not extensible
     }
 
     // Object integrity levels (ES5)
@@ -355,8 +374,8 @@ public non-sealed class JSObject implements JSValue {
             return;
         }
 
-        // Property doesn't exist, add it (only if not sealed/frozen)
-        if (!sealed && !frozen) {
+        // Property doesn't exist, add it (only if extensible)
+        if (extensible) {
             defineProperty(key, PropertyDescriptor.defaultData(value));
         }
     }

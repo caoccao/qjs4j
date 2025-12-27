@@ -764,4 +764,128 @@ public final class ObjectConstructor {
 
         return result;
     }
+
+    /**
+     * Object.defineProperties(obj, props)
+     * ES5.1 15.2.3.7
+     * Defines new or modifies existing properties directly on an object, returning the object.
+     */
+    public static JSValue defineProperties(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (args.length < 2) {
+            return ctx.throwError("TypeError", "Object.defineProperties requires 2 arguments");
+        }
+
+        if (!(args[0] instanceof JSObject obj)) {
+            return ctx.throwError("TypeError", "Object.defineProperties called on non-object");
+        }
+
+        if (!(args[1] instanceof JSObject props)) {
+            return ctx.throwError("TypeError", "Properties argument must be an object");
+        }
+
+        // Get all enumerable properties from the props object
+        List<PropertyKey> propertyKeys = props.getOwnPropertyKeys();
+
+        for (PropertyKey key : propertyKeys) {
+            // Only process enumerable properties
+            PropertyDescriptor keyDesc = props.getOwnPropertyDescriptor(key);
+            if (keyDesc != null && keyDesc.isEnumerable()) {
+                JSValue descValue = props.get(key);
+
+                if (!(descValue instanceof JSObject descObj)) {
+                    return ctx.throwError("TypeError", "Property descriptor must be an object");
+                }
+
+                // Parse the descriptor object
+                PropertyDescriptor desc = new PropertyDescriptor();
+
+                // Check for value
+                JSValue value = descObj.get("value");
+                if (value != null && !(value instanceof JSUndefined)) {
+                    desc.setValue(value);
+                }
+
+                // Check for writable
+                JSValue writable = descObj.get("writable");
+                if (writable != null && !(writable instanceof JSUndefined)) {
+                    desc.setWritable(JSTypeChecking.isTruthy(writable));
+                }
+
+                // Check for enumerable
+                JSValue enumerable = descObj.get("enumerable");
+                if (enumerable != null && !(enumerable instanceof JSUndefined)) {
+                    desc.setEnumerable(JSTypeChecking.isTruthy(enumerable));
+                }
+
+                // Check for configurable
+                JSValue configurable = descObj.get("configurable");
+                if (configurable != null && !(configurable instanceof JSUndefined)) {
+                    desc.setConfigurable(JSTypeChecking.isTruthy(configurable));
+                }
+
+                // Check for getter
+                JSValue getter = descObj.get("get");
+                if (getter != null && !(getter instanceof JSUndefined)) {
+                    if (!(getter instanceof JSFunction)) {
+                        return ctx.throwError("TypeError", "Getter must be a function");
+                    }
+                    desc.setGetter((JSFunction) getter);
+                }
+
+                // Check for setter
+                JSValue setter = descObj.get("set");
+                if (setter != null && !(setter instanceof JSUndefined)) {
+                    if (!(setter instanceof JSFunction)) {
+                        return ctx.throwError("TypeError", "Setter must be a function");
+                    }
+                    desc.setSetter((JSFunction) setter);
+                }
+
+                obj.defineProperty(key, desc);
+            }
+        }
+
+        return obj;
+    }
+
+    /**
+     * Object.preventExtensions(obj)
+     * ES5.1 15.2.3.10
+     * Prevents new properties from ever being added to an object.
+     */
+    public static JSValue preventExtensions(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (args.length == 0) {
+            return ctx.throwError("TypeError", "Object.preventExtensions called without arguments");
+        }
+
+        JSValue arg = args[0];
+
+        // Non-objects are returned as-is
+        if (!(arg instanceof JSObject obj)) {
+            return arg;
+        }
+
+        obj.preventExtensions();
+        return obj;
+    }
+
+    /**
+     * Object.isExtensible(obj)
+     * ES5.1 15.2.3.13
+     * Determines if an object is extensible (whether new properties can be added to it).
+     */
+    public static JSValue isExtensible(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (args.length == 0) {
+            return ctx.throwError("TypeError", "Object.isExtensible called without arguments");
+        }
+
+        JSValue arg = args[0];
+
+        // Non-objects are not extensible
+        if (!(arg instanceof JSObject obj)) {
+            return JSBoolean.FALSE;
+        }
+
+        return JSBoolean.valueOf(obj.isExtensible());
+    }
 }
