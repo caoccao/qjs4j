@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.core.JSValue;
 
 /**
  * Represents the value stack for the VM.
+ * Following QuickJS stack operations: sp[-1], sp[-2], etc.
  */
 public final class CallStack {
     private final JSValue[] stack;
@@ -30,6 +31,9 @@ public final class CallStack {
         this.stackTop = 0;
     }
 
+    /**
+     * Drop count values from the stack (QuickJS: sp -= count).
+     */
     public void drop(int count) {
         stackTop -= count;
     }
@@ -38,15 +42,44 @@ public final class CallStack {
         return stackTop;
     }
 
+    /**
+     * Peek at a value on the stack (QuickJS: sp[-1-offset]).
+     * offset=0 means sp[-1], offset=1 means sp[-2], etc.
+     */
     public JSValue peek(int offset) {
-        return stack[stackTop - 1 - offset];
+        int index = stackTop - 1 - offset;
+        if (index < 0) {
+            throw new IllegalStateException("Stack underflow in peek: stackTop=" + stackTop + ", offset=" + offset);
+        }
+        return stack[index];
     }
 
+    /**
+     * Pop a value from the stack (QuickJS: *--sp).
+     */
     public JSValue pop() {
+        if (stackTop <= 0) {
+            throw new IllegalStateException("Stack underflow in pop: stackTop=" + stackTop);
+        }
         return stack[--stackTop];
     }
 
+    /**
+     * Push a value onto the stack (QuickJS: *sp++ = value).
+     */
     public void push(JSValue value) {
         stack[stackTop++] = value;
+    }
+
+    /**
+     * Set a value at a stack position (QuickJS: sp[-1-offset] = value).
+     * offset=0 means sp[-1], offset=1 means sp[-2], etc.
+     */
+    public void set(int offset, JSValue value) {
+        int index = stackTop - 1 - offset;
+        if (index < 0) {
+            throw new IllegalStateException("Stack underflow in set: stackTop=" + stackTop + ", offset=" + offset);
+        }
+        stack[index] = value;
     }
 }

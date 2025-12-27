@@ -24,7 +24,8 @@ import java.util.Optional;
  */
 public sealed interface JSValue permits
         JSUndefined, JSNull, JSBoolean, JSNumber, JSString,
-        JSObject, JSSymbol, JSBigInt, JSFunction {
+        JSObject, JSSymbol, JSBigInt, JSFunction,
+        CatchOffset {
 
     /**
      * Attempt to cast this value to JSArray.

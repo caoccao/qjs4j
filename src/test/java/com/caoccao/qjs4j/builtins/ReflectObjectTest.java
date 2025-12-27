@@ -90,7 +90,6 @@ public class ReflectObjectTest extends BaseTest {
         assertFalse((Boolean) result.toJavaObject());
     }
 
-    @Disabled
     @Test
     public void testReflectPreventExtensions() {
         // Test that Reflect.preventExtensions prevents adding properties

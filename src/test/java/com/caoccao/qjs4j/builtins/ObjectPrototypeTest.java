@@ -234,6 +234,15 @@ public class ObjectPrototypeTest extends BaseTest {
     }
 
     @Test
+    public void testSet() {
+        JSValue result = ctx.eval("""
+                const obj = {};
+                obj.a = 1;
+                JSON.stringify(obj);""");
+        assertEquals("{\"a\":1}", result.asString().map(JSString::value).orElse(null));
+    }
+
+    @Test
     public void testToString() {
         // Normal case: undefined
         JSValue result = ObjectPrototype.toString(ctx, JSUndefined.INSTANCE, new JSValue[]{});
