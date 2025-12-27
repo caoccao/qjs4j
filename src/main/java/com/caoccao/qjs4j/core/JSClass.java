@@ -22,7 +22,7 @@ import java.util.Map;
 /**
  * Represents an ES6 class in JavaScript.
  * Based on ES2020 class syntax specification.
- *
+ * <p>
  * In JavaScript, classes are special functions:
  * - typeof MyClass === 'function'
  * - Classes can only be called with 'new'
@@ -43,28 +43,17 @@ public final class JSClass extends JSObject implements JSFunction {
     private final Map<String, PropertyDescriptor> staticFields;
 
     /**
-     * Property descriptor for class fields.
-     */
-    public static class PropertyDescriptor {
-        public final JSValue value;
-        public final boolean writable;
-        public final boolean enumerable;
-        public final boolean configurable;
-
-        public PropertyDescriptor(JSValue value, boolean writable, boolean enumerable, boolean configurable) {
-            this.value = value;
-            this.writable = writable;
-            this.enumerable = enumerable;
-            this.configurable = configurable;
-        }
+         * Property descriptor for class fields.
+         */
+        public record PropertyDescriptor(JSValue value, boolean writable, boolean enumerable, boolean configurable) {
     }
 
     /**
      * Create a new class.
      *
-     * @param name Class name
+     * @param name        Class name
      * @param constructor Constructor function
-     * @param superClass Parent class (null for no inheritance)
+     * @param superClass  Parent class (null for no inheritance)
      */
     public JSClass(String name, JSFunction constructor, JSClass superClass) {
         super();
@@ -98,7 +87,7 @@ public final class JSClass extends JSObject implements JSFunction {
      * Instance methods are added to the prototype.
      *
      * @param methodName Method name
-     * @param method Method function
+     * @param method     Method function
      */
     public void addInstanceMethod(String methodName, JSFunction method) {
         instanceMethods.put(methodName, method);
@@ -110,7 +99,7 @@ public final class JSClass extends JSObject implements JSFunction {
      * Static methods are added to the class itself.
      *
      * @param methodName Method name
-     * @param method Method function
+     * @param method     Method function
      */
     public void addStaticMethod(String methodName, JSFunction method) {
         staticMethods.put(methodName, method);
@@ -121,7 +110,7 @@ public final class JSClass extends JSObject implements JSFunction {
      * Add an instance field initializer.
      * Instance fields are initialized in the constructor.
      *
-     * @param fieldName Field name
+     * @param fieldName  Field name
      * @param descriptor Property descriptor
      */
     public void addInstanceField(String fieldName, PropertyDescriptor descriptor) {
@@ -132,7 +121,7 @@ public final class JSClass extends JSObject implements JSFunction {
      * Add a static field to the class.
      * Static fields are added to the class itself.
      *
-     * @param fieldName Field name
+     * @param fieldName  Field name
      * @param descriptor Property descriptor
      */
     public void addStaticField(String fieldName, PropertyDescriptor descriptor) {
@@ -151,7 +140,7 @@ public final class JSClass extends JSObject implements JSFunction {
     /**
      * Construct a new instance of the class.
      *
-     * @param ctx The execution context
+     * @param ctx  The execution context
      * @param args Constructor arguments
      * @return The new instance
      */

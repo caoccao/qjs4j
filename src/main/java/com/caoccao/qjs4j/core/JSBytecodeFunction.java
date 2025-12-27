@@ -21,13 +21,13 @@ import com.caoccao.qjs4j.vm.Bytecode;
 /**
  * Represents a JavaScript function compiled to bytecode.
  * Based on QuickJS JSFunctionBytecode structure.
- *
+ * <p>
  * Bytecode functions are created by:
  * - Function declarations
  * - Function expressions
  * - Arrow functions
  * - Method definitions
- *
+ * <p>
  * They contain:
  * - Compiled bytecode for execution
  * - Closure variables (captured from outer scopes)
@@ -48,8 +48,8 @@ public final class JSBytecodeFunction implements JSFunction {
      * Create a bytecode function.
      *
      * @param bytecode The compiled bytecode
-     * @param name Function name (empty string for anonymous)
-     * @param length Number of formal parameters
+     * @param name     Function name (empty string for anonymous)
+     * @param length   Number of formal parameters
      */
     public JSBytecodeFunction(Bytecode bytecode, String name, int length) {
         this(bytecode, name, length, new JSValue[0], null, true, false, false);

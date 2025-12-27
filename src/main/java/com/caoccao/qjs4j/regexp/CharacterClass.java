@@ -16,8 +16,6 @@
 
 package com.caoccao.qjs4j.regexp;
 
-import com.caoccao.qjs4j.unicode.UnicodeData;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -26,20 +24,17 @@ import java.util.List;
  * Represents a character class in a regex.
  * Character classes match sets of characters (e.g., [a-z], \d, \w).
  * Based on QuickJS libregexp.c character range implementation.
+ *
+ * @param ranges pairs of [start, end] inclusive
  */
-public final class CharacterClass {
-    private final boolean inverted;
-    private final int[] ranges; // pairs of [start, end] inclusive
-
+public record CharacterClass(boolean inverted, int[] ranges) {
     /**
      * Create a character class from ranges.
      *
      * @param inverted Whether the class is inverted (e.g., [^a-z])
-     * @param ranges Array of range pairs [start1, end1, start2, end2, ...]
+     * @param ranges   Array of range pairs [start1, end1, start2, end2, ...]
      */
-    public CharacterClass(boolean inverted, int[] ranges) {
-        this.inverted = inverted;
-        this.ranges = ranges;
+    public CharacterClass {
     }
 
     /**
@@ -59,7 +54,7 @@ public final class CharacterClass {
         }
 
         // Apply inversion if needed
-        return inverted ? !inRange : inRange;
+        return inverted != inRange;
     }
 
     /**
@@ -80,14 +75,6 @@ public final class CharacterClass {
         // Try lowercase variant
         int lower = Character.toLowerCase(codePoint);
         return lower != codePoint && matches(lower);
-    }
-
-    public boolean isInverted() {
-        return inverted;
-    }
-
-    public int[] getRanges() {
-        return ranges;
     }
 
     // Predefined character classes

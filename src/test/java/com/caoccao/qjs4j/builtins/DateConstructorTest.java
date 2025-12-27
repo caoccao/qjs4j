@@ -277,7 +277,7 @@ public class DateConstructorTest extends BaseTest {
         JSDate date = new JSDate(1735689600000L);
 
         JSValue result = DatePrototype.toISOString(ctx, date, new JSValue[]{});
-        String isoString = result.asString().map(JSString::getValue).orElse("");
+        String isoString = result.asString().map(JSString::value).orElse("");
         assertTrue(isoString.contains("2025-01-01"));
         assertTrue(isoString.endsWith("Z"));
 
@@ -292,7 +292,7 @@ public class DateConstructorTest extends BaseTest {
         JSDate date = new JSDate(1735689600000L);
 
         JSValue result = DatePrototype.toJSON(ctx, date, new JSValue[]{});
-        String jsonString = result.asString().map(JSString::getValue).orElse("");
+        String jsonString = result.asString().map(JSString::value).orElse("");
         assertTrue(jsonString.contains("2025-01-01"));
 
         // Edge case: called on non-Date
@@ -305,7 +305,7 @@ public class DateConstructorTest extends BaseTest {
         JSDate date = new JSDate(1735689600000L);
 
         JSValue result = DatePrototype.toStringMethod(ctx, date, new JSValue[]{});
-        String str = result.asString().map(JSString::getValue).orElse("");
+        String str = result.asString().map(JSString::value).orElse("");
         assertFalse(str.isEmpty());
 
         // Edge case: called on non-Date

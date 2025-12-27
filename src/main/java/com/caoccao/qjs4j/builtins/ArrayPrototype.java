@@ -303,6 +303,68 @@ public final class ArrayPrototype {
     }
 
     /**
+     * Array.prototype.findLast(callbackFn[, thisArg])
+     * ES2023 23.1.3.13
+     * Returns the last element that satisfies the test (iterates backwards).
+     */
+    public static JSValue findLast(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArray arr)) {
+            return ctx.throwError("TypeError", "Array.prototype.findLast called on non-array");
+        }
+
+        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
+            return ctx.throwError("TypeError", "Callback must be a function");
+        }
+
+        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        long length = arr.getLength();
+
+        // Iterate backwards
+        for (long i = length - 1; i >= 0; i--) {
+            JSValue element = arr.get(i);
+            JSValue[] callbackArgs = {element, new JSNumber(i), arr};
+            JSValue result = callback.call(ctx, callbackThis, callbackArgs);
+
+            if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
+                return element;
+            }
+        }
+
+        return JSUndefined.INSTANCE;
+    }
+
+    /**
+     * Array.prototype.findLastIndex(callbackFn[, thisArg])
+     * ES2023 23.1.3.14
+     * Returns the index of the last element that satisfies the test (iterates backwards).
+     */
+    public static JSValue findLastIndex(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArray arr)) {
+            return ctx.throwError("TypeError", "Array.prototype.findLastIndex called on non-array");
+        }
+
+        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
+            return ctx.throwError("TypeError", "Callback must be a function");
+        }
+
+        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        long length = arr.getLength();
+
+        // Iterate backwards
+        for (long i = length - 1; i >= 0; i--) {
+            JSValue element = arr.get(i);
+            JSValue[] callbackArgs = {element, new JSNumber(i), arr};
+            JSValue result = callback.call(ctx, callbackThis, callbackArgs);
+
+            if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
+                return new JSNumber(i);
+            }
+        }
+
+        return new JSNumber(-1);
+    }
+
+    /**
      * Array.prototype.slice([begin[, end]])
      * Returns a shallow copy of a portion of an array.
      */
@@ -422,8 +484,8 @@ public final class ArrayPrototype {
                 return JSTypeConversions.toInt32(result);
             } else {
                 // Default: convert to strings and compare
-                String aStr = JSTypeConversions.toString(a).getValue();
-                String bStr = JSTypeConversions.toString(b).getValue();
+                String aStr = JSTypeConversions.toString(a).value();
+                String bStr = JSTypeConversions.toString(b).value();
                 return aStr.compareTo(bStr);
             }
         });
@@ -456,6 +518,159 @@ public final class ArrayPrototype {
     }
 
     /**
+     * Array.prototype.toReversed()
+     * ES2023 23.1.3.31
+     * Returns a new array with elements in reversed order (immutable version of reverse).
+     */
+    public static JSValue toReversed(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArray arr)) {
+            return ctx.throwError("TypeError", "Array.prototype.toReversed called on non-array");
+        }
+
+        long length = arr.getLength();
+        JSArray result = new JSArray();
+
+        // Copy elements in reverse order
+        for (long i = length - 1; i >= 0; i--) {
+            result.push(arr.get(i));
+        }
+
+        return result;
+    }
+
+    /**
+     * Array.prototype.toSorted([compareFn])
+     * ES2023 23.1.3.32
+     * Returns a new sorted array (immutable version of sort).
+     */
+    public static JSValue toSorted(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArray arr)) {
+            return ctx.throwError("TypeError", "Array.prototype.toSorted called on non-array");
+        }
+
+        JSFunction compareFn = args.length > 0 && args[0] instanceof JSFunction ?
+                (JSFunction) args[0] : null;
+
+        // Create a copy of the array elements
+        List<JSValue> elements = new ArrayList<>();
+        long length = arr.getLength();
+        for (long i = 0; i < length; i++) {
+            elements.add(arr.get(i));
+        }
+
+        // Sort the copy
+        Collections.sort(elements, (a, b) -> {
+            if (compareFn != null) {
+                JSValue[] compareArgs = {a, b};
+                JSValue result = compareFn.call(ctx, JSUndefined.INSTANCE, compareArgs);
+                return JSTypeConversions.toInt32(result);
+            } else {
+                // Default: convert to strings and compare
+                String aStr = JSTypeConversions.toString(a).value();
+                String bStr = JSTypeConversions.toString(b).value();
+                return aStr.compareTo(bStr);
+            }
+        });
+
+        // Create new array with sorted elements
+        JSArray result = new JSArray();
+        for (JSValue element : elements) {
+            result.push(element);
+        }
+
+        return result;
+    }
+
+    /**
+     * Array.prototype.toSpliced(start, deleteCount, ...items)
+     * ES2023 23.1.3.33
+     * Returns a new array with elements removed and/or added (immutable version of splice).
+     */
+    public static JSValue toSpliced(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArray arr)) {
+            return ctx.throwError("TypeError", "Array.prototype.toSpliced called on non-array");
+        }
+
+        long length = arr.getLength();
+        long start = args.length > 0 ? JSTypeConversions.toInt32(args[0]) : 0;
+
+        // Normalize start index
+        if (start < 0) {
+            start = Math.max(length + start, 0);
+        } else {
+            start = Math.min(start, length);
+        }
+
+        // Calculate delete count
+        long deleteCount = length - start;
+        if (args.length > 1) {
+            deleteCount = Math.max(0, Math.min(JSTypeConversions.toInt32(args[1]), length - start));
+        }
+
+        // Create new array with spliced result
+        JSArray result = new JSArray();
+
+        // Copy elements before start
+        for (long i = 0; i < start; i++) {
+            result.push(arr.get(i));
+        }
+
+        // Insert new elements
+        for (int i = 2; i < args.length; i++) {
+            result.push(args[i]);
+        }
+
+        // Copy elements after deleted portion
+        for (long i = start + deleteCount; i < length; i++) {
+            result.push(arr.get(i));
+        }
+
+        return result;
+    }
+
+    /**
+     * Array.prototype.with(index, value)
+     * ES2023 23.1.3.34
+     * Returns a new array with the element at the given index replaced (immutable version of arr[index] = value).
+     */
+    public static JSValue with(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArray arr)) {
+            return ctx.throwError("TypeError", "Array.prototype.with called on non-array");
+        }
+
+        if (args.length < 2) {
+            return ctx.throwError("TypeError", "Array.prototype.with requires 2 arguments");
+        }
+
+        long length = arr.getLength();
+        long index = JSTypeConversions.toInt32(args[0]);
+
+        // Normalize negative index
+        if (index < 0) {
+            index = length + index;
+        }
+
+        // Check bounds
+        if (index < 0 || index >= length) {
+            return ctx.throwError("RangeError", "Index out of bounds");
+        }
+
+        JSValue newValue = args[1];
+
+        // Create a copy of the array
+        JSArray result = new JSArray();
+        for (long i = 0; i < length; i++) {
+            if (i == index) {
+                result.push(newValue);
+            } else {
+                result.push(arr.get(i));
+            }
+        }
+
+        return result;
+    }
+
+    /**
      * Array.prototype.join([separator])
      * Joins all elements of an array into a string.
      */
@@ -465,7 +680,7 @@ public final class ArrayPrototype {
         }
 
         String separator = args.length > 0 && !(args[0] instanceof JSUndefined) ?
-                JSTypeConversions.toString(args[0]).getValue() : ",";
+                JSTypeConversions.toString(args[0]).value() : ",";
 
         StringBuilder result = new StringBuilder();
         long length = arr.getLength();
@@ -476,7 +691,7 @@ public final class ArrayPrototype {
             }
             JSValue element = arr.get(i);
             if (!(element instanceof JSNull) && !(element instanceof JSUndefined)) {
-                result.append(JSTypeConversions.toString(element).getValue());
+                result.append(JSTypeConversions.toString(element).value());
             }
         }
 
@@ -743,6 +958,36 @@ public final class ArrayPrototype {
         }
 
         return result;
+    }
+
+    /**
+     * Array.prototype.at(index)
+     * ES2022 23.1.3.1
+     * Returns the element at the specified index, supporting negative indices.
+     */
+    public static JSValue at(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArray arr)) {
+            return ctx.throwError("TypeError", "Array.prototype.at called on non-array");
+        }
+
+        if (args.length == 0) {
+            return JSUndefined.INSTANCE;
+        }
+
+        long index = (long) JSTypeConversions.toInteger(args[0]);
+        long length = arr.getLength();
+
+        // Handle negative indices
+        if (index < 0) {
+            index = length + index;
+        }
+
+        // Check bounds
+        if (index < 0 || index >= length) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return arr.get((int) index);
     }
 
     /**

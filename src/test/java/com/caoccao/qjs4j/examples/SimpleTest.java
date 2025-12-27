@@ -20,7 +20,8 @@ import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSRuntime;
 import com.caoccao.qjs4j.core.JSValue;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Simple test to demonstrate JavaScript execution.
@@ -62,7 +63,7 @@ public class SimpleTest {
             // Test 4: String methods
             System.out.println("Test 4: String methods");
             JSValue result5 = ctx.eval("'hello world'.toUpperCase()");
-            assertEquals("HELLO WORLD", (String) result5.toJavaObject());
+            assertEquals("HELLO WORLD", result5.toJavaObject());
             System.out.println("'hello world'.toUpperCase() = " + result5);
             System.out.println();
 

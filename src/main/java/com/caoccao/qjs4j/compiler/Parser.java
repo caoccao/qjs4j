@@ -26,13 +26,13 @@ import java.util.List;
 /**
  * Recursive descent parser for JavaScript.
  * Converts tokens into an Abstract Syntax Tree (AST).
- *
+ * <p>
  * Implements a subset of ECMAScript grammar including:
  * - Expressions (binary, unary, assignment, conditional, call, member access)
  * - Statements (if, while, for, return, break, continue, block, expression)
  * - Declarations (variable, function)
  * - Literals (number, string, boolean, null, undefined)
- *
+ * <p>
  * Uses operator precedence climbing for expression parsing.
  */
 public final class Parser {
@@ -250,7 +250,7 @@ public final class Parser {
 
                 List<Statement> consequent = new ArrayList<>();
                 while (!match(TokenType.CASE) && !match(TokenType.DEFAULT) &&
-                       !match(TokenType.RBRACE) && !match(TokenType.EOF)) {
+                        !match(TokenType.RBRACE) && !match(TokenType.EOF)) {
                     Statement stmt = parseStatement();
                     if (stmt != null) {
                         consequent.add(stmt);
@@ -264,7 +264,7 @@ public final class Parser {
 
                 List<Statement> consequent = new ArrayList<>();
                 while (!match(TokenType.CASE) && !match(TokenType.DEFAULT) &&
-                       !match(TokenType.RBRACE) && !match(TokenType.EOF)) {
+                        !match(TokenType.RBRACE) && !match(TokenType.EOF)) {
                     Statement stmt = parseStatement();
                     if (stmt != null) {
                         consequent.add(stmt);
@@ -391,7 +391,7 @@ public final class Parser {
 
         while (match(TokenType.LOGICAL_OR) || match(TokenType.NULLISH_COALESCING)) {
             BinaryOperator op = match(TokenType.LOGICAL_OR) ?
-                BinaryOperator.LOGICAL_OR : BinaryOperator.NULLISH_COALESCING;
+                    BinaryOperator.LOGICAL_OR : BinaryOperator.NULLISH_COALESCING;
             SourceLocation location = getLocation();
             advance();
             Expression right = parseLogicalAndExpression();
@@ -457,7 +457,7 @@ public final class Parser {
         Expression left = parseRelationalExpression();
 
         while (match(TokenType.EQ) || match(TokenType.NE) ||
-               match(TokenType.STRICT_EQ) || match(TokenType.STRICT_NE)) {
+                match(TokenType.STRICT_EQ) || match(TokenType.STRICT_NE)) {
             BinaryOperator op = switch (currentToken.type()) {
                 case EQ -> BinaryOperator.EQ;
                 case NE -> BinaryOperator.NE;
@@ -478,8 +478,8 @@ public final class Parser {
         Expression left = parseShiftExpression();
 
         while (match(TokenType.LT) || match(TokenType.LE) ||
-               match(TokenType.GT) || match(TokenType.GE) ||
-               match(TokenType.IN) || match(TokenType.INSTANCEOF)) {
+                match(TokenType.GT) || match(TokenType.GE) ||
+                match(TokenType.IN) || match(TokenType.INSTANCEOF)) {
             BinaryOperator op = switch (currentToken.type()) {
                 case LT -> BinaryOperator.LT;
                 case LE -> BinaryOperator.LE;
@@ -573,8 +573,8 @@ public final class Parser {
         }
 
         if (match(TokenType.PLUS) || match(TokenType.MINUS) || match(TokenType.NOT) ||
-            match(TokenType.BIT_NOT) || match(TokenType.TYPEOF) ||
-            match(TokenType.VOID) || match(TokenType.DELETE)) {
+                match(TokenType.BIT_NOT) || match(TokenType.TYPEOF) ||
+                match(TokenType.VOID) || match(TokenType.DELETE)) {
             UnaryOperator op = switch (currentToken.type()) {
                 case PLUS -> UnaryOperator.PLUS;
                 case MINUS -> UnaryOperator.MINUS;
@@ -803,7 +803,7 @@ public final class Parser {
     private Token expect(TokenType type) {
         if (!match(type)) {
             throw new RuntimeException("Expected " + type + " but got " + currentToken.type() +
-                " at line " + currentToken.line() + ", column " + currentToken.column());
+                    " at line " + currentToken.line() + ", column " + currentToken.column());
         }
         Token token = currentToken;
         advance();
@@ -819,8 +819,8 @@ public final class Parser {
 
     private boolean isAssignmentOperator(TokenType type) {
         return type == TokenType.ASSIGN || type == TokenType.PLUS_ASSIGN ||
-               type == TokenType.MINUS_ASSIGN || type == TokenType.MUL_ASSIGN ||
-               type == TokenType.DIV_ASSIGN || type == TokenType.MOD_ASSIGN;
+                type == TokenType.MINUS_ASSIGN || type == TokenType.MUL_ASSIGN ||
+                type == TokenType.DIV_ASSIGN || type == TokenType.MOD_ASSIGN;
     }
 
     private SourceLocation getLocation() {

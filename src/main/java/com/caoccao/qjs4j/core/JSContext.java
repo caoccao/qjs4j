@@ -24,13 +24,13 @@ import java.util.*;
 /**
  * Represents a JavaScript execution context.
  * Based on QuickJS JSContext structure.
- *
+ * <p>
  * A context is an independent JavaScript execution environment with:
  * - Its own global object and built-in objects
  * - Its own module cache
  * - Its own call stack and exception state
  * - Shared runtime resources (atoms, GC, job queue)
- *
+ * <p>
  * Multiple contexts can exist in a single runtime, each isolated
  * from the others (separate globals, separate module namespaces).
  */
@@ -96,7 +96,7 @@ public final class JSContext {
 
     /**
      * Evaluate JavaScript code in this context.
-     *
+     * <p>
      * In full implementation, this would:
      * 1. Parse the source code
      * 2. Compile to bytecode
@@ -113,7 +113,7 @@ public final class JSContext {
     /**
      * Evaluate code with source location information.
      *
-     * @param code JavaScript source code
+     * @param code     JavaScript source code
      * @param filename Source filename for stack traces
      * @param isModule Whether to evaluate as module (vs script)
      * @return The completion value
@@ -174,15 +174,13 @@ public final class JSContext {
      *
      * @param specifier Module specifier (file path or URL)
      * @return The loaded module
-     * @throws JSModule.ModuleLinkingException if module cannot be loaded or linked
+     * @throws JSModule.ModuleLinkingException    if module cannot be loaded or linked
      * @throws JSModule.ModuleEvaluationException if module evaluation fails
      */
     public JSModule loadModule(String specifier) throws JSModule.ModuleLinkingException, JSModule.ModuleEvaluationException {
         // Check cache first
         JSModule cached = moduleCache.get(specifier);
-        if (cached != null) {
-            return cached;
-        }
+        return cached;
 
         // In full implementation:
         // 1. Resolve the module specifier to absolute path
@@ -194,7 +192,6 @@ public final class JSContext {
 
         // For now, return null to indicate module not found
         // A full implementation would load from filesystem or URL
-        return null;
     }
 
     /**
@@ -235,7 +232,7 @@ public final class JSContext {
      * Throw a JavaScript error of a specific type.
      *
      * @param errorType Error constructor name (Error, TypeError, RangeError, etc.)
-     * @param message Error message
+     * @param message   Error message
      * @return The error value
      */
     public JSValue throwError(String errorType, String message) {
@@ -363,12 +360,12 @@ public final class JSContext {
 
         for (StackFrame frame : callStack) {
             stackTrace.append("    at ")
-                     .append(frame.functionName)
-                     .append(" (")
-                     .append(frame.filename)
-                     .append(":")
-                     .append(frame.lineNumber)
-                     .append(")\n");
+                    .append(frame.functionName)
+                    .append(" (")
+                    .append(frame.filename)
+                    .append(":")
+                    .append(frame.lineNumber)
+                    .append(")\n");
         }
 
         error.set("stack", new JSString(stackTrace.toString()));
@@ -381,10 +378,10 @@ public final class JSContext {
         errorStackTrace.clear();
         for (StackFrame frame : callStack) {
             errorStackTrace.add(new StackTraceElement(
-                "JavaScript",
-                frame.functionName,
-                frame.filename,
-                frame.lineNumber
+                    "JavaScript",
+                    frame.functionName,
+                    frame.filename,
+                    frame.lineNumber
             ));
         }
     }
@@ -489,28 +486,23 @@ public final class JSContext {
     }
 
     /**
-     * Represents a stack frame in the call stack.
-     */
-    public static class StackFrame {
-        public final String functionName;
-        public final String filename;
-        public final int lineNumber;
-        public final int columnNumber;
+         * Represents a stack frame in the call stack.
+         */
+        public record StackFrame(String functionName, String filename, int lineNumber, int columnNumber) {
+            public StackFrame(String functionName, String filename, int lineNumber) {
+                this(functionName, filename, lineNumber, 0);
+            }
 
-        public StackFrame(String functionName, String filename, int lineNumber) {
-            this(functionName, filename, lineNumber, 0);
-        }
+            public StackFrame(String functionName, String filename, int lineNumber, int columnNumber) {
+                this.functionName = functionName != null ? functionName : "<anonymous>";
+                this.filename = filename != null ? filename : "<unknown>";
+                this.lineNumber = lineNumber;
+                this.columnNumber = columnNumber;
+            }
 
-        public StackFrame(String functionName, String filename, int lineNumber, int columnNumber) {
-            this.functionName = functionName != null ? functionName : "<anonymous>";
-            this.filename = filename != null ? filename : "<unknown>";
-            this.lineNumber = lineNumber;
-            this.columnNumber = columnNumber;
+            @Override
+            public String toString() {
+                return functionName + " (" + filename + ":" + lineNumber + ":" + columnNumber + ")";
+            }
         }
-
-        @Override
-        public String toString() {
-            return functionName + " (" + filename + ":" + lineNumber + ":" + columnNumber + ")";
-        }
-    }
 }

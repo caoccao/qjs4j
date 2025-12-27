@@ -16,7 +16,10 @@
 
 package com.caoccao.qjs4j.types;
 
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.JSBytecodeFunction;
+import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSObject;
+import com.caoccao.qjs4j.core.JSValue;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -37,7 +40,7 @@ public final class ModuleLoader implements JSModule.ModuleResolver {
     /**
      * Create a module loader.
      *
-     * @param context The execution context
+     * @param context  The execution context
      * @param basePath Base path for resolving relative module specifiers
      */
     public ModuleLoader(JSContext context, Path basePath) {
@@ -58,7 +61,7 @@ public final class ModuleLoader implements JSModule.ModuleResolver {
      *
      * @param specifier Module specifier (file path or module name)
      * @return The loaded module
-     * @throws JSModule.ModuleLinkingException if loading or linking fails
+     * @throws JSModule.ModuleLinkingException    if loading or linking fails
      * @throws JSModule.ModuleEvaluationException if evaluation fails
      */
     public JSModule load(String specifier) throws JSModule.ModuleLinkingException, JSModule.ModuleEvaluationException {
@@ -123,13 +126,13 @@ public final class ModuleLoader implements JSModule.ModuleResolver {
             }
 
             // Try adding .js extension
-            Path withJs = Paths.get(resolved.toString() + ".js");
+            Path withJs = Paths.get(resolved + ".js");
             if (Files.exists(withJs)) {
                 return withJs;
             }
 
             // Try adding .mjs extension
-            Path withMjs = Paths.get(resolved.toString() + ".mjs");
+            Path withMjs = Paths.get(resolved + ".mjs");
             if (Files.exists(withMjs)) {
                 return withMjs;
             }
@@ -196,7 +199,7 @@ public final class ModuleLoader implements JSModule.ModuleResolver {
      *
      * @param specifier Module specifier
      * @return The module namespace object
-     * @throws JSModule.ModuleLinkingException if loading or linking fails
+     * @throws JSModule.ModuleLinkingException    if loading or linking fails
      * @throws JSModule.ModuleEvaluationException if evaluation fails
      */
     public JSObject import_(String specifier) throws JSModule.ModuleLinkingException, JSModule.ModuleEvaluationException {

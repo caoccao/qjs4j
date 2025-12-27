@@ -23,7 +23,7 @@ import java.util.*;
 /**
  * Represents a JavaScript ES6 module.
  * Based on ES2020 Module Record specification.
- *
+ * <p>
  * A module has:
  * - Named exports (export { x, y })
  * - Default export (export default ...)
@@ -54,13 +54,13 @@ public final class JSModule {
     private final JSObject namespace;
 
     // For circular dependency detection
-    private int dfsIndex;
-    private int dfsAncestorIndex;
+    private final int dfsIndex;
+    private final int dfsAncestorIndex;
 
     /**
      * Create a new module.
      *
-     * @param url Module URL or identifier
+     * @param url            Module URL or identifier
      * @param moduleFunction The compiled module code as a function
      */
     public JSModule(String url, JSBytecodeFunction moduleFunction) {
@@ -80,7 +80,7 @@ public final class JSModule {
      * Add a named export to this module.
      *
      * @param exportName The name to export as
-     * @param localName The local binding name
+     * @param localName  The local binding name
      */
     public void addNamedExport(String exportName, String localName) {
         namedExports.put(exportName, new ExportEntry(exportName, localName, null, null));
@@ -89,9 +89,9 @@ public final class JSModule {
     /**
      * Add a re-export from another module.
      *
-     * @param exportName The name to export as
+     * @param exportName    The name to export as
      * @param moduleRequest The module to import from
-     * @param importName The name to import from that module
+     * @param importName    The name to import from that module
      */
     public void addReExport(String exportName, String moduleRequest, String importName) {
         namedExports.put(exportName, new ExportEntry(exportName, null, moduleRequest, importName));
@@ -110,9 +110,9 @@ public final class JSModule {
     /**
      * Add a named import from another module.
      *
-     * @param localName The local binding name
+     * @param localName     The local binding name
      * @param moduleRequest The module to import from
-     * @param importName The name to import (or "*" for namespace import)
+     * @param importName    The name to import (or "*" for namespace import)
      */
     public void addImport(String localName, String moduleRequest, String importName) {
         namedImports.put(localName, new ImportEntry(moduleRequest, importName, localName));
@@ -134,7 +134,7 @@ public final class JSModule {
      * ES2020 15.2.1.16 Link() method.
      *
      * @param resolver Module resolver for resolving import specifiers
-     * @param ctx The execution context
+     * @param ctx      The execution context
      * @throws ModuleLinkingException if linking fails
      */
     public void link(ModuleResolver resolver, JSContext ctx) throws ModuleLinkingException {
@@ -304,35 +304,24 @@ public final class JSModule {
     /**
      * Export entry record.
      * Represents: export { x as y } or export { x } from 'module'
+     *
+     * @param exportName    Name exported to other modules
+     * @param localName     Local binding name (for local exports)
+     * @param moduleRequest Module to re-export from (for re-exports)
+     * @param importName    Name to import from that module (for re-exports)
      */
-    public static class ExportEntry {
-        public final String exportName;     // Name exported to other modules
-        public final String localName;      // Local binding name (for local exports)
-        public final String moduleRequest;  // Module to re-export from (for re-exports)
-        public final String importName;     // Name to import from that module (for re-exports)
-
-        public ExportEntry(String exportName, String localName, String moduleRequest, String importName) {
-            this.exportName = exportName;
-            this.localName = localName;
-            this.moduleRequest = moduleRequest;
-            this.importName = importName;
-        }
+        public record ExportEntry(String exportName, String localName, String moduleRequest, String importName) {
     }
 
     /**
      * Import entry record.
      * Represents: import { x as y } from 'module'
+     *
+     * @param moduleRequest Module specifier to import from
+     * @param importName    Name to import (or "*" for namespace)
+     * @param localName     Local binding name
      */
-    public static class ImportEntry {
-        public final String moduleRequest;  // Module specifier to import from
-        public final String importName;     // Name to import (or "*" for namespace)
-        public final String localName;      // Local binding name
-
-        public ImportEntry(String moduleRequest, String importName, String localName) {
-            this.moduleRequest = moduleRequest;
-            this.importName = importName;
-            this.localName = localName;
-        }
+        public record ImportEntry(String moduleRequest, String importName, String localName) {
     }
 
     /**
@@ -344,7 +333,7 @@ public final class JSModule {
          * Resolve a module specifier to a module.
          *
          * @param specifier The module specifier (e.g., './foo.js', 'lodash')
-         * @param referrer The module requesting the import
+         * @param referrer  The module requesting the import
          * @return The resolved module, or null if not found
          */
         JSModule resolve(String specifier, JSModule referrer);

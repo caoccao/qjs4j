@@ -37,9 +37,9 @@ public class RegExpPrototypeTest extends BaseTest {
         JSArray matchArray = result.asArray().orElse(null);
         assertNotNull(matchArray);
         assertEquals(2, matchArray.getLength()); // full match only
-        assertEquals("hello", matchArray.get(0).asString().map(JSString::getValue).orElse(""));
+        assertEquals("hello", matchArray.get(0).asString().map(JSString::value).orElse(""));
         assertEquals(0.0, matchArray.get("index").asNumber().map(JSNumber::value).orElse(0.0));
-        assertEquals("hello world", matchArray.get("input").asString().map(JSString::getValue).orElse(""));
+        assertEquals("hello world", matchArray.get("input").asString().map(JSString::value).orElse(""));
 
         // Edge case: called on non-RegExp
         result = RegExpPrototype.exec(ctx, new JSString("not a regexp"), new JSValue[]{});
@@ -52,17 +52,17 @@ public class RegExpPrototypeTest extends BaseTest {
         // Normal case: no flags
         JSRegExp regexp = new JSRegExp("test", "");
         JSValue result = RegExpPrototype.getFlags(ctx, regexp, new JSValue[]{});
-        assertEquals("", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: multiple flags
         JSRegExp withFlags = new JSRegExp("hello", "gim");
         result = RegExpPrototype.getFlags(ctx, withFlags, new JSValue[]{});
-        assertEquals("gim", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("gim", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: single flag
         JSRegExp singleFlag = new JSRegExp("world", "i");
         result = RegExpPrototype.getFlags(ctx, singleFlag, new JSValue[]{});
-        assertEquals("i", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("i", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: called on non-RegExp
         result = RegExpPrototype.getFlags(ctx, new JSString("not a regexp"), new JSValue[]{});
@@ -141,12 +141,12 @@ public class RegExpPrototypeTest extends BaseTest {
         // Normal case: simple pattern
         JSRegExp regexp = new JSRegExp("test", "");
         JSValue result = RegExpPrototype.getSource(ctx, regexp, new JSValue[]{});
-        assertEquals("test", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("test", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: pattern with special characters
         JSRegExp special = new JSRegExp("test", "i");
         result = RegExpPrototype.getSource(ctx, special, new JSValue[]{});
-        assertEquals("test", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("test", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: called on non-RegExp
         result = RegExpPrototype.getSource(ctx, new JSString("not a regexp"), new JSValue[]{});
@@ -201,17 +201,17 @@ public class RegExpPrototypeTest extends BaseTest {
         // Normal case: simple regex
         JSRegExp regexp = new JSRegExp("test", "");
         JSValue result = RegExpPrototype.toStringMethod(ctx, regexp, new JSValue[]{});
-        assertEquals("/test/", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("/test/", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: regex with flags
         JSRegExp withFlags = new JSRegExp("hello", "gi");
         result = RegExpPrototype.toStringMethod(ctx, withFlags, new JSValue[]{});
-        assertEquals("/hello/gi", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("/hello/gi", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: pattern with special characters
         JSRegExp special = new JSRegExp("test", "m");
         result = RegExpPrototype.toStringMethod(ctx, special, new JSValue[]{});
-        assertEquals("/test/m", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("/test/m", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: called on non-RegExp
         result = RegExpPrototype.toStringMethod(ctx, new JSString("not a regexp"), new JSValue[]{});

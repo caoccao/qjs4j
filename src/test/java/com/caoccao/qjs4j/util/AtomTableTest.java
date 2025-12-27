@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.util;
 
 import com.caoccao.qjs4j.BaseTest;
 import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class AtomTableTest extends BaseTest {

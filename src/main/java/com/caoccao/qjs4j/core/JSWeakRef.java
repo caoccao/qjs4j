@@ -21,10 +21,10 @@ import java.lang.ref.WeakReference;
 /**
  * Represents a WeakRef object in JavaScript.
  * Based on ES2021 WeakRef specification.
- *
+ * <p>
  * WeakRef allows you to hold a weak reference to an object without preventing
  * its garbage collection. When the object is collected, deref() returns undefined.
- *
+ * <p>
  * Key characteristics:
  * - Does not prevent garbage collection of the target
  * - deref() returns the target if still alive, undefined if collected

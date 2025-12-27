@@ -19,11 +19,11 @@ package com.caoccao.qjs4j.core;
 /**
  * Represents a JavaScript property descriptor.
  * Based on ECMAScript specification and QuickJS implementation.
- *
+ * <p>
  * A property can be either:
  * - Data descriptor: has value and writable
  * - Accessor descriptor: has getter and/or setter
- *
+ * <p>
  * Both types can have enumerable and configurable attributes.
  */
 public final class PropertyDescriptor {
@@ -51,7 +51,7 @@ public final class PropertyDescriptor {
      * Create a data descriptor.
      */
     public static PropertyDescriptor dataDescriptor(JSValue value, boolean writable,
-                                                     boolean enumerable, boolean configurable) {
+                                                    boolean enumerable, boolean configurable) {
         PropertyDescriptor desc = new PropertyDescriptor();
         desc.setValue(value);
         desc.setWritable(writable);
@@ -64,7 +64,7 @@ public final class PropertyDescriptor {
      * Create an accessor descriptor.
      */
     public static PropertyDescriptor accessorDescriptor(JSFunction getter, JSFunction setter,
-                                                         boolean enumerable, boolean configurable) {
+                                                        boolean enumerable, boolean configurable) {
         PropertyDescriptor desc = new PropertyDescriptor();
         if (getter != null) desc.setGetter(getter);
         if (setter != null) desc.setSetter(setter);

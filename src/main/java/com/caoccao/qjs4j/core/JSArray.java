@@ -21,11 +21,11 @@ import java.util.Arrays;
 /**
  * Represents a JavaScript Array object.
  * Based on QuickJS array implementation.
- *
+ * <p>
  * Uses dual storage strategy:
  * - Dense array for consecutive indices [0, 1, 2, ...]
  * - Sparse map (inherited from JSObject) for gaps or large indices
- *
+ * <p>
  * Automatically switches between dense and sparse based on usage patterns.
  */
 public final class JSArray extends JSObject {
@@ -356,7 +356,7 @@ public final class JSArray extends JSObject {
             if (i > 0) sb.append(", ");
             JSValue val = get(i);
             if (val instanceof JSString s) {
-                sb.append('"').append(s.getValue()).append('"');
+                sb.append('"').append(s.value()).append('"');
             } else if (val instanceof JSUndefined) {
                 sb.append("undefined");
             } else {

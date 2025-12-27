@@ -54,7 +54,7 @@ public final class UnicodeNormalization {
      * Normalize a string using the specified normalization form.
      *
      * @param input The string to normalize
-     * @param form The normalization form to use
+     * @param form  The normalization form to use
      * @return The normalized string
      */
     public static String normalize(String input, Form form) {
@@ -127,7 +127,7 @@ public final class UnicodeNormalization {
      * Normalize an array of code points.
      *
      * @param codePoints Array of Unicode code points
-     * @param form The normalization form
+     * @param form       The normalization form
      * @return Array of normalized code points
      */
     public static int[] normalize(int[] codePoints, Form form) {

@@ -220,7 +220,7 @@ public class DatePrototypeTest extends BaseTest {
         JSDate date = new JSDate(1704067200000L);
 
         JSValue result = DatePrototype.toISOString(ctx, date, new JSValue[]{});
-        String isoString = result.asString().map(JSString::getValue).orElse("");
+        String isoString = result.asString().map(JSString::value).orElse("");
         assertTrue(isoString.startsWith("2024-01-01T00:00:00"));
 
         // Edge case: called on non-Date
@@ -235,7 +235,7 @@ public class DatePrototypeTest extends BaseTest {
         JSDate date = new JSDate(1704067200000L);
 
         JSValue result = DatePrototype.toJSON(ctx, date, new JSValue[]{});
-        String jsonString = result.asString().map(JSString::getValue).orElse("");
+        String jsonString = result.asString().map(JSString::value).orElse("");
         assertTrue(jsonString.startsWith("2024-01-01T00:00:00"));
 
         // Edge case: called on non-Date
@@ -251,7 +251,7 @@ public class DatePrototypeTest extends BaseTest {
 
         JSValue result = DatePrototype.toStringMethod(ctx, date, new JSValue[]{});
         // Should return a string representation
-        String str = result.asString().map(JSString::getValue).orElse("");
+        String str = result.asString().map(JSString::value).orElse("");
         assertNotNull(str);
         assertTrue(str.length() > 0);
 

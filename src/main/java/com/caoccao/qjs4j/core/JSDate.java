@@ -36,6 +36,7 @@ public final class JSDate extends JSObject {
 
     /**
      * Create a Date with a specific timestamp.
+     *
      * @param timeValue milliseconds since Unix epoch
      */
     public JSDate(long timeValue) {

@@ -27,7 +27,7 @@ import java.util.List;
  * Represents a JavaScript Promise.
  */
 public final class JSPromise extends JSObject {
-    private State state;
+    private final State state;
     private JSValue result;
     private final List<PromiseReaction> fulfillReactions;
     private final List<PromiseReaction> rejectReactions;

@@ -21,7 +21,7 @@ import java.util.Objects;
 /**
  * Represents a property key (can be string, symbol, or integer index).
  * Based on ECMAScript property keys and QuickJS atom system.
- *
+ * <p>
  * In JavaScript, property keys can be:
  * - Strings (most common)
  * - Symbols (for unique properties)
@@ -70,7 +70,7 @@ public final class PropertyKey {
      */
     public static PropertyKey fromValue(JSValue value) {
         if (value instanceof JSString s) {
-            return fromString(s.getValue());
+            return fromString(s.value());
         }
         if (value instanceof JSSymbol s) {
             return fromSymbol(s);
@@ -84,7 +84,7 @@ public final class PropertyKey {
         }
         // Convert to string for other types
         JSString str = JSTypeConversions.toString(value);
-        return fromString(str.getValue());
+        return fromString(str.value());
     }
 
     public Object getValue() {

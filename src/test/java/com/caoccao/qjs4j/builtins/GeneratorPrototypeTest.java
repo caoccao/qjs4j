@@ -49,13 +49,13 @@ public class GeneratorPrototypeTest extends BaseTest {
         JSValue result = GeneratorPrototype.next(ctx, generator, new JSValue[]{});
         JSObject iteratorResult = result.asObject().orElse(null);
         assertNotNull(iteratorResult);
-        assertEquals("first", iteratorResult.get("value").asString().map(JSString::getValue).orElse(""));
+        assertEquals("first", iteratorResult.get("value").asString().map(JSString::value).orElse(""));
         assertEquals(JSBoolean.FALSE, iteratorResult.get("done"));
 
         result = GeneratorPrototype.next(ctx, generator, new JSValue[]{});
         iteratorResult = result.asObject().orElse(null);
         assertNotNull(iteratorResult);
-        assertEquals("second", iteratorResult.get("value").asString().map(JSString::getValue).orElse(""));
+        assertEquals("second", iteratorResult.get("value").asString().map(JSString::value).orElse(""));
         assertEquals(JSBoolean.FALSE, iteratorResult.get("done"));
 
         result = GeneratorPrototype.next(ctx, generator, new JSValue[]{});
@@ -85,7 +85,7 @@ public class GeneratorPrototypeTest extends BaseTest {
         result = GeneratorPrototype.returnMethod(ctx, generator2, new JSValue[]{new JSString("done")});
         iteratorResult = result.asObject().orElse(null);
         assertNotNull(iteratorResult);
-        assertEquals("done", iteratorResult.get("value").asString().map(JSString::getValue).orElse(""));
+        assertEquals("done", iteratorResult.get("value").asString().map(JSString::value).orElse(""));
         assertEquals(JSBoolean.TRUE, iteratorResult.get("done"));
     }
 
@@ -168,14 +168,14 @@ public class GeneratorPrototypeTest extends BaseTest {
         JSValue result = GeneratorPrototype.returnMethod(ctx, generator, new JSValue[]{new JSString("returned")});
         JSObject iteratorResult = result.asObject().orElse(null);
         assertNotNull(iteratorResult);
-        assertEquals("returned", iteratorResult.get("value").asString().map(JSString::getValue).orElse(""));
+        assertEquals("returned", iteratorResult.get("value").asString().map(JSString::value).orElse(""));
         assertEquals(JSBoolean.TRUE, iteratorResult.get("done"));
 
         // Normal case: subsequent next() calls after return
         result = GeneratorPrototype.next(ctx, generator, new JSValue[]{});
         iteratorResult = result.asObject().orElse(null);
         assertNotNull(iteratorResult);
-        assertEquals("returned", iteratorResult.get("value").asString().map(JSString::getValue).orElse(""));
+        assertEquals("returned", iteratorResult.get("value").asString().map(JSString::value).orElse(""));
         assertEquals(JSBoolean.TRUE, iteratorResult.get("done"));
 
         // Normal case: return without value (undefined)

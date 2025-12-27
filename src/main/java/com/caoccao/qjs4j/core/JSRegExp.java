@@ -28,7 +28,7 @@ public final class JSRegExp extends JSObject {
     private final String pattern;
     private final String flags;
     private final RegExpEngine engine;
-    private int lastIndex = 0;
+    private final int lastIndex = 0;
 
     /**
      * Create a RegExp with pattern and flags.

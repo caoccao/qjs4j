@@ -101,114 +101,73 @@ public final class JSMap extends JSObject {
     }
 
     /**
-     * Wrapper class for Map keys to handle JSValue equality using SameValueZero.
-     * SameValueZero is like === except NaN equals NaN.
-     */
-    public static class KeyWrapper {
-        private final JSValue value;
-
-        public KeyWrapper(JSValue value) {
-            this.value = value;
-        }
-
-        public JSValue getValue() {
-            return value;
-        }
+         * Wrapper class for Map keys to handle JSValue equality using SameValueZero.
+         * SameValueZero is like === except NaN equals NaN.
+         */
+        public record KeyWrapper(JSValue value) {
 
         @Override
-        public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (!(obj instanceof KeyWrapper other)) return false;
+            public boolean equals(Object obj) {
+                if (this == obj) return true;
+                if (!(obj instanceof KeyWrapper other)) return false;
 
-            // SameValueZero algorithm
-            return sameValueZero(this.value, other.value);
-        }
-
-        @Override
-        public int hashCode() {
-            // For numbers, use the numeric value for hash
-            if (value instanceof JSNumber num) {
-                double d = num.value();
-                // NaN values should hash the same
-                if (Double.isNaN(d)) {
-                    return Double.hashCode(Double.NaN);
-                }
-                // +0 and -0 should hash the same (SameValueZero)
-                if (d == 0.0) {
-                    return Double.hashCode(0.0);
-                }
-                return Double.hashCode(d);
-            } else if (value instanceof JSString str) {
-                return str.getValue().hashCode();
-            } else if (value instanceof JSBoolean bool) {
-                return Boolean.hashCode(bool.value());
-            } else if (value instanceof JSNull) {
-                return "null".hashCode();
-            } else if (value instanceof JSUndefined) {
-                return "undefined".hashCode();
-            } else if (value instanceof JSSymbol sym) {
-                return sym.getId();
-            } else if (value instanceof JSBigInt bigInt) {
-                return bigInt.getValue().hashCode();
-            } else {
-                // For objects, use identity hash
-                return System.identityHashCode(value);
+                // SameValueZero algorithm
+                return sameValueZero(this.value, other.value);
             }
-        }
 
         /**
-         * SameValueZero comparison.
-         * Like === but NaN equals NaN, and +0 equals -0.
-         */
-        private boolean sameValueZero(JSValue x, JSValue y) {
-            // Same reference
-            if (x == y) return true;
+             * SameValueZero comparison.
+             * Like === but NaN equals NaN, and +0 equals -0.
+             */
+            private boolean sameValueZero(JSValue x, JSValue y) {
+                // Same reference
+                if (x == y) return true;
 
-            // Different types
-            if (x.type() != y.type()) return false;
+                // Different types
+                if (x.type() != y.type()) return false;
 
-            // Numbers
-            if (x instanceof JSNumber xNum && y instanceof JSNumber yNum) {
-                double xVal = xNum.value();
-                double yVal = yNum.value();
+                // Numbers
+                if (x instanceof JSNumber xNum && y instanceof JSNumber yNum) {
+                    double xVal = xNum.value();
+                    double yVal = yNum.value();
 
-                // NaN == NaN in SameValueZero
-                if (Double.isNaN(xVal) && Double.isNaN(yVal)) {
-                    return true;
+                    // NaN == NaN in SameValueZero
+                    if (Double.isNaN(xVal) && Double.isNaN(yVal)) {
+                        return true;
+                    }
+
+                    // +0 == -0 in SameValueZero
+                    return xVal == yVal;
                 }
 
-                // +0 == -0 in SameValueZero
-                return xVal == yVal;
-            }
+                // Strings
+                if (x instanceof JSString xStr && y instanceof JSString yStr) {
+                    return xStr.value().equals(yStr.value());
+                }
 
-            // Strings
-            if (x instanceof JSString xStr && y instanceof JSString yStr) {
-                return xStr.getValue().equals(yStr.getValue());
-            }
+                // Booleans
+                if (x instanceof JSBoolean xBool && y instanceof JSBoolean yBool) {
+                    return xBool.value() == yBool.value();
+                }
 
-            // Booleans
-            if (x instanceof JSBoolean xBool && y instanceof JSBoolean yBool) {
-                return xBool.value() == yBool.value();
-            }
+                // BigInt
+                if (x instanceof JSBigInt xBig && y instanceof JSBigInt yBig) {
+                    return xBig.value().equals(yBig.value());
+                }
 
-            // BigInt
-            if (x instanceof JSBigInt xBig && y instanceof JSBigInt yBig) {
-                return xBig.getValue().equals(yBig.getValue());
-            }
+                // Symbols (compare by identity, each Symbol is unique except well-known ones)
+                if (x instanceof JSSymbol && y instanceof JSSymbol) {
+                    return x == y;
+                }
 
-            // Symbols (compare by identity, each Symbol is unique except well-known ones)
-            if (x instanceof JSSymbol && y instanceof JSSymbol) {
+                // null and undefined
+                if (x instanceof JSNull && y instanceof JSNull) return true;
+                if (x instanceof JSUndefined && y instanceof JSUndefined) return true;
+
+                // Objects (compare by identity)
                 return x == y;
             }
-
-            // null and undefined
-            if (x instanceof JSNull && y instanceof JSNull) return true;
-            if (x instanceof JSUndefined && y instanceof JSUndefined) return true;
-
-            // Objects (compare by identity)
-            return x == y;
         }
-    }
 
     @Override
     public String toString() {

@@ -24,7 +24,7 @@ import java.util.Map;
 /**
  * Lexical analyzer for JavaScript source code.
  * Converts source text into a stream of tokens.
- *
+ * <p>
  * Implements ECMAScript lexical grammar including:
  * - Number literals (decimal, hex, binary, octal, scientific)
  * - String literals with escape sequences
@@ -42,6 +42,7 @@ public final class Lexer {
 
     // Keyword mapping
     private static final Map<String, TokenType> KEYWORDS = new HashMap<>();
+
     static {
         KEYWORDS.put("async", TokenType.ASYNC);
         KEYWORDS.put("await", TokenType.AWAIT);
@@ -197,7 +198,7 @@ public final class Lexer {
 
         // Check for decimal point
         if (!isAtEnd() && peek() == '.' && position + 1 < source.length() &&
-            Character.isDigit(source.charAt(position + 1))) {
+                Character.isDigit(source.charAt(position + 1))) {
             advance(); // consume '.'
             while (!isAtEnd() && Character.isDigit(peek())) {
                 advance();
@@ -537,12 +538,12 @@ public final class Lexer {
 
     private boolean isIdentifierStart(char c) {
         return Character.isLetter(c) || c == '_' || c == '$' ||
-               UnicodeData.isIdentifierStart(c);
+                UnicodeData.isIdentifierStart(c);
     }
 
     private boolean isIdentifierPart(char c) {
         return Character.isLetterOrDigit(c) || c == '_' || c == '$' ||
-               UnicodeData.isIdentifierPart(c);
+                UnicodeData.isIdentifierPart(c);
     }
 
     private boolean isHexDigit(char c) {

@@ -22,7 +22,7 @@ import java.nio.ByteOrder;
 /**
  * Represents a JavaScript DataView object.
  * Based on ES2020 DataView specification.
- *
+ * <p>
  * DataView provides a low-level interface for reading and writing
  * multiple number types in an ArrayBuffer.
  */

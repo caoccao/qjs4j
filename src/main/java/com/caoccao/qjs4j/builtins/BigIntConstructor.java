@@ -50,7 +50,7 @@ public final class BigIntConstructor {
             }
             return new JSBigInt((long) value);
         } else if (arg instanceof JSString str) {
-            String strValue = str.getValue().trim();
+            String strValue = str.value().trim();
             try {
                 // Handle different radix
                 if (strValue.startsWith("0x") || strValue.startsWith("0X")) {
@@ -100,7 +100,7 @@ public final class BigIntConstructor {
         int bits = (int) bitsDouble;
 
         // Simplified implementation
-        BigInteger value = bigInt.getValue();
+        BigInteger value = bigInt.value();
         BigInteger modulus = BigInteger.TWO.pow(bits);
         BigInteger result = value.mod(modulus);
 
@@ -141,7 +141,7 @@ public final class BigIntConstructor {
         int bits = (int) bitsDouble;
 
         // Simplified implementation
-        BigInteger value = bigInt.getValue();
+        BigInteger value = bigInt.value();
         BigInteger modulus = BigInteger.TWO.pow(bits);
         BigInteger result = value.mod(modulus);
 

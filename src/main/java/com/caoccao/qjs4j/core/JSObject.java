@@ -21,12 +21,12 @@ import java.util.*;
 /**
  * Represents a JavaScript object.
  * Based on QuickJS object implementation with shape-based optimization.
- *
+ * <p>
  * Uses a shape (hidden class) system for efficient property access:
  * - Shape tracks property names and their offsets
  * - Property values stored in parallel array indexed by offset
  * - Sparse properties (numeric indices) stored separately
- *
+ * <p>
  * This design enables:
  * - Fast property access (O(1) with inline caching)
  * - Memory efficiency (shapes shared across objects)
@@ -277,9 +277,7 @@ public non-sealed class JSObject implements JSValue {
 
         // Add shape properties
         PropertyKey[] shapeKeys = shape.getPropertyKeys();
-        for (PropertyKey key : shapeKeys) {
-            keys.add(key);
-        }
+        Collections.addAll(keys, shapeKeys);
 
         // Add sparse properties
         if (sparseProperties != null) {

@@ -27,19 +27,19 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 /**
  * Represents a JavaScript runtime environment.
  * Based on QuickJS JSRuntime structure.
- *
+ * <p>
  * The runtime is the top-level container that manages:
  * - Multiple execution contexts (JSContext)
  * - Shared atom table for string interning
  * - Garbage collector
  * - Job queue for promises and microtasks
  * - Runtime-wide limits and configuration
- *
+ * <p>
  * A single runtime can have multiple contexts that share:
  * - Atom table (interned strings)
  * - Garbage collector
  * - Job queue
- *
+ * <p>
  * But contexts have separate:
  * - Global objects
  * - Module caches
@@ -55,7 +55,7 @@ public final class JSRuntime {
     // Runtime limits
     private long maxStackSize;
     private long maxMemoryUsage;
-    private int interruptCheckCounter;
+    private final int interruptCheckCounter;
 
     /**
      * Create a new runtime with default options.

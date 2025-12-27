@@ -21,7 +21,7 @@ import java.nio.ByteBuffer;
 /**
  * Base class for JavaScript TypedArray objects.
  * Based on ES2020 TypedArray specification.
- *
+ * <p>
  * TypedArrays provide an array-like view of an underlying ArrayBuffer.
  */
 public abstract class JSTypedArray extends JSObject {

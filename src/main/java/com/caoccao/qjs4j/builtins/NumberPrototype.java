@@ -94,7 +94,7 @@ public final class NumberPrototype {
         if (args.length == 0) {
             return new JSNumber(Double.NaN);
         }
-        String str = JSTypeConversions.toString(args[0]).getValue().trim();
+        String str = JSTypeConversions.toString(args[0]).value().trim();
 
         // Find the longest prefix that could be a valid number
         if (str.isEmpty()) {
@@ -172,7 +172,7 @@ public final class NumberPrototype {
             return new JSNumber(Double.NaN);
         }
 
-        String str = JSTypeConversions.toString(args[0]).getValue().trim();
+        String str = JSTypeConversions.toString(args[0]).value().trim();
         long radix = args.length > 1 ? (long) JSTypeConversions.toInteger(args[1]) : 0;
 
         // Auto-detect radix if 0

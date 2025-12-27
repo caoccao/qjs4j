@@ -17,10 +17,14 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.JSNumber;
+import com.caoccao.qjs4j.core.JSString;
+import com.caoccao.qjs4j.core.JSUndefined;
+import com.caoccao.qjs4j.core.JSValue;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for Math object methods.
@@ -200,7 +204,7 @@ public class MathObjectTest extends BaseTest {
     public void testMax() {
         // Normal case: multiple numbers
         JSValue result = MathObject.max(ctx, JSUndefined.INSTANCE, new JSValue[]{
-            new JSNumber(1), new JSNumber(5), new JSNumber(3)
+                new JSNumber(1), new JSNumber(5), new JSNumber(3)
         });
         assertEquals(5.0, result.asNumber().map(JSNumber::value).orElse(0.0));
 
@@ -210,13 +214,13 @@ public class MathObjectTest extends BaseTest {
 
         // Normal case: with NaN
         result = MathObject.max(ctx, JSUndefined.INSTANCE, new JSValue[]{
-            new JSNumber(1), new JSNumber(Double.NaN), new JSNumber(3)
+                new JSNumber(1), new JSNumber(Double.NaN), new JSNumber(3)
         });
         assertTrue(Double.isNaN(result.asNumber().map(JSNumber::value).orElse(0.0)));
 
         // Normal case: negative numbers
         result = MathObject.max(ctx, JSUndefined.INSTANCE, new JSValue[]{
-            new JSNumber(-5), new JSNumber(-1), new JSNumber(-10)
+                new JSNumber(-5), new JSNumber(-1), new JSNumber(-10)
         });
         assertEquals(-1.0, result.asNumber().map(JSNumber::value).orElse(0.0));
 
@@ -229,7 +233,7 @@ public class MathObjectTest extends BaseTest {
     public void testMin() {
         // Normal case: multiple numbers
         JSValue result = MathObject.min(ctx, JSUndefined.INSTANCE, new JSValue[]{
-            new JSNumber(1), new JSNumber(5), new JSNumber(3)
+                new JSNumber(1), new JSNumber(5), new JSNumber(3)
         });
         assertEquals(1.0, result.asNumber().map(JSNumber::value).orElse(0.0));
 
@@ -239,13 +243,13 @@ public class MathObjectTest extends BaseTest {
 
         // Normal case: with NaN
         result = MathObject.min(ctx, JSUndefined.INSTANCE, new JSValue[]{
-            new JSNumber(1), new JSNumber(Double.NaN), new JSNumber(3)
+                new JSNumber(1), new JSNumber(Double.NaN), new JSNumber(3)
         });
         assertTrue(Double.isNaN(result.asNumber().map(JSNumber::value).orElse(0.0)));
 
         // Normal case: negative numbers
         result = MathObject.min(ctx, JSUndefined.INSTANCE, new JSValue[]{
-            new JSNumber(-5), new JSNumber(-1), new JSNumber(-10)
+                new JSNumber(-5), new JSNumber(-1), new JSNumber(-10)
         });
         assertEquals(-10.0, result.asNumber().map(JSNumber::value).orElse(0.0));
 

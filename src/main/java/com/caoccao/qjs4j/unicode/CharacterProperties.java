@@ -113,8 +113,8 @@ public final class CharacterProperties {
      */
     public static boolean isCased(int codePoint) {
         return Character.isUpperCase(codePoint) ||
-               Character.isLowerCase(codePoint) ||
-               Character.isTitleCase(codePoint);
+                Character.isLowerCase(codePoint) ||
+                Character.isTitleCase(codePoint);
     }
 
     /**
@@ -124,10 +124,10 @@ public final class CharacterProperties {
     public static boolean isCaseIgnorable(int codePoint) {
         int type = Character.getType(codePoint);
         return type == Character.NON_SPACING_MARK ||
-               type == Character.ENCLOSING_MARK ||
-               type == Character.FORMAT ||
-               codePoint == 0x0027 || // APOSTROPHE
-               codePoint == 0x002E;   // FULL STOP
+                type == Character.ENCLOSING_MARK ||
+                type == Character.FORMAT ||
+                codePoint == 0x0027 || // APOSTROPHE
+                codePoint == 0x002E;   // FULL STOP
     }
 
     /**

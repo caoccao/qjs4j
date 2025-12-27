@@ -18,17 +18,16 @@ package com.caoccao.qjs4j.core;
 
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Represents a FinalizationRegistry object in JavaScript.
  * Based on ES2021 FinalizationRegistry specification.
- *
+ * <p>
  * FinalizationRegistry allows you to register cleanup callbacks that are
  * called when registered objects are garbage collected.
- *
+ * <p>
  * Key characteristics:
  * - Register objects with associated held values
  * - Cleanup callback is called with the held value when object is collected
@@ -46,23 +45,16 @@ public final class JSFinalizationRegistry extends JSObject {
     private volatile boolean running;
 
     /**
-     * Record for a registered object.
-     */
-    private static class RegistrationRecord {
-        final JSValue heldValue;
-        final JSValue unregisterToken;
-
-        RegistrationRecord(JSValue heldValue, JSValue unregisterToken) {
-            this.heldValue = heldValue;
-            this.unregisterToken = unregisterToken;
-        }
+         * Record for a registered object.
+         */
+        private record RegistrationRecord(JSValue heldValue, JSValue unregisterToken) {
     }
 
     /**
      * Create a new FinalizationRegistry.
      *
      * @param cleanupCallback Callback function called with held values
-     * @param ctx The execution context
+     * @param ctx             The execution context
      */
     public JSFinalizationRegistry(JSFunction cleanupCallback, JSContext ctx) {
         super();
@@ -117,8 +109,8 @@ public final class JSFinalizationRegistry extends JSObject {
      * Register an object for finalization.
      * ES2021 FinalizationRegistry.prototype.register()
      *
-     * @param target The object to monitor
-     * @param heldValue Value passed to cleanup callback
+     * @param target          The object to monitor
+     * @param heldValue       Value passed to cleanup callback
      * @param unregisterToken Optional token for manual unregistration
      */
     public void register(JSObject target, JSValue heldValue, JSValue unregisterToken) {
@@ -174,7 +166,7 @@ public final class JSFinalizationRegistry extends JSObject {
                     context.enqueueMicrotask(() -> {
                         try {
                             cleanupCallback.call(context, JSUndefined.INSTANCE,
-                                new JSValue[]{record.heldValue});
+                                    new JSValue[]{record.heldValue});
                         } catch (Exception e) {
                             // Cleanup callback errors should not crash the program
                             System.err.println("FinalizationRegistry cleanup error: " + e.getMessage());

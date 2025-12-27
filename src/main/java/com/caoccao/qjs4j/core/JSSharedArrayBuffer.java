@@ -22,11 +22,11 @@ import java.nio.ByteOrder;
 /**
  * Represents a JavaScript SharedArrayBuffer object.
  * Based on ES2017 SharedArrayBuffer specification.
- *
+ * <p>
  * A SharedArrayBuffer is a raw binary data buffer that can be shared across
  * multiple workers/agents. Unlike ArrayBuffer, it cannot be detached and
  * uses direct memory allocation for efficient sharing.
- *
+ * <p>
  * Key characteristics:
  * - Fixed-length binary data buffer
  * - Can be shared across workers/threads
@@ -80,7 +80,7 @@ public final class JSSharedArrayBuffer extends JSObject {
      * Returns a new SharedArrayBuffer with a copy of the bytes from begin to end.
      *
      * @param begin Start offset (inclusive)
-     * @param end End offset (exclusive)
+     * @param end   End offset (exclusive)
      * @return A new SharedArrayBuffer
      */
     public JSSharedArrayBuffer slice(int begin, int end) {

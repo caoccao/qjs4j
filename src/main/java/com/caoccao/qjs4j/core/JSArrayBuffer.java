@@ -22,7 +22,7 @@ import java.nio.ByteOrder;
 /**
  * Represents a JavaScript ArrayBuffer object.
  * Based on ES2020 ArrayBuffer specification.
- *
+ * <p>
  * An ArrayBuffer is a raw binary data buffer of a fixed length.
  * It cannot be read or written directly - use TypedArrays or DataView.
  */
@@ -114,7 +114,7 @@ public final class JSArrayBuffer extends JSObject {
      * Returns a new ArrayBuffer with a copy of the bytes from begin to end.
      *
      * @param begin Start offset (inclusive)
-     * @param end End offset (exclusive)
+     * @param end   End offset (exclusive)
      * @return A new ArrayBuffer
      */
     public JSArrayBuffer slice(int begin, int end) {

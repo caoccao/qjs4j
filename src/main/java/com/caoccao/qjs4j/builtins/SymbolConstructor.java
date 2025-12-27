@@ -37,7 +37,7 @@ public final class SymbolConstructor {
     public static JSValue call(JSContext ctx, JSValue thisArg, JSValue[] args) {
         String description = null;
         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-            description = JSTypeConversions.toString(args[0]).getValue();
+            description = JSTypeConversions.toString(args[0]).value();
         }
         return new JSSymbol(description);
     }
@@ -52,7 +52,7 @@ public final class SymbolConstructor {
             return ctx.throwError("TypeError", "Symbol.for requires a key");
         }
 
-        String key = JSTypeConversions.toString(args[0]).getValue();
+        String key = JSTypeConversions.toString(args[0]).value();
 
         synchronized (symbolRegistry) {
             return symbolRegistry.computeIfAbsent(key, k -> new JSSymbol(k));

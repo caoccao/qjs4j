@@ -30,7 +30,7 @@ public final class StringPrototype {
      */
     public static JSValue charAt(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
         long pos = args.length > 0 ? (long) JSTypeConversions.toInteger(args[0]) : 0;
 
         if (pos < 0 || pos >= s.length()) {
@@ -46,7 +46,7 @@ public final class StringPrototype {
      */
     public static JSValue charCodeAt(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
         long pos = args.length > 0 ? (long) JSTypeConversions.toInteger(args[0]) : 0;
 
         if (pos < 0 || pos >= s.length()) {
@@ -62,7 +62,7 @@ public final class StringPrototype {
      */
     public static JSValue codePointAt(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
         long pos = args.length > 0 ? (long) JSTypeConversions.toInteger(args[0]) : 0;
 
         if (pos < 0 || pos >= s.length()) {
@@ -78,10 +78,10 @@ public final class StringPrototype {
      */
     public static JSValue concat(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        StringBuilder result = new StringBuilder(str.getValue());
+        StringBuilder result = new StringBuilder(str.value());
 
         for (JSValue arg : args) {
-            result.append(JSTypeConversions.toString(arg).getValue());
+            result.append(JSTypeConversions.toString(arg).value());
         }
 
         return new JSString(result.toString());
@@ -93,13 +93,13 @@ public final class StringPrototype {
      */
     public static JSValue endsWith(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
 
         if (args.length == 0) {
             return JSBoolean.FALSE;
         }
 
-        String searchStr = JSTypeConversions.toString(args[0]).getValue();
+        String searchStr = JSTypeConversions.toString(args[0]).value();
         long endPosition = args.length > 1 ? (long) JSTypeConversions.toInteger(args[1]) : s.length();
         endPosition = Math.max(0, Math.min(endPosition, s.length()));
 
@@ -117,13 +117,13 @@ public final class StringPrototype {
      */
     public static JSValue startsWith(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
 
         if (args.length == 0) {
             return JSBoolean.FALSE;
         }
 
-        String searchStr = JSTypeConversions.toString(args[0]).getValue();
+        String searchStr = JSTypeConversions.toString(args[0]).value();
         long position = args.length > 1 ? (long) JSTypeConversions.toInteger(args[1]) : 0;
         position = Math.max(0, Math.min(position, s.length()));
 
@@ -136,13 +136,13 @@ public final class StringPrototype {
      */
     public static JSValue includes(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
 
         if (args.length == 0) {
             return JSBoolean.FALSE;
         }
 
-        String searchStr = JSTypeConversions.toString(args[0]).getValue();
+        String searchStr = JSTypeConversions.toString(args[0]).value();
         long position = args.length > 1 ? (long) JSTypeConversions.toInteger(args[1]) : 0;
         position = Math.max(0, Math.min(position, s.length()));
 
@@ -155,13 +155,13 @@ public final class StringPrototype {
      */
     public static JSValue indexOf(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
 
         if (args.length == 0) {
             return new JSNumber(-1);
         }
 
-        String searchStr = JSTypeConversions.toString(args[0]).getValue();
+        String searchStr = JSTypeConversions.toString(args[0]).value();
         long position = args.length > 1 ? (long) JSTypeConversions.toInteger(args[1]) : 0;
         position = Math.max(0, Math.min(position, s.length()));
 
@@ -175,13 +175,13 @@ public final class StringPrototype {
      */
     public static JSValue lastIndexOf(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
 
         if (args.length == 0) {
             return new JSNumber(-1);
         }
 
-        String searchStr = JSTypeConversions.toString(args[0]).getValue();
+        String searchStr = JSTypeConversions.toString(args[0]).value();
         long position = args.length > 1 ? (long) JSTypeConversions.toInteger(args[1]) : s.length();
         position = Math.max(0, Math.min(position, s.length()));
 
@@ -195,14 +195,14 @@ public final class StringPrototype {
      */
     public static JSValue padEnd(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
 
         long maxLength = args.length > 0 ? (long) JSTypeConversions.toInteger(args[0]) : 0;
         if (maxLength <= s.length()) {
             return str;
         }
 
-        String fillStr = args.length > 1 ? JSTypeConversions.toString(args[1]).getValue() : " ";
+        String fillStr = args.length > 1 ? JSTypeConversions.toString(args[1]).value() : " ";
         if (fillStr.isEmpty()) {
             return str;
         }
@@ -225,14 +225,14 @@ public final class StringPrototype {
      */
     public static JSValue padStart(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
 
         long maxLength = args.length > 0 ? (long) JSTypeConversions.toInteger(args[0]) : 0;
         if (maxLength <= s.length()) {
             return str;
         }
 
-        String fillStr = args.length > 1 ? JSTypeConversions.toString(args[1]).getValue() : " ";
+        String fillStr = args.length > 1 ? JSTypeConversions.toString(args[1]).value() : " ";
         if (fillStr.isEmpty()) {
             return str;
         }
@@ -255,7 +255,7 @@ public final class StringPrototype {
      */
     public static JSValue repeat(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
 
         long count = args.length > 0 ? (long) JSTypeConversions.toInteger(args[0]) : 0;
 
@@ -281,14 +281,14 @@ public final class StringPrototype {
      */
     public static JSValue replace(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
 
         if (args.length == 0) {
             return str;
         }
 
-        String searchStr = JSTypeConversions.toString(args[0]).getValue();
-        String replaceStr = args.length > 1 ? JSTypeConversions.toString(args[1]).getValue() : "undefined";
+        String searchStr = JSTypeConversions.toString(args[0]).value();
+        String replaceStr = args.length > 1 ? JSTypeConversions.toString(args[1]).value() : "undefined";
 
         int index = s.indexOf(searchStr);
         if (index < 0) {
@@ -305,14 +305,14 @@ public final class StringPrototype {
      */
     public static JSValue replaceAll(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
 
         if (args.length == 0) {
             return str;
         }
 
-        String searchStr = JSTypeConversions.toString(args[0]).getValue();
-        String replaceStr = args.length > 1 ? JSTypeConversions.toString(args[1]).getValue() : "undefined";
+        String searchStr = JSTypeConversions.toString(args[0]).value();
+        String replaceStr = args.length > 1 ? JSTypeConversions.toString(args[1]).value() : "undefined";
 
         if (searchStr.isEmpty()) {
             return str;
@@ -327,7 +327,7 @@ public final class StringPrototype {
      */
     public static JSValue slice(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
         int len = s.length();
 
         long begin = args.length > 0 ? (long) JSTypeConversions.toInteger(args[0]) : 0;
@@ -359,7 +359,7 @@ public final class StringPrototype {
      */
     public static JSValue split(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
 
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             JSArray arr = new JSArray();
@@ -367,7 +367,7 @@ public final class StringPrototype {
             return arr;
         }
 
-        String separator = JSTypeConversions.toString(args[0]).getValue();
+        String separator = JSTypeConversions.toString(args[0]).value();
         long limit = args.length > 1 && !(args[1] instanceof JSUndefined)
                 ? JSTypeConversions.toUint32(args[1])
                 : Long.MAX_VALUE;
@@ -396,7 +396,7 @@ public final class StringPrototype {
      */
     public static JSValue substring(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
         int len = s.length();
 
         long start = args.length > 0 ? (long) JSTypeConversions.toInteger(args[0]) : 0;
@@ -422,7 +422,7 @@ public final class StringPrototype {
      */
     public static JSValue substr(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        String s = str.getValue();
+        String s = str.value();
         int len = s.length();
 
         long start = args.length > 0 ? (long) JSTypeConversions.toInteger(args[0]) : 0;
@@ -446,7 +446,7 @@ public final class StringPrototype {
      */
     public static JSValue toLowerCase(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        return new JSString(str.getValue().toLowerCase());
+        return new JSString(str.value().toLowerCase());
     }
 
     /**
@@ -455,7 +455,7 @@ public final class StringPrototype {
      */
     public static JSValue toUpperCase(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        return new JSString(str.getValue().toUpperCase());
+        return new JSString(str.value().toUpperCase());
     }
 
     /**
@@ -464,7 +464,7 @@ public final class StringPrototype {
      */
     public static JSValue trim(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        return new JSString(str.getValue().strip());
+        return new JSString(str.value().strip());
     }
 
     /**
@@ -473,7 +473,7 @@ public final class StringPrototype {
      */
     public static JSValue trimStart(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        return new JSString(str.getValue().stripLeading());
+        return new JSString(str.value().stripLeading());
     }
 
     /**
@@ -482,7 +482,7 @@ public final class StringPrototype {
      */
     public static JSValue trimEnd(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        return new JSString(str.getValue().stripTrailing());
+        return new JSString(str.value().stripTrailing());
     }
 
     /**
@@ -513,7 +513,36 @@ public final class StringPrototype {
      */
     public static JSValue getLength(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(thisArg);
-        return new JSNumber(str.getValue().length());
+        return new JSNumber(str.value().length());
+    }
+
+    /**
+     * String.prototype.at(index)
+     * ES2022 22.1.3.1
+     * Returns the character at the specified index, supporting negative indices.
+     */
+    public static JSValue at(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        JSString str = JSTypeConversions.toString(thisArg);
+        String s = str.value();
+
+        if (args.length == 0) {
+            return JSUndefined.INSTANCE;
+        }
+
+        long index = (long) JSTypeConversions.toInteger(args[0]);
+        int length = s.length();
+
+        // Handle negative indices
+        if (index < 0) {
+            index = length + index;
+        }
+
+        // Check bounds
+        if (index < 0 || index >= length) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return new JSString(String.valueOf(s.charAt((int) index)));
     }
 
     /**
@@ -522,5 +551,16 @@ public final class StringPrototype {
      */
     public static JSValue match(JSContext ctx, JSValue thisArg, JSValue[] args) {
         return ctx.throwError("Error", "String.prototype.match not implemented yet");
+    }
+
+    /**
+     * String.prototype.matchAll(regexp)
+     * ES2020 21.1.3.11
+     * Returns an iterator of all results matching a string against a regular expression,
+     * including capturing groups.
+     * (stub - regex support not implemented yet)
+     */
+    public static JSValue matchAll(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        return ctx.throwError("Error", "String.prototype.matchAll not implemented yet");
     }
 }

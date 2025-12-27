@@ -19,7 +19,7 @@ package com.caoccao.qjs4j.core;
 /**
  * Helper for implementing super keyword in ES6 classes.
  * Provides access to parent class constructor and methods.
- *
+ * <p>
  * The super keyword has two uses in JavaScript:
  * 1. super() - calls parent constructor (must be called in derived class constructor)
  * 2. super.method() - calls parent class method
@@ -30,10 +30,10 @@ public final class SuperHelper {
      * Call the super constructor.
      * Must be called in a derived class constructor before accessing 'this'.
      *
-     * @param ctx The execution context
+     * @param ctx          The execution context
      * @param derivedClass The derived class
-     * @param thisArg The instance being constructed
-     * @param args Arguments to pass to super constructor
+     * @param thisArg      The instance being constructed
+     * @param args         Arguments to pass to super constructor
      * @return Undefined (super() doesn't return a value)
      */
     public static JSValue callSuperConstructor(JSContext ctx, JSClass derivedClass, JSObject thisArg, JSValue[] args) {
@@ -60,7 +60,7 @@ public final class SuperHelper {
      * Used for super.methodName() calls.
      *
      * @param derivedClass The derived class
-     * @param methodName The method name to look up
+     * @param methodName   The method name to look up
      * @return The method from the parent class, or null if not found
      */
     public static JSValue getSuperMethod(JSClass derivedClass, String methodName) {
@@ -81,8 +81,8 @@ public final class SuperHelper {
      * This object provides access to super constructor and methods.
      *
      * @param derivedClass The derived class
-     * @param instance The current instance
-     * @param ctx The execution context
+     * @param instance     The current instance
+     * @param ctx          The execution context
      * @return A super reference object
      */
     public static JSObject createSuperReference(JSClass derivedClass, JSObject instance, JSContext ctx) {
@@ -98,7 +98,7 @@ public final class SuperHelper {
             if (args.length == 0) {
                 return JSUndefined.INSTANCE;
             }
-            String methodName = JSTypeConversions.toString(args[0]).getValue();
+            String methodName = JSTypeConversions.toString(args[0]).value();
             JSValue method = getSuperMethod(derivedClass, methodName);
 
             // If method is a function, bind it to the current instance
@@ -137,8 +137,8 @@ public final class SuperHelper {
     /**
      * Validate that super constructor has been called before accessing 'this'.
      *
-     * @param ctx The execution context
-     * @param instance The instance being constructed
+     * @param ctx                  The execution context
+     * @param instance             The instance being constructed
      * @param inDerivedConstructor Whether we're in a derived class constructor
      * @return The instance if valid, or throws an error
      */

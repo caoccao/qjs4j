@@ -18,8 +18,8 @@ public abstract class BaseTest {
     protected void assertTypeError(JSValue value) {
         if (value instanceof JSObject jsObject) {
             if (jsObject.get("name") instanceof JSString name && jsObject.get("message") instanceof JSString message) {
-                assertEquals("TypeError", name.getValue());
-                assertNotNull(message.getValue());
+                assertEquals("TypeError", name.value());
+                assertNotNull(message.value());
             }
         }
     }
@@ -27,8 +27,8 @@ public abstract class BaseTest {
     protected void assertRangeError(JSValue value) {
         if (value instanceof JSObject jsObject) {
             if (jsObject.get("name") instanceof JSString name && jsObject.get("message") instanceof JSString message) {
-                assertEquals("RangeError", name.getValue());
-                assertNotNull(message.getValue());
+                assertEquals("RangeError", name.value());
+                assertNotNull(message.value());
             }
         }
     }
@@ -36,8 +36,8 @@ public abstract class BaseTest {
     protected void assertSyntaxError(JSValue value) {
         if (value instanceof JSObject jsObject) {
             if (jsObject.get("name") instanceof JSString name && jsObject.get("message") instanceof JSString message) {
-                assertEquals("SyntaxError", name.getValue());
-                assertNotNull(message.getValue());
+                assertEquals("SyntaxError", name.value());
+                assertNotNull(message.value());
             }
         }
     }
@@ -45,8 +45,8 @@ public abstract class BaseTest {
     protected void assertError(JSValue value) {
         if (value instanceof JSObject jsObject) {
             if (jsObject.get("name") instanceof JSString name && jsObject.get("message") instanceof JSString message) {
-                assertEquals("Error", name.getValue());
-                assertNotNull(message.getValue());
+                assertEquals("Error", name.value());
+                assertNotNull(message.value());
             }
         }
     }

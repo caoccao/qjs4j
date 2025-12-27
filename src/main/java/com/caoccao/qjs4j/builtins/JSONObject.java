@@ -44,7 +44,7 @@ public final class JSONObject {
             return ctx.throwError("SyntaxError", "JSON.parse requires at least 1 argument");
         }
 
-        String text = JSTypeConversions.toString(args[0]).getValue();
+        String text = JSTypeConversions.toString(args[0]).value();
 
         try {
             return parseValue(text.strip(), 0).value;
@@ -76,7 +76,7 @@ public final class JSONObject {
             int spaces = Math.min(10, Math.max(0, (int) num.value()));
             indent = " ".repeat(spaces);
         } else if (args.length > 2 && args[2] instanceof JSString str) {
-            indent = str.getValue().substring(0, Math.min(10, str.getValue().length()));
+            indent = str.value().substring(0, Math.min(10, str.value().length()));
         }
 
         try {
@@ -240,7 +240,7 @@ public final class JSONObject {
         while (i < text.length()) {
             // Parse key (must be string)
             ParseResult keyResult = parseString(text, i);
-            String key = ((JSString) keyResult.value).getValue();
+            String key = ((JSString) keyResult.value).value();
             i = skipWhitespace(text, keyResult.endIndex);
 
             // Expect colon
@@ -369,7 +369,7 @@ public final class JSONObject {
         }
 
         if (value instanceof JSString s) {
-            return stringifyString(s.getValue());
+            return stringifyString(s.value());
         }
 
         if (value instanceof JSArray arr) {

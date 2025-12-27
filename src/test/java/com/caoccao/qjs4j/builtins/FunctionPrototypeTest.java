@@ -191,12 +191,12 @@ public class FunctionPrototypeTest extends BaseTest {
         // Normal case: function with name
         JSFunction testFunc = new JSNativeFunction("myFunction", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         JSValue result = FunctionPrototype.getName(ctx, testFunc, new JSValue[]{});
-        assertEquals("myFunction", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("myFunction", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: function without name
         JSFunction anonFunc = new JSNativeFunction("", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         result = FunctionPrototype.getName(ctx, anonFunc, new JSValue[]{});
-        assertEquals("", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: called on non-function
         result = FunctionPrototype.getName(ctx, new JSString("not a function"), new JSValue[]{});
@@ -209,14 +209,14 @@ public class FunctionPrototypeTest extends BaseTest {
         // Normal case: function with name
         JSFunction testFunc = new JSNativeFunction("testFunction", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         JSValue result = FunctionPrototype.toStringMethod(ctx, testFunc, new JSValue[]{});
-        String str = result.asString().map(JSString::getValue).orElse("");
+        String str = result.asString().map(JSString::value).orElse("");
         assertTrue(str.contains("function testFunction"));
         assertTrue(str.contains("[native code]"));
 
         // Normal case: function without name (anonymous)
         JSFunction anonFunc = new JSNativeFunction("", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         result = FunctionPrototype.toStringMethod(ctx, anonFunc, new JSValue[]{});
-        str = result.asString().map(JSString::getValue).orElse("");
+        str = result.asString().map(JSString::value).orElse("");
         assertTrue(str.contains("function anonymous"));
         assertTrue(str.contains("[native code]"));
 

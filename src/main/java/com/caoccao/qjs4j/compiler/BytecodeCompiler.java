@@ -17,7 +17,8 @@
 package com.caoccao.qjs4j.compiler;
 
 import com.caoccao.qjs4j.compiler.ast.*;
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.JSNumber;
+import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.Opcode;
 
@@ -394,7 +395,7 @@ public final class BytecodeCompiler {
                 }
             }
             int defaultStart = caseBodyStarts.isEmpty() ? switchEnd :
-                (defaultIndex < caseBodyStarts.size() ? caseBodyStarts.get(defaultIndex) : switchEnd);
+                    (defaultIndex < caseBodyStarts.size() ? caseBodyStarts.get(defaultIndex) : switchEnd);
             emitter.patchJump(jumpToDefault, defaultStart);
         } else {
             emitter.patchJump(jumpToDefault, switchEnd);

@@ -24,7 +24,7 @@ import java.util.List;
 /**
  * Compiles regex patterns to bytecode.
  * Based on QuickJS libregexp.c compiler.
- *
+ * <p>
  * This is a simplified initial implementation that handles basic patterns.
  * Full ES2020 regex syntax support will be added incrementally.
  */
@@ -37,7 +37,7 @@ public final class RegExpCompiler {
      * Compile a regex pattern to bytecode.
      *
      * @param pattern The regex pattern string
-     * @param flags The regex flags (g, i, m, s, u, y, d, v)
+     * @param flags   The regex flags (g, i, m, s, u, y, d, v)
      * @return Compiled bytecode
      * @throws RegExpSyntaxException if the pattern is invalid
      */

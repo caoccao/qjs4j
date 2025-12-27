@@ -22,7 +22,7 @@ import com.caoccao.qjs4j.vm.Bytecode;
 
 /**
  * Main compiler interface that integrates the entire compilation pipeline.
- *
+ * <p>
  * Pipeline: JavaScript Source → Lexer → Tokens → Parser → AST → BytecodeCompiler → Bytecode
  */
 public final class Compiler {
@@ -30,7 +30,7 @@ public final class Compiler {
     /**
      * Compile JavaScript source code into executable bytecode.
      *
-     * @param source The JavaScript source code to compile
+     * @param source   The JavaScript source code to compile
      * @param filename Optional filename for error reporting (can be null)
      * @return A JSBytecodeFunction containing the compiled bytecode
      * @throws CompilerException if compilation fails
@@ -78,7 +78,7 @@ public final class Compiler {
      * Compile ES6 module source code into executable bytecode.
      * The resulting function will be executed in module scope.
      *
-     * @param source The module source code to compile
+     * @param source   The module source code to compile
      * @param filename Optional filename for error reporting (can be null)
      * @return A JSBytecodeFunction containing the compiled module bytecode
      * @throws CompilerException if compilation fails
@@ -118,7 +118,7 @@ public final class Compiler {
      * Parse JavaScript source code into an AST (without bytecode compilation).
      * Useful for static analysis, code transformation, etc.
      *
-     * @param source The JavaScript source code to parse
+     * @param source   The JavaScript source code to parse
      * @param filename Optional filename for error reporting (can be null)
      * @return The parsed AST Program node
      * @throws CompilerException if parsing fails

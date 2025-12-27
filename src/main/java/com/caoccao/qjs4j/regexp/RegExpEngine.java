@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.regexp;
 
 import java.util.Arrays;
-import java.util.Stack;
 
 /**
  * Regular expression bytecode executor.
@@ -34,7 +33,7 @@ public final class RegExpEngine {
     /**
      * Execute the regex against the input string starting at the given index.
      *
-     * @param input The string to match against
+     * @param input      The string to match against
      * @param startIndex The index to start matching from
      * @return The match result, or null if no match
      */
@@ -45,8 +44,8 @@ public final class RegExpEngine {
 
         ExecutionContext ctx = new ExecutionContext(
                 input,
-                bytecode.getInstructions(),
-                bytecode.getCaptureCount(),
+                bytecode.instructions(),
+                bytecode.captureCount(),
                 bytecode.isIgnoreCase(),
                 bytecode.isMultiline(),
                 bytecode.isDotAll(),
@@ -359,11 +358,11 @@ public final class RegExpEngine {
     /**
      * Result of a regex match operation.
      *
-     * @param matched Whether the pattern matched
+     * @param matched    Whether the pattern matched
      * @param startIndex Starting position of the match (in code points)
-     * @param endIndex Ending position of the match (in code points)
-     * @param captures Array of captured groups (including group 0 - the full match)
-     * @param indices Array of [start, end] indices for each capture group
+     * @param endIndex   Ending position of the match (in code points)
+     * @param captures   Array of captured groups (including group 0 - the full match)
+     * @param indices    Array of [start, end] indices for each capture group
      */
     public record MatchResult(
             boolean matched,

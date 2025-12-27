@@ -24,13 +24,13 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Represents the shape (hidden class) of a JavaScript object.
  * Based on QuickJS shape system and V8's hidden classes.
- *
+ * <p>
  * Shapes enable:
  * - Efficient property access through stable property offsets
  * - Inline caching for property access
  * - Memory-efficient property storage (shared shape metadata)
  * - Shape transitions when properties are added
- *
+ * <p>
  * Shapes form a tree structure where:
  * - Root shape has no properties
  * - Each property addition creates a child shape
@@ -200,35 +200,28 @@ public final class JSShape {
     }
 
     /**
-     * Key for shape transitions.
-     * Combines property key and descriptor attributes to determine
-     * if two property additions should share a shape.
-     */
-    private static final class TransitionKey {
-        private final PropertyKey propertyKey;
-        private final int descriptorFlags;
+         * Key for shape transitions.
+         * Combines property key and descriptor attributes to determine
+         * if two property additions should share a shape.
+         */
+        private record TransitionKey(PropertyKey propertyKey, int descriptorFlags) {
+            private TransitionKey(PropertyKey propertyKey, PropertyDescriptor descriptorFlags) {
+                this.propertyKey = propertyKey;
+                // Only care about enumerable/configurable for transitions
+                // (writable and value don't affect shape)
+                this.descriptorFlags =
+                        (descriptorFlags.isEnumerable() ? 1 : 0) |
+                                (descriptorFlags.isConfigurable() ? 2 : 0) |
+                                (descriptorFlags.isDataDescriptor() ? 4 : 0) |
+                                (descriptorFlags.isAccessorDescriptor() ? 8 : 0);
+            }
 
-        TransitionKey(PropertyKey key, PropertyDescriptor descriptor) {
-            this.propertyKey = key;
-            // Only care about enumerable/configurable for transitions
-            // (writable and value don't affect shape)
-            this.descriptorFlags =
-                (descriptor.isEnumerable() ? 1 : 0) |
-                (descriptor.isConfigurable() ? 2 : 0) |
-                (descriptor.isDataDescriptor() ? 4 : 0) |
-                (descriptor.isAccessorDescriptor() ? 8 : 0);
-        }
+            @Override
+            public boolean equals(Object obj) {
+                if (!(obj instanceof TransitionKey other)) return false;
+                return propertyKey.equals(other.propertyKey) &&
+                        descriptorFlags == other.descriptorFlags;
+            }
 
-        @Override
-        public boolean equals(Object obj) {
-            if (!(obj instanceof TransitionKey other)) return false;
-            return propertyKey.equals(other.propertyKey) &&
-                   descriptorFlags == other.descriptorFlags;
-        }
-
-        @Override
-        public int hashCode() {
-            return propertyKey.hashCode() * 31 + descriptorFlags;
-        }
     }
 }

@@ -35,7 +35,7 @@ public final class RegExpPrototype {
             return ctx.throwError("TypeError", "RegExp.prototype.test called on non-RegExp");
         }
 
-        String str = args.length > 0 ? JSTypeConversions.toString(args[0]).getValue() : "";
+        String str = args.length > 0 ? JSTypeConversions.toString(args[0]).value() : "";
 
         // Get lastIndex
         int lastIndex = regexp.isGlobal() ? regexp.getLastIndex() : 0;
@@ -68,7 +68,7 @@ public final class RegExpPrototype {
             return ctx.throwError("TypeError", "RegExp.prototype.exec called on non-RegExp");
         }
 
-        String str = args.length > 0 ? JSTypeConversions.toString(args[0]).getValue() : "";
+        String str = args.length > 0 ? JSTypeConversions.toString(args[0]).value() : "";
 
         // Get lastIndex
         int lastIndex = regexp.isGlobal() ? regexp.getLastIndex() : 0;

@@ -20,26 +20,9 @@ package com.caoccao.qjs4j.core;
  * Represents a JavaScript string value.
  * Supports atom indexing for interned strings.
  */
-public final class JSString implements JSValue {
-    private final String value;
-    private final int atomIndex;
-
+public record JSString(String value, int atomIndex) implements JSValue {
     public JSString(String value) {
-        this.value = value;
-        this.atomIndex = -1;
-    }
-
-    public JSString(String value, int atomIndex) {
-        this.value = value;
-        this.atomIndex = atomIndex;
-    }
-
-    public String getValue() {
-        return value;
-    }
-
-    public int getAtomIndex() {
-        return atomIndex;
+        this(value, -1);
     }
 
     @Override

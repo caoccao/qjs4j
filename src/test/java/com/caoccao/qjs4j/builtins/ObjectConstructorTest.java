@@ -76,7 +76,7 @@ public class ObjectConstructorTest extends BaseTest {
         result = ObjectConstructor.fromEntries(ctx, JSUndefined.INSTANCE, new JSValue[]{mixedEntries});
         obj = result.asObject().orElse(null);
         assertNotNull(obj);
-        assertEquals("value1", obj.get("key1").asString().map(JSString::getValue).orElse(""));
+        assertEquals("value1", obj.get("key1").asString().map(JSString::value).orElse(""));
         assertEquals(JSBoolean.TRUE, obj.get("key2"));
     }
 

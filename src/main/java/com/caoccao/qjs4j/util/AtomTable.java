@@ -20,13 +20,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Atom table for interned strings.
  * Provides fast string comparison using integer indices (atoms).
  * Based on QuickJS atom system in quickjs.c.
- *
+ * <p>
  * Atoms are used extensively in JavaScript engines for:
  * - Property names
  * - Variable names

@@ -130,7 +130,7 @@ public final class MapPrototype {
 
         // Iterate over entries in insertion order
         for (Map.Entry<JSMap.KeyWrapper, JSValue> entry : map.entries()) {
-            JSValue key = entry.getKey().getValue();
+            JSValue key = entry.getKey().value();
             JSValue value = entry.getValue();
 
             // Call callback with (value, key, map)
@@ -155,7 +155,7 @@ public final class MapPrototype {
         JSArray result = new JSArray();
         for (Map.Entry<JSMap.KeyWrapper, JSValue> entry : map.entries()) {
             JSArray pair = new JSArray();
-            pair.push(entry.getKey().getValue());
+            pair.push(entry.getKey().value());
             pair.push(entry.getValue());
             result.push(pair);
         }
@@ -176,7 +176,7 @@ public final class MapPrototype {
 
         JSArray result = new JSArray();
         for (Map.Entry<JSMap.KeyWrapper, JSValue> entry : map.entries()) {
-            result.push(entry.getKey().getValue());
+            result.push(entry.getKey().value());
         }
 
         return result;

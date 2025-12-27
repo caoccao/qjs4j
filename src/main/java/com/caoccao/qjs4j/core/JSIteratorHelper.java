@@ -27,7 +27,7 @@ public final class JSIteratorHelper {
      * Calls the object's [Symbol.iterator] method to get an iterator.
      *
      * @param iterable The iterable object
-     * @param ctx The execution context
+     * @param ctx      The execution context
      * @return An iterator, or null if the object is not iterable
      */
     public static JSValue getIterator(JSValue iterable, JSContext ctx) {
@@ -60,7 +60,7 @@ public final class JSIteratorHelper {
      * Call next() on an iterator and return the result.
      *
      * @param iterator The iterator object
-     * @param ctx The execution context
+     * @param ctx      The execution context
      * @return The iterator result object with {value, done}
      */
     public static JSObject iteratorNext(JSValue iterator, JSContext ctx) {
@@ -100,7 +100,7 @@ public final class JSIteratorHelper {
      *
      * @param iterable The iterable to loop over
      * @param callback Function to call for each value
-     * @param ctx The execution context
+     * @param ctx      The execution context
      */
     public static void forOf(JSValue iterable, IterationCallback callback, JSContext ctx) {
         // Get the iterator
@@ -141,6 +141,7 @@ public final class JSIteratorHelper {
     public interface IterationCallback {
         /**
          * Called for each iterated value.
+         *
          * @param value The current value
          * @return true to continue iteration, false to break
          */
@@ -151,7 +152,7 @@ public final class JSIteratorHelper {
      * Convert an iterable to an array.
      *
      * @param iterable The iterable to convert
-     * @param ctx The execution context
+     * @param ctx      The execution context
      * @return A JSArray containing all values from the iterable
      */
     public static JSArray toArray(JSValue iterable, JSContext ctx) {

@@ -48,8 +48,8 @@ public class JSException extends RuntimeException {
             JSValue nameValue = errorObj.get("name");
             JSValue messageValue = errorObj.get("message");
 
-            String name = nameValue instanceof JSString ? ((JSString) nameValue).getValue() : "Error";
-            String message = messageValue instanceof JSString ? ((JSString) messageValue).getValue() : "";
+            String name = nameValue instanceof JSString ? ((JSString) nameValue).value() : "Error";
+            String message = messageValue instanceof JSString ? ((JSString) messageValue).value() : "";
 
             if (message.isEmpty()) {
                 return name;

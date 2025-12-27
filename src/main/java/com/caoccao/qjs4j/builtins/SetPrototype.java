@@ -112,7 +112,7 @@ public final class SetPrototype {
 
         // Iterate over values in insertion order
         for (JSMap.KeyWrapper wrapper : set.values()) {
-            JSValue value = wrapper.getValue();
+            JSValue value = wrapper.value();
 
             // Call callback with (value, value, set)
             // Note: In Set, both arguments are the value (for consistency with Map)
@@ -136,7 +136,7 @@ public final class SetPrototype {
 
         JSArray result = new JSArray();
         for (JSMap.KeyWrapper wrapper : set.values()) {
-            JSValue value = wrapper.getValue();
+            JSValue value = wrapper.value();
             JSArray pair = new JSArray();
             pair.push(value);
             pair.push(value); // In Set, both elements are the same value
@@ -170,7 +170,7 @@ public final class SetPrototype {
 
         JSArray result = new JSArray();
         for (JSMap.KeyWrapper wrapper : set.values()) {
-            result.push(wrapper.getValue());
+            result.push(wrapper.value());
         }
 
         return result;

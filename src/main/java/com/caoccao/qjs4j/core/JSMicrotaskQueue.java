@@ -22,7 +22,7 @@ import java.util.Queue;
 /**
  * Manages the microtask queue for promise resolution and async operations.
  * Based on ES2020 Jobs and Job Queues specification.
- *
+ * <p>
  * Microtasks are executed after the current script completes and before
  * returning to the event loop. This ensures promise handlers run at the
  * right time.
@@ -62,7 +62,7 @@ public final class JSMicrotaskQueue {
     /**
      * Process all pending microtasks.
      * This should be called at the end of each task in the event loop.
-     *
+     * <p>
      * Microtasks can enqueue more microtasks, so this runs until the queue is empty.
      */
     public void processMicrotasks() {

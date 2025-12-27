@@ -487,20 +487,20 @@ public class ArrayPrototypeTest extends BaseTest {
 
         // Normal case
         JSValue result = ArrayPrototype.join(ctx, arr, new JSValue[]{new JSString("-")});
-        assertEquals("a-b-c", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("a-b-c", result.asString().map(JSString::value).orElse(""));
 
         // Default separator
         result = ArrayPrototype.join(ctx, arr, new JSValue[]{});
-        assertEquals("a,b,c", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("a,b,c", result.asString().map(JSString::value).orElse(""));
 
         // Empty separator
         result = ArrayPrototype.join(ctx, arr, new JSValue[]{new JSString("")});
-        assertEquals("abc", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("abc", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray();
         result = ArrayPrototype.join(ctx, emptyArr, new JSValue[]{});
-        assertEquals("", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: array with null/undefined
         JSArray mixedArr = new JSArray();
@@ -509,7 +509,7 @@ public class ArrayPrototypeTest extends BaseTest {
         mixedArr.push(JSUndefined.INSTANCE);
         mixedArr.push(new JSString("b"));
         result = ArrayPrototype.join(ctx, mixedArr, new JSValue[]{});
-        assertEquals("a,,,b", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("a,,,b", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: join on non-array
         JSValue nonArray = new JSString("not an array");
@@ -709,8 +709,8 @@ public class ArrayPrototypeTest extends BaseTest {
 
         // Normal case: concatenate strings in reverse
         JSFunction concatFn = createTestFunction(args -> {
-            String acc = args[0].asString().map(JSString::getValue).orElse("");
-            String curr = args[1].asString().map(JSString::getValue).orElse("");
+            String acc = args[0].asString().map(JSString::value).orElse("");
+            String curr = args[1].asString().map(JSString::value).orElse("");
             return new JSString(acc + curr);
         });
 
@@ -720,11 +720,11 @@ public class ArrayPrototypeTest extends BaseTest {
         strArr.push(new JSString("c"));
 
         JSValue result = ArrayPrototype.reduceRight(ctx, strArr, new JSValue[]{concatFn});
-        assertEquals("cba", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("cba", result.asString().map(JSString::value).orElse(""));
 
         // With initial value
         result = ArrayPrototype.reduceRight(ctx, strArr, new JSValue[]{concatFn, new JSString("d")});
-        assertEquals("dcba", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("dcba", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: empty array without initial value
         JSArray emptyArr = new JSArray();
@@ -733,13 +733,13 @@ public class ArrayPrototypeTest extends BaseTest {
 
         // Edge case: empty array with initial value
         result = ArrayPrototype.reduceRight(ctx, emptyArr, new JSValue[]{concatFn, new JSString("x")});
-        assertEquals("x", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("x", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: single element without initial value
         JSArray singleArr = new JSArray();
         singleArr.push(new JSString("z"));
         result = ArrayPrototype.reduceRight(ctx, singleArr, new JSValue[]{concatFn});
-        assertEquals("z", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("z", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: no callback
         assertTypeError(ArrayPrototype.reduceRight(ctx, strArr, new JSValue[]{}));
@@ -1049,7 +1049,7 @@ public class ArrayPrototypeTest extends BaseTest {
 
         // Normal case
         JSValue result = ArrayPrototype.toString(ctx, arr, new JSValue[]{});
-        assertEquals("a,b,c", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("a,b,c", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: toString on non-array
         JSValue nonArray = new JSString("not an array");

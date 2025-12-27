@@ -32,22 +32,22 @@ public class BooleanPrototypeTest extends BaseTest {
     public void testToString() {
         // Normal case: true
         JSValue result = BooleanPrototype.toString(ctx, JSBoolean.TRUE, new JSValue[]{});
-        assertEquals("true", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("true", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: false
         result = BooleanPrototype.toString(ctx, JSBoolean.FALSE, new JSValue[]{});
-        assertEquals("false", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("false", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: Boolean object wrapper
         JSObject boolObj = new JSObject();
         boolObj.set("[[PrimitiveValue]]", JSBoolean.TRUE);
         result = BooleanPrototype.toString(ctx, boolObj, new JSValue[]{});
-        assertEquals("true", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("true", result.asString().map(JSString::value).orElse(""));
 
         JSObject boolObj2 = new JSObject();
         boolObj2.set("[[PrimitiveValue]]", JSBoolean.FALSE);
         result = BooleanPrototype.toString(ctx, boolObj2, new JSValue[]{});
-        assertEquals("false", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("false", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: called on non-boolean
         assertTypeError(BooleanPrototype.toString(ctx, new JSString("not boolean"), new JSValue[]{}));

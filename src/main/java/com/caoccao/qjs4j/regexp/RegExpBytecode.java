@@ -22,7 +22,7 @@ import java.util.Arrays;
  * Represents compiled regex bytecode.
  * Based on QuickJS libregexp.h.
  */
-public final class RegExpBytecode {
+public record RegExpBytecode(byte[] instructions, int flags, int captureCount, String[] groupNames) {
     // Regex flags
     public static final int FLAG_GLOBAL = 1 << 0;
     public static final int FLAG_IGNORECASE = 1 << 1;
@@ -34,36 +34,8 @@ public final class RegExpBytecode {
     public static final int FLAG_NAMED_GROUPS = 1 << 7;
     public static final int FLAG_UNICODE_SETS = 1 << 8;
 
-    private final byte[] instructions;
-    private final int flags;
-    private final int captureCount;
-    private final String[] groupNames;
-
     public RegExpBytecode(byte[] instructions, int flags, int captureCount) {
         this(instructions, flags, captureCount, null);
-    }
-
-    public RegExpBytecode(byte[] instructions, int flags, int captureCount, String[] groupNames) {
-        this.instructions = instructions;
-        this.flags = flags;
-        this.captureCount = captureCount;
-        this.groupNames = groupNames;
-    }
-
-    public byte[] getInstructions() {
-        return instructions;
-    }
-
-    public int getFlags() {
-        return flags;
-    }
-
-    public int getCaptureCount() {
-        return captureCount;
-    }
-
-    public String[] getGroupNames() {
-        return groupNames;
     }
 
     public boolean isGlobal() {

@@ -113,7 +113,7 @@ public final class ArrayConstructor {
 
         // Handle string (iterable)
         if (arrayLike instanceof JSString str) {
-            String value = str.getValue();
+            String value = str.value();
             for (int i = 0; i < value.length(); i++) {
                 JSValue charValue = new JSString(String.valueOf(value.charAt(i)));
 

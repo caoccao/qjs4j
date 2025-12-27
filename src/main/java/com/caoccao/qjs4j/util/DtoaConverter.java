@@ -403,15 +403,15 @@ public final class DtoaConverter {
             BigDecimal bd = new BigDecimal(value);
             MathContext mc = new MathContext(precision, RoundingMode.HALF_UP);
             bd = bd.round(mc);
-            
+
             // Format with exactly precision significant digits
             String str = bd.toPlainString();
-            
+
             // Count significant digits and add trailing zeros if needed
             return formatFixedPrecision(str, precision, exponent);
         }
     }
-    
+
     /**
      * Format a value in exponential notation for toPrecision.
      * fractionDigits is the number of digits after the decimal point in the mantissa.
@@ -420,13 +420,13 @@ public final class DtoaConverter {
         // Use String.format for exponential notation
         String format = "%." + fractionDigits + "e";
         String result = String.format(Locale.US, format, value);
-        
+
         // Clean up the exponent part (remove leading zeros after e+ or e-)
         result = result.replaceAll("e([+-])0+(\\d)", "e$1$2");
-        
+
         return result;
     }
-    
+
     /**
      * Format a string to have exactly precision significant digits in fixed notation.
      */
@@ -436,10 +436,10 @@ public final class DtoaConverter {
         if (negative) {
             str = str.substring(1);
         }
-        
+
         // Remove decimal point for counting
         String digits = str.replace(".", "");
-        
+
         // Count leading zeros if any (for numbers like 0.001)
         int leadingZeros = 0;
         for (int i = 0; i < digits.length(); i++) {
@@ -448,10 +448,10 @@ public final class DtoaConverter {
             }
             leadingZeros++;
         }
-        
+
         // Significant digits are all non-leading-zero digits
         int sigDigits = digits.length() - leadingZeros;
-        
+
         // Add trailing zeros if we need more significant digits
         int zerosToAdd = precision - sigDigits;
         if (zerosToAdd > 0) {
@@ -464,7 +464,7 @@ public final class DtoaConverter {
             }
             str = result.toString();
         }
-        
+
         return negative ? "-" + str : str;
     }
 
@@ -502,13 +502,12 @@ public final class DtoaConverter {
         // Format the result - keep the exact precision as specified by fractionDigits
         String mantissaStr = mantissa.toPlainString();
 
-        StringBuilder result = new StringBuilder();
-        result.append(mantissaStr);
-        result.append('e');
-        result.append(exponent >= 0 ? '+' : "");
-        result.append(exponent);
+        String result = mantissaStr +
+                'e' +
+                (exponent >= 0 ? '+' : "") +
+                exponent;
 
-        return result.toString();
+        return result;
     }
 
     /**

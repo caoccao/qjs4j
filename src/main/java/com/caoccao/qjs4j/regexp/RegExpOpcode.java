@@ -100,8 +100,8 @@ public enum RegExpOpcode {
      */
     public boolean isCaseInsensitive() {
         return this == CHAR_I || this == CHAR32_I || this == RANGE_I || this == RANGE32_I ||
-               this == WORD_BOUNDARY_I || this == NOT_WORD_BOUNDARY_I ||
-               this == BACK_REFERENCE_I || this == BACKWARD_BACK_REFERENCE_I;
+                this == WORD_BOUNDARY_I || this == NOT_WORD_BOUNDARY_I ||
+                this == BACK_REFERENCE_I || this == BACKWARD_BACK_REFERENCE_I;
     }
 
     /**
@@ -109,7 +109,7 @@ public enum RegExpOpcode {
      */
     public boolean isVariableLength() {
         return this == BACK_REFERENCE || this == BACK_REFERENCE_I ||
-               this == BACKWARD_BACK_REFERENCE || this == BACKWARD_BACK_REFERENCE_I ||
-               this == RANGE || this == RANGE_I || this == RANGE32 || this == RANGE32_I;
+                this == BACKWARD_BACK_REFERENCE || this == BACKWARD_BACK_REFERENCE_I ||
+                this == RANGE || this == RANGE_I || this == RANGE32 || this == RANGE32_I;
     }
 }

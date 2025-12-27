@@ -153,7 +153,7 @@ public final class JSProxy extends JSObject {
                 for (int i = 0; i < length; i++) {
                     JSValue keyValue = resultArray.get(i);
                     if (keyValue instanceof JSString str) {
-                        keys[i] = PropertyKey.fromString(str.getValue());
+                        keys[i] = PropertyKey.fromString(str.value());
                     } else if (keyValue instanceof JSSymbol sym) {
                         keys[i] = PropertyKey.fromSymbol(sym);
                     }

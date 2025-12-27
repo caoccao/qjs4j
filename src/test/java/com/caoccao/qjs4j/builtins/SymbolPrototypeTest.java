@@ -35,18 +35,18 @@ public class SymbolPrototypeTest extends BaseTest {
         // Normal case: symbol with description
         JSSymbol symbolWithDesc = new JSSymbol("testDescription");
         JSValue result = SymbolPrototype.toString(ctx, symbolWithDesc, new JSValue[]{});
-        assertEquals("Symbol(testDescription)", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("Symbol(testDescription)", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: symbol without description
         JSSymbol symbolNoDesc = new JSSymbol(null);
         result = SymbolPrototype.toString(ctx, symbolNoDesc, new JSValue[]{});
-        assertEquals("Symbol()", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("Symbol()", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: symbol object wrapper
         JSObject symbolObj = new JSObject();
         symbolObj.set("[[PrimitiveValue]]", symbolWithDesc);
         result = SymbolPrototype.toString(ctx, symbolObj, new JSValue[]{});
-        assertEquals("Symbol(testDescription)", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("Symbol(testDescription)", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: called on non-symbol
         result = SymbolPrototype.toString(ctx, new JSString("not a symbol"), new JSValue[]{});
@@ -96,7 +96,7 @@ public class SymbolPrototypeTest extends BaseTest {
         // Normal case: symbol with description
         JSSymbol symbolWithDesc = new JSSymbol("testDescription");
         JSValue result = SymbolPrototype.getDescription(ctx, symbolWithDesc, new JSValue[]{});
-        assertEquals("testDescription", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("testDescription", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: symbol without description
         JSSymbol symbolNoDesc = new JSSymbol(null);
@@ -107,7 +107,7 @@ public class SymbolPrototypeTest extends BaseTest {
         JSObject symbolObj = new JSObject();
         symbolObj.set("[[PrimitiveValue]]", symbolWithDesc);
         result = SymbolPrototype.getDescription(ctx, symbolObj, new JSValue[]{});
-        assertEquals("testDescription", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("testDescription", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: called on non-symbol
         result = SymbolPrototype.getDescription(ctx, new JSString("not a symbol"), new JSValue[]{});
@@ -147,12 +147,12 @@ public class SymbolPrototypeTest extends BaseTest {
 
         // Normal case: any this value
         JSValue result = SymbolPrototype.toStringTag(ctx, JSUndefined.INSTANCE, new JSValue[]{});
-        assertEquals("Symbol", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("Symbol", result.asString().map(JSString::value).orElse(""));
 
         result = SymbolPrototype.toStringTag(ctx, new JSString("anything"), new JSValue[]{});
-        assertEquals("Symbol", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("Symbol", result.asString().map(JSString::value).orElse(""));
 
         result = SymbolPrototype.toStringTag(ctx, new JSObject(), new JSValue[]{});
-        assertEquals("Symbol", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("Symbol", result.asString().map(JSString::value).orElse(""));
     }
 }

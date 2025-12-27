@@ -56,7 +56,7 @@ public final class BigIntPrototype {
             return ctx.throwError("RangeError", "toString() radix must be between 2 and 36");
         }
 
-        return new JSString(bigInt.getValue().toString(radix));
+        return new JSString(bigInt.value().toString(radix));
     }
 
     /**

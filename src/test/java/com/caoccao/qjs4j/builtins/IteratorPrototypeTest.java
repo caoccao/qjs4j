@@ -46,7 +46,7 @@ public class IteratorPrototypeTest extends BaseTest {
         JSArray pair = iteratorResult.get("value").asArray().orElse(null);
         assertNotNull(pair);
         assertEquals(0.0, pair.get(0).asNumber().map(JSNumber::value).orElse(0.0));
-        assertEquals("a", pair.get(1).asString().map(JSString::getValue).orElse(""));
+        assertEquals("a", pair.get(1).asString().map(JSString::value).orElse(""));
         assertEquals(JSBoolean.FALSE, iteratorResult.get("done"));
 
         // Second entry [1, "b"]
@@ -54,7 +54,7 @@ public class IteratorPrototypeTest extends BaseTest {
         pair = iteratorResult.get("value").asArray().orElse(null);
         assertNotNull(pair);
         assertEquals(1.0, pair.get(0).asNumber().map(JSNumber::value).orElse(0.0));
-        assertEquals("b", pair.get(1).asString().map(JSString::getValue).orElse(""));
+        assertEquals("b", pair.get(1).asString().map(JSString::value).orElse(""));
         assertEquals(JSBoolean.FALSE, iteratorResult.get("done"));
 
         // End
@@ -122,7 +122,7 @@ public class IteratorPrototypeTest extends BaseTest {
         assertEquals(JSBoolean.FALSE, iteratorResult.get("done"));
 
         iteratorResult = iterator.next();
-        assertEquals("hello", iteratorResult.get("value").asString().map(JSString::getValue).orElse(""));
+        assertEquals("hello", iteratorResult.get("value").asString().map(JSString::value).orElse(""));
         assertEquals(JSBoolean.FALSE, iteratorResult.get("done"));
 
         iteratorResult = iterator.next();
@@ -161,9 +161,9 @@ public class IteratorPrototypeTest extends BaseTest {
             JSArray pair = iteratorResult.get("value").asArray().orElse(null);
             assertNotNull(pair);
 
-            String key = pair.get(0).asString().map(JSString::getValue).orElse("");
+            String key = pair.get(0).asString().map(JSString::value).orElse("");
             if ("key1".equals(key)) {
-                assertEquals("value1", pair.get(1).asString().map(JSString::getValue).orElse(""));
+                assertEquals("value1", pair.get(1).asString().map(JSString::value).orElse(""));
                 foundKey1 = true;
             } else if ("key2".equals(key)) {
                 assertEquals(42.0, pair.get(1).asNumber().map(JSNumber::value).orElse(0.0));
@@ -202,7 +202,7 @@ public class IteratorPrototypeTest extends BaseTest {
         for (int i = 0; i < 2; i++) {
             JSObject iteratorResult = iterator.next();
             assertEquals(JSBoolean.FALSE, iteratorResult.get("done"));
-            String key = iteratorResult.get("value").asString().map(JSString::getValue).orElse("");
+            String key = iteratorResult.get("value").asString().map(JSString::value).orElse("");
             if ("a".equals(key)) foundA = true;
             else if ("b".equals(key)) foundB = true;
         }
@@ -233,7 +233,7 @@ public class IteratorPrototypeTest extends BaseTest {
         for (int i = 0; i < 2; i++) {
             JSObject iteratorResult = iterator.next();
             assertEquals(JSBoolean.FALSE, iteratorResult.get("done"));
-            String value = iteratorResult.get("value").asString().map(JSString::getValue).orElse("");
+            String value = iteratorResult.get("value").asString().map(JSString::value).orElse("");
             if ("one".equals(value)) foundOne = true;
             else if ("two".equals(value)) foundTwo = true;
         }
@@ -308,7 +308,7 @@ public class IteratorPrototypeTest extends BaseTest {
             assertEquals(pair.get(0), pair.get(1));
 
             JSValue value = pair.get(0);
-            if (value instanceof JSString str && "hello".equals(str.getValue())) {
+            if (value instanceof JSString str && "hello".equals(str.value())) {
                 foundHello = true;
             } else if (value instanceof JSNumber num && num.value() == 42.0) {
                 found42 = true;
@@ -367,8 +367,8 @@ public class IteratorPrototypeTest extends BaseTest {
             assertEquals(JSBoolean.FALSE, iteratorResult.get("done"));
             JSValue value = iteratorResult.get("value");
             if (value instanceof JSString str) {
-                if ("a".equals(str.getValue())) foundA = true;
-                else if ("b".equals(str.getValue())) foundB = true;
+                if ("a".equals(str.value())) foundA = true;
+                else if ("b".equals(str.value())) foundB = true;
             } else if (value instanceof JSNumber num && num.value() == 3.0) {
                 found3 = true;
             }
@@ -398,15 +398,15 @@ public class IteratorPrototypeTest extends BaseTest {
 
         // Test iteration
         JSObject iteratorResult = iterator.next();
-        assertEquals("a", iteratorResult.get("value").asString().map(JSString::getValue).orElse(""));
+        assertEquals("a", iteratorResult.get("value").asString().map(JSString::value).orElse(""));
         assertEquals(JSBoolean.FALSE, iteratorResult.get("done"));
 
         iteratorResult = iterator.next();
-        assertEquals("b", iteratorResult.get("value").asString().map(JSString::getValue).orElse(""));
+        assertEquals("b", iteratorResult.get("value").asString().map(JSString::value).orElse(""));
         assertEquals(JSBoolean.FALSE, iteratorResult.get("done"));
 
         iteratorResult = iterator.next();
-        assertEquals("c", iteratorResult.get("value").asString().map(JSString::getValue).orElse(""));
+        assertEquals("c", iteratorResult.get("value").asString().map(JSString::value).orElse(""));
         assertEquals(JSBoolean.FALSE, iteratorResult.get("done"));
 
         iteratorResult = iterator.next();

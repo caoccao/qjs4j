@@ -19,7 +19,7 @@ package com.caoccao.qjs4j.core;
 /**
  * Builder for creating ES6 classes programmatically.
  * Simplifies class creation with a fluent API.
- *
+ * <p>
  * Example:
  * <pre>
  * JSClass myClass = new ClassBuilder("MyClass")
@@ -68,7 +68,7 @@ public final class ClassBuilder {
     /**
      * Set the constructor function with parameter count.
      *
-     * @param length Number of parameters
+     * @param length      Number of parameters
      * @param constructor Constructor function
      * @return This builder
      */
@@ -92,7 +92,7 @@ public final class ClassBuilder {
      * Add an instance method.
      *
      * @param methodName Method name
-     * @param callback Method implementation
+     * @param callback   Method implementation
      * @return This builder
      */
     public ClassBuilder instanceMethod(String methodName, JSNativeFunction.NativeCallback callback) {
@@ -103,8 +103,8 @@ public final class ClassBuilder {
      * Add an instance method with parameter count.
      *
      * @param methodName Method name
-     * @param length Number of parameters
-     * @param callback Method implementation
+     * @param length     Number of parameters
+     * @param callback   Method implementation
      * @return This builder
      */
     public ClassBuilder instanceMethod(String methodName, int length, JSNativeFunction.NativeCallback callback) {
@@ -120,7 +120,7 @@ public final class ClassBuilder {
      * Add a static method.
      *
      * @param methodName Method name
-     * @param callback Method implementation
+     * @param callback   Method implementation
      * @return This builder
      */
     public ClassBuilder staticMethod(String methodName, JSNativeFunction.NativeCallback callback) {
@@ -131,8 +131,8 @@ public final class ClassBuilder {
      * Add a static method with parameter count.
      *
      * @param methodName Method name
-     * @param length Number of parameters
-     * @param callback Method implementation
+     * @param length     Number of parameters
+     * @param callback   Method implementation
      * @return This builder
      */
     public ClassBuilder staticMethod(String methodName, int length, JSNativeFunction.NativeCallback callback) {
@@ -147,7 +147,7 @@ public final class ClassBuilder {
     /**
      * Add an instance field with initial value.
      *
-     * @param fieldName Field name
+     * @param fieldName    Field name
      * @param initialValue Initial value
      * @return This builder
      */
@@ -156,10 +156,10 @@ public final class ClassBuilder {
             throw new IllegalStateException("Must call build() before adding fields");
         }
         JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(
-            initialValue,
-            true,  // writable
-            true,  // enumerable
-            true   // configurable
+                initialValue,
+                true,  // writable
+                true,  // enumerable
+                true   // configurable
         );
         classObject.addInstanceField(fieldName, descriptor);
         return this;
@@ -169,7 +169,7 @@ public final class ClassBuilder {
      * Add a static field with value.
      *
      * @param fieldName Field name
-     * @param value Field value
+     * @param value     Field value
      * @return This builder
      */
     public ClassBuilder staticField(String fieldName, JSValue value) {
@@ -177,10 +177,10 @@ public final class ClassBuilder {
             throw new IllegalStateException("Must call build() before adding fields");
         }
         JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(
-            value,
-            true,  // writable
-            true,  // enumerable
-            true   // configurable
+                value,
+                true,  // writable
+                true,  // enumerable
+                true   // configurable
         );
         classObject.addStaticField(fieldName, descriptor);
         return this;
@@ -239,8 +239,8 @@ public final class ClassBuilder {
 
         public BuilderWithClass instanceField(String fieldName, JSValue initialValue) {
             JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(
-                initialValue,
-                true, true, true
+                    initialValue,
+                    true, true, true
             );
             classObject.addInstanceField(fieldName, descriptor);
             return this;
@@ -248,8 +248,8 @@ public final class ClassBuilder {
 
         public BuilderWithClass staticField(String fieldName, JSValue value) {
             JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(
-                value,
-                true, true, true
+                    value,
+                    true, true, true
             );
             classObject.addStaticField(fieldName, descriptor);
             return this;

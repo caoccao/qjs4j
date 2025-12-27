@@ -19,10 +19,10 @@ package com.caoccao.qjs4j.core;
 /**
  * Represents a JavaScript Generator object.
  * Based on ES2020 Generator specification (simplified).
- *
+ * <p>
  * A generator is both an iterator and an iterable.
  * It implements the generator protocol with next(), return(), and throw() methods.
- *
+ * <p>
  * This is a simplified implementation that wraps an iterator function.
  * In a full implementation, generators would support yield expressions
  * and maintain execution state across calls.

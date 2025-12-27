@@ -21,11 +21,11 @@ import com.caoccao.qjs4j.core.*;
 /**
  * Implementation of dynamic import() for ES6 modules.
  * ES2020 specification: import() returns a Promise that resolves to the module namespace.
- *
+ * <p>
  * Usage:
- *   import('./module.js').then(mod => {
- *     console.log(mod.exportedValue);
- *   });
+ * import('./module.js').then(mod => {
+ * console.log(mod.exportedValue);
+ * });
  */
 public final class DynamicImport {
 
@@ -33,9 +33,9 @@ public final class DynamicImport {
      * Implement dynamic import as a function.
      * Returns a promise that resolves to the module namespace.
      *
-     * @param ctx The execution context
+     * @param ctx       The execution context
      * @param specifier Module specifier to import
-     * @param loader Module loader to use
+     * @param loader    Module loader to use
      * @return A promise that resolves to the module namespace object
      */
     public static JSPromise import_(JSContext ctx, String specifier, ModuleLoader loader) {
@@ -81,7 +81,7 @@ public final class DynamicImport {
     /**
      * Create a native function wrapper for import().
      *
-     * @param ctx The execution context
+     * @param ctx    The execution context
      * @param loader Module loader to use
      * @return A JSNativeFunction that implements import()
      */
@@ -92,7 +92,7 @@ public final class DynamicImport {
             }
 
             // Convert specifier to string
-            String specifier = JSTypeConversions.toString(args[0]).getValue();
+            String specifier = JSTypeConversions.toString(args[0]).value();
 
             // Return promise
             return import_(context, specifier, loader);

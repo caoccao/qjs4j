@@ -175,7 +175,7 @@ public final class IteratorPrototype {
         final java.util.Iterator<JSMap.KeyWrapper> iter = set.values().iterator();
         return new JSIterator(() -> {
             if (iter.hasNext()) {
-                JSValue value = iter.next().getValue();
+                JSValue value = iter.next().value();
                 JSArray pair = new JSArray();
                 pair.push(value);
                 pair.push(value); // In Set, both elements are the same

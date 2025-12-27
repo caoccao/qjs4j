@@ -48,7 +48,7 @@ public final class DateConstructor {
         }
 
         JSString dateString = JSTypeConversions.toString(args[0]);
-        String str = dateString.getValue();
+        String str = dateString.value();
 
         try {
             // Try ISO 8601 format first

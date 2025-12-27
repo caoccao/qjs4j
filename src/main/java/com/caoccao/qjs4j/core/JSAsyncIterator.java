@@ -21,7 +21,7 @@ import java.util.Iterator;
 /**
  * Represents an async iterator in JavaScript.
  * Based on ES2018 async iteration protocol.
- *
+ * <p>
  * Async iterators return promises that resolve to iterator results:
  * - next() returns Promise<{value, done}>
  * - Used by for-await-of loops
@@ -38,6 +38,7 @@ public class JSAsyncIterator extends JSObject {
     public interface AsyncIteratorFunction {
         /**
          * Get the next value asynchronously.
+         *
          * @return A promise that resolves to an IteratorResult
          */
         JSPromise next();
@@ -47,7 +48,7 @@ public class JSAsyncIterator extends JSObject {
      * Create a new async iterator.
      *
      * @param iteratorFunction The function that produces values
-     * @param ctx The execution context
+     * @param ctx              The execution context
      */
     public JSAsyncIterator(AsyncIteratorFunction iteratorFunction, JSContext ctx) {
         super();
@@ -63,7 +64,7 @@ public class JSAsyncIterator extends JSObject {
         JSSymbol asyncIteratorSymbol = JSSymbol.getWellKnownSymbol("asyncIterator");
         if (asyncIteratorSymbol != null) {
             this.set(PropertyKey.fromSymbol(asyncIteratorSymbol), new JSNativeFunction("[Symbol.asyncIterator]", 0,
-                (context, thisArg, args) -> thisArg));
+                    (context, thisArg, args) -> thisArg));
         }
     }
 
@@ -80,7 +81,7 @@ public class JSAsyncIterator extends JSObject {
      * Create an IteratorResult object that resolves in a promise.
      *
      * @param value The iterator value
-     * @param done Whether iteration is complete
+     * @param done  Whether iteration is complete
      * @return A promise that resolves to the iterator result
      */
     public static JSPromise createIteratorResultPromise(JSValue value, boolean done) {
@@ -97,7 +98,7 @@ public class JSAsyncIterator extends JSObject {
      * Each iteration returns a promise that immediately resolves.
      *
      * @param iterator The synchronous iterator
-     * @param ctx The execution context
+     * @param ctx      The execution context
      * @return An async iterator
      */
     public static JSAsyncIterator fromIterator(JSIterator iterator, JSContext ctx) {
@@ -115,7 +116,7 @@ public class JSAsyncIterator extends JSObject {
      * Returns values one at a time asynchronously.
      *
      * @param array The array to iterate
-     * @param ctx The execution context
+     * @param ctx   The execution context
      * @return An async iterator
      */
     public static JSAsyncIterator fromArray(JSArray array, JSContext ctx) {
@@ -138,7 +139,7 @@ public class JSAsyncIterator extends JSObject {
      * Useful for wrapping Java collections.
      *
      * @param iterable The Java iterable
-     * @param ctx The execution context
+     * @param ctx      The execution context
      * @return An async iterator
      */
     public static JSAsyncIterator fromIterable(Iterable<JSValue> iterable, JSContext ctx) {
@@ -157,7 +158,7 @@ public class JSAsyncIterator extends JSObject {
      * When the promise resolves, yields the value once and then completes.
      *
      * @param promise The promise to await
-     * @param ctx The execution context
+     * @param ctx     The execution context
      * @return An async iterator
      */
     public static JSAsyncIterator fromPromise(JSPromise promise, JSContext ctx) {
@@ -174,28 +175,28 @@ public class JSAsyncIterator extends JSObject {
                 // Return a promise that waits for the input promise
                 JSPromise resultPromise = new JSPromise();
                 promise.addReactions(
-                    new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onFulfilled", 1, (context, thisArg, args) -> {
-                            JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                            JSObject result = new JSObject();
-                            result.set("value", value);
-                            result.set("done", JSBoolean.FALSE);
-                            resultPromise.fulfill(result);
-                            return JSUndefined.INSTANCE;
-                        }),
-                        resultPromise,
-                        ctx
-                    ),
-                    new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onRejected", 1, (context, thisArg, args) -> {
-                            // If promise rejects, propagate the rejection
-                            JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                            resultPromise.reject(reason);
-                            return JSUndefined.INSTANCE;
-                        }),
-                        resultPromise,
-                        ctx
-                    )
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onFulfilled", 1, (context, thisArg, args) -> {
+                                    JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                    JSObject result = new JSObject();
+                                    result.set("value", value);
+                                    result.set("done", JSBoolean.FALSE);
+                                    resultPromise.fulfill(result);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                resultPromise,
+                                ctx
+                        ),
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onRejected", 1, (context, thisArg, args) -> {
+                                    // If promise rejects, propagate the rejection
+                                    JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                    resultPromise.reject(reason);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                resultPromise,
+                                ctx
+                        )
                 );
                 return resultPromise;
             }

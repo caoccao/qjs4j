@@ -54,13 +54,13 @@ public class MapPrototypeTest extends BaseTest {
         JSValue result = MapPrototype.set(ctx, map, new JSValue[]{new JSString("key"), new JSString("value")});
         assertEquals(map, result); // Should return the map
         assertEquals(1, map.size());
-        assertEquals("value", map.mapGet(new JSString("key")).asString().map(JSString::getValue).orElse(""));
+        assertEquals("value", map.mapGet(new JSString("key")).asString().map(JSString::value).orElse(""));
 
         // Normal case: update existing key
         result = MapPrototype.set(ctx, map, new JSValue[]{new JSString("key"), new JSString("newValue")});
         assertEquals(map, result);
         assertEquals(1, map.size());
-        assertEquals("newValue", map.mapGet(new JSString("key")).asString().map(JSString::getValue).orElse(""));
+        assertEquals("newValue", map.mapGet(new JSString("key")).asString().map(JSString::value).orElse(""));
 
         // Normal case: set with undefined value
         result = MapPrototype.set(ctx, map, new JSValue[]{new JSString("key2")});
@@ -80,7 +80,7 @@ public class MapPrototypeTest extends BaseTest {
 
         // Normal case: existing key
         JSValue result = MapPrototype.get(ctx, map, new JSValue[]{new JSString("key1")});
-        assertEquals("value1", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("value1", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: non-existing key
         result = MapPrototype.get(ctx, map, new JSValue[]{new JSString("key2")});
@@ -168,8 +168,8 @@ public class MapPrototypeTest extends BaseTest {
         // Normal case: forEach with callback
         final StringBuilder result = new StringBuilder();
         JSFunction callback = new JSNativeFunction("testCallback", 3, (ctx, thisArg, args) -> {
-            String value = args[0].asString().map(JSString::getValue).orElse("");
-            String key = args[1].asString().map(JSString::getValue).orElse("");
+            String value = args[0].asString().map(JSString::value).orElse("");
+            String key = args[1].asString().map(JSString::value).orElse("");
             result.append(key).append(":").append(value).append(",");
             return JSUndefined.INSTANCE;
         });
@@ -210,15 +210,15 @@ public class MapPrototypeTest extends BaseTest {
         JSArray entry1 = entries.get(0).asArray().orElse(null);
         assertNotNull(entry1);
         assertEquals(2, entry1.getLength());
-        assertEquals("key1", entry1.get(0).asString().map(JSString::getValue).orElse(""));
-        assertEquals("value1", entry1.get(1).asString().map(JSString::getValue).orElse(""));
+        assertEquals("key1", entry1.get(0).asString().map(JSString::value).orElse(""));
+        assertEquals("value1", entry1.get(1).asString().map(JSString::value).orElse(""));
 
         // Check second entry
         JSArray entry2 = entries.get(1).asArray().orElse(null);
         assertNotNull(entry2);
         assertEquals(2, entry2.getLength());
-        assertEquals("key2", entry2.get(0).asString().map(JSString::getValue).orElse(""));
-        assertEquals("value2", entry2.get(1).asString().map(JSString::getValue).orElse(""));
+        assertEquals("key2", entry2.get(0).asString().map(JSString::value).orElse(""));
+        assertEquals("value2", entry2.get(1).asString().map(JSString::value).orElse(""));
 
         // Normal case: empty map
         JSMap emptyMap = new JSMap();
@@ -245,8 +245,8 @@ public class MapPrototypeTest extends BaseTest {
         assertEquals(2, keys.getLength());
 
         // Check that both keys are present (order may vary)
-        String key1 = keys.get(0).asString().map(JSString::getValue).orElse("");
-        String key2 = keys.get(1).asString().map(JSString::getValue).orElse("");
+        String key1 = keys.get(0).asString().map(JSString::value).orElse("");
+        String key2 = keys.get(1).asString().map(JSString::value).orElse("");
         assertTrue((key1.equals("key1") && key2.equals("key2")) || (key1.equals("key2") && key2.equals("key1")));
 
         // Normal case: empty map
@@ -274,8 +274,8 @@ public class MapPrototypeTest extends BaseTest {
         assertEquals(2, values.getLength());
 
         // Check that both values are present (order may vary)
-        String value1 = values.get(0).asString().map(JSString::getValue).orElse("");
-        String value2 = values.get(1).asString().map(JSString::getValue).orElse("");
+        String value1 = values.get(0).asString().map(JSString::value).orElse("");
+        String value2 = values.get(1).asString().map(JSString::value).orElse("");
         assertTrue((value1.equals("value1") && value2.equals("value2")) || (value1.equals("value2") && value2.equals("value1")));
 
         // Normal case: empty map

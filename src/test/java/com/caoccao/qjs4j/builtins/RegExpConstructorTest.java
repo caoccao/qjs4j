@@ -36,7 +36,7 @@ public class RegExpConstructorTest extends BaseTest {
         JSArray arr = result.asArray().orElse(null);
         assertNotNull(arr);
         assertEquals(2, arr.getLength()); // At least the matched string
-        assertEquals("hello", arr.get(0).asString().map(JSString::getValue).orElse(""));
+        assertEquals("hello", arr.get(0).asString().map(JSString::value).orElse(""));
 
         // Check index property
         JSValue indexValue = arr.get("index");
@@ -44,7 +44,7 @@ public class RegExpConstructorTest extends BaseTest {
 
         // Check input property
         JSValue inputValue = arr.get("input");
-        assertEquals("hello world", inputValue.asString().map(JSString::getValue).orElse(""));
+        assertEquals("hello world", inputValue.asString().map(JSString::value).orElse(""));
 
         // Normal case: no match
         result = RegExpPrototype.exec(ctx, regexp, new JSValue[]{new JSString("goodbye")});
@@ -63,14 +63,14 @@ public class RegExpConstructorTest extends BaseTest {
         JSValue result = RegExpPrototype.exec(ctx, regexp, new JSValue[]{new JSString("foo bar")});
         JSArray arr = result.asArray().orElse(null);
         assertNotNull(arr);
-        assertEquals("o", arr.get(0).asString().map(JSString::getValue).orElse(""));
+        assertEquals("o", arr.get(0).asString().map(JSString::value).orElse(""));
         assertTrue(regexp.getLastIndex() > 0);
 
         // Second exec (should get next match)
         result = RegExpPrototype.exec(ctx, regexp, new JSValue[]{new JSString("foo bar")});
         arr = result.asArray().orElse(null);
         assertNotNull(arr);
-        assertEquals("o", arr.get(0).asString().map(JSString::getValue).orElse(""));
+        assertEquals("o", arr.get(0).asString().map(JSString::value).orElse(""));
 
         // Third exec (no more matches, should return null and reset lastIndex)
         result = RegExpPrototype.exec(ctx, regexp, new JSValue[]{new JSString("foo bar")});
@@ -83,12 +83,12 @@ public class RegExpConstructorTest extends BaseTest {
         JSRegExp regexp = new JSRegExp("test", "gimsuy");
 
         JSValue result = RegExpPrototype.getFlags(ctx, regexp, new JSValue[]{});
-        assertEquals("gimsuy", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("gimsuy", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: no flags
         JSRegExp regexp2 = new JSRegExp("test", "");
         result = RegExpPrototype.getFlags(ctx, regexp2, new JSValue[]{});
-        assertEquals("", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: called on non-RegExp
         assertTypeError(RegExpPrototype.getFlags(ctx, new JSArray(), new JSValue[]{}));
@@ -145,7 +145,7 @@ public class RegExpConstructorTest extends BaseTest {
         JSRegExp regexp = new JSRegExp("hello", "");
 
         JSValue result = RegExpPrototype.getSource(ctx, regexp, new JSValue[]{});
-        assertEquals("hello", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("hello", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: called on non-RegExp
         assertTypeError(RegExpPrototype.getSource(ctx, JSUndefined.INSTANCE, new JSValue[]{}));
@@ -198,10 +198,10 @@ public class RegExpConstructorTest extends BaseTest {
 
         // Check properties are set
         JSValue source = regexp.get("source");
-        assertEquals("test", source.asString().map(JSString::getValue).orElse(""));
+        assertEquals("test", source.asString().map(JSString::value).orElse(""));
 
         JSValue flags = regexp.get("flags");
-        assertEquals("gim", flags.asString().map(JSString::getValue).orElse(""));
+        assertEquals("gim", flags.asString().map(JSString::value).orElse(""));
 
         JSValue global = regexp.get("global");
         assertEquals(JSBoolean.TRUE, global);
@@ -271,12 +271,12 @@ public class RegExpConstructorTest extends BaseTest {
         JSRegExp regexp = new JSRegExp("test", "gi");
 
         JSValue result = RegExpPrototype.toStringMethod(ctx, regexp, new JSValue[]{});
-        assertEquals("/test/gi", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("/test/gi", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: empty pattern
         JSRegExp regexp2 = new JSRegExp("", "");
         result = RegExpPrototype.toStringMethod(ctx, regexp2, new JSValue[]{});
-        assertEquals("//", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("//", result.asString().map(JSString::value).orElse(""));
 
         // Edge case: called on non-RegExp
         assertTypeError(RegExpPrototype.toStringMethod(ctx, new JSString("not regexp"), new JSValue[]{}));

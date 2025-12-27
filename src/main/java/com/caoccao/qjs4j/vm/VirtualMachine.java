@@ -528,8 +528,8 @@ public final class VirtualMachine {
 
         // String concatenation or numeric addition
         if (left instanceof JSString || right instanceof JSString) {
-            String leftStr = JSTypeConversions.toString(left).getValue();
-            String rightStr = JSTypeConversions.toString(right).getValue();
+            String leftStr = JSTypeConversions.toString(left).value();
+            String rightStr = JSTypeConversions.toString(right).value();
             valueStack.push(new JSString(leftStr + rightStr));
         } else {
             double leftNum = JSTypeConversions.toNumber(left).value();
@@ -714,10 +714,8 @@ public final class VirtualMachine {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
         // Simplified instanceof check
-        boolean result = false;
-        if (right instanceof JSFunction && left instanceof JSObject) {
-            result = true; // Simplified
-        }
+        boolean result = right instanceof JSFunction && left instanceof JSObject;
+        // Simplified
         valueStack.push(JSBoolean.valueOf(result));
     }
 
@@ -950,12 +948,12 @@ public final class VirtualMachine {
                         // Copy from existing RegExp
                         pattern = existingRegExp.getPattern();
                         flags = args.length > 1 && !(args[1] instanceof JSUndefined)
-                                ? JSTypeConversions.toString(args[1]).getValue()
+                                ? JSTypeConversions.toString(args[1]).value()
                                 : existingRegExp.getFlags();
                     } else if (!(patternArg instanceof JSUndefined)) {
-                        pattern = JSTypeConversions.toString(patternArg).getValue();
+                        pattern = JSTypeConversions.toString(patternArg).value();
                         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-                            flags = JSTypeConversions.toString(args[1]).getValue();
+                            flags = JSTypeConversions.toString(args[1]).value();
                         }
                     }
                 }

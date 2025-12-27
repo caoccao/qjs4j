@@ -23,7 +23,7 @@ import java.math.BigInteger;
 /**
  * JavaScript type conversion operations as defined in ECMAScript specification.
  * Based on QuickJS quickjs.c type conversion implementation.
- *
+ * <p>
  * Implements all abstract operations from ES2020:
  * - ToPrimitive
  * - ToBoolean
@@ -78,10 +78,10 @@ public final class JSTypeConversions {
             return n.value() == 0.0 || Double.isNaN(n.value()) ? JSBoolean.FALSE : JSBoolean.TRUE;
         }
         if (value instanceof JSString s) {
-            return s.getValue().isEmpty() ? JSBoolean.FALSE : JSBoolean.TRUE;
+            return s.value().isEmpty() ? JSBoolean.FALSE : JSBoolean.TRUE;
         }
         if (value instanceof JSBigInt b) {
-            return b.getValue().equals(BigInteger.ZERO) ? JSBoolean.FALSE : JSBoolean.TRUE;
+            return b.value().equals(BigInteger.ZERO) ? JSBoolean.FALSE : JSBoolean.TRUE;
         }
         if (value instanceof JSSymbol) {
             return JSBoolean.TRUE; // Symbols are always truthy
@@ -108,13 +108,13 @@ public final class JSTypeConversions {
             return n;
         }
         if (value instanceof JSString s) {
-            return stringToNumber(s.getValue());
+            return stringToNumber(s.value());
         }
         if (value instanceof JSBigInt b) {
             // BigInt cannot be converted to number without loss of precision
             // In full implementation, this would throw a TypeError
             try {
-                return new JSNumber(b.getValue().doubleValue());
+                return new JSNumber(b.value().doubleValue());
             } catch (Exception e) {
                 return new JSNumber(Double.NaN);
             }
@@ -152,7 +152,7 @@ public final class JSTypeConversions {
             return s;
         }
         if (value instanceof JSBigInt b) {
-            return new JSString(b.getValue().toString());
+            return new JSString(b.value().toString());
         }
         if (value instanceof JSSymbol s) {
             // Symbols cannot be converted to strings - would throw TypeError
@@ -324,12 +324,12 @@ public final class JSTypeConversions {
      */
     public static boolean isPrimitive(JSValue value) {
         return value instanceof JSUndefined ||
-               value instanceof JSNull ||
-               value instanceof JSBoolean ||
-               value instanceof JSNumber ||
-               value instanceof JSString ||
-               value instanceof JSSymbol ||
-               value instanceof JSBigInt;
+                value instanceof JSNull ||
+                value instanceof JSBoolean ||
+                value instanceof JSNumber ||
+                value instanceof JSString ||
+                value instanceof JSSymbol ||
+                value instanceof JSBigInt;
     }
 
     /**
@@ -435,7 +435,7 @@ public final class JSTypeConversions {
 
         // Strings
         if (x instanceof JSString xStr && y instanceof JSString yStr) {
-            return xStr.getValue().equals(yStr.getValue());
+            return xStr.value().equals(yStr.value());
         }
 
         // Booleans
@@ -458,7 +458,7 @@ public final class JSTypeConversions {
 
         // If both are strings, compare lexicographically
         if (px instanceof JSString xStr && py instanceof JSString yStr) {
-            return xStr.getValue().compareTo(yStr.getValue()) < 0;
+            return xStr.value().compareTo(yStr.value()) < 0;
         }
 
         // Otherwise, convert to numbers and compare

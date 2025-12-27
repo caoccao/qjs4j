@@ -19,7 +19,7 @@ package com.caoccao.qjs4j.core;
 /**
  * Type checking utilities for JavaScript values.
  * Based on QuickJS quickjs.c type checking macros.
- *
+ * <p>
  * Provides fast type checking predicates for all JavaScript value types.
  */
 public final class JSTypeChecking {
@@ -110,12 +110,12 @@ public final class JSTypeChecking {
      */
     public static boolean isPrimitive(JSValue value) {
         return value instanceof JSUndefined ||
-               value instanceof JSNull ||
-               value instanceof JSBoolean ||
-               value instanceof JSNumber ||
-               value instanceof JSString ||
-               value instanceof JSSymbol ||
-               value instanceof JSBigInt;
+                value instanceof JSNull ||
+                value instanceof JSBoolean ||
+                value instanceof JSNumber ||
+                value instanceof JSString ||
+                value instanceof JSSymbol ||
+                value instanceof JSBigInt;
     }
 
     /**
@@ -169,8 +169,8 @@ public final class JSTypeChecking {
         }
         double d = n.value();
         return Double.isFinite(d) &&
-               d == Math.floor(d) &&
-               Math.abs(d) <= 0x1FFFFFFFFFFFFFL; // 2^53 - 1
+                d == Math.floor(d) &&
+                Math.abs(d) <= 0x1FFFFFFFFFFFFFL; // 2^53 - 1
     }
 
     // Boolean value checks
@@ -257,7 +257,7 @@ public final class JSTypeChecking {
     public static <T extends JSValue> T requireType(JSValue value, Class<T> expectedType, String message) {
         if (!expectedType.isInstance(value)) {
             String msg = message != null ? message :
-                "Expected " + expectedType.getSimpleName() + " but got " + getTypeName(value);
+                    "Expected " + expectedType.getSimpleName() + " but got " + getTypeName(value);
             throw new IllegalArgumentException(msg);
         }
         return expectedType.cast(value);

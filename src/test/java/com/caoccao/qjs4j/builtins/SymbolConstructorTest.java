@@ -102,7 +102,7 @@ public class SymbolConstructorTest extends BaseTest {
         JSSymbol symbol = SymbolConstructor.symbolFor(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSString("registryKey")}).asSymbol().orElse(null);
         assertNotNull(symbol);
         JSValue result = SymbolConstructor.keyFor(ctx, JSUndefined.INSTANCE, new JSValue[]{symbol});
-        assertEquals("registryKey", result.asString().map(JSString::getValue).orElse(""));
+        assertEquals("registryKey", result.asString().map(JSString::value).orElse(""));
 
         // Normal case: symbol not in registry
         JSSymbol unregisteredSymbol = SymbolConstructor.call(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSString("unregistered")}).asSymbol().orElse(null);

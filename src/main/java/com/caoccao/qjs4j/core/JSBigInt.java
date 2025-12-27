@@ -22,23 +22,14 @@ import java.math.BigInteger;
  * Represents a JavaScript BigInt value.
  * Uses Java's BigInteger for implementation.
  */
-public final class JSBigInt implements JSValue {
-    private final BigInteger value;
-
-    public JSBigInt(BigInteger value) {
-        this.value = value;
-    }
+public record JSBigInt(BigInteger value) implements JSValue {
 
     public JSBigInt(String value) {
-        this.value = new BigInteger(value);
+        this(new BigInteger(value));
     }
 
     public JSBigInt(long value) {
-        this.value = BigInteger.valueOf(value);
-    }
-
-    public BigInteger getValue() {
-        return value;
+        this(BigInteger.valueOf(value));
     }
 
     // Arithmetic operations

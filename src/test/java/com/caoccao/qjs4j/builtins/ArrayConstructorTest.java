@@ -20,9 +20,7 @@ import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for Array constructor static methods.
@@ -77,7 +75,7 @@ public class ArrayConstructorTest extends BaseTest {
         arr = result.asArray().orElse(null);
         assertNotNull(arr);
         assertEquals(1, arr.getLength());
-        assertEquals("hello", arr.get(0).asString().map(JSString::getValue).orElse(""));
+        assertEquals("hello", arr.get(0).asString().map(JSString::value).orElse(""));
 
         // Edge case: mixed types
         result = ArrayConstructor.of(ctx, JSUndefined.INSTANCE, new JSValue[]{
@@ -111,9 +109,9 @@ public class ArrayConstructorTest extends BaseTest {
         arr = result.asArray().orElse(null);
         assertNotNull(arr);
         assertEquals(3, arr.getLength());
-        assertEquals("a", arr.get(0).asString().map(JSString::getValue).orElse(""));
-        assertEquals("b", arr.get(1).asString().map(JSString::getValue).orElse(""));
-        assertEquals("c", arr.get(2).asString().map(JSString::getValue).orElse(""));
+        assertEquals("a", arr.get(0).asString().map(JSString::value).orElse(""));
+        assertEquals("b", arr.get(1).asString().map(JSString::value).orElse(""));
+        assertEquals("c", arr.get(2).asString().map(JSString::value).orElse(""));
 
         // Normal case: with mapping function
         JSFunction mapFn = new JSNativeFunction("double", 1, (context, thisArg, args) -> {
@@ -137,7 +135,7 @@ public class ArrayConstructorTest extends BaseTest {
         // Normal case: from string with mapping function
         JSFunction upperFn = new JSNativeFunction("upper", 1, (context, thisArg, args) -> {
             if (args.length > 0 && args[0] instanceof JSString str) {
-                return new JSString(str.getValue().toUpperCase());
+                return new JSString(str.value().toUpperCase());
             }
             return args[0];
         });
@@ -146,8 +144,8 @@ public class ArrayConstructorTest extends BaseTest {
         arr = result.asArray().orElse(null);
         assertNotNull(arr);
         assertEquals(5, arr.getLength());
-        assertEquals("H", arr.get(0).asString().map(JSString::getValue).orElse(""));
-        assertEquals("E", arr.get(1).asString().map(JSString::getValue).orElse(""));
+        assertEquals("H", arr.get(0).asString().map(JSString::value).orElse(""));
+        assertEquals("E", arr.get(1).asString().map(JSString::value).orElse(""));
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray();

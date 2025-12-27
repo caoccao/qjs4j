@@ -153,9 +153,9 @@ public final class UnicodeData {
      */
     public static boolean isLineTerminator(int codePoint) {
         return codePoint == 0x000A ||  // LINE FEED (LF)
-               codePoint == 0x000D ||  // CARRIAGE RETURN (CR)
-               codePoint == 0x2028 ||  // LINE SEPARATOR (LS)
-               codePoint == 0x2029;    // PARAGRAPH SEPARATOR (PS)
+                codePoint == 0x000D ||  // CARRIAGE RETURN (CR)
+                codePoint == 0x2028 ||  // LINE SEPARATOR (LS)
+                codePoint == 0x2029;    // PARAGRAPH SEPARATOR (PS)
     }
 
     /**

@@ -123,6 +123,8 @@ public final class GlobalObject {
         objectConstructor.set("seal", createNativeFunction(ctx, "seal", ObjectConstructor::seal, 1));
         objectConstructor.set("isFrozen", createNativeFunction(ctx, "isFrozen", ObjectConstructor::isFrozen, 1));
         objectConstructor.set("isSealed", createNativeFunction(ctx, "isSealed", ObjectConstructor::isSealed, 1));
+        objectConstructor.set("hasOwn", createNativeFunction(ctx, "hasOwn", ObjectConstructor::hasOwn, 2));
+        objectConstructor.set("groupBy", createNativeFunction(ctx, "groupBy", ObjectConstructor::groupBy, 2));
 
         global.set("Object", objectConstructor);
     }
@@ -155,13 +157,18 @@ public final class GlobalObject {
         arrayPrototype.set("unshift", createNativeFunction(ctx, "unshift", ArrayPrototype::unshift, 1));
         arrayPrototype.set("slice", createNativeFunction(ctx, "slice", ArrayPrototype::slice, 2));
         arrayPrototype.set("splice", createNativeFunction(ctx, "splice", ArrayPrototype::splice, 2));
+        arrayPrototype.set("toSpliced", createNativeFunction(ctx, "toSpliced", ArrayPrototype::toSpliced, 2));
+        arrayPrototype.set("with", createNativeFunction(ctx, "with", ArrayPrototype::with, 2));
         arrayPrototype.set("concat", createNativeFunction(ctx, "concat", ArrayPrototype::concat, 1));
         arrayPrototype.set("join", createNativeFunction(ctx, "join", ArrayPrototype::join, 1));
         arrayPrototype.set("reverse", createNativeFunction(ctx, "reverse", ArrayPrototype::reverse, 0));
+        arrayPrototype.set("toReversed", createNativeFunction(ctx, "toReversed", ArrayPrototype::toReversed, 0));
         arrayPrototype.set("sort", createNativeFunction(ctx, "sort", ArrayPrototype::sort, 1));
+        arrayPrototype.set("toSorted", createNativeFunction(ctx, "toSorted", ArrayPrototype::toSorted, 1));
         arrayPrototype.set("indexOf", createNativeFunction(ctx, "indexOf", ArrayPrototype::indexOf, 1));
         arrayPrototype.set("lastIndexOf", createNativeFunction(ctx, "lastIndexOf", ArrayPrototype::lastIndexOf, 1));
         arrayPrototype.set("includes", createNativeFunction(ctx, "includes", ArrayPrototype::includes, 1));
+        arrayPrototype.set("at", createNativeFunction(ctx, "at", ArrayPrototype::at, 1));
         arrayPrototype.set("map", createNativeFunction(ctx, "map", ArrayPrototype::map, 1));
         arrayPrototype.set("filter", createNativeFunction(ctx, "filter", ArrayPrototype::filter, 1));
         arrayPrototype.set("reduce", createNativeFunction(ctx, "reduce", ArrayPrototype::reduce, 1));
@@ -175,6 +182,8 @@ public final class GlobalObject {
         arrayPrototype.set("entries", createNativeFunction(ctx, "entries", IteratorPrototype::arrayEntries, 0));
         arrayPrototype.set("find", createNativeFunction(ctx, "find", ArrayPrototype::find, 1));
         arrayPrototype.set("findIndex", createNativeFunction(ctx, "findIndex", ArrayPrototype::findIndex, 1));
+        arrayPrototype.set("findLast", createNativeFunction(ctx, "findLast", ArrayPrototype::findLast, 1));
+        arrayPrototype.set("findLastIndex", createNativeFunction(ctx, "findLastIndex", ArrayPrototype::findLastIndex, 1));
         arrayPrototype.set("every", createNativeFunction(ctx, "every", ArrayPrototype::every, 1));
         arrayPrototype.set("some", createNativeFunction(ctx, "some", ArrayPrototype::some, 1));
         arrayPrototype.set("flat", createNativeFunction(ctx, "flat", ArrayPrototype::flat, 0));
@@ -201,6 +210,7 @@ public final class GlobalObject {
         JSObject stringPrototype = new JSObject();
         stringPrototype.set("charAt", createNativeFunction(ctx, "charAt", StringPrototype::charAt, 1));
         stringPrototype.set("charCodeAt", createNativeFunction(ctx, "charCodeAt", StringPrototype::charCodeAt, 1));
+        stringPrototype.set("at", createNativeFunction(ctx, "at", StringPrototype::at, 1));
         stringPrototype.set("codePointAt", createNativeFunction(ctx, "codePointAt", StringPrototype::codePointAt, 1));
         stringPrototype.set("concat", createNativeFunction(ctx, "concat", StringPrototype::concat, 1));
         stringPrototype.set("endsWith", createNativeFunction(ctx, "endsWith", StringPrototype::endsWith, 1));
@@ -213,6 +223,8 @@ public final class GlobalObject {
         stringPrototype.set("repeat", createNativeFunction(ctx, "repeat", StringPrototype::repeat, 1));
         stringPrototype.set("replace", createNativeFunction(ctx, "replace", StringPrototype::replace, 2));
         stringPrototype.set("replaceAll", createNativeFunction(ctx, "replaceAll", StringPrototype::replaceAll, 2));
+        stringPrototype.set("match", createNativeFunction(ctx, "match", StringPrototype::match, 1));
+        stringPrototype.set("matchAll", createNativeFunction(ctx, "matchAll", StringPrototype::matchAll, 1));
         stringPrototype.set("slice", createNativeFunction(ctx, "slice", StringPrototype::slice, 2));
         stringPrototype.set("split", createNativeFunction(ctx, "split", StringPrototype::split, 2));
         stringPrototype.set("substring", createNativeFunction(ctx, "substring", StringPrototype::substring, 2));
@@ -638,6 +650,7 @@ public final class GlobalObject {
         promiseConstructor.set("race", createNativeFunction(ctx, "race", PromiseConstructor::race, 1));
         promiseConstructor.set("allSettled", createNativeFunction(ctx, "allSettled", PromiseConstructor::allSettled, 1));
         promiseConstructor.set("any", createNativeFunction(ctx, "any", PromiseConstructor::any, 1));
+        promiseConstructor.set("withResolvers", createNativeFunction(ctx, "withResolvers", PromiseConstructor::withResolvers, 0));
 
         global.set("Promise", promiseConstructor);
     }
@@ -807,7 +820,7 @@ public final class GlobalObject {
     public static JSValue parseInt(JSContext ctx, JSValue thisArg, JSValue[] args) {
         // Get input string
         JSValue input = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String inputString = JSTypeConversions.toString(input).getValue().trim();
+        String inputString = JSTypeConversions.toString(input).value().trim();
 
         // Get radix
         int radix = 10;
@@ -879,7 +892,7 @@ public final class GlobalObject {
     public static JSValue parseFloat(JSContext ctx, JSValue thisArg, JSValue[] args) {
         // Get input string
         JSValue input = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String inputString = JSTypeConversions.toString(input).getValue().trim();
+        String inputString = JSTypeConversions.toString(input).value().trim();
 
         if (inputString.isEmpty()) {
             return new JSNumber(Double.NaN);
@@ -979,7 +992,7 @@ public final class GlobalObject {
             return x;
         }
 
-        String code = ((JSString) x).getValue();
+        String code = ((JSString) x).value();
         return ctx.eval(code);
     }
 
@@ -992,7 +1005,7 @@ public final class GlobalObject {
      */
     public static JSValue encodeURI(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSValue uriValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String uriString = JSTypeConversions.toString(uriValue).getValue();
+        String uriString = JSTypeConversions.toString(uriValue).value();
 
         try {
             // Encode, but preserve URI structure characters
@@ -1025,7 +1038,7 @@ public final class GlobalObject {
      */
     public static JSValue decodeURI(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSValue encodedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String encodedString = JSTypeConversions.toString(encodedValue).getValue();
+        String encodedString = JSTypeConversions.toString(encodedValue).value();
 
         try {
             String decoded = URLDecoder.decode(encodedString, StandardCharsets.UTF_8);
@@ -1044,7 +1057,7 @@ public final class GlobalObject {
      */
     public static JSValue encodeURIComponent(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSValue componentValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String componentString = JSTypeConversions.toString(componentValue).getValue();
+        String componentString = JSTypeConversions.toString(componentValue).value();
 
         try {
             String encoded = URLEncoder.encode(componentString, StandardCharsets.UTF_8);
@@ -1071,7 +1084,7 @@ public final class GlobalObject {
      */
     public static JSValue decodeURIComponent(JSContext ctx, JSValue thisArg, JSValue[] args) {
         JSValue encodedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String encodedString = JSTypeConversions.toString(encodedValue).getValue();
+        String encodedString = JSTypeConversions.toString(encodedValue).value();
 
         try {
             String decoded = URLDecoder.decode(encodedString, StandardCharsets.UTF_8);
@@ -1149,10 +1162,10 @@ public final class GlobalObject {
             return String.valueOf(b.value());
         }
         if (value instanceof JSNumber n) {
-            return JSTypeConversions.toString(value).getValue();
+            return JSTypeConversions.toString(value).value();
         }
         if (value instanceof JSString s) {
-            return s.getValue();
+            return s.value();
         }
         if (value instanceof JSArray arr) {
             StringBuilder sb = new StringBuilder("[");
@@ -1216,8 +1229,8 @@ public final class GlobalObject {
         JSValue nameValue = error.get("name");
         JSValue messageValue = error.get("message");
 
-        String name = nameValue instanceof JSString ? ((JSString) nameValue).getValue() : "Error";
-        String message = messageValue instanceof JSString ? ((JSString) messageValue).getValue() : "";
+        String name = nameValue instanceof JSString ? ((JSString) nameValue).value() : "Error";
+        String message = messageValue instanceof JSString ? ((JSString) messageValue).value() : "";
 
         if (message.isEmpty()) {
             return new JSString(name);

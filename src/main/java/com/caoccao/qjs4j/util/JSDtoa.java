@@ -316,7 +316,7 @@ public final class JSDtoa {
             result.append(digits);
             for (int i = 0; i < E - P; i++) result.append('0');
         } else {
-            result.append(digits.substring(0, E));
+            result.append(digits, 0, E);
             result.append('.');
             result.append(digits.substring(E));
         }

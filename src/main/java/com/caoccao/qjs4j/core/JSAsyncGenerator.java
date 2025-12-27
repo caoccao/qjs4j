@@ -19,7 +19,7 @@ package com.caoccao.qjs4j.core;
 /**
  * Represents an async generator object in JavaScript.
  * Based on ES2018 async generator specification.
- *
+ * <p>
  * Async generators combine generator functions with async iteration:
  * - Defined with async function* syntax
  * - yield produces promises
@@ -54,7 +54,7 @@ public final class JSAsyncGenerator extends JSObject {
          * Execute the next step of the generator.
          *
          * @param inputValue Value passed to next()
-         * @param isThrow Whether this is a throw() call
+         * @param isThrow    Whether this is a throw() call
          * @return A promise that resolves to {value, done}
          */
         JSPromise executeNext(JSValue inputValue, boolean isThrow);
@@ -64,7 +64,7 @@ public final class JSAsyncGenerator extends JSObject {
      * Create a new async generator.
      *
      * @param generatorFunction The generator implementation
-     * @param ctx The execution context
+     * @param ctx               The execution context
      */
     public JSAsyncGenerator(AsyncGeneratorFunction generatorFunction, JSContext ctx) {
         super();
@@ -94,7 +94,7 @@ public final class JSAsyncGenerator extends JSObject {
 
         // Make this an async iterable via Symbol.asyncIterator
         this.set(PropertyKey.fromSymbol(JSSymbol.ASYNC_ITERATOR),
-            new JSNativeFunction("[Symbol.asyncIterator]", 0, (context, thisArg, args) -> thisArg));
+                new JSNativeFunction("[Symbol.asyncIterator]", 0, (context, thisArg, args) -> thisArg));
     }
 
     /**
@@ -132,38 +132,38 @@ public final class JSAsyncGenerator extends JSObject {
 
             // When the generator execution completes
             resultPromise.addReactions(
-                new JSPromise.ReactionRecord(
-                    new JSNativeFunction("onFulfilled", 1, (ctx, thisArg, args) -> {
-                        JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onFulfilled", 1, (ctx, thisArg, args) -> {
+                                JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
-                        if (result instanceof JSObject resultObj) {
-                            JSValue doneValue = resultObj.get("done");
-                            boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
+                                if (result instanceof JSObject resultObj) {
+                                    JSValue doneValue = resultObj.get("done");
+                                    boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
 
-                            if (done) {
+                                    if (done) {
+                                        state = AsyncGeneratorState.COMPLETED;
+                                        returnValue = resultObj.get("value");
+                                    } else {
+                                        state = AsyncGeneratorState.SUSPENDED_YIELD;
+                                    }
+                                }
+
+                                finalPromise.fulfill(result);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            finalPromise,
+                            context
+                    ),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onRejected", 1, (ctx, thisArg, args) -> {
                                 state = AsyncGeneratorState.COMPLETED;
-                                returnValue = resultObj.get("value");
-                            } else {
-                                state = AsyncGeneratorState.SUSPENDED_YIELD;
-                            }
-                        }
-
-                        finalPromise.fulfill(result);
-                        return JSUndefined.INSTANCE;
-                    }),
-                    finalPromise,
-                    context
-                ),
-                new JSPromise.ReactionRecord(
-                    new JSNativeFunction("onRejected", 1, (ctx, thisArg, args) -> {
-                        state = AsyncGeneratorState.COMPLETED;
-                        JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                        finalPromise.reject(error);
-                        return JSUndefined.INSTANCE;
-                    }),
-                    finalPromise,
-                    context
-                )
+                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                finalPromise.reject(error);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            finalPromise,
+                            context
+                    )
             );
 
             return finalPromise;
@@ -221,37 +221,37 @@ public final class JSAsyncGenerator extends JSObject {
             JSPromise finalPromise = new JSPromise();
 
             resultPromise.addReactions(
-                new JSPromise.ReactionRecord(
-                    new JSNativeFunction("onFulfilled", 1, (ctx, thisArg, args) -> {
-                        JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onFulfilled", 1, (ctx, thisArg, args) -> {
+                                JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
-                        if (result instanceof JSObject resultObj) {
-                            JSValue doneValue = resultObj.get("done");
-                            boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
+                                if (result instanceof JSObject resultObj) {
+                                    JSValue doneValue = resultObj.get("done");
+                                    boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
 
-                            if (done) {
+                                    if (done) {
+                                        state = AsyncGeneratorState.COMPLETED;
+                                    } else {
+                                        state = AsyncGeneratorState.SUSPENDED_YIELD;
+                                    }
+                                }
+
+                                finalPromise.fulfill(result);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            finalPromise,
+                            context
+                    ),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onRejected", 1, (ctx, thisArg, args) -> {
                                 state = AsyncGeneratorState.COMPLETED;
-                            } else {
-                                state = AsyncGeneratorState.SUSPENDED_YIELD;
-                            }
-                        }
-
-                        finalPromise.fulfill(result);
-                        return JSUndefined.INSTANCE;
-                    }),
-                    finalPromise,
-                    context
-                ),
-                new JSPromise.ReactionRecord(
-                    new JSNativeFunction("onRejected", 1, (ctx, thisArg, args) -> {
-                        state = AsyncGeneratorState.COMPLETED;
-                        JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                        finalPromise.reject(error);
-                        return JSUndefined.INSTANCE;
-                    }),
-                    finalPromise,
-                    context
-                )
+                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                finalPromise.reject(error);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            finalPromise,
+                            context
+                    )
             );
 
             return finalPromise;
@@ -274,7 +274,7 @@ public final class JSAsyncGenerator extends JSObject {
      * Create an iterator result promise.
      *
      * @param value The iterator value
-     * @param done Whether iteration is complete
+     * @param done  Whether iteration is complete
      * @return A promise that resolves to {value, done}
      */
     private JSPromise createIteratorResultPromise(JSValue value, boolean done) {
@@ -290,7 +290,7 @@ public final class JSAsyncGenerator extends JSObject {
      * Create a simple async generator from a function that yields promises.
      *
      * @param yielder Function that returns promise values in sequence
-     * @param ctx The execution context
+     * @param ctx     The execution context
      * @return An async generator
      */
     public static JSAsyncGenerator create(AsyncYieldFunction yielder, JSContext ctx) {

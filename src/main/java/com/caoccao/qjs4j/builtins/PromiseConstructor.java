@@ -308,4 +308,35 @@ public final class PromiseConstructor {
 
         return resultPromise;
     }
+
+    /**
+     * Promise.withResolvers()
+     * ES2024 27.2.4.9
+     * Returns an object with a new promise and its resolve/reject functions.
+     */
+    public static JSValue withResolvers(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        JSPromise promise = new JSPromise();
+
+        // Create resolve function
+        JSNativeFunction resolveFn = new JSNativeFunction("resolve", 1, (context, thisValue, funcArgs) -> {
+            JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+            promise.fulfill(value);
+            return JSUndefined.INSTANCE;
+        });
+
+        // Create reject function
+        JSNativeFunction rejectFn = new JSNativeFunction("reject", 1, (context, thisValue, funcArgs) -> {
+            JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+            promise.reject(reason);
+            return JSUndefined.INSTANCE;
+        });
+
+        // Create result object
+        JSObject result = new JSObject();
+        result.set("promise", promise);
+        result.set("resolve", resolveFn);
+        result.set("reject", rejectFn);
+
+        return result;
+    }
 }

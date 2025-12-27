@@ -327,7 +327,32 @@ public final class ObjectConstructor {
         }
 
         JSString propName = JSTypeConversions.toString(args[0]);
-        PropertyKey key = PropertyKey.fromString(propName.getValue());
+        PropertyKey key = PropertyKey.fromString(propName.value());
+
+        return JSBoolean.valueOf(obj.hasOwnProperty(key));
+    }
+
+    /**
+     * Object.hasOwn(obj, prop)
+     * ES2022 20.1.2.10
+     * Static method to check if an object has a property as its own property.
+     */
+    public static JSValue hasOwn(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (args.length == 0) {
+            return ctx.throwError("TypeError", "Object.hasOwn requires at least 1 argument");
+        }
+
+        JSValue objValue = args[0];
+        if (!(objValue instanceof JSObject obj)) {
+            return ctx.throwError("TypeError", "Object.hasOwn called on non-object");
+        }
+
+        if (args.length < 2) {
+            return JSBoolean.FALSE;
+        }
+
+        JSString propName = JSTypeConversions.toString(args[1]);
+        PropertyKey key = PropertyKey.fromString(propName.value());
 
         return JSBoolean.valueOf(obj.hasOwnProperty(key));
     }
@@ -372,7 +397,7 @@ public final class ObjectConstructor {
 
                 // Convert key to string
                 JSString keyString = JSTypeConversions.toString(keyValue);
-                PropertyKey key = PropertyKey.fromString(keyString.getValue());
+                PropertyKey key = PropertyKey.fromString(keyString.value());
 
                 // Set property
                 result.set(key, entryValue);
@@ -435,10 +460,58 @@ public final class ObjectConstructor {
 
             // Convert key to string
             JSString keyString = JSTypeConversions.toString(keyValue);
-            PropertyKey key = PropertyKey.fromString(keyString.getValue());
+            PropertyKey key = PropertyKey.fromString(keyString.value());
 
             // Set property
             result.set(key, entryValue);
+        }
+
+        return result;
+    }
+
+    /**
+     * Object.groupBy(items, callbackFn)
+     * ES2024 20.1.2.11
+     * Groups array elements by a key returned from the callback function.
+     */
+    public static JSValue groupBy(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (args.length < 2) {
+            return ctx.throwError("TypeError", "Object.groupBy requires 2 arguments");
+        }
+
+        JSValue items = args[0];
+        if (!(items instanceof JSArray arr)) {
+            return ctx.throwError("TypeError", "First argument must be an array");
+        }
+
+        if (!(args[1] instanceof JSFunction callback)) {
+            return ctx.throwError("TypeError", "Second argument must be a function");
+        }
+
+        JSObject result = new JSObject();
+
+        long length = arr.getLength();
+        for (long i = 0; i < length; i++) {
+            JSValue element = arr.get(i);
+            JSValue[] callbackArgs = {element, new JSNumber(i)};
+            JSValue keyValue = callback.call(ctx, JSUndefined.INSTANCE, callbackArgs);
+
+            // Convert key to string
+            JSString keyString = JSTypeConversions.toString(keyValue);
+            String key = keyString.value();
+
+            // Get or create array for this key
+            JSValue existingGroup = result.get(key);
+            JSArray group;
+            if (existingGroup instanceof JSArray) {
+                group = (JSArray) existingGroup;
+            } else {
+                group = new JSArray();
+                result.set(key, group);
+            }
+
+            // Add element to group
+            group.push(element);
         }
 
         return result;

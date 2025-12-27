@@ -19,7 +19,7 @@ package com.caoccao.qjs4j.core;
 /**
  * Represents a JavaScript Iterator object.
  * Based on ES2020 Iterator protocol.
- *
+ * <p>
  * An iterator is an object that implements the iterator protocol by having a next() method
  * that returns an object with two properties: value and done.
  */
@@ -34,6 +34,7 @@ public class JSIterator extends JSObject {
     public interface IteratorFunction {
         /**
          * Get the next iteration result.
+         *
          * @return IteratorResult with value and done status
          */
         IteratorResult next();
@@ -120,7 +121,7 @@ public class JSIterator extends JSObject {
             if (iter.hasNext()) {
                 java.util.Map.Entry<JSMap.KeyWrapper, JSValue> entry = iter.next();
                 JSArray pair = new JSArray();
-                pair.push(entry.getKey().getValue());
+                pair.push(entry.getKey().value());
                 pair.push(entry.getValue());
                 return IteratorResult.of(pair);
             }
@@ -135,7 +136,7 @@ public class JSIterator extends JSObject {
         final java.util.Iterator<JSMap.KeyWrapper> iter = map.keys().iterator();
         return new JSIterator(() -> {
             if (iter.hasNext()) {
-                JSValue key = iter.next().getValue();
+                JSValue key = iter.next().value();
                 return IteratorResult.of(key);
             }
             return IteratorResult.done();
@@ -163,7 +164,7 @@ public class JSIterator extends JSObject {
         final java.util.Iterator<JSMap.KeyWrapper> iter = set.values().iterator();
         return new JSIterator(() -> {
             if (iter.hasNext()) {
-                JSValue value = iter.next().getValue();
+                JSValue value = iter.next().value();
                 return IteratorResult.of(value);
             }
             return IteratorResult.done();
@@ -174,7 +175,7 @@ public class JSIterator extends JSObject {
      * Create a string iterator.
      */
     public static JSIterator stringIterator(JSString string) {
-        final String str = string.getValue();
+        final String str = string.value();
         final int[] index = {0};
         return new JSIterator(() -> {
             if (index[0] < str.length()) {

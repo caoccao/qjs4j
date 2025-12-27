@@ -51,33 +51,6 @@ public final class Scope {
         return parent;
     }
 
-    public static class Variable {
-        private final String name;
-        private final boolean isConst;
-        private final boolean isLet;
-        private final int index;
-
-        public Variable(String name, boolean isConst, boolean isLet, int index) {
-            this.name = name;
-            this.isConst = isConst;
-            this.isLet = isLet;
-            this.index = index;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        public boolean isConst() {
-            return isConst;
-        }
-
-        public boolean isLet() {
-            return isLet;
-        }
-
-        public int getIndex() {
-            return index;
-        }
+    public record Variable(String name, boolean isConst, boolean isLet, int index) {
     }
 }
