@@ -74,6 +74,59 @@ public class ArrayPrototypeTest extends BaseTest {
     }
 
     @Test
+    public void testCopyWithin() {
+        // Normal case: copyWithin(0, 3, 5)
+        JSArray arr = new JSArray();
+        arr.push(new JSNumber(1));
+        arr.push(new JSNumber(2));
+        arr.push(new JSNumber(3));
+        arr.push(new JSNumber(4));
+        arr.push(new JSNumber(5));
+
+        JSValue result = ArrayPrototype.copyWithin(ctx, arr, new JSValue[]{new JSNumber(0), new JSNumber(3), new JSNumber(5)});
+        assertSame(arr, result);
+        assertEquals(5, arr.getLength());
+        assertEquals(4.0, arr.get(0).asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(5.0, arr.get(1).asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(3.0, arr.get(2).asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(4.0, arr.get(3).asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(5.0, arr.get(4).asNumber().map(JSNumber::value).orElse(0D));
+
+        // With negative indices
+        JSArray arr2 = new JSArray();
+        arr2.push(new JSNumber(1));
+        arr2.push(new JSNumber(2));
+        arr2.push(new JSNumber(3));
+        arr2.push(new JSNumber(4));
+        arr2.push(new JSNumber(5));
+
+        result = ArrayPrototype.copyWithin(ctx, arr2, new JSValue[]{new JSNumber(-2), new JSNumber(0), new JSNumber(2)});
+        assertSame(arr2, result);
+        assertEquals(5, arr2.getLength());
+        assertEquals(1.0, arr2.get(0).asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(2.0, arr2.get(1).asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(3.0, arr2.get(2).asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(1.0, arr2.get(3).asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(2.0, arr2.get(4).asNumber().map(JSNumber::value).orElse(0D));
+
+        // Edge case: empty array
+        JSArray emptyArr = new JSArray();
+        result = ArrayPrototype.copyWithin(ctx, emptyArr, new JSValue[]{new JSNumber(0), new JSNumber(1)});
+        assertSame(emptyArr, result);
+
+        // Edge case: no arguments
+        JSArray arr3 = new JSArray();
+        arr3.push(new JSNumber(1));
+        result = ArrayPrototype.copyWithin(ctx, arr3, new JSValue[]{});
+        assertSame(arr3, result);
+
+        // Edge case: copyWithin on non-array
+        JSValue nonArray = new JSString("not an array");
+        assertTypeError(ArrayPrototype.copyWithin(ctx, nonArray, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
+        assertPendingException(ctx);
+    }
+
+    @Test
     public void testEvery() {
         JSArray arr = new JSArray();
         arr.push(new JSNumber(2));
@@ -110,6 +163,79 @@ public class ArrayPrototypeTest extends BaseTest {
         // Edge case: every on non-array
         JSValue nonArray = new JSString("not an array");
         assertTypeError(ArrayPrototype.every(ctx, nonArray, new JSValue[]{isEvenFn}));
+        assertPendingException(ctx);
+    }
+
+    @Test
+    public void testFill() {
+        // Normal case: fill entire array
+        JSArray arr = new JSArray();
+        arr.push(new JSNumber(1));
+        arr.push(new JSNumber(2));
+        arr.push(new JSNumber(3));
+        arr.push(new JSNumber(4));
+
+        JSValue result = ArrayPrototype.fill(ctx, arr, new JSValue[]{new JSNumber(0)});
+        assertSame(arr, result);
+        assertEquals(4, arr.getLength());
+        assertEquals(0.0, arr.get(0).asNumber().map(JSNumber::value).orElse(-1D));
+        assertEquals(0.0, arr.get(1).asNumber().map(JSNumber::value).orElse(-1D));
+        assertEquals(0.0, arr.get(2).asNumber().map(JSNumber::value).orElse(-1D));
+        assertEquals(0.0, arr.get(3).asNumber().map(JSNumber::value).orElse(-1D));
+
+        // Fill with start index
+        JSArray arr2 = new JSArray();
+        arr2.push(new JSNumber(1));
+        arr2.push(new JSNumber(2));
+        arr2.push(new JSNumber(3));
+        arr2.push(new JSNumber(4));
+
+        result = ArrayPrototype.fill(ctx, arr2, new JSValue[]{new JSNumber(0), new JSNumber(2)});
+        assertSame(arr2, result);
+        assertEquals(4, arr2.getLength());
+        assertEquals(1.0, arr2.get(0).asNumber().map(JSNumber::value).orElse(-1D));
+        assertEquals(2.0, arr2.get(1).asNumber().map(JSNumber::value).orElse(-1D));
+        assertEquals(0.0, arr2.get(2).asNumber().map(JSNumber::value).orElse(-1D));
+        assertEquals(0.0, arr2.get(3).asNumber().map(JSNumber::value).orElse(-1D));
+
+        // Fill with start and end
+        JSArray arr3 = new JSArray();
+        arr3.push(new JSNumber(1));
+        arr3.push(new JSNumber(2));
+        arr3.push(new JSNumber(3));
+        arr3.push(new JSNumber(4));
+
+        result = ArrayPrototype.fill(ctx, arr3, new JSValue[]{new JSNumber(0), new JSNumber(1), new JSNumber(3)});
+        assertSame(arr3, result);
+        assertEquals(4, arr3.getLength());
+        assertEquals(1.0, arr3.get(0).asNumber().map(JSNumber::value).orElse(-1D));
+        assertEquals(0.0, arr3.get(1).asNumber().map(JSNumber::value).orElse(-1D));
+        assertEquals(0.0, arr3.get(2).asNumber().map(JSNumber::value).orElse(-1D));
+        assertEquals(4.0, arr3.get(3).asNumber().map(JSNumber::value).orElse(-1D));
+
+        // With negative indices
+        JSArray arr4 = new JSArray();
+        arr4.push(new JSNumber(1));
+        arr4.push(new JSNumber(2));
+        arr4.push(new JSNumber(3));
+        arr4.push(new JSNumber(4));
+
+        result = ArrayPrototype.fill(ctx, arr4, new JSValue[]{new JSNumber(0), new JSNumber(-3), new JSNumber(-1)});
+        assertSame(arr4, result);
+        assertEquals(4, arr4.getLength());
+        assertEquals(1.0, arr4.get(0).asNumber().map(JSNumber::value).orElse(-1D));
+        assertEquals(0.0, arr4.get(1).asNumber().map(JSNumber::value).orElse(-1D));
+        assertEquals(0.0, arr4.get(2).asNumber().map(JSNumber::value).orElse(-1D));
+        assertEquals(4.0, arr4.get(3).asNumber().map(JSNumber::value).orElse(-1D));
+
+        // Edge case: empty array
+        JSArray emptyArr = new JSArray();
+        result = ArrayPrototype.fill(ctx, emptyArr, new JSValue[]{new JSNumber(1)});
+        assertSame(emptyArr, result);
+
+        // Edge case: fill on non-array
+        JSValue nonArray = new JSString("not an array");
+        assertTypeError(ArrayPrototype.fill(ctx, nonArray, new JSValue[]{new JSNumber(0)}));
         assertPendingException(ctx);
     }
 
@@ -388,6 +514,87 @@ public class ArrayPrototypeTest extends BaseTest {
         JSValue nonArray = new JSString("not an array");
         assertTypeError(ArrayPrototype.forEach(ctx, nonArray, new JSValue[]{collectFn}));
         assertPendingException(ctx);
+    }
+
+    @Test
+    public void testGetLength() {
+        // Normal case: non-empty array
+        JSArray arr = new JSArray();
+        arr.push(new JSNumber(1));
+        arr.push(new JSNumber(2));
+        arr.push(new JSNumber(3));
+
+        JSValue result = ArrayPrototype.getLength(ctx, arr, new JSValue[]{});
+        assertEquals(3.0, result.asNumber().map(JSNumber::value).orElse(0.0));
+
+        // Empty array
+        JSArray emptyArr = new JSArray();
+        result = ArrayPrototype.getLength(ctx, emptyArr, new JSValue[]{});
+        assertEquals(0.0, result.asNumber().map(JSNumber::value).orElse(-1.0));
+
+        // Array with specific length
+        JSArray arrWithLength = new JSArray(10);
+        result = ArrayPrototype.getLength(ctx, arrWithLength, new JSValue[]{});
+        assertEquals(10.0, result.asNumber().map(JSNumber::value).orElse(0.0));
+
+        // After modifying array
+        arr.push(new JSNumber(4));
+        result = ArrayPrototype.getLength(ctx, arr, new JSValue[]{});
+        assertEquals(4.0, result.asNumber().map(JSNumber::value).orElse(0.0));
+
+        arr.pop();
+        result = ArrayPrototype.getLength(ctx, arr, new JSValue[]{});
+        assertEquals(3.0, result.asNumber().map(JSNumber::value).orElse(0.0));
+
+        // Edge case: getLength on non-array
+        JSValue nonArray = new JSString("not an array");
+        assertTypeError(ArrayPrototype.getLength(ctx, nonArray, new JSValue[]{}));
+        assertPendingException(ctx);
+    }
+
+    @Test
+    public void testGetSymbolUnscopables() {
+        // Normal case: get unscopables
+        JSArray arr = new JSArray();
+        JSValue result = ArrayPrototype.getSymbolUnscopables(ctx, arr, new JSValue[]{});
+
+        assertTrue(result.isObject());
+        JSObject unscopables = result.asObject().orElse(null);
+        assertNotNull(unscopables);
+
+        // Verify ES2015 methods are marked as unscopable
+        assertEquals(JSBoolean.TRUE, unscopables.get("copyWithin"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("entries"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("fill"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("find"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("findIndex"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("flat"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("flatMap"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("includes"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("keys"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("values"));
+
+        // Verify ES2022+ methods are marked as unscopable
+        assertEquals(JSBoolean.TRUE, unscopables.get("at"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("findLast"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("findLastIndex"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("toReversed"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("toSorted"));
+        assertEquals(JSBoolean.TRUE, unscopables.get("toSpliced"));
+
+        // Verify old methods are NOT in unscopables (they should return undefined)
+        assertTrue(unscopables.get("push").isUndefined());
+        assertTrue(unscopables.get("pop").isUndefined());
+        assertTrue(unscopables.get("shift").isUndefined());
+        assertTrue(unscopables.get("unshift").isUndefined());
+        assertTrue(unscopables.get("slice").isUndefined());
+        assertTrue(unscopables.get("splice").isUndefined());
+        assertTrue(unscopables.get("concat").isUndefined());
+        assertTrue(unscopables.get("join").isUndefined());
+        assertTrue(unscopables.get("reverse").isUndefined());
+        assertTrue(unscopables.get("sort").isUndefined());
+        assertTrue(unscopables.get("indexOf").isUndefined());
+        assertTrue(unscopables.get("lastIndexOf").isUndefined());
     }
 
     @Test
@@ -1038,6 +1245,47 @@ public class ArrayPrototypeTest extends BaseTest {
         JSObject result4 = iterator.next();
         assertTrue(result4.get("done").isBooleanTrue());
         assertTrue(result4.get("value").isUndefined());
+    }
+
+    @Test
+    public void testToLocaleString() {
+        // Normal case
+        JSArray arr = new JSArray();
+        arr.push(new JSString("a"));
+        arr.push(new JSString("b"));
+        arr.push(new JSString("c"));
+
+        JSValue result = ArrayPrototype.toLocaleString(ctx, arr, new JSValue[]{});
+        assertEquals("a,b,c", result.asString().map(JSString::value).orElse(""));
+
+        // With numbers
+        JSArray arr2 = new JSArray();
+        arr2.push(new JSNumber(1));
+        arr2.push(new JSNumber(2));
+        arr2.push(new JSNumber(3));
+
+        result = ArrayPrototype.toLocaleString(ctx, arr2, new JSValue[]{});
+        assertEquals("1,2,3", result.asString().map(JSString::value).orElse(""));
+
+        // With null and undefined
+        JSArray arr3 = new JSArray();
+        arr3.push(new JSString("a"));
+        arr3.push(JSNull.INSTANCE);
+        arr3.push(JSUndefined.INSTANCE);
+        arr3.push(new JSString("b"));
+
+        result = ArrayPrototype.toLocaleString(ctx, arr3, new JSValue[]{});
+        assertEquals("a,,,b", result.asString().map(JSString::value).orElse(""));
+
+        // Edge case: empty array
+        JSArray emptyArr = new JSArray();
+        result = ArrayPrototype.toLocaleString(ctx, emptyArr, new JSValue[]{});
+        assertEquals("", result.asString().map(JSString::value).orElse("FAIL"));
+
+        // Edge case: toLocaleString on non-array
+        JSValue nonArray = new JSString("not an array");
+        assertTypeError(ArrayPrototype.toLocaleString(ctx, nonArray, new JSValue[]{}));
+        assertPendingException(ctx);
     }
 
     @Test

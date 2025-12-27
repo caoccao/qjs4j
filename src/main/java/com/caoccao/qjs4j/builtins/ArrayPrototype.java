@@ -91,6 +91,65 @@ public final class ArrayPrototype {
     }
 
     /**
+     * Array.prototype.copyWithin(target, start[, end])
+     * ES2015 23.1.3.3
+     * Copies a sequence of array elements within the array.
+     */
+    public static JSValue copyWithin(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArray arr)) {
+            return ctx.throwError("TypeError", "Array.prototype.copyWithin called on non-array");
+        }
+
+        long length = arr.getLength();
+        if (length == 0 || args.length == 0) {
+            return arr;
+        }
+
+        // Get target position
+        long target = (long) JSTypeConversions.toInteger(args[0]);
+        if (target < 0) {
+            target = Math.max(length + target, 0);
+        } else {
+            target = Math.min(target, length);
+        }
+
+        // Get start position
+        long start = args.length > 1 ? (long) JSTypeConversions.toInteger(args[1]) : 0;
+        if (start < 0) {
+            start = Math.max(length + start, 0);
+        } else {
+            start = Math.min(start, length);
+        }
+
+        // Get end position
+        long end = args.length > 2 ? (long) JSTypeConversions.toInteger(args[2]) : length;
+        if (end < 0) {
+            end = Math.max(length + end, 0);
+        } else {
+            end = Math.min(end, length);
+        }
+
+        // Calculate count
+        long count = Math.min(end - start, length - target);
+
+        // Copy elements
+        if (count > 0) {
+            // Create a temporary array to hold values to copy
+            JSValue[] temp = new JSValue[(int) count];
+            for (int i = 0; i < count; i++) {
+                temp[i] = arr.get((int) (start + i));
+            }
+
+            // Write values to target position
+            for (int i = 0; i < count; i++) {
+                arr.set((int) (target + i), temp[i]);
+            }
+        }
+
+        return arr;
+    }
+
+    /**
      * Array.prototype.every(callbackFn[, thisArg])
      * Tests whether all elements pass the test.
      */
@@ -117,6 +176,47 @@ public final class ArrayPrototype {
         }
 
         return JSBoolean.TRUE;
+    }
+
+    /**
+     * Array.prototype.fill(value[, start[, end]])
+     * ES2015 23.1.3.6
+     * Fills all the elements of an array from a start index to an end index with a static value.
+     */
+    public static JSValue fill(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArray arr)) {
+            return ctx.throwError("TypeError", "Array.prototype.fill called on non-array");
+        }
+
+        long length = arr.getLength();
+        if (length == 0) {
+            return arr;
+        }
+
+        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+
+        // Get start position
+        long start = args.length > 1 ? (long) JSTypeConversions.toInteger(args[1]) : 0;
+        if (start < 0) {
+            start = Math.max(length + start, 0);
+        } else {
+            start = Math.min(start, length);
+        }
+
+        // Get end position
+        long end = args.length > 2 ? (long) JSTypeConversions.toInteger(args[2]) : length;
+        if (end < 0) {
+            end = Math.max(length + end, 0);
+        } else {
+            end = Math.min(end, length);
+        }
+
+        // Fill the array
+        for (long i = start; i < end; i++) {
+            arr.set((int) i, value);
+        }
+
+        return arr;
     }
 
     /**
@@ -279,7 +379,7 @@ public final class ArrayPrototype {
         }
 
         int depth = args.length > 0 ? JSTypeConversions.toInt32(args[0]) : 1;
-        return flattenArray(arr, depth);
+        return internalFlattenArray(arr, depth);
     }
 
     /**
@@ -324,25 +424,6 @@ public final class ArrayPrototype {
         return result;
     }
 
-    private static JSArray flattenArray(JSArray arr, int depth) {
-        JSArray result = new JSArray();
-
-        for (int i = 0; i < arr.getLength(); i++) {
-            JSValue element = arr.get(i);
-
-            if (depth > 0 && element instanceof JSArray subArr) {
-                JSArray flattened = flattenArray(subArr, depth - 1);
-                for (int j = 0; j < flattened.getLength(); j++) {
-                    result.push(flattened.get(j));
-                }
-            } else {
-                result.push(element);
-            }
-        }
-
-        return result;
-    }
-
     /**
      * Array.prototype.forEach(callbackFn[, thisArg])
      * Executes a function for each array element.
@@ -366,6 +447,50 @@ public final class ArrayPrototype {
         }
 
         return JSUndefined.INSTANCE;
+    }
+
+    /**
+     * get Array.prototype.length
+     * Returns the number of elements in the array.
+     * This is a getter for the length property.
+     */
+    public static JSValue getLength(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArray arr)) {
+            return ctx.throwError("TypeError", "Array.prototype.length getter called on non-array");
+        }
+        return new JSNumber(arr.getLength());
+    }
+
+    /**
+     * Array.prototype[Symbol.unscopables]
+     * ES2015 23.1.3.32
+     * Returns an object containing property names that are excluded from with statement binding.
+     * These are methods added in ES2015 and later that should not be included in with statements.
+     */
+    public static JSValue getSymbolUnscopables(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        JSObject unscopables = new JSObject();
+
+        // ES2015 methods
+        unscopables.set("copyWithin", JSBoolean.TRUE);
+        unscopables.set("entries", JSBoolean.TRUE);
+        unscopables.set("fill", JSBoolean.TRUE);
+        unscopables.set("find", JSBoolean.TRUE);
+        unscopables.set("findIndex", JSBoolean.TRUE);
+        unscopables.set("flat", JSBoolean.TRUE);
+        unscopables.set("flatMap", JSBoolean.TRUE);
+        unscopables.set("includes", JSBoolean.TRUE);
+        unscopables.set("keys", JSBoolean.TRUE);
+        unscopables.set("values", JSBoolean.TRUE);
+
+        // ES2022+ methods
+        unscopables.set("at", JSBoolean.TRUE);
+        unscopables.set("findLast", JSBoolean.TRUE);
+        unscopables.set("findLastIndex", JSBoolean.TRUE);
+        unscopables.set("toReversed", JSBoolean.TRUE);
+        unscopables.set("toSorted", JSBoolean.TRUE);
+        unscopables.set("toSpliced", JSBoolean.TRUE);
+
+        return unscopables;
     }
 
     /**
@@ -434,6 +559,25 @@ public final class ArrayPrototype {
         }
 
         return new JSNumber(-1);
+    }
+
+    private static JSArray internalFlattenArray(JSArray arr, int depth) {
+        JSArray result = new JSArray();
+
+        for (int i = 0; i < arr.getLength(); i++) {
+            JSValue element = arr.get(i);
+
+            if (depth > 0 && element instanceof JSArray subArr) {
+                JSArray flattened = internalFlattenArray(subArr, depth - 1);
+                for (int j = 0; j < flattened.getLength(); j++) {
+                    result.push(flattened.get(j));
+                }
+            } else {
+                result.push(element);
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -819,6 +963,36 @@ public final class ArrayPrototype {
         }
 
         return deleted;
+    }
+
+    /**
+     * Array.prototype.toLocaleString()
+     * ES2015 23.1.3.29
+     * Returns a localized string representing the calling array and its elements.
+     */
+    public static JSValue toLocaleString(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArray arr)) {
+            return ctx.throwError("TypeError", "Array.prototype.toLocaleString called on non-array");
+        }
+
+        // For now, use the same implementation as toString
+        // A full implementation would call toLocaleString on each element
+        StringBuilder sb = new StringBuilder();
+        long length = arr.getLength();
+
+        for (long i = 0; i < length; i++) {
+            if (i > 0) {
+                sb.append(",");
+            }
+            JSValue element = arr.get(i);
+            if (!(element instanceof JSUndefined || element instanceof JSNull)) {
+                // In a full implementation, we would call toLocaleString on each element
+                // For now, convert to string
+                sb.append(JSTypeConversions.toString(element).value());
+            }
+        }
+
+        return new JSString(sb.toString());
     }
 
     /**

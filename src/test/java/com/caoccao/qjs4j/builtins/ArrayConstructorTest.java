@@ -113,6 +113,134 @@ public class ArrayConstructorTest extends BaseTest {
     }
 
     @Test
+    public void testFromAsync() {
+        // Normal case: from async iterator (array)
+        JSArray sourceArr = new JSArray();
+        sourceArr.push(new JSNumber(1));
+        sourceArr.push(new JSNumber(2));
+        sourceArr.push(new JSNumber(3));
+
+        JSAsyncIterator asyncIterator = JSAsyncIterator.fromArray(sourceArr, ctx);
+        JSValue result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{asyncIterator});
+        JSPromise promise = result.asPromise().orElse(null);
+        assertNotNull(promise);
+        awaitPromise(promise);
+
+        assertEquals(JSPromise.PromiseState.FULFILLED, promise.getState());
+        JSArray arr = promise.getResult().asArray().orElse(null);
+        assertNotNull(arr);
+        assertEquals(3, arr.getLength());
+        assertEquals(1.0, arr.get(0).asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(2.0, arr.get(1).asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(3.0, arr.get(2).asNumber().map(JSNumber::value).orElse(0D));
+
+        // Normal case: from regular array (sync fallback)
+        JSArray sourceArr2 = new JSArray();
+        sourceArr2.push(new JSNumber(10));
+        sourceArr2.push(new JSNumber(20));
+
+        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{sourceArr2});
+        promise = result.asPromise().orElse(null);
+        assertNotNull(promise);
+        awaitPromise(promise);
+
+        assertEquals(JSPromise.PromiseState.FULFILLED, promise.getState());
+        arr = promise.getResult().asArray().orElse(null);
+        assertNotNull(arr);
+        assertEquals(2, arr.getLength());
+        assertEquals(10.0, arr.get(0).asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(20.0, arr.get(1).asNumber().map(JSNumber::value).orElse(0D));
+
+        // Normal case: with mapping function
+        JSFunction mapFn = new JSNativeFunction("double", 1, (context, thisArg, args) -> {
+            if (args.length > 0 && args[0] instanceof JSNumber num) {
+                return new JSNumber(num.value() * 2);
+            }
+            return args[0];
+        });
+
+        JSArray sourceArr3 = new JSArray();
+        sourceArr3.push(new JSNumber(1));
+        sourceArr3.push(new JSNumber(2));
+
+        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{sourceArr3, mapFn});
+        promise = result.asPromise().orElse(null);
+        assertNotNull(promise);
+        awaitPromise(promise);
+
+        assertEquals(JSPromise.PromiseState.FULFILLED, promise.getState());
+        arr = promise.getResult().asArray().orElse(null);
+        assertNotNull(arr);
+        assertEquals(2, arr.getLength());
+        assertEquals(2.0, arr.get(0).asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(4.0, arr.get(1).asNumber().map(JSNumber::value).orElse(0D));
+
+        // Normal case: from string
+        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSString("abc")});
+        promise = result.asPromise().orElse(null);
+        assertNotNull(promise);
+        awaitPromise(promise);
+
+        assertEquals(JSPromise.PromiseState.FULFILLED, promise.getState());
+        arr = promise.getResult().asArray().orElse(null);
+        assertNotNull(arr);
+        assertEquals(3, arr.getLength());
+        assertEquals("a", arr.get(0).asString().map(JSString::value).orElse(""));
+        assertEquals("b", arr.get(1).asString().map(JSString::value).orElse(""));
+        assertEquals("c", arr.get(2).asString().map(JSString::value).orElse(""));
+
+        // Edge case: empty array
+        JSArray emptyArr = new JSArray();
+        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{emptyArr});
+        promise = result.asPromise().orElse(null);
+        assertNotNull(promise);
+        awaitPromise(promise);
+
+        assertEquals(JSPromise.PromiseState.FULFILLED, promise.getState());
+        arr = promise.getResult().asArray().orElse(null);
+        assertNotNull(arr);
+        assertEquals(0, arr.getLength());
+
+        // Edge case: no arguments
+        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{});
+        promise = result.asPromise().orElse(null);
+        assertNotNull(promise);
+        awaitPromise(promise);
+        assertEquals(JSPromise.PromiseState.REJECTED, promise.getState());
+
+        // Edge case: non-iterable
+        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)});
+        promise = result.asPromise().orElse(null);
+        assertNotNull(promise);
+        awaitPromise(promise);
+        assertEquals(JSPromise.PromiseState.REJECTED, promise.getState());
+
+        // Edge case: invalid mapFn
+        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{sourceArr, new JSString("not a function")});
+        promise = result.asPromise().orElse(null);
+        assertNotNull(promise);
+        awaitPromise(promise);
+        assertEquals(JSPromise.PromiseState.REJECTED, promise.getState());
+    }
+
+    @Test
+    public void testGetSpecies() {
+        // Normal case: returns thisArg
+        JSObject arrayConstructor = new JSObject();
+        JSValue result = ArrayConstructor.getSpecies(ctx, arrayConstructor, new JSValue[]{});
+        assertEquals(arrayConstructor, result);
+
+        // Normal case: with different thisArg
+        JSObject customConstructor = new JSObject();
+        result = ArrayConstructor.getSpecies(ctx, customConstructor, new JSValue[]{});
+        assertEquals(customConstructor, result);
+
+        // Edge case: undefined thisArg
+        result = ArrayConstructor.getSpecies(ctx, JSUndefined.INSTANCE, new JSValue[]{});
+        assertTrue(result.isUndefined());
+    }
+
+    @Test
     public void testIsArray() {
         // Normal case: array
         JSArray arr = new JSArray();

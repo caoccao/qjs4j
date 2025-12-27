@@ -51,6 +51,13 @@ public abstract class BaseTest {
         }
     }
 
+    protected boolean awaitPromise(JSPromise promise) {
+        for (int i = 0; i < 1000 && promise.getState() == JSPromise.PromiseState.PENDING; i++) {
+            ctx.processMicrotasks();
+        }
+        return promise.getState() != JSPromise.PromiseState.PENDING;
+    }
+
     @BeforeEach
     public void setUp() {
         ctx = new JSContext(new JSRuntime());

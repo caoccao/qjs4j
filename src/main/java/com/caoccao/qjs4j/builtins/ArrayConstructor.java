@@ -104,6 +104,143 @@ public final class ArrayConstructor {
     }
 
     /**
+     * Array.fromAsync(asyncIterable, mapFn, thisArg)
+     * ES2022 23.1.2.2
+     * Creates a new Array instance from an async iterable, iterable, or array-like object.
+     * Returns a Promise that resolves to the created array.
+     */
+    public static JSValue fromAsync(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (args.length == 0) {
+            JSPromise promise = new JSPromise();
+            promise.reject(ctx.throwError("TypeError", "undefined is not iterable"));
+            return promise;
+        }
+
+        JSValue arrayLike = args[0];
+        JSValue mapFn = args.length > 1 ? args[1] : null;
+        JSValue mapThisArg = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
+
+        // Check if mapFn is callable
+        if (mapFn != null && !(mapFn instanceof JSUndefined) && !(mapFn instanceof JSFunction)) {
+            JSPromise promise = new JSPromise();
+            promise.reject(ctx.throwError("TypeError", "Array.fromAsync: when provided, the second argument must be a function"));
+            return promise;
+        }
+
+        JSPromise resultPromise = new JSPromise();
+
+        // Try to get async iterator first
+        JSAsyncIterator asyncIterator = JSAsyncIteratorHelper.getAsyncIterator(arrayLike, ctx);
+        if (asyncIterator != null) {
+            // Use async iteration
+            JSPromise arrayPromise = JSAsyncIteratorHelper.toArray(arrayLike, ctx);
+
+            arrayPromise.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onFulfill", 1, (context, thisValue, funcArgs) -> {
+                                JSValue arrayValue = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                                if (!(arrayValue instanceof JSArray collectedArray)) {
+                                    resultPromise.reject(ctx.throwError("TypeError", "Failed to collect array from async iterable"));
+                                    return JSUndefined.INSTANCE;
+                                }
+
+                                // Apply mapping function if provided
+                                if (mapFn instanceof JSFunction mappingFunc) {
+                                    JSArray mappedArray = new JSArray();
+                                    for (int i = 0; i < collectedArray.getLength(); i++) {
+                                        JSValue value = collectedArray.get(i);
+                                        JSValue[] mapArgs = new JSValue[]{value, new JSNumber(i)};
+                                        JSValue mappedValue = mappingFunc.call(ctx, mapThisArg, mapArgs);
+                                        mappedArray.push(mappedValue);
+                                    }
+                                    resultPromise.fulfill(mappedArray);
+                                } else {
+                                    resultPromise.fulfill(collectedArray);
+                                }
+                                return JSUndefined.INSTANCE;
+                            }),
+                            resultPromise,
+                            ctx
+                    ),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onReject", 1, (context, thisValue, funcArgs) -> {
+                                JSValue error = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                                resultPromise.reject(error);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            resultPromise,
+                            ctx
+                    )
+            );
+
+            return resultPromise;
+        }
+
+        // Handle JSArray input (sync fallback)
+        if (arrayLike instanceof JSArray sourceArray) {
+            JSArray result = new JSArray();
+            for (int i = 0; i < sourceArray.getLength(); i++) {
+                JSValue value = sourceArray.get(i);
+                if (mapFn instanceof JSFunction mappingFunc) {
+                    JSValue[] mapArgs = new JSValue[]{value, new JSNumber(i)};
+                    value = mappingFunc.call(ctx, mapThisArg, mapArgs);
+                }
+                result.push(value);
+            }
+            resultPromise.fulfill(result);
+            return resultPromise;
+        }
+
+        // Handle object with length property (sync fallback)
+        if (arrayLike instanceof JSObject obj) {
+            JSValue lengthValue = obj.get("length");
+            if (lengthValue instanceof JSNumber num) {
+                int length = (int) num.value();
+                JSArray result = new JSArray();
+                for (int i = 0; i < length; i++) {
+                    JSValue value = obj.get(i);
+                    if (mapFn instanceof JSFunction mappingFunc) {
+                        JSValue[] mapArgs = new JSValue[]{value, new JSNumber(i)};
+                        value = mappingFunc.call(ctx, mapThisArg, mapArgs);
+                    }
+                    result.push(value);
+                }
+                resultPromise.fulfill(result);
+                return resultPromise;
+            }
+        }
+
+        // Handle string (sync fallback)
+        if (arrayLike instanceof JSString str) {
+            String value = str.value();
+            JSArray result = new JSArray();
+            for (int i = 0; i < value.length(); i++) {
+                JSValue charValue = new JSString(String.valueOf(value.charAt(i)));
+                if (mapFn instanceof JSFunction mappingFunc) {
+                    JSValue[] mapArgs = new JSValue[]{charValue, new JSNumber(i)};
+                    charValue = mappingFunc.call(ctx, mapThisArg, mapArgs);
+                }
+                result.push(charValue);
+            }
+            resultPromise.fulfill(result);
+            return resultPromise;
+        }
+
+        // Not iterable
+        resultPromise.reject(ctx.throwError("TypeError", "object is not iterable"));
+        return resultPromise;
+    }
+
+    /**
+     * get Array[@@species]
+     * ES2015 22.1.2.4
+     * Returns the Array constructor.
+     */
+    public static JSValue getSpecies(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        return thisArg;
+    }
+
+    /**
      * Array.isArray(arg)
      * ES2020 22.1.2.2
      * Determines whether the passed value is an Array.

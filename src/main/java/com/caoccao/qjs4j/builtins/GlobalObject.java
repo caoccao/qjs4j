@@ -82,7 +82,7 @@ public final class GlobalObject {
         JSObject errorPrototype = new JSObject();
         errorPrototype.set("name", new JSString(errorName));
         errorPrototype.set("message", new JSString(""));
-        errorPrototype.set("toString", createNativeFunction(ctx, "toString", GlobalObject::errorToString, 0));
+        errorPrototype.set("toString", new JSNativeFunction("toString", 0, GlobalObject::errorToString));
 
         // For now, Error constructor is a placeholder (like Array, String, etc.)
         JSObject errorConstructor = new JSObject();
@@ -91,14 +91,6 @@ public final class GlobalObject {
         errorConstructor.set("[[ErrorName]]", new JSString(errorName));
 
         return errorConstructor;
-    }
-
-    /**
-     * Helper to create a native function.
-     */
-    private static JSNativeFunction createNativeFunction(JSContext ctx, String name,
-                                                         JSNativeFunction.NativeCallback implementation, int length) {
-        return new JSNativeFunction(name, length, implementation);
     }
 
     /**
@@ -283,18 +275,18 @@ public final class GlobalObject {
         global.set("Infinity", new JSNumber(Double.POSITIVE_INFINITY));
 
         // Global function properties
-        global.set("parseInt", createNativeFunction(ctx, "parseInt", GlobalObject::parseInt, 2));
-        global.set("parseFloat", createNativeFunction(ctx, "parseFloat", GlobalObject::parseFloat, 1));
-        global.set("isNaN", createNativeFunction(ctx, "isNaN", GlobalObject::isNaN, 1));
-        global.set("isFinite", createNativeFunction(ctx, "isFinite", GlobalObject::isFinite, 1));
-        global.set("eval", createNativeFunction(ctx, "eval", GlobalObject::eval, 1));
-        global.set("queueMicrotask", createNativeFunction(ctx, "queueMicrotask", GlobalObject::queueMicrotask, 1));
+        global.set("parseInt", new JSNativeFunction("parseInt", 2, GlobalObject::parseInt));
+        global.set("parseFloat", new JSNativeFunction("parseFloat", 1, GlobalObject::parseFloat));
+        global.set("isNaN", new JSNativeFunction("isNaN", 1, GlobalObject::isNaN));
+        global.set("isFinite", new JSNativeFunction("isFinite", 1, GlobalObject::isFinite));
+        global.set("eval", new JSNativeFunction("eval", 1, GlobalObject::eval));
+        global.set("queueMicrotask", new JSNativeFunction("queueMicrotask", 1, GlobalObject::queueMicrotask));
 
         // URI handling functions
-        global.set("encodeURI", createNativeFunction(ctx, "encodeURI", GlobalObject::encodeURI, 1));
-        global.set("decodeURI", createNativeFunction(ctx, "decodeURI", GlobalObject::decodeURI, 1));
-        global.set("encodeURIComponent", createNativeFunction(ctx, "encodeURIComponent", GlobalObject::encodeURIComponent, 1));
-        global.set("decodeURIComponent", createNativeFunction(ctx, "decodeURIComponent", GlobalObject::decodeURIComponent, 1));
+        global.set("encodeURI", new JSNativeFunction("encodeURI", 1, GlobalObject::encodeURI));
+        global.set("decodeURI", new JSNativeFunction("decodeURI", 1, GlobalObject::decodeURI));
+        global.set("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, GlobalObject::encodeURIComponent));
+        global.set("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, GlobalObject::decodeURIComponent));
 
         // Console object for debugging
         initializeConsoleObject(ctx, global);
@@ -343,27 +335,21 @@ public final class GlobalObject {
     private static void initializeArrayBufferConstructor(JSContext ctx, JSObject global) {
         // Create ArrayBuffer.prototype
         JSObject arrayBufferPrototype = new JSObject();
-        arrayBufferPrototype.set("slice", createNativeFunction(ctx, "slice", ArrayBufferPrototype::slice, 2));
-        arrayBufferPrototype.set("resize", createNativeFunction(ctx, "resize", ArrayBufferPrototype::resize, 1));
-        arrayBufferPrototype.set("transfer", createNativeFunction(ctx, "transfer", ArrayBufferPrototype::transfer, 0));
-        arrayBufferPrototype.set("transferToFixedLength", createNativeFunction(ctx, "transferToFixedLength", ArrayBufferPrototype::transferToFixedLength, 0));
-        
+        arrayBufferPrototype.set("slice", new JSNativeFunction("slice", 2, ArrayBufferPrototype::slice));
+        arrayBufferPrototype.set("resize", new JSNativeFunction("resize", 1, ArrayBufferPrototype::resize));
+        arrayBufferPrototype.set("transfer", new JSNativeFunction("transfer", 0, ArrayBufferPrototype::transfer));
+        arrayBufferPrototype.set("transferToFixedLength", new JSNativeFunction("transferToFixedLength", 0, ArrayBufferPrototype::transferToFixedLength));
+
         // Getters
-        JSNativeFunction byteLengthGetter = createNativeFunction(ctx, "get byteLength", ArrayBufferPrototype::getByteLength, 0);
-        arrayBufferPrototype.set("byteLength", byteLengthGetter); // Simplified: should be a getter
-        
-        JSNativeFunction detachedGetter = createNativeFunction(ctx, "get detached", ArrayBufferPrototype::getDetached, 0);
-        arrayBufferPrototype.set("detached", detachedGetter);
-        
-        JSNativeFunction maxByteLengthGetter = createNativeFunction(ctx, "get maxByteLength", ArrayBufferPrototype::getMaxByteLength, 0);
-        arrayBufferPrototype.set("maxByteLength", maxByteLengthGetter);
-        
-        JSNativeFunction resizableGetter = createNativeFunction(ctx, "get resizable", ArrayBufferPrototype::getResizable, 0);
-        arrayBufferPrototype.set("resizable", resizableGetter);
-        
+        arrayBufferPrototype.set("byteLength", new JSNativeFunction("get byteLength", 0, ArrayBufferPrototype::getByteLength));
+        arrayBufferPrototype.set("detached", new JSNativeFunction("get detached", 0, ArrayBufferPrototype::getDetached));
+        arrayBufferPrototype.set("maxByteLength", new JSNativeFunction("get maxByteLength", 0, ArrayBufferPrototype::getMaxByteLength));
+        arrayBufferPrototype.set("resizable", new JSNativeFunction("get resizable", 0, ArrayBufferPrototype::getResizable));
+
         // Symbol.toStringTag
-        JSNativeFunction toStringTagGetter = createNativeFunction(ctx, "get [Symbol.toStringTag]", ArrayBufferPrototype::getToStringTag, 0);
-        arrayBufferPrototype.set(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), toStringTagGetter);
+        arrayBufferPrototype.set(
+                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                new JSNativeFunction("get [Symbol.toStringTag]", 0, ArrayBufferPrototype::getToStringTag));
 
         // Create ArrayBuffer constructor
         JSObject arrayBufferConstructor = new JSObject();
@@ -371,11 +357,12 @@ public final class GlobalObject {
         arrayBufferConstructor.set("[[ArrayBufferConstructor]]", JSBoolean.TRUE);
 
         // Static methods
-        arrayBufferConstructor.set("isView", createNativeFunction(ctx, "isView", ArrayBufferConstructor::isView, 1));
+        arrayBufferConstructor.set("isView", new JSNativeFunction("isView", 1, ArrayBufferConstructor::isView));
 
         // Symbol.species getter
-        JSNativeFunction speciesGetter = createNativeFunction(ctx, "get [Symbol.species]", ArrayBufferConstructor::getSpecies, 0);
-        arrayBufferConstructor.set(PropertyKey.fromSymbol(JSSymbol.SPECIES), speciesGetter);
+        arrayBufferConstructor.set(
+                PropertyKey.fromSymbol(JSSymbol.SPECIES),
+                new JSNativeFunction("get [Symbol.species]", 0, ArrayBufferConstructor::getSpecies));
 
         global.set("ArrayBuffer", arrayBufferConstructor);
     }
@@ -386,53 +373,70 @@ public final class GlobalObject {
     private static void initializeArrayConstructor(JSContext ctx, JSObject global) {
         // Create Array.prototype
         JSObject arrayPrototype = new JSObject();
-        arrayPrototype.set("push", createNativeFunction(ctx, "push", ArrayPrototype::push, 1));
-        arrayPrototype.set("pop", createNativeFunction(ctx, "pop", ArrayPrototype::pop, 0));
-        arrayPrototype.set("shift", createNativeFunction(ctx, "shift", ArrayPrototype::shift, 0));
-        arrayPrototype.set("unshift", createNativeFunction(ctx, "unshift", ArrayPrototype::unshift, 1));
-        arrayPrototype.set("slice", createNativeFunction(ctx, "slice", ArrayPrototype::slice, 2));
-        arrayPrototype.set("splice", createNativeFunction(ctx, "splice", ArrayPrototype::splice, 2));
-        arrayPrototype.set("toSpliced", createNativeFunction(ctx, "toSpliced", ArrayPrototype::toSpliced, 2));
-        arrayPrototype.set("with", createNativeFunction(ctx, "with", ArrayPrototype::with, 2));
-        arrayPrototype.set("concat", createNativeFunction(ctx, "concat", ArrayPrototype::concat, 1));
-        arrayPrototype.set("join", createNativeFunction(ctx, "join", ArrayPrototype::join, 1));
-        arrayPrototype.set("reverse", createNativeFunction(ctx, "reverse", ArrayPrototype::reverse, 0));
-        arrayPrototype.set("toReversed", createNativeFunction(ctx, "toReversed", ArrayPrototype::toReversed, 0));
-        arrayPrototype.set("sort", createNativeFunction(ctx, "sort", ArrayPrototype::sort, 1));
-        arrayPrototype.set("toSorted", createNativeFunction(ctx, "toSorted", ArrayPrototype::toSorted, 1));
-        arrayPrototype.set("indexOf", createNativeFunction(ctx, "indexOf", ArrayPrototype::indexOf, 1));
-        arrayPrototype.set("lastIndexOf", createNativeFunction(ctx, "lastIndexOf", ArrayPrototype::lastIndexOf, 1));
-        arrayPrototype.set("includes", createNativeFunction(ctx, "includes", ArrayPrototype::includes, 1));
-        arrayPrototype.set("at", createNativeFunction(ctx, "at", ArrayPrototype::at, 1));
-        arrayPrototype.set("map", createNativeFunction(ctx, "map", ArrayPrototype::map, 1));
-        arrayPrototype.set("filter", createNativeFunction(ctx, "filter", ArrayPrototype::filter, 1));
-        arrayPrototype.set("reduce", createNativeFunction(ctx, "reduce", ArrayPrototype::reduce, 1));
-        arrayPrototype.set("reduceRight", createNativeFunction(ctx, "reduceRight", ArrayPrototype::reduceRight, 1));
-        arrayPrototype.set("forEach", createNativeFunction(ctx, "forEach", ArrayPrototype::forEach, 1));
+        arrayPrototype.set("push", new JSNativeFunction("push", 1, ArrayPrototype::push));
+        arrayPrototype.set("pop", new JSNativeFunction("pop", 0, ArrayPrototype::pop));
+        arrayPrototype.set("shift", new JSNativeFunction("shift", 0, ArrayPrototype::shift));
+        arrayPrototype.set("unshift", new JSNativeFunction("unshift", 1, ArrayPrototype::unshift));
+        arrayPrototype.set("slice", new JSNativeFunction("slice", 2, ArrayPrototype::slice));
+        arrayPrototype.set("splice", new JSNativeFunction("splice", 2, ArrayPrototype::splice));
+        arrayPrototype.set("toSpliced", new JSNativeFunction("toSpliced", 2, ArrayPrototype::toSpliced));
+        arrayPrototype.set("with", new JSNativeFunction("with", 2, ArrayPrototype::with));
+        arrayPrototype.set("concat", new JSNativeFunction("concat", 1, ArrayPrototype::concat));
+        arrayPrototype.set("join", new JSNativeFunction("join", 1, ArrayPrototype::join));
+        arrayPrototype.set("reverse", new JSNativeFunction("reverse", 0, ArrayPrototype::reverse));
+        arrayPrototype.set("toReversed", new JSNativeFunction("toReversed", 0, ArrayPrototype::toReversed));
+        arrayPrototype.set("sort", new JSNativeFunction("sort", 1, ArrayPrototype::sort));
+        arrayPrototype.set("toSorted", new JSNativeFunction("toSorted", 1, ArrayPrototype::toSorted));
+        arrayPrototype.set("indexOf", new JSNativeFunction("indexOf", 1, ArrayPrototype::indexOf));
+        arrayPrototype.set("lastIndexOf", new JSNativeFunction("lastIndexOf", 1, ArrayPrototype::lastIndexOf));
+        arrayPrototype.set("includes", new JSNativeFunction("includes", 1, ArrayPrototype::includes));
+        arrayPrototype.set("at", new JSNativeFunction("at", 1, ArrayPrototype::at));
+        arrayPrototype.set("map", new JSNativeFunction("map", 1, ArrayPrototype::map));
+        arrayPrototype.set("filter", new JSNativeFunction("filter", 1, ArrayPrototype::filter));
+        arrayPrototype.set("reduce", new JSNativeFunction("reduce", 1, ArrayPrototype::reduce));
+        arrayPrototype.set("reduceRight", new JSNativeFunction("reduceRight", 1, ArrayPrototype::reduceRight));
+        arrayPrototype.set("forEach", new JSNativeFunction("forEach", 1, ArrayPrototype::forEach));
         // Array.prototype.values and Array.prototype[Symbol.iterator] should be the same function
-        JSNativeFunction valuesFunction = createNativeFunction(ctx, "values", IteratorPrototype::arrayValues, 0);
+        JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, IteratorPrototype::arrayValues);
         arrayPrototype.set("values", valuesFunction);
         arrayPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction);
-        arrayPrototype.set("keys", createNativeFunction(ctx, "keys", IteratorPrototype::arrayKeys, 0));
-        arrayPrototype.set("entries", createNativeFunction(ctx, "entries", IteratorPrototype::arrayEntries, 0));
-        arrayPrototype.set("find", createNativeFunction(ctx, "find", ArrayPrototype::find, 1));
-        arrayPrototype.set("findIndex", createNativeFunction(ctx, "findIndex", ArrayPrototype::findIndex, 1));
-        arrayPrototype.set("findLast", createNativeFunction(ctx, "findLast", ArrayPrototype::findLast, 1));
-        arrayPrototype.set("findLastIndex", createNativeFunction(ctx, "findLastIndex", ArrayPrototype::findLastIndex, 1));
-        arrayPrototype.set("every", createNativeFunction(ctx, "every", ArrayPrototype::every, 1));
-        arrayPrototype.set("some", createNativeFunction(ctx, "some", ArrayPrototype::some, 1));
-        arrayPrototype.set("flat", createNativeFunction(ctx, "flat", ArrayPrototype::flat, 0));
-        arrayPrototype.set("flatMap", createNativeFunction(ctx, "flatMap", ArrayPrototype::flatMap, 1));
-        arrayPrototype.set("toString", createNativeFunction(ctx, "toString", ArrayPrototype::toString, 0));
+        arrayPrototype.set("keys", new JSNativeFunction("keys", 0, IteratorPrototype::arrayKeys));
+        arrayPrototype.set("entries", new JSNativeFunction("entries", 0, IteratorPrototype::arrayEntries));
+        arrayPrototype.set("find", new JSNativeFunction("find", 1, ArrayPrototype::find));
+        arrayPrototype.set("findIndex", new JSNativeFunction("findIndex", 1, ArrayPrototype::findIndex));
+        arrayPrototype.set("findLast", new JSNativeFunction("findLast", 1, ArrayPrototype::findLast));
+        arrayPrototype.set("findLastIndex", new JSNativeFunction("findLastIndex", 1, ArrayPrototype::findLastIndex));
+        arrayPrototype.set("every", new JSNativeFunction("every", 1, ArrayPrototype::every));
+        arrayPrototype.set("some", new JSNativeFunction("some", 1, ArrayPrototype::some));
+        arrayPrototype.set("flat", new JSNativeFunction("flat", 0, ArrayPrototype::flat));
+        arrayPrototype.set("flatMap", new JSNativeFunction("flatMap", 1, ArrayPrototype::flatMap));
+        arrayPrototype.set("toString", new JSNativeFunction("toString", 0, ArrayPrototype::toString));
+        arrayPrototype.set("toLocaleString", new JSNativeFunction("toLocaleString", 0, ArrayPrototype::toLocaleString));
+        arrayPrototype.set("copyWithin", new JSNativeFunction("copyWithin", 2, ArrayPrototype::copyWithin));
+        arrayPrototype.set("fill", new JSNativeFunction("fill", 1, ArrayPrototype::fill));
+
+        // Array.prototype.length getter
+        arrayPrototype.set("length", new JSNativeFunction("get length", 0, ArrayPrototype::getLength));
+
+        // Array.prototype[Symbol.unscopables]
+        arrayPrototype.set(
+                PropertyKey.fromSymbol(JSSymbol.UNSCOPABLES),
+                new JSNativeFunction("get [Symbol.unscopables]", 0, ArrayPrototype::getSymbolUnscopables));
 
         // Create Array constructor with static methods
         JSObject arrayConstructor = new JSObject();
         arrayConstructor.set("prototype", arrayPrototype);
 
         // Array static methods
-        arrayConstructor.set("isArray", createNativeFunction(ctx, "isArray", ArrayConstructor::isArray, 1));
-        arrayConstructor.set("of", createNativeFunction(ctx, "of", ArrayConstructor::of, 0));
-        arrayConstructor.set("from", createNativeFunction(ctx, "from", ArrayConstructor::from, 1));
+        arrayConstructor.set("isArray", new JSNativeFunction("isArray", 1, ArrayConstructor::isArray));
+        arrayConstructor.set("of", new JSNativeFunction("of", 0, ArrayConstructor::of));
+        arrayConstructor.set("from", new JSNativeFunction("from", 1, ArrayConstructor::from));
+        arrayConstructor.set("fromAsync", new JSNativeFunction("fromAsync", 1, ArrayConstructor::fromAsync));
+
+        // Symbol.species getter
+        arrayConstructor.set(
+                PropertyKey.fromSymbol(JSSymbol.SPECIES),
+                new JSNativeFunction("get [Symbol.species]", 0, ArrayConstructor::getSpecies));
 
         global.set("Array", arrayConstructor);
     }
@@ -442,16 +446,16 @@ public final class GlobalObject {
      */
     private static void initializeAtomicsObject(JSContext ctx, JSObject global) {
         JSObject atomics = new JSObject();
-        atomics.set("add", createNativeFunction(ctx, "add", AtomicsObject::add, 3));
-        atomics.set("sub", createNativeFunction(ctx, "sub", AtomicsObject::sub, 3));
-        atomics.set("and", createNativeFunction(ctx, "and", AtomicsObject::and, 3));
-        atomics.set("or", createNativeFunction(ctx, "or", AtomicsObject::or, 3));
-        atomics.set("xor", createNativeFunction(ctx, "xor", AtomicsObject::xor, 3));
-        atomics.set("load", createNativeFunction(ctx, "load", AtomicsObject::load, 2));
-        atomics.set("store", createNativeFunction(ctx, "store", AtomicsObject::store, 3));
-        atomics.set("compareExchange", createNativeFunction(ctx, "compareExchange", AtomicsObject::compareExchange, 4));
-        atomics.set("exchange", createNativeFunction(ctx, "exchange", AtomicsObject::exchange, 3));
-        atomics.set("isLockFree", createNativeFunction(ctx, "isLockFree", AtomicsObject::isLockFree, 1));
+        atomics.set("add", new JSNativeFunction("add", 3, AtomicsObject::add));
+        atomics.set("sub", new JSNativeFunction("sub", 3, AtomicsObject::sub));
+        atomics.set("and", new JSNativeFunction("and", 3, AtomicsObject::and));
+        atomics.set("or", new JSNativeFunction("or", 3, AtomicsObject::or));
+        atomics.set("xor", new JSNativeFunction("xor", 3, AtomicsObject::xor));
+        atomics.set("load", new JSNativeFunction("load", 2, AtomicsObject::load));
+        atomics.set("store", new JSNativeFunction("store", 3, AtomicsObject::store));
+        atomics.set("compareExchange", new JSNativeFunction("compareExchange", 4, AtomicsObject::compareExchange));
+        atomics.set("exchange", new JSNativeFunction("exchange", 3, AtomicsObject::exchange));
+        atomics.set("isLockFree", new JSNativeFunction("isLockFree", 1, AtomicsObject::isLockFree));
 
         global.set("Atomics", atomics);
     }
@@ -462,9 +466,9 @@ public final class GlobalObject {
     private static void initializeBigIntConstructor(JSContext ctx, JSObject global) {
         // Create BigInt.prototype
         JSObject bigIntPrototype = new JSObject();
-        bigIntPrototype.set("toString", createNativeFunction(ctx, "toString", BigIntPrototype::toString, 1));
-        bigIntPrototype.set("valueOf", createNativeFunction(ctx, "valueOf", BigIntPrototype::valueOf, 0));
-        bigIntPrototype.set("toLocaleString", createNativeFunction(ctx, "toLocaleString", BigIntPrototype::toLocaleString, 0));
+        bigIntPrototype.set("toString", new JSNativeFunction("toString", 1, BigIntPrototype::toString));
+        bigIntPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, BigIntPrototype::valueOf));
+        bigIntPrototype.set("toLocaleString", new JSNativeFunction("toLocaleString", 0, BigIntPrototype::toLocaleString));
 
         // Create BigInt constructor
         JSObject bigIntConstructor = new JSObject();
@@ -472,8 +476,8 @@ public final class GlobalObject {
         bigIntConstructor.set("[[BigIntConstructor]]", JSBoolean.TRUE); // Mark as BigInt constructor
 
         // BigInt static methods
-        bigIntConstructor.set("asIntN", createNativeFunction(ctx, "asIntN", BigIntConstructor::asIntN, 2));
-        bigIntConstructor.set("asUintN", createNativeFunction(ctx, "asUintN", BigIntConstructor::asUintN, 2));
+        bigIntConstructor.set("asIntN", new JSNativeFunction("asIntN", 2, BigIntConstructor::asIntN));
+        bigIntConstructor.set("asUintN", new JSNativeFunction("asUintN", 2, BigIntConstructor::asUintN));
 
         global.set("BigInt", bigIntConstructor);
     }
@@ -484,8 +488,8 @@ public final class GlobalObject {
     private static void initializeBooleanConstructor(JSContext ctx, JSObject global) {
         // Create Boolean.prototype
         JSObject booleanPrototype = new JSObject();
-        booleanPrototype.set("toString", createNativeFunction(ctx, "toString", BooleanPrototype::toString, 0));
-        booleanPrototype.set("valueOf", createNativeFunction(ctx, "valueOf", BooleanPrototype::valueOf, 0));
+        booleanPrototype.set("toString", new JSNativeFunction("toString", 0, BooleanPrototype::toString));
+        booleanPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, BooleanPrototype::valueOf));
 
         // Create Boolean constructor (placeholder)
         JSObject booleanConstructor = new JSObject();
@@ -499,10 +503,10 @@ public final class GlobalObject {
      */
     private static void initializeConsoleObject(JSContext ctx, JSObject global) {
         JSObject console = new JSObject();
-        console.set("log", createNativeFunction(ctx, "log", GlobalObject::consoleLog, 0));
-        console.set("info", createNativeFunction(ctx, "info", GlobalObject::consoleLog, 0));
-        console.set("warn", createNativeFunction(ctx, "warn", GlobalObject::consoleWarn, 0));
-        console.set("error", createNativeFunction(ctx, "error", GlobalObject::consoleError, 0));
+        console.set("log", new JSNativeFunction("log", 0, GlobalObject::consoleLog));
+        console.set("info", new JSNativeFunction("info", 0, GlobalObject::consoleLog));
+        console.set("warn", new JSNativeFunction("warn", 0, GlobalObject::consoleWarn));
+        console.set("error", new JSNativeFunction("error", 0, GlobalObject::consoleError));
 
         global.set("console", console);
     }
@@ -515,31 +519,31 @@ public final class GlobalObject {
         JSObject dataViewPrototype = new JSObject();
 
         // Getters (simplified as regular properties)
-        dataViewPrototype.set("buffer", createNativeFunction(ctx, "get buffer", DataViewPrototype::getBuffer, 0));
-        dataViewPrototype.set("byteLength", createNativeFunction(ctx, "get byteLength", DataViewPrototype::getByteLength, 0));
-        dataViewPrototype.set("byteOffset", createNativeFunction(ctx, "get byteOffset", DataViewPrototype::getByteOffset, 0));
+        dataViewPrototype.set("buffer", new JSNativeFunction("get buffer", 0, DataViewPrototype::getBuffer));
+        dataViewPrototype.set("byteLength", new JSNativeFunction("get byteLength", 0, DataViewPrototype::getByteLength));
+        dataViewPrototype.set("byteOffset", new JSNativeFunction("get byteOffset", 0, DataViewPrototype::getByteOffset));
 
         // Int8/Uint8 methods
-        dataViewPrototype.set("getInt8", createNativeFunction(ctx, "getInt8", DataViewPrototype::getInt8, 1));
-        dataViewPrototype.set("setInt8", createNativeFunction(ctx, "setInt8", DataViewPrototype::setInt8, 2));
-        dataViewPrototype.set("getUint8", createNativeFunction(ctx, "getUint8", DataViewPrototype::getUint8, 1));
-        dataViewPrototype.set("setUint8", createNativeFunction(ctx, "setUint8", DataViewPrototype::setUint8, 2));
+        dataViewPrototype.set("getInt8", new JSNativeFunction("getInt8", 1, DataViewPrototype::getInt8));
+        dataViewPrototype.set("setInt8", new JSNativeFunction("setInt8", 2, DataViewPrototype::setInt8));
+        dataViewPrototype.set("getUint8", new JSNativeFunction("getUint8", 1, DataViewPrototype::getUint8));
+        dataViewPrototype.set("setUint8", new JSNativeFunction("setUint8", 2, DataViewPrototype::setUint8));
 
         // Int16 methods
-        dataViewPrototype.set("getInt16", createNativeFunction(ctx, "getInt16", DataViewPrototype::getInt16, 2));
-        dataViewPrototype.set("setInt16", createNativeFunction(ctx, "setInt16", DataViewPrototype::setInt16, 3));
+        dataViewPrototype.set("getInt16", new JSNativeFunction("getInt16", 2, DataViewPrototype::getInt16));
+        dataViewPrototype.set("setInt16", new JSNativeFunction("setInt16", 3, DataViewPrototype::setInt16));
 
         // Int32 methods
-        dataViewPrototype.set("getInt32", createNativeFunction(ctx, "getInt32", DataViewPrototype::getInt32, 2));
-        dataViewPrototype.set("setInt32", createNativeFunction(ctx, "setInt32", DataViewPrototype::setInt32, 3));
+        dataViewPrototype.set("getInt32", new JSNativeFunction("getInt32", 2, DataViewPrototype::getInt32));
+        dataViewPrototype.set("setInt32", new JSNativeFunction("setInt32", 3, DataViewPrototype::setInt32));
 
         // Float32 methods
-        dataViewPrototype.set("getFloat32", createNativeFunction(ctx, "getFloat32", DataViewPrototype::getFloat32, 2));
-        dataViewPrototype.set("setFloat32", createNativeFunction(ctx, "setFloat32", DataViewPrototype::setFloat32, 3));
+        dataViewPrototype.set("getFloat32", new JSNativeFunction("getFloat32", 2, DataViewPrototype::getFloat32));
+        dataViewPrototype.set("setFloat32", new JSNativeFunction("setFloat32", 3, DataViewPrototype::setFloat32));
 
         // Float64 methods
-        dataViewPrototype.set("getFloat64", createNativeFunction(ctx, "getFloat64", DataViewPrototype::getFloat64, 2));
-        dataViewPrototype.set("setFloat64", createNativeFunction(ctx, "setFloat64", DataViewPrototype::setFloat64, 3));
+        dataViewPrototype.set("getFloat64", new JSNativeFunction("getFloat64", 2, DataViewPrototype::getFloat64));
+        dataViewPrototype.set("setFloat64", new JSNativeFunction("setFloat64", 3, DataViewPrototype::setFloat64));
 
         // Create DataView constructor
         JSObject dataViewConstructor = new JSObject();
@@ -555,23 +559,23 @@ public final class GlobalObject {
     private static void initializeDateConstructor(JSContext ctx, JSObject global) {
         // Create Date.prototype
         JSObject datePrototype = new JSObject();
-        datePrototype.set("getTime", createNativeFunction(ctx, "getTime", DatePrototype::getTime, 0));
-        datePrototype.set("getFullYear", createNativeFunction(ctx, "getFullYear", DatePrototype::getFullYear, 0));
-        datePrototype.set("getMonth", createNativeFunction(ctx, "getMonth", DatePrototype::getMonth, 0));
-        datePrototype.set("getDate", createNativeFunction(ctx, "getDate", DatePrototype::getDate, 0));
-        datePrototype.set("getDay", createNativeFunction(ctx, "getDay", DatePrototype::getDay, 0));
-        datePrototype.set("getHours", createNativeFunction(ctx, "getHours", DatePrototype::getHours, 0));
-        datePrototype.set("getMinutes", createNativeFunction(ctx, "getMinutes", DatePrototype::getMinutes, 0));
-        datePrototype.set("getSeconds", createNativeFunction(ctx, "getSeconds", DatePrototype::getSeconds, 0));
-        datePrototype.set("getMilliseconds", createNativeFunction(ctx, "getMilliseconds", DatePrototype::getMilliseconds, 0));
-        datePrototype.set("getUTCFullYear", createNativeFunction(ctx, "getUTCFullYear", DatePrototype::getUTCFullYear, 0));
-        datePrototype.set("getUTCMonth", createNativeFunction(ctx, "getUTCMonth", DatePrototype::getUTCMonth, 0));
-        datePrototype.set("getUTCDate", createNativeFunction(ctx, "getUTCDate", DatePrototype::getUTCDate, 0));
-        datePrototype.set("getUTCHours", createNativeFunction(ctx, "getUTCHours", DatePrototype::getUTCHours, 0));
-        datePrototype.set("toISOString", createNativeFunction(ctx, "toISOString", DatePrototype::toISOString, 0));
-        datePrototype.set("toJSON", createNativeFunction(ctx, "toJSON", DatePrototype::toJSON, 0));
-        datePrototype.set("toString", createNativeFunction(ctx, "toString", DatePrototype::toStringMethod, 0));
-        datePrototype.set("valueOf", createNativeFunction(ctx, "valueOf", DatePrototype::valueOf, 0));
+        datePrototype.set("getTime", new JSNativeFunction("getTime", 0, DatePrototype::getTime));
+        datePrototype.set("getFullYear", new JSNativeFunction("getFullYear", 0, DatePrototype::getFullYear));
+        datePrototype.set("getMonth", new JSNativeFunction("getMonth", 0, DatePrototype::getMonth));
+        datePrototype.set("getDate", new JSNativeFunction("getDate", 0, DatePrototype::getDate));
+        datePrototype.set("getDay", new JSNativeFunction("getDay", 0, DatePrototype::getDay));
+        datePrototype.set("getHours", new JSNativeFunction("getHours", 0, DatePrototype::getHours));
+        datePrototype.set("getMinutes", new JSNativeFunction("getMinutes", 0, DatePrototype::getMinutes));
+        datePrototype.set("getSeconds", new JSNativeFunction("getSeconds", 0, DatePrototype::getSeconds));
+        datePrototype.set("getMilliseconds", new JSNativeFunction("getMilliseconds", 0, DatePrototype::getMilliseconds));
+        datePrototype.set("getUTCFullYear", new JSNativeFunction("getUTCFullYear", 0, DatePrototype::getUTCFullYear));
+        datePrototype.set("getUTCMonth", new JSNativeFunction("getUTCMonth", 0, DatePrototype::getUTCMonth));
+        datePrototype.set("getUTCDate", new JSNativeFunction("getUTCDate", 0, DatePrototype::getUTCDate));
+        datePrototype.set("getUTCHours", new JSNativeFunction("getUTCHours", 0, DatePrototype::getUTCHours));
+        datePrototype.set("toISOString", new JSNativeFunction("toISOString", 0, DatePrototype::toISOString));
+        datePrototype.set("toJSON", new JSNativeFunction("toJSON", 0, DatePrototype::toJSON));
+        datePrototype.set("toString", new JSNativeFunction("toString", 0, DatePrototype::toStringMethod));
+        datePrototype.set("valueOf", new JSNativeFunction("valueOf", 0, DatePrototype::valueOf));
 
         // Create Date constructor with static methods
         JSObject dateConstructor = new JSObject();
@@ -579,9 +583,9 @@ public final class GlobalObject {
         dateConstructor.set("[[DateConstructor]]", JSBoolean.TRUE); // Mark as Date constructor
 
         // Date static methods
-        dateConstructor.set("now", createNativeFunction(ctx, "now", DateConstructor::now, 0));
-        dateConstructor.set("parse", createNativeFunction(ctx, "parse", DateConstructor::parse, 1));
-        dateConstructor.set("UTC", createNativeFunction(ctx, "UTC", DateConstructor::UTC, 7));
+        dateConstructor.set("now", new JSNativeFunction("now", 0, DateConstructor::now));
+        dateConstructor.set("parse", new JSNativeFunction("parse", 1, DateConstructor::parse));
+        dateConstructor.set("UTC", new JSNativeFunction("UTC", 7, DateConstructor::UTC));
 
         global.set("Date", dateConstructor);
     }
@@ -624,10 +628,10 @@ public final class GlobalObject {
     private static void initializeFunctionConstructor(JSContext ctx, JSObject global) {
         // Create Function.prototype
         JSObject functionPrototype = new JSObject();
-        functionPrototype.set("call", createNativeFunction(ctx, "call", FunctionPrototype::call, 1));
-        functionPrototype.set("apply", createNativeFunction(ctx, "apply", FunctionPrototype::apply, 2));
-        functionPrototype.set("bind", createNativeFunction(ctx, "bind", FunctionPrototype::bind, 1));
-        functionPrototype.set("toString", createNativeFunction(ctx, "toString", FunctionPrototype::toStringMethod, 0));
+        functionPrototype.set("call", new JSNativeFunction("call", 1, FunctionPrototype::call));
+        functionPrototype.set("apply", new JSNativeFunction("apply", 2, FunctionPrototype::apply));
+        functionPrototype.set("bind", new JSNativeFunction("bind", 1, FunctionPrototype::bind));
+        functionPrototype.set("toString", new JSNativeFunction("toString", 0, FunctionPrototype::toStringMethod));
 
         // Function constructor is a placeholder
         JSObject functionConstructor = new JSObject();
@@ -644,12 +648,12 @@ public final class GlobalObject {
     private static void initializeGeneratorPrototype(JSContext ctx, JSObject global) {
         // Create Generator.prototype
         JSObject generatorPrototype = new JSObject();
-        generatorPrototype.set("next", createNativeFunction(ctx, "next", GeneratorPrototype::next, 1));
-        generatorPrototype.set("return", createNativeFunction(ctx, "return", GeneratorPrototype::returnMethod, 1));
-        generatorPrototype.set("throw", createNativeFunction(ctx, "throw", GeneratorPrototype::throwMethod, 1));
+        generatorPrototype.set("next", new JSNativeFunction("next", 1, GeneratorPrototype::next));
+        generatorPrototype.set("return", new JSNativeFunction("return", 1, GeneratorPrototype::returnMethod));
+        generatorPrototype.set("throw", new JSNativeFunction("throw", 1, GeneratorPrototype::throwMethod));
         // Generator.prototype[Symbol.iterator] returns this
         generatorPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
-                createNativeFunction(ctx, "[Symbol.iterator]", (context, thisArg, args) -> thisArg, 0));
+                new JSNativeFunction("[Symbol.iterator]", 0, (context, thisArg, args) -> thisArg));
 
         // Create GeneratorFunction constructor (placeholder)
         JSObject generatorFunction = new JSObject();
@@ -664,8 +668,8 @@ public final class GlobalObject {
      */
     private static void initializeJSONObject(JSContext ctx, JSObject global) {
         JSObject json = new JSObject();
-        json.set("parse", createNativeFunction(ctx, "parse", JSONObject::parse, 1));
-        json.set("stringify", createNativeFunction(ctx, "stringify", JSONObject::stringify, 1));
+        json.set("parse", new JSNativeFunction("parse", 1, JSONObject::parse));
+        json.set("stringify", new JSNativeFunction("stringify", 1, JSONObject::stringify));
 
         global.set("JSON", json);
     }
@@ -676,17 +680,17 @@ public final class GlobalObject {
     private static void initializeMapConstructor(JSContext ctx, JSObject global) {
         // Create Map.prototype
         JSObject mapPrototype = new JSObject();
-        mapPrototype.set("set", createNativeFunction(ctx, "set", MapPrototype::set, 2));
-        mapPrototype.set("get", createNativeFunction(ctx, "get", MapPrototype::get, 1));
-        mapPrototype.set("has", createNativeFunction(ctx, "has", MapPrototype::has, 1));
-        mapPrototype.set("delete", createNativeFunction(ctx, "delete", MapPrototype::delete, 1));
-        mapPrototype.set("clear", createNativeFunction(ctx, "clear", MapPrototype::clear, 0));
-        mapPrototype.set("forEach", createNativeFunction(ctx, "forEach", MapPrototype::forEach, 1));
-        mapPrototype.set("entries", createNativeFunction(ctx, "entries", IteratorPrototype::mapEntriesIterator, 0));
-        mapPrototype.set("keys", createNativeFunction(ctx, "keys", IteratorPrototype::mapKeysIterator, 0));
-        mapPrototype.set("values", createNativeFunction(ctx, "values", IteratorPrototype::mapValuesIterator, 0));
+        mapPrototype.set("set", new JSNativeFunction("set", 2, MapPrototype::set));
+        mapPrototype.set("get", new JSNativeFunction("get", 1, MapPrototype::get));
+        mapPrototype.set("has", new JSNativeFunction("has", 1, MapPrototype::has));
+        mapPrototype.set("delete", new JSNativeFunction("delete", 1, MapPrototype::delete));
+        mapPrototype.set("clear", new JSNativeFunction("clear", 0, MapPrototype::clear));
+        mapPrototype.set("forEach", new JSNativeFunction("forEach", 1, MapPrototype::forEach));
+        mapPrototype.set("entries", new JSNativeFunction("entries", 0, IteratorPrototype::mapEntriesIterator));
+        mapPrototype.set("keys", new JSNativeFunction("keys", 0, IteratorPrototype::mapKeysIterator));
+        mapPrototype.set("values", new JSNativeFunction("values", 0, IteratorPrototype::mapValuesIterator));
         // Map.prototype[Symbol.iterator] is the same as entries()
-        mapPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), createNativeFunction(ctx, "[Symbol.iterator]", IteratorPrototype::mapEntriesIterator, 0));
+        mapPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), new JSNativeFunction("[Symbol.iterator]", 0, IteratorPrototype::mapEntriesIterator));
 
         // Create Map constructor
         JSObject mapConstructor = new JSObject();
@@ -694,7 +698,7 @@ public final class GlobalObject {
         mapConstructor.set("[[MapConstructor]]", JSBoolean.TRUE); // Mark as Map constructor
 
         // Map static methods
-        mapConstructor.set("groupBy", createNativeFunction(ctx, "groupBy", MapConstructor::groupBy, 2));
+        mapConstructor.set("groupBy", new JSNativeFunction("groupBy", 2, MapConstructor::groupBy));
 
         global.set("Map", mapConstructor);
     }
@@ -718,41 +722,41 @@ public final class GlobalObject {
         math.set("SQRT2", new JSNumber(MathObject.SQRT2));
 
         // Math methods
-        math.set("abs", createNativeFunction(ctx, "abs", MathObject::abs, 1));
-        math.set("acos", createNativeFunction(ctx, "acos", MathObject::acos, 1));
-        math.set("acosh", createNativeFunction(ctx, "acosh", MathObject::acosh, 1));
-        math.set("asin", createNativeFunction(ctx, "asin", MathObject::asin, 1));
-        math.set("asinh", createNativeFunction(ctx, "asinh", MathObject::asinh, 1));
-        math.set("atan", createNativeFunction(ctx, "atan", MathObject::atan, 1));
-        math.set("atanh", createNativeFunction(ctx, "atanh", MathObject::atanh, 1));
-        math.set("atan2", createNativeFunction(ctx, "atan2", MathObject::atan2, 2));
-        math.set("cbrt", createNativeFunction(ctx, "cbrt", MathObject::cbrt, 1));
-        math.set("ceil", createNativeFunction(ctx, "ceil", MathObject::ceil, 1));
-        math.set("clz32", createNativeFunction(ctx, "clz32", MathObject::clz32, 1));
-        math.set("cos", createNativeFunction(ctx, "cos", MathObject::cos, 1));
-        math.set("cosh", createNativeFunction(ctx, "cosh", MathObject::cosh, 1));
-        math.set("exp", createNativeFunction(ctx, "exp", MathObject::exp, 1));
-        math.set("expm1", createNativeFunction(ctx, "expm1", MathObject::expm1, 1));
-        math.set("floor", createNativeFunction(ctx, "floor", MathObject::floor, 1));
-        math.set("fround", createNativeFunction(ctx, "fround", MathObject::fround, 1));
-        math.set("hypot", createNativeFunction(ctx, "hypot", MathObject::hypot, 0));
-        math.set("imul", createNativeFunction(ctx, "imul", MathObject::imul, 2));
-        math.set("log", createNativeFunction(ctx, "log", MathObject::log, 1));
-        math.set("log1p", createNativeFunction(ctx, "log1p", MathObject::log1p, 1));
-        math.set("log10", createNativeFunction(ctx, "log10", MathObject::log10, 1));
-        math.set("log2", createNativeFunction(ctx, "log2", MathObject::log2, 1));
-        math.set("max", createNativeFunction(ctx, "max", MathObject::max, 2));
-        math.set("min", createNativeFunction(ctx, "min", MathObject::min, 2));
-        math.set("pow", createNativeFunction(ctx, "pow", MathObject::pow, 2));
-        math.set("random", createNativeFunction(ctx, "random", MathObject::random, 0));
-        math.set("round", createNativeFunction(ctx, "round", MathObject::round, 1));
-        math.set("sign", createNativeFunction(ctx, "sign", MathObject::sign, 1));
-        math.set("sin", createNativeFunction(ctx, "sin", MathObject::sin, 1));
-        math.set("sinh", createNativeFunction(ctx, "sinh", MathObject::sinh, 1));
-        math.set("sqrt", createNativeFunction(ctx, "sqrt", MathObject::sqrt, 1));
-        math.set("tan", createNativeFunction(ctx, "tan", MathObject::tan, 1));
-        math.set("tanh", createNativeFunction(ctx, "tanh", MathObject::tanh, 1));
-        math.set("trunc", createNativeFunction(ctx, "trunc", MathObject::trunc, 1));
+        math.set("abs", new JSNativeFunction("abs", 1, MathObject::abs));
+        math.set("acos", new JSNativeFunction("acos", 1, MathObject::acos));
+        math.set("acosh", new JSNativeFunction("acosh", 1, MathObject::acosh));
+        math.set("asin", new JSNativeFunction("asin", 1, MathObject::asin));
+        math.set("asinh", new JSNativeFunction("asinh", 1, MathObject::asinh));
+        math.set("atan", new JSNativeFunction("atan", 1, MathObject::atan));
+        math.set("atanh", new JSNativeFunction("atanh", 1, MathObject::atanh));
+        math.set("atan2", new JSNativeFunction("atan2", 2, MathObject::atan2));
+        math.set("cbrt", new JSNativeFunction("cbrt", 1, MathObject::cbrt));
+        math.set("ceil", new JSNativeFunction("ceil", 1, MathObject::ceil));
+        math.set("clz32", new JSNativeFunction("clz32", 1, MathObject::clz32));
+        math.set("cos", new JSNativeFunction("cos", 1, MathObject::cos));
+        math.set("cosh", new JSNativeFunction("cosh", 1, MathObject::cosh));
+        math.set("exp", new JSNativeFunction("exp", 1, MathObject::exp));
+        math.set("expm1", new JSNativeFunction("expm1", 1, MathObject::expm1));
+        math.set("floor", new JSNativeFunction("floor", 1, MathObject::floor));
+        math.set("fround", new JSNativeFunction("fround", 1, MathObject::fround));
+        math.set("hypot", new JSNativeFunction("hypot", 0, MathObject::hypot));
+        math.set("imul", new JSNativeFunction("imul", 2, MathObject::imul));
+        math.set("log", new JSNativeFunction("log", 1, MathObject::log));
+        math.set("log1p", new JSNativeFunction("log1p", 1, MathObject::log1p));
+        math.set("log10", new JSNativeFunction("log10", 1, MathObject::log10));
+        math.set("log2", new JSNativeFunction("log2", 1, MathObject::log2));
+        math.set("max", new JSNativeFunction("max", 2, MathObject::max));
+        math.set("min", new JSNativeFunction("min", 2, MathObject::min));
+        math.set("pow", new JSNativeFunction("pow", 2, MathObject::pow));
+        math.set("random", new JSNativeFunction("random", 0, MathObject::random));
+        math.set("round", new JSNativeFunction("round", 1, MathObject::round));
+        math.set("sign", new JSNativeFunction("sign", 1, MathObject::sign));
+        math.set("sin", new JSNativeFunction("sin", 1, MathObject::sin));
+        math.set("sinh", new JSNativeFunction("sinh", 1, MathObject::sinh));
+        math.set("sqrt", new JSNativeFunction("sqrt", 1, MathObject::sqrt));
+        math.set("tan", new JSNativeFunction("tan", 1, MathObject::tan));
+        math.set("tanh", new JSNativeFunction("tanh", 1, MathObject::tanh));
+        math.set("trunc", new JSNativeFunction("trunc", 1, MathObject::trunc));
 
         global.set("Math", math);
     }
@@ -763,22 +767,22 @@ public final class GlobalObject {
     private static void initializeNumberConstructor(JSContext ctx, JSObject global) {
         // Create Number.prototype
         JSObject numberPrototype = new JSObject();
-        numberPrototype.set("toFixed", createNativeFunction(ctx, "toFixed", NumberPrototype::toFixed, 1));
-        numberPrototype.set("toExponential", createNativeFunction(ctx, "toExponential", NumberPrototype::toExponential, 1));
-        numberPrototype.set("toPrecision", createNativeFunction(ctx, "toPrecision", NumberPrototype::toPrecision, 1));
-        numberPrototype.set("toString", createNativeFunction(ctx, "toString", NumberPrototype::toString, 1));
-        numberPrototype.set("toLocaleString", createNativeFunction(ctx, "toLocaleString", NumberPrototype::toLocaleString, 0));
-        numberPrototype.set("valueOf", createNativeFunction(ctx, "valueOf", NumberPrototype::valueOf, 0));
+        numberPrototype.set("toFixed", new JSNativeFunction("toFixed", 1, NumberPrototype::toFixed));
+        numberPrototype.set("toExponential", new JSNativeFunction("toExponential", 1, NumberPrototype::toExponential));
+        numberPrototype.set("toPrecision", new JSNativeFunction("toPrecision", 1, NumberPrototype::toPrecision));
+        numberPrototype.set("toString", new JSNativeFunction("toString", 1, NumberPrototype::toString));
+        numberPrototype.set("toLocaleString", new JSNativeFunction("toLocaleString", 0, NumberPrototype::toLocaleString));
+        numberPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, NumberPrototype::valueOf));
 
         // Number constructor with static methods
         JSObject numberConstructor = new JSObject();
         numberConstructor.set("prototype", numberPrototype);
-        numberConstructor.set("isNaN", createNativeFunction(ctx, "isNaN", NumberPrototype::isNaN, 1));
-        numberConstructor.set("isFinite", createNativeFunction(ctx, "isFinite", NumberPrototype::isFinite, 1));
-        numberConstructor.set("isInteger", createNativeFunction(ctx, "isInteger", NumberPrototype::isInteger, 1));
-        numberConstructor.set("isSafeInteger", createNativeFunction(ctx, "isSafeInteger", NumberPrototype::isSafeInteger, 1));
-        numberConstructor.set("parseFloat", createNativeFunction(ctx, "parseFloat", NumberPrototype::parseFloat, 1));
-        numberConstructor.set("parseInt", createNativeFunction(ctx, "parseInt", NumberPrototype::parseInt, 2));
+        numberConstructor.set("isNaN", new JSNativeFunction("isNaN", 1, NumberPrototype::isNaN));
+        numberConstructor.set("isFinite", new JSNativeFunction("isFinite", 1, NumberPrototype::isFinite));
+        numberConstructor.set("isInteger", new JSNativeFunction("isInteger", 1, NumberPrototype::isInteger));
+        numberConstructor.set("isSafeInteger", new JSNativeFunction("isSafeInteger", 1, NumberPrototype::isSafeInteger));
+        numberConstructor.set("parseFloat", new JSNativeFunction("parseFloat", 1, NumberPrototype::parseFloat));
+        numberConstructor.set("parseInt", new JSNativeFunction("parseInt", 2, NumberPrototype::parseInt));
 
         global.set("Number", numberConstructor);
     }
@@ -789,34 +793,34 @@ public final class GlobalObject {
     private static void initializeObjectConstructor(JSContext ctx, JSObject global) {
         // Create Object.prototype
         JSObject objectPrototype = new JSObject();
-        objectPrototype.set("hasOwnProperty", createNativeFunction(ctx, "hasOwnProperty", ObjectConstructor::hasOwnProperty, 1));
-        objectPrototype.set("toString", createNativeFunction(ctx, "toString", ObjectPrototype::toString, 0));
-        objectPrototype.set("valueOf", createNativeFunction(ctx, "valueOf", ObjectPrototype::valueOf, 0));
+        objectPrototype.set("hasOwnProperty", new JSNativeFunction("hasOwnProperty", 1, ObjectConstructor::hasOwnProperty));
+        objectPrototype.set("toString", new JSNativeFunction("toString", 0, ObjectPrototype::toString));
+        objectPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, ObjectPrototype::valueOf));
 
         // Create Object constructor
         JSObject objectConstructor = new JSObject();
         objectConstructor.set("prototype", objectPrototype);
 
         // Object static methods
-        objectConstructor.set("keys", createNativeFunction(ctx, "keys", ObjectConstructor::keys, 1));
-        objectConstructor.set("values", createNativeFunction(ctx, "values", ObjectConstructor::values, 1));
-        objectConstructor.set("entries", createNativeFunction(ctx, "entries", ObjectConstructor::entries, 1));
-        objectConstructor.set("fromEntries", createNativeFunction(ctx, "fromEntries", ObjectConstructor::fromEntries, 1));
-        objectConstructor.set("assign", createNativeFunction(ctx, "assign", ObjectConstructor::assign, 2));
-        objectConstructor.set("create", createNativeFunction(ctx, "create", ObjectConstructor::create, 2));
-        objectConstructor.set("getOwnPropertyDescriptor", createNativeFunction(ctx, "getOwnPropertyDescriptor", ObjectConstructor::getOwnPropertyDescriptor, 2));
-        objectConstructor.set("getOwnPropertyDescriptors", createNativeFunction(ctx, "getOwnPropertyDescriptors", ObjectConstructor::getOwnPropertyDescriptors, 1));
-        objectConstructor.set("getOwnPropertyNames", createNativeFunction(ctx, "getOwnPropertyNames", ObjectConstructor::getOwnPropertyNames, 1));
-        objectConstructor.set("getOwnPropertySymbols", createNativeFunction(ctx, "getOwnPropertySymbols", ObjectConstructor::getOwnPropertySymbols, 1));
-        objectConstructor.set("getPrototypeOf", createNativeFunction(ctx, "getPrototypeOf", ObjectConstructor::getPrototypeOf, 1));
-        objectConstructor.set("setPrototypeOf", createNativeFunction(ctx, "setPrototypeOf", ObjectConstructor::setPrototypeOf, 2));
-        objectConstructor.set("freeze", createNativeFunction(ctx, "freeze", ObjectConstructor::freeze, 1));
-        objectConstructor.set("seal", createNativeFunction(ctx, "seal", ObjectConstructor::seal, 1));
-        objectConstructor.set("isFrozen", createNativeFunction(ctx, "isFrozen", ObjectConstructor::isFrozen, 1));
-        objectConstructor.set("is", createNativeFunction(ctx, "is", ObjectConstructor::is, 2));
-        objectConstructor.set("isSealed", createNativeFunction(ctx, "isSealed", ObjectConstructor::isSealed, 1));
-        objectConstructor.set("hasOwn", createNativeFunction(ctx, "hasOwn", ObjectConstructor::hasOwn, 2));
-        objectConstructor.set("groupBy", createNativeFunction(ctx, "groupBy", ObjectConstructor::groupBy, 2));
+        objectConstructor.set("keys", new JSNativeFunction("keys", 1, ObjectConstructor::keys));
+        objectConstructor.set("values", new JSNativeFunction("values", 1, ObjectConstructor::values));
+        objectConstructor.set("entries", new JSNativeFunction("entries", 1, ObjectConstructor::entries));
+        objectConstructor.set("fromEntries", new JSNativeFunction("fromEntries", 1, ObjectConstructor::fromEntries));
+        objectConstructor.set("assign", new JSNativeFunction("assign", 2, ObjectConstructor::assign));
+        objectConstructor.set("create", new JSNativeFunction("create", 2, ObjectConstructor::create));
+        objectConstructor.set("getOwnPropertyDescriptor", new JSNativeFunction("getOwnPropertyDescriptor", 2, ObjectConstructor::getOwnPropertyDescriptor));
+        objectConstructor.set("getOwnPropertyDescriptors", new JSNativeFunction("getOwnPropertyDescriptors", 1, ObjectConstructor::getOwnPropertyDescriptors));
+        objectConstructor.set("getOwnPropertyNames", new JSNativeFunction("getOwnPropertyNames", 1, ObjectConstructor::getOwnPropertyNames));
+        objectConstructor.set("getOwnPropertySymbols", new JSNativeFunction("getOwnPropertySymbols", 1, ObjectConstructor::getOwnPropertySymbols));
+        objectConstructor.set("getPrototypeOf", new JSNativeFunction("getPrototypeOf", 1, ObjectConstructor::getPrototypeOf));
+        objectConstructor.set("setPrototypeOf", new JSNativeFunction("setPrototypeOf", 2, ObjectConstructor::setPrototypeOf));
+        objectConstructor.set("freeze", new JSNativeFunction("freeze", 1, ObjectConstructor::freeze));
+        objectConstructor.set("seal", new JSNativeFunction("seal", 1, ObjectConstructor::seal));
+        objectConstructor.set("isFrozen", new JSNativeFunction("isFrozen", 1, ObjectConstructor::isFrozen));
+        objectConstructor.set("is", new JSNativeFunction("is", 2, ObjectConstructor::is));
+        objectConstructor.set("isSealed", new JSNativeFunction("isSealed", 1, ObjectConstructor::isSealed));
+        objectConstructor.set("hasOwn", new JSNativeFunction("hasOwn", 2, ObjectConstructor::hasOwn));
+        objectConstructor.set("groupBy", new JSNativeFunction("groupBy", 2, ObjectConstructor::groupBy));
 
         global.set("Object", objectConstructor);
     }
@@ -827,9 +831,9 @@ public final class GlobalObject {
     private static void initializePromiseConstructor(JSContext ctx, JSObject global) {
         // Create Promise.prototype
         JSObject promisePrototype = new JSObject();
-        promisePrototype.set("then", createNativeFunction(ctx, "then", PromisePrototype::then, 2));
-        promisePrototype.set("catch", createNativeFunction(ctx, "catch", PromisePrototype::catchMethod, 1));
-        promisePrototype.set("finally", createNativeFunction(ctx, "finally", PromisePrototype::finallyMethod, 1));
+        promisePrototype.set("then", new JSNativeFunction("then", 2, PromisePrototype::then));
+        promisePrototype.set("catch", new JSNativeFunction("catch", 1, PromisePrototype::catchMethod));
+        promisePrototype.set("finally", new JSNativeFunction("finally", 1, PromisePrototype::finallyMethod));
 
         // Create Promise constructor
         JSObject promiseConstructor = new JSObject();
@@ -837,13 +841,13 @@ public final class GlobalObject {
         promiseConstructor.set("[[PromiseConstructor]]", JSBoolean.TRUE); // Mark as Promise constructor
 
         // Static methods
-        promiseConstructor.set("resolve", createNativeFunction(ctx, "resolve", PromiseConstructor::resolve, 1));
-        promiseConstructor.set("reject", createNativeFunction(ctx, "reject", PromiseConstructor::reject, 1));
-        promiseConstructor.set("all", createNativeFunction(ctx, "all", PromiseConstructor::all, 1));
-        promiseConstructor.set("race", createNativeFunction(ctx, "race", PromiseConstructor::race, 1));
-        promiseConstructor.set("allSettled", createNativeFunction(ctx, "allSettled", PromiseConstructor::allSettled, 1));
-        promiseConstructor.set("any", createNativeFunction(ctx, "any", PromiseConstructor::any, 1));
-        promiseConstructor.set("withResolvers", createNativeFunction(ctx, "withResolvers", PromiseConstructor::withResolvers, 0));
+        promiseConstructor.set("resolve", new JSNativeFunction("resolve", 1, PromiseConstructor::resolve));
+        promiseConstructor.set("reject", new JSNativeFunction("reject", 1, PromiseConstructor::reject));
+        promiseConstructor.set("all", new JSNativeFunction("all", 1, PromiseConstructor::all));
+        promiseConstructor.set("race", new JSNativeFunction("race", 1, PromiseConstructor::race));
+        promiseConstructor.set("allSettled", new JSNativeFunction("allSettled", 1, PromiseConstructor::allSettled));
+        promiseConstructor.set("any", new JSNativeFunction("any", 1, PromiseConstructor::any));
+        promiseConstructor.set("withResolvers", new JSNativeFunction("withResolvers", 0, PromiseConstructor::withResolvers));
 
         global.set("Promise", promiseConstructor);
     }
@@ -857,7 +861,7 @@ public final class GlobalObject {
         proxyConstructor.set("[[ProxyConstructor]]", JSBoolean.TRUE); // Mark as Proxy constructor
 
         // Add static methods
-        proxyConstructor.set("revocable", createNativeFunction(ctx, "revocable", ProxyConstructor::revocable, 2));
+        proxyConstructor.set("revocable", new JSNativeFunction("revocable", 2, ProxyConstructor::revocable));
 
         global.set("Proxy", proxyConstructor);
     }
@@ -867,17 +871,17 @@ public final class GlobalObject {
      */
     private static void initializeReflectObject(JSContext ctx, JSObject global) {
         JSObject reflect = new JSObject();
-        reflect.set("get", createNativeFunction(ctx, "get", ReflectObject::get, 2));
-        reflect.set("set", createNativeFunction(ctx, "set", ReflectObject::set, 3));
-        reflect.set("has", createNativeFunction(ctx, "has", ReflectObject::has, 2));
-        reflect.set("deleteProperty", createNativeFunction(ctx, "deleteProperty", ReflectObject::deleteProperty, 2));
-        reflect.set("getPrototypeOf", createNativeFunction(ctx, "getPrototypeOf", ReflectObject::getPrototypeOf, 1));
-        reflect.set("setPrototypeOf", createNativeFunction(ctx, "setPrototypeOf", ReflectObject::setPrototypeOf, 2));
-        reflect.set("ownKeys", createNativeFunction(ctx, "ownKeys", ReflectObject::ownKeys, 1));
-        reflect.set("apply", createNativeFunction(ctx, "apply", ReflectObject::apply, 3));
-        reflect.set("construct", createNativeFunction(ctx, "construct", ReflectObject::construct, 2));
-        reflect.set("isExtensible", createNativeFunction(ctx, "isExtensible", ReflectObject::isExtensible, 1));
-        reflect.set("preventExtensions", createNativeFunction(ctx, "preventExtensions", ReflectObject::preventExtensions, 1));
+        reflect.set("get", new JSNativeFunction("get", 2, ReflectObject::get));
+        reflect.set("set", new JSNativeFunction("set", 3, ReflectObject::set));
+        reflect.set("has", new JSNativeFunction("has", 2, ReflectObject::has));
+        reflect.set("deleteProperty", new JSNativeFunction("deleteProperty", 2, ReflectObject::deleteProperty));
+        reflect.set("getPrototypeOf", new JSNativeFunction("getPrototypeOf", 1, ReflectObject::getPrototypeOf));
+        reflect.set("setPrototypeOf", new JSNativeFunction("setPrototypeOf", 2, ReflectObject::setPrototypeOf));
+        reflect.set("ownKeys", new JSNativeFunction("ownKeys", 1, ReflectObject::ownKeys));
+        reflect.set("apply", new JSNativeFunction("apply", 3, ReflectObject::apply));
+        reflect.set("construct", new JSNativeFunction("construct", 2, ReflectObject::construct));
+        reflect.set("isExtensible", new JSNativeFunction("isExtensible", 1, ReflectObject::isExtensible));
+        reflect.set("preventExtensions", new JSNativeFunction("preventExtensions", 1, ReflectObject::preventExtensions));
 
         global.set("Reflect", reflect);
     }
@@ -888,9 +892,9 @@ public final class GlobalObject {
     private static void initializeRegExpConstructor(JSContext ctx, JSObject global) {
         // Create RegExp.prototype
         JSObject regexpPrototype = new JSObject();
-        regexpPrototype.set("test", createNativeFunction(ctx, "test", RegExpPrototype::test, 1));
-        regexpPrototype.set("exec", createNativeFunction(ctx, "exec", RegExpPrototype::exec, 1));
-        regexpPrototype.set("toString", createNativeFunction(ctx, "toString", RegExpPrototype::toStringMethod, 0));
+        regexpPrototype.set("test", new JSNativeFunction("test", 1, RegExpPrototype::test));
+        regexpPrototype.set("exec", new JSNativeFunction("exec", 1, RegExpPrototype::exec));
+        regexpPrototype.set("toString", new JSNativeFunction("toString", 0, RegExpPrototype::toStringMethod));
 
         // Create RegExp constructor
         JSObject regexpConstructor = new JSObject();
@@ -906,16 +910,16 @@ public final class GlobalObject {
     private static void initializeSetConstructor(JSContext ctx, JSObject global) {
         // Create Set.prototype
         JSObject setPrototype = new JSObject();
-        setPrototype.set("add", createNativeFunction(ctx, "add", SetPrototype::add, 1));
-        setPrototype.set("has", createNativeFunction(ctx, "has", SetPrototype::has, 1));
-        setPrototype.set("delete", createNativeFunction(ctx, "delete", SetPrototype::delete, 1));
-        setPrototype.set("clear", createNativeFunction(ctx, "clear", SetPrototype::clear, 0));
-        setPrototype.set("forEach", createNativeFunction(ctx, "forEach", SetPrototype::forEach, 1));
-        setPrototype.set("entries", createNativeFunction(ctx, "entries", IteratorPrototype::setEntriesIterator, 0));
-        setPrototype.set("keys", createNativeFunction(ctx, "keys", IteratorPrototype::setKeysIterator, 0));
-        setPrototype.set("values", createNativeFunction(ctx, "values", IteratorPrototype::setValuesIterator, 0));
+        setPrototype.set("add", new JSNativeFunction("add", 1, SetPrototype::add));
+        setPrototype.set("has", new JSNativeFunction("has", 1, SetPrototype::has));
+        setPrototype.set("delete", new JSNativeFunction("delete", 1, SetPrototype::delete));
+        setPrototype.set("clear", new JSNativeFunction("clear", 0, SetPrototype::clear));
+        setPrototype.set("forEach", new JSNativeFunction("forEach", 1, SetPrototype::forEach));
+        setPrototype.set("entries", new JSNativeFunction("entries", 0, IteratorPrototype::setEntriesIterator));
+        setPrototype.set("keys", new JSNativeFunction("keys", 0, IteratorPrototype::setKeysIterator));
+        setPrototype.set("values", new JSNativeFunction("values", 0, IteratorPrototype::setValuesIterator));
         // Set.prototype[Symbol.iterator] is the same as values()
-        setPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), createNativeFunction(ctx, "[Symbol.iterator]", IteratorPrototype::setValuesIterator, 0));
+        setPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), new JSNativeFunction("[Symbol.iterator]", 0, IteratorPrototype::setValuesIterator));
 
         // Create Set constructor
         JSObject setConstructor = new JSObject();
@@ -931,9 +935,9 @@ public final class GlobalObject {
     private static void initializeSharedArrayBufferConstructor(JSContext ctx, JSObject global) {
         // Create SharedArrayBuffer.prototype
         JSObject sharedArrayBufferPrototype = new JSObject();
-        sharedArrayBufferPrototype.set("slice", createNativeFunction(ctx, "slice", SharedArrayBufferPrototype::slice, 2));
+        sharedArrayBufferPrototype.set("slice", new JSNativeFunction("slice", 2, SharedArrayBufferPrototype::slice));
         // byteLength getter
-        JSNativeFunction byteLengthGetter = createNativeFunction(ctx, "get byteLength", SharedArrayBufferPrototype::getByteLength, 0);
+        JSNativeFunction byteLengthGetter = new JSNativeFunction("get byteLength", 0, SharedArrayBufferPrototype::getByteLength);
         sharedArrayBufferPrototype.set("byteLength", byteLengthGetter); // Simplified: should be a getter
 
         // Create SharedArrayBuffer constructor
@@ -950,36 +954,36 @@ public final class GlobalObject {
     private static void initializeStringConstructor(JSContext ctx, JSObject global) {
         // Create String.prototype
         JSObject stringPrototype = new JSObject();
-        stringPrototype.set("charAt", createNativeFunction(ctx, "charAt", StringPrototype::charAt, 1));
-        stringPrototype.set("charCodeAt", createNativeFunction(ctx, "charCodeAt", StringPrototype::charCodeAt, 1));
-        stringPrototype.set("at", createNativeFunction(ctx, "at", StringPrototype::at, 1));
-        stringPrototype.set("codePointAt", createNativeFunction(ctx, "codePointAt", StringPrototype::codePointAt, 1));
-        stringPrototype.set("concat", createNativeFunction(ctx, "concat", StringPrototype::concat, 1));
-        stringPrototype.set("endsWith", createNativeFunction(ctx, "endsWith", StringPrototype::endsWith, 1));
-        stringPrototype.set("startsWith", createNativeFunction(ctx, "startsWith", StringPrototype::startsWith, 1));
-        stringPrototype.set("includes", createNativeFunction(ctx, "includes", StringPrototype::includes, 1));
-        stringPrototype.set("indexOf", createNativeFunction(ctx, "indexOf", StringPrototype::indexOf, 1));
-        stringPrototype.set("lastIndexOf", createNativeFunction(ctx, "lastIndexOf", StringPrototype::lastIndexOf, 1));
-        stringPrototype.set("padEnd", createNativeFunction(ctx, "padEnd", StringPrototype::padEnd, 1));
-        stringPrototype.set("padStart", createNativeFunction(ctx, "padStart", StringPrototype::padStart, 1));
-        stringPrototype.set("repeat", createNativeFunction(ctx, "repeat", StringPrototype::repeat, 1));
-        stringPrototype.set("replace", createNativeFunction(ctx, "replace", StringPrototype::replace, 2));
-        stringPrototype.set("replaceAll", createNativeFunction(ctx, "replaceAll", StringPrototype::replaceAll, 2));
-        stringPrototype.set("match", createNativeFunction(ctx, "match", StringPrototype::match, 1));
-        stringPrototype.set("matchAll", createNativeFunction(ctx, "matchAll", StringPrototype::matchAll, 1));
-        stringPrototype.set("slice", createNativeFunction(ctx, "slice", StringPrototype::slice, 2));
-        stringPrototype.set("split", createNativeFunction(ctx, "split", StringPrototype::split, 2));
-        stringPrototype.set("substring", createNativeFunction(ctx, "substring", StringPrototype::substring, 2));
-        stringPrototype.set("substr", createNativeFunction(ctx, "substr", StringPrototype::substr, 2));
-        stringPrototype.set("toLowerCase", createNativeFunction(ctx, "toLowerCase", StringPrototype::toLowerCase, 0));
-        stringPrototype.set("toUpperCase", createNativeFunction(ctx, "toUpperCase", StringPrototype::toUpperCase, 0));
-        stringPrototype.set("trim", createNativeFunction(ctx, "trim", StringPrototype::trim, 0));
-        stringPrototype.set("trimStart", createNativeFunction(ctx, "trimStart", StringPrototype::trimStart, 0));
-        stringPrototype.set("trimEnd", createNativeFunction(ctx, "trimEnd", StringPrototype::trimEnd, 0));
-        stringPrototype.set("toString", createNativeFunction(ctx, "toString", StringPrototype::toStringMethod, 0));
-        stringPrototype.set("valueOf", createNativeFunction(ctx, "valueOf", StringPrototype::valueOf, 0));
+        stringPrototype.set("charAt", new JSNativeFunction("charAt", 1, StringPrototype::charAt));
+        stringPrototype.set("charCodeAt", new JSNativeFunction("charCodeAt", 1, StringPrototype::charCodeAt));
+        stringPrototype.set("at", new JSNativeFunction("at", 1, StringPrototype::at));
+        stringPrototype.set("codePointAt", new JSNativeFunction("codePointAt", 1, StringPrototype::codePointAt));
+        stringPrototype.set("concat", new JSNativeFunction("concat", 1, StringPrototype::concat));
+        stringPrototype.set("endsWith", new JSNativeFunction("endsWith", 1, StringPrototype::endsWith));
+        stringPrototype.set("startsWith", new JSNativeFunction("startsWith", 1, StringPrototype::startsWith));
+        stringPrototype.set("includes", new JSNativeFunction("includes", 1, StringPrototype::includes));
+        stringPrototype.set("indexOf", new JSNativeFunction("indexOf", 1, StringPrototype::indexOf));
+        stringPrototype.set("lastIndexOf", new JSNativeFunction("lastIndexOf", 1, StringPrototype::lastIndexOf));
+        stringPrototype.set("padEnd", new JSNativeFunction("padEnd", 1, StringPrototype::padEnd));
+        stringPrototype.set("padStart", new JSNativeFunction("padStart", 1, StringPrototype::padStart));
+        stringPrototype.set("repeat", new JSNativeFunction("repeat", 1, StringPrototype::repeat));
+        stringPrototype.set("replace", new JSNativeFunction("replace", 2, StringPrototype::replace));
+        stringPrototype.set("replaceAll", new JSNativeFunction("replaceAll", 2, StringPrototype::replaceAll));
+        stringPrototype.set("match", new JSNativeFunction("match", 1, StringPrototype::match));
+        stringPrototype.set("matchAll", new JSNativeFunction("matchAll", 1, StringPrototype::matchAll));
+        stringPrototype.set("slice", new JSNativeFunction("slice", 2, StringPrototype::slice));
+        stringPrototype.set("split", new JSNativeFunction("split", 2, StringPrototype::split));
+        stringPrototype.set("substring", new JSNativeFunction("substring", 2, StringPrototype::substring));
+        stringPrototype.set("substr", new JSNativeFunction("substr", 2, StringPrototype::substr));
+        stringPrototype.set("toLowerCase", new JSNativeFunction("toLowerCase", 0, StringPrototype::toLowerCase));
+        stringPrototype.set("toUpperCase", new JSNativeFunction("toUpperCase", 0, StringPrototype::toUpperCase));
+        stringPrototype.set("trim", new JSNativeFunction("trim", 0, StringPrototype::trim));
+        stringPrototype.set("trimStart", new JSNativeFunction("trimStart", 0, StringPrototype::trimStart));
+        stringPrototype.set("trimEnd", new JSNativeFunction("trimEnd", 0, StringPrototype::trimEnd));
+        stringPrototype.set("toString", new JSNativeFunction("toString", 0, StringPrototype::toStringMethod));
+        stringPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, StringPrototype::valueOf));
         // String.prototype[Symbol.iterator]
-        stringPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), createNativeFunction(ctx, "[Symbol.iterator]", IteratorPrototype::stringIterator, 0));
+        stringPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), new JSNativeFunction("[Symbol.iterator]", 0, IteratorPrototype::stringIterator));
 
         // String constructor is a placeholder
         JSObject stringConstructor = new JSObject();
@@ -994,11 +998,11 @@ public final class GlobalObject {
     private static void initializeSymbolConstructor(JSContext ctx, JSObject global) {
         // Create Symbol.prototype
         JSObject symbolPrototype = new JSObject();
-        symbolPrototype.set("toString", createNativeFunction(ctx, "toString", SymbolPrototype::toString, 0));
-        symbolPrototype.set("valueOf", createNativeFunction(ctx, "valueOf", SymbolPrototype::valueOf, 0));
+        symbolPrototype.set("toString", new JSNativeFunction("toString", 0, SymbolPrototype::toString));
+        symbolPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, SymbolPrototype::valueOf));
         // Symbol.prototype.description is a getter, set as property for now
         symbolPrototype.set("description", JSUndefined.INSTANCE);
-        symbolPrototype.set("[Symbol.toPrimitive]", createNativeFunction(ctx, "[Symbol.toPrimitive]", SymbolPrototype::toPrimitive, 1));
+        symbolPrototype.set("[Symbol.toPrimitive]", new JSNativeFunction("[Symbol.toPrimitive]", 1, SymbolPrototype::toPrimitive));
         symbolPrototype.set("[Symbol.toStringTag]", new JSString("Symbol"));
 
         // Create Symbol constructor
@@ -1007,8 +1011,8 @@ public final class GlobalObject {
         symbolConstructor.set("[[SymbolConstructor]]", JSBoolean.TRUE); // Mark as Symbol constructor
 
         // Symbol static methods
-        symbolConstructor.set("for", createNativeFunction(ctx, "for", SymbolConstructor::symbolFor, 1));
-        symbolConstructor.set("keyFor", createNativeFunction(ctx, "keyFor", SymbolConstructor::keyFor, 1));
+        symbolConstructor.set("for", new JSNativeFunction("for", 1, SymbolConstructor::symbolFor));
+        symbolConstructor.set("keyFor", new JSNativeFunction("keyFor", 1, SymbolConstructor::keyFor));
 
         // Well-known symbols (ES2015+)
         symbolConstructor.set("iterator", JSSymbol.ITERATOR);
@@ -1093,10 +1097,10 @@ public final class GlobalObject {
     private static void initializeWeakMapConstructor(JSContext ctx, JSObject global) {
         // Create WeakMap.prototype
         JSObject weakMapPrototype = new JSObject();
-        weakMapPrototype.set("set", createNativeFunction(ctx, "set", WeakMapPrototype::set, 2));
-        weakMapPrototype.set("get", createNativeFunction(ctx, "get", WeakMapPrototype::get, 1));
-        weakMapPrototype.set("has", createNativeFunction(ctx, "has", WeakMapPrototype::has, 1));
-        weakMapPrototype.set("delete", createNativeFunction(ctx, "delete", WeakMapPrototype::delete, 1));
+        weakMapPrototype.set("set", new JSNativeFunction("set", 2, WeakMapPrototype::set));
+        weakMapPrototype.set("get", new JSNativeFunction("get", 1, WeakMapPrototype::get));
+        weakMapPrototype.set("has", new JSNativeFunction("has", 1, WeakMapPrototype::has));
+        weakMapPrototype.set("delete", new JSNativeFunction("delete", 1, WeakMapPrototype::delete));
 
         // Create WeakMap constructor
         JSObject weakMapConstructor = new JSObject();
@@ -1128,9 +1132,9 @@ public final class GlobalObject {
     private static void initializeWeakSetConstructor(JSContext ctx, JSObject global) {
         // Create WeakSet.prototype
         JSObject weakSetPrototype = new JSObject();
-        weakSetPrototype.set("add", createNativeFunction(ctx, "add", WeakSetPrototype::add, 1));
-        weakSetPrototype.set("has", createNativeFunction(ctx, "has", WeakSetPrototype::has, 1));
-        weakSetPrototype.set("delete", createNativeFunction(ctx, "delete", WeakSetPrototype::delete, 1));
+        weakSetPrototype.set("add", new JSNativeFunction("add", 1, WeakSetPrototype::add));
+        weakSetPrototype.set("has", new JSNativeFunction("has", 1, WeakSetPrototype::has));
+        weakSetPrototype.set("delete", new JSNativeFunction("delete", 1, WeakSetPrototype::delete));
 
         // Create WeakSet constructor
         JSObject weakSetConstructor = new JSObject();
