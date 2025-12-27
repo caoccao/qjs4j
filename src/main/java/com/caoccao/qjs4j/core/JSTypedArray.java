@@ -25,7 +25,7 @@ import java.nio.ByteBuffer;
  * TypedArrays provide an array-like view of an underlying ArrayBuffer.
  */
 public abstract class JSTypedArray extends JSObject {
-    protected final JSArrayBuffer buffer;
+    protected final JSArrayBufferable buffer;
     protected final int byteLength;
     protected final int byteOffset;
     protected final int bytesPerElement;
@@ -47,9 +47,9 @@ public abstract class JSTypedArray extends JSObject {
     }
 
     /**
-     * Create a TypedArray view on an existing ArrayBuffer.
+     * Create a TypedArray view on an existing ArrayBuffer or SharedArrayBuffer.
      */
-    protected JSTypedArray(JSArrayBuffer buffer, int byteOffset, int length, int bytesPerElement) {
+    protected JSTypedArray(JSArrayBufferable buffer, int byteOffset, int length, int bytesPerElement) {
         super();
         if (buffer == null || buffer.isDetached()) {
             throw new IllegalArgumentException("Cannot create TypedArray on detached buffer");
@@ -98,9 +98,9 @@ public abstract class JSTypedArray extends JSObject {
     }
 
     /**
-     * Get the underlying ArrayBuffer.
+     * Get the underlying ArrayBuffer or SharedArrayBuffer.
      */
-    public JSArrayBuffer getBuffer() {
+    public JSArrayBufferable getBuffer() {
         return buffer;
     }
 

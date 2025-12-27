@@ -36,7 +36,7 @@ public final class JSUint8ClampedArray extends JSTypedArray {
     /**
      * Create a Uint8ClampedArray view on an existing buffer.
      */
-    public JSUint8ClampedArray(JSArrayBuffer buffer, int byteOffset, int length) {
+    public JSUint8ClampedArray(JSArrayBufferable buffer, int byteOffset, int length) {
         super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 

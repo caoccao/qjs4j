@@ -151,34 +151,29 @@ public final class AsyncGeneratorPrototype {
      * @return An async generator that yields the values
      */
     public static JSAsyncGenerator createFromValues(JSContext ctx, JSValue[] values) {
+        // Use a holder to track the current index across calls
+        final int[] indexHolder = {0};
+
         return JSAsyncGenerator.create((inputValue) -> {
-            // Static counter to track position
-            final int[] index = {0};
+            int currentIndex = indexHolder[0]++;
 
-            return new JSAsyncGenerator.AsyncYieldFunction() {
-                private final int currentIndex = index[0]++;
+            if (currentIndex >= values.length) {
+                // All values yielded
+                JSPromise promise = new JSPromise();
+                JSObject result = new JSObject();
+                result.set("value", JSUndefined.INSTANCE);
+                result.set("done", JSBoolean.TRUE);
+                promise.fulfill(result);
+                return promise;
+            }
 
-                @Override
-                public JSPromise yieldNext(JSValue input) {
-                    if (currentIndex >= values.length) {
-                        // All values yielded
-                        JSPromise promise = new JSPromise();
-                        JSObject result = new JSObject();
-                        result.set("value", JSUndefined.INSTANCE);
-                        result.set("done", JSBoolean.TRUE);
-                        promise.fulfill(result);
-                        return promise;
-                    }
-
-                    // Yield next value
-                    JSPromise promise = new JSPromise();
-                    JSObject result = new JSObject();
-                    result.set("value", values[currentIndex]);
-                    result.set("done", JSBoolean.FALSE);
-                    promise.fulfill(result);
-                    return promise;
-                }
-            }.yieldNext(inputValue);
+            // Yield next value
+            JSPromise promise = new JSPromise();
+            JSObject result = new JSObject();
+            result.set("value", values[currentIndex]);
+            result.set("done", JSBoolean.FALSE);
+            promise.fulfill(result);
+            return promise;
         }, ctx);
     }
 

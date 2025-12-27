@@ -26,7 +26,7 @@ import java.nio.ByteOrder;
  * An ArrayBuffer is a raw binary data buffer of a fixed length.
  * It cannot be read or written directly - use TypedArrays or DataView.
  */
-public final class JSArrayBuffer extends JSObject {
+public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
     private final int maxByteLength;
     private final boolean resizable;
     private ByteBuffer buffer;

@@ -33,6 +33,134 @@ import static org.junit.jupiter.api.Assertions.*;
 public class AtomicsObjectTest extends BaseTest {
 
     @Test
+    public void testAdd() {
+        // Create SharedArrayBuffer and Int32Array
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(16); // 4 int32 values
+        JSInt32Array arr = new JSInt32Array(ab, 0, 4);
+
+        // Initialize values
+        arr.getBuffer().getBuffer().putInt(0, 10);
+        arr.getBuffer().getBuffer().putInt(4, 20);
+
+        // Test normal case: add to index 0
+        JSValue result = AtomicsObject.add(ctx, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(5)});
+        assertEquals(10.0, result.asNumber().map(JSNumber::value).orElse(0D)); // returns old value
+        assertEquals(15, arr.getBuffer().getBuffer().getInt(0)); // new value is 10 + 5
+
+        // Test add to index 1
+        result = AtomicsObject.add(ctx, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(-3)});
+        assertEquals(20.0, result.asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(17, arr.getBuffer().getBuffer().getInt(4));
+
+        // Test edge cases
+        JSValue error = AtomicsObject.add(ctx, null, new JSValue[]{arr}); // too few args
+        assertTypeError(error);
+
+        error = AtomicsObject.add(ctx, null, new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(5)}); // not typed array
+        assertTypeError(error);
+
+        error = AtomicsObject.add(ctx, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(5)}); // out of bounds
+        assertRangeError(error);
+    }
+
+    @Test
+    public void testAnd() {
+        // Create SharedArrayBuffer and Int32Array
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
+        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+
+        // Initialize values: 0b1111 (15) and 0b1010 (10)
+        arr.getBuffer().getBuffer().putInt(0, 15);
+        arr.getBuffer().getBuffer().putInt(4, 10);
+
+        // Test AND operation: 15 & 10 = 10
+        JSValue result = AtomicsObject.and(ctx, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(10)});
+        assertEquals(15.0, result.asNumber().map(JSNumber::value).orElse(0D)); // returns old value
+        assertEquals(10, arr.getBuffer().getBuffer().getInt(0)); // new value
+
+        // Test AND with 0: 10 & 0 = 0
+        result = AtomicsObject.and(ctx, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(0)});
+        assertEquals(10.0, result.asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(0, arr.getBuffer().getBuffer().getInt(4));
+    }
+
+    @Test
+    public void testCompareExchange() {
+        // Create SharedArrayBuffer and Int32Array
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
+        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+
+        arr.getBuffer().getBuffer().putInt(0, 42);
+        arr.getBuffer().getBuffer().putInt(4, 100);
+
+        // Test successful exchange: expected == current
+        JSValue result = AtomicsObject.compareExchange(ctx, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(42), new JSNumber(99)});
+        assertEquals(42.0, result.asNumber().map(JSNumber::value).orElse(0D)); // returns old value
+        assertEquals(99, arr.getBuffer().getBuffer().getInt(0)); // new value
+
+        // Test failed exchange: expected != current
+        result = AtomicsObject.compareExchange(ctx, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(50), new JSNumber(200)});
+        assertEquals(100.0, result.asNumber().map(JSNumber::value).orElse(0D)); // returns current value
+        assertEquals(100, arr.getBuffer().getBuffer().getInt(4)); // unchanged
+    }
+
+    @Test
+    public void testExchange() {
+        // Create SharedArrayBuffer and Int32Array
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
+        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+
+        arr.getBuffer().getBuffer().putInt(0, 123);
+        arr.getBuffer().getBuffer().putInt(4, 456);
+
+        // Test exchange
+        JSValue result = AtomicsObject.exchange(ctx, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(789)});
+        assertEquals(123.0, result.asNumber().map(JSNumber::value).orElse(0D)); // returns old value
+        assertEquals(789, arr.getBuffer().getBuffer().getInt(0)); // new value
+
+        result = AtomicsObject.exchange(ctx, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(0)});
+        assertEquals(456.0, result.asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(0, arr.getBuffer().getBuffer().getInt(4));
+    }
+
+    @Test
+    public void testIsLockFree() {
+        // Test various sizes
+        JSValue result = AtomicsObject.isLockFree(ctx, null, new JSValue[]{new JSNumber(1)});
+        assertTrue(result.isBoolean()); // Implementation dependent
+
+        result = AtomicsObject.isLockFree(ctx, null, new JSValue[]{new JSNumber(2)});
+        assertTrue(result.isBoolean());
+
+        result = AtomicsObject.isLockFree(ctx, null, new JSValue[]{new JSNumber(4)});
+        assertTrue(result.isBoolean());
+
+        result = AtomicsObject.isLockFree(ctx, null, new JSValue[]{new JSNumber(8)});
+        assertTrue(result.isBoolean());
+
+        // Test invalid size
+        result = AtomicsObject.isLockFree(ctx, null, new JSValue[]{new JSNumber(3)});
+        assertTrue(result.isBooleanFalse()); // Should be false for unsupported sizes
+    }
+
+    @Test
+    public void testLoad() {
+        // Create SharedArrayBuffer and Int32Array
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
+        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+
+        arr.getBuffer().getBuffer().putInt(0, 111);
+        arr.getBuffer().getBuffer().putInt(4, 222);
+
+        // Test load
+        JSValue result = AtomicsObject.load(ctx, null, new JSValue[]{arr, new JSNumber(0)});
+        assertEquals(111.0, result.asNumber().map(JSNumber::value).orElse(0D));
+
+        result = AtomicsObject.load(ctx, null, new JSValue[]{arr, new JSNumber(1)});
+        assertEquals(222.0, result.asNumber().map(JSNumber::value).orElse(0D));
+    }
+
+    @Test
     public void testNotify() {
         // Create ArrayBuffer and Int32Array
         JSArrayBuffer ab = new JSArrayBuffer(4);
@@ -153,10 +281,71 @@ public class AtomicsObjectTest extends BaseTest {
     }
 
     @Test
+    public void testOr() {
+        // Create SharedArrayBuffer and Int32Array
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
+        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+
+        // Initialize values: 0b1010 (10) and 0b1100 (12)
+        arr.getBuffer().getBuffer().putInt(0, 10);
+        arr.getBuffer().getBuffer().putInt(4, 12);
+
+        // Test OR operation: 10 | 5 = 15 (0b1010 | 0b0101 = 0b1111)
+        JSValue result = AtomicsObject.or(ctx, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(5)});
+        assertEquals(10.0, result.asNumber().map(JSNumber::value).orElse(0D)); // returns old value
+        assertEquals(15, arr.getBuffer().getBuffer().getInt(0)); // new value
+
+        // Test OR with all bits set: 12 | 3 = 15
+        result = AtomicsObject.or(ctx, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(3)});
+        assertEquals(12.0, result.asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(15, arr.getBuffer().getBuffer().getInt(4));
+    }
+
+    @Test
     public void testPause() {
         // Atomics.pause() should return undefined
         JSValue result = AtomicsObject.pause(ctx, null, new JSValue[]{});
         assertTrue(result.isUndefined());
+    }
+
+    @Test
+    public void testStore() {
+        // Create SharedArrayBuffer and Int32Array
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
+        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+
+        arr.getBuffer().getBuffer().putInt(0, 0);
+        arr.getBuffer().getBuffer().putInt(4, 0);
+
+        // Test store
+        JSValue result = AtomicsObject.store(ctx, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(999)});
+        assertEquals(999.0, result.asNumber().map(JSNumber::value).orElse(0D)); // returns stored value
+        assertEquals(999, arr.getBuffer().getBuffer().getInt(0));
+
+        result = AtomicsObject.store(ctx, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(-123)});
+        assertEquals(-123.0, result.asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(-123, arr.getBuffer().getBuffer().getInt(4));
+    }
+
+    @Test
+    public void testSub() {
+        // Create SharedArrayBuffer and Int32Array
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(16);
+        JSInt32Array arr = new JSInt32Array(ab, 0, 4);
+
+        // Initialize values
+        arr.getBuffer().getBuffer().putInt(0, 50);
+        arr.getBuffer().getBuffer().putInt(4, 25);
+
+        // Test normal case: subtract from index 0
+        JSValue result = AtomicsObject.sub(ctx, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(15)});
+        assertEquals(50.0, result.asNumber().map(JSNumber::value).orElse(0D)); // returns old value
+        assertEquals(35, arr.getBuffer().getBuffer().getInt(0)); // new value is 50 - 15
+
+        // Test subtract to index 1
+        result = AtomicsObject.sub(ctx, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(10)});
+        assertEquals(25.0, result.asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(15, arr.getBuffer().getBuffer().getInt(4));
     }
 
     @Test
@@ -285,5 +474,26 @@ public class AtomicsObjectTest extends BaseTest {
         // Test 5: Out of bounds index
         error = AtomicsObject.waitAsync(ctx, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(0)});
         assertRangeError(error);
+    }
+
+    @Test
+    public void testXor() {
+        // Create SharedArrayBuffer and Int32Array
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
+        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+
+        // Initialize values: 0b1111 (15) and 0b1010 (10)
+        arr.getBuffer().getBuffer().putInt(0, 15);
+        arr.getBuffer().getBuffer().putInt(4, 10);
+
+        // Test XOR operation: 15 ^ 10 = 5 (0b1111 ^ 0b1010 = 0b0101)
+        JSValue result = AtomicsObject.xor(ctx, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(10)});
+        assertEquals(15.0, result.asNumber().map(JSNumber::value).orElse(0D)); // returns old value
+        assertEquals(5, arr.getBuffer().getBuffer().getInt(0)); // new value
+
+        // Test XOR with same value: 10 ^ 10 = 0
+        result = AtomicsObject.xor(ctx, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(10)});
+        assertEquals(10.0, result.asNumber().map(JSNumber::value).orElse(0D));
+        assertEquals(0, arr.getBuffer().getBuffer().getInt(4));
     }
 }

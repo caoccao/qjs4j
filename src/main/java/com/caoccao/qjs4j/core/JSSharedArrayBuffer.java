@@ -34,7 +34,7 @@ import java.nio.ByteOrder;
  * - Used with Atomics for thread-safe operations
  * - Direct ByteBuffer for efficient multi-threaded access
  */
-public final class JSSharedArrayBuffer extends JSObject {
+public final class JSSharedArrayBuffer extends JSObject implements JSArrayBufferable {
     private final ByteBuffer buffer;
     private final int byteLength;
 
@@ -82,6 +82,16 @@ public final class JSSharedArrayBuffer extends JSObject {
      */
     public boolean isShared() {
         return true;
+    }
+
+    /**
+     * Check if this SharedArrayBuffer is detached.
+     * SharedArrayBuffers cannot be detached.
+     *
+     * @return Always false
+     */
+    public boolean isDetached() {
+        return false;
     }
 
     /**

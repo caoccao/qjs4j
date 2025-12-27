@@ -35,7 +35,7 @@ public final class JSInt16Array extends JSTypedArray {
     /**
      * Create an Int16Array view on an existing buffer.
      */
-    public JSInt16Array(JSArrayBuffer buffer, int byteOffset, int length) {
+    public JSInt16Array(JSArrayBufferable buffer, int byteOffset, int length) {
         super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 

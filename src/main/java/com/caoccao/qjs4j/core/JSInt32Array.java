@@ -35,7 +35,7 @@ public final class JSInt32Array extends JSTypedArray {
     /**
      * Create an Int32Array view on an existing buffer.
      */
-    public JSInt32Array(JSArrayBuffer buffer, int byteOffset, int length) {
+    public JSInt32Array(JSArrayBufferable buffer, int byteOffset, int length) {
         super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 

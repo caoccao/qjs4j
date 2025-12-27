@@ -35,7 +35,7 @@ public final class JSUint8Array extends JSTypedArray {
     /**
      * Create a Uint8Array view on an existing buffer.
      */
-    public JSUint8Array(JSArrayBuffer buffer, int byteOffset, int length) {
+    public JSUint8Array(JSArrayBufferable buffer, int byteOffset, int length) {
         super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 

@@ -35,7 +35,7 @@ public final class JSFloat64Array extends JSTypedArray {
     /**
      * Create a Float64Array view on an existing buffer.
      */
-    public JSFloat64Array(JSArrayBuffer buffer, int byteOffset, int length) {
+    public JSFloat64Array(JSArrayBufferable buffer, int byteOffset, int length) {
         super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 

@@ -201,7 +201,7 @@ public final class AtomicsObject {
         }
     }
 
-    private static String getWaitKey(JSArrayBuffer buffer, int index) {
+    private static String getWaitKey(JSArrayBufferable buffer, int index) {
         return System.identityHashCode(buffer) + ":" + index;
     }
 
@@ -291,7 +291,7 @@ public final class AtomicsObject {
         }
 
         // Get the buffer
-        JSArrayBuffer buffer = typedArray.getBuffer();
+        JSArrayBufferable buffer = typedArray.getBuffer();
         String waitKey = getWaitKey(buffer, index);
 
         WaitList waitList = waitLists.get(waitKey);
@@ -473,7 +473,7 @@ public final class AtomicsObject {
         }
 
         // Set up wait
-        JSArrayBuffer buffer = typedArray.getBuffer();
+        JSArrayBufferable buffer = typedArray.getBuffer();
         String waitKey = getWaitKey(buffer, index);
         WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
 
@@ -532,7 +532,7 @@ public final class AtomicsObject {
         }
 
         // Create a promise for async waiting
-        JSArrayBuffer buffer = typedArray.getBuffer();
+        JSArrayBufferable buffer = typedArray.getBuffer();
         String waitKey = getWaitKey(buffer, index);
         WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
 

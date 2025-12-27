@@ -35,7 +35,7 @@ public final class JSFloat32Array extends JSTypedArray {
     /**
      * Create a Float32Array view on an existing buffer.
      */
-    public JSFloat32Array(JSArrayBuffer buffer, int byteOffset, int length) {
+    public JSFloat32Array(JSArrayBufferable buffer, int byteOffset, int length) {
         super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
