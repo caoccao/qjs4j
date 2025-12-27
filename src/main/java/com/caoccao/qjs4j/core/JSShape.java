@@ -16,106 +16,120 @@
 
 package com.caoccao.qjs4j.core;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Represents the shape (hidden class) of a JavaScript object.
- * Based on QuickJS shape system and V8's hidden classes.
+ * Represents the shape (structure) of a JavaScript object.
+ * Based on QuickJS shape system with mutable property lists.
  * <p>
- * Shapes enable:
- * - Efficient property access through stable property offsets
- * - Inline caching for property access
- * - Memory-efficient property storage (shared shape metadata)
- * - Shape transitions when properties are added
- * <p>
- * Shapes form a tree structure where:
- * - Root shape has no properties
- * - Each property addition creates a child shape
- * - Objects with same property sequence share shapes
+ * Following QuickJS implementation:
+ * - Shapes are mutable and can have properties removed
+ * - Deleted properties are tracked and shape is compacted when threshold is reached
+ * - Each object has its own shape instance (no sharing)
+ * - Supports property addition, removal, and compaction
  */
 public final class JSShape {
-    private static final JSShape ROOT = new JSShape();
-    private final PropertyDescriptor[] descriptors;
-    private final JSShape parent;
-    private final int propertyCount;
-    private final PropertyKey[] propertyKeys;
-    // Transition map: property key -> child shape
-    // Used to find or create child shapes when properties are added
-    private final Map<TransitionKey, JSShape> transitions;
+    private int deletedPropCount;
+    private PropertyDescriptor[] descriptors;
+    private int propertyCount;
+    private PropertyKey[] propertyKeys;
 
     /**
-     * Create root shape (no properties).
+     * Create an empty shape (no properties).
      */
-    private JSShape() {
+    public JSShape() {
         this.propertyKeys = new PropertyKey[0];
         this.descriptors = new PropertyDescriptor[0];
-        this.parent = null;
         this.propertyCount = 0;
-        this.transitions = new ConcurrentHashMap<>();
+        this.deletedPropCount = 0;
     }
 
     /**
-     * Create a shape by adding a property to a parent shape.
+     * Create a shape by copying from another shape.
      */
-    private JSShape(JSShape parent, PropertyKey key, PropertyDescriptor descriptor) {
-        this.parent = parent;
-        this.propertyCount = parent.propertyCount + 1;
-
-        // Copy parent's properties and add new one
-        this.propertyKeys = Arrays.copyOf(parent.propertyKeys, propertyCount);
-        this.descriptors = Arrays.copyOf(parent.descriptors, propertyCount);
-
-        this.propertyKeys[propertyCount - 1] = key;
-        this.descriptors[propertyCount - 1] = descriptor;
-
-        this.transitions = new HashMap<>();
+    private JSShape(JSShape other) {
+        this.propertyKeys = other.propertyKeys.clone();
+        this.descriptors = other.descriptors.clone();
+        this.propertyCount = other.propertyCount;
+        this.deletedPropCount = other.deletedPropCount;
     }
 
     /**
-     * Get the root shape (empty object shape).
+     * Add a property to this shape.
+     * Modifies the shape in-place.
      */
-    public static JSShape getRoot() {
-        return ROOT;
-    }
-
-    /**
-     * Add a property to this shape, returning a new shape.
-     * Uses transitions to share shapes when possible.
-     */
-    public JSShape addProperty(PropertyKey key, PropertyDescriptor descriptor) {
-        TransitionKey transKey = new TransitionKey(key, descriptor);
-
-        // Check if we already have a transition for this property
-        JSShape existing = transitions.get(transKey);
-        if (existing != null) {
-            return existing;
+    public void addProperty(PropertyKey key, PropertyDescriptor descriptor) {
+        // Check if property already exists (might be deleted)
+        int existingOffset = getPropertyOffset(key);
+        if (existingOffset >= 0) {
+            // Property exists, update it
+            descriptors[existingOffset] = descriptor;
+            return;
         }
 
-        // Create new child shape
-        JSShape newShape = new JSShape(this, key, descriptor);
-        transitions.put(transKey, newShape);
-        return newShape;
+        // Grow arrays
+        PropertyKey[] newKeys = new PropertyKey[propertyCount + 1];
+        PropertyDescriptor[] newDescriptors = new PropertyDescriptor[propertyCount + 1];
+
+        // Copy existing properties
+        System.arraycopy(propertyKeys, 0, newKeys, 0, propertyCount);
+        System.arraycopy(descriptors, 0, newDescriptors, 0, propertyCount);
+
+        // Add new property
+        newKeys[propertyCount] = key;
+        newDescriptors[propertyCount] = descriptor;
+
+        this.propertyKeys = newKeys;
+        this.descriptors = newDescriptors;
+        this.propertyCount++;
     }
 
     /**
-     * Get the depth of this shape in the transition tree.
+     * Compact the shape by removing deleted properties.
+     * Creates new arrays without deleted properties.
+     * Following QuickJS compact_properties() logic.
      */
-    public int getDepth() {
-        int depth = 0;
-        JSShape current = this;
-        while (current.parent != null) {
-            depth++;
-            current = current.parent;
+    public void compact() {
+        if (deletedPropCount == 0) {
+            return; // Nothing to compact
         }
-        return depth;
+
+        List<PropertyKey> newKeys = new ArrayList<>(propertyCount - deletedPropCount);
+        List<PropertyDescriptor> newDescriptors = new ArrayList<>(propertyCount - deletedPropCount);
+
+        // Copy non-null properties
+        for (int i = 0; i < propertyCount; i++) {
+            if (propertyKeys[i] != null) {
+                newKeys.add(propertyKeys[i]);
+                newDescriptors.add(descriptors[i]);
+            }
+        }
+
+        // Update arrays
+        this.propertyKeys = newKeys.toArray(new PropertyKey[0]);
+        this.descriptors = newDescriptors.toArray(new PropertyDescriptor[0]);
+        this.propertyCount = newKeys.size();
+        this.deletedPropCount = 0;
+    }
+
+    /**
+     * Create a copy of this shape.
+     */
+    public JSShape copy() {
+        return new JSShape(this);
+    }
+
+    /**
+     * Get the count of deleted properties.
+     */
+    public int getDeletedPropCount() {
+        return deletedPropCount;
     }
 
     /**
      * Get the descriptor for a property.
-     * Returns null if property not found.
+     * Returns null if property not found or deleted.
      */
     public PropertyDescriptor getDescriptor(PropertyKey key) {
         int offset = getPropertyOffset(key);
@@ -124,46 +138,59 @@ public final class JSShape {
 
     /**
      * Get the descriptor at a specific offset.
+     * Returns null if offset is invalid or property is deleted.
      */
     public PropertyDescriptor getDescriptorAt(int offset) {
-        return offset >= 0 && offset < propertyCount ? descriptors[offset] : null;
+        if (offset < 0 || offset >= propertyCount) {
+            return null;
+        }
+        // Check if deleted
+        if (propertyKeys[offset] == null) {
+            return null;
+        }
+        return descriptors[offset];
     }
 
     /**
-     * Get all property descriptors in this shape.
+     * Get all property descriptors in this shape (excluding deleted).
      */
     public PropertyDescriptor[] getDescriptors() {
-        return Arrays.copyOf(descriptors, propertyCount);
+        List<PropertyDescriptor> result = new ArrayList<>(propertyCount - deletedPropCount);
+        for (int i = 0; i < propertyCount; i++) {
+            if (propertyKeys[i] != null) {
+                result.add(descriptors[i]);
+            }
+        }
+        return result.toArray(new PropertyDescriptor[0]);
     }
 
     /**
-     * Get the parent shape.
-     */
-    public JSShape getParent() {
-        return parent;
-    }
-
-    /**
-     * Get the number of properties in this shape.
+     * Get the number of properties in this shape (including deleted).
      */
     public int getPropertyCount() {
         return propertyCount;
     }
 
     /**
-     * Get all property keys in this shape.
+     * Get all property keys in this shape (excluding deleted).
      */
     public PropertyKey[] getPropertyKeys() {
-        return Arrays.copyOf(propertyKeys, propertyCount);
+        List<PropertyKey> result = new ArrayList<>(propertyCount - deletedPropCount);
+        for (int i = 0; i < propertyCount; i++) {
+            if (propertyKeys[i] != null) {
+                result.add(propertyKeys[i]);
+            }
+        }
+        return result.toArray(new PropertyKey[0]);
     }
 
     /**
      * Get the offset of a property in the property array.
-     * Returns -1 if property not found.
+     * Returns -1 if property not found or deleted.
      */
     public int getPropertyOffset(PropertyKey key) {
         for (int i = 0; i < propertyCount; i++) {
-            if (propertyKeys[i].equals(key)) {
+            if (propertyKeys[i] != null && propertyKeys[i].equals(key)) {
                 return i;
             }
         }
@@ -171,53 +198,63 @@ public final class JSShape {
     }
 
     /**
-     * Check if this shape has a property.
+     * Check if this shape has a property (not deleted).
      */
     public boolean hasProperty(PropertyKey key) {
         return getPropertyOffset(key) >= 0;
     }
 
     /**
-     * Check if this is the root shape.
+     * Remove a property from this shape.
+     * Marks the property as deleted (sets key to null).
+     * Following QuickJS delete_property() logic.
+     *
+     * @return true if property was removed, false if not found or not configurable
      */
-    public boolean isRoot() {
-        return parent == null;
+    public boolean removeProperty(PropertyKey key) {
+        int offset = getPropertyOffset(key);
+        if (offset < 0) {
+            return true; // Property doesn't exist, deletion successful
+        }
+
+        // Check if configurable
+        PropertyDescriptor desc = descriptors[offset];
+        if (!desc.isConfigurable()) {
+            return false; // Cannot delete non-configurable property
+        }
+
+        // Mark as deleted (QuickJS sets atom to JS_ATOM_NULL)
+        propertyKeys[offset] = null;
+        descriptors[offset] = null;
+        deletedPropCount++;
+
+        return true;
+    }
+
+    /**
+     * Check if compaction should be performed.
+     * Following QuickJS logic: compact if deleted >= 8 AND deleted >= prop_count/2
+     */
+    public boolean shouldCompact() {
+        return deletedPropCount >= 8 &&
+                deletedPropCount >= propertyCount / 2;
     }
 
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("JSShape{");
         sb.append("properties=[");
+        boolean first = true;
         for (int i = 0; i < propertyCount; i++) {
-            if (i > 0) sb.append(", ");
-            sb.append(propertyKeys[i].toPropertyString());
+            if (propertyKeys[i] != null) {
+                if (!first) sb.append(", ");
+                sb.append(propertyKeys[i].toPropertyString());
+                first = false;
+            }
         }
-        sb.append("], depth=").append(getDepth());
+        sb.append("], total=").append(propertyCount);
+        sb.append(", deleted=").append(deletedPropCount);
         sb.append("}");
         return sb.toString();
-    }
-
-    /**
-     * Key for shape transitions.
-     * Combines property key and descriptor attributes to determine
-     * if two property additions should share a shape.
-     */
-    private record TransitionKey(PropertyKey propertyKey, int descriptorFlags) {
-        private TransitionKey(PropertyKey propertyKey, PropertyDescriptor descriptorFlags) {
-            // Call canonical constructor with computed flags
-            this(propertyKey,
-                    (descriptorFlags.isEnumerable() ? 1 : 0) |
-                            (descriptorFlags.isConfigurable() ? 2 : 0) |
-                            (descriptorFlags.isDataDescriptor() ? 4 : 0) |
-                            (descriptorFlags.isAccessorDescriptor() ? 8 : 0));
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (!(obj instanceof TransitionKey other)) return false;
-            return propertyKey.equals(other.propertyKey) &&
-                    descriptorFlags == other.descriptorFlags;
-        }
-
     }
 }

@@ -100,6 +100,25 @@ public final class ArrayConstructor {
             return result;
         }
 
+        // Try to use Symbol.iterator for general iterables
+        if (JSIteratorHelper.isIterable(arrayLike)) {
+            final int[] index = {0};
+            JSIteratorHelper.forOf(arrayLike, (value) -> {
+                JSValue itemValue = value;
+
+                // Apply mapping function if provided
+                if (mapFn instanceof JSFunction mappingFunc) {
+                    JSValue[] mapArgs = new JSValue[]{value, new JSNumber(index[0])};
+                    itemValue = mappingFunc.call(ctx, mapThisArg, mapArgs);
+                }
+
+                result.push(itemValue);
+                index[0]++;
+                return true;
+            }, ctx);
+            return result;
+        }
+
         return ctx.throwError("TypeError", "object is not iterable");
     }
 
@@ -222,6 +241,24 @@ public final class ArrayConstructor {
                 }
                 result.push(charValue);
             }
+            resultPromise.fulfill(result);
+            return resultPromise;
+        }
+
+        // Try to use Symbol.iterator for general iterables (sync fallback)
+        if (JSIteratorHelper.isIterable(arrayLike)) {
+            JSArray result = new JSArray();
+            final int[] index = {0};
+            JSIteratorHelper.forOf(arrayLike, (value) -> {
+                JSValue itemValue = value;
+                if (mapFn instanceof JSFunction mappingFunc) {
+                    JSValue[] mapArgs = new JSValue[]{value, new JSNumber(index[0])};
+                    itemValue = mappingFunc.call(ctx, mapThisArg, mapArgs);
+                }
+                result.push(itemValue);
+                index[0]++;
+                return true;
+            }, ctx);
             resultPromise.fulfill(result);
             return resultPromise;
         }

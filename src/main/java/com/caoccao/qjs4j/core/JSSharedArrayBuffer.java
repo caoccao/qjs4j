@@ -75,16 +75,6 @@ public final class JSSharedArrayBuffer extends JSObject implements JSArrayBuffer
     }
 
     /**
-     * Check if this buffer is a SharedArrayBuffer.
-     * Used to distinguish from regular ArrayBuffer.
-     *
-     * @return Always true
-     */
-    public boolean isShared() {
-        return true;
-    }
-
-    /**
      * Check if this SharedArrayBuffer is detached.
      * SharedArrayBuffers cannot be detached.
      *
@@ -92,6 +82,16 @@ public final class JSSharedArrayBuffer extends JSObject implements JSArrayBuffer
      */
     public boolean isDetached() {
         return false;
+    }
+
+    /**
+     * Check if this buffer is a SharedArrayBuffer.
+     * Used to distinguish from regular ArrayBuffer.
+     *
+     * @return Always true
+     */
+    public boolean isShared() {
+        return true;
     }
 
     /**

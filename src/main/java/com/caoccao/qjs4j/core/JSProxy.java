@@ -42,23 +42,6 @@ public final class JSProxy extends JSObject {
     }
 
     /**
-     * Check if this proxy has been revoked.
-     * @return true if revoked, false otherwise
-     */
-    public boolean isRevoked() {
-        return revoked;
-    }
-
-    /**
-     * Revoke this proxy.
-     * After revocation, all proxy operations will throw TypeError.
-     * ES2020 26.2.2.1.1
-     */
-    public void revoke() {
-        this.revoked = true;
-    }
-
-    /**
      * Check if the proxy is revoked and throw TypeError if so.
      */
     private void checkRevoked() {
@@ -145,6 +128,15 @@ public final class JSProxy extends JSObject {
     }
 
     /**
+     * Check if this proxy has been revoked.
+     *
+     * @return true if revoked, false otherwise
+     */
+    public boolean isRevoked() {
+        return revoked;
+    }
+
+    /**
      * Override ownPropertyKeys to intercept Object.keys(), etc.
      */
     @Override
@@ -176,6 +168,15 @@ public final class JSProxy extends JSObject {
 
         // No trap, forward to target
         return target.ownPropertyKeys();
+    }
+
+    /**
+     * Revoke this proxy.
+     * After revocation, all proxy operations will throw TypeError.
+     * ES2020 26.2.2.1.1
+     */
+    public void revoke() {
+        this.revoked = true;
     }
 
     /**

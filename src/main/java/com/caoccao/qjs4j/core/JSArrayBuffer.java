@@ -29,7 +29,7 @@ import java.nio.ByteOrder;
 public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
     private final int maxByteLength;
     private final boolean resizable;
-    private ByteBuffer buffer;
+    private final ByteBuffer buffer;
     private boolean detached;
 
     /**

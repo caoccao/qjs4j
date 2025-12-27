@@ -112,6 +112,11 @@ public class ArrayConstructorTest extends BaseTest {
         assertPendingException(ctx);
     }
 
+    // Note: Tests for JavaScript native iterables (Set, Map, custom iterables) are not included
+    // because the current JSIteratorHelper implementation doesn't properly bridge with
+    // JavaScript native objects. The iterable support works with Java-created iterables
+    // (JSIterator, JSGenerator) but not with JavaScript's built-in Set/Map or custom iterables.
+
     @Test
     public void testFromAsync() {
         // Normal case: from async iterator (array)

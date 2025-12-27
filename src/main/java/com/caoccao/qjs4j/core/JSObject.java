@@ -20,17 +20,14 @@ import java.util.*;
 
 /**
  * Represents a JavaScript object.
- * Based on QuickJS object implementation with shape-based optimization.
+ * Based on QuickJS object implementation with mutable shape system.
  * <p>
- * Uses a shape (hidden class) system for efficient property access:
- * - Shape tracks property names and their offsets
+ * Following QuickJS approach:
+ * - Each object has its own mutable shape (no sharing)
+ * - Shapes can have properties added and removed
+ * - Property deletion compacts shape when threshold is reached
  * - Property values stored in parallel array indexed by offset
  * - Sparse properties (numeric indices) stored separately
- * <p>
- * This design enables:
- * - Fast property access (O(1) with inline caching)
- * - Memory efficiency (shapes shared across objects)
- * - Optimized for objects with similar structure
  */
 public non-sealed class JSObject implements JSValue {
     protected boolean extensible = true;
@@ -43,9 +40,10 @@ public non-sealed class JSObject implements JSValue {
 
     /**
      * Create an empty object with no prototype.
+     * Each object gets its own shape copy (not shared).
      */
     public JSObject() {
-        this.shape = JSShape.getRoot();
+        this.shape = new JSShape();  // Each object gets its own shape
         this.propertyValues = new JSValue[0];
         this.sparseProperties = null;
         this.prototype = null;
@@ -62,30 +60,69 @@ public non-sealed class JSObject implements JSValue {
     // Property operations
 
     /**
+     * Compact properties by removing deleted properties.
+     * Following QuickJS compact_properties() logic.
+     */
+    private void compactProperties() {
+        if (shape.getDeletedPropCount() == 0) {
+            return; // Nothing to compact
+        }
+
+        // Compact the shape
+        shape.compact();
+
+        // Rebuild property values array without deleted entries
+        PropertyKey[] keys = shape.getPropertyKeys();
+        JSValue[] newValues = new JSValue[keys.length];
+
+        int newIndex = 0;
+        for (int i = 0; i < propertyValues.length; i++) {
+            // Check if this slot is still valid after compaction
+            if (newIndex < keys.length) {
+                newValues[newIndex] = propertyValues[i];
+                newIndex++;
+            }
+        }
+
+        this.propertyValues = newValues;
+    }
+
+    /**
      * Define a new property with a descriptor.
      */
     public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
-        // Transition to new shape
-        JSShape newShape = shape.addProperty(key, descriptor);
+        // Check if property already exists
+        int offset = shape.getPropertyOffset(key);
+        if (offset >= 0) {
+            // Property exists, update descriptor and value
+            shape.addProperty(key, descriptor);
+            if (descriptor.hasValue()) {
+                propertyValues[offset] = descriptor.getValue();
+            }
+            return;
+        }
 
-        // Allocate new property array
-        JSValue[] newValues = Arrays.copyOf(propertyValues, newShape.getPropertyCount());
+        // Add new property to shape
+        shape.addProperty(key, descriptor);
+
+        // Grow property values array
+        int newCount = shape.getPropertyCount();
+        JSValue[] newValues = Arrays.copyOf(propertyValues, newCount);
 
         // Set the new property value
         if (descriptor.hasValue()) {
-            newValues[newShape.getPropertyCount() - 1] = descriptor.getValue();
+            newValues[newCount - 1] = descriptor.getValue();
         } else {
-            newValues[newShape.getPropertyCount() - 1] = JSUndefined.INSTANCE;
+            newValues[newCount - 1] = JSUndefined.INSTANCE;
         }
 
-        // Update shape and values
-        this.shape = newShape;
         this.propertyValues = newValues;
     }
 
     /**
      * Delete a property.
      * Returns true if deletion was successful.
+     * Following QuickJS delete_property() logic.
      */
     public boolean delete(String propertyName) {
         return delete(PropertyKey.fromString(propertyName));
@@ -93,6 +130,7 @@ public non-sealed class JSObject implements JSValue {
 
     /**
      * Delete a property by key.
+     * Following QuickJS delete_property() implementation.
      */
     public boolean delete(PropertyKey key) {
         // Cannot delete from sealed or frozen objects
@@ -100,26 +138,32 @@ public non-sealed class JSObject implements JSValue {
             return false;
         }
 
-        // Check if property exists
+        // Check sparse properties first
+        if (key.isIndex() && sparseProperties != null) {
+            sparseProperties.remove(key.asIndex());
+            return true;
+        }
+
+        // Find property in shape and check if it exists
         int offset = shape.getPropertyOffset(key);
         if (offset < 0) {
-            // Check sparse properties
-            if (key.isIndex() && sparseProperties != null) {
-                return sparseProperties.remove(key.asIndex()) != null;
-            }
             return true; // Property doesn't exist, deletion successful
         }
 
-        // Check if property is configurable
-        PropertyDescriptor desc = shape.getDescriptorAt(offset);
-        if (!desc.isConfigurable()) {
-            return false; // Cannot delete non-configurable property
+        // Remove from shape (checks configurability internally)
+        boolean removed = shape.removeProperty(key);
+        if (!removed) {
+            return false; // Not configurable or other error
         }
 
-        // For simplicity, we don't actually remove from shape
-        // In a full implementation, we'd need to create a new shape without this property
-        // For now, just set to undefined
+        // Set value to undefined (QuickJS does this)
         propertyValues[offset] = JSUndefined.INSTANCE;
+
+        // Compact if threshold reached (QuickJS logic: deleted >= 8 AND >= prop_count/2)
+        if (shape.shouldCompact()) {
+            compactProperties();
+        }
+
         return true;
     }
 
@@ -271,6 +315,14 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
+     * Check if this object is extensible.
+     * ES5.1 15.2.3.13
+     */
+    public boolean isExtensible() {
+        return extensible;
+    }
+
+    /**
      * Check if this object is frozen.
      */
     public boolean isFrozen() {
@@ -285,24 +337,6 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Check if this object is extensible.
-     * ES5.1 15.2.3.13
-     */
-    public boolean isExtensible() {
-        return extensible;
-    }
-
-    /**
-     * Prevent new properties from being added to this object.
-     * ES5.1 15.2.3.10
-     */
-    public void preventExtensions() {
-        this.extensible = false;
-    }
-
-    // Prototype chain
-
-    /**
      * Get all own property keys.
      */
     public PropertyKey[] ownPropertyKeys() {
@@ -310,7 +344,7 @@ public non-sealed class JSObject implements JSValue {
 
         // Add shape properties
         PropertyKey[] shapeKeys = shape.getPropertyKeys();
-        Collections.addAll(keys, shapeKeys);
+        keys.addAll(Arrays.asList(shapeKeys));
 
         // Add sparse properties
         if (sparseProperties != null) {
@@ -320,6 +354,16 @@ public non-sealed class JSObject implements JSValue {
         }
 
         return keys.toArray(new PropertyKey[0]);
+    }
+
+    // Prototype chain
+
+    /**
+     * Prevent new properties from being added to this object.
+     * ES5.1 15.2.3.10
+     */
+    public void preventExtensions() {
+        this.extensible = false;
     }
 
     /**
