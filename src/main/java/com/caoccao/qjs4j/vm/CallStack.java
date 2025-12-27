@@ -16,18 +16,20 @@
 
 package com.caoccao.qjs4j.vm;
 
+import com.caoccao.qjs4j.core.JSStackValue;
 import com.caoccao.qjs4j.core.JSValue;
 
 /**
  * Represents the value stack for the VM.
  * Following QuickJS stack operations: sp[-1], sp[-2], etc.
+ * Can store both JSValue and internal markers like CatchOffset.
  */
 public final class CallStack {
-    private final JSValue[] stack;
+    private final JSStackValue[] stack;
     private int stackTop;
 
     public CallStack() {
-        this.stack = new JSValue[1024];
+        this.stack = new JSStackValue[1024];
         this.stackTop = 0;
     }
 
@@ -51,15 +53,27 @@ public final class CallStack {
         if (index < 0) {
             throw new IllegalStateException("Stack underflow in peek: stackTop=" + stackTop + ", offset=" + offset);
         }
-        return stack[index];
+        return (JSValue) stack[index];
     }
 
     /**
      * Pop a value from the stack (QuickJS: *--sp).
+     * Returns JSValue for normal stack operations.
      */
     public JSValue pop() {
         if (stackTop <= 0) {
             throw new IllegalStateException("Stack underflow in pop: stackTop=" + stackTop);
+        }
+        return (JSValue) stack[--stackTop];
+    }
+
+    /**
+     * Pop any stack value, including internal markers.
+     * Used for exception unwinding to find CatchOffset markers.
+     */
+    public JSStackValue popStackValue() {
+        if (stackTop <= 0) {
+            throw new IllegalStateException("Stack underflow in popStackValue: stackTop=" + stackTop);
         }
         return stack[--stackTop];
     }
@@ -68,6 +82,13 @@ public final class CallStack {
      * Push a value onto the stack (QuickJS: *sp++ = value).
      */
     public void push(JSValue value) {
+        stack[stackTop++] = value;
+    }
+
+    /**
+     * Push a stack value (including internal markers like CatchOffset).
+     */
+    public void pushStackValue(JSStackValue value) {
         stack[stackTop++] = value;
     }
 

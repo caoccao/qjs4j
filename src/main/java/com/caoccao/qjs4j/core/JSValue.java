@@ -22,10 +22,9 @@ import java.util.Optional;
  * Base sealed interface for all JavaScript values.
  * Implements the value representation using sealed interfaces for type safety.
  */
-public sealed interface JSValue permits
+public sealed interface JSValue extends JSStackValue permits
         JSUndefined, JSNull, JSBoolean, JSNumber, JSString,
-        JSObject, JSSymbol, JSBigInt, JSFunction,
-        CatchOffset {
+        JSObject, JSSymbol, JSBigInt, JSFunction {
 
     /**
      * Attempt to cast this value to JSArray.

@@ -17,26 +17,8 @@
 package com.caoccao.qjs4j.core;
 
 /**
- * Special marker value pushed on stack by CATCH opcode.
- * Contains the PC offset to the catch handler.
- * When an exception occurs, the VM unwinds the stack looking for this marker,
- * then jumps to the catch handler.
- *
- * This is an internal VM type, not a JavaScript value.
+ * Base interface for values that can be stored on the VM stack.
+ * This includes both JavaScript values (JSValue) and internal VM markers (like CatchOffset).
  */
-public final class CatchOffset implements JSStackValue {
-    private final int offset;
-
-    public CatchOffset(int offset) {
-        this.offset = offset;
-    }
-
-    public int getOffset() {
-        return offset;
-    }
-
-    @Override
-    public String toString() {
-        return "[CatchOffset:" + offset + "]";
-    }
+public sealed interface JSStackValue permits JSValue, CatchOffset {
 }

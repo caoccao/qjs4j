@@ -61,7 +61,7 @@ public final class VirtualMachine {
                     // Unwind the stack looking for a CatchOffset marker
                     boolean foundHandler = false;
                     while (valueStack.getStackTop() > 0) {
-                        JSValue val = valueStack.pop();
+                        JSStackValue val = valueStack.popStackValue();
                         if (val instanceof CatchOffset catchOffset) {
                             // Found catch handler - push exception and jump to it
                             valueStack.push(exception);
@@ -516,7 +516,7 @@ public final class VirtualMachine {
                         // This marker is used during exception unwinding to find the catch handler
                         int catchOffset = bytecode.readI32(pc + 1);
                         int catchHandlerPC = pc + op.getSize() + catchOffset;
-                        valueStack.push(new CatchOffset(catchHandlerPC));
+                        valueStack.pushStackValue(new CatchOffset(catchHandlerPC));
                         pc += op.getSize();
                         break;
 
