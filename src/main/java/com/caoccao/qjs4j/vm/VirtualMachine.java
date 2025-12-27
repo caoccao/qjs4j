@@ -418,6 +418,20 @@ public final class VirtualMachine {
                         if (arrayObj instanceof JSObject jsObj) {
                             PropertyKey key = PropertyKey.fromValue(index);
                             valueStack.push(jsObj.get(key));
+                        } else if (arrayObj instanceof JSFunction) {
+                            // For functions, look up methods from Function.prototype
+                            PropertyKey key = PropertyKey.fromValue(index);
+                            JSValue funcProto = context.getGlobalObject().get("Function");
+                            if (funcProto instanceof JSObject funcCtor) {
+                                JSValue prototype = funcCtor.get("prototype");
+                                if (prototype instanceof JSObject protoObj) {
+                                    valueStack.push(protoObj.get(key));
+                                } else {
+                                    valueStack.push(JSUndefined.INSTANCE);
+                                }
+                            } else {
+                                valueStack.push(JSUndefined.INSTANCE);
+                            }
                         } else {
                             valueStack.push(JSUndefined.INSTANCE);
                         }
@@ -425,9 +439,10 @@ public final class VirtualMachine {
                         break;
 
                     case PUT_ARRAY_EL:
-                        JSValue putElValue = valueStack.pop();
-                        JSValue putElIndex = valueStack.pop();
-                        JSValue putElObj = valueStack.pop();
+                        // Stack layout: [value, object, property] (property on top)
+                        JSValue putElIndex = valueStack.pop();   // Pop property
+                        JSValue putElObj = valueStack.pop();     // Pop object
+                        JSValue putElValue = valueStack.pop();   // Pop value
                         if (putElObj instanceof JSObject jsObj) {
                             PropertyKey key = PropertyKey.fromValue(putElIndex);
                             jsObj.set(key, putElValue);
@@ -607,6 +622,13 @@ public final class VirtualMachine {
         // Pop callee (method)
         JSValue callee = valueStack.pop();
 
+        // Handle proxy apply trap (QuickJS: js_proxy_call)
+        if (callee instanceof JSProxy proxy) {
+            JSValue result = proxyApply(proxy, receiver, args);
+            valueStack.push(result);
+            return;
+        }
+
         // Special handling for Symbol constructor (must be called without new)
         if (callee instanceof JSObject calleeObj) {
             JSValue isSymbolCtor = calleeObj.get("[[SymbolConstructor]]");
@@ -653,6 +675,13 @@ public final class VirtualMachine {
 
         // Pop constructor
         JSValue constructor = valueStack.pop();
+
+        // Handle proxy construct trap (QuickJS: js_proxy_call_constructor)
+        if (constructor instanceof JSProxy proxy) {
+            JSValue result = proxyConstruct(proxy, args);
+            valueStack.push(result);
+            return;
+        }
 
         // Check for ES6 class constructor
         if (constructor instanceof JSClass classConstructor) {
@@ -1530,6 +1559,150 @@ public final class VirtualMachine {
         }
 
         return null;
+    }
+
+    /**
+     * Invoke proxy apply trap when calling a proxy as a function.
+     * Based on QuickJS js_proxy_call (quickjs.c:50338).
+     *
+     * @param proxy    The proxy being called
+     * @param thisArg  The 'this' value for the call
+     * @param args     The arguments
+     * @return The result of the call
+     */
+    private JSValue proxyApply(JSProxy proxy, JSValue thisArg, JSValue[] args) {
+        // Get the apply trap from the handler
+        JSValue applyTrap = proxy.getHandler().get("apply");
+
+        // If no apply trap, forward to target
+        if (applyTrap == JSUndefined.INSTANCE || applyTrap == null) {
+            JSValue target = proxy.getTarget();
+
+            // Check that target is callable
+            if (!(target instanceof JSFunction)) {
+                throw new VMException("not a function");
+            }
+
+            // Forward call to target
+            if (target instanceof JSNativeFunction nativeFunc) {
+                return nativeFunc.call(context, thisArg, args);
+            } else if (target instanceof JSBytecodeFunction bytecodeFunc) {
+                return execute(bytecodeFunc, thisArg, args);
+            } else {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        // Check that apply trap is a function
+        if (!(applyTrap instanceof JSFunction applyFunc)) {
+            throw new VMException("apply trap is not a function");
+        }
+
+        // Create arguments array
+        JSArray argArray = new JSArray();
+        for (JSValue arg : args) {
+            argArray.push(arg);
+        }
+
+        // Call the apply trap: apply(target, thisArg, argArray)
+        JSValue[] trapArgs = new JSValue[]{
+                proxy.getTarget(),
+                thisArg,
+                argArray
+        };
+
+        if (applyFunc instanceof JSNativeFunction nativeFunc) {
+            return nativeFunc.call(context, proxy.getHandler(), trapArgs);
+        } else if (applyFunc instanceof JSBytecodeFunction bytecodeFunc) {
+            return execute(bytecodeFunc, proxy.getHandler(), trapArgs);
+        } else {
+            return JSUndefined.INSTANCE;
+        }
+    }
+
+    /**
+     * Invoke proxy construct trap when calling a proxy with 'new'.
+     * Based on QuickJS js_proxy_call_constructor (quickjs.c:50304).
+     *
+     * @param proxy The proxy being constructed
+     * @param args  The arguments
+     * @return The constructed object
+     */
+    private JSValue proxyConstruct(JSProxy proxy, JSValue[] args) {
+        // Get the construct trap from the handler
+        JSValue constructTrap = proxy.getHandler().get("construct");
+
+        // Check that target is a constructor
+        JSValue target = proxy.getTarget();
+        if (!(target instanceof JSFunction)) {
+            throw new VMException("target is not a constructor");
+        }
+
+        // If no construct trap, forward to target
+        if (constructTrap == JSUndefined.INSTANCE || constructTrap == null) {
+            // Forward to target constructor
+            // Create a new instance
+            JSValue prototypeValue = null;
+            if (target instanceof JSObject targetObj) {
+                prototypeValue = targetObj.get("prototype");
+            }
+            JSObject instance = new JSObject();
+            if (prototypeValue instanceof JSObject prototype) {
+                instance.setPrototype(prototype);
+            }
+
+            // Call the function with the new instance as 'this'
+            JSValue result;
+            if (target instanceof JSNativeFunction nativeFunc) {
+                result = nativeFunc.call(context, instance, args);
+            } else if (target instanceof JSBytecodeFunction bytecodeFunc) {
+                result = execute(bytecodeFunc, instance, args);
+            } else {
+                throw new VMException("target is not a constructor");
+            }
+
+            // If function returned an object, use that; otherwise use instance
+            if (result instanceof JSObject) {
+                return result;
+            } else {
+                return instance;
+            }
+        }
+
+        // Check that construct trap is a function
+        if (!(constructTrap instanceof JSFunction constructFunc)) {
+            throw new VMException("construct trap is not a function");
+        }
+
+        // Create arguments array
+        JSArray argArray = new JSArray();
+        for (JSValue arg : args) {
+            argArray.push(arg);
+        }
+
+        // Call the construct trap: construct(target, argArray, newTarget)
+        // newTarget is the proxy itself
+        JSValue[] trapArgs = new JSValue[]{
+                target,
+                argArray,
+                proxy  // newTarget
+        };
+
+        JSValue result;
+        if (constructFunc instanceof JSNativeFunction nativeFunc) {
+            result = nativeFunc.call(context, proxy.getHandler(), trapArgs);
+        } else if (constructFunc instanceof JSBytecodeFunction bytecodeFunc) {
+            result = execute(bytecodeFunc, proxy.getHandler(), trapArgs);
+        } else {
+            return JSUndefined.INSTANCE;
+        }
+
+        // Validate that construct trap returned an object
+        if (!(result instanceof JSObject)) {
+            throw new VMException("construct trap must return an object");
+        }
+
+        return result;
     }
 
     /**
