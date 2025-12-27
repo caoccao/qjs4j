@@ -1211,6 +1211,236 @@ These methods are fundamental to JavaScript's object model and are widely used f
 
 ---
 
+## Phase 36: Reflect and Proxy Enhancements, Proper Getters
+
+### Overview
+Fixed several "Simplified" implementations identified in the codebase:
+1. **Reflect.isExtensible** and **Reflect.preventExtensions** now use JSObject methods
+2. **Proxy.revocable** revoke function now properly revokes proxies
+3. **ArrayBuffer**, **SharedArrayBuffer**, and **DataView** getters converted to proper accessor descriptors
+
+**Files Modified:**
+- `ReflectObject.java`: Fixed isExtensible and preventExtensions implementations
+- `JSProxy.java`: Added revocation support with proper TypeError throwing
+- `ProxyConstructor.java`: Implemented working revoke function
+- `GlobalObject.java`: Converted all buffer getter properties to accessor descriptors
+
+### 1. Reflect.isExtensible Fix
+**File**: `ReflectObject.java:146-157`
+
+**Before (Simplified):**
+```java
+public static JSValue isExtensible(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    if (args.length == 0 || !(args[0] instanceof JSObject)) {
+        return ctx.throwError("TypeError", "Reflect.isExtensible called on non-object");
+    }
+    // Simplified: always return true
+    return JSBoolean.TRUE;
+}
+```
+
+**After (Full Implementation):**
+```java
+public static JSValue isExtensible(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    if (args.length == 0 || !(args[0] instanceof JSObject target)) {
+        return ctx.throwError("TypeError", "Reflect.isExtensible called on non-object");
+    }
+    return JSBoolean.valueOf(target.isExtensible());
+}
+```
+
+### 2. Reflect.preventExtensions Fix
+**File**: `ReflectObject.java:180-192`
+
+**Before (Simplified):**
+```java
+public static JSValue preventExtensions(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    if (args.length == 0 || !(args[0] instanceof JSObject)) {
+        return ctx.throwError("TypeError", "Reflect.preventExtensions called on non-object");
+    }
+    // Simplified: no-op, just return true
+    return JSBoolean.TRUE;
+}
+```
+
+**After (Full Implementation):**
+```java
+public static JSValue preventExtensions(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    if (args.length == 0 || !(args[0] instanceof JSObject target)) {
+        return ctx.throwError("TypeError", "Reflect.preventExtensions called on non-object");
+    }
+    target.preventExtensions();
+    return JSBoolean.TRUE;
+}
+```
+
+### 3. Proxy Revocation Implementation
+**File**: `JSProxy.java`
+
+Added complete revocation support to JSProxy:
+
+**New Fields and Methods:**
+```java
+public final class JSProxy extends JSObject {
+    private boolean revoked = false;  // New field
+
+    // New methods
+    public boolean isRevoked() {
+        return revoked;
+    }
+
+    public void revoke() {
+        this.revoked = true;
+    }
+
+    private void checkRevoked() {
+        if (revoked) {
+            throw new JSException(context.throwError("TypeError",
+                "Cannot perform operation on a revoked proxy"));
+        }
+    }
+}
+```
+
+**Updated All Trap Methods:**
+All proxy trap methods (get, set, has, delete, ownPropertyKeys) now check revocation status:
+
+```java
+@Override
+public JSValue get(PropertyKey key) {
+    checkRevoked();  // Throws TypeError if revoked
+    // ... rest of implementation
+}
+```
+
+**File**: `ProxyConstructor.java:29-56`
+
+**Before (Simplified):**
+```java
+JSNativeFunction revokeFunc = new JSNativeFunction("revoke", 0, (context, thisValue, funcArgs) -> {
+    // In a full implementation, this would invalidate the proxy
+    return JSUndefined.INSTANCE;
+});
+```
+
+**After (Full Implementation):**
+```java
+JSNativeFunction revokeFunc = new JSNativeFunction("revoke", 0, (context, thisValue, funcArgs) -> {
+    // Revoke the proxy - all subsequent operations will throw TypeError
+    proxy.revoke();
+    return JSUndefined.INSTANCE;
+});
+```
+
+**Behavior After Revocation:**
+```javascript
+const { proxy, revoke } = Proxy.revocable(target, handler);
+proxy.foo;  // Works normally
+revoke();
+proxy.foo;  // TypeError: Cannot perform operation on a revoked proxy
+```
+
+### 4. Proper Getter Descriptors
+
+Converted all buffer-related getters from regular properties to proper accessor descriptors using `PropertyDescriptor.accessorDescriptor()`.
+
+#### ArrayBuffer.prototype Getters
+**File**: `GlobalObject.java:343-358`
+
+**Before:**
+```java
+arrayBufferPrototype.set("byteLength", new JSNativeFunction("get byteLength", 0, ...));
+arrayBufferPrototype.set("detached", new JSNativeFunction("get detached", 0, ...));
+arrayBufferPrototype.set("maxByteLength", new JSNativeFunction("get maxByteLength", 0, ...));
+arrayBufferPrototype.set("resizable", new JSNativeFunction("get resizable", 0, ...));
+```
+
+**After:**
+```java
+JSNativeFunction byteLengthGetter = new JSNativeFunction("get byteLength", 0, ArrayBufferPrototype::getByteLength);
+arrayBufferPrototype.defineProperty(PropertyKey.fromString("byteLength"),
+    PropertyDescriptor.accessorDescriptor(byteLengthGetter, null, false, true));
+// ... same for detached, maxByteLength, resizable
+```
+
+#### SharedArrayBuffer.prototype Getters
+**File**: `GlobalObject.java:948-956`
+
+**Before:**
+```java
+JSNativeFunction byteLengthGetter = new JSNativeFunction("get byteLength", 0, ...);
+sharedArrayBufferPrototype.set("byteLength", byteLengthGetter); // Simplified: should be a getter
+```
+
+**After:**
+```java
+JSNativeFunction byteLengthGetter = new JSNativeFunction("get byteLength", 0, SharedArrayBufferPrototype::getByteLength);
+PropertyDescriptor byteLengthDesc = PropertyDescriptor.accessorDescriptor(
+    byteLengthGetter,  // getter
+    null,              // no setter
+    false,             // not enumerable
+    true               // configurable
+);
+sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("byteLength"), byteLengthDesc);
+```
+
+#### DataView.prototype Getters
+**File**: `GlobalObject.java:536-547`
+
+**Before:**
+```java
+// Getters (simplified as regular properties)
+dataViewPrototype.set("buffer", new JSNativeFunction("get buffer", 0, ...));
+dataViewPrototype.set("byteLength", new JSNativeFunction("get byteLength", 0, ...));
+dataViewPrototype.set("byteOffset", new JSNativeFunction("get byteOffset", 0, ...));
+```
+
+**After:**
+```java
+// Define getter properties
+JSNativeFunction bufferGetter = new JSNativeFunction("get buffer", 0, DataViewPrototype::getBuffer);
+dataViewPrototype.defineProperty(PropertyKey.fromString("buffer"),
+    PropertyDescriptor.accessorDescriptor(bufferGetter, null, false, true));
+// ... same for byteLength, byteOffset
+```
+
+### Why Proper Getters Matter
+
+1. **Spec Compliance**: ES specification requires these to be accessor properties, not data properties
+2. **Property Enumeration**: Getters defined with `defineProperty` have proper enumerable flags
+3. **Descriptor Introspection**: `Object.getOwnPropertyDescriptor()` returns correct accessor descriptor
+4. **Non-writable**: Accessor properties without setters can't be reassigned (proper immutability)
+
+**Example:**
+```javascript
+const buffer = new ArrayBuffer(16);
+const desc = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength');
+// Before: { value: [Function], writable: true, enumerable: true, configurable: true }
+// After:  { get: [Function], set: undefined, enumerable: false, configurable: true }
+```
+
+### Testing and Validation
+
+✅ **Build Status**: Clean compilation with zero errors
+✅ **Test Suite**: All 260 tests passing
+✅ **Spec Compliance**:
+- Reflect methods now properly use JSObject extensibility
+- Proxy revocation throws TypeError as per ES2020 26.2.2.1.1
+- All buffer getters are proper accessor descriptors
+
+### Summary
+
+Phase 36 eliminated four categories of "Simplified" implementations:
+
+1. **Reflect.isExtensible** - Now properly checks object extensibility
+2. **Reflect.preventExtensions** - Now actually prevents extensions
+3. **Proxy revocation** - Full implementation with TypeError on revoked proxy access
+4. **Buffer getters** - All converted to proper accessor descriptors (9 getters total)
+
+These changes improve ES2020 compliance and ensure correct JavaScript semantics for meta-programming operations and binary data access.
+
+---
+
 ## Conclusion
 
 Successfully brought qjs4j from **ES2020 to ES2024 compliance** by implementing 16 new ECMAScript features across 4 specification versions, plus post-migration cleanup and enhancements. All implementations:
@@ -1229,6 +1459,7 @@ Successfully brought qjs4j from **ES2020 to ES2024 compliance** by implementing 
 - **Phase 33**: Collection constructor iterable initialization (Map, Set, WeakMap, WeakSet)
 - **Phase 34**: Object static method implementations (is, getOwnPropertyDescriptor, getOwnPropertyDescriptors, getOwnPropertyNames, getOwnPropertySymbols)
 - **Phase 35**: ES5.1 object extensibility and property definition (defineProperty registration, defineProperties, preventExtensions, isExtensible)
+- **Phase 36**: Reflect and Proxy enhancements, proper getters (Reflect.isExtensible/preventExtensions fixes, Proxy.revocable revoke function, buffer getter descriptors)
 - **Total Tests**: 260 tests, all passing
 - **Build Status**: Clean build with zero errors
 

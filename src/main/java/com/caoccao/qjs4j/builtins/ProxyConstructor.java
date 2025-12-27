@@ -30,7 +30,7 @@ public final class ProxyConstructor {
      * Proxy.revocable(target, handler)
      * ES2020 26.2.2.1
      * Creates a revocable proxy object.
-     * Simplified implementation: returns a basic proxy for now.
+     * Returns an object with a proxy and a revoke function.
      */
     public static JSValue revocable(JSContext ctx, JSValue thisArg, JSValue[] args) {
         if (args.length < 2 || !(args[0] instanceof JSObject target) || !(args[1] instanceof JSObject handler)) {
@@ -44,9 +44,10 @@ public final class ProxyConstructor {
         JSObject result = new JSObject();
         result.set("proxy", proxy);
 
-        // Create revoke function (simplified: does nothing for now)
+        // Create revoke function that invalidates the proxy
         JSNativeFunction revokeFunc = new JSNativeFunction("revoke", 0, (context, thisValue, funcArgs) -> {
-            // In a full implementation, this would invalidate the proxy
+            // Revoke the proxy - all subsequent operations will throw TypeError
+            proxy.revoke();
             return JSUndefined.INSTANCE;
         });
         result.set("revoke", revokeFunc);

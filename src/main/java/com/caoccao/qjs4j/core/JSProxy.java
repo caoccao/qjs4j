@@ -25,6 +25,7 @@ public final class JSProxy extends JSObject {
     private final JSContext context;
     private final JSObject handler;
     private final JSObject target;
+    private boolean revoked = false;
 
     /**
      * Create a new Proxy.
@@ -41,10 +42,38 @@ public final class JSProxy extends JSObject {
     }
 
     /**
+     * Check if this proxy has been revoked.
+     * @return true if revoked, false otherwise
+     */
+    public boolean isRevoked() {
+        return revoked;
+    }
+
+    /**
+     * Revoke this proxy.
+     * After revocation, all proxy operations will throw TypeError.
+     * ES2020 26.2.2.1.1
+     */
+    public void revoke() {
+        this.revoked = true;
+    }
+
+    /**
+     * Check if the proxy is revoked and throw TypeError if so.
+     */
+    private void checkRevoked() {
+        if (revoked) {
+            throw new JSException(context.throwError("TypeError", "Cannot perform operation on a revoked proxy"));
+        }
+    }
+
+    /**
      * Override delete to intercept property deletion.
      */
     @Override
     public boolean delete(PropertyKey key) {
+        checkRevoked();
+
         // Check if handler has 'deleteProperty' trap
         JSValue deleteTrap = handler.get("deleteProperty");
         if (deleteTrap instanceof JSFunction deleteTrapFunc) {
@@ -66,6 +95,8 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public JSValue get(PropertyKey key) {
+        checkRevoked();
+
         // Check if handler has 'get' trap
         JSValue getTrap = handler.get("get");
         if (getTrap instanceof JSFunction getTrapFunc) {
@@ -95,6 +126,8 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public boolean has(PropertyKey key) {
+        checkRevoked();
+
         // Check if handler has 'has' trap
         JSValue hasTrap = handler.get("has");
         if (hasTrap instanceof JSFunction hasTrapFunc) {
@@ -116,6 +149,8 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public PropertyKey[] ownPropertyKeys() {
+        checkRevoked();
+
         // Check if handler has 'ownKeys' trap
         JSValue ownKeysTrap = handler.get("ownKeys");
         if (ownKeysTrap instanceof JSFunction ownKeysTrapFunc) {
@@ -148,6 +183,8 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue value) {
+        checkRevoked();
+
         // Check if handler has 'set' trap
         JSValue setTrap = handler.get("set");
         if (setTrap instanceof JSFunction setTrapFunc) {

@@ -147,15 +147,13 @@ public final class ReflectObject {
      * Reflect.isExtensible(target)
      * ES2020 26.1.10
      * Checks if an object is extensible.
-     * Simplified: always returns true for now.
      */
     public static JSValue isExtensible(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject)) {
+        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
             return ctx.throwError("TypeError", "Reflect.isExtensible called on non-object");
         }
 
-        // Simplified: always return true
-        return JSBoolean.TRUE;
+        return JSBoolean.valueOf(target.isExtensible());
     }
 
     /**
@@ -183,14 +181,13 @@ public final class ReflectObject {
      * Reflect.preventExtensions(target)
      * ES2020 26.1.12
      * Prevents new properties from being added to an object.
-     * Simplified: always returns true for now.
      */
     public static JSValue preventExtensions(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject)) {
+        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
             return ctx.throwError("TypeError", "Reflect.preventExtensions called on non-object");
         }
 
-        // Simplified: no-op, just return true
+        target.preventExtensions();
         return JSBoolean.TRUE;
     }
 

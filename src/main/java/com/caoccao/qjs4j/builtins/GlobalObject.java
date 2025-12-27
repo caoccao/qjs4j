@@ -340,11 +340,22 @@ public final class GlobalObject {
         arrayBufferPrototype.set("transfer", new JSNativeFunction("transfer", 0, ArrayBufferPrototype::transfer));
         arrayBufferPrototype.set("transferToFixedLength", new JSNativeFunction("transferToFixedLength", 0, ArrayBufferPrototype::transferToFixedLength));
 
-        // Getters
-        arrayBufferPrototype.set("byteLength", new JSNativeFunction("get byteLength", 0, ArrayBufferPrototype::getByteLength));
-        arrayBufferPrototype.set("detached", new JSNativeFunction("get detached", 0, ArrayBufferPrototype::getDetached));
-        arrayBufferPrototype.set("maxByteLength", new JSNativeFunction("get maxByteLength", 0, ArrayBufferPrototype::getMaxByteLength));
-        arrayBufferPrototype.set("resizable", new JSNativeFunction("get resizable", 0, ArrayBufferPrototype::getResizable));
+        // Define getter properties
+        JSNativeFunction byteLengthGetter = new JSNativeFunction("get byteLength", 0, ArrayBufferPrototype::getByteLength);
+        arrayBufferPrototype.defineProperty(PropertyKey.fromString("byteLength"),
+            PropertyDescriptor.accessorDescriptor(byteLengthGetter, null, false, true));
+
+        JSNativeFunction detachedGetter = new JSNativeFunction("get detached", 0, ArrayBufferPrototype::getDetached);
+        arrayBufferPrototype.defineProperty(PropertyKey.fromString("detached"),
+            PropertyDescriptor.accessorDescriptor(detachedGetter, null, false, true));
+
+        JSNativeFunction maxByteLengthGetter = new JSNativeFunction("get maxByteLength", 0, ArrayBufferPrototype::getMaxByteLength);
+        arrayBufferPrototype.defineProperty(PropertyKey.fromString("maxByteLength"),
+            PropertyDescriptor.accessorDescriptor(maxByteLengthGetter, null, false, true));
+
+        JSNativeFunction resizableGetter = new JSNativeFunction("get resizable", 0, ArrayBufferPrototype::getResizable);
+        arrayBufferPrototype.defineProperty(PropertyKey.fromString("resizable"),
+            PropertyDescriptor.accessorDescriptor(resizableGetter, null, false, true));
 
         // Symbol.toStringTag
         arrayBufferPrototype.set(
@@ -522,10 +533,18 @@ public final class GlobalObject {
         // Create DataView.prototype
         JSObject dataViewPrototype = new JSObject();
 
-        // Getters (simplified as regular properties)
-        dataViewPrototype.set("buffer", new JSNativeFunction("get buffer", 0, DataViewPrototype::getBuffer));
-        dataViewPrototype.set("byteLength", new JSNativeFunction("get byteLength", 0, DataViewPrototype::getByteLength));
-        dataViewPrototype.set("byteOffset", new JSNativeFunction("get byteOffset", 0, DataViewPrototype::getByteOffset));
+        // Define getter properties
+        JSNativeFunction bufferGetter = new JSNativeFunction("get buffer", 0, DataViewPrototype::getBuffer);
+        dataViewPrototype.defineProperty(PropertyKey.fromString("buffer"),
+            PropertyDescriptor.accessorDescriptor(bufferGetter, null, false, true));
+
+        JSNativeFunction byteLengthGetter = new JSNativeFunction("get byteLength", 0, DataViewPrototype::getByteLength);
+        dataViewPrototype.defineProperty(PropertyKey.fromString("byteLength"),
+            PropertyDescriptor.accessorDescriptor(byteLengthGetter, null, false, true));
+
+        JSNativeFunction byteOffsetGetter = new JSNativeFunction("get byteOffset", 0, DataViewPrototype::getByteOffset);
+        dataViewPrototype.defineProperty(PropertyKey.fromString("byteOffset"),
+            PropertyDescriptor.accessorDescriptor(byteOffsetGetter, null, false, true));
 
         // Int8/Uint8 methods
         dataViewPrototype.set("getInt8", new JSNativeFunction("getInt8", 1, DataViewPrototype::getInt8));
@@ -944,9 +963,16 @@ public final class GlobalObject {
         // Create SharedArrayBuffer.prototype
         JSObject sharedArrayBufferPrototype = new JSObject();
         sharedArrayBufferPrototype.set("slice", new JSNativeFunction("slice", 2, SharedArrayBufferPrototype::slice));
-        // byteLength getter
+
+        // Define byteLength as a proper getter property
         JSNativeFunction byteLengthGetter = new JSNativeFunction("get byteLength", 0, SharedArrayBufferPrototype::getByteLength);
-        sharedArrayBufferPrototype.set("byteLength", byteLengthGetter); // Simplified: should be a getter
+        PropertyDescriptor byteLengthDesc = PropertyDescriptor.accessorDescriptor(
+            byteLengthGetter,  // getter
+            null,              // no setter
+            false,             // not enumerable
+            true               // configurable
+        );
+        sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("byteLength"), byteLengthDesc);
 
         // Create SharedArrayBuffer constructor
         JSObject sharedArrayBufferConstructor = new JSObject();
