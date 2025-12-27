@@ -783,11 +783,16 @@ public final class GlobalObject {
         objectConstructor.set("fromEntries", createNativeFunction(ctx, "fromEntries", ObjectConstructor::fromEntries, 1));
         objectConstructor.set("assign", createNativeFunction(ctx, "assign", ObjectConstructor::assign, 2));
         objectConstructor.set("create", createNativeFunction(ctx, "create", ObjectConstructor::create, 2));
+        objectConstructor.set("getOwnPropertyDescriptor", createNativeFunction(ctx, "getOwnPropertyDescriptor", ObjectConstructor::getOwnPropertyDescriptor, 2));
+        objectConstructor.set("getOwnPropertyDescriptors", createNativeFunction(ctx, "getOwnPropertyDescriptors", ObjectConstructor::getOwnPropertyDescriptors, 1));
+        objectConstructor.set("getOwnPropertyNames", createNativeFunction(ctx, "getOwnPropertyNames", ObjectConstructor::getOwnPropertyNames, 1));
+        objectConstructor.set("getOwnPropertySymbols", createNativeFunction(ctx, "getOwnPropertySymbols", ObjectConstructor::getOwnPropertySymbols, 1));
         objectConstructor.set("getPrototypeOf", createNativeFunction(ctx, "getPrototypeOf", ObjectConstructor::getPrototypeOf, 1));
         objectConstructor.set("setPrototypeOf", createNativeFunction(ctx, "setPrototypeOf", ObjectConstructor::setPrototypeOf, 2));
         objectConstructor.set("freeze", createNativeFunction(ctx, "freeze", ObjectConstructor::freeze, 1));
         objectConstructor.set("seal", createNativeFunction(ctx, "seal", ObjectConstructor::seal, 1));
         objectConstructor.set("isFrozen", createNativeFunction(ctx, "isFrozen", ObjectConstructor::isFrozen, 1));
+        objectConstructor.set("is", createNativeFunction(ctx, "is", ObjectConstructor::is, 2));
         objectConstructor.set("isSealed", createNativeFunction(ctx, "isSealed", ObjectConstructor::isSealed, 1));
         objectConstructor.set("hasOwn", createNativeFunction(ctx, "hasOwn", ObjectConstructor::hasOwn, 2));
         objectConstructor.set("groupBy", createNativeFunction(ctx, "groupBy", ObjectConstructor::groupBy, 2));

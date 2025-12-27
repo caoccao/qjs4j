@@ -29,6 +29,7 @@ public final class JSPromise extends JSObject {
     private final List<ReactionRecord> rejectReactions;
     private JSValue result;
     private PromiseState state;
+
     /**
      * Create a new Promise in pending state.
      */

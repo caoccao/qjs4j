@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.regexp.RegExpEngine;
 
 /**
  * Implementation of JavaScript String.prototype methods.
@@ -210,10 +211,92 @@ public final class StringPrototype {
 
     /**
      * String.prototype.match(regexp)
-     * ES2020 21.1.3.10 (stub - regex support not implemented yet)
+     * ES2020 21.1.3.10
+     * Returns an array of matches when matching a string against a regular expression.
      */
     public static JSValue match(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        return ctx.throwError("Error", "String.prototype.match not implemented yet");
+        JSString str = JSTypeConversions.toString(thisArg);
+        String s = str.value();
+
+        if (args.length == 0) {
+            return JSNull.INSTANCE;
+        }
+
+        JSValue regexpArg = args[0];
+
+        // Convert to RegExp if not already
+        JSRegExp regexp;
+        if (regexpArg instanceof JSRegExp) {
+            regexp = (JSRegExp) regexpArg;
+        } else if (regexpArg instanceof JSString regexpStr) {
+            regexp = new JSRegExp(regexpStr.value(), "");
+        } else {
+            // Convert to string and create RegExp
+            String pattern = JSTypeConversions.toString(regexpArg).value();
+            regexp = new JSRegExp(pattern, "");
+        }
+
+        // Get the regex engine
+        RegExpEngine engine = regexp.getEngine();
+
+        // Check if global flag is set
+        if (regexp.isGlobal()) {
+            // Global match: return array of all matches
+            JSArray results = new JSArray();
+            int lastIndex = 0;
+
+            while (lastIndex <= s.length()) {
+                RegExpEngine.MatchResult result = engine.exec(s, lastIndex);
+
+                if (result == null || !result.matched()) {
+                    break;
+                }
+
+                // Add the full match to results
+                String matchedText = s.substring(result.startIndex(), result.endIndex());
+                results.push(new JSString(matchedText));
+
+                // Move to next position
+                lastIndex = result.endIndex();
+                if (lastIndex == result.startIndex()) {
+                    // Avoid infinite loop on zero-width matches
+                    lastIndex++;
+                }
+            }
+
+            return results.getLength() > 0 ? results : JSNull.INSTANCE;
+        } else {
+            // Non-global match: return array with match and captures
+            RegExpEngine.MatchResult result = engine.exec(s, 0);
+
+            if (result == null || !result.matched()) {
+                return JSNull.INSTANCE;
+            }
+
+            // Create result array with full match
+            JSArray matchArray = new JSArray();
+            String matchedText = s.substring(result.startIndex(), result.endIndex());
+            matchArray.push(new JSString(matchedText));
+
+            // Add capture groups
+            if (result.captures() != null) {
+                for (String capture : result.captures()) {
+                    if (capture != null) {
+                        matchArray.push(new JSString(capture));
+                    } else {
+                        matchArray.push(JSUndefined.INSTANCE);
+                    }
+                }
+            }
+
+            // Add 'index' property
+            matchArray.set("index", new JSNumber(result.startIndex()));
+
+            // Add 'input' property
+            matchArray.set("input", new JSString(s));
+
+            return matchArray;
+        }
     }
 
     /**
@@ -221,10 +304,81 @@ public final class StringPrototype {
      * ES2020 21.1.3.11
      * Returns an iterator of all results matching a string against a regular expression,
      * including capturing groups.
-     * (stub - regex support not implemented yet)
      */
     public static JSValue matchAll(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        return ctx.throwError("Error", "String.prototype.matchAll not implemented yet");
+        JSString str = JSTypeConversions.toString(thisArg);
+        String s = str.value();
+
+        if (args.length == 0) {
+            return ctx.throwError("TypeError", "String.prototype.matchAll requires a RegExp argument");
+        }
+
+        JSValue regexpArg = args[0];
+
+        // Convert to RegExp if not already
+        JSRegExp regexp;
+        if (regexpArg instanceof JSRegExp) {
+            regexp = (JSRegExp) regexpArg;
+        } else if (regexpArg instanceof JSString regexpStr) {
+            // For matchAll, the regexp must have the 'g' flag
+            regexp = new JSRegExp(regexpStr.value(), "g");
+        } else {
+            // Convert to string and create RegExp with 'g' flag
+            String pattern = JSTypeConversions.toString(regexpArg).value();
+            regexp = new JSRegExp(pattern, "g");
+        }
+
+        // matchAll requires global flag
+        if (!regexp.isGlobal()) {
+            return ctx.throwError("TypeError", "String.prototype.matchAll called with a non-global RegExp argument");
+        }
+
+        // Collect all matches into an array and return an iterator
+        JSArray matches = new JSArray();
+        RegExpEngine engine = regexp.getEngine();
+        int lastIndex = 0;
+
+        while (lastIndex <= s.length()) {
+            RegExpEngine.MatchResult result = engine.exec(s, lastIndex);
+
+            if (result == null || !result.matched()) {
+                break;
+            }
+
+            // Create match array for this result
+            JSArray matchArray = new JSArray();
+            String matchedText = s.substring(result.startIndex(), result.endIndex());
+            matchArray.push(new JSString(matchedText));
+
+            // Add capture groups
+            if (result.captures() != null) {
+                for (String capture : result.captures()) {
+                    if (capture != null) {
+                        matchArray.push(new JSString(capture));
+                    } else {
+                        matchArray.push(JSUndefined.INSTANCE);
+                    }
+                }
+            }
+
+            // Add 'index' property
+            matchArray.set("index", new JSNumber(result.startIndex()));
+
+            // Add 'input' property
+            matchArray.set("input", new JSString(s));
+
+            matches.push(matchArray);
+
+            // Move to next position
+            lastIndex = result.endIndex();
+            if (lastIndex == result.startIndex()) {
+                // Avoid infinite loop on zero-width matches
+                lastIndex++;
+            }
+        }
+
+        // Return an iterator over the matches
+        return JSIterator.arrayIterator(matches);
     }
 
     /**

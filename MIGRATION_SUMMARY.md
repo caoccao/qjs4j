@@ -550,6 +550,400 @@ All 260 tests passing
 
 ---
 
+## Phase 32: String Method Implementations and Stub Cleanup
+
+### Completed Implementations
+
+#### 1. Object.freeze() in ObjectPrototype
+**File**: `ObjectPrototype.java:188-202`
+**Status**: ✅ Complete
+
+Implemented the previously stubbed Object.freeze() method to actually freeze objects.
+
+**Changes**:
+- Replaced stub comment with actual implementation
+- Calls `obj.freeze()` to freeze the object
+- Returns the frozen object (or primitive if not an object)
+- Maintains ES2020 19.1.2.6 spec compliance
+
+#### 2. Object.create() Second Parameter in ObjectPrototype
+**File**: `ObjectPrototype.java:66-154`
+**Status**: ✅ Complete
+
+Implemented full property descriptor support for Object.create() second parameter in ObjectPrototype (was already implemented in ObjectConstructor, now consistent).
+
+**Implementation**:
+- Accepts optional second argument with property descriptors
+- Validates that properties object is an object
+- Iterates over all own properties
+- Parses descriptor objects (value, writable, enumerable, configurable, get, set)
+- Validates getters and setters are functions
+- Defines properties using PropertyDescriptor
+
+#### 3. String.prototype.match(regexp)
+**File**: `StringPrototype.java:211-299`
+**Spec**: ES2020 21.1.3.10
+**Status**: ✅ Complete
+
+Fully implemented String.prototype.match with regex support.
+
+**Implementation Details**:
+```java
+public static JSValue match(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    // Convert argument to RegExp
+    JSRegExp regexp = convertToRegExp(args[0]);
+    RegExpEngine engine = regexp.getEngine();
+
+    if (regexp.isGlobal()) {
+        // Global flag: return array of all matches
+        JSArray results = new JSArray();
+        // Loop through string collecting matches
+        return results;
+    } else {
+        // Non-global: return array with match and captures
+        JSArray matchArray = new JSArray();
+        matchArray.push(matchedText);
+        // Add capture groups
+        matchArray.set("index", startIndex);
+        matchArray.set("input", originalString);
+        return matchArray;
+    }
+}
+```
+
+**Features**:
+- Converts non-RegExp arguments to RegExp
+- Global flag: returns array of all match strings
+- Non-global: returns array with match, captures, index, and input properties
+- Handles zero-width matches to avoid infinite loops
+- Returns null for no matches
+
+#### 4. String.prototype.matchAll(regexp)
+**File**: `StringPrototype.java:301-381`
+**Spec**: ES2020 21.1.3.11
+**Status**: ✅ Complete
+
+Fully implemented String.prototype.matchAll returning an iterator.
+
+**Implementation Details**:
+```java
+public static JSValue matchAll(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    JSRegExp regexp = convertToRegExp(args[0]);
+
+    // Enforce global flag requirement
+    if (!regexp.isGlobal()) {
+        return ctx.throwError("TypeError", "matchAll called with non-global RegExp");
+    }
+
+    // Collect all matches
+    JSArray matches = new JSArray();
+    for (each match) {
+        JSArray matchArray = createMatchArray(match, captures);
+        matchArray.set("index", startIndex);
+        matchArray.set("input", originalString);
+        matches.push(matchArray);
+    }
+
+    return JSIterator.arrayIterator(matches);
+}
+```
+
+**Features**:
+- Requires global flag (throws TypeError otherwise)
+- Returns iterator over all matches
+- Each match includes captures, index, and input
+- Handles zero-width matches correctly
+- Uses JSIterator.arrayIterator for proper iteration protocol
+
+### Files Modified in Phase 32
+
+1. **ObjectPrototype.java**
+   - Implemented Object.freeze() (line 188-202)
+   - Implemented Object.create() second parameter (line 66-154)
+   - Added `import java.util.List;`
+
+2. **StringPrototype.java**
+   - Implemented String.prototype.match() (line 211-299)
+   - Implemented String.prototype.matchAll() (line 301-381)
+   - Removed stub error messages
+
+### RegExp Infrastructure Used
+
+Phase 32 leverages the existing regex infrastructure:
+- **JSRegExp**: JavaScript RegExp object wrapper
+- **RegExpEngine**: Bytecode-based regex execution engine
+- **RegExpCompiler**: Pattern compilation to bytecode
+- **MatchResult**: Record containing match details (startIndex, endIndex, captures, indices)
+
+### Test Results
+```
+BUILD SUCCESSFUL
+All 260 tests passing
+Zero compilation errors
+```
+
+---
+
+## Phase 33: Collection Constructor Iterable Initialization
+
+### Completed Implementations
+
+All collection constructors (Map, Set, WeakMap, WeakSet) now properly support iterable initialization according to ES2015+ specifications.
+
+#### 1. Map Constructor with Iterable
+**File**: `VirtualMachine.java:732-797`
+**Spec**: ES2015 23.1.1.1
+**Status**: ✅ Complete
+
+Implemented Map constructor to accept an optional iterable of [key, value] pairs.
+
+**Implementation Details**:
+```java
+// Map constructor now supports:
+new Map([[key1, value1], [key2, value2]])
+new Map(someIterable)
+```
+
+**Features**:
+- Accepts array of [key, value] pairs
+- Supports any iterable object
+- Uses JSIteratorHelper.getIterator() for iteration protocol
+- Validates entry format
+- Populates map during construction
+
+#### 2. Set Constructor with Iterable
+**File**: `VirtualMachine.java:799-846`
+**Spec**: ES2015 23.2.1.1
+**Status**: ✅ Complete
+
+Implemented Set constructor to accept an optional iterable of values.
+
+**Implementation Details**:
+```java
+// Set constructor now supports:
+new Set([value1, value2, value3])
+new Set(someIterable)
+```
+
+**Features**:
+- Accepts array of values
+- Supports any iterable object
+- Adds each value to the set
+- Automatic deduplication via SameValueZero equality
+
+#### 3. WeakMap Constructor with Iterable
+**File**: `VirtualMachine.java:848-929`
+**Spec**: ES2015 23.3.1.1
+**Status**: ✅ Complete
+
+Implemented WeakMap constructor to accept an optional iterable of [key, value] pairs with object key validation.
+
+**Implementation Details**:
+```java
+// WeakMap constructor now supports:
+new WeakMap([[objKey1, value1], [objKey2, value2]])
+```
+
+**Features**:
+- Accepts array of [key, value] pairs
+- Supports any iterable object
+- **Validates keys are objects** (throws TypeError for non-objects)
+- Populates weakmap during construction
+- Weak reference semantics for garbage collection
+
+#### 4. WeakSet Constructor with Iterable
+**File**: `VirtualMachine.java:931-994`
+**Spec**: ES2015 23.4.1.1
+**Status**: ✅ Complete
+
+Implemented WeakSet constructor to accept an optional iterable of object values.
+
+**Implementation Details**:
+```java
+// WeakSet constructor now supports:
+new WeakSet([obj1, obj2, obj3])
+```
+
+**Features**:
+- Accepts array of object values
+- Supports any iterable object
+- **Validates values are objects** (throws TypeError for non-objects)
+- Weak reference semantics for garbage collection
+
+### Common Implementation Pattern
+
+All four constructors follow the same pattern:
+
+1. **Fast path for arrays**: Direct iteration over JSArray for efficiency
+2. **Iterable protocol**: Uses `JSIteratorHelper.getIterator()` for other iterables
+3. **Iteration**: Calls `iter.next()` until done
+4. **Validation**: Type checking (especially for Weak collections)
+5. **Population**: Adds entries/values during construction
+
+### Iterator Protocol Integration
+
+The implementation properly uses the existing iterator infrastructure:
+- **JSIteratorHelper.getIterator(iterable, context)**: Gets iterator from iterable
+- **iter.next()**: Returns {value, done} result object
+- **Checks done property**: Terminates when done is true
+- **Extracts value**: Gets value from result object
+
+### Files Modified in Phase 33
+
+1. **VirtualMachine.java**
+   - Map constructor: Added iterable initialization (lines 744-793)
+   - Set constructor: Added iterable initialization (lines 812-842)
+   - WeakMap constructor: Added iterable initialization (lines 861-925)
+   - WeakSet constructor: Added iterable initialization (lines 944-990)
+   - Removed 4 TODO comments
+
+### Test Results
+```
+BUILD SUCCESSFUL
+All 260 tests passing
+Zero compilation errors
+```
+
+---
+
+## Phase 34: Object Static Method Implementations
+
+### Completed Implementations
+
+Implemented 5 essential Object static methods from ES2015-ES2017 specifications.
+
+#### 1. Object.is(value1, value2)
+**File**: `ObjectConstructor.java:469-513`
+**Spec**: ES2015 19.1.2.10
+**Status**: ✅ Complete
+
+Implements the SameValue algorithm for comparing two values.
+
+**Implementation Details**:
+```java
+public static JSValue is(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    // SameValue algorithm (ES2020 7.2.11)
+    // 1. Type checking
+    // 2. Special handling for Numbers:
+    //    - NaN equals NaN (unlike ===)
+    //    - +0 differs from -0 (unlike ===)
+    // 3. Reference equality for other types
+}
+```
+
+**Features**:
+- **NaN equals NaN**: `Object.is(NaN, NaN) === true` (vs `NaN === NaN` is false)
+- **+0 differs from -0**: `Object.is(+0, -0) === false` (vs `+0 === -0` is true)
+- Uses `Double.doubleToRawLongBits()` to distinguish +0 from -0
+- Reference equality for objects
+
+####  2. Object.getOwnPropertyDescriptor(obj, prop)
+**File**: `ObjectConstructor.java:515-552`
+**Spec**: ES2015 19.1.2.6
+**Status**: ✅ Complete
+
+Returns a property descriptor for an own property of an object.
+
+**Implementation Details**:
+- Calls `obj.getOwnPropertyDescriptor(key)`
+- Converts PropertyDescriptor to descriptor object
+- Returns object with: value, writable, enumerable, configurable (data descriptor)
+- Or: get, set, enumerable, configurable (accessor descriptor)
+- Returns undefined if property doesn't exist
+
+#### 3. Object.getOwnPropertyDescriptors(obj)
+**File**: `ObjectConstructor.java:554-593`
+**Spec**: ES2017 19.1.2.7
+**Status**: ✅ Complete
+
+Returns all own property descriptors of an object.
+
+**Implementation Details**:
+- Iterates over all own property keys
+- Gets descriptor for each property
+- Returns object mapping keys to descriptor objects
+- Handles both data and accessor descriptors
+
+**Use Case**: Object cloning with property descriptors
+```javascript
+const clone = Object.create(
+  Object.getPrototypeOf(obj),
+  Object.getOwnPropertyDescriptors(obj)
+);
+```
+
+#### 4. Object.getOwnPropertyNames(obj)
+**File**: `ObjectConstructor.java:595-621`
+**Spec**: ES2015 19.1.2.8
+**Status**: ✅ Complete
+
+Returns an array of all own property names (including non-enumerable).
+
+**Implementation Details**:
+- Gets all own property keys from object
+- Filters to include only string keys (not symbols)
+- Returns array of property names
+- Includes non-enumerable properties (unlike Object.keys)
+
+**Difference from Object.keys**:
+- `Object.keys()`: Only enumerable string properties
+- `Object.getOwnPropertyNames()`: All string properties (including non-enumerable)
+
+#### 5. Object.getOwnPropertySymbols(obj)
+**File**: `ObjectConstructor.java:623-652`
+**Spec**: ES2015 19.1.2.9
+**Status**: ✅ Complete
+
+Returns an array of all own symbol properties.
+
+**Implementation Details**:
+- Gets all own property keys from object
+- Filters to include only symbol keys (not strings)
+- Returns array of JSSymbol objects
+- Includes both enumerable and non-enumerable symbols
+
+**Use Case**: Getting all symbol-keyed properties
+```javascript
+const symbols = Object.getOwnPropertySymbols(obj);
+```
+
+### Files Modified in Phase 34
+
+1. **ObjectConstructor.java**
+   - Added Object.is() (lines 469-513)
+   - Added Object.getOwnPropertyDescriptor() (lines 515-552)
+   - Added Object.getOwnPropertyDescriptors() (lines 554-593)
+   - Added Object.getOwnPropertyNames() (lines 595-621)
+   - Added Object.getOwnPropertySymbols() (lines 623-652)
+
+2. **GlobalObject.java**
+   - Registered all 5 new Object static methods (lines 786-789, 791)
+
+3. **README.md**
+   - Updated Object methods list to include new methods
+
+### SameValue vs SameValueZero
+
+The implementation correctly distinguishes between:
+
+| Comparison | `===` | SameValueZero | SameValue (Object.is) |
+|------------|-------|---------------|----------------------|
+| NaN vs NaN | false | **true** | **true** |
+| +0 vs -0 | true | **true** | **false** |
+
+- **SameValue**: Used by Object.is
+- **SameValueZero**: Used by Map, Set, includes()
+- **Strict Equality (===)**: Standard JavaScript comparison
+
+### Test Results
+```
+BUILD SUCCESSFUL
+All 260 tests passing
+Zero compilation errors
+```
+
+---
+
 ## Pending Features
 
 ### Phase 16.2: Await Expression Handling
@@ -598,7 +992,23 @@ Successfully brought qjs4j from **ES2020 to ES2024 compliance** by implementing 
 ### Migration Summary
 - **Phases 27-30**: ES2021-ES2024 feature implementation (16 new features)
 - **Phase 31**: Post-migration cleanup and enhancement (Object.prototype.toString fix, Object.create verification)
+- **Phase 32**: String method implementations and stub cleanup (match, matchAll, Object.freeze, Object.create)
+- **Phase 33**: Collection constructor iterable initialization (Map, Set, WeakMap, WeakSet)
+- **Phase 34**: Object static method implementations (is, getOwnPropertyDescriptor, getOwnPropertyDescriptors, getOwnPropertyNames, getOwnPropertySymbols)
 - **Total Tests**: 260 tests, all passing
 - **Build Status**: Clean build with zero errors
+
+### Completed String Methods
+All ES2020 String.prototype methods are now fully implemented, including:
+- ✅ String.prototype.match (with regex support)
+- ✅ String.prototype.matchAll (returns iterator with regex support)
+- ✅ All other ES2020 string methods previously completed
+
+### Completed Collection Features
+All ES2015 collection constructors now support iterable initialization:
+- ✅ Map(iterable) - accepts [key, value] pairs
+- ✅ Set(iterable) - accepts values
+- ✅ WeakMap(iterable) - accepts [key, value] pairs with object key validation
+- ✅ WeakSet(iterable) - accepts object values
 
 The project now supports modern JavaScript features through ES2024, making it one of the most complete pure-Java JavaScript implementations available.

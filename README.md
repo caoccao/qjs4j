@@ -29,9 +29,9 @@ qjs4j is a complete reimplementation of the QuickJS JavaScript engine in pure Ja
 - **Spread operator**: Array and object spread
 
 #### ✅ Built-in Objects
-- **Object**: keys, values, entries, fromEntries (ES2019), assign, create, freeze, seal, getPrototypeOf, setPrototypeOf, hasOwn (ES2022), groupBy (ES2024)
+- **Object**: keys, values, entries, fromEntries (ES2019), assign, create, freeze, seal, getPrototypeOf, setPrototypeOf, getOwnPropertyDescriptor, getOwnPropertyDescriptors (ES2017), getOwnPropertyNames, getOwnPropertySymbols, is (ES2015), hasOwn (ES2022), groupBy (ES2024)
 - **Array**: push, pop, shift, unshift, slice, splice, concat, join, reverse, sort, map, filter, reduce, find, findIndex, findLast (ES2023), findLastIndex (ES2023), every, some, includes, flat (ES2019), flatMap (ES2019), at (ES2022), toReversed (ES2023), toSorted (ES2023), toSpliced (ES2023), with (ES2023)
-- **String**: charAt, charCodeAt, at (ES2022), substring, substr, indexOf, lastIndexOf, split, replace, replaceAll (ES2021), toUpperCase, toLowerCase, trim, trimStart (ES2019), trimEnd (ES2019), repeat, startsWith, endsWith, includes, padStart, padEnd
+- **String**: charAt, charCodeAt, at (ES2022), substring, substr, indexOf, lastIndexOf, split, replace, replaceAll (ES2021), match, matchAll, toUpperCase, toLowerCase, trim, trimStart (ES2019), trimEnd (ES2019), repeat, startsWith, endsWith, includes, padStart, padEnd
 - **Number**: parseInt, parseFloat, isNaN, isFinite, toFixed, toPrecision, toExponential
 - **Boolean**: toString, valueOf
 - **Date**: Date constructor with current time, date manipulation methods

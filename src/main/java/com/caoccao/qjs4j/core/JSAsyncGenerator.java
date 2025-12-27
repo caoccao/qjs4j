@@ -33,6 +33,7 @@ public final class JSAsyncGenerator extends JSObject {
     private JSValue returnValue;
     private AsyncGeneratorState state;
     private JSValue thrownValue;
+
     /**
      * Create a new async generator.
      *

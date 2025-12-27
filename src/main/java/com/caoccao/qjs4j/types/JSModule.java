@@ -44,6 +44,7 @@ public final class JSModule {
     private final String url;
     private JSValue defaultExport;
     private ModuleStatus status;
+
     /**
      * Create a new module.
      *

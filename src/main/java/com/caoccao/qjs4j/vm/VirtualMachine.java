@@ -742,8 +742,55 @@ public final class VirtualMachine {
                 }
 
                 // If an iterable is provided, populate the map
-                // For now, simplified - we'll skip iterable initialization
-                // TODO: Implement iterable initialization when iterators are available
+                if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
+                    JSValue iterableArg = args[0];
+
+                    // Handle array directly for efficiency
+                    if (iterableArg instanceof JSArray arr) {
+                        for (long i = 0; i < arr.getLength(); i++) {
+                            JSValue entry = arr.get((int) i);
+                            if (!(entry instanceof JSObject entryObj)) {
+                                context.throwError("TypeError", "Iterator value must be an object");
+                                valueStack.push(JSUndefined.INSTANCE);
+                                return;
+                            }
+
+                            // Get key and value from entry [key, value]
+                            JSValue key = entryObj.get(0);
+                            JSValue value = entryObj.get(1);
+                            mapObj.mapSet(key, value);
+                        }
+                    } else if (iterableArg instanceof JSObject) {
+                        // Try to get iterator
+                        JSValue iterator = JSIteratorHelper.getIterator(iterableArg, context);
+                        if (iterator instanceof JSIterator iter) {
+                            // Iterate and populate
+                            while (true) {
+                                JSObject nextResult = iter.next();
+                                if (nextResult == null) {
+                                    break;
+                                }
+
+                                JSValue done = nextResult.get("done");
+                                if (done == JSBoolean.TRUE) {
+                                    break;
+                                }
+
+                                JSValue entry = nextResult.get("value");
+                                if (!(entry instanceof JSObject entryObj)) {
+                                    context.throwError("TypeError", "Iterator value must be an object");
+                                    valueStack.push(JSUndefined.INSTANCE);
+                                    return;
+                                }
+
+                                // Get key and value from entry [key, value]
+                                JSValue key = entryObj.get(0);
+                                JSValue value = entryObj.get(1);
+                                mapObj.mapSet(key, value);
+                            }
+                        }
+                    }
+                }
 
                 valueStack.push(mapObj);
                 return;
@@ -762,8 +809,37 @@ public final class VirtualMachine {
                 }
 
                 // If an iterable is provided, populate the set
-                // For now, simplified - we'll skip iterable initialization
-                // TODO: Implement iterable initialization when iterators are available
+                if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
+                    JSValue iterableArg = args[0];
+
+                    // Handle array directly for efficiency
+                    if (iterableArg instanceof JSArray arr) {
+                        for (long i = 0; i < arr.getLength(); i++) {
+                            JSValue value = arr.get((int) i);
+                            setObj.setAdd(value);
+                        }
+                    } else if (iterableArg instanceof JSObject) {
+                        // Try to get iterator
+                        JSValue iterator = JSIteratorHelper.getIterator(iterableArg, context);
+                        if (iterator instanceof JSIterator iter) {
+                            // Iterate and populate
+                            while (true) {
+                                JSObject nextResult = iter.next();
+                                if (nextResult == null) {
+                                    break;
+                                }
+
+                                JSValue done = nextResult.get("done");
+                                if (done == JSBoolean.TRUE) {
+                                    break;
+                                }
+
+                                JSValue value = nextResult.get("value");
+                                setObj.setAdd(value);
+                            }
+                        }
+                    }
+                }
 
                 valueStack.push(setObj);
                 return;
@@ -782,8 +858,71 @@ public final class VirtualMachine {
                 }
 
                 // If an iterable is provided, populate the weakmap
-                // For now, simplified - we'll skip iterable initialization
-                // TODO: Implement iterable initialization when iterators are available
+                if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
+                    JSValue iterableArg = args[0];
+
+                    // Handle array directly for efficiency
+                    if (iterableArg instanceof JSArray arr) {
+                        for (long i = 0; i < arr.getLength(); i++) {
+                            JSValue entry = arr.get((int) i);
+                            if (!(entry instanceof JSObject entryObj)) {
+                                context.throwError("TypeError", "Iterator value must be an object");
+                                valueStack.push(JSUndefined.INSTANCE);
+                                return;
+                            }
+
+                            // Get key and value from entry [key, value]
+                            JSValue key = entryObj.get(0);
+                            JSValue value = entryObj.get(1);
+
+                            // WeakMap requires object keys
+                            if (!(key instanceof JSObject)) {
+                                context.throwError("TypeError", "WeakMap key must be an object");
+                                valueStack.push(JSUndefined.INSTANCE);
+                                return;
+                            }
+
+                            weakMapObj.weakMapSet((JSObject) key, value);
+                        }
+                    } else if (iterableArg instanceof JSObject) {
+                        // Try to get iterator
+                        JSValue iterator = JSIteratorHelper.getIterator(iterableArg, context);
+                        if (iterator instanceof JSIterator iter) {
+                            // Iterate and populate
+                            while (true) {
+                                JSObject nextResult = iter.next();
+                                if (nextResult == null) {
+                                    break;
+                                }
+
+                                JSValue done = nextResult.get("done");
+                                if (done == JSBoolean.TRUE) {
+                                    break;
+                                }
+
+                                JSValue entry = nextResult.get("value");
+                                if (!(entry instanceof JSObject entryObj)) {
+                                    context.throwError("TypeError", "Iterator value must be an object");
+                                    valueStack.push(JSUndefined.INSTANCE);
+                                    return;
+                                }
+
+                                // Get key and value from entry [key, value]
+                                JSValue key = entryObj.get(0);
+                                JSValue value = entryObj.get(1);
+
+                                // WeakMap requires object keys
+                                if (!(key instanceof JSObject)) {
+                                    context.throwError("TypeError", "WeakMap key must be an object");
+                                    valueStack.push(JSUndefined.INSTANCE);
+                                    return;
+                                }
+
+                                weakMapObj.weakMapSet((JSObject) key, value);
+                            }
+                        }
+                    }
+                }
 
                 valueStack.push(weakMapObj);
                 return;
@@ -802,8 +941,53 @@ public final class VirtualMachine {
                 }
 
                 // If an iterable is provided, populate the weakset
-                // For now, simplified - we'll skip iterable initialization
-                // TODO: Implement iterable initialization when iterators are available
+                if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
+                    JSValue iterableArg = args[0];
+
+                    // Handle array directly for efficiency
+                    if (iterableArg instanceof JSArray arr) {
+                        for (long i = 0; i < arr.getLength(); i++) {
+                            JSValue value = arr.get((int) i);
+
+                            // WeakSet requires object values
+                            if (!(value instanceof JSObject)) {
+                                context.throwError("TypeError", "WeakSet value must be an object");
+                                valueStack.push(JSUndefined.INSTANCE);
+                                return;
+                            }
+
+                            weakSetObj.weakSetAdd((JSObject) value);
+                        }
+                    } else if (iterableArg instanceof JSObject) {
+                        // Try to get iterator
+                        JSValue iterator = JSIteratorHelper.getIterator(iterableArg, context);
+                        if (iterator instanceof JSIterator iter) {
+                            // Iterate and populate
+                            while (true) {
+                                JSObject nextResult = iter.next();
+                                if (nextResult == null) {
+                                    break;
+                                }
+
+                                JSValue done = nextResult.get("done");
+                                if (done == JSBoolean.TRUE) {
+                                    break;
+                                }
+
+                                JSValue value = nextResult.get("value");
+
+                                // WeakSet requires object values
+                                if (!(value instanceof JSObject)) {
+                                    context.throwError("TypeError", "WeakSet value must be an object");
+                                    valueStack.push(JSUndefined.INSTANCE);
+                                    return;
+                                }
+
+                                weakSetObj.weakSetAdd((JSObject) value);
+                            }
+                        }
+                    }
+                }
 
                 valueStack.push(weakSetObj);
                 return;

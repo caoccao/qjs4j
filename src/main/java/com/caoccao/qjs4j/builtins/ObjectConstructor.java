@@ -322,6 +322,145 @@ public final class ObjectConstructor {
     }
 
     /**
+     * Object.getOwnPropertyDescriptor(obj, prop)
+     * ES2015 19.1.2.6
+     * Returns a property descriptor for an own property of an object.
+     */
+    public static JSValue getOwnPropertyDescriptor(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (args.length < 2) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue objArg = args[0];
+        if (!(objArg instanceof JSObject obj)) {
+            return ctx.throwError("TypeError", "Object.getOwnPropertyDescriptor called on non-object");
+        }
+
+        PropertyKey key = PropertyKey.fromValue(args[1]);
+        PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
+
+        if (desc == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        // Convert PropertyDescriptor to a descriptor object
+        JSObject descObj = new JSObject();
+
+        if (desc.isDataDescriptor()) {
+            descObj.set("value", desc.getValue() != null ? desc.getValue() : JSUndefined.INSTANCE);
+            descObj.set("writable", JSBoolean.valueOf(desc.isWritable()));
+        } else if (desc.isAccessorDescriptor()) {
+            descObj.set("get", desc.getGetter() != null ? desc.getGetter() : JSUndefined.INSTANCE);
+            descObj.set("set", desc.getSetter() != null ? desc.getSetter() : JSUndefined.INSTANCE);
+        }
+
+        descObj.set("enumerable", JSBoolean.valueOf(desc.isEnumerable()));
+        descObj.set("configurable", JSBoolean.valueOf(desc.isConfigurable()));
+
+        return descObj;
+    }
+
+    /**
+     * Object.getOwnPropertyDescriptors(obj)
+     * ES2017 19.1.2.7
+     * Returns all own property descriptors of an object.
+     */
+    public static JSValue getOwnPropertyDescriptors(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (args.length == 0) {
+            return ctx.throwError("TypeError", "Object.getOwnPropertyDescriptors called on non-object");
+        }
+
+        JSValue objArg = args[0];
+        if (!(objArg instanceof JSObject obj)) {
+            return ctx.throwError("TypeError", "Object.getOwnPropertyDescriptors called on non-object");
+        }
+
+        JSObject result = new JSObject();
+        List<PropertyKey> keys = obj.getOwnPropertyKeys();
+
+        for (PropertyKey key : keys) {
+            PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
+            if (desc != null) {
+                JSObject descObj = new JSObject();
+
+                if (desc.isDataDescriptor()) {
+                    descObj.set("value", desc.getValue() != null ? desc.getValue() : JSUndefined.INSTANCE);
+                    descObj.set("writable", JSBoolean.valueOf(desc.isWritable()));
+                } else if (desc.isAccessorDescriptor()) {
+                    descObj.set("get", desc.getGetter() != null ? desc.getGetter() : JSUndefined.INSTANCE);
+                    descObj.set("set", desc.getSetter() != null ? desc.getSetter() : JSUndefined.INSTANCE);
+                }
+
+                descObj.set("enumerable", JSBoolean.valueOf(desc.isEnumerable()));
+                descObj.set("configurable", JSBoolean.valueOf(desc.isConfigurable()));
+
+                result.set(key, descObj);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Object.getOwnPropertyNames(obj)
+     * ES2015 19.1.2.8
+     * Returns an array of all own property names (including non-enumerable).
+     */
+    public static JSValue getOwnPropertyNames(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (args.length == 0) {
+            return ctx.throwError("TypeError", "Object.getOwnPropertyNames called on non-object");
+        }
+
+        JSValue objArg = args[0];
+        if (!(objArg instanceof JSObject obj)) {
+            return ctx.throwError("TypeError", "Object.getOwnPropertyNames called on non-object");
+        }
+
+        List<PropertyKey> keys = obj.getOwnPropertyKeys();
+        JSArray result = new JSArray();
+
+        for (PropertyKey key : keys) {
+            // Only include string keys (not symbols)
+            if (!key.isSymbol()) {
+                result.push(new JSString(key.toPropertyString()));
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Object.getOwnPropertySymbols(obj)
+     * ES2015 19.1.2.9
+     * Returns an array of all own symbol properties.
+     */
+    public static JSValue getOwnPropertySymbols(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        if (args.length == 0) {
+            return new JSArray();
+        }
+
+        JSValue objArg = args[0];
+        if (!(objArg instanceof JSObject obj)) {
+            return new JSArray();
+        }
+
+        List<PropertyKey> keys = obj.getOwnPropertyKeys();
+        JSArray result = new JSArray();
+
+        for (PropertyKey key : keys) {
+            // Only include symbol keys
+            if (key.isSymbol()) {
+                JSSymbol symbol = key.asSymbol();
+                if (symbol != null) {
+                    result.push(symbol);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
      * Object.getPrototypeOf(obj)
      * ES2020 19.1.2.9
      * Returns the prototype of the specified object.
@@ -430,6 +569,52 @@ public final class ObjectConstructor {
         PropertyKey key = PropertyKey.fromString(propName.value());
 
         return JSBoolean.valueOf(obj.hasOwnProperty(key));
+    }
+
+    /**
+     * Object.is(value1, value2)
+     * ES2015 19.1.2.10
+     * Determines whether two values are the same value using SameValue algorithm.
+     * Unlike ===, Object.is treats NaN as equal to NaN and +0 as different from -0.
+     */
+    public static JSValue is(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        JSValue x = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue y = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+
+        // SameValue algorithm (ES2020 7.2.11)
+
+        // 1. If Type(x) is different from Type(y), return false
+        if (x.getClass() != y.getClass()) {
+            return JSBoolean.FALSE;
+        }
+
+        // 2. If Type(x) is Number, then
+        if (x instanceof JSNumber xNum && y instanceof JSNumber yNum) {
+            double xVal = xNum.value();
+            double yVal = yNum.value();
+
+            // a. If x is NaN and y is NaN, return true
+            if (Double.isNaN(xVal) && Double.isNaN(yVal)) {
+                return JSBoolean.TRUE;
+            }
+
+            // b. If x is +0 and y is -0, return false
+            if (xVal == 0.0 && yVal == 0.0) {
+                // Check for +0 vs -0
+                if (Double.doubleToRawLongBits(xVal) != Double.doubleToRawLongBits(yVal)) {
+                    return JSBoolean.FALSE;
+                }
+            }
+
+            // c. If x is -0 and y is +0, return false (covered above)
+            // d. If x is the same Number value as y, return true
+            // e. Return false
+            return JSBoolean.valueOf(xVal == yVal);
+        }
+
+        // 3. Return SameValueNonNumber(x, y)
+        // For other types, use reference equality
+        return JSBoolean.valueOf(x == y);
     }
 
     /**
