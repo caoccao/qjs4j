@@ -33,8 +33,18 @@ public final class ProxyConstructor {
      * Returns an object with a proxy and a revoke function.
      */
     public static JSValue revocable(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        if (args.length < 2 || !(args[0] instanceof JSObject target) || !(args[1] instanceof JSObject handler)) {
-            return ctx.throwError("TypeError", "Proxy.revocable requires target and handler objects");
+        if (args.length < 2) {
+            return ctx.throwError("TypeError", "Proxy.revocable requires target and handler arguments");
+        }
+
+        // Target must be an object or function (in JavaScript, functions are objects)
+        JSValue target = args[0];
+        if (!(target instanceof JSObject) && !(target instanceof JSFunction)) {
+            return ctx.throwError("TypeError", "Proxy.revocable target must be an object");
+        }
+
+        if (!(args[1] instanceof JSObject handler)) {
+            return ctx.throwError("TypeError", "Proxy.revocable handler must be an object");
         }
 
         // Create the proxy

@@ -1078,7 +1078,9 @@ public final class VirtualMachine {
                     return;
                 }
 
-                if (!(args[0] instanceof JSObject target)) {
+                // Target must be an object or function (in JavaScript, functions are objects)
+                JSValue target = args[0];
+                if (!(target instanceof JSObject) && !(target instanceof JSFunction)) {
                     context.throwError("TypeError", "Proxy target must be an object");
                     valueStack.push(JSUndefined.INSTANCE);
                     return;
