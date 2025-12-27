@@ -25,6 +25,15 @@ import com.caoccao.qjs4j.core.*;
 public final class ArrayBufferConstructor {
 
     /**
+     * get ArrayBuffer[@@species]
+     * ES2020 24.1.3.3
+     * Returns the ArrayBuffer constructor.
+     */
+    public static JSValue getSpecies(JSContext ctx, JSValue thisArg, JSValue[] args) {
+        return thisArg;
+    }
+
+    /**
      * ArrayBuffer.isView(value)
      * ES2020 24.1.3.1
      * Returns true if value is a TypedArray or DataView.

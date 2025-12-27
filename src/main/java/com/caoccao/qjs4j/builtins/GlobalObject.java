@@ -344,9 +344,26 @@ public final class GlobalObject {
         // Create ArrayBuffer.prototype
         JSObject arrayBufferPrototype = new JSObject();
         arrayBufferPrototype.set("slice", createNativeFunction(ctx, "slice", ArrayBufferPrototype::slice, 2));
-        // byteLength getter
+        arrayBufferPrototype.set("resize", createNativeFunction(ctx, "resize", ArrayBufferPrototype::resize, 1));
+        arrayBufferPrototype.set("transfer", createNativeFunction(ctx, "transfer", ArrayBufferPrototype::transfer, 0));
+        arrayBufferPrototype.set("transferToFixedLength", createNativeFunction(ctx, "transferToFixedLength", ArrayBufferPrototype::transferToFixedLength, 0));
+        
+        // Getters
         JSNativeFunction byteLengthGetter = createNativeFunction(ctx, "get byteLength", ArrayBufferPrototype::getByteLength, 0);
         arrayBufferPrototype.set("byteLength", byteLengthGetter); // Simplified: should be a getter
+        
+        JSNativeFunction detachedGetter = createNativeFunction(ctx, "get detached", ArrayBufferPrototype::getDetached, 0);
+        arrayBufferPrototype.set("detached", detachedGetter);
+        
+        JSNativeFunction maxByteLengthGetter = createNativeFunction(ctx, "get maxByteLength", ArrayBufferPrototype::getMaxByteLength, 0);
+        arrayBufferPrototype.set("maxByteLength", maxByteLengthGetter);
+        
+        JSNativeFunction resizableGetter = createNativeFunction(ctx, "get resizable", ArrayBufferPrototype::getResizable, 0);
+        arrayBufferPrototype.set("resizable", resizableGetter);
+        
+        // Symbol.toStringTag
+        JSNativeFunction toStringTagGetter = createNativeFunction(ctx, "get [Symbol.toStringTag]", ArrayBufferPrototype::getToStringTag, 0);
+        arrayBufferPrototype.set(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), toStringTagGetter);
 
         // Create ArrayBuffer constructor
         JSObject arrayBufferConstructor = new JSObject();
@@ -355,6 +372,10 @@ public final class GlobalObject {
 
         // Static methods
         arrayBufferConstructor.set("isView", createNativeFunction(ctx, "isView", ArrayBufferConstructor::isView, 1));
+
+        // Symbol.species getter
+        JSNativeFunction speciesGetter = createNativeFunction(ctx, "get [Symbol.species]", ArrayBufferConstructor::getSpecies, 0);
+        arrayBufferConstructor.set(PropertyKey.fromSymbol(JSSymbol.SPECIES), speciesGetter);
 
         global.set("ArrayBuffer", arrayBufferConstructor);
     }

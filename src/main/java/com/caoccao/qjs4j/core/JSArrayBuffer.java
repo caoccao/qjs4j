@@ -27,7 +27,9 @@ import java.nio.ByteOrder;
  * It cannot be read or written directly - use TypedArrays or DataView.
  */
 public final class JSArrayBuffer extends JSObject {
-    private final ByteBuffer buffer;
+    private final int maxByteLength;
+    private final boolean resizable;
+    private ByteBuffer buffer;
     private boolean detached;
 
     /**
@@ -36,13 +38,29 @@ public final class JSArrayBuffer extends JSObject {
      * @param byteLength The length in bytes
      */
     public JSArrayBuffer(int byteLength) {
+        this(byteLength, -1);
+    }
+
+    /**
+     * Create an ArrayBuffer with the specified byte length and max byte length.
+     *
+     * @param byteLength    The initial length in bytes
+     * @param maxByteLength The maximum length in bytes, or -1 for non-resizable
+     */
+    public JSArrayBuffer(int byteLength, int maxByteLength) {
         super();
         if (byteLength < 0) {
             throw new IllegalArgumentException("ArrayBuffer byteLength must be non-negative");
         }
-        this.buffer = ByteBuffer.allocate(byteLength);
+        if (maxByteLength != -1 && maxByteLength < byteLength) {
+            throw new IllegalArgumentException("ArrayBuffer maxByteLength must be >= byteLength");
+        }
+        this.buffer = ByteBuffer.allocate(maxByteLength != -1 ? maxByteLength : byteLength);
         this.buffer.order(ByteOrder.LITTLE_ENDIAN); // JavaScript uses little-endian
+        this.buffer.limit(byteLength);
         this.detached = false;
+        this.resizable = (maxByteLength != -1);
+        this.maxByteLength = (maxByteLength != -1) ? maxByteLength : byteLength;
     }
 
     /**
@@ -55,6 +73,8 @@ public final class JSArrayBuffer extends JSObject {
         this.buffer = ByteBuffer.wrap(bytes);
         this.buffer.order(ByteOrder.LITTLE_ENDIAN);
         this.detached = false;
+        this.resizable = false;
+        this.maxByteLength = bytes.length;
     }
 
     /**
@@ -87,7 +107,16 @@ public final class JSArrayBuffer extends JSObject {
         if (detached) {
             return 0;
         }
-        return buffer.capacity();
+        return buffer.limit();
+    }
+
+    /**
+     * Get the maximum byte length of this buffer.
+     *
+     * @return The maximum byte length
+     */
+    public int getMaxByteLength() {
+        return maxByteLength;
     }
 
     /**
@@ -100,12 +129,43 @@ public final class JSArrayBuffer extends JSObject {
     }
 
     /**
+     * Check if this ArrayBuffer is resizable.
+     *
+     * @return true if resizable, false otherwise
+     */
+    public boolean isResizable() {
+        return resizable;
+    }
+
+    /**
      * Check if this buffer is a SharedArrayBuffer.
      *
      * @return false for ArrayBuffer, true for SharedArrayBuffer
      */
     public boolean isShared() {
         return false;
+    }
+
+    /**
+     * Resize the ArrayBuffer to the specified size.
+     * ES2024 25.1.5.3
+     *
+     * @param newByteLength The new byte length
+     * @throws IllegalStateException    if the buffer is detached or not resizable
+     * @throws IllegalArgumentException if newByteLength exceeds maxByteLength
+     */
+    public void resize(int newByteLength) {
+        if (detached) {
+            throw new IllegalStateException("Cannot resize a detached ArrayBuffer");
+        }
+        if (!resizable) {
+            throw new IllegalStateException("Cannot resize a non-resizable ArrayBuffer");
+        }
+        if (newByteLength < 0 || newByteLength > maxByteLength) {
+            throw new IllegalArgumentException("New byte length must be between 0 and " + maxByteLength);
+        }
+
+        buffer.limit(newByteLength);
     }
 
     /**
@@ -145,10 +205,12 @@ public final class JSArrayBuffer extends JSObject {
         JSArrayBuffer newBuffer = new JSArrayBuffer(newLength);
         if (newLength > 0) {
             byte[] bytes = new byte[newLength];
+            int oldPosition = buffer.position();
             buffer.position(begin);
             buffer.get(bytes, 0, newLength);
+            buffer.position(oldPosition); // Reset position
             newBuffer.getBuffer().put(bytes);
-            buffer.position(0); // Reset position
+            newBuffer.getBuffer().position(0);
         }
 
         return newBuffer;
@@ -157,5 +219,87 @@ public final class JSArrayBuffer extends JSObject {
     @Override
     public String toString() {
         return "[object ArrayBuffer]";
+    }
+
+    /**
+     * Transfer the contents to a new ArrayBuffer and detach this buffer.
+     * ES2024 25.1.5.4
+     *
+     * @param newByteLength The byte length of the new buffer, or -1 to use current length
+     * @return A new ArrayBuffer with the transferred contents
+     * @throws IllegalStateException if the buffer is already detached
+     */
+    public JSArrayBuffer transfer(int newByteLength) {
+        if (detached) {
+            throw new IllegalStateException("Cannot transfer a detached ArrayBuffer");
+        }
+
+        int currentLength = getByteLength();
+        int targetLength = (newByteLength == -1) ? currentLength : newByteLength;
+
+        if (targetLength < 0) {
+            throw new IllegalArgumentException("New byte length must be non-negative");
+        }
+
+        // Create new resizable buffer with same characteristics
+        JSArrayBuffer newBuffer = new JSArrayBuffer(targetLength, resizable ? maxByteLength : -1);
+
+        // Copy data up to the minimum of current and target length
+        int copyLength = Math.min(currentLength, targetLength);
+        if (copyLength > 0) {
+            byte[] bytes = new byte[copyLength];
+            int oldPosition = buffer.position();
+            buffer.position(0);
+            buffer.get(bytes, 0, copyLength);
+            buffer.position(oldPosition);
+            newBuffer.getBuffer().put(bytes);
+            newBuffer.getBuffer().position(0);
+        }
+
+        // Detach this buffer
+        detach();
+
+        return newBuffer;
+    }
+
+    /**
+     * Transfer the contents to a new fixed-length ArrayBuffer and detach this buffer.
+     * ES2024 25.1.5.5
+     *
+     * @param newByteLength The byte length of the new buffer, or -1 to use current length
+     * @return A new non-resizable ArrayBuffer with the transferred contents
+     * @throws IllegalStateException if the buffer is already detached
+     */
+    public JSArrayBuffer transferToFixedLength(int newByteLength) {
+        if (detached) {
+            throw new IllegalStateException("Cannot transfer a detached ArrayBuffer");
+        }
+
+        int currentLength = getByteLength();
+        int targetLength = (newByteLength == -1) ? currentLength : newByteLength;
+
+        if (targetLength < 0) {
+            throw new IllegalArgumentException("New byte length must be non-negative");
+        }
+
+        // Create new fixed-length buffer
+        JSArrayBuffer newBuffer = new JSArrayBuffer(targetLength);
+
+        // Copy data up to the minimum of current and target length
+        int copyLength = Math.min(currentLength, targetLength);
+        if (copyLength > 0) {
+            byte[] bytes = new byte[copyLength];
+            int oldPosition = buffer.position();
+            buffer.position(0);
+            buffer.get(bytes, 0, copyLength);
+            buffer.position(oldPosition);
+            newBuffer.getBuffer().put(bytes);
+            newBuffer.getBuffer().position(0);
+        }
+
+        // Detach this buffer
+        detach();
+
+        return newBuffer;
     }
 }
