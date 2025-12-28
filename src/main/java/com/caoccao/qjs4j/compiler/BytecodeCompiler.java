@@ -445,6 +445,12 @@ public final class BytecodeCompiler {
     private void compileIdentifier(Identifier id) {
         String name = id.name();
 
+        // Handle 'this' keyword
+        if ("this".equals(name)) {
+            emitter.emitOpcode(Opcode.PUSH_THIS);
+            return;
+        }
+
         if (inGlobalScope) {
             // In global scope, always use GET_VAR
             emitter.emitOpcodeAtom(Opcode.GET_VAR, name);

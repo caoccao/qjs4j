@@ -850,37 +850,34 @@ public class ProxyConstructorTest extends BaseTest {
                     var target = {};
                     var handler = {
                       preventExtensions: function(target) {
-                        return true; // Claim success without doing it
+                        return true;
                       }
                     };
                     var proxy = new Proxy(target, handler);
                     Object.preventExtensions(proxy)""");
             fail("Should have thrown TypeError");
         } catch (Exception e) {
-            assertTrue(e.getMessage().contains("inconsistent") ||
-                    e.getMessage().contains("TypeError"));
+            assertEquals("TypeError: 'preventExtensions' on proxy: trap returned truish but the proxy target is extensible", e.getMessage());
         }
     }
 
     @Test
     public void testProxyPreventExtensionsReturningFalse() {
         // Test that preventExtensions trap can return false
-        JSValue result = ctx.eval("""
-                var target = {};
-                var handler = {
-                  preventExtensions: function(target) {
-                    return false; // Refuse to prevent extensions
-                  }
-                };
-                var proxy = new Proxy(target, handler);
-                try {
-                  Object.preventExtensions(proxy);
-                  'no-error';
-                } catch (e) {
-                  'error';
-                }""");
-        // In non-strict mode, returning false from preventExtensions may not throw
-        assertTrue(result.toJavaObject().equals("error") || result.toJavaObject().equals("no-error"));
+        try {
+            ctx.eval("""
+                    var target = {};
+                    var handler = {
+                      preventExtensions: function(target) {
+                        return false;
+                      }
+                    };
+                    var proxy = new Proxy(target, handler);
+                    Object.preventExtensions(proxy)""");
+            fail("Should have thrown TypeError");
+        } catch (Exception e) {
+            assertEquals("TypeError: 'preventExtensions' on proxy: trap returned falsish", e.getMessage());
+        }
     }
 
     @Test

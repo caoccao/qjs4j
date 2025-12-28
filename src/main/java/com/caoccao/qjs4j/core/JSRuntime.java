@@ -45,7 +45,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * - Module caches
  * - Stack traces
  */
-public final class JSRuntime {
+public final class JSRuntime implements AutoCloseable {
     private final AtomTable atoms;
     private final List<JSContext> contexts;
     private final GarbageCollector gc;
@@ -75,6 +75,16 @@ public final class JSRuntime {
         this.maxStackSize = options.maxStackSize;
         this.maxMemoryUsage = options.maxMemoryUsage;
         this.interruptCheckCounter = 0;
+    }
+
+    @Override
+    public void close() {
+        jobQueue.clear();
+        for (JSContext context : new ArrayList<>(contexts)) {
+            context.close();
+        }
+        atoms.clear();
+        gc();
     }
 
     /**

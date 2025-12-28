@@ -34,7 +34,7 @@ import java.util.*;
  * Multiple contexts can exist in a single runtime, each isolated
  * from the others (separate globals, separate module namespaces).
  */
-public final class JSContext {
+public final class JSContext implements AutoCloseable {
     private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
     // Call stack management
     private final Deque<StackFrame> callStack;
@@ -133,6 +133,7 @@ public final class JSContext {
      * Close this context and release resources.
      * Called when the context is no longer needed.
      */
+    @Override
     public void close() {
         // Clear all caches
         moduleCache.clear();

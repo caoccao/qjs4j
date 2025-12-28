@@ -765,11 +765,7 @@ public final class Parser {
             case THROW -> parseThrowStatement();
             case TRY -> parseTryStatement();
             case SWITCH -> parseSwitchStatement();
-            case LBRACE -> {
-                Expression expr = parseObjectExpression();
-                consumeSemicolon();
-                yield new ExpressionStatement(expr, getLocation());
-            }
+            case LBRACE -> parseBlockStatement();
             case VAR, LET, CONST -> parseVariableDeclaration();
             case FUNCTION -> {
                 // Function declarations are treated as statements in JavaScript

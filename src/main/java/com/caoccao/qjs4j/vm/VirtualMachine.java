@@ -644,18 +644,34 @@ public final class VirtualMachine {
             return;
         }
 
-        if (constructor instanceof JSFunction) {
-            // Create new object
+        if (constructor instanceof JSFunction func) {
+            // Following QuickJS js_create_from_ctor:
+            // Create new object with prototype from constructor.prototype
             JSObject newObj = new JSObject();
 
-            // Call constructor with new object as this
-            if (constructor instanceof JSNativeFunction nativeFunc) {
-                nativeFunc.call(context, newObj, args);
-            } else if (constructor instanceof JSBytecodeFunction bytecodeFunc) {
-                execute(bytecodeFunc, newObj, args);
+            // Get the prototype property from the constructor
+            JSValue prototypeValue = func.get("prototype");
+            if (prototypeValue instanceof JSObject prototypeObj) {
+                newObj.setPrototype(prototypeObj);
             }
 
-            valueStack.push(newObj);
+            // Call constructor with new object as this
+            JSValue result;
+            if (constructor instanceof JSNativeFunction nativeFunc) {
+                result = nativeFunc.call(context, newObj, args);
+            } else if (constructor instanceof JSBytecodeFunction bytecodeFunc) {
+                result = execute(bytecodeFunc, newObj, args);
+            } else {
+                result = JSUndefined.INSTANCE;
+            }
+
+            // Following QuickJS JS_CallConstructorInternal:
+            // If constructor returns an object, use that; otherwise use newObj
+            if (result instanceof JSObject) {
+                valueStack.push(result);
+            } else {
+                valueStack.push(newObj);
+            }
         } else if (constructor instanceof JSObject ctorObj) {
             // Check for ES6 class constructor marker
             JSValue isClassCtor = ctorObj.get("[[ClassConstructor]]");

@@ -748,10 +748,10 @@ public final class JSProxy extends JSObject {
             // Invariant: if trap returns true, target must be non-extensible
             if (targetObj.isExtensible()) {
                 throw new JSException(context.throwError("TypeError",
-                        "proxy: inconsistent preventExtensions"));
+                        "'preventExtensions' on proxy: trap returned truish but the proxy target is extensible"));
             }
         } else {
-            throw new JSException(context.throwError("TypeError", "preventExtensions returned false"));
+            throw new JSException(context.throwError("TypeError", "'preventExtensions' on proxy: trap returned falsish"));
         }
     }
 
@@ -834,6 +834,7 @@ public final class JSProxy extends JSObject {
                     this
             };
             JSValue result = setTrapFunc.call(context, handler, args);
+
             // Check if trap returned falsy in strict mode
             if (context.isStrictMode() && JSTypeConversions.toBoolean(result) != JSBoolean.TRUE) {
                 throw new JSException(context.throwError("TypeError",

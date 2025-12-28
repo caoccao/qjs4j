@@ -31,11 +31,7 @@ public class SimpleTest {
     public static void main(String[] args) {
         System.out.println("=== QuickJS for Java (qjs4j) - Simple Test ===\n");
 
-        // Create runtime and context
-        JSRuntime runtime = new JSRuntime();
-        JSContext ctx = runtime.createContext();
-
-        try {
+        try (JSRuntime runtime = new JSRuntime();JSContext ctx = runtime.createContext()) {
             // Test 1: Simple arithmetic
             System.out.println("Test 1: Simple arithmetic");
             JSValue result1 = ctx.eval("2 + 3");
@@ -98,10 +94,6 @@ public class SimpleTest {
             System.out.println();
 
             System.out.println("=== All tests completed successfully! ===");
-
-        } finally {
-            ctx.close();
-            runtime.gc();
         }
     }
 }
