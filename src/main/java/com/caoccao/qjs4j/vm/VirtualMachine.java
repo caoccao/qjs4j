@@ -105,6 +105,10 @@ public final class VirtualMachine {
                         // Load function from constant pool and create closure
                         int funcIndex = bytecode.readU32(pc + 1);
                         JSValue funcValue = bytecode.getConstants()[funcIndex];
+                        // Initialize the function's prototype chain to inherit from Function.prototype
+                        if (funcValue instanceof JSFunction func) {
+                            func.initializePrototypeChain(context);
+                        }
                         // The function is already a JSBytecodeFunction, just push it
                         valueStack.push(funcValue);
                         pc += op.getSize();
@@ -620,6 +624,13 @@ public final class VirtualMachine {
 
         // Handle proxy construct trap (QuickJS: js_proxy_call_constructor)
         if (constructor instanceof JSProxy proxy) {
+            // Following QuickJS JS_CallConstructorInternal:
+            // Check if target is a constructor BEFORE checking for construct trap
+            JSValue target = proxy.getTarget();
+            if (!(target instanceof JSFunction)) {
+                throw new JSException(context.throwError("TypeError", "proxy is not a constructor"));
+            }
+
             JSValue result = proxyConstruct(proxy, args);
             valueStack.push(result);
             return;
@@ -1072,9 +1083,9 @@ public final class VirtualMachine {
                     return;
                 }
 
-                // Target must be an object or function (in JavaScript, functions are objects)
+                // Target must be an object (since JSFunction extends JSObject, this covers both)
                 JSValue target = args[0];
-                if (!(target instanceof JSObject) && !(target instanceof JSFunction)) {
+                if (!(target instanceof JSObject)) {
                     context.throwError("TypeError", "Proxy target must be an object");
                     valueStack.push(JSUndefined.INSTANCE);
                     return;
@@ -1507,14 +1518,12 @@ public final class VirtualMachine {
      * @return The constructed object
      */
     private JSValue proxyConstruct(JSProxy proxy, JSValue[] args) {
+        // Following QuickJS: target is already validated as a constructor
+        // by the caller (handleCallConstructor)
+        JSValue target = proxy.getTarget();
+
         // Get the construct trap from the handler
         JSValue constructTrap = proxy.getHandler().get("construct");
-
-        // Check that target is a constructor
-        JSValue target = proxy.getTarget();
-        if (!(target instanceof JSFunction)) {
-            throw new VMException("target is not a constructor");
-        }
 
         // If no construct trap, forward to target
         if (constructTrap == JSUndefined.INSTANCE || constructTrap == null) {
@@ -1530,13 +1539,15 @@ public final class VirtualMachine {
             }
 
             // Call the function with the new instance as 'this'
+            // Target is already validated as JSFunction by caller
             JSValue result;
             if (target instanceof JSNativeFunction nativeFunc) {
                 result = nativeFunc.call(context, instance, args);
             } else if (target instanceof JSBytecodeFunction bytecodeFunc) {
                 result = execute(bytecodeFunc, instance, args);
             } else {
-                throw new VMException("target is not a constructor");
+                // Should never reach here since target is validated as JSFunction
+                return instance;
             }
 
             // If function returned an object, use that; otherwise use instance
@@ -1549,7 +1560,7 @@ public final class VirtualMachine {
 
         // Check that construct trap is a function
         if (!(constructTrap instanceof JSFunction constructFunc)) {
-            throw new VMException("construct trap is not a function");
+            throw new JSException(context.throwError("TypeError", "construct trap is not a function"));
         }
 
         // Create arguments array
@@ -1586,8 +1597,10 @@ public final class VirtualMachine {
     /**
      * Convert a value to an object (auto-boxing for primitives).
      * Returns null for null and undefined.
+     * Since JSFunction now extends JSObject, functions are already objects.
      */
     private JSObject toObject(JSValue value) {
+        // JSFunction extends JSObject, so this handles both objects and functions
         if (value instanceof JSObject jsObj) {
             return jsObj;
         }
@@ -1639,33 +1652,6 @@ public final class VirtualMachine {
                     JSObject wrapper = new JSObject();
                     wrapper.setPrototype(protoObj);
                     wrapper.set("[[PrimitiveValue]]", bool);
-                    return wrapper;
-                }
-            }
-        }
-
-        if (value instanceof JSFunction func) {
-            // Get Function.prototype from global object
-            JSObject global = context.getGlobalObject();
-            JSValue functionCtor = global.get("Function");
-            if (functionCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get("prototype");
-                if (prototype instanceof JSObject protoObj) {
-                    JSObject wrapper = new JSObject();
-                    wrapper.setPrototype(protoObj);
-                    // Store the function value so it can be called
-                    wrapper.set("[[FunctionValue]]", func);
-                    // Copy function properties
-                    wrapper.set("name", new JSString(func.getName()));
-                    wrapper.set("length", new JSNumber(func.getLength()));
-
-                    // Add prototype property for constructors
-                    // Every function (except arrow functions) has a prototype property
-                    JSObject funcPrototype = new JSObject();
-                    // The function's prototype object has a constructor property pointing back to the function
-                    funcPrototype.set("constructor", func);
-                    wrapper.set("prototype", funcPrototype);
-
                     return wrapper;
                 }
             }

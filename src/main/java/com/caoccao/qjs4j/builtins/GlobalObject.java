@@ -21,6 +21,9 @@ import com.caoccao.qjs4j.core.*;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * The global object with built-in functions.
@@ -327,6 +330,9 @@ public final class GlobalObject {
 
         // Error constructors
         initializeErrorConstructors(ctx, global);
+
+        // Initialize function prototype chains after all built-ins are set up
+        initializeFunctionPrototypeChains(ctx, global, new HashSet<>());
     }
 
     /**
@@ -661,6 +667,35 @@ public final class GlobalObject {
         functionConstructor.set("prototype", functionPrototype);
 
         global.set("Function", functionConstructor);
+    }
+
+    /**
+     * Recursively initialize prototype chains for all JSFunction instances in the global object.
+     * This must be called after Function.prototype is set up.
+     */
+    private static void initializeFunctionPrototypeChains(JSContext ctx, JSObject obj, Set<JSObject> visitedObjectSet) {
+        // This ensures all JSFunction instances inherit from Function.prototype
+        // Avoid infinite recursion by tracking visited objects
+        if (visitedObjectSet.contains(obj)) {
+            return;
+        }
+        visitedObjectSet.add(obj);
+
+        List<PropertyKey> keys = obj.getOwnPropertyKeys();
+        for (PropertyKey key : keys) {
+            // Get the property value using the property string
+            String keyStr = key.toPropertyString();
+            JSValue value = obj.get(keyStr);
+            if (value instanceof JSFunction func) {
+                // Initialize this function's prototype chain
+                func.initializePrototypeChain(ctx);
+                // Recursively process the function's own properties
+                initializeFunctionPrototypeChains(ctx, func, visitedObjectSet);
+            } else if (value instanceof JSObject subObj) {
+                // Recursively process nested objects
+                initializeFunctionPrototypeChains(ctx, subObj, visitedObjectSet);
+            }
+        }
     }
 
     /**

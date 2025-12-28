@@ -17,23 +17,40 @@
 package com.caoccao.qjs4j.core;
 
 /**
- * Sealed interface for JavaScript function types.
+ * Abstract base class for JavaScript function types.
+ * In JavaScript, functions are objects, so JSFunction extends JSObject.
  */
-public sealed interface JSFunction extends JSValue
+public abstract sealed class JSFunction extends JSObject
         permits JSBytecodeFunction, JSNativeFunction, JSBoundFunction, JSClass {
 
     /**
      * Call this function with the given context, this value, and arguments.
      */
-    JSValue call(JSContext ctx, JSValue thisArg, JSValue[] args);
+    public abstract JSValue call(JSContext ctx, JSValue thisArg, JSValue[] args);
 
     /**
      * Get the number of formal parameters.
      */
-    int getLength();
+    public abstract int getLength();
 
     /**
      * Get the function name.
      */
-    String getName();
+    public abstract String getName();
+
+    /**
+     * Initialize the function's prototype chain to inherit from Function.prototype.
+     * This should be called after creation when the context is available.
+     */
+    public void initializePrototypeChain(JSContext ctx) {
+        // Set __proto__ to Function.prototype so functions inherit apply, call, bind, etc.
+        JSObject global = ctx.getGlobalObject();
+        JSValue functionCtor = global.get("Function");
+        if (functionCtor instanceof JSObject ctorObj) {
+            JSValue funcProto = ctorObj.get("prototype");
+            if (funcProto instanceof JSObject protoObj) {
+                this.setPrototype(protoObj);
+            }
+        }
+    }
 }

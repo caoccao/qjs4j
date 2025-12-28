@@ -32,7 +32,7 @@ import java.util.Map;
  * - Methods are added to prototype
  * - Static methods are added to the class itself
  */
-public final class JSClass extends JSObject implements JSFunction {
+public final class JSClass extends JSFunction {
     private final JSFunction constructor;
     private final Map<String, PropertyDescriptor> instanceFields;
     private final Map<String, JSFunction> instanceMethods;

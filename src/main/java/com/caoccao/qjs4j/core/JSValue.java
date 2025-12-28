@@ -21,10 +21,11 @@ import java.util.Optional;
 /**
  * Base sealed interface for all JavaScript values.
  * Implements the value representation using sealed interfaces for type safety.
+ * Note: JSFunction extends JSObject, so it's not listed here separately.
  */
 public sealed interface JSValue extends JSStackValue permits
         JSUndefined, JSNull, JSBoolean, JSNumber, JSString,
-        JSObject, JSSymbol, JSBigInt, JSFunction {
+        JSObject, JSSymbol, JSBigInt {
 
     /**
      * Attempt to cast this value to JSArray.

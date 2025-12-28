@@ -216,6 +216,9 @@ public final class JSContext {
             // Phase 1-3: Lexer → Parser → Compiler (compile to bytecode)
             JSBytecodeFunction func = com.caoccao.qjs4j.compiler.Compiler.compile(code, filename);
 
+            // Initialize the function's prototype chain so it inherits from Function.prototype
+            func.initializePrototypeChain(this);
+
             // Phase 4: Execute bytecode in the virtual machine
             JSValue result = virtualMachine.execute(func, globalObject, new JSValue[0]);
 

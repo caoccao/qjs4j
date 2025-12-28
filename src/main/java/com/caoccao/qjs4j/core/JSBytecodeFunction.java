@@ -34,7 +34,7 @@ import com.caoccao.qjs4j.vm.Bytecode;
  * - Prototype object (for constructors)
  * - Function metadata (name, length)
  */
-public final class JSBytecodeFunction implements JSFunction {
+public final class JSBytecodeFunction extends JSFunction {
     private final Bytecode bytecode;
     private final JSValue[] closureVars;
     private final boolean isAsync;
@@ -61,6 +61,7 @@ public final class JSBytecodeFunction implements JSFunction {
     public JSBytecodeFunction(Bytecode bytecode, String name, int length,
                               JSValue[] closureVars, JSObject prototype,
                               boolean isConstructor, boolean isAsync, boolean isGenerator) {
+        super(); // Initialize as JSObject
         this.bytecode = bytecode;
         this.name = name != null ? name : "";
         this.length = length;
@@ -69,6 +70,20 @@ public final class JSBytecodeFunction implements JSFunction {
         this.isConstructor = isConstructor;
         this.isAsync = isAsync;
         this.isGenerator = isGenerator;
+
+        // Set up function properties on the object
+        // Functions are objects in JavaScript and have these standard properties
+        this.set("name", new JSString(this.name));
+        this.set("length", new JSNumber(this.length));
+
+        // Every function (except arrow functions) has a prototype property
+        if (prototype != null) {
+            this.set("prototype", prototype);
+        } else if (isConstructor) {
+            JSObject funcPrototype = new JSObject();
+            funcPrototype.set("constructor", this);
+            this.set("prototype", funcPrototype);
+        }
     }
 
     @Override

@@ -19,15 +19,26 @@ package com.caoccao.qjs4j.core;
 /**
  * Represents a native (Java-implemented) JavaScript function.
  */
-public final class JSNativeFunction implements JSFunction {
+public final class JSNativeFunction extends JSFunction {
     private final NativeCallback callback;
     private final int length;
     private final String name;
 
     public JSNativeFunction(String name, int length, NativeCallback callback) {
+        super(); // Initialize as JSObject
         this.name = name;
         this.length = length;
         this.callback = callback;
+
+        // Set up function properties on the object
+        // Functions are objects in JavaScript and have these standard properties
+        this.set("name", new JSString(this.name));
+        this.set("length", new JSNumber(this.length));
+
+        // Native functions also have a prototype property
+        JSObject funcPrototype = new JSObject();
+        funcPrototype.set("constructor", this);
+        this.set("prototype", funcPrototype);
     }
 
     @Override
@@ -43,11 +54,6 @@ public final class JSNativeFunction implements JSFunction {
     @Override
     public String getName() {
         return name;
-    }
-
-    @Override
-    public Object toJavaObject() {
-        return this;
     }
 
     @Override

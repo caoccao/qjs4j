@@ -37,9 +37,9 @@ public final class ProxyConstructor {
             return ctx.throwError("TypeError", "Proxy.revocable requires target and handler arguments");
         }
 
-        // Target must be an object or function (in JavaScript, functions are objects)
+        // Target must be an object (since JSFunction extends JSObject, this covers both)
         JSValue target = args[0];
-        if (!(target instanceof JSObject) && !(target instanceof JSFunction)) {
+        if (!(target instanceof JSObject)) {
             return ctx.throwError("TypeError", "Proxy.revocable target must be an object");
         }
 

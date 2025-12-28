@@ -148,7 +148,8 @@ public final class JSProxy extends JSObject {
     @Override
     public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
         checkRevoked();
-        JSObject targetObj = getTargetAsObject();
+        // Since JSFunction extends JSObject, target is always a JSObject
+        JSObject targetObj = (JSObject) target;
 
         JSValue trap = getTrapMethod("defineProperty");
         if (trap instanceof JSUndefined) {
@@ -220,8 +221,7 @@ public final class JSProxy extends JSObject {
             boolean success = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
 
             // Check invariant: cannot delete non-configurable properties
-            JSObject targetObj = getTargetAsObject();
-            PropertyDescriptor targetDesc = targetObj.getOwnPropertyDescriptor(key);
+            PropertyDescriptor targetDesc = ((JSObject) target).getOwnPropertyDescriptor(key);
             if (success && targetDesc != null && !targetDesc.isConfigurable()) {
                 throw new JSException(context.throwError("TypeError",
                         "'deleteProperty' on proxy: trap returned truish for property '" + key.asString() + "' which is non-configurable in the proxy target"));
@@ -235,7 +235,7 @@ public final class JSProxy extends JSObject {
         }
 
         // No trap, forward to target
-        return getTargetAsObject().delete(key);
+        return ((JSObject) target).delete(key);
     }
 
     /**
@@ -310,24 +310,26 @@ public final class JSProxy extends JSObject {
                 JSValue trapResult = getTrapFunc.call(context, handler, args);
 
                 // Check invariant: non-configurable accessor without getter must return undefined
-                JSObject targetObj = getTargetAsObject();
-                PropertyDescriptor targetDesc = targetObj.getOwnPropertyDescriptor(key);
-                if (targetDesc != null && !targetDesc.isConfigurable() &&
-                        targetDesc.isAccessorDescriptor() && targetDesc.getGetter() == null) {
-                    // Non-configurable accessor without getter
-                    if (!(trapResult instanceof JSUndefined)) {
-                        throw new JSException(context.throwError("TypeError",
-                                "'get' on proxy: property '" + key.asString() + "' is a non-configurable accessor property on the proxy target and does not have a getter function, but the trap did not return 'undefined' (got '" + JSTypeConversions.toString(trapResult).value() + "')"));
+                // Since JSFunction extends JSObject, target is always a JSObject
+                if (target instanceof JSObject targetObj) {
+                    PropertyDescriptor targetDesc = targetObj.getOwnPropertyDescriptor(key);
+                    if (targetDesc != null && !targetDesc.isConfigurable() &&
+                            targetDesc.isAccessorDescriptor() && targetDesc.getGetter() == null) {
+                        // Non-configurable accessor without getter
+                        if (!(trapResult instanceof JSUndefined)) {
+                            throw new JSException(context.throwError("TypeError",
+                                    "'get' on proxy: property '" + key.asString() + "' is a non-configurable accessor property on the proxy target and does not have a getter function, but the trap did not return 'undefined' (got '" + JSTypeConversions.toString(trapResult).value() + "')"));
+                        }
                     }
-                }
 
-                // Check invariant: non-writable, non-configurable data property must return same value
-                if (targetDesc != null && targetDesc.isDataDescriptor() &&
-                        !targetDesc.isConfigurable() && !targetDesc.isWritable()) {
-                    // Non-writable, non-configurable data property
-                    if (!JSTypeConversions.strictEquals(trapResult, targetDesc.getValue())) {
-                        throw new JSException(context.throwError("TypeError",
-                                "'get' on proxy: property '" + key.asString() + "' is a read-only and non-configurable data property on the proxy target but the proxy did not return its actual"));
+                    // Check invariant: non-writable, non-configurable data property must return same value
+                    if (targetDesc != null && targetDesc.isDataDescriptor() &&
+                            !targetDesc.isConfigurable() && !targetDesc.isWritable()) {
+                        // Non-writable, non-configurable data property
+                        if (!JSTypeConversions.strictEquals(trapResult, targetDesc.getValue())) {
+                            throw new JSException(context.throwError("TypeError",
+                                    "'get' on proxy: property '" + key.asString() + "' is a read-only and non-configurable data property on the proxy target but the proxy did not return its actual"));
+                        }
                     }
                 }
 
@@ -338,7 +340,12 @@ public final class JSProxy extends JSObject {
         }
 
         // No trap, forward to target
-        return getTargetAsObject().get(key);
+        // Following QuickJS js_proxy_get: forward to target
+        // Since JSFunction now extends JSObject, all targets are JSObjects
+        if (target instanceof JSObject targetObj) {
+            return targetObj.get(key);
+        }
+        return JSUndefined.INSTANCE;
     }
 
     public JSObject getHandler() {
@@ -352,7 +359,7 @@ public final class JSProxy extends JSObject {
     @Override
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
         checkRevoked();
-        JSObject targetObj = getTargetAsObject();
+        JSObject targetObj = (JSObject) target;
 
         JSValue trap = getTrapMethod("getOwnPropertyDescriptor");
         if (trap instanceof JSUndefined) {
@@ -473,7 +480,7 @@ public final class JSProxy extends JSObject {
             }
 
             // Validate invariants
-            JSObject targetObj = getTargetAsObject();
+            JSObject targetObj = (JSObject) target;
             List<PropertyKey> targetKeys = targetObj.getOwnPropertyKeys();
             boolean targetExtensible = targetObj.isExtensible();
 
@@ -502,7 +509,7 @@ public final class JSProxy extends JSObject {
         }
 
         // No trap, forward to target
-        return getTargetAsObject().getOwnPropertyKeys();
+        return ((JSObject) target).getOwnPropertyKeys();
     }
 
     /**
@@ -512,7 +519,7 @@ public final class JSProxy extends JSObject {
     @Override
     public JSObject getPrototype() {
         checkRevoked();
-        JSObject targetObj = getTargetAsObject();
+        JSObject targetObj = (JSObject) target;
 
         JSValue trap = getTrapMethod("getPrototypeOf");
         if (trap instanceof JSUndefined) {
@@ -550,19 +557,6 @@ public final class JSProxy extends JSObject {
     }
 
     /**
-     * Helper to get target as JSObject.
-     * In JavaScript, functions are objects, but in this implementation they're separate.
-     * For object operations, we need the target to be a JSObject.
-     */
-    private JSObject getTargetAsObject() {
-        if (target instanceof JSObject obj) {
-            return obj;
-        }
-        throw new JSException(context.throwError("TypeError",
-                "Proxy target must be an object for this operation"));
-    }
-
-    /**
      * Helper to get a trap method from the handler.
      * Returns null if handler is null/undefined.
      * Following QuickJS get_proxy_method().
@@ -596,14 +590,14 @@ public final class JSProxy extends JSObject {
             boolean trapResult = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
 
             // Check invariant: non-configurable properties must be reported as present
-            JSObject targetObj = getTargetAsObject();
-            PropertyDescriptor targetDesc = targetObj.getOwnPropertyDescriptor(key);
+            PropertyDescriptor targetDesc = ((JSObject) target).getOwnPropertyDescriptor(key);
             if (targetDesc != null && !targetDesc.isConfigurable() && !trapResult) {
                 throw new JSException(context.throwError("TypeError",
                         "'has' on proxy: trap returned falsish for property '" + key.asString() + "' which exists in the proxy target as non-configurable"));
             }
 
             // Check invariant: if target is not extensible, trap result must match target's has
+            JSObject targetObj = (JSObject) target;
             if (!targetObj.isExtensible() && trapResult != targetObj.has(key)) {
                 throw new JSException(context.throwError("TypeError",
                         "'has' on proxy: trap returned " + (trapResult ? "truish" : "falsish") + " for property '" + key.asString() + "' but the proxy target is not extensible"));
@@ -613,7 +607,7 @@ public final class JSProxy extends JSObject {
         }
 
         // No trap, forward to target
-        return getTargetAsObject().has(key);
+        return ((JSObject) target).has(key);
     }
 
     /**
@@ -681,7 +675,7 @@ public final class JSProxy extends JSObject {
     @Override
     public boolean isExtensible() {
         checkRevoked();
-        JSObject targetObj = getTargetAsObject();
+        JSObject targetObj = (JSObject) target;
 
         JSValue trap = getTrapMethod("isExtensible");
         if (trap instanceof JSUndefined) {
@@ -733,7 +727,7 @@ public final class JSProxy extends JSObject {
     @Override
     public void preventExtensions() {
         checkRevoked();
-        JSObject targetObj = getTargetAsObject();
+        JSObject targetObj = (JSObject) target;
 
         JSValue trap = getTrapMethod("preventExtensions");
         if (trap instanceof JSUndefined) {
@@ -849,7 +843,7 @@ public final class JSProxy extends JSObject {
         }
 
         // No trap, forward to target
-        getTargetAsObject().set(key, value);
+        ((JSObject) target).set(key, value);
     }
 
     /**
@@ -859,7 +853,7 @@ public final class JSProxy extends JSObject {
     @Override
     public void setPrototype(JSObject proto) {
         checkRevoked();
-        JSObject targetObj = getTargetAsObject();
+        JSObject targetObj = (JSObject) target;
 
         JSValue trap = getTrapMethod("setPrototypeOf");
         if (trap instanceof JSUndefined) {

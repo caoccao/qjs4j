@@ -479,11 +479,17 @@ public final class JSONObject {
             return stringifyArray(arr, indent, currentIndent);
         }
 
+        // Functions are not serializable in JSON
+        // Check before JSObject since JSFunction extends JSObject
+        if (value instanceof JSFunction) {
+            return null;
+        }
+
         if (value instanceof JSObject obj) {
             return stringifyObject(obj, indent, currentIndent);
         }
 
-        // Functions and symbols are not serializable
+        // Symbols are not serializable
         return null;
     }
 

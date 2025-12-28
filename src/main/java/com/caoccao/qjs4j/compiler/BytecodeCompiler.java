@@ -125,6 +125,9 @@ public final class BytecodeCompiler {
                 false            // Arrow functions cannot be generators
         );
 
+        // Prototype chain will be initialized when the function is loaded
+        // during bytecode execution (see FCLOSURE opcode handler)
+
         // Emit FCLOSURE opcode with function in constant pool
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
     }
@@ -431,6 +434,9 @@ public final class BytecodeCompiler {
                 funcExpr.isAsync(),
                 funcExpr.isGenerator()
         );
+
+        // Prototype chain will be initialized when the function is loaded
+        // during bytecode execution (see FCLOSURE opcode handler)
 
         // Emit FCLOSURE opcode with function in constant pool
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);

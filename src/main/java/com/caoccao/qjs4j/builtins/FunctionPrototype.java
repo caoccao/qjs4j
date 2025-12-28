@@ -29,10 +29,8 @@ public final class FunctionPrototype {
      * ES2020 19.2.3.1
      */
     public static JSValue apply(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        // thisArg for apply() is the function itself
-        if (!(thisArg instanceof JSFunction func)) {
-            return ctx.throwError("TypeError", "Function.prototype.apply called on non-function");
-        }
+        // thisArg for apply() is the function itself (or a proxy to a function)
+        // Following QuickJS: proxies to functions should work with Function.prototype.apply
 
         // First argument is the 'this' value for the called function
         JSValue applyThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -54,7 +52,18 @@ public final class FunctionPrototype {
             callArgs = new JSValue[0];
         }
 
-        return func.call(ctx, applyThisArg, callArgs);
+        if (thisArg instanceof JSProxy proxy) {
+            // Check if proxy's target is callable
+            if (!JSTypeChecking.isFunction(proxy.getTarget())) {
+                return ctx.throwError("TypeError", "Function.prototype.apply called on non-function");
+            }
+            // Use the proxy's apply mechanism
+            return proxy.apply(ctx, applyThisArg, callArgs);
+        } else if (thisArg instanceof JSFunction func) {
+            return func.call(ctx, applyThisArg, callArgs);
+        } else {
+            return ctx.throwError("TypeError", "Function.prototype.apply called on non-function");
+        }
     }
 
     /**
@@ -85,21 +94,34 @@ public final class FunctionPrototype {
      * ES2020 19.2.3.3
      */
     public static JSValue call(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        // thisArg for call() is the function itself
-        if (!(thisArg instanceof JSFunction func)) {
+        // thisArg for call() is the function itself (or a proxy to a function)
+        // Following QuickJS: proxies to functions should work with Function.prototype.call
+        if (thisArg instanceof JSProxy proxy) {
+            // Check if proxy's target is callable
+            if (!JSTypeChecking.isFunction(proxy.getTarget())) {
+                return ctx.throwError("TypeError", "Function.prototype.call called on non-function");
+            }
+            // Use the proxy's apply mechanism
+            JSValue callThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            JSValue[] callArgs = new JSValue[args.length - 1];
+            if (args.length > 1) {
+                System.arraycopy(args, 1, callArgs, 0, args.length - 1);
+            }
+            return proxy.apply(ctx, callThisArg, callArgs);
+        } else if (thisArg instanceof JSFunction func) {
+            // First argument is the 'this' value for the called function
+            JSValue callThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+
+            // Remaining arguments are passed to the function
+            JSValue[] callArgs = new JSValue[args.length - 1];
+            if (args.length > 1) {
+                System.arraycopy(args, 1, callArgs, 0, args.length - 1);
+            }
+
+            return func.call(ctx, callThisArg, callArgs);
+        } else {
             return ctx.throwError("TypeError", "Function.prototype.call called on non-function");
         }
-
-        // First argument is the 'this' value for the called function
-        JSValue callThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-
-        // Remaining arguments are passed to the function
-        JSValue[] callArgs = new JSValue[args.length - 1];
-        if (args.length > 1) {
-            System.arraycopy(args, 1, callArgs, 0, args.length - 1);
-        }
-
-        return func.call(ctx, callThisArg, callArgs);
     }
 
     /**
