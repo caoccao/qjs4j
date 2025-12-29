@@ -334,6 +334,15 @@ public sealed interface JSValue extends JSStackValue permits
     }
 
     /**
+     * Attempt to cast this value to JSSymbolObject.
+     *
+     * @return Optional containing the JSSymbolObject if this value is a Symbol object, empty otherwise
+     */
+    default Optional<JSSymbolObject> asSymbolObject() {
+        return this instanceof JSSymbolObject v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
      * Attempt to cast this value to JSTypedArray.
      *
      * @return Optional containing the JSTypedArray if this value is a TypedArray, empty otherwise
@@ -761,6 +770,15 @@ public sealed interface JSValue extends JSStackValue permits
      */
     default boolean isSymbol() {
         return this instanceof JSSymbol;
+    }
+
+    /**
+     * Check if this value is a Symbol object.
+     *
+     * @return true if this value is a Symbol object, false otherwise
+     */
+    default boolean isSymbolObject() {
+        return this instanceof JSSymbolObject;
     }
 
     /**

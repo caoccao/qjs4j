@@ -47,33 +47,25 @@ public class BigIntPrototypeTest extends BaseTest {
         assertTrue(ctx.eval("BigInt(123) == 123n").asBoolean().map(JSBoolean::value).orElseThrow());
         assertFalse(ctx.eval("BigInt(123) == 321n").asBoolean().map(JSBoolean::value).orElseThrow());
         // Verify that loose equality passes between primitive and object
-        assertTrue(ctx.eval("123n == new BigInt(123)").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertFalse(ctx.eval("123n == new BigInt(321)").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertTrue(ctx.eval("BigInt(123) == new BigInt(123)").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertFalse(ctx.eval("BigInt(123) == new BigInt(321)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(ctx.eval("123n == Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("123n == Object(BigInt(321))").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(ctx.eval("BigInt(123) == Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("BigInt(123) == Object(BigInt(321))").asBoolean().map(JSBoolean::value).orElseThrow());
         // Verify that loose equality fails between object and object
-        assertFalse(ctx.eval("new BigInt(123) == new BigInt(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("Object(BigInt(123)) == Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
         // Verify that strict equality fails between primitive and object
-        assertFalse(ctx.eval("123n === new BigInt(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("123n === Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
         // Verify that strict equality fails between object and object
-        assertFalse(ctx.eval("new BigInt(123) === new BigInt(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("Object(BigInt(123)) === Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
     }
 
     @Test
     public void testLiterals() {
         // Test typeof for BigInt literal
         JSValue typeResult = ctx.eval("typeof 123n");
-        if (typeResult.isString()) {
-            System.out.println("typeof 123n = " + typeResult.asString().map(JSString::value).orElse("N/A"));
-        } else {
-            System.out.println("typeof result is not a string: " + typeResult);
-        }
 
         // Test basic decimal BigInt literal
         JSValue result = ctx.eval("123n");
-        System.out.println("Result class: " + result.getClass().getName());
-        System.out.println("Result: " + result);
-        System.out.println("Is BigInt: " + result.isBigInt());
 
         // Just check if it works without assertion for now
         if (!result.isBigInt()) {

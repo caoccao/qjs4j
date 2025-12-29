@@ -23,7 +23,10 @@ import java.math.BigInteger;
  * <p>
  * In JavaScript, there's a distinction between:
  * - BigInt primitives: {@code 42n}, {@code BigInt(123)}, {@code 9007199254740991n}
- * - BigInt objects: {@code new BigInt(42)}, {@code Object(42n)}
+ * - BigInt objects: {@code Object(42n)}, {@code Object(BigInt(123))}
+ * <p>
+ * Note: BigInt cannot be called with {@code new} operator - attempting {@code new BigInt(42)}
+ * will throw a TypeError: "BigInt is not a constructor". Use {@code Object(BigInt(42))} instead.
  * <p>
  * This class represents the object form, which is necessary for use cases like {@link JSProxy Proxy},
  * since primitive BigInt values cannot be used as Proxy targets. A primitive BigInt value

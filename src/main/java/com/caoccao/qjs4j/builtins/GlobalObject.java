@@ -857,7 +857,7 @@ public final class GlobalObject {
         objectPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, ObjectPrototype::valueOf));
 
         // Create Object constructor
-        JSObject objectConstructor = new JSObject();
+        JSNativeFunction objectConstructor = new JSNativeFunction("Object", 1, ObjectConstructor::call);
         objectConstructor.set("prototype", objectPrototype);
 
         // Object static methods
@@ -1077,7 +1077,9 @@ public final class GlobalObject {
         symbolPrototype.set("[Symbol.toStringTag]", new JSString("Symbol"));
 
         // Create Symbol constructor
-        JSObject symbolConstructor = new JSObject();
+        // Note: Symbol cannot be called with 'new' in JavaScript (throws TypeError)
+        // Symbol objects are created using Object(symbolValue) for use with Proxy
+        JSNativeFunction symbolConstructor = new JSNativeFunction("Symbol", 1, SymbolConstructor::call);
         symbolConstructor.set("prototype", symbolPrototype);
         symbolConstructor.set("[[SymbolConstructor]]", JSBoolean.TRUE); // Mark as Symbol constructor
 

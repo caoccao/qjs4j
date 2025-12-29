@@ -63,6 +63,100 @@ public final class ObjectConstructor {
     }
 
     /**
+     * Object(value)
+     * ES2020 19.1.1.1
+     * When called as a function, creates a wrapper object for the given value.
+     * - For null/undefined, returns a new empty object
+     * - For primitives (number, string, boolean, symbol, bigint), returns a wrapper object
+     * - For objects, returns the object itself
+     */
+    public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        // If no argument or undefined/null, return new empty object
+        if (args.length == 0 || args[0].isNullOrUndefined()) {
+            return new JSObject();
+        }
+
+        JSValue value = args[0];
+
+        // If already an object, return it as-is
+        if (value instanceof JSObject) {
+            return value;
+        }
+
+        // Get global object for accessing constructor prototypes
+        JSObject global = context.getGlobalObject();
+
+        // Wrap primitive values in their respective object wrappers
+        if (value instanceof JSNumber num) {
+            JSNumberObject wrapper = new JSNumberObject(num);
+            // Set Number.prototype
+            JSValue numberCtor = global.get("Number");
+            if (numberCtor instanceof JSObject) {
+                JSValue prototype = ((JSObject) numberCtor).get("prototype");
+                if (prototype instanceof JSObject) {
+                    wrapper.setPrototype((JSObject) prototype);
+                }
+            }
+            return wrapper;
+        }
+
+        if (value instanceof JSString str) {
+            JSStringObject wrapper = new JSStringObject(str);
+            // Set String.prototype
+            JSValue stringCtor = global.get("String");
+            if (stringCtor instanceof JSObject) {
+                JSValue prototype = ((JSObject) stringCtor).get("prototype");
+                if (prototype instanceof JSObject) {
+                    wrapper.setPrototype((JSObject) prototype);
+                }
+            }
+            return wrapper;
+        }
+
+        if (value instanceof JSBoolean bool) {
+            JSBooleanObject wrapper = new JSBooleanObject(bool);
+            // Set Boolean.prototype
+            JSValue booleanCtor = global.get("Boolean");
+            if (booleanCtor instanceof JSObject) {
+                JSValue prototype = ((JSObject) booleanCtor).get("prototype");
+                if (prototype instanceof JSObject) {
+                    wrapper.setPrototype((JSObject) prototype);
+                }
+            }
+            return wrapper;
+        }
+
+        if (value instanceof JSSymbol sym) {
+            JSSymbolObject wrapper = new JSSymbolObject(sym);
+            // Set Symbol.prototype
+            JSValue symbolCtor = global.get("Symbol");
+            if (symbolCtor instanceof JSObject) {
+                JSValue prototype = ((JSObject) symbolCtor).get("prototype");
+                if (prototype instanceof JSObject) {
+                    wrapper.setPrototype((JSObject) prototype);
+                }
+            }
+            return wrapper;
+        }
+
+        if (value instanceof JSBigInt bigInt) {
+            JSBigIntObject wrapper = new JSBigIntObject(bigInt);
+            // Set BigInt.prototype
+            JSValue bigIntCtor = global.get("BigInt");
+            if (bigIntCtor instanceof JSObject) {
+                JSValue prototype = ((JSObject) bigIntCtor).get("prototype");
+                if (prototype instanceof JSObject) {
+                    wrapper.setPrototype((JSObject) prototype);
+                }
+            }
+            return wrapper;
+        }
+
+        // For any other value, return new empty object
+        return new JSObject();
+    }
+
+    /**
      * Object.create(proto, propertiesObject)
      * ES2020 19.1.2.2
      * Creates a new object with the specified prototype object.

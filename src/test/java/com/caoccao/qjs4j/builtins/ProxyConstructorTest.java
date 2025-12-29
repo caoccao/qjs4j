@@ -1195,7 +1195,7 @@ public class ProxyConstructorTest extends BaseTest {
     public void testProxyWithBigIntObjectArithmetic() {
         // Test that proxied BigInt object valueOf works
         JSValue result = ctx.eval("""
-                var target = new BigInt(10);
+                var target = Object(BigInt(10));
                 var handler = {};
                 var proxy = new Proxy(target, handler);
                 proxy.valueOf()""");
@@ -1204,10 +1204,10 @@ public class ProxyConstructorTest extends BaseTest {
 
     @Test
     public void testProxyWithBigIntObjectAsTarget() {
-        // Test that BigInt object (new BigInt(42)) can be a proxy target
+        // Test that BigInt object (Object(BigInt(42))) can be a proxy target
         // BigInt objects are needed as proxy targets since primitive BigInts cannot be proxied
         JSValue result = ctx.eval("""
-                var target = new BigInt(42);
+                var target = Object(BigInt(42));
                 var handler = {
                   get: function(target, prop) {
                     if (prop === 'test') {
@@ -1225,7 +1225,7 @@ public class ProxyConstructorTest extends BaseTest {
     public void testProxyWithBigIntObjectHasTrap() {
         // Test has trap on BigInt object proxy
         JSValue result = ctx.eval("""
-                var target = new BigInt(42);
+                var target = Object(BigInt(42));
                 target.customProp = 'exists';
                 var handler = {
                   has: function(target, prop) {
@@ -1244,7 +1244,7 @@ public class ProxyConstructorTest extends BaseTest {
     public void testProxyWithBigIntObjectSetTrap() {
         // Test set trap on BigInt object proxy
         JSValue result = ctx.eval("""
-                var target = new BigInt(42);
+                var target = Object(BigInt(42));
                 var handler = {
                   set: function(target, prop, value) {
                     target[prop] = value * 2;
@@ -1261,7 +1261,7 @@ public class ProxyConstructorTest extends BaseTest {
     public void testProxyWithBigIntObjectToString() {
         // Test that proxied BigInt object toString works correctly
         JSValue result = ctx.eval("""
-                var target = new BigInt(255);
+                var target = Object(BigInt(255));
                 var handler = {};
                 var proxy = new Proxy(target, handler);
                 proxy.toString()""");
@@ -1272,7 +1272,7 @@ public class ProxyConstructorTest extends BaseTest {
     public void testProxyWithBigIntObjectValueOf() {
         // Test that proxied BigInt object valueOf works correctly
         JSValue result = ctx.eval("""
-                var target = new BigInt(100);
+                var target = Object(BigInt(100));
                 var handler = {
                   get: function(target, prop) {
                     return target[prop];
@@ -1540,6 +1540,136 @@ public class ProxyConstructorTest extends BaseTest {
                 var proxy = new Proxy(target, handler);
                 proxy.valueOf()""");
         assertEquals("world", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithSymbolObjectAsPropertyKey() {
+        // Test that symbol object is created and can be used with proxy
+        JSValue result = ctx.eval("""
+                var symObj = Object(Symbol('key'));
+                var sym = symObj.valueOf();
+                var target = {};
+                var handler = {
+                  set: function(t, p, v) {
+                    t[p] = v;
+                    return true;
+                  },
+                  get: function(t, p) {
+                    return t[p];
+                  }
+                };
+                var proxy = new Proxy(target, handler);
+                proxy[sym] = 'value';
+                proxy[sym]""");
+        assertEquals("value", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithSymbolObjectAsTarget() {
+        // Test that Symbol object (Object(Symbol('foo'))) can be a proxy target
+        // Symbol objects are needed as proxy targets since primitive symbols cannot be proxied
+        JSValue result = ctx.eval("""
+                var target = Object(Symbol('foo'));
+                var handler = {
+                  get: function(target, prop) {
+                    if (prop === 'test') {
+                      return 'intercepted';
+                    }
+                    return target[prop];
+                  }
+                };
+                var proxy = new Proxy(target, handler);
+                proxy.test""");
+        assertEquals("intercepted", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithSymbolObjectDescription() {
+        // Test accessing description through proxy
+        JSValue result = ctx.eval("""
+                var target = Object(Symbol('myDescription'));
+                var handler = {
+                  get: function(target, prop) {
+                    if (prop === 'description') {
+                      return 'modified';
+                    }
+                    return target[prop];
+                  }
+                };
+                var proxy = new Proxy(target, handler);
+                proxy.description""");
+        assertEquals("modified", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithSymbolObjectGetPrimitiveValue() {
+        // Test accessing [[PrimitiveValue]] through proxy
+        JSValue result = ctx.eval("""
+                var target = Object(Symbol('test'));
+                var handler = {};
+                var proxy = new Proxy(target, handler);
+                var primitiveValue = proxy['[[PrimitiveValue]]'];
+                typeof primitiveValue""");
+        assertEquals("symbol", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithSymbolObjectToString() {
+        // Test that proxied Symbol object still works with toString
+        JSValue result = ctx.eval("""
+                var target = Object(Symbol('test'));
+                var handler = {};
+                var proxy = new Proxy(target, handler);
+                proxy.toString()""");
+        assertEquals("Symbol(test)", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithSymbolObjectTrapGet() {
+        // Test that get trap intercepts methods on Symbol object
+        JSValue result = ctx.eval("""
+                var target = Object(Symbol('test'));
+                var handler = {
+                  get: function(target, prop) {
+                    if (prop === 'toString') {
+                      return function() { return 'INTERCEPTED'; };
+                    }
+                    return target[prop];
+                  }
+                };
+                var proxy = new Proxy(target, handler);
+                proxy.toString()""");
+        assertEquals("INTERCEPTED", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithSymbolObjectValueOf() {
+        // Test that proxied Symbol object still works with valueOf
+        JSValue result = ctx.eval("""
+                var target = Object(Symbol('mySymbol'));
+                var handler = {};
+                var proxy = new Proxy(target, handler);
+                var primitiveValue = proxy.valueOf();
+                typeof primitiveValue""");
+        assertEquals("symbol", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithSymbolObjectWellKnown() {
+        // Test proxying an object wrapping a well-known symbol
+        JSValue result = ctx.eval("""
+                var target = Object(Symbol.iterator);
+                var handler = {
+                  get: function(target, prop) {
+                    if (prop === 'test') {
+                      return 'well-known';
+                    }
+                    return target[prop];
+                  }
+                };
+                var proxy = new Proxy(target, handler);
+                proxy.test""");
+        assertEquals("well-known", result.toJavaObject());
     }
 
     @Test
