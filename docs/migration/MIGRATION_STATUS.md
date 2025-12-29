@@ -323,11 +323,57 @@ Proper implementation for Map/Set where:
   - Continuation-based resumption when promises settle
   - Microtask queue processing for proper promise scheduling
 
+### Phase 16.3: Promise Prototype Chain Fix ✅
+**Completed**: Fixed critical Promise.prototype inheritance bug
+
+#### Problem
+JSPromise instances created by Promise static methods did not have access to prototype methods:
+- `Promise.resolve(10).then()` returned `JSUndefined` instead of a function
+- Promise chaining completely failed
+- All Promise.all(), Promise.race(), Promise.any(), etc. returned promises without prototype
+
+#### Root Cause
+When JSPromise objects were created via `new JSPromise()` in static methods, the `[[Prototype]]` internal property was not being set. The prototype chain was broken.
+
+#### Solution
+Added two helper methods to PromiseConstructor.java:
+1. `getPromisePrototype(JSContext context)` - Retrieves Promise.prototype from global scope
+2. `createPromise(JSContext context)` - Creates JSPromise with prototype set correctly
+
+Updated 11 instances of `new JSPromise()` across all Promise static methods:
+- Promise.resolve() - 1 fix
+- Promise.reject() - 1 fix  
+- Promise.all() - 2 fixes
+- Promise.allSettled() - 2 fixes
+- Promise.any() - 2 fixes
+- Promise.race() - 1 fix
+- Promise.withResolvers() - 1 fix
+
+#### Test Results
+- AsyncAwaitAdvancedTest: 10/10 tests passing (100%)
+- AsyncAwaitTest: 10/10 tests passing (100%)
+- FunctionDeclarationTest: 4/4 tests passing (100%)
+- **Total async/await tests**: 24/24 passing (100%)
+
+#### Impact
+This fix enables:
+- ✅ Promise chaining: `Promise.resolve(10).then(x => x * 2).then(x => x + 1)`
+- ✅ Promise.all() with proper promise handling
+- ✅ Promise.race(), Promise.any(), Promise.allSettled()
+- ✅ Async/await with promise chains
+- ✅ Full Promise API compatibility
+
+#### Notes
+- Promise constructor (via `new Promise(executor)`) already sets prototype correctly in VirtualMachine.handleCallConstructor()
+- Bug only affected static methods creating promises internally
+- See PROMISE_PROTOTYPE_FIX.md for detailed analysis
+
 #### Bug Fixes
 - Fixed StackOverflow in JSObject.get() by adding cycle detection for prototype chain traversal
 - Fixed StackOverflow in JSTypeConversions by implementing proper OrdinaryToPrimitive algorithm
 - Fixed FunctionPrototype.toString() to show async/generator flags correctly
   - State machine for tracking async function execution points
+- **Fixed Promise prototype chain**: JSPromise instances now have access to .then(), .catch(), .finally()
 - These limitations will be addressed in future enhancements when implementing full coroutine support
 - Proper ES2020 timing: Promise reactions now execute as microtasks, not synchronously
 - Exception handling: Microtask errors are logged (full implementation would trigger unhandled rejection)

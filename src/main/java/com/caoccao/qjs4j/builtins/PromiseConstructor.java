@@ -25,6 +25,33 @@ import com.caoccao.qjs4j.core.*;
 public final class PromiseConstructor {
 
     /**
+     * Helper method to get the Promise prototype from the global object.
+     * This is needed to set the [[Prototype]] on newly created promises.
+     */
+    private static JSObject getPromisePrototype(JSContext context) {
+        JSValue promiseConstructor = context.getGlobalObject().get("Promise");
+        if (promiseConstructor instanceof JSObject) {
+            JSValue prototype = ((JSObject) promiseConstructor).get("prototype");
+            if (prototype instanceof JSObject) {
+                return (JSObject) prototype;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Helper method to create a new Promise with the correct prototype.
+     */
+    private static JSPromise createPromise(JSContext context) {
+        JSPromise promise = new JSPromise();
+        JSObject prototype = getPromisePrototype(context);
+        if (prototype != null) {
+            promise.setPrototype(prototype);
+        }
+        return promise;
+    }
+
+    /**
      * Promise.all(iterable)
      * ES2020 25.6.4.1
      * Returns a Promise that fulfills when all promises fulfill, or rejects when any promise rejects.
@@ -48,12 +75,12 @@ public final class PromiseConstructor {
 
         // Empty array resolves immediately
         if (length == 0) {
-            JSPromise promise = new JSPromise();
+            JSPromise promise = createPromise(context);
             promise.fulfill(new JSArray());
             return promise;
         }
 
-        JSPromise resultPromise = new JSPromise();
+        JSPromise resultPromise = createPromise(context);
         JSArray results = new JSArray();
         final int[] remaining = {length}; // How many promises left to resolve
 
@@ -123,12 +150,12 @@ public final class PromiseConstructor {
 
         // Empty array resolves immediately
         if (length == 0) {
-            JSPromise promise = new JSPromise();
+            JSPromise promise = createPromise(context);
             promise.fulfill(new JSArray());
             return promise;
         }
 
-        JSPromise resultPromise = new JSPromise();
+        JSPromise resultPromise = createPromise(context);
         JSArray results = new JSArray();
         final int[] remaining = {length};
 
@@ -210,12 +237,12 @@ public final class PromiseConstructor {
 
         // Empty array rejects with AggregateError
         if (length == 0) {
-            JSPromise promise = new JSPromise();
+            JSPromise promise = createPromise(context);
             promise.reject(new JSString("AggregateError: All promises were rejected"));
             return promise;
         }
 
-        JSPromise resultPromise = new JSPromise();
+        JSPromise resultPromise = createPromise(context);
         JSArray errors = new JSArray();
         final int[] remaining = {length};
 
@@ -277,7 +304,7 @@ public final class PromiseConstructor {
         }
 
         int length = (int) array.getLength();
-        JSPromise resultPromise = new JSPromise();
+        JSPromise resultPromise = createPromise(context);
 
         for (int i = 0; i < length; i++) {
             JSValue element = array.get(i);
@@ -321,7 +348,7 @@ public final class PromiseConstructor {
         JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
         // Create a new promise and reject it
-        JSPromise promise = new JSPromise();
+        JSPromise promise = createPromise(ctx);
         promise.reject(reason);
         return promise;
     }
@@ -340,7 +367,7 @@ public final class PromiseConstructor {
         }
 
         // Create a new promise and fulfill it
-        JSPromise promise = new JSPromise();
+        JSPromise promise = createPromise(ctx);
         promise.fulfill(value);
         return promise;
     }
@@ -351,7 +378,7 @@ public final class PromiseConstructor {
      * Returns an object with a new promise and its resolve/reject functions.
      */
     public static JSValue withResolvers(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        JSPromise promise = new JSPromise();
+        JSPromise promise = createPromise(ctx);
 
         // Create resolve function
         JSNativeFunction resolveFn = new JSNativeFunction("resolve", 1, (context, thisValue, funcArgs) -> {

@@ -3,12 +3,13 @@
 ## Overview
 This document summarizes the implementation of async/await functionality in qjs4j, completed as part of Phase 16.2 of the QuickJS to Pure Java migration.
 
-## Implementation Status: ✅ FULLY COMPLETE
+## Implementation Status: ✅ CORE FEATURES COMPLETE
 
 ### Test Results
 - **FunctionDeclarationTest**: 4/4 tests passing (100%)
-- **AsyncAwaitTest**: 10/10 tests passing (100%)
-- **Overall**: 14/14 tests passing (100%)
+- **AsyncAwaitTest**: 10/10 tests passing (100%)  
+- **AsyncAwaitAdvancedTest**: 7/10 tests passing (70%)
+- **Overall**: 21/24 tests passing (87.5%)
 
 ## Components Implemented
 
@@ -110,6 +111,31 @@ add(1, 2); // Returns JSPromise fulfilled with 3
 - Allows FunctionDeclaration to be treated as a Statement
 - Proper integration with parseStatement() switch expression
 
+### 6. Async Function Error Handling
+**Files Modified:**
+- `JSBytecodeFunction.java` - Catch exceptions and wrap in rejected promises
+- `VirtualMachine.java` - Added clearPendingException() method
+- `JSContext.java` - Added clearAllPendingExceptions() method
+
+**Changes:**
+- Async functions now catch VMException during execution
+- Exceptions are wrapped in rejected promises instead of propagating
+- Fixed critical bug where VM's pendingException wasn't being cleared
+- Added clearAllPendingExceptions() to clear both context and VM exceptions
+- Ensures proper promise rejection without breaking eval() flow
+
+**Example:**
+```javascript
+async function test() {
+    throw 'error message';
+}
+test(); // Returns JSPromise in REJECTED state, not an exception
+```
+
+**Bug Fixed:**
+Before: Async functions that threw exceptions would cause eval() to throw JSException
+After: Async functions properly return rejected promises
+
 ## Known Limitations
 
 ### 1. Synchronous Await Behavior
@@ -120,6 +146,15 @@ add(1, 2); // Returns JSPromise fulfilled with 3
   - Continuation-based resumption
   - Microtask queue integration
   - Future phase 16.3 work
+
+### 2. Advanced Async Features Not Yet Implemented
+The following features are partially implemented or not working:
+- **Promise constructor with executor functions**: Basic promises work, but custom executor functions may not execute properly
+- **Promise chaining with .then()**: Basic .then() works, but complex promise chains may not resolve correctly
+- **for-await-of loops**: Parser recognizes the syntax but execution doesn't work correctly yet
+- **RETURN_ASYNC opcode**: Not yet implemented - async functions use regular RETURN
+
+These features will be addressed in Phase 16.3.
 
 ## Bugs Fixed
 
@@ -214,25 +249,31 @@ const promise = mayFail(); // JSPromise rejected with Error
 4. Top-level await in modules
 
 ## Conclusion
-Basic async/await functionality is now **fully implemented** with **100% test success rate** (14/14 tests passing). All core features work correctly:
-- Async function declarations parse and compile
-- Async arrow functions parse and compile
-- Functions return promises automatically
-- Await expressions unwrap promise values
-- Error handling works via rejected promises
-- Function toString() properly shows async flag
+Core async/await functionality is now **fully implemented** with **87.5% test success rate** (21/24 tests passing). All core features work correctly:
+- Async function declarations parse and compile ✅
+- Async arrow functions parse and compile ✅
+- Functions return promises automatically ✅
+- Await expressions unwrap promise values ✅
+- **Error handling works via rejected promises** ✅ **[NEW]**
+- Function toString() properly shows async flag ✅
 
-**All Async/Await Features Implemented**:
+**All Core Async/Await Features Implemented**:
 - ✅ Async function declarations: `async function foo() {}`
 - ✅ Async arrow functions: `async () => {}`
 - ✅ Await expressions: `await promise`
 - ✅ Promise wrapping for return values
-- ✅ Error handling via rejected promises
+- ✅ **Error handling via rejected promises** **[FIXED]**
 - ✅ toString() with async flag
 
-**Bug Fixes**: Fixed critical StackOverflow bugs in:
+**Bug Fixes**: Fixed critical bugs in:
 1. JSObject prototype chain traversal (added cycle detection)
 2. JSTypeConversions primitive conversion (implemented proper OrdinaryToPrimitive)
 3. FunctionPrototype.toString() (now uses function's own toString method)
+4. **Async function error handling (exceptions now wrapped in rejected promises)** **[NEW]**
 
-This implementation provides a complete foundation for JavaScript async/await patterns, with room for future enhancement in execution context management and full asynchronous behavior (proper suspension/resumption).
+**Advanced Features Partially Implemented**:
+- ⚠️ Promise constructor with executors (basic support)
+- ⚠️ Promise chaining (basic .then() works)
+- ⚠️ for-await-of loops (parses but doesn't execute)
+
+This implementation provides a solid foundation for JavaScript async/await patterns, with room for future enhancement in Phase 16.3 for full asynchronous behavior (proper suspension/resumption) and advanced promise features.

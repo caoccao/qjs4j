@@ -129,6 +129,15 @@ public final class JSContext implements AutoCloseable {
         this.pendingException = null;
         this.errorStackTrace.clear();
     }
+    
+    /**
+     * Clear the pending exception in both context and VM.
+     * This is needed when an async function catches an exception.
+     */
+    public void clearAllPendingExceptions() {
+        clearPendingException();
+        virtualMachine.clearPendingException();
+    }
 
     /**
      * Close this context and release resources.

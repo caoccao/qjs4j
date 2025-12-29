@@ -1798,6 +1798,14 @@ public final class VirtualMachine {
 
         return null;
     }
+    
+    /**
+     * Clear the pending exception in the VM.
+     * This is needed when an async function catches an exception.
+     */
+    public void clearPendingException() {
+        this.pendingException = null;
+    }
 
     /**
      * VM exception for runtime errors.

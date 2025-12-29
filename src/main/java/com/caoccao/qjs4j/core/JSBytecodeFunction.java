@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.vm.Bytecode;
+import com.caoccao.qjs4j.vm.VirtualMachine;
 
 /**
  * Represents a JavaScript function compiled to bytecode.
@@ -88,24 +89,47 @@ public final class JSBytecodeFunction extends JSFunction {
 
     @Override
     public JSValue call(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        // Execute bytecode in the VM
-        // The VM will create a stack frame, bind arguments, and execute bytecode
-        JSValue result = ctx.getVirtualMachine().execute(this, thisArg, args);
-
-        // If this is an async function, wrap the result in a promise
+        // If this is an async function, wrap execution in a promise
         if (isAsync) {
-            // If result is already a promise, return it directly
-            if (result instanceof JSPromise) {
-                return result;
-            }
-
-            // Otherwise, wrap the result in a fulfilled promise
             JSPromise promise = new JSPromise();
-            promise.fulfill(result);
+            try {
+                // Execute bytecode in the VM
+                JSValue result = ctx.getVirtualMachine().execute(this, thisArg, args);
+
+                // If result is already a promise, use it directly
+                if (result instanceof JSPromise) {
+                    return result;
+                }
+
+                // Otherwise, wrap the result in a fulfilled promise
+                promise.fulfill(result);
+            } catch (VirtualMachine.VMException e) {
+                // VM exception during async function execution
+                // Check if there's a pending exception in the context
+                if (ctx.hasPendingException()) {
+                    JSValue exception = ctx.getPendingException();
+                    ctx.clearAllPendingExceptions(); // Clear BOTH context and VM pending exceptions
+                    promise.reject(exception);
+                } else {
+                    // Create error object from exception message
+                    String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
+                    JSObject errorObj = new JSObject();
+                    errorObj.set("message", new JSString(errorMessage));
+                    promise.reject(errorObj);
+                }
+            } catch (Exception e) {
+                // Any other exception in an async function should be caught
+                // and wrapped in a rejected promise
+                String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
+                JSObject errorObj = new JSObject();
+                errorObj.set("message", new JSString(errorMessage));
+                promise.reject(errorObj);
+            }
             return promise;
         }
 
-        return result;
+        // For non-async functions, execute normally and let exceptions propagate
+        return ctx.getVirtualMachine().execute(this, thisArg, args);
     }
 
     /**
