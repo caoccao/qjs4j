@@ -36,7 +36,7 @@ package com.caoccao.qjs4j.core;
  *     .build();
  * </pre>
  */
-public final class ClassBuilder {
+public final class JSClassBuilder {
     private final JSClass classObject;
     private final String name;
     private JSFunction constructor;
@@ -47,7 +47,7 @@ public final class ClassBuilder {
      *
      * @param name Class name
      */
-    public ClassBuilder(String name) {
+    public JSClassBuilder(String name) {
         this.name = name;
         this.constructor = new JSNativeFunction("constructor", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         this.superClass = null;
@@ -81,7 +81,7 @@ public final class ClassBuilder {
      * @param constructor Constructor function
      * @return This builder
      */
-    public ClassBuilder constructor(JSNativeFunction.NativeCallback constructor) {
+    public JSClassBuilder constructor(JSNativeFunction.NativeCallback constructor) {
         this.constructor = new JSNativeFunction("constructor", 0, constructor);
         return this;
     }
@@ -93,7 +93,7 @@ public final class ClassBuilder {
      * @param constructor Constructor function
      * @return This builder
      */
-    public ClassBuilder constructor(int length, JSNativeFunction.NativeCallback constructor) {
+    public JSClassBuilder constructor(int length, JSNativeFunction.NativeCallback constructor) {
         this.constructor = new JSNativeFunction("constructor", length, constructor);
         return this;
     }
@@ -104,7 +104,7 @@ public final class ClassBuilder {
      * @param superClass Parent class
      * @return This builder
      */
-    public ClassBuilder extends_(JSClass superClass) {
+    public JSClassBuilder extends_(JSClass superClass) {
         this.superClass = superClass;
         return this;
     }
@@ -116,7 +116,7 @@ public final class ClassBuilder {
      * @param initialValue Initial value
      * @return This builder
      */
-    public ClassBuilder instanceField(String fieldName, JSValue initialValue) {
+    public JSClassBuilder instanceField(String fieldName, JSValue initialValue) {
         if (classObject == null) {
             throw new IllegalStateException("Must call build() before adding fields");
         }
@@ -137,7 +137,7 @@ public final class ClassBuilder {
      * @param callback   Method implementation
      * @return This builder
      */
-    public ClassBuilder instanceMethod(String methodName, JSNativeFunction.NativeCallback callback) {
+    public JSClassBuilder instanceMethod(String methodName, JSNativeFunction.NativeCallback callback) {
         return instanceMethod(methodName, 0, callback);
     }
 
@@ -149,7 +149,7 @@ public final class ClassBuilder {
      * @param callback   Method implementation
      * @return This builder
      */
-    public ClassBuilder instanceMethod(String methodName, int length, JSNativeFunction.NativeCallback callback) {
+    public JSClassBuilder instanceMethod(String methodName, int length, JSNativeFunction.NativeCallback callback) {
         if (classObject == null) {
             throw new IllegalStateException("Must call build() before adding methods");
         }
@@ -165,7 +165,7 @@ public final class ClassBuilder {
      * @param value     Field value
      * @return This builder
      */
-    public ClassBuilder staticField(String fieldName, JSValue value) {
+    public JSClassBuilder staticField(String fieldName, JSValue value) {
         if (classObject == null) {
             throw new IllegalStateException("Must call build() before adding fields");
         }
@@ -186,7 +186,7 @@ public final class ClassBuilder {
      * @param callback   Method implementation
      * @return This builder
      */
-    public ClassBuilder staticMethod(String methodName, JSNativeFunction.NativeCallback callback) {
+    public JSClassBuilder staticMethod(String methodName, JSNativeFunction.NativeCallback callback) {
         return staticMethod(methodName, 0, callback);
     }
 
@@ -198,7 +198,7 @@ public final class ClassBuilder {
      * @param callback   Method implementation
      * @return This builder
      */
-    public ClassBuilder staticMethod(String methodName, int length, JSNativeFunction.NativeCallback callback) {
+    public JSClassBuilder staticMethod(String methodName, int length, JSNativeFunction.NativeCallback callback) {
         if (classObject == null) {
             throw new IllegalStateException("Must call build() before adding methods");
         }

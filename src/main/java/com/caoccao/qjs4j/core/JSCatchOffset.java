@@ -24,7 +24,7 @@ package com.caoccao.qjs4j.core;
  * <p>
  * This is an internal VM type, not a JavaScript value.
  */
-public record CatchOffset(int offset) implements JSStackValue {
+public record JSCatchOffset(int offset) implements JSStackValue {
 
     @Override
     public String toString() {
