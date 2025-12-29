@@ -1361,6 +1361,94 @@ public class ProxyConstructorTest extends BaseTest {
     }
 
     @Test
+    public void testProxyWithStringObjectAsTarget() {
+        // Test that String object (new String("hello")) can be a proxy target
+        // String objects are needed as proxy targets since primitive strings cannot be proxied
+        JSValue result = ctx.eval("""
+                var target = new String('hello');
+                var handler = {
+                  get: function(target, prop) {
+                    if (prop === 'test') {
+                      return 'intercepted';
+                    }
+                    return target[prop];
+                  }
+                };
+                var proxy = new Proxy(target, handler);
+                proxy.test""");
+        assertEquals("intercepted", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithStringObjectCharAccess() {
+        // Test that proxied String object supports character access
+        JSValue result = ctx.eval("""
+                var target = new String('hello');
+                var handler = {
+                  get: function(target, prop) {
+                    if (prop === '1') {
+                      return 'X';
+                    }
+                    return target[prop];
+                  }
+                };
+                var proxy = new Proxy(target, handler);
+                proxy[1]""");
+        assertEquals("X", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithStringObjectLength() {
+        // Test that proxied String object has length property
+        JSValue result = ctx.eval("""
+                var target = new String('hello');
+                var handler = {};
+                var proxy = new Proxy(target, handler);
+                proxy.length""");
+        assertEquals(5.0, (Double) result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithStringObjectToString() {
+        // Test that proxied String object still works with toString
+        JSValue result = ctx.eval("""
+                var target = new String('hello');
+                var handler = {};
+                var proxy = new Proxy(target, handler);
+                proxy.toString()""");
+        assertEquals("hello", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithStringObjectTrapGet() {
+        // Test that get trap intercepts methods on String object
+        JSValue result = ctx.eval("""
+                var target = new String('hello');
+                var handler = {
+                  get: function(target, prop) {
+                    if (prop === 'toUpperCase') {
+                      return function() { return 'INTERCEPTED'; };
+                    }
+                    return target[prop];
+                  }
+                };
+                var proxy = new Proxy(target, handler);
+                proxy.toUpperCase()""");
+        assertEquals("INTERCEPTED", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithStringObjectValueOf() {
+        // Test that proxied String object still works with valueOf
+        JSValue result = ctx.eval("""
+                var target = new String('world');
+                var handler = {};
+                var proxy = new Proxy(target, handler);
+                proxy.valueOf()""");
+        assertEquals("world", result.toJavaObject());
+    }
+
+    @Test
     public void testProxyWithSymbolProperty() {
         // Test that proxy works with symbol properties
         JSValue result = ctx.eval("""
@@ -1377,3 +1465,4 @@ public class ProxyConstructorTest extends BaseTest {
         assertEquals(42.0, (Double) result.toJavaObject());
     }
 }
+

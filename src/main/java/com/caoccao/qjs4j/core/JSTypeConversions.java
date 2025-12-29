@@ -351,6 +351,19 @@ public final class JSTypeConversions {
             // Symbols cannot be converted to numbers - would throw TypeError
             return new JSNumber(Double.NaN);
         }
+
+        // Handle wrapper objects (String, Number, Boolean objects)
+        if (value instanceof JSObject obj) {
+            JSValue primitiveValue = obj.get("[[PrimitiveValue]]");
+            if (primitiveValue instanceof JSNumber num) {
+                return num;
+            } else if (primitiveValue instanceof JSString str) {
+                return stringToNumber(str.value());
+            } else if (primitiveValue instanceof JSBoolean bool) {
+                return new JSNumber(bool.value() ? 1.0 : 0.0);
+            }
+        }
+
         // For objects, call ToPrimitive with NUMBER hint
         JSValue primitive = toPrimitive(context, value, PreferredType.NUMBER);
         if (primitive == value) {
@@ -394,13 +407,29 @@ public final class JSTypeConversions {
                 || value.isBigInt()
                 || value.isBoolean()
                 || value.isBooleanObject()
-                || value.isNumber()) {
+                || value.isNumber()
+                || value.isNumberObject()) {
             return new JSString(value.toString());
         } else if (value instanceof JSString s) {
             return s;
+        } else if (value instanceof JSStringObject s) {
+            return s.getValue();
         } else if (value instanceof JSSymbol s) {
             return new JSString(s.toString(context));
         }
+
+        // Handle wrapper objects (String, Number, Boolean objects)
+        if (value instanceof JSObject obj) {
+            JSValue primitiveValue = obj.get("[[PrimitiveValue]]");
+            if (primitiveValue instanceof JSString str) {
+                return str;
+            } else if (primitiveValue instanceof JSNumber num) {
+                return new JSString(num.toString());
+            } else if (primitiveValue instanceof JSBoolean bool) {
+                return new JSString(bool.toString());
+            }
+        }
+
         // For objects, call ToPrimitive with STRING hint
         JSValue primitive = toPrimitive(context, value, PreferredType.STRING);
         if (primitive == value) {

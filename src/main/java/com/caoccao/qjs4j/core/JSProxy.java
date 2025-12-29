@@ -312,9 +312,21 @@ public final class JSProxy extends JSObject {
         if (getTrap != null && !(getTrap instanceof JSUndefined) && !(getTrap instanceof JSNull)) {
             if (getTrap instanceof JSFunction getTrapFunc) {
                 // Call the trap: handler.get(target, property, receiver)
+                // Convert PropertyKey to JSValue for the trap
+                JSValue keyValue;
+                if (key.isString()) {
+                    keyValue = new JSString(key.asString());
+                } else if (key.isIndex()) {
+                    // Convert index to string as JavaScript does
+                    keyValue = new JSString(String.valueOf(key.getValue()));
+                } else {
+                    // Symbol
+                    keyValue = key.asSymbol();
+                }
+
                 JSValue[] args = new JSValue[]{
                         target,
-                        key.isString() ? new JSString(key.asString()) : key.asSymbol(),
+                        keyValue,
                         this
                 };
                 JSValue trapResult = getTrapFunc.call(context, handler, args);

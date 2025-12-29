@@ -575,6 +575,30 @@ public class StringPrototypeTest extends BaseTest {
     }
 
     @Test
+    public void testToString() {
+        // Normal case
+        JSValue result = StringPrototype.toString_(ctx, str, new JSValue[]{});
+        assertEquals("hello world", result.asString().map(JSString::value).orElseThrow());
+
+        // Empty string
+        JSString empty = new JSString("");
+        result = StringPrototype.toString_(ctx, empty, new JSValue[]{});
+        assertEquals("", result.asString().map(JSString::value).orElseThrow());
+
+        // Non-string thisArg
+        try {
+            StringPrototype.toString_(ctx, new JSNumber(42), new JSValue[]{});
+        } catch (Exception e) {
+            assertEquals("TypeError: String.prototype.toString requires that 'this' be a String", e.getMessage());
+        }
+        try {
+            ctx.eval("String.prototype.toString.call(123)");
+        } catch (Exception e) {
+            assertEquals("TypeError: String.prototype.toString requires that 'this' be a String", e.getMessage());
+        }
+    }
+
+    @Test
     public void testToUpperCase() {
         JSValue result = StringPrototype.toUpperCase(ctx, str, new JSValue[]{});
         assertEquals("HELLO WORLD", result.asString().map(JSString::value).orElseThrow());

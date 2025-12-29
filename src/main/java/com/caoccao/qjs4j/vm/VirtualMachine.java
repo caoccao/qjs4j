@@ -692,6 +692,31 @@ public final class VirtualMachine {
                 valueStack.push(numObj);
                 return;
             }
+
+            // Check for String constructor (must come before generic JSFunction check)
+            JSValue isStringCtor = ctorObj.get("[[StringConstructor]]");
+            if (isStringCtor instanceof JSBoolean && ((JSBoolean) isStringCtor).value()) {
+                // ES2020: If no argument is passed, use empty string
+                JSString strValue;
+                if (args.length == 0) {
+                    strValue = new JSString("");
+                } else {
+                    // Convert to string using ToString
+                    strValue = JSTypeConversions.toString(context, args[0]);
+                }
+
+                // Create String object wrapper
+                JSStringObject strObj = new JSStringObject(strValue);
+
+                // Set prototype
+                JSValue prototypeValue = ctorObj.get("prototype");
+                if (prototypeValue instanceof JSObject prototype) {
+                    strObj.setPrototype(prototype);
+                }
+
+                valueStack.push(strObj);
+                return;
+            }
         }
 
         if (constructor instanceof JSFunction func) {

@@ -307,6 +307,15 @@ public sealed interface JSValue extends JSStackValue permits
     }
 
     /**
+     * Attempt to cast this value to JSStringObject.
+     *
+     * @return Optional containing the JSStringObject if this value is a String object, empty otherwise
+     */
+    default Optional<JSStringObject> asStringObject() {
+        return this instanceof JSStringObject v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
      * Attempt to cast this value to JSSymbol.
      *
      * @return Optional containing the JSSymbol if this value is a symbol, empty otherwise
@@ -721,6 +730,15 @@ public sealed interface JSValue extends JSStackValue permits
      */
     default boolean isString() {
         return this instanceof JSString;
+    }
+
+    /**
+     * Check if this value is a String object.
+     *
+     * @return true if this value is a String object, false otherwise
+     */
+    default boolean isStringObject() {
+        return this instanceof JSStringObject;
     }
 
     /**

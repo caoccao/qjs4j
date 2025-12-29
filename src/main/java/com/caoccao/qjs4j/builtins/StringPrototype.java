@@ -664,11 +664,20 @@ public final class StringPrototype {
      * String.prototype.toString()
      * ES2020 21.1.3.23
      */
-    public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
+    public static JSValue toString_(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSString str) {
             return str;
         }
-        return context.throwTypeError("String.prototype.toString called on non-string");
+
+        if (thisArg instanceof JSObject obj) {
+            // Check for [[StringData]] internal slot
+            JSValue primitiveValue = obj.get("[[PrimitiveValue]]");
+            if (primitiveValue instanceof JSString str) {
+                return str;
+            }
+        }
+
+        return context.throwTypeError("String.prototype.toString requires that 'this' be a String");
     }
 
     /**
@@ -715,6 +724,15 @@ public final class StringPrototype {
         if (thisArg instanceof JSString str) {
             return str;
         }
+
+        if (thisArg instanceof JSObject obj) {
+            // Check for [[StringData]] internal slot
+            JSValue primitiveValue = obj.get("[[PrimitiveValue]]");
+            if (primitiveValue instanceof JSString str) {
+                return str;
+            }
+        }
+
         return context.throwTypeError("String.prototype.valueOf called on non-string");
     }
 }

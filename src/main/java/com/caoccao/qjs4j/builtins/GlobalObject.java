@@ -245,7 +245,9 @@ public final class GlobalObject {
                 || value.isBoolean()
                 || value.isBooleanObject()
                 || value.isNumber()
+                || value.isNumberObject()
                 || value.isString()
+                || value.isStringObject()
                 || value.isSymbol()) {
             return JSTypeConversions.toString(context, value).value();
         } else if (value instanceof JSArray arr) {
@@ -1047,14 +1049,15 @@ public final class GlobalObject {
         stringPrototype.set("trim", new JSNativeFunction("trim", 0, StringPrototype::trim));
         stringPrototype.set("trimStart", new JSNativeFunction("trimStart", 0, StringPrototype::trimStart));
         stringPrototype.set("trimEnd", new JSNativeFunction("trimEnd", 0, StringPrototype::trimEnd));
-        stringPrototype.set("toString", new JSNativeFunction("toString", 0, StringPrototype::toStringMethod));
+        stringPrototype.set("toString", new JSNativeFunction("toString", 0, StringPrototype::toString_));
         stringPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, StringPrototype::valueOf));
         // String.prototype[Symbol.iterator]
         stringPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), new JSNativeFunction("[Symbol.iterator]", 0, IteratorPrototype::stringIterator));
 
-        // String constructor is a placeholder
-        JSObject stringConstructor = new JSObject();
+        // Create String constructor
+        JSNativeFunction stringConstructor = new JSNativeFunction("String", 1, StringConstructor::call);
         stringConstructor.set("prototype", stringPrototype);
+        stringConstructor.set("[[StringConstructor]]", JSBoolean.TRUE); // Mark as String constructor
 
         global.set("String", stringConstructor);
     }
