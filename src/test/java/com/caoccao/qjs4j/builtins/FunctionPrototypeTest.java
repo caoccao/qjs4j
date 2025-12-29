@@ -21,7 +21,6 @@ import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for FunctionPrototype methods.
@@ -47,7 +46,7 @@ public class FunctionPrototypeTest extends BaseTest {
         argsArray.push(new JSNumber(2));
         argsArray.push(new JSNumber(3));
 
-        JSValue result = FunctionPrototype.apply(ctx, testFunc, new JSValue[]{
+        JSValue result = FunctionPrototype.apply(context, testFunc, new JSValue[]{
                 JSUndefined.INSTANCE, // thisArg
                 argsArray
         });
@@ -55,32 +54,32 @@ public class FunctionPrototypeTest extends BaseTest {
 
         // Normal case: apply with custom thisArg
         JSObject customThis = new JSObject();
-        result = FunctionPrototype.apply(ctx, testFunc, new JSValue[]{
+        result = FunctionPrototype.apply(context, testFunc, new JSValue[]{
                 customThis,
                 argsArray
         });
         assertEquals(6.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Normal case: apply with no arguments array
-        result = FunctionPrototype.apply(ctx, testFunc, new JSValue[]{JSUndefined.INSTANCE});
+        result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE});
         assertEquals(0.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Normal case: apply with null/undefined arguments array
-        result = FunctionPrototype.apply(ctx, testFunc, new JSValue[]{JSUndefined.INSTANCE, JSNull.INSTANCE});
+        result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE, JSNull.INSTANCE});
         assertEquals(0.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: apply with non-array arguments
-        result = FunctionPrototype.apply(ctx, testFunc, new JSValue[]{
+        result = FunctionPrototype.apply(context, testFunc, new JSValue[]{
                 JSUndefined.INSTANCE,
                 new JSString("not an array")
         });
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
 
         // Edge case: called on non-function
-        result = FunctionPrototype.apply(ctx, new JSString("not a function"), new JSValue[]{});
+        result = FunctionPrototype.apply(context, new JSString("not a function"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -103,7 +102,7 @@ public class FunctionPrototypeTest extends BaseTest {
         JSObject boundThis = new JSObject();
         boundThis.set("value", new JSNumber(10));
 
-        JSValue result = FunctionPrototype.bind(ctx, testFunc, new JSValue[]{
+        JSValue result = FunctionPrototype.bind(context, testFunc, new JSValue[]{
                 boundThis,
                 new JSNumber(1),
                 new JSNumber(2)
@@ -111,20 +110,20 @@ public class FunctionPrototypeTest extends BaseTest {
         JSBoundFunction boundFunc = result.asBoundFunction().orElseThrow();
 
         // Call the bound function
-        JSValue callResult = boundFunc.call(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(3)});
+        JSValue callResult = boundFunc.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(3)});
         assertEquals(16.0, callResult.asNumber().map(JSNumber::value).orElseThrow()); // 10 + 1 + 2 + 3
 
         // Normal case: bind with no pre-bound arguments
-        result = FunctionPrototype.bind(ctx, testFunc, new JSValue[]{boundThis});
+        result = FunctionPrototype.bind(context, testFunc, new JSValue[]{boundThis});
         boundFunc = result.asBoundFunction().orElseThrow();
 
-        callResult = boundFunc.call(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(5)});
+        callResult = boundFunc.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(5)});
         assertEquals(15.0, callResult.asNumber().map(JSNumber::value).orElseThrow()); // 10 + 5
 
         // Edge case: called on non-function
-        result = FunctionPrototype.bind(ctx, new JSString("not a function"), new JSValue[]{});
+        result = FunctionPrototype.bind(context, new JSString("not a function"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -141,7 +140,7 @@ public class FunctionPrototypeTest extends BaseTest {
         });
 
         // Normal case: call with arguments
-        JSValue result = FunctionPrototype.call(ctx, testFunc, new JSValue[]{
+        JSValue result = FunctionPrototype.call(context, testFunc, new JSValue[]{
                 JSUndefined.INSTANCE, // thisArg
                 new JSNumber(1),
                 new JSNumber(2),
@@ -151,77 +150,73 @@ public class FunctionPrototypeTest extends BaseTest {
 
         // Normal case: call with custom thisArg
         JSObject customThis = new JSObject();
-        result = FunctionPrototype.call(ctx, testFunc, new JSValue[]{
+        result = FunctionPrototype.call(context, testFunc, new JSValue[]{
                 customThis,
                 new JSNumber(5)
         });
         assertEquals(5.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Normal case: call with no arguments
-        result = FunctionPrototype.call(ctx, testFunc, new JSValue[]{JSUndefined.INSTANCE});
+        result = FunctionPrototype.call(context, testFunc, new JSValue[]{JSUndefined.INSTANCE});
         assertEquals(0.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-function
-        result = FunctionPrototype.call(ctx, new JSString("not a function"), new JSValue[]{});
+        result = FunctionPrototype.call(context, new JSString("not a function"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
     public void testGetLength() {
         // Normal case: function with length
         JSFunction testFunc = new JSNativeFunction("test", 3, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
-        JSValue result = FunctionPrototype.getLength(ctx, testFunc, new JSValue[]{});
+        JSValue result = FunctionPrototype.getLength(context, testFunc, new JSValue[]{});
         assertEquals(3.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Normal case: function with zero length
         JSFunction zeroFunc = new JSNativeFunction("zero", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
-        result = FunctionPrototype.getLength(ctx, zeroFunc, new JSValue[]{});
+        result = FunctionPrototype.getLength(context, zeroFunc, new JSValue[]{});
         assertEquals(0.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-function
-        result = FunctionPrototype.getLength(ctx, new JSString("not a function"), new JSValue[]{});
+        result = FunctionPrototype.getLength(context, new JSString("not a function"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
     public void testGetName() {
         // Normal case: function with name
         JSFunction testFunc = new JSNativeFunction("myFunction", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
-        JSValue result = FunctionPrototype.getName(ctx, testFunc, new JSValue[]{});
+        JSValue result = FunctionPrototype.getName(context, testFunc, new JSValue[]{});
         assertEquals("myFunction", result.asString().map(JSString::value).orElseThrow());
 
         // Normal case: function without name
         JSFunction anonFunc = new JSNativeFunction("", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
-        result = FunctionPrototype.getName(ctx, anonFunc, new JSValue[]{});
+        result = FunctionPrototype.getName(context, anonFunc, new JSValue[]{});
         assertEquals("", result.asString().map(JSString::value).orElseThrow());
 
         // Edge case: called on non-function
-        result = FunctionPrototype.getName(ctx, new JSString("not a function"), new JSValue[]{});
+        result = FunctionPrototype.getName(context, new JSString("not a function"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
-    public void testToStringMethod() {
+    public void testToString() {
         // Normal case: function with name
         JSFunction testFunc = new JSNativeFunction("testFunction", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
-        JSValue result = FunctionPrototype.toStringMethod(ctx, testFunc, new JSValue[]{});
-        String str = result.asString().map(JSString::value).orElseThrow();
-        assertTrue(str.contains("function testFunction"));
-        assertTrue(str.contains("[native code]"));
+        JSValue result = FunctionPrototype.toString_(context, testFunc, new JSValue[]{});
+        assertEquals("function testFunction() { [native code] }", result.asString().map(JSString::value).orElseThrow());
 
         // Normal case: function without name (anonymous)
         JSFunction anonFunc = new JSNativeFunction("", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
-        result = FunctionPrototype.toStringMethod(ctx, anonFunc, new JSValue[]{});
-        str = result.asString().map(JSString::value).orElseThrow();
-        assertTrue(str.contains("function anonymous"));
-        assertTrue(str.contains("[native code]"));
+        result = FunctionPrototype.toString_(context, anonFunc, new JSValue[]{});
+        assertEquals("function anonymous() { [native code] }", result.asString().map(JSString::value).orElseThrow());
 
         // Edge case: called on non-function
-        result = FunctionPrototype.toStringMethod(ctx, new JSString("not a function"), new JSValue[]{});
+        result = FunctionPrototype.toString_(context, new JSString("not a function"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 }

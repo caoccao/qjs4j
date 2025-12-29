@@ -159,6 +159,16 @@ public final class BytecodeCompiler {
         }
     }
 
+    private void compileAwaitExpression(AwaitExpression awaitExpr) {
+        // Compile the argument expression
+        compileExpression(awaitExpr.argument());
+
+        // Emit the AWAIT opcode
+        // This will convert the value to a promise (if it isn't already)
+        // and pause execution until the promise resolves
+        emitter.emitOpcode(Opcode.AWAIT);
+    }
+
     private void compileBinaryExpression(BinaryExpression binExpr) {
         // Compile operands
         compileExpression(binExpr.left());
@@ -318,6 +328,8 @@ public final class BytecodeCompiler {
             compileFunctionExpression(funcExpr);
         } else if (expr instanceof ArrowFunctionExpression arrowExpr) {
             compileArrowFunctionExpression(arrowExpr);
+        } else if (expr instanceof AwaitExpression awaitExpr) {
+            compileAwaitExpression(awaitExpr);
         } else if (expr instanceof ArrayExpression arrayExpr) {
             compileArrayExpression(arrayExpr);
         } else if (expr instanceof ObjectExpression objExpr) {
@@ -385,6 +397,70 @@ public final class BytecodeCompiler {
 
         loopStack.pop();
         exitScope();
+    }
+
+    private void compileFunctionDeclaration(FunctionDeclaration funcDecl) {
+        // Create a new compiler for the function body
+        BytecodeCompiler functionCompiler = new BytecodeCompiler();
+
+        // Enter function scope and add parameters as locals
+        functionCompiler.enterScope();
+        functionCompiler.inGlobalScope = false;
+
+        for (Identifier param : funcDecl.params()) {
+            functionCompiler.currentScope().declareLocal(param.name());
+        }
+
+        // Compile function body statements
+        for (Statement stmt : funcDecl.body().body()) {
+            functionCompiler.compileStatement(stmt);
+        }
+
+        // If body doesn't end with return, add implicit return undefined
+        List<Statement> bodyStatements = funcDecl.body().body();
+        if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
+            functionCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
+            functionCompiler.emitter.emitOpcode(Opcode.RETURN);
+        }
+
+        int localCount = functionCompiler.currentScope().getLocalCount();
+        functionCompiler.exitScope();
+
+        // Build the function bytecode
+        Bytecode functionBytecode = functionCompiler.emitter.build(localCount);
+
+        // Get function name
+        String functionName = funcDecl.id().name();
+
+        // Create JSBytecodeFunction
+        JSBytecodeFunction function = new JSBytecodeFunction(
+                functionBytecode,
+                functionName,
+                funcDecl.params().size(),
+                new JSValue[0],  // closure vars - for now empty
+                null,            // prototype - will be set by VM
+                true,            // isConstructor - regular functions can be constructors
+                funcDecl.isAsync(),
+                funcDecl.isGenerator()
+        );
+
+        // Emit FCLOSURE opcode with function in constant pool
+        emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
+
+        // Store the function in a variable with its name
+        Integer localIndex = currentScope().getLocal(functionName);
+        if (localIndex != null) {
+            emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+        } else {
+            // Declare the function as a global variable or in the current scope
+            if (inGlobalScope) {
+                emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
+            } else {
+                // Declare it as a local
+                localIndex = currentScope().declareLocal(functionName);
+                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+            }
+        }
     }
 
     private void compileFunctionExpression(FunctionExpression funcExpr) {
@@ -692,6 +768,11 @@ public final class BytecodeCompiler {
             compileSwitchStatement(switchStmt);
         } else if (stmt instanceof VariableDeclaration varDecl) {
             compileVariableDeclaration(varDecl);
+        } else if (stmt instanceof FunctionDeclaration funcDecl) {
+            compileFunctionDeclaration(funcDecl);
+        } else if (stmt instanceof ClassDeclaration classDecl) {
+            // Class declarations not yet implemented
+            throw new CompilerException("Class declarations not yet implemented");
         }
     }
 

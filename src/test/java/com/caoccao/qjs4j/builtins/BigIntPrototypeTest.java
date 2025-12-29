@@ -32,40 +32,40 @@ public class BigIntPrototypeTest extends BaseTest {
     @Test
     public void testEquals() {
         // Verify that loose equality passes between primitive and primitive
-        assertTrue(ctx.eval("123n == 123n").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertFalse(ctx.eval("123n == 321n").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertTrue(ctx.eval("123n == BigInt(123)").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertFalse(ctx.eval("123n == BigInt(321)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(context.eval("123n == 123n").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(context.eval("123n == 321n").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(context.eval("123n == BigInt(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(context.eval("123n == BigInt(321)").asBoolean().map(JSBoolean::value).orElseThrow());
         // Verify that strict equality passes between primitive and primitive
-        assertTrue(ctx.eval("123n === 123n").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertFalse(ctx.eval("123n === 321n").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertTrue(ctx.eval("123n === BigInt(123)").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertFalse(ctx.eval("123n === BigInt(321)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(context.eval("123n === 123n").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(context.eval("123n === 321n").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(context.eval("123n === BigInt(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(context.eval("123n === BigInt(321)").asBoolean().map(JSBoolean::value).orElseThrow());
         // Verify that loose equality passes between primitive and primitive
-        assertTrue(ctx.eval("BigInt(123) == BigInt(123)").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertFalse(ctx.eval("BigInt(123) == BigInt(321)").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertTrue(ctx.eval("BigInt(123) == 123n").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertFalse(ctx.eval("BigInt(123) == 321n").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(context.eval("BigInt(123) == BigInt(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(context.eval("BigInt(123) == BigInt(321)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(context.eval("BigInt(123) == 123n").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(context.eval("BigInt(123) == 321n").asBoolean().map(JSBoolean::value).orElseThrow());
         // Verify that loose equality passes between primitive and object
-        assertTrue(ctx.eval("123n == Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertFalse(ctx.eval("123n == Object(BigInt(321))").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertTrue(ctx.eval("BigInt(123) == Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
-        assertFalse(ctx.eval("BigInt(123) == Object(BigInt(321))").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(context.eval("123n == Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(context.eval("123n == Object(BigInt(321))").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(context.eval("BigInt(123) == Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(context.eval("BigInt(123) == Object(BigInt(321))").asBoolean().map(JSBoolean::value).orElseThrow());
         // Verify that loose equality fails between object and object
-        assertFalse(ctx.eval("Object(BigInt(123)) == Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(context.eval("Object(BigInt(123)) == Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
         // Verify that strict equality fails between primitive and object
-        assertFalse(ctx.eval("123n === Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(context.eval("123n === Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
         // Verify that strict equality fails between object and object
-        assertFalse(ctx.eval("Object(BigInt(123)) === Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(context.eval("Object(BigInt(123)) === Object(BigInt(123))").asBoolean().map(JSBoolean::value).orElseThrow());
     }
 
     @Test
     public void testLiterals() {
         // Test typeof for BigInt literal
-        JSValue typeResult = ctx.eval("typeof 123n");
+        JSValue typeResult = context.eval("typeof 123n");
 
         // Test basic decimal BigInt literal
-        JSValue result = ctx.eval("123n");
+        JSValue result = context.eval("123n");
 
         // Just check if it works without assertion for now
         if (!result.isBigInt()) {
@@ -76,22 +76,22 @@ public class BigIntPrototypeTest extends BaseTest {
         assertEquals(BigInteger.valueOf(123), bigInt.value());
 
         // Test hex BigInt literal
-        result = ctx.eval("0xFFn");
+        result = context.eval("0xFFn");
         assertTrue(result.isBigInt());
         assertEquals(BigInteger.valueOf(255), result.asBigInt().map(JSBigInt::value).orElseThrow());
 
         // Test binary BigInt literal
-        result = ctx.eval("0b1111n");
+        result = context.eval("0b1111n");
         assertTrue(result.isBigInt());
         assertEquals(BigInteger.valueOf(15), result.asBigInt().map(JSBigInt::value).orElseThrow());
 
         // Test octal BigInt literal
-        result = ctx.eval("0o77n");
+        result = context.eval("0o77n");
         assertTrue(result.isBigInt());
         assertEquals(BigInteger.valueOf(63), result.asBigInt().map(JSBigInt::value).orElseThrow());
 
         // Test large BigInt literal
-        result = ctx.eval("9007199254740991n");
+        result = context.eval("9007199254740991n");
         assertTrue(result.isBigInt());
         assertEquals(new BigInteger("9007199254740991"), result.asBigInt().map(JSBigInt::value).orElseThrow());
     }
@@ -100,86 +100,86 @@ public class BigIntPrototypeTest extends BaseTest {
     public void testToLocaleString() {
         JSBigInt bigInt = new JSBigInt(BigInteger.valueOf(12345));
         // Normal case: default
-        JSValue result = BigIntPrototype.toLocaleString(ctx, bigInt, new JSValue[]{});
+        JSValue result = BigIntPrototype.toLocaleString(context, bigInt, new JSValue[]{});
         JSString str = result.asString().orElseThrow();
         assertEquals("12345", str.value());
 
         // Normal case: with arguments (ignored in simplified implementation)
-        result = BigIntPrototype.toLocaleString(ctx, bigInt, new JSValue[]{new JSString("en-US")});
+        result = BigIntPrototype.toLocaleString(context, bigInt, new JSValue[]{new JSString("en-US")});
         str = result.asString().orElseThrow();
         assertEquals("12345", str.value());
 
         // Edge case: called on non-BigInt
-        result = BigIntPrototype.toLocaleString(ctx, new JSString("not a bigint"), new JSValue[]{});
+        result = BigIntPrototype.toLocaleString(context, new JSString("not a bigint"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
     public void testToString() {
         JSBigInt bigInt = new JSBigInt(BigInteger.valueOf(12345));
         // Normal case: default radix (10)
-        JSValue result = BigIntPrototype.toString(ctx, bigInt, new JSValue[]{});
+        JSValue result = BigIntPrototype.toString(context, bigInt, new JSValue[]{});
         JSString str = result.asString().orElseThrow();
         assertEquals("12345", str.value());
 
         // Normal case: explicit radix 10
-        result = BigIntPrototype.toString(ctx, bigInt, new JSValue[]{new JSNumber(10)});
+        result = BigIntPrototype.toString(context, bigInt, new JSValue[]{new JSNumber(10)});
         str = result.asString().orElseThrow();
         assertEquals("12345", str.value());
 
         // Normal case: radix 16
-        result = BigIntPrototype.toString(ctx, bigInt, new JSValue[]{new JSNumber(16)});
+        result = BigIntPrototype.toString(context, bigInt, new JSValue[]{new JSNumber(16)});
         str = result.asString().orElseThrow();
         assertEquals("3039", str.value());
 
         // Normal case: radix 2
-        result = BigIntPrototype.toString(ctx, bigInt, new JSValue[]{new JSNumber(2)});
+        result = BigIntPrototype.toString(context, bigInt, new JSValue[]{new JSNumber(2)});
         str = result.asString().orElseThrow();
         assertEquals("11000000111001", str.value());
 
         // Normal case: negative BigInt
         JSBigInt negativeBigInt = new JSBigInt(BigInteger.valueOf(-12345));
-        result = BigIntPrototype.toString(ctx, negativeBigInt, new JSValue[]{});
+        result = BigIntPrototype.toString(context, negativeBigInt, new JSValue[]{});
         str = result.asString().orElseThrow();
         assertEquals("-12345", str.value());
 
         // Edge case: radix 2 (minimum)
-        result = BigIntPrototype.toString(ctx, bigInt, new JSValue[]{new JSNumber(2)});
+        result = BigIntPrototype.toString(context, bigInt, new JSValue[]{new JSNumber(2)});
         str = result.asString().orElseThrow();
         assertEquals("11000000111001", str.value());
 
         // Edge case: radix 36 (maximum)
-        result = BigIntPrototype.toString(ctx, bigInt, new JSValue[]{new JSNumber(36)});
+        result = BigIntPrototype.toString(context, bigInt, new JSValue[]{new JSNumber(36)});
         str = result.asString().orElseThrow();
         assertEquals("9ix", str.value());
 
         // Edge case: radix too small
-        result = BigIntPrototype.toString(ctx, bigInt, new JSValue[]{new JSNumber(1)});
+        result = BigIntPrototype.toString(context, bigInt, new JSValue[]{new JSNumber(1)});
         assertRangeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
 
         // Edge case: radix too large
-        result = BigIntPrototype.toString(ctx, bigInt, new JSValue[]{new JSNumber(37)});
+        result = BigIntPrototype.toString(context, bigInt, new JSValue[]{new JSNumber(37)});
         assertRangeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
 
         // Edge case: called on non-BigInt
-        result = BigIntPrototype.toString(ctx, new JSString("not a bigint"), new JSValue[]{});
+        result = BigIntPrototype.toString(context, new JSString("not a bigint"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
     public void testValueOf() {
         JSBigInt bigInt = new JSBigInt(BigInteger.valueOf(12345));
         // Normal case: BigInt
-        JSValue result = BigIntPrototype.valueOf(ctx, bigInt, new JSValue[]{});
+        JSValue result = BigIntPrototype.valueOf(context, bigInt, new JSValue[]{});
         assertEquals(bigInt, result);
 
         // Edge case: called on non-BigInt
-        result = BigIntPrototype.valueOf(ctx, new JSString("not a bigint"), new JSValue[]{});
+        result = BigIntPrototype.valueOf(context, new JSString("not a bigint"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 }

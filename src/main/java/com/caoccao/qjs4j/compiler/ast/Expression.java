@@ -23,5 +23,5 @@ public sealed interface Expression extends ASTNode permits
         Literal, Identifier, BinaryExpression, UnaryExpression,
         AssignmentExpression, ConditionalExpression, CallExpression,
         MemberExpression, NewExpression, FunctionExpression,
-        ArrowFunctionExpression, ArrayExpression, ObjectExpression {
+        ArrowFunctionExpression, ArrayExpression, ObjectExpression, AwaitExpression {
 }

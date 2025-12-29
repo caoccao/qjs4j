@@ -31,8 +31,8 @@ public class WeakRefConstructorTest extends BaseTest {
     @Test
     public void testConstruct() {
         // WeakRef constructor must be called with 'new', so direct call should throw error
-        assertTypeError(WeakRefConstructor.construct(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSObject()}));
-        assertPendingException(ctx);
+        assertTypeError(WeakRefConstructor.construct(context, JSUndefined.INSTANCE, new JSValue[]{new JSObject()}));
+        assertPendingException(context);
     }
 
     @Test
@@ -40,26 +40,26 @@ public class WeakRefConstructorTest extends BaseTest {
         JSObject target = new JSObject();
 
         // Normal case: create WeakRef with object
-        JSValue result = WeakRefConstructor.createWeakRef(ctx, target);
+        JSValue result = WeakRefConstructor.createWeakRef(context, target);
         assertInstanceOf(JSWeakRef.class, result);
         JSWeakRef weakRef = (JSWeakRef) result;
         assertSame(target, weakRef.deref());
 
         // Edge case: target is null
-        assertTypeError(WeakRefConstructor.createWeakRef(ctx, JSNull.INSTANCE));
-        assertPendingException(ctx);
+        assertTypeError(WeakRefConstructor.createWeakRef(context, JSNull.INSTANCE));
+        assertPendingException(context);
 
         // Edge case: target is not an object
-        assertTypeError(WeakRefConstructor.createWeakRef(ctx, new JSString("string")));
-        assertPendingException(ctx);
+        assertTypeError(WeakRefConstructor.createWeakRef(context, new JSString("string")));
+        assertPendingException(context);
 
-        assertTypeError(WeakRefConstructor.createWeakRef(ctx, new JSNumber(42)));
-        assertPendingException(ctx);
+        assertTypeError(WeakRefConstructor.createWeakRef(context, new JSNumber(42)));
+        assertPendingException(context);
 
-        assertTypeError(WeakRefConstructor.createWeakRef(ctx, JSBoolean.TRUE));
-        assertPendingException(ctx);
+        assertTypeError(WeakRefConstructor.createWeakRef(context, JSBoolean.TRUE));
+        assertPendingException(context);
 
-        assertTypeError(WeakRefConstructor.createWeakRef(ctx, JSUndefined.INSTANCE));
-        assertPendingException(ctx);
+        assertTypeError(WeakRefConstructor.createWeakRef(context, JSUndefined.INSTANCE));
+        assertPendingException(context);
     }
 }

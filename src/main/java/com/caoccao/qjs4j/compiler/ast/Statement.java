@@ -22,5 +22,6 @@ package com.caoccao.qjs4j.compiler.ast;
 public sealed interface Statement extends ASTNode permits
         ExpressionStatement, BlockStatement, IfStatement, WhileStatement,
         ForStatement, ReturnStatement, BreakStatement, ContinueStatement,
-        ThrowStatement, TryStatement, SwitchStatement, VariableDeclaration {
+        ThrowStatement, TryStatement, SwitchStatement, VariableDeclaration,
+        Declaration {
 }

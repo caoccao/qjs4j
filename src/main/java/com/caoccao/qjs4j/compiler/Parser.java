@@ -163,11 +163,75 @@ public final class Parser {
     }
 
     private Expression parseAssignmentExpression() {
+        SourceLocation location = getLocation();
+
+        // Check for async arrow function: async () => {} or async (params) => {}
+        if (match(TokenType.ASYNC)) {
+            int savedPos = currentToken.offset();
+            advance(); // consume 'async'
+
+            // Check if followed by ( or identifier (for single param)
+            if (match(TokenType.LPAREN) || match(TokenType.IDENTIFIER)) {
+                // Try to parse as arrow function
+                boolean isArrow = false;
+
+                if (match(TokenType.LPAREN)) {
+                    // Could be async (params) => or just async followed by something else
+                    // We need to look ahead to see if there's a =>
+                    int parenDepth = 0;
+                    int lookAheadPos = 0;
+                    Token lookAhead = currentToken;
+
+                    // Simple lookahead: scan for matching paren and then check for =>
+                    // This is a simplified implementation
+                    if (match(TokenType.LPAREN)) {
+                        advance(); // consume '('
+
+                        // Parse parameters
+                        List<Identifier> params = new ArrayList<>();
+                        if (!match(TokenType.RPAREN)) {
+                            do {
+                                if (match(TokenType.COMMA)) {
+                                    advance();
+                                }
+                                if (match(TokenType.IDENTIFIER)) {
+                                    params.add(parseIdentifier());
+                                }
+                            } while (match(TokenType.COMMA));
+                        }
+
+                        expect(TokenType.RPAREN);
+
+                        // Check for arrow
+                        if (match(TokenType.ARROW)) {
+                            advance(); // consume '=>'
+
+                            // Parse body
+                            ASTNode body;
+                            if (match(TokenType.LBRACE)) {
+                                body = parseBlockStatement();
+                            } else {
+                                // Expression body
+                                body = parseAssignmentExpression();
+                            }
+
+                            return new ArrowFunctionExpression(params, body, true, location);
+                        }
+                    }
+                }
+            }
+
+            // Not an arrow function, backtrack and parse normally
+            // This is tricky - we've already consumed 'async'
+            // For now, throw an error as proper backtracking requires lexer support
+            throw new RuntimeException("Expected arrow function after 'async'");
+        }
+
         Expression left = parseConditionalExpression();
 
         if (isAssignmentOperator(currentToken.type())) {
             TokenType op = currentToken.type();
-            SourceLocation location = getLocation();
+            location = getLocation();
             advance();
             Expression right = parseAssignmentExpression();
 
@@ -394,7 +458,7 @@ public final class Parser {
         return new ForStatement(init, test, update, body, location);
     }
 
-    private FunctionDeclaration parseFunctionDeclaration() {
+    private FunctionDeclaration parseFunctionDeclaration(boolean isAsync, boolean isGenerator) {
         SourceLocation location = getLocation();
         expect(TokenType.FUNCTION);
 
@@ -415,7 +479,7 @@ public final class Parser {
         expect(TokenType.RPAREN);
         BlockStatement body = parseBlockStatement();
 
-        return new FunctionDeclaration(id, params, body, false, false, location);
+        return new FunctionDeclaration(id, params, body, isAsync, isGenerator, location);
     }
 
     private Expression parseFunctionExpression() {
@@ -783,10 +847,19 @@ public final class Parser {
             case SWITCH -> parseSwitchStatement();
             case LBRACE -> parseBlockStatement();
             case VAR, LET, CONST -> parseVariableDeclaration();
+            case ASYNC -> {
+                // Consume 'async' and check if it's an async function declaration
+                advance();
+                if (match(TokenType.FUNCTION)) {
+                    yield parseFunctionDeclaration(true, false);
+                } else {
+                    // Otherwise, it's an error - async must be followed by function
+                    throw new RuntimeException("Expected 'function' after 'async'");
+                }
+            }
             case FUNCTION -> {
                 // Function declarations are treated as statements in JavaScript
-                parseFunctionDeclaration();
-                yield null; // Function declarations don't return a statement value
+                yield parseFunctionDeclaration(false, false);
             }
             case SEMICOLON -> {
                 advance(); // consume semicolon
@@ -881,6 +954,14 @@ public final class Parser {
     }
 
     private Expression parseUnaryExpression() {
+        // Handle await expressions
+        if (match(TokenType.AWAIT)) {
+            SourceLocation location = getLocation();
+            advance();
+            Expression argument = parseUnaryExpression();
+            return new AwaitExpression(argument, location);
+        }
+
         if (match(TokenType.INC) || match(TokenType.DEC)) {
             UnaryOperator op = match(TokenType.INC) ? UnaryOperator.INC : UnaryOperator.DEC;
             SourceLocation location = getLocation();

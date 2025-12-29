@@ -513,6 +513,12 @@ public final class VirtualMachine {
                         pc += op.getSize();
                     }
 
+                    // ==================== Async Operations ====================
+                    case AWAIT -> {
+                        handleAwait();
+                        pc += op.getSize();
+                    }
+
                     // ==================== Other Operations ====================
                     default -> throw new VMException("Unimplemented opcode: " + op + " at PC " + pc);
                 }
@@ -553,6 +559,28 @@ public final class VirtualMachine {
         JSValue left = valueStack.pop();
         int result = JSTypeConversions.toInt32(context, left) & JSTypeConversions.toInt32(context, right);
         valueStack.push(new JSNumber(result));
+    }
+
+    private void handleAwait() {
+        JSValue value = valueStack.pop();
+
+        // If the value is already a promise, use it directly
+        // Otherwise, wrap it in a resolved promise
+        JSPromise promise;
+        if (value instanceof JSPromise) {
+            promise = (JSPromise) value;
+        } else {
+            // Create a new promise and immediately fulfill it
+            promise = new JSPromise();
+            promise.fulfill(value);
+        }
+
+        // Push the promise onto the stack
+        // Note: For a full implementation with proper async/await support,
+        // we would need to suspend the current execution context here
+        // and resume it when the promise settles. For now, this simple
+        // implementation just returns the promise value.
+        valueStack.push(promise);
     }
 
     private void handleCall(int argCount) {
@@ -602,8 +630,8 @@ public final class VirtualMachine {
                 JSValue result = nativeFunc.call(context, receiver, args);
                 valueStack.push(result);
             } else if (function instanceof JSBytecodeFunction bytecodeFunc) {
-                // Recursive call with receiver as thisArg
-                JSValue result = execute(bytecodeFunc, receiver, args);
+                // Call through the function's call method to handle async wrapping
+                JSValue result = bytecodeFunc.call(context, receiver, args);
                 valueStack.push(result);
             } else {
                 valueStack.push(JSUndefined.INSTANCE);
@@ -1350,14 +1378,14 @@ public final class VirtualMachine {
         valueStack.push(new JSNumber(result));
     }
 
+    // ==================== Bitwise Operation Handlers ====================
+
     private void handleGt() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
         boolean result = JSTypeConversions.lessThan(context, right, left);
         valueStack.push(JSBoolean.valueOf(result));
     }
-
-    // ==================== Bitwise Operation Handlers ====================
 
     private void handleGte() {
         JSValue right = valueStack.pop();
@@ -1410,6 +1438,8 @@ public final class VirtualMachine {
         valueStack.push(JSBoolean.valueOf(result));
     }
 
+    // ==================== Comparison Operation Handlers ====================
+
     private void handleLogicalOr() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -1420,8 +1450,6 @@ public final class VirtualMachine {
             valueStack.push(right);
         }
     }
-
-    // ==================== Comparison Operation Handlers ====================
 
     private void handleLt() {
         JSValue right = valueStack.pop();
@@ -1489,13 +1517,13 @@ public final class VirtualMachine {
         valueStack.push(new JSNumber(result));
     }
 
+    // ==================== Logical Operation Handlers ====================
+
     private void handlePlus() {
         JSValue operand = valueStack.pop();
         double result = JSTypeConversions.toNumber(context, operand).value();
         valueStack.push(new JSNumber(result));
     }
-
-    // ==================== Logical Operation Handlers ====================
 
     private void handleSar() {
         JSValue right = valueStack.pop();
@@ -1521,6 +1549,8 @@ public final class VirtualMachine {
         valueStack.push(new JSNumber((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
     }
 
+    // ==================== Type Operation Handlers ====================
+
     private void handleStrictEq() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -1528,14 +1558,14 @@ public final class VirtualMachine {
         valueStack.push(JSBoolean.valueOf(result));
     }
 
-    // ==================== Type Operation Handlers ====================
-
     private void handleStrictNeq() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
         boolean result = !JSTypeConversions.strictEquals(left, right);
         valueStack.push(JSBoolean.valueOf(result));
     }
+
+    // ==================== Async Operation Handlers ====================
 
     private void handleSub() {
         JSValue right = valueStack.pop();

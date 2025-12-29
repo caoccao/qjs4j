@@ -17,10 +17,18 @@
 package com.caoccao.qjs4j.compiler.ast;
 
 /**
- * Base sealed interface for all AST nodes.
+ * Represents an await expression.
+ * <p>
+ * await expression
+ * <p>
+ * Can only be used inside async functions.
  */
-public sealed interface ASTNode permits
-        Expression, Statement, ModuleItem, Program {
-
-    SourceLocation getLocation();
+public record AwaitExpression(
+        Expression argument,
+        SourceLocation location
+) implements Expression {
+    @Override
+    public SourceLocation getLocation() {
+        return location;
+    }
 }

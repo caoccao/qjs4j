@@ -90,7 +90,22 @@ public final class JSBytecodeFunction extends JSFunction {
     public JSValue call(JSContext ctx, JSValue thisArg, JSValue[] args) {
         // Execute bytecode in the VM
         // The VM will create a stack frame, bind arguments, and execute bytecode
-        return ctx.getVirtualMachine().execute(this, thisArg, args);
+        JSValue result = ctx.getVirtualMachine().execute(this, thisArg, args);
+
+        // If this is an async function, wrap the result in a promise
+        if (isAsync) {
+            // If result is already a promise, return it directly
+            if (result instanceof JSPromise) {
+                return result;
+            }
+
+            // Otherwise, wrap the result in a fulfilled promise
+            JSPromise promise = new JSPromise();
+            promise.fulfill(result);
+            return promise;
+        }
+
+        return result;
     }
 
     /**

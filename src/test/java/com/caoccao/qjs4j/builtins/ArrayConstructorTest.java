@@ -35,7 +35,7 @@ public class ArrayConstructorTest extends BaseTest {
         sourceArr.push(new JSNumber(2));
         sourceArr.push(new JSNumber(3));
 
-        JSValue result = ArrayConstructor.from(ctx, JSUndefined.INSTANCE, new JSValue[]{sourceArr});
+        JSValue result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr});
         JSArray arr = result.asArray().orElseThrow();
         assertNotNull(arr);
         assertEquals(3, arr.getLength());
@@ -44,7 +44,7 @@ public class ArrayConstructorTest extends BaseTest {
         assertEquals(3.0, arr.get(2).asNumber().map(JSNumber::value).orElseThrow());
 
         // Normal case: from string
-        result = ArrayConstructor.from(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSString("abc")});
+        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("abc")});
         arr = result.asArray().orElseThrow();
         assertEquals(3, arr.getLength());
         assertEquals("a", arr.get(0).asString().map(JSString::value).orElseThrow());
@@ -63,7 +63,7 @@ public class ArrayConstructorTest extends BaseTest {
         sourceArr2.push(new JSNumber(1));
         sourceArr2.push(new JSNumber(2));
 
-        result = ArrayConstructor.from(ctx, JSUndefined.INSTANCE, new JSValue[]{sourceArr2, mapFn});
+        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr2, mapFn});
         arr = result.asArray().orElseThrow();
         assertEquals(2, arr.getLength());
         assertEquals(2.0, arr.get(0).asNumber().map(JSNumber::value).orElseThrow());
@@ -77,7 +77,7 @@ public class ArrayConstructorTest extends BaseTest {
             return args[0];
         });
 
-        result = ArrayConstructor.from(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSString("hello"), upperFn});
+        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("hello"), upperFn});
         arr = result.asArray().orElseThrow();
         assertEquals(5, arr.getLength());
         assertEquals("H", arr.get(0).asString().map(JSString::value).orElseThrow());
@@ -85,26 +85,26 @@ public class ArrayConstructorTest extends BaseTest {
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray();
-        result = ArrayConstructor.from(ctx, JSUndefined.INSTANCE, new JSValue[]{emptyArr});
+        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{emptyArr});
         arr = result.asArray().orElseThrow();
         assertEquals(0, arr.getLength());
 
         // Edge case: empty string
-        result = ArrayConstructor.from(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSString("")});
+        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("")});
         arr = result.asArray().orElseThrow();
         assertEquals(0, arr.getLength());
 
         // Edge case: no arguments
-        assertTypeError(ArrayConstructor.from(ctx, JSUndefined.INSTANCE, new JSValue[]{}));
-        assertPendingException(ctx);
+        assertTypeError(ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{}));
+        assertPendingException(context);
 
         // Edge case: non-iterable
-        assertTypeError(ArrayConstructor.from(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)}));
-        assertPendingException(ctx);
+        assertTypeError(ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)}));
+        assertPendingException(context);
 
         // Edge case: invalid mapFn
-        assertTypeError(ArrayConstructor.from(ctx, JSUndefined.INSTANCE, new JSValue[]{sourceArr, new JSString("not a function")}));
-        assertPendingException(ctx);
+        assertTypeError(ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr, new JSString("not a function")}));
+        assertPendingException(context);
     }
 
     // Note: Tests for JavaScript native iterables (Set, Map, custom iterables) are not included
@@ -120,8 +120,8 @@ public class ArrayConstructorTest extends BaseTest {
         sourceArr.push(new JSNumber(2));
         sourceArr.push(new JSNumber(3));
 
-        JSAsyncIterator asyncIterator = JSAsyncIterator.fromArray(sourceArr, ctx);
-        JSValue result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{asyncIterator});
+        JSAsyncIterator asyncIterator = JSAsyncIterator.fromArray(sourceArr, context);
+        JSValue result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{asyncIterator});
         JSPromise promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
 
@@ -137,7 +137,7 @@ public class ArrayConstructorTest extends BaseTest {
         sourceArr2.push(new JSNumber(10));
         sourceArr2.push(new JSNumber(20));
 
-        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{sourceArr2});
+        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr2});
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
 
@@ -159,7 +159,7 @@ public class ArrayConstructorTest extends BaseTest {
         sourceArr3.push(new JSNumber(1));
         sourceArr3.push(new JSNumber(2));
 
-        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{sourceArr3, mapFn});
+        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr3, mapFn});
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
 
@@ -170,7 +170,7 @@ public class ArrayConstructorTest extends BaseTest {
         assertEquals(4.0, arr.get(1).asNumber().map(JSNumber::value).orElseThrow());
 
         // Normal case: from string
-        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSString("abc")});
+        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("abc")});
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
 
@@ -183,7 +183,7 @@ public class ArrayConstructorTest extends BaseTest {
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray();
-        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{emptyArr});
+        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{emptyArr});
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
 
@@ -192,19 +192,19 @@ public class ArrayConstructorTest extends BaseTest {
         assertEquals(0, arr.getLength());
 
         // Edge case: no arguments
-        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{});
+        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{});
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
         assertEquals(JSPromise.PromiseState.REJECTED, promise.getState());
 
         // Edge case: non-iterable
-        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)});
+        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)});
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
         assertEquals(JSPromise.PromiseState.REJECTED, promise.getState());
 
         // Edge case: invalid mapFn
-        result = ArrayConstructor.fromAsync(ctx, JSUndefined.INSTANCE, new JSValue[]{sourceArr, new JSString("not a function")});
+        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr, new JSString("not a function")});
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
         assertEquals(JSPromise.PromiseState.REJECTED, promise.getState());
@@ -214,16 +214,16 @@ public class ArrayConstructorTest extends BaseTest {
     public void testGetSpecies() {
         // Normal case: returns thisArg
         JSObject arrayConstructor = new JSObject();
-        JSValue result = ArrayConstructor.getSpecies(ctx, arrayConstructor, new JSValue[]{});
+        JSValue result = ArrayConstructor.getSpecies(context, arrayConstructor, new JSValue[]{});
         assertEquals(arrayConstructor, result);
 
         // Normal case: with different thisArg
         JSObject customConstructor = new JSObject();
-        result = ArrayConstructor.getSpecies(ctx, customConstructor, new JSValue[]{});
+        result = ArrayConstructor.getSpecies(context, customConstructor, new JSValue[]{});
         assertEquals(customConstructor, result);
 
         // Edge case: undefined thisArg
-        result = ArrayConstructor.getSpecies(ctx, JSUndefined.INSTANCE, new JSValue[]{});
+        result = ArrayConstructor.getSpecies(context, JSUndefined.INSTANCE, new JSValue[]{});
         assertTrue(result.isUndefined());
     }
 
@@ -231,28 +231,28 @@ public class ArrayConstructorTest extends BaseTest {
     public void testIsArray() {
         // Normal case: array
         JSArray arr = new JSArray();
-        JSValue result = ArrayConstructor.isArray(ctx, JSUndefined.INSTANCE, new JSValue[]{arr});
+        JSValue result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, new JSValue[]{arr});
         assertTrue(result.isBooleanTrue());
 
         // Normal case: not array
-        result = ArrayConstructor.isArray(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSString("not array")});
+        result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not array")});
         assertTrue(result.isBooleanFalse());
 
-        result = ArrayConstructor.isArray(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSObject()});
+        result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, new JSValue[]{new JSObject()});
         assertTrue(result.isBooleanFalse());
 
-        result = ArrayConstructor.isArray(ctx, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
+        result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
         assertTrue(result.isBooleanFalse());
 
         // Edge case: no arguments
-        result = ArrayConstructor.isArray(ctx, JSUndefined.INSTANCE, new JSValue[]{});
+        result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, new JSValue[]{});
         assertTrue(result.isBooleanFalse());
     }
 
     @Test
     public void testOf() {
         // Normal case: create array with elements
-        JSValue result = ArrayConstructor.of(ctx, JSUndefined.INSTANCE, new JSValue[]{
+        JSValue result = ArrayConstructor.of(context, JSUndefined.INSTANCE, new JSValue[]{
                 new JSNumber(1),
                 new JSNumber(2),
                 new JSNumber(3)
@@ -264,18 +264,18 @@ public class ArrayConstructorTest extends BaseTest {
         assertEquals(3.0, arr.get(2).asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: no arguments
-        result = ArrayConstructor.of(ctx, JSUndefined.INSTANCE, new JSValue[]{});
+        result = ArrayConstructor.of(context, JSUndefined.INSTANCE, new JSValue[]{});
         arr = result.asArray().orElseThrow();
         assertEquals(0, arr.getLength());
 
         // Edge case: single element
-        result = ArrayConstructor.of(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSString("hello")});
+        result = ArrayConstructor.of(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("hello")});
         arr = result.asArray().orElseThrow();
         assertEquals(1, arr.getLength());
         assertEquals("hello", arr.get(0).asString().map(JSString::value).orElseThrow());
 
         // Edge case: mixed types
-        result = ArrayConstructor.of(ctx, JSUndefined.INSTANCE, new JSValue[]{
+        result = ArrayConstructor.of(context, JSUndefined.INSTANCE, new JSValue[]{
                 new JSNumber(1),
                 new JSString("two"),
                 JSBoolean.TRUE

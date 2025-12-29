@@ -19,6 +19,6 @@ package com.caoccao.qjs4j.compiler.ast;
 /**
  * Base sealed interface for all declaration nodes.
  */
-public sealed interface Declaration extends ASTNode permits
+public sealed interface Declaration extends Statement permits
         FunctionDeclaration, ClassDeclaration {
 }

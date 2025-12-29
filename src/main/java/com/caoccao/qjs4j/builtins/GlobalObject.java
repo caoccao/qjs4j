@@ -658,7 +658,7 @@ public final class GlobalObject {
         functionPrototype.set("call", new JSNativeFunction("call", 1, FunctionPrototype::call));
         functionPrototype.set("apply", new JSNativeFunction("apply", 2, FunctionPrototype::apply));
         functionPrototype.set("bind", new JSNativeFunction("bind", 1, FunctionPrototype::bind));
-        functionPrototype.set("toString", new JSNativeFunction("toString", 0, FunctionPrototype::toStringMethod));
+        functionPrototype.set("toString", new JSNativeFunction("toString", 0, FunctionPrototype::toString_));
 
         // Function constructor is a placeholder
         JSObject functionConstructor = new JSObject();

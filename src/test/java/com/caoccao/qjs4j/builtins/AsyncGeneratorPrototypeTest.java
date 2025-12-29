@@ -31,7 +31,7 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
     public void testCreateDelayedGenerator() {
         // Test creating a delayed generator with some values
         JSValue[] values = {new JSNumber(1), new JSNumber(2), new JSNumber(3)};
-        JSAsyncGenerator generator = AsyncGeneratorPrototype.createDelayedGenerator(ctx, values);
+        JSAsyncGenerator generator = AsyncGeneratorPrototype.createDelayedGenerator(context, values);
 
         assertNotNull(generator);
         assertEquals("[object AsyncGenerator]", generator.toString());
@@ -48,7 +48,7 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
         promise2.fulfill(new JSNumber(20));
 
         JSPromise[] promises = {promise1, promise2};
-        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromPromises(ctx, promises);
+        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromPromises(context, promises);
 
         assertNotNull(generator);
         assertEquals("[object AsyncGenerator]", generator.toString());
@@ -59,7 +59,7 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
     public void testCreateFromValues() {
         // Test creating a generator from values
         JSValue[] values = {new JSString("hello"), new JSString("world")};
-        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(ctx, values);
+        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         assertNotNull(generator);
         assertEquals("[object AsyncGenerator]", generator.toString());
@@ -70,10 +70,10 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
     public void testGeneratorCompletion() {
         // Create a generator with one value
         JSValue[] values = {new JSNumber(42)};
-        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(ctx, values);
+        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Get first value
-        JSValue result1 = AsyncGeneratorPrototype.next(ctx, generator, new JSValue[0]);
+        JSValue result1 = AsyncGeneratorPrototype.next(context, generator, new JSValue[0]);
         JSPromise promise1 = (JSPromise) result1;
         assertTrue(awaitPromise(promise1));
 
@@ -82,7 +82,7 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
         assertEquals(JSBoolean.FALSE, resultObj1.get("done"));
 
         // Get second value (should be done)
-        JSValue result2 = AsyncGeneratorPrototype.next(ctx, generator, new JSValue[0]);
+        JSValue result2 = AsyncGeneratorPrototype.next(context, generator, new JSValue[0]);
         JSPromise promise2 = (JSPromise) result2;
         assertTrue(awaitPromise(promise2));
 
@@ -95,10 +95,10 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
     public void testNext() {
         // Create a simple generator
         JSValue[] values = {new JSNumber(42)};
-        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(ctx, values);
+        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Test next() method
-        JSValue result = AsyncGeneratorPrototype.next(ctx, generator, new JSValue[0]);
+        JSValue result = AsyncGeneratorPrototype.next(context, generator, new JSValue[0]);
         JSPromise promise = result.asPromise().orElseThrow();
         assertTrue(awaitPromise(promise));
 
@@ -113,19 +113,19 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
     @Test
     public void testNextOnNonAsyncGenerator() {
         // Test next() called on non-async generator
-        JSValue result = AsyncGeneratorPrototype.next(ctx, new JSString("not a generator"), new JSValue[0]);
+        JSValue result = AsyncGeneratorPrototype.next(context, new JSString("not a generator"), new JSValue[0]);
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
     public void testNextWithValue() {
         // Create a generator and test next with a value
         JSValue[] values = {new JSNumber(100)};
-        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(ctx, values);
+        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Test next() with a value parameter
-        JSValue result = AsyncGeneratorPrototype.next(ctx, generator, new JSValue[]{new JSString("ignored")});
+        JSValue result = AsyncGeneratorPrototype.next(context, generator, new JSValue[]{new JSString("ignored")});
 
         JSPromise promise = result.asPromise().orElseThrow();
         assertTrue(awaitPromise(promise));
@@ -142,11 +142,11 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
     public void testReturn() {
         // Create a generator
         JSValue[] values = {new JSNumber(1), new JSNumber(2)};
-        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(ctx, values);
+        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Test return() method
         JSValue returnValue = new JSString("early return");
-        JSValue result = AsyncGeneratorPrototype.return_(ctx, generator, new JSValue[]{returnValue});
+        JSValue result = AsyncGeneratorPrototype.return_(context, generator, new JSValue[]{returnValue});
 
         JSPromise promise = result.asPromise().orElseThrow();
         assertTrue(awaitPromise(promise));
@@ -162,20 +162,20 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
     @Test
     public void testReturnOnNonAsyncGenerator() {
         // Test return() called on non-async generator
-        JSValue result = AsyncGeneratorPrototype.return_(ctx, new JSNumber(123), new JSValue[]{new JSString("value")});
+        JSValue result = AsyncGeneratorPrototype.return_(context, new JSNumber(123), new JSValue[]{new JSString("value")});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
     public void testThrow() {
         // Create a generator
         JSValue[] values = {new JSNumber(1)};
-        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(ctx, values);
+        JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Test throw() method
         JSValue exception = new JSString("test exception");
-        JSValue result = AsyncGeneratorPrototype.throw_(ctx, generator, new JSValue[]{exception});
+        JSValue result = AsyncGeneratorPrototype.throw_(context, generator, new JSValue[]{exception});
 
         JSPromise promise = result.asPromise().orElseThrow();
         assertTrue(awaitPromise(promise));
@@ -188,8 +188,8 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
     @Test
     public void testThrowOnNonAsyncGenerator() {
         // Test throw() called on non-async generator
-        JSValue result = AsyncGeneratorPrototype.throw_(ctx, new JSObject(), new JSValue[]{new JSString("error")});
+        JSValue result = AsyncGeneratorPrototype.throw_(context, new JSObject(), new JSValue[]{new JSString("error")});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 }

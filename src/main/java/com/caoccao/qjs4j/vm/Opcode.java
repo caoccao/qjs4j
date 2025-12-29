@@ -169,7 +169,10 @@ public enum Opcode {
     WITH_DELETE_VAR(121, 10, 0, 1),
     WITH_MAKE_REF(122, 10, 0, 2),
     WITH_GET_REF(123, 10, 1, 0),
-    WITH_GET_REF_UNDEF(124, 10, 1, 0);
+    WITH_GET_REF_UNDEF(124, 10, 1, 0),
+
+    // Async operations
+    AWAIT(125, 1, 1, 1);
 
     // This is a subset of QuickJS opcodes - full implementation would have ~244 opcodes
 

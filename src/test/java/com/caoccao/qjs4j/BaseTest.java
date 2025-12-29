@@ -7,8 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.*;
 
 public abstract class BaseTest {
-    protected JSContext ctx;
-    protected JSString str;
+    protected JSContext context;
 
     protected void assertError(JSValue value) {
         assertError(value, "Error", null);
@@ -54,20 +53,19 @@ public abstract class BaseTest {
 
     protected boolean awaitPromise(JSPromise promise) {
         for (int i = 0; i < 1000 && promise.getState() == JSPromise.PromiseState.PENDING; i++) {
-            ctx.processMicrotasks();
+            context.processMicrotasks();
         }
         return promise.getState() != JSPromise.PromiseState.PENDING;
     }
 
     @BeforeEach
     public void setUp() {
-        ctx = new JSContext(new JSRuntime());
-        str = new JSString("hello world");
+        context = new JSContext(new JSRuntime());
     }
 
     @AfterEach
     public void tearDown() {
-        ctx.getRuntime().gc();
-        ctx.close();
+        context.getRuntime().gc();
+        context.close();
     }
 }

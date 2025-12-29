@@ -37,31 +37,31 @@ public class WeakSetPrototypeTest extends BaseTest {
         JSObject value2 = new JSObject();
 
         // Normal case: add new value
-        JSValue result = WeakSetPrototype.add(ctx, weakSet, new JSValue[]{value1});
+        JSValue result = WeakSetPrototype.add(context, weakSet, new JSValue[]{value1});
         assertSame(weakSet, result);
         assertTrue(weakSet.weakSetHas(value1));
 
         // Normal case: add duplicate value (should not change)
-        result = WeakSetPrototype.add(ctx, weakSet, new JSValue[]{value1});
+        result = WeakSetPrototype.add(context, weakSet, new JSValue[]{value1});
         assertSame(weakSet, result);
         assertTrue(weakSet.weakSetHas(value1));
 
         // Normal case: add different value
-        result = WeakSetPrototype.add(ctx, weakSet, new JSValue[]{value2});
+        result = WeakSetPrototype.add(context, weakSet, new JSValue[]{value2});
         assertSame(weakSet, result);
         assertTrue(weakSet.weakSetHas(value2));
 
         // Edge case: no arguments
-        assertTypeError(WeakSetPrototype.add(ctx, weakSet, new JSValue[]{}));
-        assertPendingException(ctx);
+        assertTypeError(WeakSetPrototype.add(context, weakSet, new JSValue[]{}));
+        assertPendingException(context);
 
         // Edge case: non-object value
-        assertTypeError(WeakSetPrototype.add(ctx, weakSet, new JSValue[]{new JSString("string")}));
-        assertPendingException(ctx);
+        assertTypeError(WeakSetPrototype.add(context, weakSet, new JSValue[]{new JSString("string")}));
+        assertPendingException(context);
 
         // Edge case: called on non-WeakSet
-        assertTypeError(WeakSetPrototype.add(ctx, new JSString("not weakset"), new JSValue[]{value1}));
-        assertPendingException(ctx);
+        assertTypeError(WeakSetPrototype.add(context, new JSString("not weakset"), new JSValue[]{value1}));
+        assertPendingException(context);
     }
 
     @Test
@@ -73,25 +73,25 @@ public class WeakSetPrototypeTest extends BaseTest {
         weakSet.weakSetAdd(value2);
 
         // Normal case: delete existing value
-        JSValue result = WeakSetPrototype.delete(ctx, weakSet, new JSValue[]{value1});
+        JSValue result = WeakSetPrototype.delete(context, weakSet, new JSValue[]{value1});
         assertTrue(result.isBooleanTrue());
         assertFalse(weakSet.weakSetHas(value1));
 
         // Normal case: delete non-existing value
-        result = WeakSetPrototype.delete(ctx, weakSet, new JSValue[]{new JSObject()});
+        result = WeakSetPrototype.delete(context, weakSet, new JSValue[]{new JSObject()});
         assertTrue(result.isBooleanFalse());
 
         // Normal case: no arguments
-        result = WeakSetPrototype.delete(ctx, weakSet, new JSValue[]{});
+        result = WeakSetPrototype.delete(context, weakSet, new JSValue[]{});
         assertTrue(result.isBooleanFalse());
 
         // Edge case: non-object value
-        result = WeakSetPrototype.delete(ctx, weakSet, new JSValue[]{new JSString("string")});
+        result = WeakSetPrototype.delete(context, weakSet, new JSValue[]{new JSString("string")});
         assertTrue(result.isBooleanFalse());
 
         // Edge case: called on non-WeakSet
-        assertTypeError(WeakSetPrototype.delete(ctx, new JSString("not weakset"), new JSValue[]{value1}));
-        assertPendingException(ctx);
+        assertTypeError(WeakSetPrototype.delete(context, new JSString("not weakset"), new JSValue[]{value1}));
+        assertPendingException(context);
     }
 
     @Test
@@ -103,23 +103,23 @@ public class WeakSetPrototypeTest extends BaseTest {
         weakSet.weakSetAdd(value2);
 
         // Normal case: has existing value
-        JSValue result = WeakSetPrototype.has(ctx, weakSet, new JSValue[]{value1});
+        JSValue result = WeakSetPrototype.has(context, weakSet, new JSValue[]{value1});
         assertTrue(result.isBooleanTrue());
 
         // Normal case: has non-existing value
-        result = WeakSetPrototype.has(ctx, weakSet, new JSValue[]{new JSObject()});
+        result = WeakSetPrototype.has(context, weakSet, new JSValue[]{new JSObject()});
         assertTrue(result.isBooleanFalse());
 
         // Normal case: no arguments
-        result = WeakSetPrototype.has(ctx, weakSet, new JSValue[]{});
+        result = WeakSetPrototype.has(context, weakSet, new JSValue[]{});
         assertTrue(result.isBooleanFalse());
 
         // Edge case: non-object value
-        result = WeakSetPrototype.has(ctx, weakSet, new JSValue[]{new JSString("string")});
+        result = WeakSetPrototype.has(context, weakSet, new JSValue[]{new JSString("string")});
         assertTrue(result.isBooleanFalse());
 
         // Edge case: called on non-WeakSet
-        assertTypeError(WeakSetPrototype.has(ctx, new JSString("not weakset"), new JSValue[]{value1}));
-        assertPendingException(ctx);
+        assertTypeError(WeakSetPrototype.has(context, new JSString("not weakset"), new JSValue[]{value1}));
+        assertPendingException(context);
     }
 }

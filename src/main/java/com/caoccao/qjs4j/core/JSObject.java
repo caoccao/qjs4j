@@ -30,6 +30,9 @@ import java.util.*;
  * - Sparse properties (numeric indices) stored separately
  */
 public non-sealed class JSObject implements JSValue {
+    // ThreadLocal to track visited objects during prototype chain traversal
+    private static final ThreadLocal<Set<JSObject>> visitedObjects = ThreadLocal.withInitial(HashSet::new);
+
     protected boolean extensible = true;
     protected boolean frozen = false;
     protected JSValue[] propertyValues;
@@ -260,9 +263,31 @@ public non-sealed class JSObject implements JSValue {
             return propertyValues[offset];
         }
 
-        // Look in prototype chain
+        // Look in prototype chain with cycle detection
         if (prototype != null) {
-            return prototype.get(key, ctx);
+            Set<JSObject> visited = visitedObjects.get();
+            boolean isTopLevel = visited.isEmpty();
+
+            try {
+                // Check for circular reference
+                if (visited.contains(prototype)) {
+                    return JSUndefined.INSTANCE;
+                }
+
+                // Add current prototype to visited set
+                visited.add(prototype);
+
+                // Recurse into prototype chain
+                return prototype.get(key, ctx);
+            } finally {
+                // Clean up: remove from visited set
+                visited.remove(prototype);
+
+                // If this was the top-level call, clear the ThreadLocal
+                if (isTopLevel) {
+                    visited.clear();
+                }
+            }
         }
 
         return JSUndefined.INSTANCE;

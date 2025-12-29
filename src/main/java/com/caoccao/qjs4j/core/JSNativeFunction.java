@@ -57,6 +57,12 @@ public final class JSNativeFunction extends JSFunction {
     }
 
     @Override
+    public String toString() {
+        String functionName = name != null && !name.isEmpty() ? name : "anonymous";
+        return "function " + functionName + "() { [native code] }";
+    }
+
+    @Override
     public JSValueType type() {
         return JSValueType.FUNCTION;
     }

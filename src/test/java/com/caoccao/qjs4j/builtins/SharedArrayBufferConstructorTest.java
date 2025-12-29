@@ -30,30 +30,30 @@ public class SharedArrayBufferConstructorTest extends BaseTest {
     @Test
     public void testConstruct() {
         // SharedArrayBuffer constructor must be called with 'new', so direct call should throw error
-        assertTypeError(SharedArrayBufferConstructor.construct(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(16)}));
-        assertPendingException(ctx);
+        assertTypeError(SharedArrayBufferConstructor.construct(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(16)}));
+        assertPendingException(context);
 
         // Edge case: no arguments
-        assertTypeError(SharedArrayBufferConstructor.construct(ctx, JSUndefined.INSTANCE, new JSValue[]{}));
-        assertPendingException(ctx);
+        assertTypeError(SharedArrayBufferConstructor.construct(context, JSUndefined.INSTANCE, new JSValue[]{}));
+        assertPendingException(context);
     }
 
     @Test
     public void testCreateSharedArrayBuffer() {
         // Normal case: create with valid length
-        JSValue result = SharedArrayBufferConstructor.createSharedArrayBuffer(ctx, new JSNumber(32));
+        JSValue result = SharedArrayBufferConstructor.createSharedArrayBuffer(context, new JSNumber(32));
         assertEquals(32, result.asSharedArrayBuffer().map(JSSharedArrayBuffer::getByteLength).orElseThrow());
 
         // Normal case: create with zero length
-        result = SharedArrayBufferConstructor.createSharedArrayBuffer(ctx, new JSNumber(0));
+        result = SharedArrayBufferConstructor.createSharedArrayBuffer(context, new JSNumber(0));
         assertEquals(0, result.asSharedArrayBuffer().map(JSSharedArrayBuffer::getByteLength).orElseThrow());
 
         // Edge case: negative length
-        assertRangeError(SharedArrayBufferConstructor.createSharedArrayBuffer(ctx, new JSNumber(-1)));
-        assertPendingException(ctx);
+        assertRangeError(SharedArrayBufferConstructor.createSharedArrayBuffer(context, new JSNumber(-1)));
+        assertPendingException(context);
 
         // Edge case: non-numeric length
-        assertTypeError(SharedArrayBufferConstructor.createSharedArrayBuffer(ctx, new JSString("32")));
-        assertPendingException(ctx);
+        assertTypeError(SharedArrayBufferConstructor.createSharedArrayBuffer(context, new JSString("32")));
+        assertPendingException(context);
     }
 }

@@ -411,14 +411,34 @@ public final class JSTypeConversions {
                 return primitiveValue;
             }
 
-            // In a full implementation, this would call [[DefaultValue]]
-            // For now, DEFAULT and NUMBER hints convert to number, STRING hint converts to string
+            // Implement OrdinaryToPrimitive algorithm
+            // Try valueOf() and toString() methods in order based on hint
+            String[] methodNames;
             if (hint == PreferredType.STRING) {
-                return toString(context, input);
+                methodNames = new String[]{"toString", "valueOf"};
             } else {
                 // DEFAULT and NUMBER both prefer number conversion
-                return toNumber(context, input);
+                methodNames = new String[]{"valueOf", "toString"};
             }
+
+            for (String methodName : methodNames) {
+                JSValue method = obj.get(methodName);
+                if (method instanceof JSFunction func) {
+                    try {
+                        JSValue result = func.call(context, obj, new JSValue[0]);
+                        if (isPrimitive(result)) {
+                            return result;
+                        }
+                    } catch (Exception e) {
+                        // Continue to next method
+                    }
+                }
+            }
+
+            // If no JavaScript method returned a primitive, fall back to Java toString()
+            // This handles built-in objects like JSBytecodeFunction that don't have
+            // JavaScript toString methods but do have Java toString() implementations
+            return new JSString(input.toString());
         }
 
         return input;

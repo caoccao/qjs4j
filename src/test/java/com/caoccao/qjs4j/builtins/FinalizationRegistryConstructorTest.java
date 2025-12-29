@@ -31,9 +31,9 @@ public class FinalizationRegistryConstructorTest extends BaseTest {
     public void testConstruct() {
         // construct() should always throw TypeError when called directly
         // (FinalizationRegistry must be called with 'new')
-        JSValue result = FinalizationRegistryConstructor.construct(ctx, JSUndefined.INSTANCE, new JSValue[0]);
+        JSValue result = FinalizationRegistryConstructor.construct(context, JSUndefined.INSTANCE, new JSValue[0]);
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -45,7 +45,7 @@ public class FinalizationRegistryConstructorTest extends BaseTest {
         });
 
         // Test successful creation
-        JSValue result = FinalizationRegistryConstructor.createFinalizationRegistry(ctx, cleanupCallback);
+        JSValue result = FinalizationRegistryConstructor.createFinalizationRegistry(context, cleanupCallback);
         assertNotNull(result);
         assertTrue(result.isFinalizationRegistry());
 
@@ -56,24 +56,24 @@ public class FinalizationRegistryConstructorTest extends BaseTest {
     @Test
     public void testCreateFinalizationRegistryWithNonFunction() {
         // Test with non-function cleanup callback - should throw TypeError
-        JSValue result = FinalizationRegistryConstructor.createFinalizationRegistry(ctx, new JSString("not a function"));
+        JSValue result = FinalizationRegistryConstructor.createFinalizationRegistry(context, new JSString("not a function"));
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
     public void testCreateFinalizationRegistryWithNull() {
         // Test with null cleanup callback - should throw TypeError
-        JSValue result = FinalizationRegistryConstructor.createFinalizationRegistry(ctx, JSNull.INSTANCE);
+        JSValue result = FinalizationRegistryConstructor.createFinalizationRegistry(context, JSNull.INSTANCE);
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
     public void testCreateFinalizationRegistryWithUndefined() {
         // Test with undefined cleanup callback - should throw TypeError
-        JSValue result = FinalizationRegistryConstructor.createFinalizationRegistry(ctx, JSUndefined.INSTANCE);
+        JSValue result = FinalizationRegistryConstructor.createFinalizationRegistry(context, JSUndefined.INSTANCE);
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 }

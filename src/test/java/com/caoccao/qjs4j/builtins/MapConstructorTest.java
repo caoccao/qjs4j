@@ -42,7 +42,7 @@ public class MapConstructorTest extends BaseTest {
         });
 
         // Normal case: group by even/odd
-        JSValue result = MapConstructor.groupBy(ctx, JSUndefined.INSTANCE, new JSValue[]{items, callback});
+        JSValue result = MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items, callback});
         JSMap map = result.asMap().orElseThrow();
 
         // Check even group
@@ -61,20 +61,20 @@ public class MapConstructorTest extends BaseTest {
 
         // Edge case: empty array
         JSArray emptyItems = new JSArray();
-        result = MapConstructor.groupBy(ctx, JSUndefined.INSTANCE, new JSValue[]{emptyItems, callback});
+        result = MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{emptyItems, callback});
         map = result.asMap().orElseThrow();
         assertEquals(0, map.size());
 
         // Edge case: insufficient arguments
-        assertTypeError(MapConstructor.groupBy(ctx, JSUndefined.INSTANCE, new JSValue[]{items}));
-        assertPendingException(ctx);
+        assertTypeError(MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items}));
+        assertPendingException(context);
 
         // Edge case: non-array items
-        assertTypeError(MapConstructor.groupBy(ctx, JSUndefined.INSTANCE, new JSValue[]{new JSString("not array"), callback}));
-        assertPendingException(ctx);
+        assertTypeError(MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not array"), callback}));
+        assertPendingException(context);
 
         // Edge case: non-function callback
-        assertTypeError(MapConstructor.groupBy(ctx, JSUndefined.INSTANCE, new JSValue[]{items, new JSString("not function")}));
-        assertPendingException(ctx);
+        assertTypeError(MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items, new JSString("not function")}));
+        assertPendingException(context);
     }
 }

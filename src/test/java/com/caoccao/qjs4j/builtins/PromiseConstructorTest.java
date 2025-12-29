@@ -30,7 +30,7 @@ public class PromiseConstructorTest extends BaseTest {
     @Test
     public void testPromiseAllWithArray() {
         // Test with array (original behavior)
-        JSValue result = ctx.eval(
+        JSValue result = context.eval(
                 "var p1 = Promise.resolve(1); " +
                         "var p2 = Promise.resolve(2); " +
                         "var p3 = Promise.resolve(3); " +

@@ -34,7 +34,7 @@ public class SymbolObjectTest extends BaseTest {
     public void testNewSymbolThrowsTypeError() {
         // Test that new Symbol() throws TypeError
         try {
-            ctx.eval("new Symbol('foo');");
+            context.eval("new Symbol('foo');");
             fail("new Symbol() should throw TypeError");
         } catch (Exception e) {
             assertTrue(e.getMessage().contains("Symbol is not a constructor") ||
@@ -45,7 +45,7 @@ public class SymbolObjectTest extends BaseTest {
     @Test
     public void testObjectSymbolCreatesJSSymbolObject() {
         // Test Object(Symbol('foo')) creates JSSymbolObject
-        JSValue result1 = ctx.eval("Object(Symbol('foo'));");
+        JSValue result1 = context.eval("Object(Symbol('foo'));");
         assertInstanceOf(JSSymbolObject.class, result1, "Object(Symbol('foo')) should return JSSymbolObject");
         assertTrue(result1.isSymbolObject(), "Object(Symbol('foo')) should be a symbol object");
 
@@ -53,7 +53,7 @@ public class SymbolObjectTest extends BaseTest {
         assertEquals("foo", symObj1.getValue().getDescription());
 
         // Test Object(Symbol()) creates JSSymbolObject with undefined description
-        JSValue result2 = ctx.eval("Object(Symbol());");
+        JSValue result2 = context.eval("Object(Symbol());");
         assertInstanceOf(JSSymbolObject.class, result2, "Object(Symbol()) should return JSSymbolObject");
         assertTrue(result2.isSymbolObject(), "Object(Symbol()) should be a symbol object");
 
@@ -64,29 +64,29 @@ public class SymbolObjectTest extends BaseTest {
     @Test
     public void testSymbolObjectAsPropertyKey() {
         // Symbol objects are created correctly
-        JSValue result = ctx.eval("var symObj = Object(Symbol('key')); typeof symObj;");
+        JSValue result = context.eval("var symObj = Object(Symbol('key')); typeof symObj;");
         assertEquals("object", result.toJavaObject());
 
         // The valueOf extracts the primitive
-        JSValue primitiveResult = ctx.eval("symObj.valueOf();");
+        JSValue primitiveResult = context.eval("symObj.valueOf();");
         assertInstanceOf(JSSymbol.class, primitiveResult);
     }
 
     @Test
     public void testSymbolObjectCoercion() {
         // Symbol objects should behave like objects in boolean context
-        JSValue result1 = ctx.eval("Boolean(Object(Symbol('test')));");
+        JSValue result1 = context.eval("Boolean(Object(Symbol('test')));");
         assertTrue((Boolean) result1.toJavaObject(), "Symbol object should be truthy");
 
         // Symbol object toString should work
-        JSValue result2 = ctx.eval("Object(Symbol('test')).toString();");
+        JSValue result2 = context.eval("Object(Symbol('test')).toString();");
         assertEquals("Symbol(test)", result2.toJavaObject());
     }
 
     @Test
     public void testSymbolObjectDescription() {
         // Test description property access
-        JSValue result1 = ctx.eval("""
+        JSValue result1 = context.eval("""
                 var sym = Object(Symbol('test description'));
                 sym.description;
                 """);
@@ -97,21 +97,21 @@ public class SymbolObjectTest extends BaseTest {
     @Test
     public void testSymbolObjectEquality() {
         // Test equality comparisons
-        JSValue result1 = ctx.eval("""
+        JSValue result1 = context.eval("""
                 var symObj1 = Object(Symbol('test'));
                 var symObj2 = symObj1;
                 symObj1 === symObj2;
                 """);
         assertTrue((Boolean) result1.toJavaObject(), "Same symbol object should be strictly equal");
 
-        JSValue result2 = ctx.eval("""
+        JSValue result2 = context.eval("""
                 var symObj1 = Object(Symbol('test'));
                 var symObj2 = Object(Symbol('test'));
                 symObj1 === symObj2;
                 """);
         assertFalse((Boolean) result2.toJavaObject(), "Different symbol objects should not be strictly equal");
 
-        JSValue result3 = ctx.eval("""
+        JSValue result3 = context.eval("""
                 var symObj = Object(Symbol('test'));
                 var sym = symObj.valueOf();
                 symObj === sym;
@@ -122,7 +122,7 @@ public class SymbolObjectTest extends BaseTest {
     @Test
     public void testSymbolObjectGetPrimitiveValue() {
         // Test accessing [[PrimitiveValue]] internal slot
-        JSValue result = ctx.eval("""
+        JSValue result = context.eval("""
                 var symObj = Object(Symbol('test'));
                 symObj['[[PrimitiveValue]]'];
                 """);
@@ -134,7 +134,7 @@ public class SymbolObjectTest extends BaseTest {
     @Test
     public void testSymbolObjectInObject() {
         // Test creating symbol object
-        JSValue result = ctx.eval("""
+        JSValue result = context.eval("""
                 var symObj = Object(Symbol('prop'));
                 symObj instanceof Symbol;
                 """);
@@ -144,17 +144,17 @@ public class SymbolObjectTest extends BaseTest {
     @Test
     public void testSymbolObjectInstanceof() {
         // Test instanceof checks
-        JSValue result1 = ctx.eval("Object(Symbol('test')) instanceof Symbol;");
+        JSValue result1 = context.eval("Object(Symbol('test')) instanceof Symbol;");
         assertTrue((Boolean) result1.toJavaObject(), "Symbol object should be instanceof Symbol");
 
-        JSValue result2 = ctx.eval("Object(Symbol('test')) instanceof Object;");
+        JSValue result2 = context.eval("Object(Symbol('test')) instanceof Object;");
         assertTrue((Boolean) result2.toJavaObject(), "Symbol object should be instanceof Object");
     }
 
     @Test
     public void testSymbolObjectPrototypeChain() {
         // Verify prototype chain
-        JSValue result = ctx.eval("""
+        JSValue result = context.eval("""
                 var symObj = Object(Symbol('test'));
                 Object.getPrototypeOf(symObj) === Symbol.prototype;
                 """);
@@ -164,33 +164,33 @@ public class SymbolObjectTest extends BaseTest {
     @Test
     public void testSymbolObjectToString() {
         // toString() on symbol object
-        JSValue result1 = ctx.eval("Object(Symbol('foo')).toString();");
+        JSValue result1 = context.eval("Object(Symbol('foo')).toString();");
         assertEquals("Symbol(foo)", result1.toJavaObject());
 
         // toString() with no description
-        JSValue result2 = ctx.eval("Object(Symbol()).toString();");
+        JSValue result2 = context.eval("Object(Symbol()).toString();");
         assertEquals("Symbol()", result2.toJavaObject());
 
         // toString() with empty description
-        JSValue result3 = ctx.eval("Object(Symbol('')).toString();");
+        JSValue result3 = context.eval("Object(Symbol('')).toString();");
         assertEquals("Symbol()", result3.toJavaObject());
     }
 
     @Test
     public void testSymbolObjectTypeof() {
         // typeof on Symbol object should return "object", not "symbol"
-        JSValue result = ctx.eval("typeof Object(Symbol('test'));");
+        JSValue result = context.eval("typeof Object(Symbol('test'));");
         assertEquals("object", result.toJavaObject(), "typeof symbol object should be 'object'");
 
         // Compare with primitive symbol
-        JSValue primitiveResult = ctx.eval("typeof Symbol('test');");
+        JSValue primitiveResult = context.eval("typeof Symbol('test');");
         assertEquals("symbol", primitiveResult.toJavaObject(), "typeof symbol primitive should be 'symbol'");
     }
 
     @Test
     public void testSymbolObjectUniqueness() {
         // Each Symbol() call creates a unique symbol, wrapped in different objects
-        JSValue result = ctx.eval("""
+        JSValue result = context.eval("""
                 var sym1 = Object(Symbol('same'));
                 var sym2 = Object(Symbol('same'));
                 sym1 === sym2;
@@ -198,15 +198,15 @@ public class SymbolObjectTest extends BaseTest {
         assertFalse((Boolean) result.toJavaObject(), "Two symbol objects should not be equal even with same description");
 
         // Check that the symbols inside are different
-        JSValue sym1 = ctx.eval("sym1;");
-        JSValue sym2 = ctx.eval("sym2;");
+        JSValue sym1 = context.eval("sym1;");
+        JSValue sym2 = context.eval("sym2;");
         assertNotEquals(sym1, sym2);
     }
 
     @Test
     public void testSymbolObjectValueOf() {
         // valueOf() should return the primitive symbol value
-        JSValue result = ctx.eval("""
+        JSValue result = context.eval("""
                 var symObj = Object(Symbol('test'));
                 symObj.valueOf();
                 """);
@@ -218,32 +218,32 @@ public class SymbolObjectTest extends BaseTest {
     @Test
     public void testSymbolObjectWithDifferentDescriptions() {
         // Test with string description
-        JSValue result1 = ctx.eval("Object(Symbol('test'));");
+        JSValue result1 = context.eval("Object(Symbol('test'));");
         assertInstanceOf(JSSymbolObject.class, result1);
         assertEquals("test", ((JSSymbolObject) result1).getValue().getDescription());
 
         // Test with numeric description (should be converted to string)
-        JSValue result2 = ctx.eval("Object(Symbol(123));");
+        JSValue result2 = context.eval("Object(Symbol(123));");
         assertInstanceOf(JSSymbolObject.class, result2);
         assertEquals("123", ((JSSymbolObject) result2).getValue().getDescription());
 
         // Test with boolean description
-        JSValue result3 = ctx.eval("Object(Symbol(true));");
+        JSValue result3 = context.eval("Object(Symbol(true));");
         assertInstanceOf(JSSymbolObject.class, result3);
         assertEquals("true", ((JSSymbolObject) result3).getValue().getDescription());
 
         // Test with undefined description
-        JSValue result4 = ctx.eval("Object(Symbol(undefined));");
+        JSValue result4 = context.eval("Object(Symbol(undefined));");
         assertInstanceOf(JSSymbolObject.class, result4);
         assertNull(((JSSymbolObject) result4).getValue().getDescription());
 
         // Test with null description (should convert to "null")
-        JSValue result5 = ctx.eval("Object(Symbol(null));");
+        JSValue result5 = context.eval("Object(Symbol(null));");
         assertInstanceOf(JSSymbolObject.class, result5);
         assertEquals("null", ((JSSymbolObject) result5).getValue().getDescription());
 
         // Test with empty string
-        JSValue result6 = ctx.eval("Object(Symbol(''));");
+        JSValue result6 = context.eval("Object(Symbol(''));");
         assertInstanceOf(JSSymbolObject.class, result6);
         assertEquals("", ((JSSymbolObject) result6).getValue().getDescription());
     }
@@ -251,7 +251,7 @@ public class SymbolObjectTest extends BaseTest {
     @Test
     public void testSymbolObjectWithWellKnownSymbols() {
         // Test wrapping well-known symbols with Object()
-        JSValue result = ctx.eval("Object(Symbol.iterator);");
+        JSValue result = context.eval("Object(Symbol.iterator);");
         assertInstanceOf(JSSymbolObject.class, result);
         assertEquals(JSSymbol.ITERATOR, ((JSSymbolObject) result).getValue());
     }

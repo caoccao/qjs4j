@@ -35,13 +35,13 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getDate(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getDate(context, date, new JSValue[]{});
         assertEquals(1.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-Date
-        result = DatePrototype.getDate(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getDate(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -49,14 +49,14 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getDay(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getDay(context, date, new JSValue[]{});
         double day = result.asNumber().map(JSNumber::value).orElseThrow();
         assertTrue(day >= 0 && day <= 6, "Day should be between 0 and 6");
 
         // Edge case: called on non-Date
-        result = DatePrototype.getDay(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getDay(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -64,13 +64,13 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getFullYear(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getFullYear(context, date, new JSValue[]{});
         assertEquals(2024.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-Date
-        result = DatePrototype.getFullYear(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getFullYear(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -78,14 +78,14 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getHours(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getHours(context, date, new JSValue[]{});
         double hours = result.asNumber().map(JSNumber::value).orElseThrow();
         assertTrue(hours >= 0 && hours <= 23, "Hours should be between 0 and 23");
 
         // Edge case: called on non-Date
-        result = DatePrototype.getHours(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getHours(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -93,13 +93,13 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getMilliseconds(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getMilliseconds(context, date, new JSValue[]{});
         assertEquals(0.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-Date
-        result = DatePrototype.getMilliseconds(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getMilliseconds(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -107,13 +107,13 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getMinutes(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getMinutes(context, date, new JSValue[]{});
         assertEquals(0.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-Date
-        result = DatePrototype.getMinutes(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getMinutes(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -121,13 +121,13 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC (January = month 0)
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getMonth(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getMonth(context, date, new JSValue[]{});
         assertEquals(0.0, result.asNumber().map(JSNumber::value).orElseThrow()); // January is 0
 
         // Edge case: called on non-Date
-        result = DatePrototype.getMonth(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getMonth(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -135,13 +135,13 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getSeconds(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getSeconds(context, date, new JSValue[]{});
         assertEquals(0.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-Date
-        result = DatePrototype.getSeconds(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getSeconds(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -149,13 +149,13 @@ public class DatePrototypeTest extends BaseTest {
         // Test with a known timestamp: 2024-01-01 00:00:00 UTC (1704067200000L)
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getTime(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getTime(context, date, new JSValue[]{});
         assertEquals(1704067200000.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-Date
-        result = DatePrototype.getTime(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getTime(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -163,13 +163,13 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getUTCDate(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getUTCDate(context, date, new JSValue[]{});
         assertEquals(1.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-Date
-        result = DatePrototype.getUTCDate(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getUTCDate(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -177,13 +177,13 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getUTCFullYear(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getUTCFullYear(context, date, new JSValue[]{});
         assertEquals(2024.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-Date
-        result = DatePrototype.getUTCFullYear(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getUTCFullYear(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -191,13 +191,13 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getUTCHours(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getUTCHours(context, date, new JSValue[]{});
         assertEquals(0.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-Date
-        result = DatePrototype.getUTCHours(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getUTCHours(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -205,13 +205,13 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.getUTCMonth(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.getUTCMonth(context, date, new JSValue[]{});
         assertEquals(0.0, result.asNumber().map(JSNumber::value).orElseThrow()); // January is 0
 
         // Edge case: called on non-Date
-        result = DatePrototype.getUTCMonth(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.getUTCMonth(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -219,14 +219,14 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.toISOString(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.toISOString(context, date, new JSValue[]{});
         String isoString = result.asString().map(JSString::value).orElseThrow();
         assertTrue(isoString.startsWith("2024-01-01T00:00:00"));
 
         // Edge case: called on non-Date
-        result = DatePrototype.toISOString(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.toISOString(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -234,14 +234,14 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.toJSON(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.toJSON(context, date, new JSValue[]{});
         String jsonString = result.asString().map(JSString::value).orElseThrow();
         assertTrue(jsonString.startsWith("2024-01-01T00:00:00"));
 
         // Edge case: called on non-Date
-        result = DatePrototype.toJSON(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.toJSON(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -249,16 +249,16 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.toStringMethod(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.toStringMethod(context, date, new JSValue[]{});
         // Should return a string representation
         String str = result.asString().map(JSString::value).orElseThrow();
         assertNotNull(str);
         assertTrue(str.length() > 0);
 
         // Edge case: called on non-Date
-        result = DatePrototype.toStringMethod(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.toStringMethod(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 
     @Test
@@ -266,12 +266,12 @@ public class DatePrototypeTest extends BaseTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
 
-        JSValue result = DatePrototype.valueOf(ctx, date, new JSValue[]{});
+        JSValue result = DatePrototype.valueOf(context, date, new JSValue[]{});
         assertEquals(1704067200000.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-Date
-        result = DatePrototype.valueOf(ctx, new JSString("not a date"), new JSValue[]{});
+        result = DatePrototype.valueOf(context, new JSString("not a date"), new JSValue[]{});
         assertTypeError(result);
-        assertPendingException(ctx);
+        assertPendingException(context);
     }
 }

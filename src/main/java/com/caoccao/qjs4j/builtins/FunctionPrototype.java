@@ -153,17 +153,12 @@ public final class FunctionPrototype {
      * Function.prototype.toString()
      * ES2020 19.2.3.5
      */
-    public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
+    public static JSValue toString_(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSFunction func)) {
             return context.throwTypeError("Function.prototype.toString called on non-function");
         }
 
-        // Simplified implementation - return a generic function string
-        String name = func.getName();
-        if (name == null || name.isEmpty()) {
-            name = "anonymous";
-        }
-
-        return new JSString("function " + name + "() { [native code] }");
+        // Use the function's own toString() implementation which handles async, generator, etc.
+        return new JSString(func.toString());
     }
 }

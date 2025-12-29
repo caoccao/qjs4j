@@ -35,17 +35,17 @@ public class SharedArrayBufferPrototypeTest extends BaseTest {
         JSSharedArrayBuffer sab = new JSSharedArrayBuffer(64);
 
         // Normal case: get byte length
-        JSValue result = SharedArrayBufferPrototype.getByteLength(ctx, sab, new JSValue[]{});
+        JSValue result = SharedArrayBufferPrototype.getByteLength(context, sab, new JSValue[]{});
         assertEquals(64.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Normal case: empty buffer
         JSSharedArrayBuffer emptySab = new JSSharedArrayBuffer(0);
-        result = SharedArrayBufferPrototype.getByteLength(ctx, emptySab, new JSValue[]{});
+        result = SharedArrayBufferPrototype.getByteLength(context, emptySab, new JSValue[]{});
         assertEquals(0.0, result.asNumber().map(JSNumber::value).orElseThrow());
 
         // Edge case: called on non-SharedArrayBuffer
-        assertTypeError(SharedArrayBufferPrototype.getByteLength(ctx, new JSString("not sab"), new JSValue[]{}));
-        assertPendingException(ctx);
+        assertTypeError(SharedArrayBufferPrototype.getByteLength(context, new JSString("not sab"), new JSValue[]{}));
+        assertPendingException(context);
     }
 
     @Test
@@ -53,31 +53,31 @@ public class SharedArrayBufferPrototypeTest extends BaseTest {
         JSSharedArrayBuffer sab = new JSSharedArrayBuffer(16);
 
         // Normal case: slice entire buffer
-        JSValue result = SharedArrayBufferPrototype.slice(ctx, sab, new JSValue[]{});
+        JSValue result = SharedArrayBufferPrototype.slice(context, sab, new JSValue[]{});
         assertEquals(16, result.asSharedArrayBuffer().map(JSSharedArrayBuffer::getByteLength).orElseThrow());
 
         // Normal case: slice with start only
-        result = SharedArrayBufferPrototype.slice(ctx, sab, new JSValue[]{new JSNumber(4)});
+        result = SharedArrayBufferPrototype.slice(context, sab, new JSValue[]{new JSNumber(4)});
         assertEquals(12, result.asSharedArrayBuffer().map(JSSharedArrayBuffer::getByteLength).orElseThrow()); // 16 - 4
 
         // Normal case: slice with start and end
-        result = SharedArrayBufferPrototype.slice(ctx, sab, new JSValue[]{new JSNumber(4), new JSNumber(12)});
+        result = SharedArrayBufferPrototype.slice(context, sab, new JSValue[]{new JSNumber(4), new JSNumber(12)});
         assertEquals(8, result.asSharedArrayBuffer().map(JSSharedArrayBuffer::getByteLength).orElseThrow()); // 12 - 4
 
         // Normal case: negative start (from end)
-        result = SharedArrayBufferPrototype.slice(ctx, sab, new JSValue[]{new JSNumber(-8)});
+        result = SharedArrayBufferPrototype.slice(context, sab, new JSValue[]{new JSNumber(-8)});
         assertEquals(8, result.asSharedArrayBuffer().map(JSSharedArrayBuffer::getByteLength).orElseThrow()); // 16 - 8
 
         // Normal case: negative end (from end)
-        result = SharedArrayBufferPrototype.slice(ctx, sab, new JSValue[]{new JSNumber(4), new JSNumber(-4)});
+        result = SharedArrayBufferPrototype.slice(context, sab, new JSValue[]{new JSNumber(4), new JSNumber(-4)});
         assertEquals(8, result.asSharedArrayBuffer().map(JSSharedArrayBuffer::getByteLength).orElseThrow()); // 12 - 4
 
         // Edge case: start >= end (empty slice)
-        result = SharedArrayBufferPrototype.slice(ctx, sab, new JSValue[]{new JSNumber(8), new JSNumber(4)});
+        result = SharedArrayBufferPrototype.slice(context, sab, new JSValue[]{new JSNumber(8), new JSNumber(4)});
         assertEquals(0, result.asSharedArrayBuffer().map(JSSharedArrayBuffer::getByteLength).orElseThrow());
 
         // Edge case: called on non-SharedArrayBuffer
-        assertTypeError(SharedArrayBufferPrototype.slice(ctx, new JSString("not sab"), new JSValue[]{}));
-        assertPendingException(ctx);
+        assertTypeError(SharedArrayBufferPrototype.slice(context, new JSString("not sab"), new JSValue[]{}));
+        assertPendingException(context);
     }
 }

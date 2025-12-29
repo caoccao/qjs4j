@@ -29,7 +29,7 @@ public class ReflectObjectTest extends BaseTest {
 
     @Test
     public void testReflectDeleteProperty() {
-        JSValue result = ctx.eval(
+        JSValue result = context.eval(
                 "var obj = {x: 1, y: 2}; " +
                         "Reflect.deleteProperty(obj, 'x'); " +
                         "JSON.stringify(obj)"
@@ -39,7 +39,7 @@ public class ReflectObjectTest extends BaseTest {
 
     @Test
     public void testReflectGet() {
-        JSValue result = ctx.eval(
+        JSValue result = context.eval(
                 "var obj = {x: 1}; " +
                         "Reflect.get(obj, 'x')"
         );
@@ -48,24 +48,24 @@ public class ReflectObjectTest extends BaseTest {
 
     @Test
     public void testReflectHas() {
-        JSValue result = ctx.eval(
+        JSValue result = context.eval(
                 "var obj = {x: 1}; " +
                         "Reflect.has(obj, 'x')"
         );
         assertTrue((Boolean) result.toJavaObject());
 
-        result = ctx.eval("Reflect.has(obj, 'y')");
+        result = context.eval("Reflect.has(obj, 'y')");
         assertFalse((Boolean) result.toJavaObject());
     }
 
     @Test
     public void testReflectIsExtensible() {
         // Test normal extensible object
-        JSValue result = ctx.eval("var obj = {}; Reflect.isExtensible(obj)");
+        JSValue result = context.eval("var obj = {}; Reflect.isExtensible(obj)");
         assertTrue((Boolean) result.toJavaObject());
 
         // Test after preventExtensions
-        result = ctx.eval(
+        result = context.eval(
                 "var obj2 = {}; " +
                         "Reflect.preventExtensions(obj2); " +
                         "Reflect.isExtensible(obj2)"
@@ -73,7 +73,7 @@ public class ReflectObjectTest extends BaseTest {
         assertFalse((Boolean) result.toJavaObject());
 
         // Test frozen object is not extensible
-        result = ctx.eval(
+        result = context.eval(
                 "var obj3 = {}; " +
                         "Object.freeze(obj3); " +
                         "Reflect.isExtensible(obj3)"
@@ -81,7 +81,7 @@ public class ReflectObjectTest extends BaseTest {
         assertFalse((Boolean) result.toJavaObject());
 
         // Test sealed object is not extensible
-        result = ctx.eval(
+        result = context.eval(
                 "var obj4 = {}; " +
                         "Object.seal(obj4); " +
                         "Reflect.isExtensible(obj4)"
@@ -92,7 +92,7 @@ public class ReflectObjectTest extends BaseTest {
     @Test
     public void testReflectPreventExtensions() {
         // Test that Reflect.preventExtensions prevents adding properties
-        JSValue result = ctx.eval(
+        JSValue result = context.eval(
                 "var obj = {a: 1}; " +
                         "Reflect.preventExtensions(obj); " +
                         "obj.b = 2; " +  // Should not add
@@ -101,7 +101,7 @@ public class ReflectObjectTest extends BaseTest {
         assertEquals("{\"a\":1}", result.toJavaObject());
 
         // Test that it returns true
-        result = ctx.eval(
+        result = context.eval(
                 "var obj2 = {}; " +
                         "Reflect.preventExtensions(obj2)"
         );
@@ -111,7 +111,7 @@ public class ReflectObjectTest extends BaseTest {
     @Test
     public void testReflectPreventExtensionsWithObjectPreventExtensions() {
         // Test that Reflect.preventExtensions and Object.preventExtensions are consistent
-        JSValue result = ctx.eval(
+        JSValue result = context.eval(
                 "var obj1 = {}; " +
                         "var obj2 = {}; " +
                         "Reflect.preventExtensions(obj1); " +
@@ -123,7 +123,7 @@ public class ReflectObjectTest extends BaseTest {
 
     @Test
     public void testReflectSet() {
-        JSValue result = ctx.eval(
+        JSValue result = context.eval(
                 "var obj = {}; " +
                         "Reflect.set(obj, 'x', 42); " +
                         "obj.x"
