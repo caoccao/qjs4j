@@ -295,6 +295,14 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public JSValue get(PropertyKey key) {
+        return get(key, context);
+    }
+
+    /**
+     * Override get with context to intercept property access.
+     */
+    @Override
+    public JSValue get(PropertyKey key, JSContext ctx) {
         checkRevoked();
 
         // Check if handler has 'get' trap
@@ -343,7 +351,7 @@ public final class JSProxy extends JSObject {
         // Following QuickJS js_proxy_get: forward to target
         // Since JSFunction now extends JSObject, all targets are JSObjects
         if (target instanceof JSObject targetObj) {
-            return targetObj.get(key);
+            return targetObj.get(key, ctx != null ? ctx : context);
         }
         return JSUndefined.INSTANCE;
     }
@@ -821,6 +829,14 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue value) {
+        set(key, value, context);
+    }
+
+    /**
+     * Override set with context to intercept property assignment.
+     */
+    @Override
+    public void set(PropertyKey key, JSValue value, JSContext ctx) {
         checkRevoked();
 
         // Check if handler has 'set' trap
@@ -844,7 +860,7 @@ public final class JSProxy extends JSObject {
         }
 
         // No trap, forward to target
-        ((JSObject) target).set(key, value);
+        ((JSObject) target).set(key, value, ctx != null ? ctx : context);
     }
 
     /**

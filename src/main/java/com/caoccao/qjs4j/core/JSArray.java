@@ -114,12 +114,20 @@ public final class JSArray extends JSObject {
      */
     @Override
     public JSValue get(PropertyKey key) {
+        return get(key, null);
+    }
+
+    /**
+     * Override get by PropertyKey with context to handle array indices.
+     */
+    @Override
+    public JSValue get(PropertyKey key, JSContext ctx) {
         // If it's an index, use dense/sparse array storage
         if (key.isIndex()) {
             return get(key.asIndex());
         }
         // Otherwise, use the shape-based storage from JSObject
-        return super.get(key);
+        return super.get(key, ctx);
     }
 
     /**
@@ -227,12 +235,20 @@ public final class JSArray extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue value) {
+        set(key, value, null);
+    }
+
+    /**
+     * Override set by PropertyKey with context to handle array indices.
+     */
+    @Override
+    public void set(PropertyKey key, JSValue value, JSContext ctx) {
         // If it's an index, use dense/sparse array storage
         if (key.isIndex()) {
             set(key.asIndex(), value);
         } else {
             // Otherwise, use the shape-based storage from JSObject
-            super.set(key, value);
+            super.set(key, value, ctx);
         }
     }
 

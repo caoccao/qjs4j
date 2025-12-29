@@ -235,15 +235,34 @@ public non-sealed class JSObject implements JSValue {
      * Get a property value by property key.
      */
     public JSValue get(PropertyKey key) {
+        return get(key, null);
+    }
+
+    /**
+     * Get a property value by property key with context for getter functions.
+     */
+    public JSValue get(PropertyKey key, JSContext ctx) {
         // Look in own properties
         int offset = shape.getPropertyOffset(key);
         if (offset >= 0) {
+            // Check if property has a getter
+            PropertyDescriptor desc = shape.getDescriptor(key);
+            if (desc != null && desc.hasGetter()) {
+                JSFunction getter = desc.getGetter();
+                if (getter != null && ctx != null) {
+                    // Call the getter with 'this' as the object
+                    return getter.call(ctx, this, new JSValue[0]);
+                }
+                // Getter is explicitly undefined or no context available
+                return JSUndefined.INSTANCE;
+            }
+            // Regular property with value
             return propertyValues[offset];
         }
 
         // Look in prototype chain
         if (prototype != null) {
-            return prototype.get(key);
+            return prototype.get(key, ctx);
         }
 
         return JSUndefined.INSTANCE;
@@ -411,11 +430,31 @@ public non-sealed class JSObject implements JSValue {
      * Set a property value by property key.
      */
     public void set(PropertyKey key, JSValue value) {
+        set(key, value, null);
+    }
+
+    /**
+     * Set a property value by property key with context for setter functions.
+     */
+    public void set(PropertyKey key, JSValue value, JSContext ctx) {
         // Check if property already exists
         int offset = shape.getPropertyOffset(key);
         if (offset >= 0) {
-            // Property exists, just update the value
+            // Property exists, check if it has a setter
             PropertyDescriptor desc = shape.getDescriptorAt(offset);
+
+            // If property has a setter, call it
+            if (desc.hasSetter()) {
+                JSFunction setter = desc.getSetter();
+                if (setter != null && ctx != null) {
+                    // Call the setter with 'this' as the object and value as argument
+                    setter.call(ctx, this, new JSValue[]{value});
+                }
+                // If setter is null/undefined or no context, the assignment does nothing (silently fails)
+                return;
+            }
+
+            // Regular property - check if writable
             if (!desc.isWritable() || frozen) {
                 // In strict mode, this would throw TypeError
                 return;

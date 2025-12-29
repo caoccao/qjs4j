@@ -351,7 +351,7 @@ public final class VirtualMachine {
                         // Auto-box primitives to access their prototype methods
                         JSObject targetObj = toObject(obj);
                         if (targetObj != null) {
-                            valueStack.push(targetObj.get(PropertyKey.fromString(fieldName)));
+                            valueStack.push(targetObj.get(PropertyKey.fromString(fieldName), context));
                         } else {
                             valueStack.push(JSUndefined.INSTANCE);
                         }
@@ -364,7 +364,7 @@ public final class VirtualMachine {
                         // The value should be on top of the stack.
                         JSValue putFieldValue = valueStack.peek(0);
                         if (putFieldObj instanceof JSObject jsObj) {
-                            jsObj.set(PropertyKey.fromString(putFieldName), putFieldValue);
+                            jsObj.set(PropertyKey.fromString(putFieldName), putFieldValue, context);
                         }
                         pc += op.getSize();
                     }
@@ -373,7 +373,7 @@ public final class VirtualMachine {
                         JSValue arrayObj = valueStack.pop();
                         if (arrayObj instanceof JSObject jsObj) {
                             PropertyKey key = PropertyKey.fromValue(index);
-                            valueStack.push(jsObj.get(key));
+                            valueStack.push(jsObj.get(key, context));
                         } else if (arrayObj instanceof JSFunction) {
                             // For functions, look up methods from Function.prototype
                             PropertyKey key = PropertyKey.fromValue(index);
@@ -381,7 +381,7 @@ public final class VirtualMachine {
                             if (funcProto instanceof JSObject funcCtor) {
                                 JSValue prototype = funcCtor.get("prototype");
                                 if (prototype instanceof JSObject protoObj) {
-                                    valueStack.push(protoObj.get(key));
+                                    valueStack.push(protoObj.get(key, context));
                                 } else {
                                     valueStack.push(JSUndefined.INSTANCE);
                                 }
@@ -400,7 +400,7 @@ public final class VirtualMachine {
                         JSValue putElValue = valueStack.pop();   // Pop value
                         if (putElObj instanceof JSObject jsObj) {
                             PropertyKey key = PropertyKey.fromValue(putElIndex);
-                            jsObj.set(key, putElValue);
+                            jsObj.set(key, putElValue, context);
                         }
                         // Assignment expressions return the assigned value
                         valueStack.push(putElValue);
