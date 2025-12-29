@@ -20,6 +20,7 @@ package com.caoccao.qjs4j.compiler;
  * Enumeration of all JavaScript token types.
  */
 public enum TokenType {
+    BIGINT,
     EOF,
     IDENTIFIER,
     NUMBER,

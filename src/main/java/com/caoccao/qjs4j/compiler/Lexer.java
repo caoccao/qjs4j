@@ -173,6 +173,12 @@ public final class Lexer {
         while (!isAtEnd() && (peek() == '0' || peek() == '1')) {
             advance();
         }
+        // Check for BigInt literal suffix 'n'
+        if (!isAtEnd() && peek() == 'n') {
+            advance(); // consume 'n'
+            String value = source.substring(startPos, position - 1); // exclude 'n' from value
+            return new Token(TokenType.BIGINT, value, startLine, startColumn, startPos);
+        }
         String value = source.substring(startPos, position);
         return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
     }
@@ -182,6 +188,12 @@ public final class Lexer {
     private Token scanHexNumber(int startPos, int startLine, int startColumn) {
         while (!isAtEnd() && isHexDigit(peek())) {
             advance();
+        }
+        // Check for BigInt literal suffix 'n'
+        if (!isAtEnd() && peek() == 'n') {
+            advance(); // consume 'n'
+            String value = source.substring(startPos, position - 1); // exclude 'n' from value
+            return new Token(TokenType.BIGINT, value, startLine, startColumn, startPos);
         }
         String value = source.substring(startPos, position);
         return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
@@ -241,6 +253,13 @@ public final class Lexer {
             }
         }
 
+        // Check for BigInt literal suffix 'n'
+        if (!isAtEnd() && peek() == 'n') {
+            advance(); // consume 'n'
+            String value = source.substring(startPos, position - 1); // exclude 'n' from value
+            return new Token(TokenType.BIGINT, value, startLine, startColumn, startPos);
+        }
+
         String value = source.substring(startPos, position);
         return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
     }
@@ -248,6 +267,12 @@ public final class Lexer {
     private Token scanOctalNumber(int startPos, int startLine, int startColumn) {
         while (!isAtEnd() && peek() >= '0' && peek() <= '7') {
             advance();
+        }
+        // Check for BigInt literal suffix 'n'
+        if (!isAtEnd() && peek() == 'n') {
+            advance(); // consume 'n'
+            String value = source.substring(startPos, position - 1); // exclude 'n' from value
+            return new Token(TokenType.BIGINT, value, startLine, startColumn, startPos);
         }
         String value = source.substring(startPos, position);
         return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);

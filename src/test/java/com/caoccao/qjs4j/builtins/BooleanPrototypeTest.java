@@ -20,13 +20,41 @@ import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+
 
 /**
  * Unit tests for Boolean.prototype methods.
  */
 public class BooleanPrototypeTest extends BaseTest {
+    @Test
+    public void testEquals() {
+        // Verify that loose equality passes between primitive and primitive
+        assertTrue(ctx.eval("true == true").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("true == false").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(ctx.eval("true == Boolean(true)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("true == Boolean(false)").asBoolean().map(JSBoolean::value).orElseThrow());
+        // Verify that strict equality passes between primitive and primitive
+        assertTrue(ctx.eval("true === true").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("true === false").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(ctx.eval("true === Boolean(true)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("true === Boolean(false)").asBoolean().map(JSBoolean::value).orElseThrow());
+        // Verify that loose equality passes between primitive and primitive
+        assertTrue(ctx.eval("Boolean(true) == Boolean(true)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("Boolean(true) == Boolean(false)").asBoolean().map(JSBoolean::value).orElseThrow());
+        // Verify that loose equality passes between primitive and object
+        assertTrue(ctx.eval("true == new Boolean(true)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("true == new Boolean(false)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(ctx.eval("Boolean(true) == new Boolean(true)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("Boolean(true) == new Boolean(false)").asBoolean().map(JSBoolean::value).orElseThrow());
+        // Verify that loose equality fails between object and object
+        assertFalse(ctx.eval("new Boolean(true) == new Boolean(true)").asBoolean().map(JSBoolean::value).orElseThrow());
+        // Verify that strict equality fails between primitive and object
+        assertFalse(ctx.eval("true === new Boolean(true)").asBoolean().map(JSBoolean::value).orElseThrow());
+        // Verify that strict equality fails between object and object
+        assertFalse(ctx.eval("new Boolean(true) === new Boolean(true)").asBoolean().map(JSBoolean::value).orElseThrow());
+    }
+
     @Test
     public void testToString() {
         // Normal case: true

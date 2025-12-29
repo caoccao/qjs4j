@@ -633,6 +633,22 @@ public final class Parser {
                 advance();
                 yield new Literal(Double.parseDouble(value), location);
             }
+            case BIGINT -> {
+                String value = currentToken.value();
+                advance();
+                // Parse BigInt literal - handle different radixes
+                java.math.BigInteger bigIntValue;
+                if (value.startsWith("0x") || value.startsWith("0X")) {
+                    bigIntValue = new java.math.BigInteger(value.substring(2), 16);
+                } else if (value.startsWith("0b") || value.startsWith("0B")) {
+                    bigIntValue = new java.math.BigInteger(value.substring(2), 2);
+                } else if (value.startsWith("0o") || value.startsWith("0O")) {
+                    bigIntValue = new java.math.BigInteger(value.substring(2), 8);
+                } else {
+                    bigIntValue = new java.math.BigInteger(value);
+                }
+                yield new Literal(bigIntValue, location);
+            }
             case STRING -> {
                 String value = currentToken.value();
                 advance();

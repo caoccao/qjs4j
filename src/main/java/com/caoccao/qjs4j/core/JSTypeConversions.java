@@ -65,6 +65,15 @@ public final class JSTypeConversions {
             return abstractEquals(context, x, toNumber(context, y));
         }
 
+        // Object to primitive conversion (ES2020 7.2.14)
+        // If one is object and other is primitive, convert object to primitive
+        if (!isPrimitive(x) && isPrimitive(y)) {
+            return abstractEquals(context, toPrimitive(context, x, PreferredType.DEFAULT), y);
+        }
+        if (isPrimitive(x) && !isPrimitive(y)) {
+            return abstractEquals(context, x, toPrimitive(context, y, PreferredType.DEFAULT));
+        }
+
         return false;
     }
 
@@ -143,6 +152,11 @@ public final class JSTypeConversions {
         // Booleans
         if (x instanceof JSBoolean xBool && y instanceof JSBoolean yBool) {
             return xBool == yBool;
+        }
+
+        // BigInts
+        if (x instanceof JSBigInt xBigInt && y instanceof JSBigInt yBigInt) {
+            return xBigInt.value().equals(yBigInt.value());
         }
 
         // Objects (reference equality)
@@ -391,11 +405,18 @@ public final class JSTypeConversions {
 
         // For objects, call ToPrimitive with hint
         if (input instanceof JSObject obj) {
+            // Check for [[PrimitiveValue]] internal slot (wrapper objects)
+            JSValue primitiveValue = obj.get("[[PrimitiveValue]]");
+            if (primitiveValue != null && !(primitiveValue instanceof JSUndefined)) {
+                return primitiveValue;
+            }
+
             // In a full implementation, this would call [[DefaultValue]]
-            // For now, return a placeholder
+            // For now, DEFAULT and NUMBER hints convert to number, STRING hint converts to string
             if (hint == PreferredType.STRING) {
                 return toString(context, input);
             } else {
+                // DEFAULT and NUMBER both prefer number conversion
                 return toNumber(context, input);
             }
         }

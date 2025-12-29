@@ -20,10 +20,7 @@ import com.caoccao.javet.exceptions.JavetException;
 import com.caoccao.javet.interop.V8Host;
 import com.caoccao.javet.interop.V8Runtime;
 import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.core.JSNumber;
-import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSUndefined;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -43,6 +40,34 @@ public class NumberPrototypeTest extends BaseTest {
 
         // Verify it's actually the maximum safe integer (2^53 - 1)
         assertEquals(Math.pow(2, 53) - 1, NumberPrototype.MAX_SAFE_INTEGER, 0.0);
+    }
+
+    @Test
+    public void testEquals() {
+        // Verify that loose equality passes between primitive and primitive
+        assertTrue(ctx.eval("123 == 123").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("123 == 321").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(ctx.eval("123 == Number(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("123 == Number(321)").asBoolean().map(JSBoolean::value).orElseThrow());
+        // Verify that strict equality passes between primitive and primitive
+        assertTrue(ctx.eval("123 === 123").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("123 === 321").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(ctx.eval("123 === Number(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("123 === Number(321)").asBoolean().map(JSBoolean::value).orElseThrow());
+        // Verify that loose equality passes between primitive and primitive
+        assertTrue(ctx.eval("Number(123) == Number(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("Number(123) == Number(321)").asBoolean().map(JSBoolean::value).orElseThrow());
+        // Verify that loose equality passes between primitive and object
+        assertTrue(ctx.eval("123 == new Number(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("123 == new Number(321)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertTrue(ctx.eval("Number(123) == new Number(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        assertFalse(ctx.eval("Number(123) == new Number(321)").asBoolean().map(JSBoolean::value).orElseThrow());
+        // Verify that loose equality fails between object and object
+        assertFalse(ctx.eval("new Number(123) == new Number(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        // Verify that strict equality fails between primitive and object
+        assertFalse(ctx.eval("123 === new Number(123)").asBoolean().map(JSBoolean::value).orElseThrow());
+        // Verify that strict equality fails between object and object
+        assertFalse(ctx.eval("new Number(123) === new Number(123)").asBoolean().map(JSBoolean::value).orElseThrow());
     }
 
     @Test

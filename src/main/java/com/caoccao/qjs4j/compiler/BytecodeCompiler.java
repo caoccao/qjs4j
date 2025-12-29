@@ -17,13 +17,11 @@
 package com.caoccao.qjs4j.compiler;
 
 import com.caoccao.qjs4j.compiler.ast.*;
-import com.caoccao.qjs4j.core.JSBytecodeFunction;
-import com.caoccao.qjs4j.core.JSNumber;
-import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.Opcode;
 
+import java.math.BigInteger;
 import java.util.*;
 
 /**
@@ -504,6 +502,9 @@ public final class BytecodeCompiler {
             emitter.emitOpcode(Opcode.NULL);
         } else if (value instanceof Boolean bool) {
             emitter.emitOpcode(bool ? Opcode.PUSH_TRUE : Opcode.PUSH_FALSE);
+        } else if (value instanceof BigInteger bigInt) {
+            // Check BigInteger before Number since BigInteger extends Number
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSBigInt(bigInt));
         } else if (value instanceof Number num) {
             // Try to emit as i32 if it's an integer in range
             if (num instanceof Integer || num instanceof Long) {
