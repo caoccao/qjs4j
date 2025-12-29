@@ -16,7 +16,10 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSNumber;
+import com.caoccao.qjs4j.core.JSTypeConversions;
+import com.caoccao.qjs4j.core.JSValue;
 
 /**
  * Implementation of Number constructor.
@@ -36,13 +39,13 @@ public final class NumberConstructor {
         if (args.length == 0) {
             return new JSNumber(0.0);
         }
-        
+
         // Get the value to convert to number
         JSValue value = args[0];
-        
+
         // Convert to number using ToNumber
         JSNumber numValue = JSTypeConversions.toNumber(context, value);
-        
+
         // When called as a function (not via new), return primitive number
         // The VM will handle the "new" case separately in handleCallConstructor
         return numValue;

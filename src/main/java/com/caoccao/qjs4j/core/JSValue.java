@@ -235,6 +235,15 @@ public sealed interface JSValue extends JSStackValue permits
     }
 
     /**
+     * Attempt to cast this value to JSNumberObject.
+     *
+     * @return Optional containing the JSNumberObject if this value is a Number object, empty otherwise
+     */
+    default Optional<JSNumberObject> asNumberObject() {
+        return this instanceof JSNumberObject v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
      * Attempt to cast this value to JSObject.
      *
      * @return Optional containing the JSObject if this value is an object, empty otherwise
@@ -478,15 +487,6 @@ public sealed interface JSValue extends JSStackValue permits
     }
 
     /**
-     * Check if this value is a Number object.
-     *
-     * @return true if this value is a Number object, false otherwise
-     */
-    default boolean isNumberObject() {
-        return this instanceof JSNumberObject;
-    }
-
-    /**
      * Check if this value is a bytecode function.
      *
      * @return true if this value is a bytecode function, false otherwise
@@ -649,6 +649,15 @@ public sealed interface JSValue extends JSStackValue permits
      */
     default boolean isNumber() {
         return this instanceof JSNumber;
+    }
+
+    /**
+     * Check if this value is a Number object.
+     *
+     * @return true if this value is a Number object, false otherwise
+     */
+    default boolean isNumberObject() {
+        return this instanceof JSNumberObject;
     }
 
     /**

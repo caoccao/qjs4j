@@ -251,6 +251,28 @@ public final class NumberPrototype {
     }
 
     /**
+     * Helper method to extract the number value from thisArg.
+     * Handles both primitive numbers and Number objects.
+     * For other values, attempts type coercion via ToNumber.
+     */
+    private static JSNumber thisValueToNumber(JSContext context, JSValue thisArg) {
+        if (thisArg instanceof JSNumber num) {
+            return num;
+        }
+
+        if (thisArg instanceof JSObject obj) {
+            // Check for [[NumberData]] internal slot (Number object)
+            JSValue primitiveValue = obj.get("[[PrimitiveValue]]");
+            if (primitiveValue instanceof JSNumber num) {
+                return num;
+            }
+        }
+
+        // For other values, attempt type coercion (maintains backward compatibility)
+        return JSTypeConversions.toNumber(context, thisArg);
+    }
+
+    /**
      * Number.prototype.toExponential(fractionDigits)
      * ES2020 20.1.3.2
      */
@@ -363,7 +385,7 @@ public final class NumberPrototype {
         if (thisArg instanceof JSNumber num) {
             return num;
         }
-        
+
         if (thisArg instanceof JSObject obj) {
             // Check for [[NumberData]] internal slot
             JSValue primitiveValue = obj.get("[[PrimitiveValue]]");
@@ -371,29 +393,7 @@ public final class NumberPrototype {
                 return num;
             }
         }
-        
+
         return context.throwTypeError("Number.prototype.valueOf called on non-number");
-    }
-
-    /**
-     * Helper method to extract the number value from thisArg.
-     * Handles both primitive numbers and Number objects.
-     * For other values, attempts type coercion via ToNumber.
-     */
-    private static JSNumber thisValueToNumber(JSContext context, JSValue thisArg) {
-        if (thisArg instanceof JSNumber num) {
-            return num;
-        }
-
-        if (thisArg instanceof JSObject obj) {
-            // Check for [[NumberData]] internal slot (Number object)
-            JSValue primitiveValue = obj.get("[[PrimitiveValue]]");
-            if (primitiveValue instanceof JSNumber num) {
-                return num;
-            }
-        }
-        
-        // For other values, attempt type coercion (maintains backward compatibility)
-        return JSTypeConversions.toNumber(context, thisArg);
     }
 }

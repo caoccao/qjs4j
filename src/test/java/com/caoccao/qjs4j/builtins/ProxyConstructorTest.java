@@ -1249,6 +1249,22 @@ public class ProxyConstructorTest extends BaseTest {
     }
 
     @Test
+    public void testProxyWithNullPrototype() {
+        // Test proxy with null prototype target
+        JSValue result = ctx.eval("""
+                var target = Object.create(null);
+                target.x = 42;
+                var handler = {
+                  get: function(target, prop) {
+                    return target[prop];
+                  }
+                };
+                var proxy = new Proxy(target, handler);
+                proxy.x""");
+        assertEquals(42.0, (Double) result.toJavaObject());
+    }
+
+    @Test
     public void testProxyWithNumberObjectAsTarget() {
         // Test that Number object (new Number(42)) can be a proxy target
         // Number objects are needed as proxy targets since primitive numbers cannot be proxied
@@ -1268,14 +1284,22 @@ public class ProxyConstructorTest extends BaseTest {
     }
 
     @Test
-    public void testProxyWithNumberObjectValueOf() {
-        // Test that proxied Number object still works with valueOf
-        JSValue result = ctx.eval("""
-                var target = new Number(3.14);
+    public void testProxyWithNumberObjectSpecialValues() {
+        // Test that Number object with NaN can be proxied
+        JSValue resultNaN = ctx.eval("""
+                var target = new Number(NaN);
                 var handler = {};
                 var proxy = new Proxy(target, handler);
                 proxy.valueOf()""");
-        assertEquals(3.14, (Double) result.toJavaObject(), 0.001);
+        assertTrue(Double.isNaN((Double) resultNaN.toJavaObject()));
+
+        // Test that Number object with Infinity can be proxied
+        JSValue resultInf = ctx.eval("""
+                var target = new Number(Infinity);
+                var handler = {};
+                var proxy = new Proxy(target, handler);
+                proxy.valueOf()""");
+        assertEquals(Double.POSITIVE_INFINITY, (Double) resultInf.toJavaObject());
     }
 
     @Test
@@ -1308,38 +1332,14 @@ public class ProxyConstructorTest extends BaseTest {
     }
 
     @Test
-    public void testProxyWithNumberObjectSpecialValues() {
-        // Test that Number object with NaN can be proxied
-        JSValue resultNaN = ctx.eval("""
-                var target = new Number(NaN);
-                var handler = {};
-                var proxy = new Proxy(target, handler);
-                proxy.valueOf()""");
-        assertTrue(Double.isNaN((Double) resultNaN.toJavaObject()));
-
-        // Test that Number object with Infinity can be proxied
-        JSValue resultInf = ctx.eval("""
-                var target = new Number(Infinity);
-                var handler = {};
-                var proxy = new Proxy(target, handler);
-                proxy.valueOf()""");
-        assertEquals(Double.POSITIVE_INFINITY, (Double) resultInf.toJavaObject());
-    }
-
-    @Test
-    public void testProxyWithNullPrototype() {
-        // Test proxy with null prototype target
+    public void testProxyWithNumberObjectValueOf() {
+        // Test that proxied Number object still works with valueOf
         JSValue result = ctx.eval("""
-                var target = Object.create(null);
-                target.x = 42;
-                var handler = {
-                  get: function(target, prop) {
-                    return target[prop];
-                  }
-                };
+                var target = new Number(3.14);
+                var handler = {};
                 var proxy = new Proxy(target, handler);
-                proxy.x""");
-        assertEquals(42.0, (Double) result.toJavaObject());
+                proxy.valueOf()""");
+        assertEquals(3.14, (Double) result.toJavaObject(), 0.001);
     }
 
     @Test

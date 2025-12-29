@@ -831,7 +831,7 @@ public final class GlobalObject {
         JSNativeFunction numberConstructor = new JSNativeFunction("Number", 1, NumberConstructor::call);
         numberConstructor.set("prototype", numberPrototype);
         numberConstructor.set("[[NumberConstructor]]", JSBoolean.TRUE); // Mark as Number constructor
-        
+
         // Number static methods
         numberConstructor.set("isNaN", new JSNativeFunction("isNaN", 1, NumberPrototype::isNaN));
         numberConstructor.set("isFinite", new JSNativeFunction("isFinite", 1, NumberPrototype::isFinite));
