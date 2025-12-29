@@ -68,7 +68,7 @@ public final class PropertyKey {
      * Create a property key from a JSValue.
      * Converts the value to an appropriate key.
      */
-    public static PropertyKey fromValue(JSValue value) {
+    public static PropertyKey fromValue(JSContext context, JSValue value) {
         if (value instanceof JSString s) {
             return fromString(s.value());
         }
@@ -83,7 +83,7 @@ public final class PropertyKey {
             }
         }
         // Convert to string for other types
-        JSString str = JSTypeConversions.toString(value);
+        JSString str = JSTypeConversions.toString(context, value);
         return fromString(str.value());
     }
 

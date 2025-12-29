@@ -100,6 +100,10 @@ public class SymbolPrototypeTest extends BaseTest {
         result = SymbolPrototype.toString(ctx, symbolObj, new JSValue[]{});
         assertEquals("Symbol(testDescription)", result.asString().map(JSString::value).orElseThrow());
 
+        // Normal case: via eval for well-known symbol
+        result = ctx.eval("Symbol.prototype.toString.call(Symbol.iterator)");
+        assertEquals("Symbol(Symbol.iterator)", result.asString().map(JSString::value).orElseThrow());
+
         // Edge case: called on non-symbol
         result = SymbolPrototype.toString(ctx, new JSString("not a symbol"), new JSValue[]{});
         assertTypeError(result);
@@ -111,6 +115,12 @@ public class SymbolPrototypeTest extends BaseTest {
         result = SymbolPrototype.toString(ctx, badSymbolObj, new JSValue[]{});
         assertTypeError(result);
         assertPendingException(ctx);
+
+        try {
+            ctx.eval("const a = '' + Symbol.iterator;");
+        } catch (Exception e) {
+            assertEquals("TypeError: Cannot convert a Symbol value to a string", e.getMessage());
+        }
     }
 
     @Test

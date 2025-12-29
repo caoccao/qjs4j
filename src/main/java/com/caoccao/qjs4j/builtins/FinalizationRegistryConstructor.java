@@ -33,32 +33,32 @@ public final class FinalizationRegistryConstructor {
      * FinalizationRegistry constructor function.
      * Cannot be called without 'new'.
      *
-     * @param ctx     The execution context
+     * @param context The execution context
      * @param thisArg The this value
      * @param args    Constructor arguments [cleanupCallback]
      * @return TypeError (FinalizationRegistry must be called with 'new')
      */
-    public static JSValue construct(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
         // This should be called via VM's handleCallConstructor
         // If called directly, it's an error
-        return ctx.throwError("TypeError", "FinalizationRegistry constructor must be called with 'new'");
+        return context.throwTypeError("FinalizationRegistry constructor must be called with 'new'");
     }
 
     /**
      * Create a FinalizationRegistry instance.
      * Called by VM when 'new FinalizationRegistry(cleanupCallback)' is executed.
      *
-     * @param ctx             The execution context
+     * @param context         The execution context
      * @param cleanupCallback The cleanup callback function
      * @return A new FinalizationRegistry instance or error
      */
-    public static JSValue createFinalizationRegistry(JSContext ctx, JSValue cleanupCallback) {
+    public static JSValue createFinalizationRegistry(JSContext context, JSValue cleanupCallback) {
         // Validate cleanupCallback is a function
         if (!(cleanupCallback instanceof JSFunction callback)) {
-            return ctx.throwError("TypeError", "FinalizationRegistry cleanup callback must be a function");
+            return context.throwTypeError("FinalizationRegistry cleanup callback must be a function");
         }
 
         // Create and return FinalizationRegistry
-        return new JSFinalizationRegistry(callback, ctx);
+        return new JSFinalizationRegistry(callback, context);
     }
 }

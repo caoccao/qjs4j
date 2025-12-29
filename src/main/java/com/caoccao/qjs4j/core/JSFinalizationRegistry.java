@@ -67,7 +67,7 @@ public final class JSFinalizationRegistry extends JSObject {
         // Add register() method
         this.set("register", new JSNativeFunction("register", 2, (context, thisArg, args) -> {
             if (args.length < 2) {
-                return context.throwError("TypeError", "FinalizationRegistry.register requires target and heldValue");
+                return context.throwTypeError("FinalizationRegistry.register requires target and heldValue");
             }
 
             JSValue target = args[0];
@@ -75,12 +75,12 @@ public final class JSFinalizationRegistry extends JSObject {
             JSValue unregisterToken = args.length > 2 ? args[2] : null;
 
             if (!(target instanceof JSObject targetObj)) {
-                return context.throwError("TypeError", "FinalizationRegistry target must be an object");
+                return context.throwTypeError("FinalizationRegistry target must be an object");
             }
 
             // Cannot register the same object as target and unregister token
             if (unregisterToken != null && target == unregisterToken) {
-                return context.throwError("TypeError", "Target and unregister token cannot be the same object");
+                return context.throwTypeError("Target and unregister token cannot be the same object");
             }
 
             register(targetObj, heldValue, unregisterToken);
@@ -90,7 +90,7 @@ public final class JSFinalizationRegistry extends JSObject {
         // Add unregister() method
         this.set("unregister", new JSNativeFunction("unregister", 1, (context, thisArg, args) -> {
             if (args.length == 0) {
-                return context.throwError("TypeError", "FinalizationRegistry.unregister requires unregisterToken");
+                return context.throwTypeError("FinalizationRegistry.unregister requires unregisterToken");
             }
 
             JSValue unregisterToken = args[0];

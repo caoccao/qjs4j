@@ -29,9 +29,9 @@ public final class WeakMapPrototype {
      * ES2020 23.3.3.2
      * Removes the element with the specified key. Returns true if an element existed and was removed.
      */
-    public static JSValue delete(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue delete(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakMap weakMap)) {
-            return ctx.throwError("TypeError", "WeakMap.prototype.delete called on non-WeakMap");
+            return context.throwTypeError("WeakMap.prototype.delete called on non-WeakMap");
         }
 
         if (args.length == 0) {
@@ -53,9 +53,9 @@ public final class WeakMapPrototype {
      * ES2020 23.3.3.3
      * Returns the value associated with the key, or undefined if none exists.
      */
-    public static JSValue get(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue get(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakMap weakMap)) {
-            return ctx.throwError("TypeError", "WeakMap.prototype.get called on non-WeakMap");
+            return context.throwTypeError("WeakMap.prototype.get called on non-WeakMap");
         }
 
         if (args.length == 0) {
@@ -77,9 +77,9 @@ public final class WeakMapPrototype {
      * ES2020 23.3.3.4
      * Returns a boolean indicating whether an element with the specified key exists.
      */
-    public static JSValue has(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakMap weakMap)) {
-            return ctx.throwError("TypeError", "WeakMap.prototype.has called on non-WeakMap");
+            return context.throwTypeError("WeakMap.prototype.has called on non-WeakMap");
         }
 
         if (args.length == 0) {
@@ -102,20 +102,20 @@ public final class WeakMapPrototype {
      * Sets the value for the key in the WeakMap object. Returns the WeakMap object.
      * Key must be an object.
      */
-    public static JSValue set(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue set(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakMap weakMap)) {
-            return ctx.throwError("TypeError", "WeakMap.prototype.set called on non-WeakMap");
+            return context.throwTypeError("WeakMap.prototype.set called on non-WeakMap");
         }
 
         if (args.length == 0) {
-            return ctx.throwError("TypeError", "WeakMap.prototype.set requires a key");
+            return context.throwTypeError("WeakMap.prototype.set requires a key");
         }
 
         JSValue key = args[0];
 
         // Key must be an object
         if (!(key instanceof JSObject keyObj)) {
-            return ctx.throwError("TypeError", "Invalid value used as weak map key");
+            return context.throwTypeError("Invalid value used as weak map key");
         }
 
         JSValue value = args.length > 1 ? args[1] : JSUndefined.INSTANCE;

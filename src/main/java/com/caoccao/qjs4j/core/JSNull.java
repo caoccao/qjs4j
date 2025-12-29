@@ -28,6 +28,11 @@ public record JSNull() implements JSValue {
     }
 
     @Override
+    public String toString() {
+        return "null";
+    }
+
+    @Override
     public JSValueType type() {
         return JSValueType.NULL;
     }

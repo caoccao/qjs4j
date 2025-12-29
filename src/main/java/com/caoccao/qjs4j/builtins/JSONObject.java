@@ -39,17 +39,17 @@ public final class JSONObject {
      * ES2020 24.5.1
      * Simplified implementation - basic JSON parsing
      */
-    public static JSValue parse(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue parse(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return ctx.throwError("SyntaxError", "JSON.parse requires at least 1 argument");
+            return context.throwSyntaxError("JSON.parse requires at least 1 argument");
         }
 
-        String text = JSTypeConversions.toString(args[0]).value();
+        String text = JSTypeConversions.toString(context, args[0]).value();
 
         try {
             return parseValue(text.strip(), 0).value;
         } catch (Exception e) {
-            return ctx.throwError("SyntaxError", "Invalid JSON: " + e.getMessage());
+            return context.throwSyntaxError("Invalid JSON: " + e.getMessage());
         }
     }
 

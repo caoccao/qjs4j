@@ -28,6 +28,11 @@ public record JSUndefined() implements JSValue {
     }
 
     @Override
+    public String toString() {
+        return "undefined";
+    }
+
+    @Override
     public JSValueType type() {
         return JSValueType.UNDEFINED;
     }

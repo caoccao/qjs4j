@@ -30,27 +30,21 @@ public final class SuperHelper {
      * Call the super constructor.
      * Must be called in a derived class constructor before accessing 'this'.
      *
-     * @param ctx          The execution context
+     * @param context      The execution context
      * @param derivedClass The derived class
      * @param thisArg      The instance being constructed
      * @param args         Arguments to pass to super constructor
      * @return Undefined (super() doesn't return a value)
      */
-    public static JSValue callSuperConstructor(JSContext ctx, JSClass derivedClass, JSObject thisArg, JSValue[] args) {
+    public static JSValue callSuperConstructor(JSContext context, JSClass derivedClass, JSObject thisArg, JSValue[] args) {
         JSClass superClass = derivedClass.getSuperClass();
         if (superClass == null) {
-            return ctx.throwError("ReferenceError", "super() called without a parent class");
+            return context.throwReferenceError("super() called without a parent class");
         }
 
         // Call super constructor with the current instance as 'this'
         JSFunction superConstructor = superClass.getConstructor();
-        superConstructor.call(ctx, thisArg, args);
-
-        // Initialize parent class instance fields
-        for (String fieldName : superClass.getInstanceMethods().keySet()) {
-            // Fields are already initialized via the prototype chain
-            // This is handled by JSClass.construct()
-        }
+        superConstructor.call(context, thisArg, args);
 
         return JSUndefined.INSTANCE;
     }
@@ -77,7 +71,7 @@ public final class SuperHelper {
             if (args.length == 0) {
                 return JSUndefined.INSTANCE;
             }
-            String methodName = JSTypeConversions.toString(args[0]).value();
+            String methodName = JSTypeConversions.toString(context, args[0]).value();
             JSValue method = getSuperMethod(derivedClass, methodName);
 
             // If method is a function, bind it to the current instance
@@ -137,14 +131,14 @@ public final class SuperHelper {
     /**
      * Validate that super constructor has been called before accessing 'this'.
      *
-     * @param ctx                  The execution context
+     * @param context              The execution context
      * @param instance             The instance being constructed
      * @param inDerivedConstructor Whether we're in a derived class constructor
      * @return The instance if valid, or throws an error
      */
-    public static JSValue validateThisAccess(JSContext ctx, JSObject instance, boolean inDerivedConstructor) {
+    public static JSValue validateThisAccess(JSContext context, JSObject instance, boolean inDerivedConstructor) {
         if (inDerivedConstructor && !isSuperConstructorCalled(instance)) {
-            return ctx.throwError("ReferenceError", "Must call super constructor in derived class before accessing 'this'");
+            return context.throwReferenceError("Must call super constructor in derived class before accessing 'this'");
         }
         return instance;
     }

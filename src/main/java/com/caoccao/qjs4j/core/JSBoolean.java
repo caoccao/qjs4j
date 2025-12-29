@@ -33,6 +33,11 @@ public record JSBoolean(boolean value) implements JSValue {
     }
 
     @Override
+    public String toString() {
+        return Boolean.toString(value);
+    }
+
+    @Override
     public JSValueType type() {
         return JSValueType.BOOLEAN;
     }

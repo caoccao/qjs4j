@@ -82,6 +82,15 @@ public sealed interface JSValue extends JSStackValue permits
     }
 
     /**
+     * Attempt to cast this value to JSBooleanObject.
+     *
+     * @return Optional containing the JSBooleanObject if this value is a Boolean object, empty otherwise
+     */
+    default Optional<JSBooleanObject> asBooleanObject() {
+        return this instanceof JSBooleanObject v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
      * Attempt to cast this value to JSBoundFunction.
      *
      * @return Optional containing the JSBoundFunction if this value is a bound function, empty otherwise
@@ -439,6 +448,15 @@ public sealed interface JSValue extends JSStackValue permits
      */
     default boolean isBooleanFalse() {
         return this == JSBoolean.FALSE;
+    }
+
+    /**
+     * Check if this value is a Boolean object.
+     *
+     * @return true if this value is a Boolean object, false otherwise
+     */
+    default boolean isBooleanObject() {
+        return this instanceof JSBooleanObject;
     }
 
     /**

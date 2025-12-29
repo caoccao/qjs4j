@@ -30,9 +30,9 @@ public final class ReflectObject {
      * ES2020 26.1.1
      * Calls a target function with specified this value and arguments.
      */
-    public static JSValue apply(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue apply(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSFunction target)) {
-            return ctx.throwError("TypeError", "Reflect.apply called on non-function");
+            return context.throwTypeError("Reflect.apply called on non-function");
         }
 
         JSValue funcThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
@@ -46,7 +46,7 @@ public final class ReflectObject {
             }
         }
 
-        return target.call(ctx, funcThisArg, funcArgs);
+        return target.call(context, funcThisArg, funcArgs);
     }
 
     /**
@@ -55,9 +55,9 @@ public final class ReflectObject {
      * Acts like the 'new' operator, but as a function.
      * Simplified implementation.
      */
-    public static JSValue construct(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSFunction target)) {
-            return ctx.throwError("TypeError", "Reflect.construct called on non-function");
+            return context.throwTypeError("Reflect.construct called on non-function");
         }
 
         JSValue[] constructorArgs = new JSValue[0];
@@ -71,7 +71,7 @@ public final class ReflectObject {
 
         // Simplified: Create a new object and call the constructor with it
         JSObject newObj = new JSObject();
-        target.call(ctx, newObj, constructorArgs);
+        target.call(context, newObj, constructorArgs);
         return newObj;
     }
 
@@ -80,16 +80,16 @@ public final class ReflectObject {
      * ES2020 26.1.4
      * Deletes a property from an object (like the 'delete' operator).
      */
-    public static JSValue deleteProperty(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue deleteProperty(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return ctx.throwError("TypeError", "Reflect.deleteProperty called on non-object");
+            return context.throwTypeError("Reflect.deleteProperty called on non-object");
         }
 
         if (args.length < 2) {
             return JSBoolean.TRUE;
         }
 
-        PropertyKey key = PropertyKey.fromValue(args[1]);
+        PropertyKey key = PropertyKey.fromValue(context, args[1]);
         return JSBoolean.valueOf(target.delete(key));
     }
 
@@ -98,16 +98,16 @@ public final class ReflectObject {
      * ES2020 26.1.6
      * Gets the value of a property on an object.
      */
-    public static JSValue get(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue get(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return ctx.throwError("TypeError", "Reflect.get called on non-object");
+            return context.throwTypeError("Reflect.get called on non-object");
         }
 
         if (args.length < 2) {
             return JSUndefined.INSTANCE;
         }
 
-        PropertyKey key = PropertyKey.fromValue(args[1]);
+        PropertyKey key = PropertyKey.fromValue(context, args[1]);
         return target.get(key);
     }
 
@@ -116,9 +116,9 @@ public final class ReflectObject {
      * ES2020 26.1.8
      * Gets the prototype of an object.
      */
-    public static JSValue getPrototypeOf(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getPrototypeOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return ctx.throwError("TypeError", "Reflect.getPrototypeOf called on non-object");
+            return context.throwTypeError("Reflect.getPrototypeOf called on non-object");
         }
 
         JSObject prototype = target.getPrototype();
@@ -130,16 +130,16 @@ public final class ReflectObject {
      * ES2020 26.1.9
      * Checks if an object has a property (like the 'in' operator).
      */
-    public static JSValue has(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return ctx.throwError("TypeError", "Reflect.has called on non-object");
+            return context.throwTypeError("Reflect.has called on non-object");
         }
 
         if (args.length < 2) {
             return JSBoolean.FALSE;
         }
 
-        PropertyKey key = PropertyKey.fromValue(args[1]);
+        PropertyKey key = PropertyKey.fromValue(context, args[1]);
         return JSBoolean.valueOf(target.has(key));
     }
 
@@ -148,9 +148,9 @@ public final class ReflectObject {
      * ES2020 26.1.10
      * Checks if an object is extensible.
      */
-    public static JSValue isExtensible(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue isExtensible(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return ctx.throwError("TypeError", "Reflect.isExtensible called on non-object");
+            return context.throwTypeError("Reflect.isExtensible called on non-object");
         }
 
         return JSBoolean.valueOf(target.isExtensible());
@@ -161,9 +161,9 @@ public final class ReflectObject {
      * ES2020 26.1.11
      * Returns an array of the target object's own property keys.
      */
-    public static JSValue ownKeys(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue ownKeys(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return ctx.throwError("TypeError", "Reflect.ownKeys called on non-object");
+            return context.throwTypeError("Reflect.ownKeys called on non-object");
         }
 
         JSArray result = new JSArray();
@@ -182,9 +182,9 @@ public final class ReflectObject {
      * ES2020 26.1.12
      * Prevents new properties from being added to an object.
      */
-    public static JSValue preventExtensions(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue preventExtensions(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return ctx.throwError("TypeError", "Reflect.preventExtensions called on non-object");
+            return context.throwTypeError("Reflect.preventExtensions called on non-object");
         }
 
         target.preventExtensions();
@@ -196,16 +196,16 @@ public final class ReflectObject {
      * ES2020 26.1.13
      * Sets the value of a property on an object.
      */
-    public static JSValue set(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue set(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return ctx.throwError("TypeError", "Reflect.set called on non-object");
+            return context.throwTypeError("Reflect.set called on non-object");
         }
 
         if (args.length < 2) {
             return JSBoolean.FALSE;
         }
 
-        PropertyKey key = PropertyKey.fromValue(args[1]);
+        PropertyKey key = PropertyKey.fromValue(context, args[1]);
         JSValue value = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
 
         target.set(key, value);
@@ -217,9 +217,9 @@ public final class ReflectObject {
      * ES2020 26.1.14
      * Sets the prototype of an object.
      */
-    public static JSValue setPrototypeOf(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue setPrototypeOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return ctx.throwError("TypeError", "Reflect.setPrototypeOf called on non-object");
+            return context.throwTypeError("Reflect.setPrototypeOf called on non-object");
         }
 
         if (args.length < 2) {
@@ -234,7 +234,7 @@ public final class ReflectObject {
             target.setPrototype(prototype);
             return JSBoolean.TRUE;
         } else {
-            return ctx.throwError("TypeError", "Object prototype may only be an Object or null");
+            return context.throwTypeError("Object prototype may only be an Object or null");
         }
     }
 }

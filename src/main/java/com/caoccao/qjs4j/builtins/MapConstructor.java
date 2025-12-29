@@ -30,18 +30,18 @@ public final class MapConstructor {
      * Groups array elements by a key returned from the callback function,
      * returning a Map where keys are callback results and values are arrays.
      */
-    public static JSValue groupBy(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue groupBy(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2) {
-            return ctx.throwError("TypeError", "Map.groupBy requires 2 arguments");
+            return context.throwTypeError("Map.groupBy requires 2 arguments");
         }
 
         JSValue items = args[0];
         if (!(items instanceof JSArray arr)) {
-            return ctx.throwError("TypeError", "First argument must be an array");
+            return context.throwTypeError("First argument must be an array");
         }
 
         if (!(args[1] instanceof JSFunction callback)) {
-            return ctx.throwError("TypeError", "Second argument must be a function");
+            return context.throwTypeError("Second argument must be a function");
         }
 
         JSMap result = new JSMap();
@@ -50,7 +50,7 @@ public final class MapConstructor {
         for (long i = 0; i < length; i++) {
             JSValue element = arr.get(i);
             JSValue[] callbackArgs = {element, new JSNumber(i)};
-            JSValue keyValue = callback.call(ctx, JSUndefined.INSTANCE, callbackArgs);
+            JSValue keyValue = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
 
             // Get or create array for this key
             JSValue existingGroup = result.mapGet(keyValue);

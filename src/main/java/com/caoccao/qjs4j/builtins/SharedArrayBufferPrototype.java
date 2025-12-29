@@ -32,9 +32,9 @@ public final class SharedArrayBufferPrototype {
      * ES2017 24.2.4.1
      * Returns the byte length of the SharedArrayBuffer.
      */
-    public static JSValue getByteLength(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getByteLength(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSharedArrayBuffer buffer)) {
-            return ctx.throwError("TypeError", "SharedArrayBuffer.prototype.byteLength called on non-SharedArrayBuffer");
+            return context.throwTypeError("SharedArrayBuffer.prototype.byteLength called on non-SharedArrayBuffer");
         }
 
         return new JSNumber(buffer.getByteLength());
@@ -45,9 +45,9 @@ public final class SharedArrayBufferPrototype {
      * ES2017 24.2.4.3
      * Returns a new SharedArrayBuffer with a copy of bytes from begin to end.
      */
-    public static JSValue slice(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue slice(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSharedArrayBuffer buffer)) {
-            return ctx.throwError("TypeError", "SharedArrayBuffer.prototype.slice called on non-SharedArrayBuffer");
+            return context.throwTypeError("SharedArrayBuffer.prototype.slice called on non-SharedArrayBuffer");
         }
 
         int byteLength = buffer.getByteLength();

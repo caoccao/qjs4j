@@ -28,19 +28,19 @@ public final class JSIteratorHelper {
      *
      * @param iterable The iterable to loop over
      * @param callback Function to call for each value
-     * @param ctx      The execution context
+     * @param context  The execution context
      */
-    public static void forOf(JSValue iterable, IterationCallback callback, JSContext ctx) {
+    public static void forOf(JSValue iterable, IterationCallback callback, JSContext context) {
         // Get the iterator
-        JSValue iterator = getIterator(iterable, ctx);
+        JSValue iterator = getIterator(iterable, context);
         if (iterator == null) {
-            ctx.throwError("TypeError", "Object is not iterable");
+            context.throwTypeError("Object is not iterable");
             return;
         }
 
         // Iterate until done
         while (true) {
-            JSObject result = iteratorNext(iterator, ctx);
+            JSObject result = iteratorNext(iterator, context);
             if (result == null) {
                 break;
             }

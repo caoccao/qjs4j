@@ -127,18 +127,18 @@ public final class JSClass extends JSFunction {
      * Call the class as a function (throws error - classes must be called with 'new').
      */
     @Override
-    public JSValue call(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        return ctx.throwError("TypeError", "Class constructor " + name + " cannot be invoked without 'new'");
+    public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwTypeError("Class constructor " + name + " cannot be invoked without 'new'");
     }
 
     /**
      * Construct a new instance of the class.
      *
-     * @param ctx  The execution context
-     * @param args Constructor arguments
+     * @param context The execution context
+     * @param args    Constructor arguments
      * @return The new instance
      */
-    public JSObject construct(JSContext ctx, JSValue[] args) {
+    public JSObject construct(JSContext context, JSValue[] args) {
         // Create new instance with this class's prototype
         JSObject instance = new JSObject();
         instance.setPrototype(prototype);
@@ -157,7 +157,7 @@ public final class JSClass extends JSFunction {
         }
 
         // Call the constructor with the instance as 'this'
-        JSValue constructorResult = constructor.call(ctx, instance, args);
+        JSValue constructorResult = constructor.call(context, instance, args);
 
         // If constructor explicitly returns an object, use that
         // Otherwise, return the instance

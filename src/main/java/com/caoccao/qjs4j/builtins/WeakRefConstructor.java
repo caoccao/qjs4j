@@ -30,34 +30,34 @@ public final class WeakRefConstructor {
      * WeakRef constructor function.
      * Cannot be called without 'new'.
      *
-     * @param ctx     The execution context
+     * @param context The execution context
      * @param thisArg The this value
      * @param args    Constructor arguments [target]
      * @return TypeError (WeakRef must be called with 'new')
      */
-    public static JSValue construct(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
         // This should be called via VM's handleCallConstructor
         // If called directly, it's an error
-        return ctx.throwError("TypeError", "WeakRef constructor must be called with 'new'");
+        return context.throwTypeError("WeakRef constructor must be called with 'new'");
     }
 
     /**
      * Create a WeakRef instance.
      * Called by VM when 'new WeakRef(target)' is executed.
      *
-     * @param ctx    The execution context
-     * @param target The target object
+     * @param context The execution context
+     * @param target  The target object
      * @return A new WeakRef instance or error
      */
-    public static JSValue createWeakRef(JSContext ctx, JSValue target) {
+    public static JSValue createWeakRef(JSContext context, JSValue target) {
         // Validate target is an object
         if (!(target instanceof JSObject targetObj)) {
-            return ctx.throwError("TypeError", "WeakRef target must be an object");
+            return context.throwTypeError("WeakRef target must be an object");
         }
 
         // Cannot create WeakRef to null
         if (target instanceof JSNull) {
-            return ctx.throwError("TypeError", "WeakRef target cannot be null");
+            return context.throwTypeError("WeakRef target cannot be null");
         }
 
         // Create and return WeakRef

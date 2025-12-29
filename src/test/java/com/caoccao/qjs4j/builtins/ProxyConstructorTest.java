@@ -1190,6 +1190,65 @@ public class ProxyConstructorTest extends BaseTest {
     }
 
     @Test
+    public void testProxyWithBooleanObjectAsTarget() {
+        // Test that Boolean object (new Boolean(true)) can be a proxy target
+        // Boolean objects are needed as proxy targets since primitive booleans cannot be proxied
+        JSValue result = ctx.eval("""
+                var target = new Boolean(true);
+                var handler = {
+                  get: function(target, prop) {
+                    if (prop === 'test') {
+                      return 'intercepted';
+                    }
+                    return target[prop];
+                  }
+                };
+                var proxy = new Proxy(target, handler);
+                proxy.test""");
+        assertEquals("intercepted", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithBooleanObjectToString() {
+        // Test that proxied Boolean object still works with toString
+        JSValue result = ctx.eval("""
+                var target = new Boolean(false);
+                var handler = {};
+                var proxy = new Proxy(target, handler);
+                proxy.toString()""");
+        assertEquals("false", result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithBooleanObjectTrapGet() {
+        // Test that get trap intercepts valueOf on Boolean object
+        JSValue result = ctx.eval("""
+                var target = new Boolean(true);
+                var handler = {
+                  get: function(target, prop) {
+                    if (prop === 'valueOf') {
+                      return function() { return false; };
+                    }
+                    return target[prop];
+                  }
+                };
+                var proxy = new Proxy(target, handler);
+                proxy.valueOf()""");
+        assertFalse((Boolean) result.toJavaObject());
+    }
+
+    @Test
+    public void testProxyWithBooleanObjectValueOf() {
+        // Test that proxied Boolean object still works with valueOf
+        JSValue result = ctx.eval("""
+                var target = new Boolean(true);
+                var handler = {};
+                var proxy = new Proxy(target, handler);
+                proxy.valueOf()""");
+        assertTrue((Boolean) result.toJavaObject());
+    }
+
+    @Test
     public void testProxyWithNullPrototype() {
         // Test proxy with null prototype target
         JSValue result = ctx.eval("""

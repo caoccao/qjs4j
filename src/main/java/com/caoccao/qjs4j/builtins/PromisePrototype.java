@@ -40,9 +40,9 @@ public final class PromisePrototype {
      * ES2020 25.6.5.2
      * Returns a new Promise, and attaches a callback that is called when the promise is settled.
      */
-    public static JSValue finallyMethod(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue finallyMethod(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSPromise promise)) {
-            return ctx.throwError("TypeError", "Promise.prototype.finally called on non-Promise");
+            return context.throwTypeError("Promise.prototype.finally called on non-Promise");
         }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction onFinally)) {
@@ -52,17 +52,17 @@ public final class PromisePrototype {
 
         // Create wrapper functions that call onFinally and then pass through the value/reason
         JSNativeFunction onFulfilledWrapper = new JSNativeFunction("onFulfilled", 1,
-                (context, thisValue, funcArgs) -> {
+                (childContext, thisValue, funcArgs) -> {
                     // Call the finally handler
-                    onFinally.call(context, JSUndefined.INSTANCE, new JSValue[0]);
+                    onFinally.call(childContext, JSUndefined.INSTANCE, new JSValue[0]);
                     // Pass through the fulfillment value
                     return funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
                 });
 
         JSNativeFunction onRejectedWrapper = new JSNativeFunction("onRejected", 1,
-                (context, thisValue, funcArgs) -> {
+                (childContext, thisValue, funcArgs) -> {
                     // Call the finally handler
-                    onFinally.call(context, JSUndefined.INSTANCE, new JSValue[0]);
+                    onFinally.call(childContext, JSUndefined.INSTANCE, new JSValue[0]);
                     // Create a new rejected promise to pass through the rejection
                     JSPromise rejectedPromise = new JSPromise();
                     rejectedPromise.reject(funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE);
@@ -71,7 +71,7 @@ public final class PromisePrototype {
 
         // Call then with both wrappers
         JSValue[] thenArgs = new JSValue[]{onFulfilledWrapper, onRejectedWrapper};
-        return then(ctx, thisArg, thenArgs);
+        return then(context, thisArg, thenArgs);
     }
 
     /**
@@ -79,9 +79,9 @@ public final class PromisePrototype {
      * ES2020 25.6.5.4
      * Returns a new Promise, and attaches callbacks for fulfillment and/or rejection.
      */
-    public static JSValue then(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue then(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSPromise promise)) {
-            return ctx.throwError("TypeError", "Promise.prototype.then called on non-Promise");
+            return context.throwTypeError("Promise.prototype.then called on non-Promise");
         }
 
         JSFunction onFulfilled = null;
@@ -101,18 +101,18 @@ public final class PromisePrototype {
         // Create reaction records
         JSPromise.ReactionRecord fulfillReaction = null;
         if (onFulfilled != null) {
-            fulfillReaction = new JSPromise.ReactionRecord(onFulfilled, chainedPromise, ctx);
+            fulfillReaction = new JSPromise.ReactionRecord(onFulfilled, chainedPromise, context);
         } else {
             // If no onFulfilled, pass value through
-            fulfillReaction = new JSPromise.ReactionRecord(null, chainedPromise, ctx);
+            fulfillReaction = new JSPromise.ReactionRecord(null, chainedPromise, context);
         }
 
         JSPromise.ReactionRecord rejectReaction = null;
         if (onRejected != null) {
-            rejectReaction = new JSPromise.ReactionRecord(onRejected, chainedPromise, ctx);
+            rejectReaction = new JSPromise.ReactionRecord(onRejected, chainedPromise, context);
         } else {
             // If no onRejected, pass rejection through
-            rejectReaction = new JSPromise.ReactionRecord(null, chainedPromise, ctx);
+            rejectReaction = new JSPromise.ReactionRecord(null, chainedPromise, context);
         }
 
         // Add reactions to the promise

@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.core;
+package com.caoccao.qjs4j.exceptions;
+
+import com.caoccao.qjs4j.core.JSObject;
+import com.caoccao.qjs4j.core.JSString;
+import com.caoccao.qjs4j.core.JSValue;
 
 /**
  * Exception thrown when JavaScript code throws an error.
@@ -23,9 +27,20 @@ package com.caoccao.qjs4j.core;
 public class JSException extends RuntimeException {
     private final JSValue errorValue;
 
+    public JSException(String name, String message) {
+        this(name, message, null);
+    }
+
+    public JSException(String name, String message, Throwable cause) {
+        super(name + ": " + message, cause);
+        JSObject errorObject = new JSObject();
+        errorObject.set("name", new JSString(name));
+        errorObject.set("message", new JSString(message));
+        errorValue = errorObject;
+    }
+
     public JSException(JSValue errorValue) {
-        super(formatErrorMessage(errorValue));
-        this.errorValue = errorValue;
+        this(errorValue, null);
     }
 
     public JSException(JSValue errorValue, Throwable cause) {

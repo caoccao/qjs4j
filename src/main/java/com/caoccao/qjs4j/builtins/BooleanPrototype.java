@@ -28,7 +28,7 @@ public final class BooleanPrototype {
      * Boolean.prototype.toString()
      * ES2020 19.3.3.2
      */
-    public static JSValue toString(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue toString(JSContext context, JSValue thisArg, JSValue[] args) {
         boolean value;
 
         if (thisArg instanceof JSBoolean bool) {
@@ -39,10 +39,10 @@ public final class BooleanPrototype {
             if (primitiveValue instanceof JSBoolean bool) {
                 value = bool.value();
             } else {
-                return ctx.throwError("TypeError", "Boolean.prototype.toString called on non-boolean");
+                return context.throwTypeError("Boolean.prototype.toString called on non-boolean");
             }
         } else {
-            return ctx.throwError("TypeError", "Boolean.prototype.toString called on non-boolean");
+            return context.throwTypeError("Boolean.prototype.toString called on non-boolean");
         }
 
         return new JSString(value ? "true" : "false");
@@ -52,7 +52,7 @@ public final class BooleanPrototype {
      * Boolean.prototype.valueOf()
      * ES2020 19.3.3.3
      */
-    public static JSValue valueOf(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSBoolean bool) {
             return bool;
         }
@@ -65,6 +65,6 @@ public final class BooleanPrototype {
             }
         }
 
-        return ctx.throwError("TypeError", "Boolean.prototype.valueOf called on non-boolean");
+        return context.throwTypeError("Boolean.prototype.valueOf called on non-boolean");
     }
 }

@@ -31,9 +31,9 @@ public final class MapPrototype {
      * ES2020 23.1.3.1
      * Removes all elements from the Map.
      */
-    public static JSValue clear(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue clear(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "Map.prototype.clear called on non-Map");
+            return context.throwTypeError("Map.prototype.clear called on non-Map");
         }
 
         map.mapClear();
@@ -45,9 +45,9 @@ public final class MapPrototype {
      * ES2020 23.1.3.3
      * Removes the element with the specified key. Returns true if an element existed and was removed.
      */
-    public static JSValue delete(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue delete(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "Map.prototype.delete called on non-Map");
+            return context.throwTypeError("Map.prototype.delete called on non-Map");
         }
 
         JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -59,9 +59,9 @@ public final class MapPrototype {
      * ES2020 23.1.3.4
      * Returns an iterator over [key, value] pairs.
      */
-    public static JSValue entries(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "Map.prototype.entries called on non-Map");
+            return context.throwTypeError("Map.prototype.entries called on non-Map");
         }
 
         return JSIterator.mapEntriesIterator(map);
@@ -72,13 +72,13 @@ public final class MapPrototype {
      * ES2020 23.1.3.4
      * Executes a provided function once per each key/value pair in the Map, in insertion order.
      */
-    public static JSValue forEach(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "Map.prototype.forEach called on non-Map");
+            return context.throwTypeError("Map.prototype.forEach called on non-Map");
         }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
-            return ctx.throwError("TypeError", "Map.prototype.forEach requires a function");
+            return context.throwTypeError("Map.prototype.forEach requires a function");
         }
 
         JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
@@ -90,7 +90,7 @@ public final class MapPrototype {
 
             // Call callback with (value, key, map)
             JSValue[] callbackArgs = new JSValue[]{value, key, map};
-            callback.call(ctx, callbackThisArg, callbackArgs);
+            callback.call(context, callbackThisArg, callbackArgs);
         }
 
         return JSUndefined.INSTANCE;
@@ -101,9 +101,9 @@ public final class MapPrototype {
      * ES2020 23.1.3.5
      * Returns the value associated with the key, or undefined if none exists.
      */
-    public static JSValue get(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue get(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "Map.prototype.get called on non-Map");
+            return context.throwTypeError("Map.prototype.get called on non-Map");
         }
 
         JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -115,9 +115,9 @@ public final class MapPrototype {
      * ES2020 23.1.3.10
      * Returns the number of entries in the Map.
      */
-    public static JSValue getSize(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getSize(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "get Map.prototype.size called on non-Map");
+            return context.throwTypeError("get Map.prototype.size called on non-Map");
         }
 
         return new JSNumber(map.size());
@@ -128,9 +128,9 @@ public final class MapPrototype {
      * ES2020 23.1.3.6
      * Returns a boolean indicating whether an element with the specified key exists.
      */
-    public static JSValue has(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "Map.prototype.has called on non-Map");
+            return context.throwTypeError("Map.prototype.has called on non-Map");
         }
 
         JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -142,9 +142,9 @@ public final class MapPrototype {
      * ES2020 23.1.3.7
      * Returns an iterator over keys.
      */
-    public static JSValue keys(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue keys(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "Map.prototype.keys called on non-Map");
+            return context.throwTypeError("Map.prototype.keys called on non-Map");
         }
 
         return JSIterator.mapKeysIterator(map);
@@ -155,9 +155,9 @@ public final class MapPrototype {
      * ES2020 23.1.3.9
      * Sets the value for the key in the Map object. Returns the Map object.
      */
-    public static JSValue set(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue set(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "Map.prototype.set called on non-Map");
+            return context.throwTypeError("Map.prototype.set called on non-Map");
         }
 
         JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -172,9 +172,9 @@ public final class MapPrototype {
      * ES2020 23.1.3.11
      * Returns an iterator over values.
      */
-    public static JSValue values(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue values(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "Map.prototype.values called on non-Map");
+            return context.throwTypeError("Map.prototype.values called on non-Map");
         }
 
         return JSIterator.mapValuesIterator(map);

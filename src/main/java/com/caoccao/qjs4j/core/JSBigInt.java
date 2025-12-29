@@ -84,6 +84,11 @@ public record JSBigInt(BigInteger value) implements JSValue {
     }
 
     @Override
+    public String toString() {
+        return value.toString();
+    }
+
+    @Override
     public JSValueType type() {
         return JSValueType.BIGINT;
     }

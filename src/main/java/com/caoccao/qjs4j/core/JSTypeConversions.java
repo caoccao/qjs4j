@@ -16,8 +16,6 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.util.DtoaConverter;
-
 import java.math.BigInteger;
 
 /**
@@ -40,7 +38,7 @@ public final class JSTypeConversions {
      * Abstract Equality Comparison (==).
      * ES2020 7.2.14
      */
-    public static boolean abstractEquals(JSValue x, JSValue y) {
+    public static boolean abstractEquals(JSContext context, JSValue x, JSValue y) {
         // Same type comparison
         if (x.getClass() == y.getClass()) {
             return strictEquals(x, y);
@@ -53,18 +51,18 @@ public final class JSTypeConversions {
 
         // Number comparison
         if (x.isNumber() && y.isString()) {
-            return abstractEquals(x, toNumber(y));
+            return abstractEquals(context, x, toNumber(context, y));
         }
         if (x.isString() && y.isNumber()) {
-            return abstractEquals(toNumber(x), y);
+            return abstractEquals(context, toNumber(context, x), y);
         }
 
         // Boolean to number
         if (x.isBoolean()) {
-            return abstractEquals(toNumber(x), y);
+            return abstractEquals(context, toNumber(context, x), y);
         }
         if (y.isBoolean()) {
-            return abstractEquals(x, toNumber(y));
+            return abstractEquals(context, x, toNumber(context, y));
         }
 
         return false;
@@ -87,10 +85,10 @@ public final class JSTypeConversions {
      * Less Than Comparison (x < y).
      * ES2020 7.2.13
      */
-    public static boolean lessThan(JSValue x, JSValue y) {
+    public static boolean lessThan(JSContext context, JSValue x, JSValue y) {
         // Convert to primitives
-        JSValue px = toPrimitive(x, PreferredType.NUMBER);
-        JSValue py = toPrimitive(y, PreferredType.NUMBER);
+        JSValue px = toPrimitive(context, x, PreferredType.NUMBER);
+        JSValue py = toPrimitive(context, y, PreferredType.NUMBER);
 
         // If both are strings, compare lexicographically
         if (px instanceof JSString xStr && py instanceof JSString yStr) {
@@ -98,8 +96,8 @@ public final class JSTypeConversions {
         }
 
         // Otherwise, convert to numbers and compare
-        double nx = toNumber(px).value();
-        double ny = toNumber(py).value();
+        double nx = toNumber(context, px).value();
+        double ny = toNumber(context, py).value();
 
         // If either is NaN, return false
         if (Double.isNaN(nx) || Double.isNaN(ny)) {
@@ -224,12 +222,12 @@ public final class JSTypeConversions {
      * ES2020 7.1.23
      * Used for typed array indices
      */
-    public static long toIndex(JSValue value) {
+    public static long toIndex(JSContext context, JSValue value) {
         if (value instanceof JSUndefined) {
             return 0;
         }
 
-        double integerIndex = toInteger(value);
+        double integerIndex = toInteger(context, value);
         if (integerIndex < 0) {
             throw new IllegalArgumentException("Index must be non-negative");
         }
@@ -246,8 +244,8 @@ public final class JSTypeConversions {
      * ToInt32(argument)
      * ES2020 7.1.6
      */
-    public static int toInt32(JSValue value) {
-        JSNumber number = toNumber(value);
+    public static int toInt32(JSContext context, JSValue value) {
+        JSNumber number = toNumber(context, value);
         double d = number.value();
 
         // Handle special cases
@@ -267,8 +265,8 @@ public final class JSTypeConversions {
      * ToInt8(argument)
      * ES2020 7.1.9
      */
-    public static byte toInt8(JSValue value) {
-        JSNumber number = toNumber(value);
+    public static byte toInt8(JSContext context, JSValue value) {
+        JSNumber number = toNumber(context, value);
         double d = number.value();
 
         // Handle special cases
@@ -288,8 +286,8 @@ public final class JSTypeConversions {
      * ToInteger(argument)
      * ES2020 7.1.20 (ToIntegerOrInfinity)
      */
-    public static double toInteger(JSValue value) {
-        JSNumber number = toNumber(value);
+    public static double toInteger(JSContext context, JSValue value) {
+        JSNumber number = toNumber(context, value);
         double d = number.value();
 
         // Handle special cases
@@ -309,8 +307,8 @@ public final class JSTypeConversions {
      * ES2020 7.1.22
      * Converts to integer suitable for array length (0 to 2^53-1)
      */
-    public static long toLength(JSValue value) {
-        double len = toInteger(value);
+    public static long toLength(JSContext context, JSValue value) {
+        double len = toInteger(context, value);
 
         if (len <= 0) {
             return 0;
@@ -324,7 +322,7 @@ public final class JSTypeConversions {
      * ToNumber(argument)
      * ES2020 7.1.4
      */
-    public static JSNumber toNumber(JSValue value) {
+    public static JSNumber toNumber(JSContext context, JSValue value) {
         if (value instanceof JSUndefined) {
             return new JSNumber(Double.NaN);
         }
@@ -354,18 +352,18 @@ public final class JSTypeConversions {
             return new JSNumber(Double.NaN);
         }
         // For objects, call ToPrimitive with NUMBER hint
-        JSValue primitive = toPrimitive(value, PreferredType.NUMBER);
+        JSValue primitive = toPrimitive(context, value, PreferredType.NUMBER);
         if (primitive == value) {
             return new JSNumber(Double.NaN);
         }
-        return toNumber(primitive);
+        return toNumber(context, primitive);
     }
 
     /**
      * ToPrimitive(input, preferredType)
      * ES2020 7.1.1
      */
-    public static JSValue toPrimitive(JSValue input, PreferredType hint) {
+    public static JSValue toPrimitive(JSContext context, JSValue input, PreferredType hint) {
         // If input is already primitive, return it
         if (isPrimitive(input)) {
             return input;
@@ -376,9 +374,9 @@ public final class JSTypeConversions {
             // In a full implementation, this would call [[DefaultValue]]
             // For now, return a placeholder
             if (hint == PreferredType.STRING) {
-                return toString(input);
+                return toString(context, input);
             } else {
-                return toNumber(input);
+                return toNumber(context, input);
             }
         }
 
@@ -389,44 +387,34 @@ public final class JSTypeConversions {
      * ToString(argument)
      * ES2020 7.1.17
      */
-    public static JSString toString(JSValue value) {
-        if (value instanceof JSUndefined) {
-            return new JSString("undefined");
-        }
-        if (value instanceof JSNull) {
+    public static JSString toString(JSContext context, JSValue value) {
+        if (value == null) {
             return new JSString("null");
-        }
-        if (value instanceof JSBoolean b) {
-            return new JSString(b.value() ? "true" : "false");
-        }
-        if (value instanceof JSNumber n) {
-            return new JSString(DtoaConverter.convert(n.value()));
-        }
-        if (value instanceof JSString s) {
+        } else if (value.isNullOrUndefined()
+                || value.isBigInt()
+                || value.isBoolean()
+                || value.isBooleanObject()
+                || value.isNumber()) {
+            return new JSString(value.toString());
+        } else if (value instanceof JSString s) {
             return s;
-        }
-        if (value instanceof JSBigInt b) {
-            return new JSString(b.value().toString());
-        }
-        if (value instanceof JSSymbol s) {
-            // Symbols cannot be converted to strings - would throw TypeError
-            // For now, return the description
-            return new JSString("Symbol(" + (s.getDescription() != null ? s.getDescription() : "") + ")");
+        } else if (value instanceof JSSymbol s) {
+            return new JSString(s.toString(context));
         }
         // For objects, call ToPrimitive with STRING hint
-        JSValue primitive = toPrimitive(value, PreferredType.STRING);
+        JSValue primitive = toPrimitive(context, value, PreferredType.STRING);
         if (primitive == value) {
             return new JSString("[object Object]");
         }
-        return toString(primitive);
+        return toString(context, primitive);
     }
 
     /**
      * ToUint16(argument)
      * ES2020 7.1.8
      */
-    public static int toUint16(JSValue value) {
-        JSNumber number = toNumber(value);
+    public static int toUint16(JSContext context, JSValue value) {
+        JSNumber number = toNumber(context, value);
         double d = number.value();
 
         // Handle special cases
@@ -442,8 +430,8 @@ public final class JSTypeConversions {
      * ToUint32(argument)
      * ES2020 7.1.7
      */
-    public static long toUint32(JSValue value) {
-        JSNumber number = toNumber(value);
+    public static long toUint32(JSContext context, JSValue value) {
+        JSNumber number = toNumber(context, value);
         double d = number.value();
 
         // Handle special cases
@@ -459,8 +447,8 @@ public final class JSTypeConversions {
      * ToUint8(argument)
      * ES2020 7.1.10
      */
-    public static short toUint8(JSValue value) {
-        JSNumber number = toNumber(value);
+    public static short toUint8(JSContext context, JSValue value) {
+        JSNumber number = toNumber(context, value);
         double d = number.value();
 
         // Handle special cases

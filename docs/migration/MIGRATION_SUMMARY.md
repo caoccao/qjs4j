@@ -1295,7 +1295,7 @@ public final class JSProxy extends JSObject {
 
     private void checkRevoked() {
         if (revoked) {
-            throw new JSException(context.throwError("TypeError",
+            throw new JSException(context.throwTypeError(
                 "Cannot perform operation on a revoked proxy"));
         }
     }

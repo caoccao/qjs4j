@@ -154,7 +154,7 @@ public abstract class JSTypedArray extends JSObject {
      * TypedArray.prototype.set(array, offset)
      * Copy values from array into this TypedArray.
      */
-    public void setArray(JSValue source, int offset) {
+    public void setArray(JSContext context, JSValue source, int offset) {
         if (offset < 0 || offset >= length) {
             throw new RangeError("TypedArray offset out of range");
         }
@@ -165,8 +165,8 @@ public abstract class JSTypedArray extends JSObject {
                 throw new RangeError("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
-                JSValue val = srcArray.get(i);
-                double numVal = JSTypeConversions.toNumber(val).value();
+                JSValue value = srcArray.get(i);
+                double numVal = JSTypeConversions.toNumber(context, value).value();
                 setElement(offset + i, numVal);
             }
         } else if (source instanceof JSTypedArray srcTyped) {

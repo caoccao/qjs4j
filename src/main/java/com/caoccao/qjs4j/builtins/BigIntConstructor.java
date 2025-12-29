@@ -31,25 +31,25 @@ public final class BigIntConstructor {
      * ES2020 20.2.2.1
      * Wraps a BigInt value to a signed integer of the given bit width.
      */
-    public static JSValue asIntN(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue asIntN(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2) {
-            return ctx.throwError("TypeError", "BigInt.asIntN requires 2 arguments");
+            return context.throwTypeError("BigInt.asIntN requires 2 arguments");
         }
 
         JSValue bitsArg = args[0];
         JSValue bigIntArg = args[1];
 
         if (!(bitsArg instanceof JSNumber bitsNum)) {
-            return ctx.throwError("TypeError", "First argument must be a number");
+            return context.throwTypeError("First argument must be a number");
         }
 
         if (!(bigIntArg instanceof JSBigInt bigInt)) {
-            return ctx.throwError("TypeError", "Second argument must be a BigInt");
+            return context.throwTypeError("Second argument must be a BigInt");
         }
 
         double bitsDouble = bitsNum.value();
         if (bitsDouble < 0 || bitsDouble > Integer.MAX_VALUE || bitsDouble != Math.floor(bitsDouble)) {
-            return ctx.throwError("RangeError", "Invalid bit width");
+            return context.throwRangeError("Invalid bit width");
         }
         int bits = (int) bitsDouble;
 
@@ -72,25 +72,25 @@ public final class BigIntConstructor {
      * ES2020 20.2.2.2
      * Wraps a BigInt value to an unsigned integer of the given bit width.
      */
-    public static JSValue asUintN(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue asUintN(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2) {
-            return ctx.throwError("TypeError", "BigInt.asUintN requires 2 arguments");
+            return context.throwTypeError("BigInt.asUintN requires 2 arguments");
         }
 
         JSValue bitsArg = args[0];
         JSValue bigIntArg = args[1];
 
         if (!(bitsArg instanceof JSNumber bitsNum)) {
-            return ctx.throwError("TypeError", "First argument must be a number");
+            return context.throwTypeError("First argument must be a number");
         }
 
         if (!(bigIntArg instanceof JSBigInt bigInt)) {
-            return ctx.throwError("TypeError", "Second argument must be a BigInt");
+            return context.throwTypeError("Second argument must be a BigInt");
         }
 
         double bitsDouble = bitsNum.value();
         if (bitsDouble < 0 || bitsDouble > Integer.MAX_VALUE || bitsDouble != Math.floor(bitsDouble)) {
-            return ctx.throwError("RangeError", "Invalid bit width");
+            return context.throwRangeError("Invalid bit width");
         }
         int bits = (int) bitsDouble;
 
@@ -112,9 +112,9 @@ public final class BigIntConstructor {
      * Creates a new BigInt value from a number or string.
      * Note: BigInt cannot be called with new operator in ES2020.
      */
-    public static JSValue call(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return ctx.throwError("TypeError", "BigInt requires an argument");
+            return context.throwTypeError("BigInt requires an argument");
         }
 
         JSValue arg = args[0];
@@ -126,7 +126,7 @@ public final class BigIntConstructor {
             double value = num.value();
             // Check if value is an integer
             if (value != Math.floor(value) || Double.isInfinite(value) || Double.isNaN(value)) {
-                return ctx.throwError("RangeError", "Cannot convert non-integer number to BigInt");
+                return context.throwRangeError("Cannot convert non-integer number to BigInt");
             }
             return new JSBigInt((long) value);
         } else if (arg instanceof JSString str) {
@@ -143,12 +143,12 @@ public final class BigIntConstructor {
                     return new JSBigInt(new BigInteger(strValue, 10));
                 }
             } catch (NumberFormatException e) {
-                return ctx.throwError("SyntaxError", "Cannot convert string to BigInt: " + strValue);
+                return context.throwSyntaxError("Cannot convert string to BigInt: " + strValue);
             }
         } else if (arg instanceof JSBoolean bool) {
             return new JSBigInt(bool.value() ? 1L : 0L);
         } else {
-            return ctx.throwError("TypeError", "Cannot convert value to BigInt");
+            return context.throwTypeError("Cannot convert value to BigInt");
         }
     }
 }

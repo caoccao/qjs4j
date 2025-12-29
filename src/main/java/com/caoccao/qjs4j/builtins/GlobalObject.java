@@ -40,11 +40,11 @@ public final class GlobalObject {
      * console.error(...args)
      * Print error to standard error.
      */
-    public static JSValue consoleError(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue consoleError(JSContext context, JSValue thisArg, JSValue[] args) {
         System.err.print("[ERROR] ");
         for (int i = 0; i < args.length; i++) {
             if (i > 0) System.err.print(" ");
-            System.err.print(formatValue(args[i]));
+            System.err.print(formatValue(context, args[i]));
         }
         System.err.println();
         return JSUndefined.INSTANCE;
@@ -54,10 +54,10 @@ public final class GlobalObject {
      * console.log(...args)
      * Print values to standard output.
      */
-    public static JSValue consoleLog(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue consoleLog(JSContext context, JSValue thisArg, JSValue[] args) {
         for (int i = 0; i < args.length; i++) {
             if (i > 0) System.out.print(" ");
-            System.out.print(formatValue(args[i]));
+            System.out.print(formatValue(context, args[i]));
         }
         System.out.println();
         return JSUndefined.INSTANCE;
@@ -67,11 +67,11 @@ public final class GlobalObject {
      * console.warn(...args)
      * Print warning to standard error.
      */
-    public static JSValue consoleWarn(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue consoleWarn(JSContext context, JSValue thisArg, JSValue[] args) {
         System.err.print("[WARN] ");
         for (int i = 0; i < args.length; i++) {
             if (i > 0) System.err.print(" ");
-            System.err.print(formatValue(args[i]));
+            System.err.print(formatValue(context, args[i]));
         }
         System.err.println();
         return JSUndefined.INSTANCE;
@@ -80,7 +80,7 @@ public final class GlobalObject {
     /**
      * Create an Error constructor.
      */
-    private static JSObject createErrorConstructor(JSContext ctx, String errorName) {
+    private static JSObject createErrorConstructor(JSContext context, String errorName) {
         // Error.prototype
         JSObject errorPrototype = new JSObject();
         errorPrototype.set("name", new JSString(errorName));
@@ -102,15 +102,15 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-decodeuri-encodeduri">ECMAScript decodeURI</a>
      */
-    public static JSValue decodeURI(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue decodeURI(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue encodedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String encodedString = JSTypeConversions.toString(encodedValue).value();
+        String encodedString = JSTypeConversions.toString(context, encodedValue).value();
 
         try {
             String decoded = URLDecoder.decode(encodedString, StandardCharsets.UTF_8);
             return new JSString(decoded);
         } catch (Exception e) {
-            return ctx.throwError("URIError", "URI malformed");
+            return context.throwURIError("URI malformed");
         }
     }
 
@@ -120,15 +120,15 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-decodeuricomponent-encodeduricomponent">ECMAScript decodeURIComponent</a>
      */
-    public static JSValue decodeURIComponent(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue decodeURIComponent(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue encodedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String encodedString = JSTypeConversions.toString(encodedValue).value();
+        String encodedString = JSTypeConversions.toString(context, encodedValue).value();
 
         try {
             String decoded = URLDecoder.decode(encodedString, StandardCharsets.UTF_8);
             return new JSString(decoded);
         } catch (Exception e) {
-            return ctx.throwError("URIError", "URI malformed");
+            return context.throwURIError("URI malformed");
         }
     }
 
@@ -139,9 +139,9 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-encodeuri-uri">ECMAScript encodeURI</a>
      */
-    public static JSValue encodeURI(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue encodeURI(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue uriValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String uriString = JSTypeConversions.toString(uriValue).value();
+        String uriString = JSTypeConversions.toString(context, uriValue).value();
 
         try {
             // Encode, but preserve URI structure characters
@@ -162,7 +162,7 @@ public final class GlobalObject {
 
             return new JSString(encoded);
         } catch (Exception e) {
-            return ctx.throwError("URIError", "URI malformed");
+            return context.throwURIError("URI malformed");
         }
     }
 
@@ -173,9 +173,9 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-encodeuricomponent-uricomponent">ECMAScript encodeURIComponent</a>
      */
-    public static JSValue encodeURIComponent(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue encodeURIComponent(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue componentValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String componentString = JSTypeConversions.toString(componentValue).value();
+        String componentString = JSTypeConversions.toString(context, componentValue).value();
 
         try {
             String encoded = URLEncoder.encode(componentString, StandardCharsets.UTF_8);
@@ -190,7 +190,7 @@ public final class GlobalObject {
 
             return new JSString(encoded);
         } catch (Exception e) {
-            return ctx.throwError("URIError", "URI malformed");
+            return context.throwURIError("URI malformed");
         }
     }
 
@@ -237,32 +237,26 @@ public final class GlobalObject {
     /**
      * Format a value for console output.
      */
-    private static String formatValue(JSValue value) {
-        if (value instanceof JSUndefined) {
-            return "undefined";
-        }
-        if (value instanceof JSNull) {
+    private static String formatValue(JSContext context, JSValue value) {
+        if (value == null) {
             return "null";
-        }
-        if (value instanceof JSBoolean b) {
-            return String.valueOf(b.value());
-        }
-        if (value instanceof JSNumber n) {
-            return JSTypeConversions.toString(value).value();
-        }
-        if (value instanceof JSString s) {
-            return s.value();
-        }
-        if (value instanceof JSArray arr) {
+        } else if (value.isNullOrUndefined()
+                || value.isBigInt()
+                || value.isBoolean()
+                || value.isBooleanObject()
+                || value.isNumber()
+                || value.isString()
+                || value.isSymbol()) {
+            return JSTypeConversions.toString(context, value).value();
+        } else if (value instanceof JSArray arr) {
             StringBuilder sb = new StringBuilder("[");
             for (long i = 0; i < arr.getLength(); i++) {
                 if (i > 0) sb.append(", ");
-                sb.append(formatValue(arr.get(i)));
+                sb.append(formatValue(context, arr.get(i)));
             }
             sb.append("]");
             return sb.toString();
-        }
-        if (value instanceof JSObject) {
+        } else if (value instanceof JSObject) {
             return "[object Object]";
         }
         return String.valueOf(value);
@@ -512,9 +506,10 @@ public final class GlobalObject {
         booleanPrototype.set("toString", new JSNativeFunction("toString", 0, BooleanPrototype::toString));
         booleanPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, BooleanPrototype::valueOf));
 
-        // Create Boolean constructor (placeholder)
-        JSObject booleanConstructor = new JSObject();
+        // Create Boolean constructor
+        JSNativeFunction booleanConstructor = new JSNativeFunction("Boolean", 1, BooleanConstructor::call);
         booleanConstructor.set("prototype", booleanPrototype);
+        booleanConstructor.set("[[BooleanConstructor]]", JSBoolean.TRUE); // Mark as Boolean constructor
 
         global.set("Boolean", booleanConstructor);
     }
@@ -1219,9 +1214,9 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-isfinite-number">ECMAScript isFinite</a>
      */
-    public static JSValue isFinite(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue isFinite(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        double num = JSTypeConversions.toNumber(value).value();
+        double num = JSTypeConversions.toNumber(context, value).value();
         return JSBoolean.valueOf(!Double.isNaN(num) && !Double.isInfinite(num));
     }
 
@@ -1231,9 +1226,9 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-isnan-number">ECMAScript isNaN</a>
      */
-    public static JSValue isNaN(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue isNaN(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        double num = JSTypeConversions.toNumber(value).value();
+        double num = JSTypeConversions.toNumber(context, value).value();
         return JSBoolean.valueOf(Double.isNaN(num));
     }
 
@@ -1243,10 +1238,10 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-parsefloat-string">ECMAScript parseFloat</a>
      */
-    public static JSValue parseFloat(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue parseFloat(JSContext context, JSValue thisArg, JSValue[] args) {
         // Get input string
         JSValue input = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String inputString = JSTypeConversions.toString(input).value().trim();
+        String inputString = JSTypeConversions.toString(context, input).value().trim();
 
         if (inputString.isEmpty()) {
             return new JSNumber(Double.NaN);
@@ -1314,15 +1309,15 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-parseint-string-radix">ECMAScript parseInt</a>
      */
-    public static JSValue parseInt(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue parseInt(JSContext context, JSValue thisArg, JSValue[] args) {
         // Get input string
         JSValue input = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String inputString = JSTypeConversions.toString(input).value().trim();
+        String inputString = JSTypeConversions.toString(context, input).value().trim();
 
         // Get radix
         int radix = 10;
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            double radixNum = JSTypeConversions.toNumber(args[1]).value();
+            double radixNum = JSTypeConversions.toNumber(context, args[1]).value();
             radix = (int) radixNum;
         }
 
@@ -1386,15 +1381,15 @@ public final class GlobalObject {
      *
      * @see <a href="https://html.spec.whatwg.org/multipage/timers-and-user-prompts.html#microtask-queuing">HTML queueMicrotask</a>
      */
-    public static JSValue queueMicrotask(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue queueMicrotask(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
-            return ctx.throwError("TypeError", "queueMicrotask requires a function argument");
+            return context.throwTypeError("queueMicrotask requires a function argument");
         }
 
         // Enqueue the callback as a microtask
-        ctx.enqueueMicrotask(() -> {
+        context.enqueueMicrotask(() -> {
             try {
-                callback.call(ctx, JSUndefined.INSTANCE, new JSValue[0]);
+                callback.call(context, JSUndefined.INSTANCE, new JSValue[0]);
             } catch (Exception e) {
                 // In a full implementation, this would trigger the unhandled rejection handler
                 System.err.println("Microtask error: " + e.getMessage());

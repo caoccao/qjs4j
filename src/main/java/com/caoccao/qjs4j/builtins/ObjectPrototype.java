@@ -31,14 +31,14 @@ public final class ObjectPrototype {
     /**
      * Object.assign(target, ...sources)
      */
-    public static JSValue assign(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue assign(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return ctx.throwError("TypeError", "Cannot convert undefined or null to object");
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
         JSValue targetArg = args[0];
         if (targetArg.isNullOrUndefined()) {
-            return ctx.throwError("TypeError", "Cannot convert undefined or null to object");
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
         if (!(targetArg instanceof JSObject target)) {
@@ -69,7 +69,7 @@ public final class ObjectPrototype {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-object.create">ECMAScript Object.create</a>
      */
-    public static JSValue create(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue create(JSContext context, JSValue thisArg, JSValue[] args) {
         // Get the prototype argument
         JSValue protoArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
@@ -78,7 +78,7 @@ public final class ObjectPrototype {
         if (protoArg instanceof JSObject obj) {
             proto = obj;
         } else if (!(protoArg.isNull())) {
-            return ctx.throwError("TypeError", "Object prototype may only be an Object or null");
+            return context.throwTypeError("Object prototype may only be an Object or null");
         }
 
         // Create new object with the specified prototype
@@ -87,7 +87,7 @@ public final class ObjectPrototype {
         // Handle propertiesObject parameter (args[1]) if present
         if (args.length > 1 && !(args[1].isUndefined())) {
             if (!(args[1] instanceof JSObject propsObj)) {
-                return ctx.throwError("TypeError", "Properties must be an object");
+                return context.throwTypeError("Properties must be an object");
             }
 
             // Get all own property keys from properties object
@@ -97,7 +97,7 @@ public final class ObjectPrototype {
                 // Get the descriptor for this property
                 JSValue descValue = propsObj.get(key);
                 if (!(descValue instanceof JSObject descObj)) {
-                    return ctx.throwError("TypeError", "Property descriptor must be an object");
+                    return context.throwTypeError("Property descriptor must be an object");
                 }
 
                 // Build property descriptor
@@ -131,7 +131,7 @@ public final class ObjectPrototype {
                 JSValue getter = descObj.get("get");
                 if (!(getter instanceof JSUndefined)) {
                     if (!(getter instanceof JSFunction)) {
-                        return ctx.throwError("TypeError", "Getter must be a function");
+                        return context.throwTypeError("Getter must be a function");
                     }
                     descriptor.setGetter((JSFunction) getter);
                 }
@@ -140,7 +140,7 @@ public final class ObjectPrototype {
                 JSValue setter = descObj.get("set");
                 if (!(setter instanceof JSUndefined)) {
                     if (!(setter instanceof JSFunction)) {
-                        return ctx.throwError("TypeError", "Setter must be a function");
+                        return context.throwTypeError("Setter must be a function");
                     }
                     descriptor.setSetter((JSFunction) setter);
                 }
@@ -156,20 +156,20 @@ public final class ObjectPrototype {
     /**
      * Object.defineProperty(obj, prop, descriptor)
      */
-    public static JSValue defineProperty(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue defineProperty(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
-            return ctx.throwError("TypeError", "Object.defineProperty requires 3 arguments");
+            return context.throwTypeError("Object.defineProperty requires 3 arguments");
         }
 
         if (!(args[0] instanceof JSObject obj)) {
-            return ctx.throwError("TypeError", "Object.defineProperty called on non-object");
+            return context.throwTypeError("Object.defineProperty called on non-object");
         }
 
-        PropertyKey key = PropertyKey.fromValue(args[1]);
+        PropertyKey key = PropertyKey.fromValue(context, args[1]);
 
         // Parse the descriptor object
         if (!(args[2] instanceof JSObject descObj)) {
-            return ctx.throwError("TypeError", "Property descriptor must be an object");
+            return context.throwTypeError("Property descriptor must be an object");
         }
 
         PropertyDescriptor desc = new PropertyDescriptor();
@@ -202,7 +202,7 @@ public final class ObjectPrototype {
         JSValue getter = descObj.get("get");
         if (getter != null && !(getter instanceof JSUndefined)) {
             if (!(getter instanceof JSFunction)) {
-                return ctx.throwError("TypeError", "Getter must be a function");
+                return context.throwTypeError("Getter must be a function");
             }
             desc.setGetter((JSFunction) getter);
         }
@@ -211,7 +211,7 @@ public final class ObjectPrototype {
         JSValue setter = descObj.get("set");
         if (setter != null && !(setter instanceof JSUndefined)) {
             if (!(setter instanceof JSFunction)) {
-                return ctx.throwError("TypeError", "Setter must be a function");
+                return context.throwTypeError("Setter must be a function");
             }
             desc.setSetter((JSFunction) setter);
         }
@@ -223,11 +223,11 @@ public final class ObjectPrototype {
     /**
      * Object.entries(obj)
      */
-    public static JSValue entries(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
         if (arg instanceof JSNull || arg instanceof JSUndefined) {
-            return ctx.throwError("TypeError", "Cannot convert undefined or null to object");
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
         if (!(arg instanceof JSObject obj)) {
@@ -266,7 +266,7 @@ public final class ObjectPrototype {
     /**
      * Object.prototype.hasOwnProperty(prop)
      */
-    public static JSValue hasOwnProperty(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue hasOwnProperty(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject obj)) {
             return JSBoolean.FALSE;
         }
@@ -275,18 +275,18 @@ public final class ObjectPrototype {
             return JSBoolean.FALSE;
         }
 
-        PropertyKey key = PropertyKey.fromValue(args[0]);
+        PropertyKey key = PropertyKey.fromValue(context, args[0]);
         return JSBoolean.valueOf(obj.hasOwnProperty(key));
     }
 
     /**
      * Object.keys(obj)
      */
-    public static JSValue keys(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue keys(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
         if (arg instanceof JSNull || arg instanceof JSUndefined) {
-            return ctx.throwError("TypeError", "Cannot convert undefined or null to object");
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
         if (!(arg instanceof JSObject obj)) {
@@ -429,11 +429,11 @@ public final class ObjectPrototype {
     /**
      * Object.values(obj)
      */
-    public static JSValue values(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue values(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
         if (arg instanceof JSNull || arg instanceof JSUndefined) {
-            return ctx.throwError("TypeError", "Cannot convert undefined or null to object");
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
         if (!(arg instanceof JSObject obj)) {

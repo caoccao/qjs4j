@@ -31,11 +31,11 @@ public final class AsyncGeneratorPrototype {
      * Note: This is a simplified version. A full implementation would use
      * actual timers or scheduled microtasks.
      *
-     * @param ctx    The execution context
-     * @param values Values to yield
+     * @param context The execution context
+     * @param values  Values to yield
      * @return An async generator that yields values "asynchronously"
      */
-    public static JSAsyncGenerator createDelayedGenerator(JSContext ctx, JSValue[] values) {
+    public static JSAsyncGenerator createDelayedGenerator(JSContext context, JSValue[] values) {
         return new JSAsyncGenerator((inputValue, isThrow) -> {
             final int[] index = {0};
 
@@ -61,7 +61,7 @@ public final class AsyncGeneratorPrototype {
 
             // In a real implementation, this would use setTimeout or similar
             // For now, we enqueue as a microtask to simulate async behavior
-            ctx.enqueueMicrotask(() -> {
+            context.enqueueMicrotask(() -> {
                 JSObject result = new JSObject();
                 result.set("value", values[currentIndex]);
                 result.set("done", JSBoolean.FALSE);
@@ -69,18 +69,18 @@ public final class AsyncGeneratorPrototype {
             });
 
             return promise;
-        }, ctx);
+        }, context);
     }
 
     /**
      * Create an async generator that yields values from a promise array.
      * Each promise is awaited before yielding its value.
      *
-     * @param ctx      The execution context
+     * @param context  The execution context
      * @param promises Array of promises to yield
      * @return An async generator
      */
-    public static JSAsyncGenerator createFromPromises(JSContext ctx, JSPromise[] promises) {
+    public static JSAsyncGenerator createFromPromises(JSContext context, JSPromise[] promises) {
         return new JSAsyncGenerator((inputValue, isThrow) -> {
             // Use a holder to track the current index
             final int[] index = {0};
@@ -109,7 +109,7 @@ public final class AsyncGeneratorPrototype {
 
             currentPromise.addReactions(
                     new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onFulfilled", 1, (context, thisArg, args) -> {
+                            new JSNativeFunction("onFulfilled", 1, (childContext, thisArg, args) -> {
                                 JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                 JSObject result = new JSObject();
                                 result.set("value", value);
@@ -118,21 +118,21 @@ public final class AsyncGeneratorPrototype {
                                 return JSUndefined.INSTANCE;
                             }),
                             resultPromise,
-                            ctx
+                            context
                     ),
                     new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onRejected", 1, (context, thisArg, args) -> {
+                            new JSNativeFunction("onRejected", 1, (childContext, thisArg, args) -> {
                                 JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                 resultPromise.reject(error);
                                 return JSUndefined.INSTANCE;
                             }),
                             resultPromise,
-                            ctx
+                            context
                     )
             );
 
             return resultPromise;
-        }, ctx);
+        }, context);
     }
 
     /**
@@ -141,16 +141,16 @@ public final class AsyncGeneratorPrototype {
      * Example usage:
      * <pre>
      * JSAsyncGenerator gen = AsyncGeneratorPrototype.createFromValues(
-     *     ctx,
+     *     context,
      *     new JSValue[]{new JSNumber(1), new JSNumber(2), new JSNumber(3)}
      * );
      * </pre>
      *
-     * @param ctx    The execution context
-     * @param values Values to yield (each wrapped in a promise)
+     * @param context The execution context
+     * @param values  Values to yield (each wrapped in a promise)
      * @return An async generator that yields the values
      */
-    public static JSAsyncGenerator createFromValues(JSContext ctx, JSValue[] values) {
+    public static JSAsyncGenerator createFromValues(JSContext context, JSValue[] values) {
         // Use a holder to track the current index across calls
         final int[] indexHolder = {0};
 
@@ -174,7 +174,7 @@ public final class AsyncGeneratorPrototype {
             result.set("done", JSBoolean.FALSE);
             promise.fulfill(result);
             return promise;
-        }, ctx);
+        }, context);
     }
 
     /**
@@ -183,9 +183,9 @@ public final class AsyncGeneratorPrototype {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-asyncgenerator-prototype-next">ECMAScript AsyncGenerator.prototype.next</a>
      */
-    public static JSValue next(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue next(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSAsyncGenerator generator)) {
-            return ctx.throwError("TypeError", "AsyncGenerator.prototype.next called on non-AsyncGenerator");
+            return context.throwTypeError("AsyncGenerator.prototype.next called on non-AsyncGenerator");
         }
 
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -198,9 +198,9 @@ public final class AsyncGeneratorPrototype {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-asyncgenerator-prototype-return">ECMAScript AsyncGenerator.prototype.return</a>
      */
-    public static JSValue return_(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue return_(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSAsyncGenerator generator)) {
-            return ctx.throwError("TypeError", "AsyncGenerator.prototype.return called on non-AsyncGenerator");
+            return context.throwTypeError("AsyncGenerator.prototype.return called on non-AsyncGenerator");
         }
 
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -213,9 +213,9 @@ public final class AsyncGeneratorPrototype {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-asyncgenerator-prototype-throw">ECMAScript AsyncGenerator.prototype.throw</a>
      */
-    public static JSValue throw_(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue throw_(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSAsyncGenerator generator)) {
-            return ctx.throwError("TypeError", "AsyncGenerator.prototype.throw called on non-AsyncGenerator");
+            return context.throwTypeError("AsyncGenerator.prototype.throw called on non-AsyncGenerator");
         }
 
         JSValue exception = args.length > 0 ? args[0] : JSUndefined.INSTANCE;

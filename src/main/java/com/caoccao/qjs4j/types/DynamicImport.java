@@ -32,21 +32,21 @@ public final class DynamicImport {
     /**
      * Create a native function wrapper for import().
      *
-     * @param ctx    The execution context
-     * @param loader Module loader to use
+     * @param context The execution context
+     * @param loader  Module loader to use
      * @return A JSNativeFunction that implements import()
      */
-    public static JSNativeFunction createImportFunction(JSContext ctx, ModuleLoader loader) {
-        return new JSNativeFunction("import", 1, (context, thisArg, args) -> {
+    public static JSNativeFunction createImportFunction(JSContext context, ModuleLoader loader) {
+        return new JSNativeFunction("import", 1, (childContext, thisArg, args) -> {
             if (args.length == 0) {
-                return context.throwError("TypeError", "import() requires a module specifier");
+                return childContext.throwTypeError("import() requires a module specifier");
             }
 
             // Convert specifier to string
-            String specifier = JSTypeConversions.toString(args[0]).value();
+            String specifier = JSTypeConversions.toString(childContext, args[0]).value();
 
             // Return promise
-            return import_(context, specifier, loader);
+            return import_(childContext, specifier, loader);
         });
     }
 

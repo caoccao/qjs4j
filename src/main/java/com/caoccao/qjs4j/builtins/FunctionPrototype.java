@@ -28,7 +28,7 @@ public final class FunctionPrototype {
      * Function.prototype.apply(thisArg, argArray)
      * ES2020 19.2.3.1
      */
-    public static JSValue apply(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue apply(JSContext context, JSValue thisArg, JSValue[] args) {
         // thisArg for apply() is the function itself (or a proxy to a function)
         // Following QuickJS: proxies to functions should work with Function.prototype.apply
 
@@ -46,7 +46,7 @@ public final class FunctionPrototype {
                     callArgs[i] = arr.get(i);
                 }
             } else {
-                return ctx.throwError("TypeError", "CreateListFromArrayLike called on non-object");
+                return context.throwTypeError("CreateListFromArrayLike called on non-object");
             }
         } else {
             callArgs = new JSValue[0];
@@ -55,14 +55,14 @@ public final class FunctionPrototype {
         if (thisArg instanceof JSProxy proxy) {
             // Check if proxy's target is callable
             if (!JSTypeChecking.isFunction(proxy.getTarget())) {
-                return ctx.throwError("TypeError", "Function.prototype.apply called on non-function");
+                return context.throwTypeError("Function.prototype.apply called on non-function");
             }
             // Use the proxy's apply mechanism
-            return proxy.apply(ctx, applyThisArg, callArgs);
+            return proxy.apply(context, applyThisArg, callArgs);
         } else if (thisArg instanceof JSFunction func) {
-            return func.call(ctx, applyThisArg, callArgs);
+            return func.call(context, applyThisArg, callArgs);
         } else {
-            return ctx.throwError("TypeError", "Function.prototype.apply called on non-function");
+            return context.throwTypeError("Function.prototype.apply called on non-function");
         }
     }
 
@@ -70,10 +70,10 @@ public final class FunctionPrototype {
      * Function.prototype.bind(thisArg, ...args)
      * ES2020 19.2.3.2
      */
-    public static JSValue bind(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue bind(JSContext context, JSValue thisArg, JSValue[] args) {
         // thisArg for bind() is the function itself
         if (!(thisArg instanceof JSFunction targetFunc)) {
-            return ctx.throwError("TypeError", "Function.prototype.bind called on non-function");
+            return context.throwTypeError("Function.prototype.bind called on non-function");
         }
 
         // First argument is the 'this' value to bind
@@ -93,13 +93,13 @@ public final class FunctionPrototype {
      * Function.prototype.call(thisArg, ...args)
      * ES2020 19.2.3.3
      */
-    public static JSValue call(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         // thisArg for call() is the function itself (or a proxy to a function)
         // Following QuickJS: proxies to functions should work with Function.prototype.call
         if (thisArg instanceof JSProxy proxy) {
             // Check if proxy's target is callable
             if (!JSTypeChecking.isFunction(proxy.getTarget())) {
-                return ctx.throwError("TypeError", "Function.prototype.call called on non-function");
+                return context.throwTypeError("Function.prototype.call called on non-function");
             }
             // Use the proxy's apply mechanism
             JSValue callThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -107,7 +107,7 @@ public final class FunctionPrototype {
             if (args.length > 1) {
                 System.arraycopy(args, 1, callArgs, 0, args.length - 1);
             }
-            return proxy.apply(ctx, callThisArg, callArgs);
+            return proxy.apply(context, callThisArg, callArgs);
         } else if (thisArg instanceof JSFunction func) {
             // First argument is the 'this' value for the called function
             JSValue callThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -118,9 +118,9 @@ public final class FunctionPrototype {
                 System.arraycopy(args, 1, callArgs, 0, args.length - 1);
             }
 
-            return func.call(ctx, callThisArg, callArgs);
+            return func.call(context, callThisArg, callArgs);
         } else {
-            return ctx.throwError("TypeError", "Function.prototype.call called on non-function");
+            return context.throwTypeError("Function.prototype.call called on non-function");
         }
     }
 
@@ -128,9 +128,9 @@ public final class FunctionPrototype {
      * get Function.prototype.length
      * ES2020 19.2.3.4
      */
-    public static JSValue getLength(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getLength(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSFunction func)) {
-            return ctx.throwError("TypeError", "Function.prototype.length called on non-function");
+            return context.throwTypeError("Function.prototype.length called on non-function");
         }
 
         return new JSNumber(func.getLength());
@@ -140,9 +140,9 @@ public final class FunctionPrototype {
      * get Function.prototype.name
      * ES2020 19.2.3.6
      */
-    public static JSValue getName(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getName(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSFunction func)) {
-            return ctx.throwError("TypeError", "Function.prototype.name called on non-function");
+            return context.throwTypeError("Function.prototype.name called on non-function");
         }
 
         String name = func.getName();
@@ -153,9 +153,9 @@ public final class FunctionPrototype {
      * Function.prototype.toString()
      * ES2020 19.2.3.5
      */
-    public static JSValue toStringMethod(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSFunction func)) {
-            return ctx.throwError("TypeError", "Function.prototype.toString called on non-function");
+            return context.throwTypeError("Function.prototype.toString called on non-function");
         }
 
         // Simplified implementation - return a generic function string

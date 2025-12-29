@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -88,6 +90,10 @@ public final class JSSymbol implements JSValue {
     @Override
     public Object toJavaObject() {
         return this;
+    }
+
+    public String toString(JSContext context) {
+        throw new JSException(context.throwTypeError("Cannot convert a Symbol value to a string"));
     }
 
     @Override

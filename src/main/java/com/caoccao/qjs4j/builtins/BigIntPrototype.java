@@ -40,7 +40,7 @@ public final class BigIntPrototype {
      * ES2020 20.2.3.3
      * Returns a string representation of the BigInt in the specified radix.
      */
-    public static JSValue toString(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue toString(JSContext context, JSValue thisArg, JSValue[] args) {
         JSBigInt bigInt;
 
         if (thisArg instanceof JSBigInt bi) {
@@ -50,10 +50,10 @@ public final class BigIntPrototype {
             if (primitiveValue instanceof JSBigInt bi) {
                 bigInt = bi;
             } else {
-                return ctx.throwError("TypeError", "BigInt.prototype.toString called on non-BigInt");
+                return context.throwTypeError("BigInt.prototype.toString called on non-BigInt");
             }
         } else {
-            return ctx.throwError("TypeError", "BigInt.prototype.toString called on non-BigInt");
+            return context.throwTypeError("BigInt.prototype.toString called on non-BigInt");
         }
 
         int radix = 10;
@@ -64,7 +64,7 @@ public final class BigIntPrototype {
         }
 
         if (radix < 2 || radix > 36) {
-            return ctx.throwError("RangeError", "toString() radix must be between 2 and 36");
+            return context.throwRangeError("toString() radix must be between 2 and 36");
         }
 
         return new JSString(bigInt.value().toString(radix));
@@ -75,7 +75,7 @@ public final class BigIntPrototype {
      * ES2020 20.2.3.4
      * Returns the primitive value of the BigInt.
      */
-    public static JSValue valueOf(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSBigInt bigInt) {
             return bigInt;
         } else if (thisArg instanceof JSObject obj) {
@@ -85,6 +85,6 @@ public final class BigIntPrototype {
             }
         }
 
-        return ctx.throwError("TypeError", "BigInt.prototype.valueOf called on non-BigInt");
+        return context.throwTypeError("BigInt.prototype.valueOf called on non-BigInt");
     }
 }

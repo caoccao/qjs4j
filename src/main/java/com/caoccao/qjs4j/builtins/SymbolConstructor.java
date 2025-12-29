@@ -34,10 +34,10 @@ public final class SymbolConstructor {
      * Creates a new unique Symbol value.
      * Note: Symbol cannot be called with new operator.
      */
-    public static JSValue call(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         String description = null;
         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-            description = JSTypeConversions.toString(args[0]).value();
+            description = JSTypeConversions.toString(context, args[0]).value();
         }
         return new JSSymbol(description);
     }
@@ -87,14 +87,14 @@ public final class SymbolConstructor {
      * ES2020 19.4.2.6
      * Returns the key for a Symbol from the global symbol registry.
      */
-    public static JSValue keyFor(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue keyFor(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return ctx.throwError("TypeError", "Symbol.keyFor requires a Symbol");
+            return context.throwTypeError("Symbol.keyFor requires a Symbol");
         }
 
         JSValue arg = args[0];
         if (!(arg instanceof JSSymbol symbol)) {
-            return ctx.throwError("TypeError", "Symbol.keyFor requires a Symbol");
+            return context.throwTypeError("Symbol.keyFor requires a Symbol");
         }
 
         // Search the registry for this symbol
@@ -115,12 +115,12 @@ public final class SymbolConstructor {
      * ES2020 19.4.2.1
      * Returns a Symbol from the global symbol registry.
      */
-    public static JSValue symbolFor(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue symbolFor(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return ctx.throwError("TypeError", "Symbol.for requires a key");
+            return context.throwTypeError("Symbol.for requires a key");
         }
 
-        String key = JSTypeConversions.toString(args[0]).value();
+        String key = JSTypeConversions.toString(context, args[0]).value();
 
         synchronized (symbolRegistry) {
             return symbolRegistry.computeIfAbsent(key, k -> new JSSymbol(k));

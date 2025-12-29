@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.builtins.GlobalObject;
+import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.types.JSModule;
 
 import java.util.*;
@@ -478,8 +479,6 @@ public final class JSContext implements AutoCloseable {
         return throwError("Error", message);
     }
 
-    // Cleanup
-
     /**
      * Throw a JavaScript error of a specific type.
      *
@@ -500,6 +499,56 @@ public final class JSContext implements AutoCloseable {
         setPendingException(error);
 
         return error;
+    }
+
+    /**
+     * Throw a RangeError.
+     *
+     * @param message Error message
+     * @return The error value
+     */
+    public JSValue throwRangeError(String message) {
+        return throwError("RangeError", message);
+    }
+
+    /**
+     * Throw a ReferenceError.
+     *
+     * @param message Error message
+     * @return The error value
+     */
+    public JSValue throwReferenceError(String message) {
+        return throwError("ReferenceError", message);
+    }
+
+    /**
+     * Throw a SyntaxError.
+     *
+     * @param message Error message
+     * @return The error value
+     */
+    public JSValue throwSyntaxError(String message) {
+        return throwError("SyntaxError", message);
+    }
+
+    /**
+     * Throw a TypeError.
+     *
+     * @param message Error message
+     * @return The error value
+     */
+    public JSValue throwTypeError(String message) {
+        return throwError("TypeError", message);
+    }
+
+    /**
+     * Throw a URIError.
+     *
+     * @param message Error message
+     * @return The error value
+     */
+    public JSValue throwURIError(String message) {
+        return throwError("URIError", message);
     }
 
     /**

@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.builtins.BigIntConstructor;
 import com.caoccao.qjs4j.builtins.SharedArrayBufferConstructor;
 import com.caoccao.qjs4j.builtins.SymbolConstructor;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSException;
 
 /**
  * The JavaScript virtual machine bytecode interpreter.
@@ -372,11 +373,11 @@ public final class VirtualMachine {
                         JSValue index = valueStack.pop();
                         JSValue arrayObj = valueStack.pop();
                         if (arrayObj instanceof JSObject jsObj) {
-                            PropertyKey key = PropertyKey.fromValue(index);
+                            PropertyKey key = PropertyKey.fromValue(context, index);
                             valueStack.push(jsObj.get(key, context));
                         } else if (arrayObj instanceof JSFunction) {
                             // For functions, look up methods from Function.prototype
-                            PropertyKey key = PropertyKey.fromValue(index);
+                            PropertyKey key = PropertyKey.fromValue(context, index);
                             JSValue funcProto = context.getGlobalObject().get("Function");
                             if (funcProto instanceof JSObject funcCtor) {
                                 JSValue prototype = funcCtor.get("prototype");
@@ -399,7 +400,7 @@ public final class VirtualMachine {
                         JSValue putElObj = valueStack.pop();     // Pop object
                         JSValue putElValue = valueStack.pop();   // Pop value
                         if (putElObj instanceof JSObject jsObj) {
-                            PropertyKey key = PropertyKey.fromValue(putElIndex);
+                            PropertyKey key = PropertyKey.fromValue(context, putElIndex);
                             jsObj.set(key, putElValue, context);
                         }
                         // Assignment expressions return the assigned value
@@ -480,7 +481,7 @@ public final class VirtualMachine {
                         JSValue propKey = valueStack.pop();
                         JSValue propObj = valueStack.peek(0);
                         if (propObj instanceof JSObject jsObj) {
-                            PropertyKey key = PropertyKey.fromValue(propKey);
+                            PropertyKey key = PropertyKey.fromValue(context, propKey);
                             jsObj.set(key, propValue);
                         }
                         pc += op.getSize();
@@ -537,12 +538,12 @@ public final class VirtualMachine {
 
         // String concatenation or numeric addition
         if (left instanceof JSString || right instanceof JSString) {
-            String leftStr = JSTypeConversions.toString(left).value();
-            String rightStr = JSTypeConversions.toString(right).value();
+            String leftStr = JSTypeConversions.toString(context, left).value();
+            String rightStr = JSTypeConversions.toString(context, right).value();
             valueStack.push(new JSString(leftStr + rightStr));
         } else {
-            double leftNum = JSTypeConversions.toNumber(left).value();
-            double rightNum = JSTypeConversions.toNumber(right).value();
+            double leftNum = JSTypeConversions.toNumber(context, left).value();
+            double rightNum = JSTypeConversions.toNumber(context, right).value();
             valueStack.push(new JSNumber(leftNum + rightNum));
         }
     }
@@ -550,7 +551,7 @@ public final class VirtualMachine {
     private void handleAnd() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        int result = JSTypeConversions.toInt32(left) & JSTypeConversions.toInt32(right);
+        int result = JSTypeConversions.toInt32(context, left) & JSTypeConversions.toInt32(context, right);
         valueStack.push(new JSNumber(result));
     }
 
@@ -628,7 +629,7 @@ public final class VirtualMachine {
             // Check if target is a constructor BEFORE checking for construct trap
             JSValue target = proxy.getTarget();
             if (!(target instanceof JSFunction)) {
-                throw new JSException(context.throwError("TypeError", "proxy is not a constructor"));
+                throw new JSException(context.throwTypeError("proxy is not a constructor"));
             }
 
             JSValue result = proxyConstruct(proxy, args);
@@ -642,6 +643,30 @@ public final class VirtualMachine {
             JSObject instance = classConstructor.construct(context, args);
             valueStack.push(instance);
             return;
+        }
+
+        // Check for Boolean constructor (must come before generic JSFunction check)
+        if (constructor instanceof JSObject ctorObj) {
+            JSValue isBooleanCtor = ctorObj.get("[[BooleanConstructor]]");
+            if (isBooleanCtor instanceof JSBoolean && ((JSBoolean) isBooleanCtor).value()) {
+                // Get the value to convert to boolean
+                JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+
+                // Convert to boolean using ToBoolean
+                JSBoolean boolValue = JSTypeConversions.toBoolean(value);
+
+                // Create Boolean object wrapper
+                JSBooleanObject boolObj = new JSBooleanObject(boolValue);
+
+                // Set prototype
+                JSValue prototypeValue = ctorObj.get("prototype");
+                if (prototypeValue instanceof JSObject prototype) {
+                    boolObj.setPrototype(prototype);
+                }
+
+                valueStack.push(boolObj);
+                return;
+            }
         }
 
         if (constructor instanceof JSFunction func) {
@@ -676,7 +701,7 @@ public final class VirtualMachine {
             // Check for ES6 class constructor marker
             JSValue isClassCtor = ctorObj.get("[[ClassConstructor]]");
             if (isClassCtor instanceof JSBoolean && ((JSBoolean) isClassCtor).value()) {
-                context.throwError("TypeError", "Class constructor cannot be invoked without 'new'");
+                context.throwTypeError("Class constructor cannot be invoked without 'new'");
                 valueStack.push(JSUndefined.INSTANCE);
                 return;
             }
@@ -695,7 +720,7 @@ public final class VirtualMachine {
                         timeValue = (long) num.value();
                     } else {
                         // Try to parse as string
-                        JSString str = JSTypeConversions.toString(arg);
+                        JSString str = JSTypeConversions.toString(context, arg);
                         // Simplified: just use current time for now
                         timeValue = System.currentTimeMillis();
                     }
@@ -720,7 +745,7 @@ public final class VirtualMachine {
             // Check for Symbol constructor (throws error when used with new)
             JSValue isSymbolCtor = ctorObj.get("[[SymbolConstructor]]");
             if (isSymbolCtor instanceof JSBoolean && ((JSBoolean) isSymbolCtor).value()) {
-                context.throwError("TypeError", "Symbol is not a constructor");
+                context.throwTypeError("Symbol is not a constructor");
                 valueStack.push(JSUndefined.INSTANCE);
                 return;
             }
@@ -728,7 +753,7 @@ public final class VirtualMachine {
             // Check for BigInt constructor (throws error when used with new)
             JSValue isBigIntCtor = ctorObj.get("[[BigIntConstructor]]");
             if (isBigIntCtor instanceof JSBoolean && ((JSBoolean) isBigIntCtor).value()) {
-                context.throwError("TypeError", "BigInt is not a constructor");
+                context.throwTypeError("BigInt is not a constructor");
                 valueStack.push(JSUndefined.INSTANCE);
                 return;
             }
@@ -747,12 +772,12 @@ public final class VirtualMachine {
                         // Copy from existing RegExp
                         pattern = existingRegExp.getPattern();
                         flags = args.length > 1 && !(args[1] instanceof JSUndefined)
-                                ? JSTypeConversions.toString(args[1]).value()
+                                ? JSTypeConversions.toString(context, args[1]).value()
                                 : existingRegExp.getFlags();
                     } else if (!(patternArg instanceof JSUndefined)) {
-                        pattern = JSTypeConversions.toString(patternArg).value();
+                        pattern = JSTypeConversions.toString(context, patternArg).value();
                         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-                            flags = JSTypeConversions.toString(args[1]).value();
+                            flags = JSTypeConversions.toString(context, args[1]).value();
                         }
                     }
                 }
@@ -769,7 +794,7 @@ public final class VirtualMachine {
                     valueStack.push(regexpObj);
                 } catch (Exception e) {
                     // Invalid regex - throw SyntaxError
-                    context.throwError("SyntaxError", "Invalid regular expression: " + e.getMessage());
+                    context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
                     valueStack.push(JSUndefined.INSTANCE);
                 }
                 return;
@@ -796,7 +821,7 @@ public final class VirtualMachine {
                         for (long i = 0; i < arr.getLength(); i++) {
                             JSValue entry = arr.get((int) i);
                             if (!(entry instanceof JSObject entryObj)) {
-                                context.throwError("TypeError", "Iterator value must be an object");
+                                context.throwTypeError("Iterator value must be an object");
                                 valueStack.push(JSUndefined.INSTANCE);
                                 return;
                             }
@@ -824,7 +849,7 @@ public final class VirtualMachine {
 
                                 JSValue entry = nextResult.get("value");
                                 if (!(entry instanceof JSObject entryObj)) {
-                                    context.throwError("TypeError", "Iterator value must be an object");
+                                    context.throwTypeError("Iterator value must be an object");
                                     valueStack.push(JSUndefined.INSTANCE);
                                     return;
                                 }
@@ -912,7 +937,7 @@ public final class VirtualMachine {
                         for (long i = 0; i < arr.getLength(); i++) {
                             JSValue entry = arr.get((int) i);
                             if (!(entry instanceof JSObject entryObj)) {
-                                context.throwError("TypeError", "Iterator value must be an object");
+                                context.throwTypeError("Iterator value must be an object");
                                 valueStack.push(JSUndefined.INSTANCE);
                                 return;
                             }
@@ -923,7 +948,7 @@ public final class VirtualMachine {
 
                             // WeakMap requires object keys
                             if (!(key instanceof JSObject)) {
-                                context.throwError("TypeError", "WeakMap key must be an object");
+                                context.throwTypeError("WeakMap key must be an object");
                                 valueStack.push(JSUndefined.INSTANCE);
                                 return;
                             }
@@ -948,7 +973,7 @@ public final class VirtualMachine {
 
                                 JSValue entry = nextResult.get("value");
                                 if (!(entry instanceof JSObject entryObj)) {
-                                    context.throwError("TypeError", "Iterator value must be an object");
+                                    context.throwTypeError("Iterator value must be an object");
                                     valueStack.push(JSUndefined.INSTANCE);
                                     return;
                                 }
@@ -959,7 +984,7 @@ public final class VirtualMachine {
 
                                 // WeakMap requires object keys
                                 if (!(key instanceof JSObject)) {
-                                    context.throwError("TypeError", "WeakMap key must be an object");
+                                    context.throwTypeError("WeakMap key must be an object");
                                     valueStack.push(JSUndefined.INSTANCE);
                                     return;
                                 }
@@ -997,7 +1022,7 @@ public final class VirtualMachine {
 
                             // WeakSet requires object values
                             if (!(value instanceof JSObject)) {
-                                context.throwError("TypeError", "WeakSet value must be an object");
+                                context.throwTypeError("WeakSet value must be an object");
                                 valueStack.push(JSUndefined.INSTANCE);
                                 return;
                             }
@@ -1024,7 +1049,7 @@ public final class VirtualMachine {
 
                                 // WeakSet requires object values
                                 if (!(value instanceof JSObject)) {
-                                    context.throwError("TypeError", "WeakSet value must be an object");
+                                    context.throwTypeError("WeakSet value must be an object");
                                     valueStack.push(JSUndefined.INSTANCE);
                                     return;
                                 }
@@ -1044,7 +1069,7 @@ public final class VirtualMachine {
             if (isWeakRefCtor instanceof JSBoolean && ((JSBoolean) isWeakRefCtor).value()) {
                 // WeakRef requires exactly 1 argument: target
                 if (args.length == 0) {
-                    context.throwError("TypeError", "WeakRef constructor requires a target object");
+                    context.throwTypeError("WeakRef constructor requires a target object");
                     valueStack.push(JSUndefined.INSTANCE);
                     return;
                 }
@@ -1069,7 +1094,7 @@ public final class VirtualMachine {
             if (isFinalizationRegistryCtor instanceof JSBoolean && ((JSBoolean) isFinalizationRegistryCtor).value()) {
                 // FinalizationRegistry requires exactly 1 argument: cleanupCallback
                 if (args.length == 0) {
-                    context.throwError("TypeError", "FinalizationRegistry constructor requires a cleanup callback");
+                    context.throwTypeError("FinalizationRegistry constructor requires a cleanup callback");
                     valueStack.push(JSUndefined.INSTANCE);
                     return;
                 }
@@ -1094,7 +1119,7 @@ public final class VirtualMachine {
             if (isProxyCtor instanceof JSBoolean && ((JSBoolean) isProxyCtor).value()) {
                 // Proxy requires exactly 2 arguments: target and handler
                 if (args.length < 2) {
-                    context.throwError("TypeError", "Proxy constructor requires target and handler");
+                    context.throwTypeError("Proxy constructor requires target and handler");
                     valueStack.push(JSUndefined.INSTANCE);
                     return;
                 }
@@ -1102,13 +1127,13 @@ public final class VirtualMachine {
                 // Target must be an object (since JSFunction extends JSObject, this covers both)
                 JSValue target = args[0];
                 if (!(target instanceof JSObject)) {
-                    context.throwError("TypeError", "Proxy target must be an object");
+                    context.throwTypeError("Proxy target must be an object");
                     valueStack.push(JSUndefined.INSTANCE);
                     return;
                 }
 
                 if (!(args[1] instanceof JSObject handler)) {
-                    context.throwError("TypeError", "Proxy handler must be an object");
+                    context.throwTypeError("Proxy handler must be an object");
                     valueStack.push(JSUndefined.INSTANCE);
                     return;
                 }
@@ -1124,7 +1149,7 @@ public final class VirtualMachine {
             if (isPromiseCtor instanceof JSBoolean && ((JSBoolean) isPromiseCtor).value()) {
                 // Promise requires an executor function
                 if (args.length == 0 || !(args[0] instanceof JSFunction executor)) {
-                    context.throwError("TypeError", "Promise constructor requires an executor function");
+                    context.throwTypeError("Promise constructor requires an executor function");
                     valueStack.push(JSUndefined.INSTANCE);
                     return;
                 }
@@ -1204,7 +1229,7 @@ public final class VirtualMachine {
 
                 // Set message from first argument
                 if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-                    JSString message = JSTypeConversions.toString(args[0]);
+                    JSString message = JSTypeConversions.toString(context, args[0]);
                     errorObj.set("message", message);
                 } else {
                     errorObj.set("message", new JSString(""));
@@ -1221,7 +1246,7 @@ public final class VirtualMachine {
 
     private void handleDec() {
         JSValue operand = valueStack.pop();
-        double result = JSTypeConversions.toNumber(operand).value() - 1;
+        double result = JSTypeConversions.toNumber(context, operand).value() - 1;
         valueStack.push(new JSNumber(result));
     }
 
@@ -1230,7 +1255,7 @@ public final class VirtualMachine {
         JSValue object = valueStack.pop();
         boolean result = false;
         if (object instanceof JSObject jsObj) {
-            PropertyKey key = PropertyKey.fromValue(property);
+            PropertyKey key = PropertyKey.fromValue(context, property);
             result = jsObj.delete(key);
         }
         valueStack.push(JSBoolean.valueOf(result));
@@ -1239,28 +1264,28 @@ public final class VirtualMachine {
     private void handleDiv() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        double result = JSTypeConversions.toNumber(left).value() / JSTypeConversions.toNumber(right).value();
+        double result = JSTypeConversions.toNumber(context, left).value() / JSTypeConversions.toNumber(context, right).value();
         valueStack.push(new JSNumber(result));
     }
 
     private void handleEq() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        boolean result = JSTypeConversions.abstractEquals(left, right);
+        boolean result = JSTypeConversions.abstractEquals(context, left, right);
         valueStack.push(JSBoolean.valueOf(result));
     }
 
     private void handleExp() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        double result = Math.pow(JSTypeConversions.toNumber(left).value(), JSTypeConversions.toNumber(right).value());
+        double result = Math.pow(JSTypeConversions.toNumber(context, left).value(), JSTypeConversions.toNumber(context, right).value());
         valueStack.push(new JSNumber(result));
     }
 
     private void handleGt() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        boolean result = JSTypeConversions.lessThan(right, left);
+        boolean result = JSTypeConversions.lessThan(context, right, left);
         valueStack.push(JSBoolean.valueOf(result));
     }
 
@@ -1269,8 +1294,8 @@ public final class VirtualMachine {
     private void handleGte() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        boolean result = JSTypeConversions.lessThan(right, left) ||
-                JSTypeConversions.abstractEquals(left, right);
+        boolean result = JSTypeConversions.lessThan(context, right, left) ||
+                JSTypeConversions.abstractEquals(context, left, right);
         valueStack.push(JSBoolean.valueOf(result));
     }
 
@@ -1279,7 +1304,7 @@ public final class VirtualMachine {
         JSValue left = valueStack.pop();
         boolean result = false;
         if (right instanceof JSObject jsObj) {
-            PropertyKey key = PropertyKey.fromValue(left);
+            PropertyKey key = PropertyKey.fromValue(context, left);
             result = jsObj.has(key);
         }
         valueStack.push(JSBoolean.valueOf(result));
@@ -1287,7 +1312,7 @@ public final class VirtualMachine {
 
     private void handleInc() {
         JSValue operand = valueStack.pop();
-        double result = JSTypeConversions.toNumber(operand).value() + 1;
+        double result = JSTypeConversions.toNumber(context, operand).value() + 1;
         valueStack.push(new JSNumber(result));
     }
 
@@ -1333,48 +1358,48 @@ public final class VirtualMachine {
     private void handleLt() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        boolean result = JSTypeConversions.lessThan(left, right);
+        boolean result = JSTypeConversions.lessThan(context, left, right);
         valueStack.push(JSBoolean.valueOf(result));
     }
 
     private void handleLte() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        boolean result = JSTypeConversions.lessThan(left, right) ||
-                JSTypeConversions.abstractEquals(left, right);
+        boolean result = JSTypeConversions.lessThan(context, left, right) ||
+                JSTypeConversions.abstractEquals(context, left, right);
         valueStack.push(JSBoolean.valueOf(result));
     }
 
     private void handleMod() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        double result = JSTypeConversions.toNumber(left).value() % JSTypeConversions.toNumber(right).value();
+        double result = JSTypeConversions.toNumber(context, left).value() % JSTypeConversions.toNumber(context, right).value();
         valueStack.push(new JSNumber(result));
     }
 
     private void handleMul() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        double result = JSTypeConversions.toNumber(left).value() * JSTypeConversions.toNumber(right).value();
+        double result = JSTypeConversions.toNumber(context, left).value() * JSTypeConversions.toNumber(context, right).value();
         valueStack.push(new JSNumber(result));
     }
 
     private void handleNeg() {
         JSValue operand = valueStack.pop();
-        double result = -JSTypeConversions.toNumber(operand).value();
+        double result = -JSTypeConversions.toNumber(context, operand).value();
         valueStack.push(new JSNumber(result));
     }
 
     private void handleNeq() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        boolean result = !JSTypeConversions.abstractEquals(left, right);
+        boolean result = !JSTypeConversions.abstractEquals(context, left, right);
         valueStack.push(JSBoolean.valueOf(result));
     }
 
     private void handleNot() {
         JSValue operand = valueStack.pop();
-        int result = ~JSTypeConversions.toInt32(operand);
+        int result = ~JSTypeConversions.toInt32(context, operand);
         valueStack.push(new JSNumber(result));
     }
 
@@ -1392,13 +1417,13 @@ public final class VirtualMachine {
     private void handleOr() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        int result = JSTypeConversions.toInt32(left) | JSTypeConversions.toInt32(right);
+        int result = JSTypeConversions.toInt32(context, left) | JSTypeConversions.toInt32(context, right);
         valueStack.push(new JSNumber(result));
     }
 
     private void handlePlus() {
         JSValue operand = valueStack.pop();
-        double result = JSTypeConversions.toNumber(operand).value();
+        double result = JSTypeConversions.toNumber(context, operand).value();
         valueStack.push(new JSNumber(result));
     }
 
@@ -1407,24 +1432,24 @@ public final class VirtualMachine {
     private void handleSar() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        int leftInt = JSTypeConversions.toInt32(left);
-        int rightInt = JSTypeConversions.toInt32(right);
+        int leftInt = JSTypeConversions.toInt32(context, left);
+        int rightInt = JSTypeConversions.toInt32(context, right);
         valueStack.push(new JSNumber(leftInt >> (rightInt & 0x1F)));
     }
 
     private void handleShl() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        int leftInt = JSTypeConversions.toInt32(left);
-        int rightInt = JSTypeConversions.toInt32(right);
+        int leftInt = JSTypeConversions.toInt32(context, left);
+        int rightInt = JSTypeConversions.toInt32(context, right);
         valueStack.push(new JSNumber(leftInt << (rightInt & 0x1F)));
     }
 
     private void handleShr() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        int leftInt = JSTypeConversions.toInt32(left);
-        int rightInt = JSTypeConversions.toInt32(right);
+        int leftInt = JSTypeConversions.toInt32(context, left);
+        int rightInt = JSTypeConversions.toInt32(context, right);
         valueStack.push(new JSNumber((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
     }
 
@@ -1447,7 +1472,7 @@ public final class VirtualMachine {
     private void handleSub() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        double result = JSTypeConversions.toNumber(left).value() - JSTypeConversions.toNumber(right).value();
+        double result = JSTypeConversions.toNumber(context, left).value() - JSTypeConversions.toNumber(context, right).value();
         valueStack.push(new JSNumber(result));
     }
 
@@ -1462,7 +1487,7 @@ public final class VirtualMachine {
     private void handleXor() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        int result = JSTypeConversions.toInt32(left) ^ JSTypeConversions.toInt32(right);
+        int result = JSTypeConversions.toInt32(context, left) ^ JSTypeConversions.toInt32(context, right);
         valueStack.push(new JSNumber(result));
     }
 
@@ -1480,7 +1505,7 @@ public final class VirtualMachine {
         // Check if target is callable BEFORE checking for apply trap
         JSValue target = proxy.getTarget();
         if (!(target instanceof JSFunction)) {
-            throw new JSException(context.throwError("TypeError", "not a function"));
+            throw new JSException(context.throwTypeError("not a function"));
         }
 
         // Get the apply trap from the handler
@@ -1500,7 +1525,7 @@ public final class VirtualMachine {
 
         // Check that apply trap is a function
         if (!(applyTrap instanceof JSFunction applyFunc)) {
-            throw new JSException(context.throwError("TypeError", "apply trap is not a function"));
+            throw new JSException(context.throwTypeError("apply trap is not a function"));
         }
 
         // Create arguments array
@@ -1576,7 +1601,7 @@ public final class VirtualMachine {
 
         // Check that construct trap is a function
         if (!(constructTrap instanceof JSFunction constructFunc)) {
-            throw new JSException(context.throwError("TypeError", "construct trap is not a function"));
+            throw new JSException(context.throwTypeError("construct trap is not a function"));
         }
 
         // Create arguments array
@@ -1604,7 +1629,7 @@ public final class VirtualMachine {
 
         // Validate that construct trap returned an object
         if (!(result instanceof JSObject)) {
-            throw new JSException(context.throwError("TypeError", "construct trap must return an object"));
+            throw new JSException(context.throwTypeError("construct trap must return an object"));
         }
 
         return result;

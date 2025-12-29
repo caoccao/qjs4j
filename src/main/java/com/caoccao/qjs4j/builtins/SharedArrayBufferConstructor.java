@@ -28,26 +28,26 @@ public final class SharedArrayBufferConstructor {
      * SharedArrayBuffer constructor function.
      * Cannot be called without 'new'.
      *
-     * @param ctx     The execution context
+     * @param context The execution context
      * @param thisArg The this value
      * @param args    Constructor arguments [byteLength]
      * @return TypeError (SharedArrayBuffer must be called with 'new')
      */
-    public static JSValue construct(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
         // This should be called via VM's handleCallConstructor
         // If called directly, it's an error
-        return ctx.throwError("TypeError", "SharedArrayBuffer constructor must be called with 'new'");
+        return context.throwTypeError("SharedArrayBuffer constructor must be called with 'new'");
     }
 
     /**
      * Create a SharedArrayBuffer instance.
      * Called by VM when 'new SharedArrayBuffer(length)' is executed.
      *
-     * @param ctx    The execution context
-     * @param length The byte length
+     * @param context The execution context
+     * @param length  The byte length
      * @return A new SharedArrayBuffer instance or error
      */
-    public static JSValue createSharedArrayBuffer(JSContext ctx, JSValue length) {
+    public static JSValue createSharedArrayBuffer(JSContext context, JSValue length) {
         // Convert length to integer
         int byteLength = 0;
         if (length instanceof JSNumber num) {
@@ -55,11 +55,11 @@ public final class SharedArrayBufferConstructor {
         } else if (length instanceof JSUndefined) {
             byteLength = 0;
         } else {
-            return ctx.throwError("TypeError", "SharedArrayBuffer length must be a number");
+            return context.throwTypeError("SharedArrayBuffer length must be a number");
         }
 
         if (byteLength < 0) {
-            return ctx.throwError("RangeError", "SharedArrayBuffer byteLength must be non-negative");
+            return context.throwRangeError("SharedArrayBuffer byteLength must be non-negative");
         }
 
         // Create and return SharedArrayBuffer

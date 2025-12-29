@@ -28,9 +28,9 @@ public final class IteratorPrototype {
      * Array.prototype.entries()
      * Returns an iterator of [index, value] pairs.
      */
-    public static JSValue arrayEntries(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue arrayEntries(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArray array)) {
-            return ctx.throwError("TypeError", "Array.prototype.entries called on non-array");
+            return context.throwTypeError("Array.prototype.entries called on non-array");
         }
 
         final int[] index = {0};
@@ -50,9 +50,9 @@ public final class IteratorPrototype {
      * Array.prototype.keys()
      * Returns an iterator of array indices.
      */
-    public static JSValue arrayKeys(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue arrayKeys(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArray array)) {
-            return ctx.throwError("TypeError", "Array.prototype.keys called on non-array");
+            return context.throwTypeError("Array.prototype.keys called on non-array");
         }
 
         final int[] index = {0};
@@ -68,9 +68,9 @@ public final class IteratorPrototype {
      * Array.prototype.values()
      * Returns an iterator of array values.
      */
-    public static JSValue arrayValues(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue arrayValues(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArray array)) {
-            return ctx.throwError("TypeError", "Array.prototype.values called on non-array");
+            return context.throwTypeError("Array.prototype.values called on non-array");
         }
 
         return JSIterator.arrayIterator(array);
@@ -80,9 +80,9 @@ public final class IteratorPrototype {
      * Map.prototype.entries() - returns iterator
      * Returns an iterator of [key, value] pairs.
      */
-    public static JSValue mapEntriesIterator(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue mapEntriesIterator(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "Map.prototype.entries called on non-Map");
+            return context.throwTypeError("Map.prototype.entries called on non-Map");
         }
 
         return JSIterator.mapEntriesIterator(map);
@@ -92,9 +92,9 @@ public final class IteratorPrototype {
      * Map.prototype.keys() - returns iterator
      * Returns an iterator of keys.
      */
-    public static JSValue mapKeysIterator(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue mapKeysIterator(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "Map.prototype.keys called on non-Map");
+            return context.throwTypeError("Map.prototype.keys called on non-Map");
         }
 
         return JSIterator.mapKeysIterator(map);
@@ -104,9 +104,9 @@ public final class IteratorPrototype {
      * Map.prototype.values() - returns iterator
      * Returns an iterator of values.
      */
-    public static JSValue mapValuesIterator(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue mapValuesIterator(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
-            return ctx.throwError("TypeError", "Map.prototype.values called on non-Map");
+            return context.throwTypeError("Map.prototype.values called on non-Map");
         }
 
         return JSIterator.mapValuesIterator(map);
@@ -116,9 +116,9 @@ public final class IteratorPrototype {
      * Iterator.prototype.next()
      * Returns the next value in the iteration.
      */
-    public static JSValue next(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue next(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIterator iterator)) {
-            return ctx.throwError("TypeError", "Iterator.prototype.next called on non-iterator");
+            return context.throwTypeError("Iterator.prototype.next called on non-iterator");
         }
 
         return iterator.next();
@@ -128,9 +128,9 @@ public final class IteratorPrototype {
      * Set.prototype.entries() - returns iterator
      * Returns an iterator of [value, value] pairs.
      */
-    public static JSValue setEntriesIterator(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue setEntriesIterator(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
-            return ctx.throwError("TypeError", "Set.prototype.entries called on non-Set");
+            return context.throwTypeError("Set.prototype.entries called on non-Set");
         }
 
         final java.util.Iterator<JSMap.KeyWrapper> iter = set.values().iterator();
@@ -150,17 +150,17 @@ public final class IteratorPrototype {
      * Set.prototype.keys() - returns iterator
      * In Set, keys() is the same as values().
      */
-    public static JSValue setKeysIterator(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        return setValuesIterator(ctx, thisArg, args);
+    public static JSValue setKeysIterator(JSContext context, JSValue thisArg, JSValue[] args) {
+        return setValuesIterator(context, thisArg, args);
     }
 
     /**
      * Set.prototype.values() - returns iterator
      * Returns an iterator of values.
      */
-    public static JSValue setValuesIterator(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue setValuesIterator(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
-            return ctx.throwError("TypeError", "Set.prototype.values called on non-Set");
+            return context.throwTypeError("Set.prototype.values called on non-Set");
         }
 
         return JSIterator.setValuesIterator(set);
@@ -170,7 +170,7 @@ public final class IteratorPrototype {
      * String.prototype[Symbol.iterator]()
      * Returns an iterator of string characters.
      */
-    public static JSValue stringIterator(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue stringIterator(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSString str)) {
             // Try to get primitive value for boxed strings
             if (thisArg instanceof JSObject obj) {
@@ -179,7 +179,7 @@ public final class IteratorPrototype {
                     return JSIterator.stringIterator(boxedStr);
                 }
             }
-            return ctx.throwError("TypeError", "String iterator called on non-string");
+            return context.throwTypeError("String iterator called on non-string");
         }
 
         return JSIterator.stringIterator(str);

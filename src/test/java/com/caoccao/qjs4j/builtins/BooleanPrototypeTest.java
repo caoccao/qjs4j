@@ -27,7 +27,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Unit tests for Boolean.prototype methods.
  */
 public class BooleanPrototypeTest extends BaseTest {
-
     @Test
     public void testToString() {
         // Normal case: true
@@ -57,6 +56,18 @@ public class BooleanPrototypeTest extends BaseTest {
         JSObject invalidObj = new JSObject();
         assertTypeError(BooleanPrototype.toString(ctx, invalidObj, new JSValue[]{}));
         assertPendingException(ctx);
+    }
+
+    @Test
+    public void testTypeof() {
+        JSValue trueType = ctx.eval("typeof true;");
+        assertEquals("boolean", trueType.asString().map(JSString::value).orElseThrow());
+
+        JSValue falseType = ctx.eval("typeof false;");
+        assertEquals("boolean", falseType.asString().map(JSString::value).orElseThrow());
+
+        JSValue boolObjType = ctx.eval("typeof new Boolean(true);");
+        assertEquals("object", boolObjType.asString().map(JSString::value).orElseThrow());
     }
 
     @Test

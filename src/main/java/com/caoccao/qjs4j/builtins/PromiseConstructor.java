@@ -29,9 +29,9 @@ public final class PromiseConstructor {
      * ES2020 25.6.4.1
      * Returns a Promise that fulfills when all promises fulfill, or rejects when any promise rejects.
      */
-    public static JSValue all(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue all(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return ctx.throwError("TypeError", "Promise.all requires an iterable");
+            return context.throwTypeError("Promise.all requires an iterable");
         }
 
         // Convert iterable to array
@@ -39,9 +39,9 @@ public final class PromiseConstructor {
         if (args[0] instanceof JSArray jsArray) {
             array = jsArray;
         } else if (JSIteratorHelper.isIterable(args[0])) {
-            array = JSIteratorHelper.toArray(args[0], ctx);
+            array = JSIteratorHelper.toArray(args[0], context);
         } else {
-            return ctx.throwError("TypeError", "Promise.all requires an iterable");
+            return context.throwTypeError("Promise.all requires an iterable");
         }
 
         int length = (int) array.getLength();
@@ -66,7 +66,7 @@ public final class PromiseConstructor {
                 // Add reaction to track completion
                 elementPromise.addReactions(
                         new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onFulfill", 1, (context, thisValue, funcArgs) -> {
+                                new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
                                     results.set(index, funcArgs[0]);
                                     remaining[0]--;
                                     if (remaining[0] == 0) {
@@ -75,15 +75,15 @@ public final class PromiseConstructor {
                                     return JSUndefined.INSTANCE;
                                 }),
                                 null,
-                                ctx
+                                context
                         ),
                         new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onReject", 1, (context, thisValue, funcArgs) -> {
+                                new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
                                     resultPromise.reject(funcArgs[0]);
                                     return JSUndefined.INSTANCE;
                                 }),
                                 null,
-                                ctx
+                                context
                         )
                 );
             } else {
@@ -104,9 +104,9 @@ public final class PromiseConstructor {
      * ES2020 25.6.4.2
      * Returns a Promise that fulfills when all promises have settled (fulfilled or rejected).
      */
-    public static JSValue allSettled(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue allSettled(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return ctx.throwError("TypeError", "Promise.allSettled requires an iterable");
+            return context.throwTypeError("Promise.allSettled requires an iterable");
         }
 
         // Convert iterable to array
@@ -114,9 +114,9 @@ public final class PromiseConstructor {
         if (args[0] instanceof JSArray jsArray) {
             array = jsArray;
         } else if (JSIteratorHelper.isIterable(args[0])) {
-            array = JSIteratorHelper.toArray(args[0], ctx);
+            array = JSIteratorHelper.toArray(args[0], context);
         } else {
-            return ctx.throwError("TypeError", "Promise.allSettled requires an iterable");
+            return context.throwTypeError("Promise.allSettled requires an iterable");
         }
 
         int length = (int) array.getLength();
@@ -140,7 +140,7 @@ public final class PromiseConstructor {
                 // Add reactions for both fulfill and reject
                 elementPromise.addReactions(
                         new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onFulfill", 1, (context, thisValue, funcArgs) -> {
+                                new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
                                     JSObject result = new JSObject();
                                     result.set("status", new JSString("fulfilled"));
                                     result.set("value", funcArgs[0]);
@@ -152,10 +152,10 @@ public final class PromiseConstructor {
                                     return JSUndefined.INSTANCE;
                                 }),
                                 null,
-                                ctx
+                                context
                         ),
                         new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onReject", 1, (context, thisValue, funcArgs) -> {
+                                new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
                                     JSObject result = new JSObject();
                                     result.set("status", new JSString("rejected"));
                                     result.set("reason", funcArgs[0]);
@@ -167,7 +167,7 @@ public final class PromiseConstructor {
                                     return JSUndefined.INSTANCE;
                                 }),
                                 null,
-                                ctx
+                                context
                         )
                 );
             } else {
@@ -191,9 +191,9 @@ public final class PromiseConstructor {
      * ES2021 25.6.4.3
      * Returns a Promise that fulfills when any promise fulfills, or rejects when all promises reject.
      */
-    public static JSValue any(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue any(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return ctx.throwError("TypeError", "Promise.any requires an iterable");
+            return context.throwTypeError("Promise.any requires an iterable");
         }
 
         // Convert iterable to array
@@ -201,9 +201,9 @@ public final class PromiseConstructor {
         if (args[0] instanceof JSArray jsArray) {
             array = jsArray;
         } else if (JSIteratorHelper.isIterable(args[0])) {
-            array = JSIteratorHelper.toArray(args[0], ctx);
+            array = JSIteratorHelper.toArray(args[0], context);
         } else {
-            return ctx.throwError("TypeError", "Promise.any requires an iterable");
+            return context.throwTypeError("Promise.any requires an iterable");
         }
 
         int length = (int) array.getLength();
@@ -226,15 +226,15 @@ public final class PromiseConstructor {
             if (element instanceof JSPromise elementPromise) {
                 elementPromise.addReactions(
                         new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onFulfill", 1, (context, thisValue, funcArgs) -> {
+                                new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
                                     resultPromise.fulfill(funcArgs[0]);
                                     return JSUndefined.INSTANCE;
                                 }),
                                 null,
-                                ctx
+                                context
                         ),
                         new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onReject", 1, (context, thisValue, funcArgs) -> {
+                                new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
                                     errors.set(index, funcArgs[0]);
                                     remaining[0]--;
                                     if (remaining[0] == 0) {
@@ -243,7 +243,7 @@ public final class PromiseConstructor {
                                     return JSUndefined.INSTANCE;
                                 }),
                                 null,
-                                ctx
+                                context
                         )
                 );
             } else {
@@ -261,9 +261,9 @@ public final class PromiseConstructor {
      * ES2020 25.6.4.5
      * Returns a Promise that settles as soon as any promise in the iterable settles.
      */
-    public static JSValue race(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue race(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return ctx.throwError("TypeError", "Promise.race requires an iterable");
+            return context.throwTypeError("Promise.race requires an iterable");
         }
 
         // Convert iterable to array
@@ -271,9 +271,9 @@ public final class PromiseConstructor {
         if (args[0] instanceof JSArray jsArray) {
             array = jsArray;
         } else if (JSIteratorHelper.isIterable(args[0])) {
-            array = JSIteratorHelper.toArray(args[0], ctx);
+            array = JSIteratorHelper.toArray(args[0], context);
         } else {
-            return ctx.throwError("TypeError", "Promise.race requires an iterable");
+            return context.throwTypeError("Promise.race requires an iterable");
         }
 
         int length = (int) array.getLength();
@@ -286,20 +286,20 @@ public final class PromiseConstructor {
                 // Add reaction to settle on first completion
                 elementPromise.addReactions(
                         new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onFulfill", 1, (context, thisValue, funcArgs) -> {
+                                new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
                                     resultPromise.fulfill(funcArgs[0]);
                                     return JSUndefined.INSTANCE;
                                 }),
                                 null,
-                                ctx
+                                context
                         ),
                         new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onReject", 1, (context, thisValue, funcArgs) -> {
+                                new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
                                     resultPromise.reject(funcArgs[0]);
                                     return JSUndefined.INSTANCE;
                                 }),
                                 null,
-                                ctx
+                                context
                         )
                 );
             } else {

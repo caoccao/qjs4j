@@ -29,9 +29,9 @@ public final class SetPrototype {
      * ES2020 23.2.3.1
      * Adds the value to the Set. Returns the Set object.
      */
-    public static JSValue add(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
-            return ctx.throwError("TypeError", "Set.prototype.add called on non-Set");
+            return context.throwTypeError("Set.prototype.add called on non-Set");
         }
 
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -44,9 +44,9 @@ public final class SetPrototype {
      * ES2020 23.2.3.2
      * Removes all values from the Set.
      */
-    public static JSValue clear(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue clear(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
-            return ctx.throwError("TypeError", "Set.prototype.clear called on non-Set");
+            return context.throwTypeError("Set.prototype.clear called on non-Set");
         }
 
         set.setClear();
@@ -58,9 +58,9 @@ public final class SetPrototype {
      * ES2020 23.2.3.4
      * Removes the value from the Set. Returns true if the value existed and was removed.
      */
-    public static JSValue delete(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue delete(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
-            return ctx.throwError("TypeError", "Set.prototype.delete called on non-Set");
+            return context.throwTypeError("Set.prototype.delete called on non-Set");
         }
 
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -72,9 +72,9 @@ public final class SetPrototype {
      * ES2020 23.2.3.5
      * Returns an iterator over [value, value] pairs.
      */
-    public static JSValue entries(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
-            return ctx.throwError("TypeError", "Set.prototype.entries called on non-Set");
+            return context.throwTypeError("Set.prototype.entries called on non-Set");
         }
 
         return JSIterator.setEntriesIterator(set);
@@ -85,13 +85,13 @@ public final class SetPrototype {
      * ES2020 23.2.3.6
      * Executes a provided function once per each value in the Set, in insertion order.
      */
-    public static JSValue forEach(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
-            return ctx.throwError("TypeError", "Set.prototype.forEach called on non-Set");
+            return context.throwTypeError("Set.prototype.forEach called on non-Set");
         }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
-            return ctx.throwError("TypeError", "Set.prototype.forEach requires a function");
+            return context.throwTypeError("Set.prototype.forEach requires a function");
         }
 
         JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
@@ -103,7 +103,7 @@ public final class SetPrototype {
             // Call callback with (value, value, set)
             // Note: In Set, both arguments are the value (for consistency with Map)
             JSValue[] callbackArgs = new JSValue[]{value, value, set};
-            callback.call(ctx, callbackThisArg, callbackArgs);
+            callback.call(context, callbackThisArg, callbackArgs);
         }
 
         return JSUndefined.INSTANCE;
@@ -114,9 +114,9 @@ public final class SetPrototype {
      * ES2020 23.2.3.9
      * Returns the number of values in the Set.
      */
-    public static JSValue getSize(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getSize(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
-            return ctx.throwError("TypeError", "get Set.prototype.size called on non-Set");
+            return context.throwTypeError("get Set.prototype.size called on non-Set");
         }
 
         return new JSNumber(set.size());
@@ -127,9 +127,9 @@ public final class SetPrototype {
      * ES2020 23.2.3.7
      * Returns a boolean indicating whether a value exists in the Set.
      */
-    public static JSValue has(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
-            return ctx.throwError("TypeError", "Set.prototype.has called on non-Set");
+            return context.throwTypeError("Set.prototype.has called on non-Set");
         }
 
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -141,9 +141,9 @@ public final class SetPrototype {
      * ES2020 23.2.3.8
      * Returns an iterator over values (same as values()).
      */
-    public static JSValue keys(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue keys(JSContext context, JSValue thisArg, JSValue[] args) {
         // In Set, keys() is the same as values()
-        return values(ctx, thisArg, args);
+        return values(context, thisArg, args);
     }
 
     /**
@@ -151,9 +151,9 @@ public final class SetPrototype {
      * ES2020 23.2.3.10
      * Returns an iterator over values.
      */
-    public static JSValue values(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue values(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
-            return ctx.throwError("TypeError", "Set.prototype.values called on non-Set");
+            return context.throwTypeError("Set.prototype.values called on non-Set");
         }
 
         return JSIterator.setValuesIterator(set);

@@ -32,9 +32,9 @@ public final class DatePrototype {
      * ES2020 20.3.4.3
      * Returns the day of the month (1-31) for the specified date according to local time.
      */
-    public static JSValue getDate(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getDate(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getDate called on non-Date");
+            return context.throwTypeError("Date.prototype.getDate called on non-Date");
         }
         ZonedDateTime zdt = date.getLocalZonedDateTime();
         return new JSNumber(zdt.getDayOfMonth());
@@ -45,9 +45,9 @@ public final class DatePrototype {
      * ES2020 20.3.4.4
      * Returns the day of the week (0-6) for the specified date according to local time.
      */
-    public static JSValue getDay(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getDay(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getDay called on non-Date");
+            return context.throwTypeError("Date.prototype.getDay called on non-Date");
         }
         ZonedDateTime zdt = date.getLocalZonedDateTime();
         int dayOfWeek = zdt.getDayOfWeek().getValue();
@@ -59,9 +59,9 @@ public final class DatePrototype {
      * ES2020 20.3.4.5
      * Returns the year of the specified date according to local time.
      */
-    public static JSValue getFullYear(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getFullYear(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getFullYear called on non-Date");
+            return context.throwTypeError("Date.prototype.getFullYear called on non-Date");
         }
         ZonedDateTime zdt = date.getLocalZonedDateTime();
         return new JSNumber(zdt.getYear());
@@ -72,9 +72,9 @@ public final class DatePrototype {
      * ES2020 20.3.4.6
      * Returns the hour (0-23) in the specified date according to local time.
      */
-    public static JSValue getHours(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getHours(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getHours called on non-Date");
+            return context.throwTypeError("Date.prototype.getHours called on non-Date");
         }
         ZonedDateTime zdt = date.getLocalZonedDateTime();
         return new JSNumber(zdt.getHour());
@@ -85,9 +85,9 @@ public final class DatePrototype {
      * ES2020 20.3.4.11
      * Returns the milliseconds (0-999) in the specified date according to local time.
      */
-    public static JSValue getMilliseconds(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getMilliseconds called on non-Date");
+            return context.throwTypeError("Date.prototype.getMilliseconds called on non-Date");
         }
         ZonedDateTime zdt = date.getLocalZonedDateTime();
         return new JSNumber(zdt.getNano() / 1_000_000);
@@ -98,9 +98,9 @@ public final class DatePrototype {
      * ES2020 20.3.4.7
      * Returns the minutes (0-59) in the specified date according to local time.
      */
-    public static JSValue getMinutes(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getMinutes(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getMinutes called on non-Date");
+            return context.throwTypeError("Date.prototype.getMinutes called on non-Date");
         }
         ZonedDateTime zdt = date.getLocalZonedDateTime();
         return new JSNumber(zdt.getMinute());
@@ -111,9 +111,9 @@ public final class DatePrototype {
      * ES2020 20.3.4.8
      * Returns the month (0-11) of the specified date according to local time.
      */
-    public static JSValue getMonth(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getMonth(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getMonth called on non-Date");
+            return context.throwTypeError("Date.prototype.getMonth called on non-Date");
         }
         ZonedDateTime zdt = date.getLocalZonedDateTime();
         return new JSNumber(zdt.getMonthValue() - 1); // JavaScript months are 0-based
@@ -124,9 +124,9 @@ public final class DatePrototype {
      * ES2020 20.3.4.9
      * Returns the seconds (0-59) in the specified date according to local time.
      */
-    public static JSValue getSeconds(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getSeconds(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getSeconds called on non-Date");
+            return context.throwTypeError("Date.prototype.getSeconds called on non-Date");
         }
         ZonedDateTime zdt = date.getLocalZonedDateTime();
         return new JSNumber(zdt.getSecond());
@@ -137,9 +137,9 @@ public final class DatePrototype {
      * ES2020 20.3.4.10
      * Returns the numeric value corresponding to the time for the specified date.
      */
-    public static JSValue getTime(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getTime(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getTime called on non-Date");
+            return context.throwTypeError("Date.prototype.getTime called on non-Date");
         }
         return new JSNumber(date.getTimeValue());
     }
@@ -148,9 +148,9 @@ public final class DatePrototype {
      * Date.prototype.getUTCDate()
      * ES2020 20.3.4.13
      */
-    public static JSValue getUTCDate(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getUTCDate(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getUTCDate called on non-Date");
+            return context.throwTypeError("Date.prototype.getUTCDate called on non-Date");
         }
         ZonedDateTime zdt = date.getZonedDateTime();
         return new JSNumber(zdt.getDayOfMonth());
@@ -160,9 +160,9 @@ public final class DatePrototype {
      * Date.prototype.getUTCFullYear()
      * ES2020 20.3.4.15
      */
-    public static JSValue getUTCFullYear(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getUTCFullYear(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getUTCFullYear called on non-Date");
+            return context.throwTypeError("Date.prototype.getUTCFullYear called on non-Date");
         }
         ZonedDateTime zdt = date.getZonedDateTime();
         return new JSNumber(zdt.getYear());
@@ -172,9 +172,9 @@ public final class DatePrototype {
      * Date.prototype.getUTCHours()
      * ES2020 20.3.4.16
      */
-    public static JSValue getUTCHours(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getUTCHours(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getUTCHours called on non-Date");
+            return context.throwTypeError("Date.prototype.getUTCHours called on non-Date");
         }
         ZonedDateTime zdt = date.getZonedDateTime();
         return new JSNumber(zdt.getHour());
@@ -184,9 +184,9 @@ public final class DatePrototype {
      * Date.prototype.getUTCMonth()
      * ES2020 20.3.4.18
      */
-    public static JSValue getUTCMonth(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getUTCMonth(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.getUTCMonth called on non-Date");
+            return context.throwTypeError("Date.prototype.getUTCMonth called on non-Date");
         }
         ZonedDateTime zdt = date.getZonedDateTime();
         return new JSNumber(zdt.getMonthValue() - 1);
@@ -197,9 +197,9 @@ public final class DatePrototype {
      * ES2020 20.3.4.36
      * Returns a string in simplified extended ISO format.
      */
-    public static JSValue toISOString(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue toISOString(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.toISOString called on non-Date");
+            return context.throwTypeError("Date.prototype.toISOString called on non-Date");
         }
         ZonedDateTime zdt = date.getZonedDateTime();
         String isoString = zdt.format(DateTimeFormatter.ISO_INSTANT);
@@ -210,17 +210,17 @@ public final class DatePrototype {
      * Date.prototype.toJSON()
      * ES2020 20.3.4.37
      */
-    public static JSValue toJSON(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        return toISOString(ctx, thisArg, args);
+    public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
+        return toISOString(context, thisArg, args);
     }
 
     /**
      * Date.prototype.toString()
      * ES2020 20.3.4.41
      */
-    public static JSValue toStringMethod(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSDate date)) {
-            return ctx.throwError("TypeError", "Date.prototype.toString called on non-Date");
+            return context.throwTypeError("Date.prototype.toString called on non-Date");
         }
         ZonedDateTime zdt = date.getLocalZonedDateTime();
         return new JSString(zdt.format(DateTimeFormatter.RFC_1123_DATE_TIME));
@@ -230,7 +230,7 @@ public final class DatePrototype {
      * Date.prototype.valueOf()
      * ES2020 20.3.4.45
      */
-    public static JSValue valueOf(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        return getTime(ctx, thisArg, args);
+    public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
+        return getTime(context, thisArg, args);
     }
 }

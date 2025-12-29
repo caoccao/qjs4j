@@ -30,12 +30,12 @@ public final class RegExpPrototype {
      * ES2020 21.2.5.2.1
      * Executes a search for a match in a string.
      */
-    public static JSValue exec(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue exec(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSRegExp regexp)) {
-            return ctx.throwError("TypeError", "RegExp.prototype.exec called on non-RegExp");
+            return context.throwTypeError("RegExp.prototype.exec called on non-RegExp");
         }
 
-        String str = args.length > 0 ? JSTypeConversions.toString(args[0]).value() : "";
+        String str = args.length > 0 ? JSTypeConversions.toString(context, args[0]).value() : "";
 
         // Get lastIndex
         int lastIndex = regexp.isGlobal() ? regexp.getLastIndex() : 0;
@@ -85,9 +85,9 @@ public final class RegExpPrototype {
      * get RegExp.prototype.flags
      * ES2020 21.2.5.3
      */
-    public static JSValue getFlags(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getFlags(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSRegExp regexp)) {
-            return ctx.throwError("TypeError", "RegExp.prototype.flags called on non-RegExp");
+            return context.throwTypeError("RegExp.prototype.flags called on non-RegExp");
         }
 
         return new JSString(regexp.getFlags());
@@ -97,7 +97,7 @@ public final class RegExpPrototype {
      * get RegExp.prototype.global
      * ES2020 21.2.5.4
      */
-    public static JSValue getGlobal(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getGlobal(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSRegExp regexp)) {
             return JSUndefined.INSTANCE;
         }
@@ -109,7 +109,7 @@ public final class RegExpPrototype {
      * get RegExp.prototype.ignoreCase
      * ES2020 21.2.5.5
      */
-    public static JSValue getIgnoreCase(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getIgnoreCase(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSRegExp regexp)) {
             return JSUndefined.INSTANCE;
         }
@@ -121,7 +121,7 @@ public final class RegExpPrototype {
      * get RegExp.prototype.multiline
      * ES2020 21.2.5.7
      */
-    public static JSValue getMultiline(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getMultiline(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSRegExp regexp)) {
             return JSUndefined.INSTANCE;
         }
@@ -133,9 +133,9 @@ public final class RegExpPrototype {
      * get RegExp.prototype.source
      * ES2020 21.2.5.10
      */
-    public static JSValue getSource(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getSource(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSRegExp regexp)) {
-            return ctx.throwError("TypeError", "RegExp.prototype.source called on non-RegExp");
+            return context.throwTypeError("RegExp.prototype.source called on non-RegExp");
         }
 
         return new JSString(regexp.getPattern());
@@ -146,12 +146,12 @@ public final class RegExpPrototype {
      * ES2020 21.2.5.17
      * Tests for a match in a string.
      */
-    public static JSValue test(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue test(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSRegExp regexp)) {
-            return ctx.throwError("TypeError", "RegExp.prototype.test called on non-RegExp");
+            return context.throwTypeError("RegExp.prototype.test called on non-RegExp");
         }
 
-        String str = args.length > 0 ? JSTypeConversions.toString(args[0]).value() : "";
+        String str = args.length > 0 ? JSTypeConversions.toString(context, args[0]).value() : "";
 
         // Get lastIndex
         int lastIndex = regexp.isGlobal() ? regexp.getLastIndex() : 0;
@@ -178,9 +178,9 @@ public final class RegExpPrototype {
      * RegExp.prototype.toString()
      * ES2020 21.2.5.14
      */
-    public static JSValue toStringMethod(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSRegExp regexp)) {
-            return ctx.throwError("TypeError", "RegExp.prototype.toString called on non-RegExp");
+            return context.throwTypeError("RegExp.prototype.toString called on non-RegExp");
         }
 
         return new JSString("/" + regexp.getPattern() + "/" + regexp.getFlags());

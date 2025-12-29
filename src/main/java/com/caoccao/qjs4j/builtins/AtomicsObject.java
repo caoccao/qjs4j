@@ -43,31 +43,31 @@ public final class AtomicsObject {
      * ES2017 24.4.3
      * Atomically adds value to the element at index and returns the old value.
      */
-    public static JSValue add(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
-            return ctx.throwError("TypeError", "Atomics.add requires typedArray, index, and value");
+            return context.throwTypeError("Atomics.add requires typedArray, index, and value");
         }
 
         // Validate typed array
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return ctx.throwError("TypeError", "Atomics.add requires a TypedArray");
+            return context.throwTypeError("Atomics.add requires a TypedArray");
         }
 
         // Only Int32Array and Uint32Array support atomic operations
         if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSUint32Array)) {
-            return ctx.throwError("TypeError", "Atomics.add only works on Int32Array or Uint32Array");
+            return context.throwTypeError("Atomics.add only works on Int32Array or Uint32Array");
         }
 
         // Check if backed by SharedArrayBuffer
         if (!typedArray.getBuffer().isShared()) {
-            return ctx.throwError("TypeError", "Atomics operations require SharedArrayBuffer");
+            return context.throwTypeError("Atomics operations require SharedArrayBuffer");
         }
 
         int index = (int) ((JSNumber) args[1]).value();
         int value = (int) ((JSNumber) args[2]).value();
 
         if (index < 0 || index >= typedArray.getLength()) {
-            return ctx.throwError("RangeError", "Index out of bounds");
+            return context.throwRangeError("Index out of bounds");
         }
 
         // Perform atomic add
@@ -86,28 +86,28 @@ public final class AtomicsObject {
      * ES2017 24.4.4
      * Atomically computes bitwise AND and returns the old value.
      */
-    public static JSValue and(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue and(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
-            return ctx.throwError("TypeError", "Atomics.and requires typedArray, index, and value");
+            return context.throwTypeError("Atomics.and requires typedArray, index, and value");
         }
 
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return ctx.throwError("TypeError", "Atomics.and requires a TypedArray");
+            return context.throwTypeError("Atomics.and requires a TypedArray");
         }
 
         if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSUint32Array)) {
-            return ctx.throwError("TypeError", "Atomics.and only works on Int32Array or Uint32Array");
+            return context.throwTypeError("Atomics.and only works on Int32Array or Uint32Array");
         }
 
         if (!typedArray.getBuffer().isShared()) {
-            return ctx.throwError("TypeError", "Atomics operations require SharedArrayBuffer");
+            return context.throwTypeError("Atomics operations require SharedArrayBuffer");
         }
 
         int index = (int) ((JSNumber) args[1]).value();
         int value = (int) ((JSNumber) args[2]).value();
 
         if (index < 0 || index >= typedArray.getLength()) {
-            return ctx.throwError("RangeError", "Index out of bounds");
+            return context.throwRangeError("Index out of bounds");
         }
 
         ByteBuffer buffer = typedArray.getBuffer().getBuffer();
@@ -125,21 +125,21 @@ public final class AtomicsObject {
      * ES2017 24.4.5
      * Atomically compares and exchanges if equal, returns the old value.
      */
-    public static JSValue compareExchange(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue compareExchange(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 4) {
-            return ctx.throwError("TypeError", "Atomics.compareExchange requires typedArray, index, expectedValue, and replacementValue");
+            return context.throwTypeError("Atomics.compareExchange requires typedArray, index, expectedValue, and replacementValue");
         }
 
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return ctx.throwError("TypeError", "Atomics.compareExchange requires a TypedArray");
+            return context.throwTypeError("Atomics.compareExchange requires a TypedArray");
         }
 
         if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSUint32Array)) {
-            return ctx.throwError("TypeError", "Atomics.compareExchange only works on Int32Array or Uint32Array");
+            return context.throwTypeError("Atomics.compareExchange only works on Int32Array or Uint32Array");
         }
 
         if (!typedArray.getBuffer().isShared()) {
-            return ctx.throwError("TypeError", "Atomics operations require SharedArrayBuffer");
+            return context.throwTypeError("Atomics operations require SharedArrayBuffer");
         }
 
         int index = (int) ((JSNumber) args[1]).value();
@@ -147,7 +147,7 @@ public final class AtomicsObject {
         int replacementValue = (int) ((JSNumber) args[3]).value();
 
         if (index < 0 || index >= typedArray.getLength()) {
-            return ctx.throwError("RangeError", "Index out of bounds");
+            return context.throwRangeError("Index out of bounds");
         }
 
         ByteBuffer buffer = typedArray.getBuffer().getBuffer();
@@ -167,28 +167,28 @@ public final class AtomicsObject {
      * ES2017 24.4.6
      * Atomically exchanges the value at index and returns the old value.
      */
-    public static JSValue exchange(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue exchange(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
-            return ctx.throwError("TypeError", "Atomics.exchange requires typedArray, index, and value");
+            return context.throwTypeError("Atomics.exchange requires typedArray, index, and value");
         }
 
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return ctx.throwError("TypeError", "Atomics.exchange requires a TypedArray");
+            return context.throwTypeError("Atomics.exchange requires a TypedArray");
         }
 
         if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSUint32Array)) {
-            return ctx.throwError("TypeError", "Atomics.exchange only works on Int32Array or Uint32Array");
+            return context.throwTypeError("Atomics.exchange only works on Int32Array or Uint32Array");
         }
 
         if (!typedArray.getBuffer().isShared()) {
-            return ctx.throwError("TypeError", "Atomics operations require SharedArrayBuffer");
+            return context.throwTypeError("Atomics operations require SharedArrayBuffer");
         }
 
         int index = (int) ((JSNumber) args[1]).value();
         int value = (int) ((JSNumber) args[2]).value();
 
         if (index < 0 || index >= typedArray.getLength()) {
-            return ctx.throwError("RangeError", "Index out of bounds");
+            return context.throwRangeError("Index out of bounds");
         }
 
         ByteBuffer buffer = typedArray.getBuffer().getBuffer();
@@ -210,7 +210,7 @@ public final class AtomicsObject {
      * ES2017 24.4.2
      * Returns whether operations on a given size are lock-free.
      */
-    public static JSValue isLockFree(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue isLockFree(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
             return JSBoolean.FALSE;
         }
@@ -228,27 +228,27 @@ public final class AtomicsObject {
      * ES2017 24.4.7
      * Atomically loads and returns the value at index.
      */
-    public static JSValue load(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue load(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2) {
-            return ctx.throwError("TypeError", "Atomics.load requires typedArray and index");
+            return context.throwTypeError("Atomics.load requires typedArray and index");
         }
 
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return ctx.throwError("TypeError", "Atomics.load requires a TypedArray");
+            return context.throwTypeError("Atomics.load requires a TypedArray");
         }
 
         if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSUint32Array)) {
-            return ctx.throwError("TypeError", "Atomics.load only works on Int32Array or Uint32Array");
+            return context.throwTypeError("Atomics.load only works on Int32Array or Uint32Array");
         }
 
         if (!typedArray.getBuffer().isShared()) {
-            return ctx.throwError("TypeError", "Atomics operations require SharedArrayBuffer");
+            return context.throwTypeError("Atomics operations require SharedArrayBuffer");
         }
 
         int index = (int) ((JSNumber) args[1]).value();
 
         if (index < 0 || index >= typedArray.getLength()) {
-            return ctx.throwError("RangeError", "Index out of bounds");
+            return context.throwRangeError("Index out of bounds");
         }
 
         ByteBuffer buffer = typedArray.getBuffer().getBuffer();
@@ -266,28 +266,28 @@ public final class AtomicsObject {
      * Notifies some agents that are sleeping in a wait on the given index.
      * Returns the number of agents that were awoken.
      */
-    public static JSValue notify(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue notify(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 1) {
-            return ctx.throwError("TypeError", "Atomics.notify requires typedArray");
+            return context.throwTypeError("Atomics.notify requires typedArray");
         }
 
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return ctx.throwError("TypeError", "Atomics.notify requires a TypedArray");
+            return context.throwTypeError("Atomics.notify requires a TypedArray");
         }
 
         if (!(typedArray instanceof JSInt32Array)) {
-            return ctx.throwError("TypeError", "Atomics.notify only works on Int32Array");
+            return context.throwTypeError("Atomics.notify only works on Int32Array");
         }
 
         int index = args.length >= 2 ? (int) ((JSNumber) args[1]).value() : 0;
         int count = args.length >= 3 ? (int) ((JSNumber) args[2]).value() : Integer.MAX_VALUE;
 
         if (index < 0 || index >= typedArray.getLength()) {
-            return ctx.throwError("RangeError", "Index out of bounds");
+            return context.throwRangeError("Index out of bounds");
         }
 
         if (count < 0) {
-            return ctx.throwError("RangeError", "Count must be non-negative");
+            return context.throwRangeError("Count must be non-negative");
         }
 
         // Get the buffer
@@ -308,28 +308,28 @@ public final class AtomicsObject {
      * ES2017 24.4.8
      * Atomically computes bitwise OR and returns the old value.
      */
-    public static JSValue or(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue or(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
-            return ctx.throwError("TypeError", "Atomics.or requires typedArray, index, and value");
+            return context.throwTypeError("Atomics.or requires typedArray, index, and value");
         }
 
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return ctx.throwError("TypeError", "Atomics.or requires a TypedArray");
+            return context.throwTypeError("Atomics.or requires a TypedArray");
         }
 
         if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSUint32Array)) {
-            return ctx.throwError("TypeError", "Atomics.or only works on Int32Array or Uint32Array");
+            return context.throwTypeError("Atomics.or only works on Int32Array or Uint32Array");
         }
 
         if (!typedArray.getBuffer().isShared()) {
-            return ctx.throwError("TypeError", "Atomics operations require SharedArrayBuffer");
+            return context.throwTypeError("Atomics operations require SharedArrayBuffer");
         }
 
         int index = (int) ((JSNumber) args[1]).value();
         int value = (int) ((JSNumber) args[2]).value();
 
         if (index < 0 || index >= typedArray.getLength()) {
-            return ctx.throwError("RangeError", "Index out of bounds");
+            return context.throwRangeError("Index out of bounds");
         }
 
         ByteBuffer buffer = typedArray.getBuffer().getBuffer();
@@ -348,7 +348,7 @@ public final class AtomicsObject {
      * Provides a hint to the runtime that it may be a good time to yield.
      * Useful in spin-wait loops.
      */
-    public static JSValue pause(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue pause(JSContext context, JSValue thisArg, JSValue[] args) {
         // Java 9+ Thread.onSpinWait() provides a hint to the JVM that we're in a spin-wait loop
         Thread.onSpinWait();
         return JSUndefined.INSTANCE;
@@ -359,28 +359,28 @@ public final class AtomicsObject {
      * ES2017 24.4.11
      * Atomically stores value at index and returns the value.
      */
-    public static JSValue store(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue store(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
-            return ctx.throwError("TypeError", "Atomics.store requires typedArray, index, and value");
+            return context.throwTypeError("Atomics.store requires typedArray, index, and value");
         }
 
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return ctx.throwError("TypeError", "Atomics.store requires a TypedArray");
+            return context.throwTypeError("Atomics.store requires a TypedArray");
         }
 
         if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSUint32Array)) {
-            return ctx.throwError("TypeError", "Atomics.store only works on Int32Array or Uint32Array");
+            return context.throwTypeError("Atomics.store only works on Int32Array or Uint32Array");
         }
 
         if (!typedArray.getBuffer().isShared()) {
-            return ctx.throwError("TypeError", "Atomics operations require SharedArrayBuffer");
+            return context.throwTypeError("Atomics operations require SharedArrayBuffer");
         }
 
         int index = (int) ((JSNumber) args[1]).value();
         int value = (int) ((JSNumber) args[2]).value();
 
         if (index < 0 || index >= typedArray.getLength()) {
-            return ctx.throwError("RangeError", "Index out of bounds");
+            return context.throwRangeError("Index out of bounds");
         }
 
         ByteBuffer buffer = typedArray.getBuffer().getBuffer();
@@ -397,28 +397,28 @@ public final class AtomicsObject {
      * ES2017 24.4.12
      * Atomically subtracts value from the element at index and returns the old value.
      */
-    public static JSValue sub(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue sub(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
-            return ctx.throwError("TypeError", "Atomics.sub requires typedArray, index, and value");
+            return context.throwTypeError("Atomics.sub requires typedArray, index, and value");
         }
 
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return ctx.throwError("TypeError", "Atomics.sub requires a TypedArray");
+            return context.throwTypeError("Atomics.sub requires a TypedArray");
         }
 
         if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSUint32Array)) {
-            return ctx.throwError("TypeError", "Atomics.sub only works on Int32Array or Uint32Array");
+            return context.throwTypeError("Atomics.sub only works on Int32Array or Uint32Array");
         }
 
         if (!typedArray.getBuffer().isShared()) {
-            return ctx.throwError("TypeError", "Atomics operations require SharedArrayBuffer");
+            return context.throwTypeError("Atomics operations require SharedArrayBuffer");
         }
 
         int index = (int) ((JSNumber) args[1]).value();
         int value = (int) ((JSNumber) args[2]).value();
 
         if (index < 0 || index >= typedArray.getLength()) {
-            return ctx.throwError("RangeError", "Index out of bounds");
+            return context.throwRangeError("Index out of bounds");
         }
 
         ByteBuffer buffer = typedArray.getBuffer().getBuffer();
@@ -438,17 +438,17 @@ public final class AtomicsObject {
      * Returns "ok" if woken by notify, "not-equal" if value doesn't match,
      * or "timed-out" if timeout expired.
      */
-    public static JSValue wait(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue wait(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
-            return ctx.throwError("TypeError", "Atomics.wait requires typedArray, index, and value");
+            return context.throwTypeError("Atomics.wait requires typedArray, index, and value");
         }
 
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return ctx.throwError("TypeError", "Atomics.wait requires a TypedArray");
+            return context.throwTypeError("Atomics.wait requires a TypedArray");
         }
 
         if (!(typedArray instanceof JSInt32Array)) {
-            return ctx.throwError("TypeError", "Atomics.wait only works on Int32Array");
+            return context.throwTypeError("Atomics.wait only works on Int32Array");
         }
 
         int index = (int) ((JSNumber) args[1]).value();
@@ -456,7 +456,7 @@ public final class AtomicsObject {
         long timeout = args.length >= 4 ? (long) ((JSNumber) args[3]).value() : -1;
 
         if (index < 0 || index >= typedArray.getLength()) {
-            return ctx.throwError("RangeError", "Index out of bounds");
+            return context.throwRangeError("Index out of bounds");
         }
 
         ByteBuffer byteBuffer = typedArray.getBuffer().getBuffer();
@@ -493,17 +493,17 @@ public final class AtomicsObject {
      * Returns {async: false, value: "not-equal"} if value doesn't match,
      * or {async: true, value: Promise} if waiting.
      */
-    public static JSValue waitAsync(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue waitAsync(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
-            return ctx.throwError("TypeError", "Atomics.waitAsync requires typedArray, index, and value");
+            return context.throwTypeError("Atomics.waitAsync requires typedArray, index, and value");
         }
 
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return ctx.throwError("TypeError", "Atomics.waitAsync requires a TypedArray");
+            return context.throwTypeError("Atomics.waitAsync requires a TypedArray");
         }
 
         if (!(typedArray instanceof JSInt32Array)) {
-            return ctx.throwError("TypeError", "Atomics.waitAsync only works on Int32Array");
+            return context.throwTypeError("Atomics.waitAsync only works on Int32Array");
         }
 
         int index = (int) ((JSNumber) args[1]).value();
@@ -511,7 +511,7 @@ public final class AtomicsObject {
         long timeout = args.length >= 4 ? (long) ((JSNumber) args[3]).value() : -1;
 
         if (index < 0 || index >= typedArray.getLength()) {
-            return ctx.throwError("RangeError", "Index out of bounds");
+            return context.throwRangeError("Index out of bounds");
         }
 
         ByteBuffer byteBuffer = typedArray.getBuffer().getBuffer();
@@ -553,28 +553,28 @@ public final class AtomicsObject {
      * ES2017 24.4.14
      * Atomically computes bitwise XOR and returns the old value.
      */
-    public static JSValue xor(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue xor(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
-            return ctx.throwError("TypeError", "Atomics.xor requires typedArray, index, and value");
+            return context.throwTypeError("Atomics.xor requires typedArray, index, and value");
         }
 
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return ctx.throwError("TypeError", "Atomics.xor requires a TypedArray");
+            return context.throwTypeError("Atomics.xor requires a TypedArray");
         }
 
         if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSUint32Array)) {
-            return ctx.throwError("TypeError", "Atomics.xor only works on Int32Array or Uint32Array");
+            return context.throwTypeError("Atomics.xor only works on Int32Array or Uint32Array");
         }
 
         if (!typedArray.getBuffer().isShared()) {
-            return ctx.throwError("TypeError", "Atomics operations require SharedArrayBuffer");
+            return context.throwTypeError("Atomics operations require SharedArrayBuffer");
         }
 
         int index = (int) ((JSNumber) args[1]).value();
         int value = (int) ((JSNumber) args[2]).value();
 
         if (index < 0 || index >= typedArray.getLength()) {
-            return ctx.throwError("RangeError", "Index out of bounds");
+            return context.throwRangeError("Index out of bounds");
         }
 
         ByteBuffer buffer = typedArray.getBuffer().getBuffer();

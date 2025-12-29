@@ -30,20 +30,20 @@ public final class WeakSetPrototype {
      * Adds the value to the WeakSet object. Returns the WeakSet object.
      * Value must be an object.
      */
-    public static JSValue add(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakSet weakSet)) {
-            return ctx.throwError("TypeError", "WeakSet.prototype.add called on non-WeakSet");
+            return context.throwTypeError("WeakSet.prototype.add called on non-WeakSet");
         }
 
         if (args.length == 0) {
-            return ctx.throwError("TypeError", "WeakSet.prototype.add requires a value");
+            return context.throwTypeError("WeakSet.prototype.add requires a value");
         }
 
         JSValue value = args[0];
 
         // Value must be an object
         if (!(value instanceof JSObject valueObj)) {
-            return ctx.throwError("TypeError", "Invalid value used in weak set");
+            return context.throwTypeError("Invalid value used in weak set");
         }
 
         weakSet.weakSetAdd(valueObj);
@@ -55,9 +55,9 @@ public final class WeakSetPrototype {
      * ES2020 23.4.3.2
      * Removes the value from the WeakSet. Returns true if the value existed and was removed.
      */
-    public static JSValue delete(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue delete(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakSet weakSet)) {
-            return ctx.throwError("TypeError", "WeakSet.prototype.delete called on non-WeakSet");
+            return context.throwTypeError("WeakSet.prototype.delete called on non-WeakSet");
         }
 
         if (args.length == 0) {
@@ -79,9 +79,9 @@ public final class WeakSetPrototype {
      * ES2020 23.4.3.3
      * Returns a boolean indicating whether a value exists in the WeakSet.
      */
-    public static JSValue has(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakSet weakSet)) {
-            return ctx.throwError("TypeError", "WeakSet.prototype.has called on non-WeakSet");
+            return context.throwTypeError("WeakSet.prototype.has called on non-WeakSet");
         }
 
         if (args.length == 0) {

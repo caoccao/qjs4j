@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -56,7 +58,7 @@ public final class JSProxy extends JSObject {
         checkRevoked();
 
         if (!isFunc) {
-            throw new JSException(context.throwError("TypeError", "not a function"));
+            throw new JSException(context.throwTypeError("not a function"));
         }
 
         JSValue trap = getTrapMethod("apply");
@@ -64,11 +66,11 @@ public final class JSProxy extends JSObject {
             if (target instanceof JSFunction targetFunc) {
                 return targetFunc.call(ctx, thisArg, args);
             }
-            throw new JSException(context.throwError("TypeError", "target is not callable"));
+            throw new JSException(context.throwTypeError("target is not callable"));
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {
-            throw new JSException(context.throwError("TypeError", "apply trap must be a function"));
+            throw new JSException(context.throwTypeError("apply trap must be a function"));
         }
 
         // Create arguments array
@@ -84,7 +86,7 @@ public final class JSProxy extends JSObject {
      */
     private void checkRevoked() {
         if (revoked) {
-            throw new JSException(context.throwError("TypeError", "Cannot perform operation on a revoked proxy"));
+            throw new JSException(context.throwTypeError("Cannot perform operation on a revoked proxy"));
         }
     }
 
@@ -96,7 +98,7 @@ public final class JSProxy extends JSObject {
         checkRevoked();
 
         if (!JSTypeChecking.isConstructor(target)) {
-            throw new JSException(context.throwError("TypeError", "target is not a constructor"));
+            throw new JSException(context.throwTypeError("target is not a constructor"));
         }
 
         JSValue trap = getTrapMethod("construct");
@@ -104,14 +106,14 @@ public final class JSProxy extends JSObject {
             // Forward to target constructor
             if (target instanceof JSFunction targetFunc) {
                 // Would need constructor invocation support
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "construct forwarding not yet implemented"));
             }
-            throw new JSException(context.throwError("TypeError", "target is not a constructor"));
+            throw new JSException(context.throwTypeError("target is not a constructor"));
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {
-            throw new JSException(context.throwError("TypeError", "construct trap must be a function"));
+            throw new JSException(context.throwTypeError("construct trap must be a function"));
         }
 
         // Create arguments array
@@ -123,7 +125,7 @@ public final class JSProxy extends JSObject {
 
         // Result must be an object
         if (!(result instanceof JSObject)) {
-            throw new JSException(context.throwError("TypeError",
+            throw new JSException(context.throwTypeError(
                     "construct trap must return an object"));
         }
 
@@ -158,7 +160,7 @@ public final class JSProxy extends JSObject {
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {
-            throw new JSException(context.throwError("TypeError", "defineProperty trap must be a function"));
+            throw new JSException(context.throwTypeError("defineProperty trap must be a function"));
         }
 
         // Convert descriptor to object
@@ -174,7 +176,7 @@ public final class JSProxy extends JSObject {
 
         boolean boolResult = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
         if (!boolResult) {
-            throw new JSException(context.throwError("TypeError", "defineProperty returned false"));
+            throw new JSException(context.throwTypeError("defineProperty returned false"));
         }
 
         // Validate invariants
@@ -186,17 +188,17 @@ public final class JSProxy extends JSObject {
         if (targetDesc == null) {
             // Property doesn't exist on target
             if (!targetExtensible || settingConfigFalse) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "proxy: inconsistent defineProperty"));
             }
         } else {
             // Property exists on target
             if (!isCompatiblePropertyDescriptor(targetExtensible, descriptor, targetDesc)) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "proxy: inconsistent defineProperty"));
             }
             if (targetDesc.isConfigurable() && settingConfigFalse) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "proxy: inconsistent defineProperty"));
             }
         }
@@ -223,12 +225,12 @@ public final class JSProxy extends JSObject {
             // Check invariant: cannot delete non-configurable properties
             PropertyDescriptor targetDesc = ((JSObject) target).getOwnPropertyDescriptor(key);
             if (success && targetDesc != null && !targetDesc.isConfigurable()) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "'deleteProperty' on proxy: trap returned truish for property '" + key.asString() + "' which is non-configurable in the proxy target"));
             }
 
             if (!success && context.isStrictMode()) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "'deleteProperty' on proxy: trap returned falsish for property '" + key.asString() + "'"));
             }
             return success;
@@ -325,8 +327,8 @@ public final class JSProxy extends JSObject {
                             targetDesc.isAccessorDescriptor() && targetDesc.getGetter() == null) {
                         // Non-configurable accessor without getter
                         if (!(trapResult instanceof JSUndefined)) {
-                            throw new JSException(context.throwError("TypeError",
-                                    "'get' on proxy: property '" + key.asString() + "' is a non-configurable accessor property on the proxy target and does not have a getter function, but the trap did not return 'undefined' (got '" + JSTypeConversions.toString(trapResult).value() + "')"));
+                            throw new JSException(context.throwTypeError(
+                                    "'get' on proxy: property '" + key.asString() + "' is a non-configurable accessor property on the proxy target and does not have a getter function, but the trap did not return 'undefined' (got '" + JSTypeConversions.toString(context, trapResult).value() + "')"));
                         }
                     }
 
@@ -335,7 +337,7 @@ public final class JSProxy extends JSObject {
                             !targetDesc.isConfigurable() && !targetDesc.isWritable()) {
                         // Non-writable, non-configurable data property
                         if (!JSTypeConversions.strictEquals(trapResult, targetDesc.getValue())) {
-                            throw new JSException(context.throwError("TypeError",
+                            throw new JSException(context.throwTypeError(
                                     "'get' on proxy: property '" + key.asString() + "' is a read-only and non-configurable data property on the proxy target but the proxy did not return its actual"));
                         }
                     }
@@ -343,7 +345,7 @@ public final class JSProxy extends JSObject {
 
                 return trapResult;
             } else {
-                throw new JSException(context.throwError("TypeError", "proxy trap 'get' must be a function"));
+                throw new JSException(context.throwTypeError("proxy trap 'get' must be a function"));
             }
         }
 
@@ -375,7 +377,7 @@ public final class JSProxy extends JSObject {
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {
-            throw new JSException(context.throwError("TypeError",
+            throw new JSException(context.throwTypeError(
                     "getOwnPropertyDescriptor trap must be a function"));
         }
 
@@ -388,7 +390,7 @@ public final class JSProxy extends JSObject {
 
         // Result must be undefined or object
         if (!(trapResult instanceof JSUndefined) && !(trapResult instanceof JSObject)) {
-            throw new JSException(context.throwError("TypeError",
+            throw new JSException(context.throwTypeError(
                     "getOwnPropertyDescriptor trap must return an object or undefined"));
         }
 
@@ -398,12 +400,12 @@ public final class JSProxy extends JSObject {
         if (trapResult instanceof JSUndefined) {
             // Invariant: cannot return undefined for non-configurable property
             if (targetDesc != null && !targetDesc.isConfigurable()) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "proxy: inconsistent getOwnPropertyDescriptor"));
             }
             // Invariant: cannot return undefined if target is non-extensible and has property
             if (!targetExtensible && targetDesc != null) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "proxy: inconsistent getOwnPropertyDescriptor"));
             }
             return null;
@@ -415,18 +417,18 @@ public final class JSProxy extends JSObject {
         // Validate against target descriptor
         if (targetDesc != null) {
             if (!isCompatiblePropertyDescriptor(targetExtensible, resultDesc, targetDesc)) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "proxy: inconsistent getOwnPropertyDescriptor"));
             }
             // Invariant: cannot return configurable for non-configurable property
             if (!targetDesc.isConfigurable() && resultDesc.isConfigurable()) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "proxy: inconsistent getOwnPropertyDescriptor"));
             }
         } else {
             // Invariant: cannot return non-configurable if property doesn't exist on non-extensible target
             if (!targetExtensible) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "proxy: inconsistent getOwnPropertyDescriptor"));
             }
         }
@@ -451,14 +453,14 @@ public final class JSProxy extends JSObject {
 
             // Result must be array-like
             if (!(result instanceof JSObject resultObj)) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "ownKeys trap result must be an object"));
             }
 
             // Get the length property
             JSValue lengthValue = resultObj.get("length");
             if (!(lengthValue instanceof JSNumber lengthNum)) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "ownKeys trap result must have a length property"));
             }
 
@@ -473,7 +475,7 @@ public final class JSProxy extends JSObject {
                 } else if (keyValue instanceof JSSymbol sym) {
                     keys.add(PropertyKey.fromSymbol(sym));
                 } else {
-                    throw new JSException(context.throwError("TypeError",
+                    throw new JSException(context.throwTypeError(
                             "ownKeys trap result must contain only strings or symbols"));
                 }
             }
@@ -482,7 +484,7 @@ public final class JSProxy extends JSObject {
             Set<PropertyKey> propertyKeySet = new HashSet<>();
             for (PropertyKey key : keys) {
                 if (!propertyKeySet.add(key)) {
-                    throw new JSException(context.throwError("TypeError",
+                    throw new JSException(context.throwTypeError(
                             "'ownKeys' on proxy: trap returned duplicate entries"));
                 }
             }
@@ -497,7 +499,7 @@ public final class JSProxy extends JSObject {
                 PropertyDescriptor desc = targetObj.getOwnPropertyDescriptor(targetKey);
                 if (desc != null && !desc.isConfigurable()) {
                     if (!keys.contains(targetKey)) {
-                        throw new JSException(context.throwError("TypeError",
+                        throw new JSException(context.throwTypeError(
                                 "'ownKeys' on proxy: trap result did not include '" + targetKey.asString() + "'"));
                     }
                 }
@@ -507,7 +509,7 @@ public final class JSProxy extends JSObject {
             if (!targetExtensible) {
                 for (PropertyKey key : keys) {
                     if (!targetKeys.contains(key)) {
-                        throw new JSException(context.throwError("TypeError",
+                        throw new JSException(context.throwTypeError(
                                 "'ownKeys' on proxy: trap returned extra key '" + key.asString() + "'"));
                     }
                 }
@@ -535,7 +537,7 @@ public final class JSProxy extends JSObject {
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {
-            throw new JSException(context.throwError("TypeError", "getPrototypeOf trap must be a function"));
+            throw new JSException(context.throwTypeError("getPrototypeOf trap must be a function"));
         }
 
         // Call trap: handler.getPrototypeOf(target)
@@ -544,7 +546,7 @@ public final class JSProxy extends JSObject {
 
         // Validate result is null or object
         if (!(result instanceof JSNull) && !(result instanceof JSObject)) {
-            throw new JSException(context.throwError("TypeError",
+            throw new JSException(context.throwTypeError(
                     "proxy getPrototypeOf handler must return an object or null"));
         }
 
@@ -552,7 +554,7 @@ public final class JSProxy extends JSObject {
         if (!targetObj.isExtensible()) {
             JSObject targetProto = targetObj.getPrototype();
             if (!sameValue(targetProto, result)) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "proxy: inconsistent getPrototypeOf"));
             }
         }
@@ -600,14 +602,14 @@ public final class JSProxy extends JSObject {
             // Check invariant: non-configurable properties must be reported as present
             PropertyDescriptor targetDesc = ((JSObject) target).getOwnPropertyDescriptor(key);
             if (targetDesc != null && !targetDesc.isConfigurable() && !trapResult) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "'has' on proxy: trap returned falsish for property '" + key.asString() + "' which exists in the proxy target as non-configurable"));
             }
 
             // Check invariant: if target is not extensible, trap result must match target's has
             JSObject targetObj = (JSObject) target;
             if (!targetObj.isExtensible() && trapResult != targetObj.has(key)) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "'has' on proxy: trap returned " + (trapResult ? "truish" : "falsish") + " for property '" + key.asString() + "' but the proxy target is not extensible"));
             }
 
@@ -691,7 +693,7 @@ public final class JSProxy extends JSObject {
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {
-            throw new JSException(context.throwError("TypeError", "isExtensible trap must be a function"));
+            throw new JSException(context.throwTypeError("isExtensible trap must be a function"));
         }
 
         // Call trap: handler.isExtensible(target)
@@ -703,7 +705,7 @@ public final class JSProxy extends JSObject {
 
         // Invariant: result must match target's extensibility
         if (boolResult != targetExtensible) {
-            throw new JSException(context.throwError("TypeError",
+            throw new JSException(context.throwTypeError(
                     "proxy: inconsistent isExtensible"));
         }
 
@@ -744,7 +746,7 @@ public final class JSProxy extends JSObject {
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {
-            throw new JSException(context.throwError("TypeError", "preventExtensions trap must be a function"));
+            throw new JSException(context.throwTypeError("preventExtensions trap must be a function"));
         }
 
         // Call trap: handler.preventExtensions(target)
@@ -755,11 +757,11 @@ public final class JSProxy extends JSObject {
         if (boolResult) {
             // Invariant: if trap returns true, target must be non-extensible
             if (targetObj.isExtensible()) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "'preventExtensions' on proxy: trap returned truish but the proxy target is extensible"));
             }
         } else {
-            throw new JSException(context.throwError("TypeError", "'preventExtensions' on proxy: trap returned falsish"));
+            throw new JSException(context.throwTypeError("'preventExtensions' on proxy: trap returned falsish"));
         }
     }
 
@@ -853,7 +855,7 @@ public final class JSProxy extends JSObject {
 
             // Check if trap returned falsy in strict mode
             if (context.isStrictMode() && JSTypeConversions.toBoolean(result) != JSBoolean.TRUE) {
-                throw new JSException(context.throwError("TypeError",
+                throw new JSException(context.throwTypeError(
                         "'set' on proxy: trap returned falsish for property '" + key.asString() + "'"));
             }
             return;
@@ -879,7 +881,7 @@ public final class JSProxy extends JSObject {
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {
-            throw new JSException(context.throwError("TypeError", "setPrototypeOf trap must be a function"));
+            throw new JSException(context.throwTypeError("setPrototypeOf trap must be a function"));
         }
 
         // Call trap: handler.setPrototypeOf(target, proto)
@@ -893,12 +895,12 @@ public final class JSProxy extends JSObject {
             if (!targetObj.isExtensible()) {
                 JSObject targetProto = targetObj.getPrototype();
                 if (!sameValue(targetProto, proto)) {
-                    throw new JSException(context.throwError("TypeError",
+                    throw new JSException(context.throwTypeError(
                             "proxy: inconsistent setPrototypeOf"));
                 }
             }
         } else {
-            throw new JSException(context.throwError("TypeError", "setPrototypeOf returned false"));
+            throw new JSException(context.throwTypeError("setPrototypeOf returned false"));
         }
     }
 

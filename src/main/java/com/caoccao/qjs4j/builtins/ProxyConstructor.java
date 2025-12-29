@@ -32,30 +32,30 @@ public final class ProxyConstructor {
      * Creates a revocable proxy object.
      * Returns an object with a proxy and a revoke function.
      */
-    public static JSValue revocable(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue revocable(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2) {
-            return ctx.throwError("TypeError", "Proxy.revocable requires target and handler arguments");
+            return context.throwTypeError("Proxy.revocable requires target and handler arguments");
         }
 
         // Target must be an object (since JSFunction extends JSObject, this covers both)
         JSValue target = args[0];
         if (!(target instanceof JSObject)) {
-            return ctx.throwError("TypeError", "Proxy.revocable target must be an object");
+            return context.throwTypeError("Proxy.revocable target must be an object");
         }
 
         if (!(args[1] instanceof JSObject handler)) {
-            return ctx.throwError("TypeError", "Proxy.revocable handler must be an object");
+            return context.throwTypeError("Proxy.revocable handler must be an object");
         }
 
         // Create the proxy
-        JSProxy proxy = new JSProxy(target, handler, ctx);
+        JSProxy proxy = new JSProxy(target, handler, context);
 
         // Create result object with proxy and revoke function
         JSObject result = new JSObject();
         result.set("proxy", proxy);
 
         // Create revoke function that invalidates the proxy
-        JSNativeFunction revokeFunc = new JSNativeFunction("revoke", 0, (context, thisValue, funcArgs) -> {
+        JSNativeFunction revokeFunc = new JSNativeFunction("revoke", 0, (childContext, thisValue, funcArgs) -> {
             // Revoke the proxy - all subsequent operations will throw TypeError
             proxy.revoke();
             return JSUndefined.INSTANCE;

@@ -63,7 +63,7 @@ public final class SymbolPrototype {
      * ES2020 19.4.3.2
      * Returns a string representation of the Symbol.
      */
-    public static JSValue toString(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue toString(JSContext context, JSValue thisArg, JSValue[] args) {
         JSSymbol symbol;
 
         if (thisArg instanceof JSSymbol sym) {
@@ -73,10 +73,10 @@ public final class SymbolPrototype {
             if (primitiveValue instanceof JSSymbol sym) {
                 symbol = sym;
             } else {
-                return ctx.throwError("TypeError", "Symbol.prototype.toString called on non-Symbol");
+                return context.throwTypeError("Symbol.prototype.toString requires that 'this' be a Symbol");
             }
         } else {
-            return ctx.throwError("TypeError", "Symbol.prototype.toString called on non-Symbol");
+            return context.throwTypeError("Symbol.prototype.toString requires that 'this' be a Symbol");
         }
 
         String description = symbol.getDescription();
@@ -101,7 +101,7 @@ public final class SymbolPrototype {
      * ES2020 19.4.3.3
      * Returns the primitive value of the Symbol.
      */
-    public static JSValue valueOf(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSSymbol symbol) {
             return symbol;
         } else if (thisArg instanceof JSObject obj) {
@@ -111,6 +111,6 @@ public final class SymbolPrototype {
             }
         }
 
-        return ctx.throwError("TypeError", "Symbol.prototype.valueOf called on non-Symbol");
+        return context.throwTypeError("Symbol.prototype.valueOf called on non-Symbol");
     }
 }

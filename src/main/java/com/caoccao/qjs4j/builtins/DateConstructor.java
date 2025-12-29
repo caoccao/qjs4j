@@ -33,31 +33,31 @@ public final class DateConstructor {
      * ES2020 20.3.3.4
      * Accepts the same parameters as the Date constructor, but treats them as UTC.
      */
-    public static JSValue UTC(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue UTC(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
             return new JSNumber(Double.NaN);
         }
 
         // Get year (required)
-        int year = (int) JSTypeConversions.toNumber(args[0]).value();
+        int year = (int) JSTypeConversions.toNumber(context, args[0]).value();
 
         // Get month (required)
-        int month = args.length > 1 ? (int) JSTypeConversions.toNumber(args[1]).value() : 0;
+        int month = args.length > 1 ? (int) JSTypeConversions.toNumber(context, args[1]).value() : 0;
 
         // Get date (default 1)
-        int date = args.length > 2 ? (int) JSTypeConversions.toNumber(args[2]).value() : 1;
+        int date = args.length > 2 ? (int) JSTypeConversions.toNumber(context, args[2]).value() : 1;
 
         // Get hours (default 0)
-        int hours = args.length > 3 ? (int) JSTypeConversions.toNumber(args[3]).value() : 0;
+        int hours = args.length > 3 ? (int) JSTypeConversions.toNumber(context, args[3]).value() : 0;
 
         // Get minutes (default 0)
-        int minutes = args.length > 4 ? (int) JSTypeConversions.toNumber(args[4]).value() : 0;
+        int minutes = args.length > 4 ? (int) JSTypeConversions.toNumber(context, args[4]).value() : 0;
 
         // Get seconds (default 0)
-        int seconds = args.length > 5 ? (int) JSTypeConversions.toNumber(args[5]).value() : 0;
+        int seconds = args.length > 5 ? (int) JSTypeConversions.toNumber(context, args[5]).value() : 0;
 
         // Get milliseconds (default 0)
-        int ms = args.length > 6 ? (int) JSTypeConversions.toNumber(args[6]).value() : 0;
+        int ms = args.length > 6 ? (int) JSTypeConversions.toNumber(context, args[6]).value() : 0;
 
         try {
             // Create UTC ZonedDateTime
@@ -83,7 +83,7 @@ public final class DateConstructor {
      * ES2020 20.3.3.1
      * Returns the number of milliseconds elapsed since January 1, 1970 00:00:00 UTC.
      */
-    public static JSValue now(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue now(JSContext context, JSValue thisArg, JSValue[] args) {
         return new JSNumber(System.currentTimeMillis());
     }
 
@@ -92,12 +92,12 @@ public final class DateConstructor {
      * ES2020 20.3.3.2
      * Parses a string representation of a date and returns the number of milliseconds since January 1, 1970, 00:00:00 UTC.
      */
-    public static JSValue parse(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue parse(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
             return new JSNumber(Double.NaN);
         }
 
-        JSString dateString = JSTypeConversions.toString(args[0]);
+        JSString dateString = JSTypeConversions.toString(context, args[0]);
         String str = dateString.value();
 
         try {
