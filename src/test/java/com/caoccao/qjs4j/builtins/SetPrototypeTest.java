@@ -16,16 +16,16 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for Set.prototype methods.
  */
-public class SetPrototypeTest extends BaseTest {
+public class SetPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testAdd() {
@@ -33,25 +33,25 @@ public class SetPrototypeTest extends BaseTest {
 
         // Normal case: add new value
         JSValue result = SetPrototype.add(context, set, new JSValue[]{new JSString("value1")});
-        assertSame(set, result);
-        assertEquals(1, set.size());
-        assertTrue(set.setHas(new JSString("value1")));
+        assertThat(result).isSameAs(set);
+        assertThat(set.size()).isEqualTo(1);
+        assertThat(set.setHas(new JSString("value1"))).isTrue();
 
         // Normal case: add duplicate value (should not increase size)
         result = SetPrototype.add(context, set, new JSValue[]{new JSString("value1")});
-        assertSame(set, result);
-        assertEquals(1, set.size());
+        assertThat(result).isSameAs(set);
+        assertThat(set.size()).isEqualTo(1);
 
         // Normal case: add different value
         result = SetPrototype.add(context, set, new JSValue[]{new JSNumber(42)});
-        assertSame(set, result);
-        assertEquals(2, set.size());
-        assertTrue(set.setHas(new JSNumber(42)));
+        assertThat(result).isSameAs(set);
+        assertThat(set.size()).isEqualTo(2);
+        assertThat(set.setHas(new JSNumber(42))).isTrue();
 
         // Edge case: no arguments (adds undefined)
         result = SetPrototype.add(context, set, new JSValue[]{});
-        assertSame(set, result);
-        assertEquals(3, set.size()); // Should add undefined, increasing size
+        assertThat(result).isSameAs(set);
+        assertThat(set.size()).isEqualTo(3); // Should add undefined, increasing size
 
         // Edge case: called on non-Set
         assertTypeError(SetPrototype.add(context, new JSString("not set"), new JSValue[]{new JSString("value")}));
@@ -66,8 +66,8 @@ public class SetPrototypeTest extends BaseTest {
 
         // Normal case: clear set
         JSValue result = SetPrototype.clear(context, set, new JSValue[]{});
-        assertTrue(result.isUndefined());
-        assertEquals(0, set.size());
+        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
+        assertThat(set.size()).isEqualTo(0);
 
         // Edge case: called on non-Set
         assertTypeError(SetPrototype.clear(context, new JSString("not set"), new JSValue[]{}));
@@ -82,18 +82,18 @@ public class SetPrototypeTest extends BaseTest {
 
         // Normal case: delete existing value
         JSValue result = SetPrototype.delete(context, set, new JSValue[]{new JSString("value1")});
-        assertTrue(result.isBooleanTrue());
-        assertEquals(1, set.size());
-        assertFalse(set.setHas(new JSString("value1")));
+        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        assertThat(set.size()).isEqualTo(1);
+        assertThat(set.setHas(new JSString("value1"))).isFalse();
 
         // Normal case: delete non-existing value
         result = SetPrototype.delete(context, set, new JSValue[]{new JSString("nonexistent")});
-        assertTrue(result.isBooleanFalse());
-        assertEquals(1, set.size());
+        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        assertThat(set.size()).isEqualTo(1);
 
         // Normal case: no arguments
         result = SetPrototype.delete(context, set, new JSValue[]{});
-        assertTrue(result.isBooleanFalse());
+        assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: called on non-Set
         assertTypeError(SetPrototype.delete(context, new JSString("not set"), new JSValue[]{new JSString("value")}));
@@ -115,11 +115,11 @@ public class SetPrototypeTest extends BaseTest {
         });
 
         JSValue forEachResult = SetPrototype.forEach(context, set, new JSValue[]{callback});
-        assertTrue(forEachResult.isUndefined());
+        assertThat(forEachResult).isEqualTo(JSUndefined.INSTANCE);
         // Note: Order might vary, but both values should be present
         String resultStr = result.toString();
-        assertTrue(resultStr.contains("value1"));
-        assertTrue(resultStr.contains("value2"));
+        assertThat(resultStr).contains("value1");
+        assertThat(resultStr).contains("value2");
 
         // Edge case: no callback function
         assertTypeError(SetPrototype.forEach(context, set, new JSValue[]{}));
@@ -140,13 +140,13 @@ public class SetPrototypeTest extends BaseTest {
 
         // Normal case: empty set
         JSValue result = SetPrototype.getSize(context, set, new JSValue[]{});
-        assertEquals(0.0, result.asNumber().map(JSNumber::value).orElseThrow());
+        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(0.0));
 
         // Normal case: set with values
         set.setAdd(new JSString("value1"));
         set.setAdd(new JSString("value2"));
         result = SetPrototype.getSize(context, set, new JSValue[]{});
-        assertEquals(2.0, result.asNumber().map(JSNumber::value).orElseThrow());
+        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(2.0));
 
         // Edge case: called on non-Set
         assertTypeError(SetPrototype.getSize(context, new JSString("not set"), new JSValue[]{}));
@@ -160,15 +160,15 @@ public class SetPrototypeTest extends BaseTest {
 
         // Normal case: existing value
         JSValue result = SetPrototype.has(context, set, new JSValue[]{new JSString("value1")});
-        assertTrue(result.isBooleanTrue());
+        assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: non-existing value
         result = SetPrototype.has(context, set, new JSValue[]{new JSString("value2")});
-        assertTrue(result.isBooleanFalse());
+        assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: no arguments
         result = SetPrototype.has(context, set, new JSValue[]{});
-        assertTrue(result.isBooleanFalse());
+        assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: called on non-Set
         assertTypeError(SetPrototype.has(context, new JSString("not set"), new JSValue[]{new JSString("value")}));

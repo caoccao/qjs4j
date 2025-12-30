@@ -368,7 +368,7 @@ public final class GlobalObject {
         // Create ArrayBuffer constructor
         JSObject arrayBufferConstructor = new JSObject();
         arrayBufferConstructor.set("prototype", arrayBufferPrototype);
-        arrayBufferConstructor.set("[[ArrayBufferConstructor]]", JSBoolean.TRUE);
+        arrayBufferConstructor.setConstructorType(ConstructorType.ARRAY_BUFFER);
 
         // Static methods
         arrayBufferConstructor.set("isView", new JSNativeFunction("isView", 1, ArrayBufferConstructor::isView));
@@ -491,7 +491,7 @@ public final class GlobalObject {
         // Create BigInt constructor
         JSNativeFunction bigIntConstructor = new JSNativeFunction("BigInt", 1, BigIntConstructor::call);
         bigIntConstructor.set("prototype", bigIntPrototype);
-        bigIntConstructor.set("[[BigIntConstructor]]", JSBoolean.TRUE); // Mark as BigInt constructor
+        bigIntConstructor.setConstructorType(ConstructorType.BIG_INT); // Mark as BigInt constructor
 
         // BigInt static methods
         bigIntConstructor.set("asIntN", new JSNativeFunction("asIntN", 2, BigIntConstructor::asIntN));
@@ -512,7 +512,7 @@ public final class GlobalObject {
         // Create Boolean constructor
         JSNativeFunction booleanConstructor = new JSNativeFunction("Boolean", 1, BooleanConstructor::call);
         booleanConstructor.set("prototype", booleanPrototype);
-        booleanConstructor.set("[[BooleanConstructor]]", JSBoolean.TRUE); // Mark as Boolean constructor
+        booleanConstructor.setConstructorType(ConstructorType.BOOLEAN); // Mark as Boolean constructor
 
         global.set("Boolean", booleanConstructor);
     }
@@ -575,7 +575,7 @@ public final class GlobalObject {
         // Create DataView constructor
         JSObject dataViewConstructor = new JSObject();
         dataViewConstructor.set("prototype", dataViewPrototype);
-        dataViewConstructor.set("[[DataViewConstructor]]", JSBoolean.TRUE);
+        dataViewConstructor.setConstructorType(ConstructorType.DATA_VIEW);
 
         global.set("DataView", dataViewConstructor);
     }
@@ -607,7 +607,7 @@ public final class GlobalObject {
         // Create Date constructor with static methods
         JSObject dateConstructor = new JSObject();
         dateConstructor.set("prototype", datePrototype);
-        dateConstructor.set("[[DateConstructor]]", JSBoolean.TRUE); // Mark as Date constructor
+        dateConstructor.setConstructorType(ConstructorType.DATE); // Mark as Date constructor
 
         // Date static methods
         dateConstructor.set("now", new JSNativeFunction("now", 0, DateConstructor::now));
@@ -644,7 +644,7 @@ public final class GlobalObject {
         // Create FinalizationRegistry constructor
         JSObject finalizationRegistryConstructor = new JSObject();
         finalizationRegistryConstructor.set("prototype", finalizationRegistryPrototype);
-        finalizationRegistryConstructor.set("[[FinalizationRegistryConstructor]]", JSBoolean.TRUE);
+        finalizationRegistryConstructor.setConstructorType(ConstructorType.FINALIZATION_REGISTRY);
 
         global.set("FinalizationRegistry", finalizationRegistryConstructor);
     }
@@ -751,7 +751,7 @@ public final class GlobalObject {
         // Create Map constructor
         JSObject mapConstructor = new JSObject();
         mapConstructor.set("prototype", mapPrototype);
-        mapConstructor.set("[[MapConstructor]]", JSBoolean.TRUE); // Mark as Map constructor
+        mapConstructor.setConstructorType(ConstructorType.MAP); // Mark as Map constructor
 
         // Map static methods
         mapConstructor.set("groupBy", new JSNativeFunction("groupBy", 2, MapConstructor::groupBy));
@@ -833,7 +833,7 @@ public final class GlobalObject {
         // Create Number constructor
         JSNativeFunction numberConstructor = new JSNativeFunction("Number", 1, NumberConstructor::call);
         numberConstructor.set("prototype", numberPrototype);
-        numberConstructor.set("[[NumberConstructor]]", JSBoolean.TRUE); // Mark as Number constructor
+        numberConstructor.setConstructorType(ConstructorType.NUMBER); // Mark as Number constructor
 
         // Number static methods
         numberConstructor.set("isNaN", new JSNativeFunction("isNaN", 1, NumberPrototype::isNaN));
@@ -901,7 +901,7 @@ public final class GlobalObject {
         // Create Promise constructor
         JSObject promiseConstructor = new JSObject();
         promiseConstructor.set("prototype", promisePrototype);
-        promiseConstructor.set("[[PromiseConstructor]]", JSBoolean.TRUE); // Mark as Promise constructor
+        promiseConstructor.setConstructorType(ConstructorType.PROMISE); // Mark as Promise constructor
 
         // Static methods
         promiseConstructor.set("resolve", new JSNativeFunction("resolve", 1, PromiseConstructor::resolve));
@@ -921,7 +921,7 @@ public final class GlobalObject {
     private static void initializeProxyConstructor(JSContext ctx, JSObject global) {
         // Create Proxy constructor (special handling required in VM)
         JSObject proxyConstructor = new JSObject();
-        proxyConstructor.set("[[ProxyConstructor]]", JSBoolean.TRUE); // Mark as Proxy constructor
+        proxyConstructor.setConstructorType(ConstructorType.PROXY);
 
         // Add static methods
         proxyConstructor.set("revocable", new JSNativeFunction("revocable", 2, ProxyConstructor::revocable));
@@ -962,7 +962,7 @@ public final class GlobalObject {
         // Create RegExp constructor
         JSObject regexpConstructor = new JSObject();
         regexpConstructor.set("prototype", regexpPrototype);
-        regexpConstructor.set("[[RegExpConstructor]]", JSBoolean.TRUE); // Mark as RegExp constructor
+        regexpConstructor.setConstructorType(ConstructorType.REGEXP); // Mark as RegExp constructor
 
         global.set("RegExp", regexpConstructor);
     }
@@ -987,7 +987,7 @@ public final class GlobalObject {
         // Create Set constructor
         JSObject setConstructor = new JSObject();
         setConstructor.set("prototype", setPrototype);
-        setConstructor.set("[[SetConstructor]]", JSBoolean.TRUE); // Mark as Set constructor
+        setConstructor.setConstructorType(ConstructorType.SET); // Mark as Set constructor
 
         global.set("Set", setConstructor);
     }
@@ -1013,7 +1013,7 @@ public final class GlobalObject {
         // Create SharedArrayBuffer constructor
         JSObject sharedArrayBufferConstructor = new JSObject();
         sharedArrayBufferConstructor.set("prototype", sharedArrayBufferPrototype);
-        sharedArrayBufferConstructor.set("[[SharedArrayBufferConstructor]]", JSBoolean.TRUE); // Mark as SharedArrayBuffer constructor
+        sharedArrayBufferConstructor.setConstructorType(ConstructorType.SHARED_ARRAY_BUFFER); // Mark as SharedArrayBuffer constructor
 
         global.set("SharedArrayBuffer", sharedArrayBufferConstructor);
     }
@@ -1058,7 +1058,7 @@ public final class GlobalObject {
         // Create String constructor
         JSNativeFunction stringConstructor = new JSNativeFunction("String", 1, StringConstructor::call);
         stringConstructor.set("prototype", stringPrototype);
-        stringConstructor.set("[[StringConstructor]]", JSBoolean.TRUE); // Mark as String constructor
+        stringConstructor.setConstructorType(ConstructorType.STRING); // Mark as String constructor
 
         global.set("String", stringConstructor);
     }
@@ -1069,19 +1069,32 @@ public final class GlobalObject {
     private static void initializeSymbolConstructor(JSContext ctx, JSObject global) {
         // Create Symbol.prototype
         JSObject symbolPrototype = new JSObject();
-        symbolPrototype.set("toString", new JSNativeFunction("toString", 0, SymbolPrototype::toString));
-        symbolPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, SymbolPrototype::valueOf));
-        // Symbol.prototype.description is a getter, set as property for now
-        symbolPrototype.set("description", JSUndefined.INSTANCE);
-        symbolPrototype.set("[Symbol.toPrimitive]", new JSNativeFunction("[Symbol.toPrimitive]", 1, SymbolPrototype::toPrimitive));
-        symbolPrototype.set("[Symbol.toStringTag]", new JSString("Symbol"));
+        JSNativeFunction symbolToString = new JSNativeFunction("toString", 0, SymbolPrototype::toString);
+        symbolToString.initializePrototypeChain(ctx);
+        symbolPrototype.set("toString", symbolToString);
+
+        JSNativeFunction symbolValueOf = new JSNativeFunction("valueOf", 0, SymbolPrototype::valueOf);
+        symbolValueOf.initializePrototypeChain(ctx);
+        symbolPrototype.set("valueOf", symbolValueOf);
+
+        // Symbol.prototype.description is a getter
+        JSNativeFunction descriptionGetter = new JSNativeFunction("get description", 0, SymbolPrototype::getDescription);
+        descriptionGetter.initializePrototypeChain(ctx);
+        symbolPrototype.defineProperty(PropertyKey.fromString("description"),
+                PropertyDescriptor.accessorDescriptor(descriptionGetter, null, false, true));
+
+        JSNativeFunction symbolToPrimitive = new JSNativeFunction("[Symbol.toPrimitive]", 1, SymbolPrototype::toPrimitive);
+        symbolToPrimitive.initializePrototypeChain(ctx);
+        symbolPrototype.set(PropertyKey.fromSymbol(JSSymbol.TO_PRIMITIVE), symbolToPrimitive);
+
+        symbolPrototype.set(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Symbol"));
 
         // Create Symbol constructor
         // Note: Symbol cannot be called with 'new' in JavaScript (throws TypeError)
         // Symbol objects are created using Object(symbolValue) for use with Proxy
         JSNativeFunction symbolConstructor = new JSNativeFunction("Symbol", 1, SymbolConstructor::call);
         symbolConstructor.set("prototype", symbolPrototype);
-        symbolConstructor.set("[[SymbolConstructor]]", JSBoolean.TRUE); // Mark as Symbol constructor
+        symbolConstructor.setConstructorType(ConstructorType.SYMBOL); // Mark as Symbol constructor
 
         // Symbol static methods
         symbolConstructor.set("for", new JSNativeFunction("for", 1, SymbolConstructor::symbolFor));
@@ -1111,55 +1124,55 @@ public final class GlobalObject {
     private static void initializeTypedArrayConstructors(JSContext ctx, JSObject global) {
         // Int8Array
         JSObject int8ArrayConstructor = new JSObject();
-        int8ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Int8Array"));
+        int8ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_INT8);
         int8ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(1));
         global.set("Int8Array", int8ArrayConstructor);
 
         // Uint8Array
         JSObject uint8ArrayConstructor = new JSObject();
-        uint8ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Uint8Array"));
+        uint8ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_UINT8);
         uint8ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(1));
         global.set("Uint8Array", uint8ArrayConstructor);
 
         // Uint8ClampedArray
         JSObject uint8ClampedArrayConstructor = new JSObject();
-        uint8ClampedArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Uint8ClampedArray"));
+        uint8ClampedArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_UINT8_CLAMPED);
         uint8ClampedArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(1));
         global.set("Uint8ClampedArray", uint8ClampedArrayConstructor);
 
         // Int16Array
         JSObject int16ArrayConstructor = new JSObject();
-        int16ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Int16Array"));
+        int16ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_INT16);
         int16ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(2));
         global.set("Int16Array", int16ArrayConstructor);
 
         // Uint16Array
         JSObject uint16ArrayConstructor = new JSObject();
-        uint16ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Uint16Array"));
+        uint16ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_UINT16);
         uint16ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(2));
         global.set("Uint16Array", uint16ArrayConstructor);
 
         // Int32Array
         JSObject int32ArrayConstructor = new JSObject();
-        int32ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Int32Array"));
+        int32ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_INT32);
         int32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(4));
         global.set("Int32Array", int32ArrayConstructor);
 
         // Uint32Array
         JSObject uint32ArrayConstructor = new JSObject();
-        uint32ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Uint32Array"));
+        uint32ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_UINT32);
         uint32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(4));
         global.set("Uint32Array", uint32ArrayConstructor);
 
         // Float32Array
         JSObject float32ArrayConstructor = new JSObject();
-        float32ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Float32Array"));
+        float32ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_FLOAT32);
         float32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(4));
         global.set("Float32Array", float32ArrayConstructor);
 
         // Float64Array
         JSObject float64ArrayConstructor = new JSObject();
-        float64ArrayConstructor.set("[[TypedArrayConstructor]]", new JSString("Float64Array"));
+        float64ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_FLOAT64);
         float64ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(8));
         global.set("Float64Array", float64ArrayConstructor);
     }
@@ -1178,7 +1191,7 @@ public final class GlobalObject {
         // Create WeakMap constructor
         JSObject weakMapConstructor = new JSObject();
         weakMapConstructor.set("prototype", weakMapPrototype);
-        weakMapConstructor.set("[[WeakMapConstructor]]", JSBoolean.TRUE); // Mark as WeakMap constructor
+        weakMapConstructor.setConstructorType(ConstructorType.WEAK_MAP); // Mark as WeakMap constructor
 
         global.set("WeakMap", weakMapConstructor);
     }
@@ -1194,7 +1207,7 @@ public final class GlobalObject {
         // Create WeakRef constructor
         JSObject weakRefConstructor = new JSObject();
         weakRefConstructor.set("prototype", weakRefPrototype);
-        weakRefConstructor.set("[[WeakRefConstructor]]", JSBoolean.TRUE); // Mark as WeakRef constructor
+        weakRefConstructor.setConstructorType(ConstructorType.WEAK_REF); // Mark as WeakRef constructor
 
         global.set("WeakRef", weakRefConstructor);
     }
@@ -1212,7 +1225,7 @@ public final class GlobalObject {
         // Create WeakSet constructor
         JSObject weakSetConstructor = new JSObject();
         weakSetConstructor.set("prototype", weakSetPrototype);
-        weakSetConstructor.set("[[WeakSetConstructor]]", JSBoolean.TRUE); // Mark as WeakSet constructor
+        weakSetConstructor.setConstructorType(ConstructorType.WEAK_SET); // Mark as WeakSet constructor
 
         global.set("WeakSet", weakSetConstructor);
     }

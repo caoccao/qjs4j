@@ -41,6 +41,7 @@ public non-sealed class JSObject implements JSValue {
     protected boolean sealed = false;
     protected JSShape shape;
     protected Map<Integer, JSValue> sparseProperties; // For array indices
+    protected ConstructorType constructorType; // Internal slot for [[Constructor]] type (not accessible from JS)
 
     /**
      * Create an empty object with no prototype.
@@ -246,6 +247,14 @@ public non-sealed class JSObject implements JSValue {
      * Get a property value by property key with context for getter functions.
      */
     public JSValue get(PropertyKey key, JSContext ctx) {
+        return get(key, ctx, this);  // Pass original receiver
+    }
+
+    /**
+     * Internal get method with receiver tracking for prototype chain getter invocation.
+     * Protected to allow JSProxy to override with proper trap handling.
+     */
+    protected JSValue get(PropertyKey key, JSContext ctx, JSObject receiver) {
         // Look in own properties
         int offset = shape.getPropertyOffset(key);
         if (offset >= 0) {
@@ -254,8 +263,8 @@ public non-sealed class JSObject implements JSValue {
             if (desc != null && desc.hasGetter()) {
                 JSFunction getter = desc.getGetter();
                 if (getter != null && ctx != null) {
-                    // Call the getter with 'this' as the object
-                    return getter.call(ctx, this, new JSValue[0]);
+                    // Call the getter with the ORIGINAL receiver as 'this', not the prototype
+                    return getter.call(ctx, receiver, new JSValue[0]);
                 }
                 // Getter is explicitly undefined or no context available
                 return JSUndefined.INSTANCE;
@@ -278,8 +287,8 @@ public non-sealed class JSObject implements JSValue {
                 // Add current prototype to visited set
                 visited.add(prototype);
 
-                // Recurse into prototype chain
-                return prototype.get(key, ctx);
+                // Recurse into prototype chain, passing along the original receiver
+                return prototype.get(key, ctx, receiver);
             } finally {
                 // Clean up: remove from visited set
                 visited.remove(prototype);
@@ -379,6 +388,22 @@ public non-sealed class JSObject implements JSValue {
      */
     public void setPrimitiveValue(JSValue value) {
         this.primitiveValue = value;
+    }
+
+    /**
+     * Get the constructor type internal slot.
+     * This is for internal use only - not accessible from JavaScript.
+     */
+    public ConstructorType getConstructorType() {
+        return constructorType;
+    }
+
+    /**
+     * Set the constructor type internal slot.
+     * This is for internal use only - not accessible from JavaScript.
+     */
+    public void setConstructorType(ConstructorType type) {
+        this.constructorType = type;
     }
 
     /**

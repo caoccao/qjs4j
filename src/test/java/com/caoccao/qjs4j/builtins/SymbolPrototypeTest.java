@@ -16,109 +16,100 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.util.stream.Stream;
 
 /**
  * Unit tests for SymbolPrototype methods.
  */
-public class SymbolPrototypeTest extends BaseTest {
+public class SymbolPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testGetDescription() {
-        JSContext ctx = new JSContext(new JSRuntime());
-
-        // Normal case: symbol with description
-        JSSymbol symbolWithDesc = new JSSymbol("testDescription");
-        JSValue result = SymbolPrototype.getDescription(ctx, symbolWithDesc, new JSValue[]{});
-        assertEquals("testDescription", result.asString().map(JSString::value).orElseThrow());
-
-        // Normal case: symbol without description
-        JSSymbol symbolNoDesc = new JSSymbol(null);
-        result = SymbolPrototype.getDescription(ctx, symbolNoDesc, new JSValue[]{});
-        assertTrue(result.isUndefined());
-
-        // Edge case: called on non-symbol
-        result = SymbolPrototype.getDescription(ctx, new JSString("not a symbol"), new JSValue[]{});
-        assertTrue(result.isUndefined());
+        Stream.of(
+                // Normal case: symbol with description
+                "Symbol('testDescription').description;",
+                // Normal case: symbol without description
+                "Symbol().description;",
+                // Test with well-known symbol
+                "Symbol.iterator.description;"
+        ).forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeObject(),
+                        () -> context.eval(code).toJavaObject()));
     }
 
     @Test
     public void testToPrimitive() {
-        JSContext ctx = new JSContext(new JSRuntime());
+        // Test Symbol[@@toPrimitive] - returns the symbol itself
+        Stream.of(
+                "var sym1 = Symbol('test'); sym1[Symbol.toPrimitive]() === sym1",
+                "var sym2 = Symbol.iterator; sym2[Symbol.toPrimitive]() === sym2"
+        ).forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeBoolean(),
+                        () -> context.eval(code).toJavaObject()));
 
-        // Normal case: symbol
-        JSSymbol symbol = new JSSymbol("test");
-        JSValue result = SymbolPrototype.toPrimitive(ctx, symbol, new JSValue[]{});
-        assertEquals(symbol, result);
-
-        // Edge case: called on non-symbol (should behave same as valueOf)
-        result = SymbolPrototype.toPrimitive(ctx, new JSString("not a symbol"), new JSValue[]{});
-        assertTypeError(result);
-        assertPendingException(ctx);
+        // Edge case: called on non-symbol should throw TypeError
+        assertErrorWithJavet("Symbol.prototype[Symbol.toPrimitive].call('not a symbol');");
     }
 
     @Test
     public void testToString() {
-        JSContext ctx = new JSContext(new JSRuntime());
+        Stream.of(
+                // Normal case: symbol with description
+                "Symbol('testDescription').toString();",
+                // Normal case: symbol without description
+                "Symbol().toString();",
+                // Normal case: via call for well-known symbol
+                "Symbol.prototype.toString.call(Symbol.iterator);",
+                // Symbol with empty string description
+                "Symbol('').toString();",
+                // Well-known symbols
+                "Symbol.asyncIterator.toString();",
+                "Symbol.hasInstance.toString();"
+        ).forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeString(),
+                        () -> context.eval(code).toJavaObject()));
 
-        // Normal case: symbol with description
-        JSSymbol symbolWithDesc = new JSSymbol("testDescription");
-        JSValue result = SymbolPrototype.toString(ctx, symbolWithDesc, new JSValue[]{});
-        assertEquals("Symbol(testDescription)", result.asString().map(JSString::value).orElseThrow());
+        // Edge case: called on non-symbol should throw TypeError
+        assertErrorWithJavet("Symbol.prototype.toString.call('not a symbol');");
 
-        // Normal case: symbol without description
-        JSSymbol symbolNoDesc = new JSSymbol(null);
-        result = SymbolPrototype.toString(ctx, symbolNoDesc, new JSValue[]{});
-        assertEquals("Symbol()", result.asString().map(JSString::value).orElseThrow());
-
-        // Normal case: via eval for well-known symbol
-        result = ctx.eval("Symbol.prototype.toString.call(Symbol.iterator)");
-        assertEquals("Symbol(Symbol.iterator)", result.asString().map(JSString::value).orElseThrow());
-
-        // Edge case: called on non-symbol
-        result = SymbolPrototype.toString(ctx, new JSString("not a symbol"), new JSValue[]{});
-        assertTypeError(result);
-        assertPendingException(ctx);
-
-        try {
-            ctx.eval("const a = '' + Symbol.iterator;");
-        } catch (Exception e) {
-            assertEquals("TypeError: Cannot convert a Symbol value to a string", e.getMessage());
-        }
+        // Test that concatenating symbol with string throws TypeError
+        assertErrorWithJavet("const a = '' + Symbol.iterator;", "Cannot convert a Symbol value to a string");
     }
 
     @Test
     public void testToStringTag() {
-        JSContext ctx = new JSContext(new JSRuntime());
-
-        // Normal case: any this value
-        JSValue result = SymbolPrototype.toStringTag(ctx, JSUndefined.INSTANCE, new JSValue[]{});
-        assertEquals("Symbol", result.asString().map(JSString::value).orElseThrow());
-
-        result = SymbolPrototype.toStringTag(ctx, new JSString("anything"), new JSValue[]{});
-        assertEquals("Symbol", result.asString().map(JSString::value).orElseThrow());
-
-        result = SymbolPrototype.toStringTag(ctx, new JSObject(), new JSValue[]{});
-        assertEquals("Symbol", result.asString().map(JSString::value).orElseThrow());
+        // Symbol.prototype[@@toStringTag] should return "Symbol"
+        Stream.of(
+                "Symbol.prototype[Symbol.toStringTag];",
+                "Object.prototype.toString.call(Symbol('test'));",
+                "Object.prototype.toString.call(Symbol.iterator);"
+        ).forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeString(),
+                        () -> context.eval(code).toJavaObject()));
     }
 
     @Test
     public void testValueOf() {
-        JSContext ctx = new JSContext(new JSRuntime());
+        Stream.of(
+                // Normal case: symbol valueOf returns itself
+                "var sym = Symbol('test'); sym.valueOf() === sym;",
+                "var sym = Symbol.iterator; sym.valueOf() === sym;",
+                // Test with Object(Symbol())
+                "var symObj = Object(Symbol('test')); typeof symObj.valueOf();",
+                "var symObj = Object(Symbol('test')); symObj.valueOf() !== symObj;"
+        ).forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeObject(),
+                        () -> context.eval(code).toJavaObject()));
 
-        // Normal case: symbol
-        JSSymbol symbol = new JSSymbol("test");
-        JSValue result = SymbolPrototype.valueOf(ctx, symbol, new JSValue[]{});
-        assertEquals(symbol, result);
-
-        // Edge case: called on non-symbol
-        result = SymbolPrototype.valueOf(ctx, new JSString("not a symbol"), new JSValue[]{});
-        assertTypeError(result);
-        assertPendingException(ctx);
+        // Edge case: called on non-symbol should throw TypeError
+        assertErrorWithJavet("Symbol.prototype.valueOf.call('not a symbol');");
     }
 }

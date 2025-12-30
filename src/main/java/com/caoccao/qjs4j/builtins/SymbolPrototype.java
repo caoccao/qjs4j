@@ -30,7 +30,7 @@ public final class SymbolPrototype {
      * ES2020 19.4.3.1
      * Getter for the Symbol's description.
      */
-    public static JSValue getDescription(JSContext ctx, JSValue thisArg, JSValue[] args) {
+    public static JSValue getDescription(JSContext context, JSValue thisArg, JSValue[] args) {
         return thisArg.asSymbolWithDownCast()
                 .map(JSSymbol::getDescription)
                 .map(description -> (JSValue) new JSString(description))
@@ -42,8 +42,10 @@ public final class SymbolPrototype {
      * ES2020 19.4.3.4
      * Returns the primitive value.
      */
-    public static JSValue toPrimitive(JSContext ctx, JSValue thisArg, JSValue[] args) {
-        return valueOf(ctx, thisArg, args);
+    public static JSValue toPrimitive(JSContext context, JSValue thisArg, JSValue[] args) {
+        return thisArg.asSymbolWithDownCast()
+                .map(jsSymbol -> (JSValue) jsSymbol)
+                .orElseGet(() -> context.throwTypeError("Symbol.prototype [ @@toPrimitive ] requires that 'this' be a Symbol"));
     }
 
     /**

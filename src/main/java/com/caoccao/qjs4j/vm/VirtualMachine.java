@@ -391,23 +391,12 @@ public final class VirtualMachine {
                     case GET_ARRAY_EL -> {
                         JSValue index = valueStack.pop();
                         JSValue arrayObj = valueStack.pop();
-                        if (arrayObj instanceof JSObject jsObj) {
+
+                        // Auto-box primitives to access their prototype methods
+                        JSObject targetObj = toObject(arrayObj);
+                        if (targetObj != null) {
                             PropertyKey key = PropertyKey.fromValue(context, index);
-                            valueStack.push(jsObj.get(key, context));
-                        } else if (arrayObj instanceof JSFunction) {
-                            // For functions, look up methods from Function.prototype
-                            PropertyKey key = PropertyKey.fromValue(context, index);
-                            JSValue funcProto = context.getGlobalObject().get("Function");
-                            if (funcProto instanceof JSObject funcCtor) {
-                                JSValue prototype = funcCtor.get("prototype");
-                                if (prototype instanceof JSObject protoObj) {
-                                    valueStack.push(protoObj.get(key, context));
-                                } else {
-                                    valueStack.push(JSUndefined.INSTANCE);
-                                }
-                            } else {
-                                valueStack.push(JSUndefined.INSTANCE);
-                            }
+                            valueStack.push(targetObj.get(key, context));
                         } else {
                             valueStack.push(JSUndefined.INSTANCE);
                         }
@@ -643,8 +632,7 @@ public final class VirtualMachine {
 
         // Special handling for Symbol constructor (must be called without new)
         if (callee instanceof JSObject calleeObj) {
-            JSValue isSymbolCtor = calleeObj.get("[[SymbolConstructor]]");
-            if (isSymbolCtor instanceof JSBoolean && ((JSBoolean) isSymbolCtor).value()) {
+            if (calleeObj.getConstructorType() == ConstructorType.SYMBOL) {
                 // Call Symbol() function
                 JSValue result = SymbolConstructor.call(context, receiver, args);
                 valueStack.push(result);
@@ -652,8 +640,7 @@ public final class VirtualMachine {
             }
 
             // Special handling for BigInt constructor (must be called without new)
-            JSValue isBigIntCtor = calleeObj.get("[[BigIntConstructor]]");
-            if (isBigIntCtor instanceof JSBoolean && ((JSBoolean) isBigIntCtor).value()) {
+            if (calleeObj.getConstructorType() == ConstructorType.BIG_INT) {
                 // Call BigInt() function
                 JSValue result = BigIntConstructor.call(context, receiver, args);
                 valueStack.push(result);
@@ -665,7 +652,22 @@ public final class VirtualMachine {
             if (function instanceof JSNativeFunction nativeFunc) {
                 // Call native function with receiver as thisArg
                 JSValue result = nativeFunc.call(context, receiver, args);
-                valueStack.push(result);
+                // Check for pending exception after native function call
+                if (context.hasPendingException()) {
+                    // Throw immediately to propagate the exception
+                    JSValue exception = context.getPendingException();
+                    // Get error message safely
+                    String errorMsg = "Unhandled exception";
+                    if (exception instanceof JSObject errorObj) {
+                        JSValue msgValue = errorObj.get("message");
+                        if (msgValue instanceof JSString msgStr) {
+                            errorMsg = msgStr.value();
+                        }
+                    }
+                    throw new VMException(errorMsg);
+                } else {
+                    valueStack.push(result);
+                }
             } else if (function instanceof JSBytecodeFunction bytecodeFunc) {
                 // Call through the function's call method to handle async wrapping
                 JSValue result = bytecodeFunc.call(context, receiver, args);
@@ -712,8 +714,7 @@ public final class VirtualMachine {
 
         // Check for Boolean constructor (must come before generic JSFunction check)
         if (constructor instanceof JSObject ctorObj) {
-            JSValue isBooleanCtor = ctorObj.get("[[BooleanConstructor]]");
-            if (isBooleanCtor instanceof JSBoolean && ((JSBoolean) isBooleanCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.BOOLEAN) {
                 // Get the value to convert to boolean
                 JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
@@ -734,8 +735,7 @@ public final class VirtualMachine {
             }
 
             // Check for Number constructor (must come before generic JSFunction check)
-            JSValue isNumberCtor = ctorObj.get("[[NumberConstructor]]");
-            if (isNumberCtor instanceof JSBoolean && ((JSBoolean) isNumberCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.NUMBER) {
                 // ES2020: If no argument is passed, use +0
                 JSNumber numValue;
                 if (args.length == 0) {
@@ -759,8 +759,7 @@ public final class VirtualMachine {
             }
 
             // Check for String constructor (must come before generic JSFunction check)
-            JSValue isStringCtor = ctorObj.get("[[StringConstructor]]");
-            if (isStringCtor instanceof JSBoolean && ((JSBoolean) isStringCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.STRING) {
                 // ES2020: If no argument is passed, use empty string
                 JSString strValue;
                 if (args.length == 0) {
@@ -785,8 +784,7 @@ public final class VirtualMachine {
 
             // Check for BigInt constructor
             // Note: BigInt cannot be called with 'new' operator per ES2020 spec
-            JSValue isBigIntCtor = ctorObj.get("[[BigIntConstructor]]");
-            if (isBigIntCtor instanceof JSBoolean && ((JSBoolean) isBigIntCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.BIG_INT) {
                 // ES2020: BigInt cannot be used as a constructor
                 valueStack.push(context.throwTypeError("BigInt is not a constructor"));
                 return;
@@ -794,8 +792,7 @@ public final class VirtualMachine {
 
             // Check for Symbol constructor
             // Note: Symbol cannot be called with 'new' operator per ES2020 spec
-            JSValue isSymbolCtor = ctorObj.get("[[SymbolConstructor]]");
-            if (isSymbolCtor instanceof JSBoolean && ((JSBoolean) isSymbolCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.SYMBOL) {
                 // ES2020: Symbol cannot be used as a constructor
                 valueStack.push(context.throwTypeError("Symbol is not a constructor"));
                 return;
@@ -817,6 +814,20 @@ public final class VirtualMachine {
             JSValue result;
             if (constructor instanceof JSNativeFunction nativeFunc) {
                 result = nativeFunc.call(context, newObj, args);
+                // Check for pending exception after native constructor call
+                if (context.hasPendingException()) {
+                    // Throw immediately to propagate the exception
+                    JSValue exception = context.getPendingException();
+                    // Get error message safely
+                    String errorMsg = "Unhandled exception in constructor";
+                    if (exception instanceof JSObject errorObj) {
+                        JSValue msgValue = errorObj.get("message");
+                        if (msgValue instanceof JSString msgStr) {
+                            errorMsg = msgStr.value();
+                        }
+                    }
+                    throw new VMException(errorMsg);
+                }
             } else if (constructor instanceof JSBytecodeFunction bytecodeFunc) {
                 result = execute(bytecodeFunc, newObj, args);
             } else {
@@ -839,8 +850,7 @@ public final class VirtualMachine {
                 return;
             }
             // Check for Date constructor
-            JSValue isDateCtor = ctorObj.get("[[DateConstructor]]");
-            if (isDateCtor instanceof JSBoolean && ((JSBoolean) isDateCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.DATE) {
                 // Create Date object
                 long timeValue;
                 if (args.length == 0) {
@@ -876,24 +886,21 @@ public final class VirtualMachine {
             }
 
             // Check for Symbol constructor (throws error when used with new)
-            JSValue isSymbolCtor = ctorObj.get("[[SymbolConstructor]]");
-            if (isSymbolCtor instanceof JSBoolean && ((JSBoolean) isSymbolCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.SYMBOL) {
                 context.throwTypeError("Symbol is not a constructor");
                 valueStack.push(JSUndefined.INSTANCE);
                 return;
             }
 
             // Check for BigInt constructor (throws error when used with new)
-            JSValue isBigIntCtor = ctorObj.get("[[BigIntConstructor]]");
-            if (isBigIntCtor instanceof JSBoolean && ((JSBoolean) isBigIntCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.BIG_INT) {
                 context.throwTypeError("BigInt is not a constructor");
                 valueStack.push(JSUndefined.INSTANCE);
                 return;
             }
 
             // Check for RegExp constructor
-            JSValue isRegExpCtor = ctorObj.get("[[RegExpConstructor]]");
-            if (isRegExpCtor instanceof JSBoolean && ((JSBoolean) isRegExpCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.REGEXP) {
                 // Create RegExp object
                 String pattern = "";
                 String flags = "";
@@ -934,8 +941,7 @@ public final class VirtualMachine {
             }
 
             // Check for Map constructor
-            JSValue isMapCtor = ctorObj.get("[[MapConstructor]]");
-            if (isMapCtor instanceof JSBoolean && ((JSBoolean) isMapCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.MAP) {
                 // Create Map object
                 JSMap mapObj = new JSMap();
 
@@ -1001,8 +1007,7 @@ public final class VirtualMachine {
             }
 
             // Check for Set constructor
-            JSValue isSetCtor = ctorObj.get("[[SetConstructor]]");
-            if (isSetCtor instanceof JSBoolean && ((JSBoolean) isSetCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.SET) {
                 // Create Set object
                 JSSet setObj = new JSSet();
 
@@ -1050,8 +1055,7 @@ public final class VirtualMachine {
             }
 
             // Check for WeakMap constructor
-            JSValue isWeakMapCtor = ctorObj.get("[[WeakMapConstructor]]");
-            if (isWeakMapCtor instanceof JSBoolean && ((JSBoolean) isWeakMapCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.WEAK_MAP) {
                 // Create WeakMap object
                 JSWeakMap weakMapObj = new JSWeakMap();
 
@@ -1133,8 +1137,7 @@ public final class VirtualMachine {
             }
 
             // Check for WeakSet constructor
-            JSValue isWeakSetCtor = ctorObj.get("[[WeakSetConstructor]]");
-            if (isWeakSetCtor instanceof JSBoolean && ((JSBoolean) isWeakSetCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.WEAK_SET) {
                 // Create WeakSet object
                 JSWeakSet weakSetObj = new JSWeakSet();
 
@@ -1198,8 +1201,7 @@ public final class VirtualMachine {
             }
 
             // Check for WeakRef constructor
-            JSValue isWeakRefCtor = ctorObj.get("[[WeakRefConstructor]]");
-            if (isWeakRefCtor instanceof JSBoolean && ((JSBoolean) isWeakRefCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.WEAK_REF) {
                 // WeakRef requires exactly 1 argument: target
                 if (args.length == 0) {
                     context.throwTypeError("WeakRef constructor requires a target object");
@@ -1223,8 +1225,7 @@ public final class VirtualMachine {
             }
 
             // Check for FinalizationRegistry constructor
-            JSValue isFinalizationRegistryCtor = ctorObj.get("[[FinalizationRegistryConstructor]]");
-            if (isFinalizationRegistryCtor instanceof JSBoolean && ((JSBoolean) isFinalizationRegistryCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.FINALIZATION_REGISTRY) {
                 // FinalizationRegistry requires exactly 1 argument: cleanupCallback
                 if (args.length == 0) {
                     context.throwTypeError("FinalizationRegistry constructor requires a cleanup callback");
@@ -1248,8 +1249,7 @@ public final class VirtualMachine {
             }
 
             // Check for Proxy constructor
-            JSValue isProxyCtor = ctorObj.get("[[ProxyConstructor]]");
-            if (isProxyCtor instanceof JSBoolean && ((JSBoolean) isProxyCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.PROXY) {
                 // Proxy requires exactly 2 arguments: target and handler
                 if (args.length < 2) {
                     context.throwTypeError("Proxy constructor requires target and handler");
@@ -1278,8 +1278,7 @@ public final class VirtualMachine {
             }
 
             // Check for Promise constructor
-            JSValue isPromiseCtor = ctorObj.get("[[PromiseConstructor]]");
-            if (isPromiseCtor instanceof JSBoolean && ((JSBoolean) isPromiseCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.PROMISE) {
                 // Promise requires an executor function
                 if (args.length == 0 || !(args[0] instanceof JSFunction executor)) {
                     context.throwTypeError("Promise constructor requires an executor function");
@@ -1325,8 +1324,7 @@ public final class VirtualMachine {
             }
 
             // Check for SharedArrayBuffer constructor
-            JSValue isSharedArrayBufferCtor = ctorObj.get("[[SharedArrayBufferConstructor]]");
-            if (isSharedArrayBufferCtor instanceof JSBoolean && ((JSBoolean) isSharedArrayBufferCtor).value()) {
+            if (ctorObj.getConstructorType() == ConstructorType.SHARED_ARRAY_BUFFER) {
                 // Get length argument
                 JSValue lengthArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
@@ -1831,6 +1829,21 @@ public final class VirtualMachine {
                     JSObject wrapper = new JSObject();
                     wrapper.setPrototype(protoObj);
                     wrapper.setPrimitiveValue(bool);
+                    return wrapper;
+                }
+            }
+        }
+
+        if (value instanceof JSSymbol sym) {
+            // Get Symbol.prototype from global object
+            JSObject global = context.getGlobalObject();
+            JSValue symbolCtor = global.get("Symbol");
+            if (symbolCtor instanceof JSObject ctorObj) {
+                JSValue prototype = ctorObj.get("prototype");
+                if (prototype instanceof JSObject protoObj) {
+                    // Create a Symbol object wrapper (not a generic JSObject)
+                    JSSymbolObject wrapper = new JSSymbolObject(sym);
+                    wrapper.setPrototype(protoObj);
                     return wrapper;
                 }
             }
