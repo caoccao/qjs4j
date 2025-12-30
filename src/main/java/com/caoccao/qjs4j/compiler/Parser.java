@@ -423,7 +423,7 @@ public final class Parser {
             } else if (match(TokenType.DOT)) {
                 SourceLocation location = getLocation();
                 advance();
-                Identifier property = parseIdentifier();
+                Expression property = parsePropertyName();
                 expr = new MemberExpression(expr, property, false, location);
             } else if (match(TokenType.LBRACKET)) {
                 SourceLocation location = getLocation();
@@ -855,6 +855,16 @@ public final class Parser {
                 advance();
                 // Numeric keys are converted to strings
                 yield new Literal(value, location);
+            }
+            // Allow keywords as property names (e.g., obj.delete, obj.class, obj.return)
+            case AS, ASYNC, AWAIT, BREAK, CASE, CATCH, CLASS, CONST, CONTINUE,
+                 DEFAULT, DELETE, DO, ELSE, EXPORT, EXTENDS, FALSE, FINALLY,
+                 FOR, FROM, FUNCTION, IF, IMPORT, IN, INSTANCEOF, LET, NEW,
+                 NULL, OF, RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY,
+                 TYPEOF, VAR, VOID, WHILE, YIELD -> {
+                String name = currentToken.value();
+                advance();
+                yield new Identifier(name, location);
             }
             default -> throw new RuntimeException("Expected property name but got " + currentToken.type() +
                     " at line " + currentToken.line() + ", column " + currentToken.column());

@@ -30,22 +30,19 @@ public final class WeakMapPrototype {
      * Removes the element with the specified key. Returns true if an element existed and was removed.
      */
     public static JSValue delete(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSWeakMap weakMap)) {
-            return context.throwTypeError("WeakMap.prototype.delete called on non-WeakMap");
-        }
-
-        if (args.length == 0) {
-            return JSBoolean.FALSE;
-        }
-
-        JSValue key = args[0];
-
-        // Key must be an object
-        if (!(key instanceof JSObject keyObj)) {
-            return JSBoolean.FALSE;
-        }
-
-        return JSBoolean.valueOf(weakMap.weakMapDelete(keyObj));
+        return thisArg.asWeakMap()
+                .map((jsWeakMap -> {
+                    if (args.length == 0) {
+                        return JSBoolean.FALSE;
+                    }
+                    JSValue key = args[0];
+                    // Key must be an object
+                    if (!(key instanceof JSObject keyObj)) {
+                        return JSBoolean.FALSE;
+                    }
+                    return (JSValue) JSBoolean.valueOf(jsWeakMap.weakMapDelete(keyObj));
+                }))
+                .orElseGet(() -> context.throwTypeError("Method WeakMap.prototype.delete called on incompatible receiver not weakmap"));
     }
 
     /**
@@ -54,22 +51,19 @@ public final class WeakMapPrototype {
      * Returns the value associated with the key, or undefined if none exists.
      */
     public static JSValue get(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSWeakMap weakMap)) {
-            return context.throwTypeError("WeakMap.prototype.get called on non-WeakMap");
-        }
-
-        if (args.length == 0) {
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue key = args[0];
-
-        // Key must be an object
-        if (!(key instanceof JSObject keyObj)) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return weakMap.weakMapGet(keyObj);
+        return thisArg.asWeakMap()
+                .map((jsWeakMap -> {
+                    if (args.length == 0) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    JSValue key = args[0];
+                    // Key must be an object
+                    if (!(key instanceof JSObject keyObj)) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    return jsWeakMap.weakMapGet(keyObj);
+                }))
+                .orElseGet(() -> context.throwTypeError("Method WeakMap.prototype.get called on incompatible receiver not weakmap"));
     }
 
     /**
@@ -78,22 +72,19 @@ public final class WeakMapPrototype {
      * Returns a boolean indicating whether an element with the specified key exists.
      */
     public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSWeakMap weakMap)) {
-            return context.throwTypeError("WeakMap.prototype.has called on non-WeakMap");
-        }
-
-        if (args.length == 0) {
-            return JSBoolean.FALSE;
-        }
-
-        JSValue key = args[0];
-
-        // Key must be an object
-        if (!(key instanceof JSObject keyObj)) {
-            return JSBoolean.FALSE;
-        }
-
-        return JSBoolean.valueOf(weakMap.weakMapHas(keyObj));
+        return thisArg.asWeakMap()
+                .map((jsWeakMap -> {
+                    if (args.length == 0) {
+                        return JSBoolean.FALSE;
+                    }
+                    JSValue key = args[0];
+                    // Key must be an object
+                    if (!(key instanceof JSObject keyObj)) {
+                        return JSBoolean.FALSE;
+                    }
+                    return (JSValue) JSBoolean.valueOf(jsWeakMap.weakMapHas(keyObj));
+                }))
+                .orElseGet(() -> context.throwTypeError("Method WeakMap.prototype.has called on incompatible receiver not weakmap"));
     }
 
     /**
@@ -103,24 +94,20 @@ public final class WeakMapPrototype {
      * Key must be an object.
      */
     public static JSValue set(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSWeakMap weakMap)) {
-            return context.throwTypeError("WeakMap.prototype.set called on non-WeakMap");
-        }
-
-        if (args.length == 0) {
-            return context.throwTypeError("WeakMap.prototype.set requires a key");
-        }
-
-        JSValue key = args[0];
-
-        // Key must be an object
-        if (!(key instanceof JSObject keyObj)) {
-            return context.throwTypeError("Invalid value used as weak map key");
-        }
-
-        JSValue value = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-
-        weakMap.weakMapSet(keyObj, value);
-        return weakMap; // Return the WeakMap object for chaining
+        return thisArg.asWeakMap()
+                .map((jsWeakMap -> {
+                    if (args.length == 0) {
+                        return context.throwTypeError("Invalid value used as weak map key");
+                    }
+                    JSValue key = args[0];
+                    // Key must be an object
+                    if (!(key instanceof JSObject keyObj)) {
+                        return context.throwTypeError("Invalid value used as weak map key");
+                    }
+                    JSValue value = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+                    jsWeakMap.weakMapSet(keyObj, value);
+                    return jsWeakMap; // Return the WeakMap object for chaining
+                }))
+                .orElseGet(() -> context.throwTypeError("Method WeakMap.prototype.set called on incompatible receiver not weakmap"));
     }
 }

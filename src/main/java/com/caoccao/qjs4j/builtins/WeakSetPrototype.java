@@ -16,7 +16,10 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.JSBoolean;
+import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSObject;
+import com.caoccao.qjs4j.core.JSValue;
 
 /**
  * Implementation of WeakSet.prototype methods.
@@ -31,23 +34,20 @@ public final class WeakSetPrototype {
      * Value must be an object.
      */
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSWeakSet weakSet)) {
-            return context.throwTypeError("WeakSet.prototype.add called on non-WeakSet");
-        }
-
-        if (args.length == 0) {
-            return context.throwTypeError("WeakSet.prototype.add requires a value");
-        }
-
-        JSValue value = args[0];
-
-        // Value must be an object
-        if (!(value instanceof JSObject valueObj)) {
-            return context.throwTypeError("Invalid value used in weak set");
-        }
-
-        weakSet.weakSetAdd(valueObj);
-        return weakSet; // Return the WeakSet object for chaining
+        return thisArg.asWeakSet()
+                .map((jsWeakSet -> {
+                    if (args.length == 0) {
+                        return context.throwTypeError("Invalid value used in weak set");
+                    }
+                    JSValue value = args[0];
+                    // Value must be an object
+                    if (!(value instanceof JSObject valueObj)) {
+                        return context.throwTypeError("Invalid value used in weak set");
+                    }
+                    jsWeakSet.weakSetAdd(valueObj);
+                    return jsWeakSet; // Return the WeakSet object for chaining
+                }))
+                .orElseGet(() -> context.throwTypeError("Method WeakSet.prototype.add called on incompatible receiver not weakset"));
     }
 
     /**
@@ -56,22 +56,19 @@ public final class WeakSetPrototype {
      * Removes the value from the WeakSet. Returns true if the value existed and was removed.
      */
     public static JSValue delete(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSWeakSet weakSet)) {
-            return context.throwTypeError("WeakSet.prototype.delete called on non-WeakSet");
-        }
-
-        if (args.length == 0) {
-            return JSBoolean.FALSE;
-        }
-
-        JSValue value = args[0];
-
-        // Value must be an object
-        if (!(value instanceof JSObject valueObj)) {
-            return JSBoolean.FALSE;
-        }
-
-        return JSBoolean.valueOf(weakSet.weakSetDelete(valueObj));
+        return thisArg.asWeakSet()
+                .map((jsWeakSet -> {
+                    if (args.length == 0) {
+                        return JSBoolean.FALSE;
+                    }
+                    JSValue value = args[0];
+                    // Value must be an object
+                    if (!(value instanceof JSObject valueObj)) {
+                        return JSBoolean.FALSE;
+                    }
+                    return (JSValue) JSBoolean.valueOf(jsWeakSet.weakSetDelete(valueObj));
+                }))
+                .orElseGet(() -> context.throwTypeError("Method WeakSet.prototype.delete called on incompatible receiver not weakset"));
     }
 
     /**
@@ -80,21 +77,18 @@ public final class WeakSetPrototype {
      * Returns a boolean indicating whether a value exists in the WeakSet.
      */
     public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSWeakSet weakSet)) {
-            return context.throwTypeError("WeakSet.prototype.has called on non-WeakSet");
-        }
-
-        if (args.length == 0) {
-            return JSBoolean.FALSE;
-        }
-
-        JSValue value = args[0];
-
-        // Value must be an object
-        if (!(value instanceof JSObject valueObj)) {
-            return JSBoolean.FALSE;
-        }
-
-        return JSBoolean.valueOf(weakSet.weakSetHas(valueObj));
+        return thisArg.asWeakSet()
+                .map((jsWeakSet -> {
+                    if (args.length == 0) {
+                        return JSBoolean.FALSE;
+                    }
+                    JSValue value = args[0];
+                    // Value must be an object
+                    if (!(value instanceof JSObject valueObj)) {
+                        return JSBoolean.FALSE;
+                    }
+                    return (JSValue) JSBoolean.valueOf(jsWeakSet.weakSetHas(valueObj));
+                }))
+                .orElseGet(() -> context.throwTypeError("Method WeakSet.prototype.has called on incompatible receiver not weakset"));
     }
 }

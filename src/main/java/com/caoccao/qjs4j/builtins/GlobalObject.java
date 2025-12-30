@@ -93,6 +93,9 @@ public final class GlobalObject {
         // Store error name for constructor use
         errorConstructor.set("[[ErrorName]]", new JSString(errorName));
 
+        // Set constructor property on prototype
+        errorPrototype.set("constructor", errorConstructor);
+
         return errorConstructor;
     }
 
@@ -369,6 +372,7 @@ public final class GlobalObject {
         JSObject arrayBufferConstructor = new JSObject();
         arrayBufferConstructor.set("prototype", arrayBufferPrototype);
         arrayBufferConstructor.setConstructorType(ConstructorType.ARRAY_BUFFER);
+        arrayBufferPrototype.set("constructor", arrayBufferConstructor);
 
         // Static methods
         arrayBufferConstructor.set("isView", new JSNativeFunction("isView", 1, ArrayBufferConstructor::isView));
@@ -440,6 +444,8 @@ public final class GlobalObject {
         // Create Array constructor with static methods
         JSObject arrayConstructor = new JSObject();
         arrayConstructor.set("prototype", arrayPrototype);
+        arrayConstructor.setConstructorType(ConstructorType.ARRAY);
+        arrayPrototype.set("constructor", arrayConstructor);
 
         // Array static methods
         arrayConstructor.set("isArray", new JSNativeFunction("isArray", 1, ArrayConstructor::isArray));
@@ -492,6 +498,7 @@ public final class GlobalObject {
         JSNativeFunction bigIntConstructor = new JSNativeFunction("BigInt", 1, BigIntConstructor::call);
         bigIntConstructor.set("prototype", bigIntPrototype);
         bigIntConstructor.setConstructorType(ConstructorType.BIG_INT); // Mark as BigInt constructor
+        bigIntPrototype.set("constructor", bigIntConstructor);
 
         // BigInt static methods
         bigIntConstructor.set("asIntN", new JSNativeFunction("asIntN", 2, BigIntConstructor::asIntN));
@@ -513,6 +520,7 @@ public final class GlobalObject {
         JSNativeFunction booleanConstructor = new JSNativeFunction("Boolean", 1, BooleanConstructor::call);
         booleanConstructor.set("prototype", booleanPrototype);
         booleanConstructor.setConstructorType(ConstructorType.BOOLEAN); // Mark as Boolean constructor
+        booleanPrototype.set("constructor", booleanConstructor);
 
         global.set("Boolean", booleanConstructor);
     }
@@ -576,6 +584,7 @@ public final class GlobalObject {
         JSObject dataViewConstructor = new JSObject();
         dataViewConstructor.set("prototype", dataViewPrototype);
         dataViewConstructor.setConstructorType(ConstructorType.DATA_VIEW);
+        dataViewPrototype.set("constructor", dataViewConstructor);
 
         global.set("DataView", dataViewConstructor);
     }
@@ -608,6 +617,7 @@ public final class GlobalObject {
         JSObject dateConstructor = new JSObject();
         dateConstructor.set("prototype", datePrototype);
         dateConstructor.setConstructorType(ConstructorType.DATE); // Mark as Date constructor
+        datePrototype.set("constructor", dateConstructor);
 
         // Date static methods
         dateConstructor.set("now", new JSNativeFunction("now", 0, DateConstructor::now));
@@ -645,6 +655,7 @@ public final class GlobalObject {
         JSObject finalizationRegistryConstructor = new JSObject();
         finalizationRegistryConstructor.set("prototype", finalizationRegistryPrototype);
         finalizationRegistryConstructor.setConstructorType(ConstructorType.FINALIZATION_REGISTRY);
+        finalizationRegistryPrototype.set("constructor", finalizationRegistryConstructor);
 
         global.set("FinalizationRegistry", finalizationRegistryConstructor);
     }
@@ -663,6 +674,7 @@ public final class GlobalObject {
         // Function constructor is a placeholder
         JSObject functionConstructor = new JSObject();
         functionConstructor.set("prototype", functionPrototype);
+        functionPrototype.set("constructor", functionConstructor);
 
         global.set("Function", functionConstructor);
     }
@@ -752,6 +764,7 @@ public final class GlobalObject {
         JSObject mapConstructor = new JSObject();
         mapConstructor.set("prototype", mapPrototype);
         mapConstructor.setConstructorType(ConstructorType.MAP); // Mark as Map constructor
+        mapPrototype.set("constructor", mapConstructor);
 
         // Map static methods
         mapConstructor.set("groupBy", new JSNativeFunction("groupBy", 2, MapConstructor::groupBy));
@@ -834,6 +847,7 @@ public final class GlobalObject {
         JSNativeFunction numberConstructor = new JSNativeFunction("Number", 1, NumberConstructor::call);
         numberConstructor.set("prototype", numberPrototype);
         numberConstructor.setConstructorType(ConstructorType.NUMBER); // Mark as Number constructor
+        numberPrototype.set("constructor", numberConstructor);
 
         // Number static methods
         numberConstructor.set("isNaN", new JSNativeFunction("isNaN", 1, NumberPrototype::isNaN));
@@ -859,6 +873,7 @@ public final class GlobalObject {
         // Create Object constructor
         JSNativeFunction objectConstructor = new JSNativeFunction("Object", 1, ObjectConstructor::call);
         objectConstructor.set("prototype", objectPrototype);
+        objectPrototype.set("constructor", objectConstructor);
 
         // Object static methods
         objectConstructor.set("keys", new JSNativeFunction("keys", 1, ObjectConstructor::keys));
@@ -902,6 +917,7 @@ public final class GlobalObject {
         JSObject promiseConstructor = new JSObject();
         promiseConstructor.set("prototype", promisePrototype);
         promiseConstructor.setConstructorType(ConstructorType.PROMISE); // Mark as Promise constructor
+        promisePrototype.set("constructor", promiseConstructor);
 
         // Static methods
         promiseConstructor.set("resolve", new JSNativeFunction("resolve", 1, PromiseConstructor::resolve));
@@ -963,6 +979,7 @@ public final class GlobalObject {
         JSObject regexpConstructor = new JSObject();
         regexpConstructor.set("prototype", regexpPrototype);
         regexpConstructor.setConstructorType(ConstructorType.REGEXP); // Mark as RegExp constructor
+        regexpPrototype.set("constructor", regexpConstructor);
 
         global.set("RegExp", regexpConstructor);
     }
@@ -988,6 +1005,7 @@ public final class GlobalObject {
         JSObject setConstructor = new JSObject();
         setConstructor.set("prototype", setPrototype);
         setConstructor.setConstructorType(ConstructorType.SET); // Mark as Set constructor
+        setPrototype.set("constructor", setConstructor);
 
         global.set("Set", setConstructor);
     }
@@ -1014,6 +1032,7 @@ public final class GlobalObject {
         JSObject sharedArrayBufferConstructor = new JSObject();
         sharedArrayBufferConstructor.set("prototype", sharedArrayBufferPrototype);
         sharedArrayBufferConstructor.setConstructorType(ConstructorType.SHARED_ARRAY_BUFFER); // Mark as SharedArrayBuffer constructor
+        sharedArrayBufferPrototype.set("constructor", sharedArrayBufferConstructor);
 
         global.set("SharedArrayBuffer", sharedArrayBufferConstructor);
     }
@@ -1059,6 +1078,7 @@ public final class GlobalObject {
         JSNativeFunction stringConstructor = new JSNativeFunction("String", 1, StringConstructor::call);
         stringConstructor.set("prototype", stringPrototype);
         stringConstructor.setConstructorType(ConstructorType.STRING); // Mark as String constructor
+        stringPrototype.set("constructor", stringConstructor);
 
         global.set("String", stringConstructor);
     }
@@ -1095,6 +1115,7 @@ public final class GlobalObject {
         JSNativeFunction symbolConstructor = new JSNativeFunction("Symbol", 1, SymbolConstructor::call);
         symbolConstructor.set("prototype", symbolPrototype);
         symbolConstructor.setConstructorType(ConstructorType.SYMBOL); // Mark as Symbol constructor
+        symbolPrototype.set("constructor", symbolConstructor);
 
         // Symbol static methods
         symbolConstructor.set("for", new JSNativeFunction("for", 1, SymbolConstructor::symbolFor));
@@ -1192,6 +1213,7 @@ public final class GlobalObject {
         JSObject weakMapConstructor = new JSObject();
         weakMapConstructor.set("prototype", weakMapPrototype);
         weakMapConstructor.setConstructorType(ConstructorType.WEAK_MAP); // Mark as WeakMap constructor
+        weakMapPrototype.set("constructor", weakMapConstructor);
 
         global.set("WeakMap", weakMapConstructor);
     }
@@ -1208,6 +1230,7 @@ public final class GlobalObject {
         JSObject weakRefConstructor = new JSObject();
         weakRefConstructor.set("prototype", weakRefPrototype);
         weakRefConstructor.setConstructorType(ConstructorType.WEAK_REF); // Mark as WeakRef constructor
+        weakRefPrototype.set("constructor", weakRefConstructor);
 
         global.set("WeakRef", weakRefConstructor);
     }
@@ -1226,6 +1249,7 @@ public final class GlobalObject {
         JSObject weakSetConstructor = new JSObject();
         weakSetConstructor.set("prototype", weakSetPrototype);
         weakSetConstructor.setConstructorType(ConstructorType.WEAK_SET); // Mark as WeakSet constructor
+        weakSetPrototype.set("constructor", weakSetConstructor);
 
         global.set("WeakSet", weakSetConstructor);
     }

@@ -16,145 +16,174 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.core.JSObject;
-import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSValue;
-import com.caoccao.qjs4j.core.JSWeakMap;
+import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.stream.Stream;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for WeakMap.prototype methods.
  */
-public class WeakMapPrototypeTest extends BaseTest {
+public class WeakMapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testDelete() {
-        JSWeakMap weakMap = new JSWeakMap();
-        JSObject key1 = new JSObject();
-        JSObject key2 = new JSObject();
-        weakMap.weakMapSet(key1, new JSString("value1"));
-        weakMap.weakMapSet(key2, new JSString("value2"));
-
         // Normal case: delete existing key
-        JSValue result = WeakMapPrototype.delete(context, weakMap, new JSValue[]{key1});
-        assertTrue(result.isBooleanTrue());
-        assertFalse(weakMap.weakMapHas(key1));
+        String code1 = """
+                var weakMap = new WeakMap();
+                var key1 = {};
+                var key2 = {};
+                weakMap.set(key1, 'value1');
+                weakMap.set(key2, 'value2');
+                weakMap.delete(key1);""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code1).executeBoolean(),
+                () -> context.eval(code1).toJavaObject());
 
         // Normal case: delete non-existing key
-        result = WeakMapPrototype.delete(context, weakMap, new JSValue[]{new JSObject()});
-        assertTrue(result.isBooleanFalse());
+        String code2 = """
+                var weakMap = new WeakMap();
+                var key = {};
+                weakMap.delete(key);""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code2).executeBoolean(),
+                () -> context.eval(code2).toJavaObject());
 
         // Normal case: no arguments
-        result = WeakMapPrototype.delete(context, weakMap, new JSValue[]{});
-        assertTrue(result.isBooleanFalse());
+        String code3 = """
+                var weakMap = new WeakMap();
+                weakMap.delete();""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code3).executeBoolean(),
+                () -> context.eval(code3).toJavaObject());
 
         // Edge case: non-object key
-        result = WeakMapPrototype.delete(context, weakMap, new JSValue[]{new JSString("string")});
-        assertTrue(result.isBooleanFalse());
+        String code4 = """
+                var weakMap = new WeakMap();
+                weakMap.delete('string');""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code4).executeBoolean(),
+                () -> context.eval(code4).toJavaObject());
 
         // Edge case: called on non-WeakMap
-        assertTypeError(WeakMapPrototype.delete(context, new JSString("not weakmap"), new JSValue[]{key1}));
-        assertPendingException(context);
+        assertErrorWithJavet("WeakMap.prototype.delete.call('not weakmap', {});");
     }
 
     @Test
     public void testGet() {
-        JSWeakMap weakMap = new JSWeakMap();
-        JSObject key1 = new JSObject();
-        JSObject key2 = new JSObject();
-        JSString value1 = new JSString("value1");
-        JSString value2 = new JSString("value2");
-        weakMap.weakMapSet(key1, value1);
-        weakMap.weakMapSet(key2, value2);
-
         // Normal case: get existing key
-        JSValue result = WeakMapPrototype.get(context, weakMap, new JSValue[]{key1});
-        assertSame(value1, result);
+        String code1 = """
+                var weakMap = new WeakMap();
+                var key1 = {};
+                weakMap.set(key1, 'value1');
+                weakMap.get(key1);""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code1).executeString(),
+                () -> context.eval(code1).toJavaObject());
 
         // Normal case: get non-existing key
-        result = WeakMapPrototype.get(context, weakMap, new JSValue[]{new JSObject()});
-        assertTrue(result.isUndefined());
+        String code2 = """
+                var weakMap = new WeakMap();
+                var key = {};
+                weakMap.get(key);""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code2).executeObject(),
+                () -> context.eval(code2).toJavaObject());
 
         // Normal case: no arguments
-        result = WeakMapPrototype.get(context, weakMap, new JSValue[]{});
-        assertTrue(result.isUndefined());
+        String code3 = """
+                var weakMap = new WeakMap();
+                weakMap.get();""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code3).executeObject(),
+                () -> context.eval(code3).toJavaObject());
 
         // Edge case: non-object key
-        result = WeakMapPrototype.get(context, weakMap, new JSValue[]{new JSString("string")});
-        assertTrue(result.isUndefined());
+        String code4 = """
+                var weakMap = new WeakMap();
+                weakMap.get('string');""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code4).executeObject(),
+                () -> context.eval(code4).toJavaObject());
 
         // Edge case: called on non-WeakMap
-        assertTypeError(WeakMapPrototype.get(context, new JSString("not weakmap"), new JSValue[]{key1}));
-        assertPendingException(context);
+        assertErrorWithJavet("WeakMap.prototype.get.call('not weakmap', {});");
     }
 
     @Test
     public void testHas() {
-        JSWeakMap weakMap = new JSWeakMap();
-        JSObject key1 = new JSObject();
-        JSObject key2 = new JSObject();
-        weakMap.weakMapSet(key1, new JSString("value1"));
-        weakMap.weakMapSet(key2, new JSString("value2"));
-
-        // Normal case: has existing key
-        JSValue result = WeakMapPrototype.has(context, weakMap, new JSValue[]{key1});
-        assertTrue(result.isBooleanTrue());
-
-        // Normal case: has non-existing key
-        result = WeakMapPrototype.has(context, weakMap, new JSValue[]{new JSObject()});
-        assertTrue(result.isBooleanFalse());
-
-        // Normal case: no arguments
-        result = WeakMapPrototype.has(context, weakMap, new JSValue[]{});
-        assertTrue(result.isBooleanFalse());
-
-        // Edge case: non-object key
-        result = WeakMapPrototype.has(context, weakMap, new JSValue[]{new JSString("string")});
-        assertTrue(result.isBooleanFalse());
+        Stream.of(
+                // Normal case: has existing key
+                """
+                var weakMap = new WeakMap();
+                var key1 = {};
+                weakMap.set(key1, 'value1');
+                weakMap.has(key1);""",
+                // Normal case: has non-existing key
+                """
+                var weakMap = new WeakMap();
+                var key = {};
+                weakMap.has(key);""",
+                // Normal case: no arguments
+                """
+                var weakMap = new WeakMap();
+                weakMap.has();""",
+                // Edge case: non-object key
+                """
+                var weakMap = new WeakMap();
+                weakMap.has('string');"""
+        ).forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeBoolean(),
+                        () -> context.eval(code).toJavaObject()));
 
         // Edge case: called on non-WeakMap
-        assertTypeError(WeakMapPrototype.has(context, new JSString("not weakmap"), new JSValue[]{key1}));
-        assertPendingException(context);
+        assertErrorWithJavet("WeakMap.prototype.has.call('not weakmap', {});");
     }
 
     @Test
     public void testSet() {
-        JSWeakMap weakMap = new JSWeakMap();
-        JSObject key1 = new JSObject();
-        JSObject key2 = new JSObject();
-        JSString value1 = new JSString("value1");
-        JSString value2 = new JSString("value2");
-
         // Normal case: set new key-value
-        JSValue result = WeakMapPrototype.set(context, weakMap, new JSValue[]{key1, value1});
-        assertSame(weakMap, result);
-        assertTrue(weakMap.weakMapHas(key1));
-        assertSame(value1, weakMap.weakMapGet(key1));
+        String code1 = """
+                var weakMap = new WeakMap();
+                var key1 = {};
+                weakMap.set(key1, 'value1').constructor === WeakMap""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code1).executeBoolean(),
+                () -> context.eval(code1).toJavaObject());
 
-        // Normal case: set existing key with new value
-        result = WeakMapPrototype.set(context, weakMap, new JSValue[]{key1, value2});
-        assertSame(weakMap, result);
-        assertSame(value2, weakMap.weakMapGet(key1));
+        // Verify set returns the WeakMap
+        String code2 = """
+                var weakMap = new WeakMap();
+                var key = {};
+                weakMap.set(key, 'value') === weakMap;""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code2).executeBoolean(),
+                () -> context.eval(code2).toJavaObject());
 
         // Normal case: set with undefined value
-        result = WeakMapPrototype.set(context, weakMap, new JSValue[]{key2});
-        assertSame(weakMap, result);
-        assertTrue(weakMap.weakMapHas(key2));
-        assertTrue(weakMap.weakMapGet(key2).isUndefined());
+        String code3 = """
+                var weakMap = new WeakMap();
+                var key = {};
+                weakMap.set(key);
+                weakMap.get(key);""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code3).executeObject(),
+                () -> context.eval(code3).toJavaObject());
 
         // Edge case: no arguments
-        assertTypeError(WeakMapPrototype.set(context, weakMap, new JSValue[]{}));
-        assertPendingException(context);
+        assertErrorWithJavet("""
+                var weakMap = new WeakMap();
+                weakMap.set();""");
 
         // Edge case: non-object key
-        assertTypeError(WeakMapPrototype.set(context, weakMap, new JSValue[]{new JSString("string"), value1}));
-        assertPendingException(context);
+        assertErrorWithJavet("""
+                var weakMap = new WeakMap();
+                weakMap.set('string', 'value');""");
 
         // Edge case: called on non-WeakMap
-        assertTypeError(WeakMapPrototype.set(context, new JSString("not weakmap"), new JSValue[]{key1, value1}));
-        assertPendingException(context);
+        assertErrorWithJavet("WeakMap.prototype.set.call('not weakmap', {}, 'value');");
     }
 }

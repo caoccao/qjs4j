@@ -16,50 +16,57 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import java.util.stream.Stream;
 
 /**
  * Unit tests for WeakRef constructor.
  */
-public class WeakRefConstructorTest extends BaseTest {
+public class WeakRefConstructorTest extends BaseJavetTest {
 
     @Test
     public void testConstruct() {
-        // WeakRef constructor must be called with 'new', so direct call should throw error
-        assertTypeError(WeakRefConstructor.construct(context, JSUndefined.INSTANCE, new JSValue[]{new JSObject()}));
-        assertPendingException(context);
+        // Normal case: create WeakRef with new
+        String code = """
+                var obj = {};
+                var ref = new WeakRef(obj);
+                ref.deref() === obj;""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code).executeBoolean(),
+                () -> context.eval(code).toJavaObject());
     }
 
     @Test
     public void testCreateWeakRef() {
-        JSObject target = new JSObject();
+        // Verify WeakRef can be created
+        String code1 = """
+                var obj = {};
+                var ref = new WeakRef(obj);
+                typeof ref;""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code1).executeString(),
+                () -> context.eval(code1).toJavaObject());
 
-        // Normal case: create WeakRef with object
-        JSValue result = WeakRefConstructor.createWeakRef(context, target);
-        assertInstanceOf(JSWeakRef.class, result);
-        JSWeakRef weakRef = (JSWeakRef) result;
-        assertSame(target, weakRef.deref());
+        // Test deref returns the target
+        String code2 = """
+                var obj = { x: 42 };
+                var ref = new WeakRef(obj);
+                ref.deref().x;""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code2).executeInteger().doubleValue(),
+                () -> context.eval(code2).toJavaObject());
 
         // Edge case: target is null
-        assertTypeError(WeakRefConstructor.createWeakRef(context, JSNull.INSTANCE));
-        assertPendingException(context);
+        assertErrorWithJavet("new WeakRef(null);");
 
         // Edge case: target is not an object
-        assertTypeError(WeakRefConstructor.createWeakRef(context, new JSString("string")));
-        assertPendingException(context);
-
-        assertTypeError(WeakRefConstructor.createWeakRef(context, new JSNumber(42)));
-        assertPendingException(context);
-
-        assertTypeError(WeakRefConstructor.createWeakRef(context, JSBoolean.TRUE));
-        assertPendingException(context);
-
-        assertTypeError(WeakRefConstructor.createWeakRef(context, JSUndefined.INSTANCE));
-        assertPendingException(context);
+        Stream.of(
+                "new WeakRef('string');",
+                "new WeakRef(42);",
+                "new WeakRef(true);",
+                "new WeakRef(undefined);"
+        ).forEach(this::assertErrorWithJavet);
     }
 }

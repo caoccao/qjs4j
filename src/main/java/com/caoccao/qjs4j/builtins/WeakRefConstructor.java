@@ -52,14 +52,8 @@ public final class WeakRefConstructor {
     public static JSValue createWeakRef(JSContext context, JSValue target) {
         // Validate target is an object
         if (!(target instanceof JSObject targetObj)) {
-            return context.throwTypeError("WeakRef target must be an object");
+            return context.throwTypeError("WeakRef: invalid target");
         }
-
-        // Cannot create WeakRef to null
-        if (target instanceof JSNull) {
-            return context.throwTypeError("WeakRef target cannot be null");
-        }
-
         // Create and return WeakRef
         return new JSWeakRef(targetObj);
     }

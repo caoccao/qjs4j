@@ -16,110 +16,120 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.core.JSObject;
-import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSValue;
-import com.caoccao.qjs4j.core.JSWeakSet;
+import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.stream.Stream;
 
 /**
  * Unit tests for WeakSet.prototype methods.
  */
-public class WeakSetPrototypeTest extends BaseTest {
+public class WeakSetPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testAdd() {
-        JSWeakSet weakSet = new JSWeakSet();
-        JSObject value1 = new JSObject();
-        JSObject value2 = new JSObject();
-
         // Normal case: add new value
-        JSValue result = WeakSetPrototype.add(context, weakSet, new JSValue[]{value1});
-        assertSame(weakSet, result);
-        assertTrue(weakSet.weakSetHas(value1));
+        String code1 = """
+                var weakSet = new WeakSet();
+                var value1 = {};
+                weakSet.add(value1).constructor === WeakSet""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code1).executeBoolean(),
+                () -> context.eval(code1).toJavaObject());
 
-        // Normal case: add duplicate value (should not change)
-        result = WeakSetPrototype.add(context, weakSet, new JSValue[]{value1});
-        assertSame(weakSet, result);
-        assertTrue(weakSet.weakSetHas(value1));
+        // Verify add returns the WeakSet
+        String code2 = """
+                var weakSet = new WeakSet();
+                var value = {};
+                weakSet.add(value) === weakSet;""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code2).executeBoolean(),
+                () -> context.eval(code2).toJavaObject());
 
-        // Normal case: add different value
-        result = WeakSetPrototype.add(context, weakSet, new JSValue[]{value2});
-        assertSame(weakSet, result);
-        assertTrue(weakSet.weakSetHas(value2));
+        // Normal case: add duplicate value
+        String code3 = """
+                var weakSet = new WeakSet();
+                var value = {};
+                weakSet.add(value);
+                weakSet.add(value);
+                weakSet.has(value);""";
+        assertWithJavet(
+                () -> v8Runtime.getExecutor(code3).executeBoolean(),
+                () -> context.eval(code3).toJavaObject());
 
         // Edge case: no arguments
-        assertTypeError(WeakSetPrototype.add(context, weakSet, new JSValue[]{}));
-        assertPendingException(context);
+        assertErrorWithJavet("""
+                var weakSet = new WeakSet();
+                weakSet.add();""");
 
         // Edge case: non-object value
-        assertTypeError(WeakSetPrototype.add(context, weakSet, new JSValue[]{new JSString("string")}));
-        assertPendingException(context);
+        assertErrorWithJavet("""
+                var weakSet = new WeakSet();
+                weakSet.add('string');""");
 
         // Edge case: called on non-WeakSet
-        assertTypeError(WeakSetPrototype.add(context, new JSString("not weakset"), new JSValue[]{value1}));
-        assertPendingException(context);
+        assertErrorWithJavet("WeakSet.prototype.add.call('not weakset', {});");
     }
 
     @Test
     public void testDelete() {
-        JSWeakSet weakSet = new JSWeakSet();
-        JSObject value1 = new JSObject();
-        JSObject value2 = new JSObject();
-        weakSet.weakSetAdd(value1);
-        weakSet.weakSetAdd(value2);
-
-        // Normal case: delete existing value
-        JSValue result = WeakSetPrototype.delete(context, weakSet, new JSValue[]{value1});
-        assertTrue(result.isBooleanTrue());
-        assertFalse(weakSet.weakSetHas(value1));
-
-        // Normal case: delete non-existing value
-        result = WeakSetPrototype.delete(context, weakSet, new JSValue[]{new JSObject()});
-        assertTrue(result.isBooleanFalse());
-
-        // Normal case: no arguments
-        result = WeakSetPrototype.delete(context, weakSet, new JSValue[]{});
-        assertTrue(result.isBooleanFalse());
-
-        // Edge case: non-object value
-        result = WeakSetPrototype.delete(context, weakSet, new JSValue[]{new JSString("string")});
-        assertTrue(result.isBooleanFalse());
+        Stream.of(
+                // Normal case: delete existing value
+                """
+                var weakSet = new WeakSet();
+                var value1 = {};
+                weakSet.add(value1);
+                weakSet.delete(value1);""",
+                // Normal case: delete non-existing value
+                """
+                var weakSet = new WeakSet();
+                var value = {};
+                weakSet.delete(value);""",
+                // Normal case: no arguments
+                """
+                var weakSet = new WeakSet();
+                weakSet.delete();""",
+                // Edge case: non-object value
+                """
+                var weakSet = new WeakSet();
+                weakSet.delete('string');"""
+        ).forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeBoolean(),
+                        () -> context.eval(code).toJavaObject()));
 
         // Edge case: called on non-WeakSet
-        assertTypeError(WeakSetPrototype.delete(context, new JSString("not weakset"), new JSValue[]{value1}));
-        assertPendingException(context);
+        assertErrorWithJavet("WeakSet.prototype.delete.call('not weakset', {});");
     }
 
     @Test
     public void testHas() {
-        JSWeakSet weakSet = new JSWeakSet();
-        JSObject value1 = new JSObject();
-        JSObject value2 = new JSObject();
-        weakSet.weakSetAdd(value1);
-        weakSet.weakSetAdd(value2);
-
-        // Normal case: has existing value
-        JSValue result = WeakSetPrototype.has(context, weakSet, new JSValue[]{value1});
-        assertTrue(result.isBooleanTrue());
-
-        // Normal case: has non-existing value
-        result = WeakSetPrototype.has(context, weakSet, new JSValue[]{new JSObject()});
-        assertTrue(result.isBooleanFalse());
-
-        // Normal case: no arguments
-        result = WeakSetPrototype.has(context, weakSet, new JSValue[]{});
-        assertTrue(result.isBooleanFalse());
-
-        // Edge case: non-object value
-        result = WeakSetPrototype.has(context, weakSet, new JSValue[]{new JSString("string")});
-        assertTrue(result.isBooleanFalse());
+        Stream.of(
+                // Normal case: has existing value
+                """
+                var weakSet = new WeakSet();
+                var value1 = {};
+                weakSet.add(value1);
+                weakSet.has(value1);""",
+                // Normal case: has non-existing value
+                """
+                var weakSet = new WeakSet();
+                var value = {};
+                weakSet.has(value);""",
+                // Normal case: no arguments
+                """
+                var weakSet = new WeakSet();
+                weakSet.has();""",
+                // Edge case: non-object value
+                """
+                var weakSet = new WeakSet();
+                weakSet.has('string');"""
+        ).forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeBoolean(),
+                        () -> context.eval(code).toJavaObject()));
 
         // Edge case: called on non-WeakSet
-        assertTypeError(WeakSetPrototype.has(context, new JSString("not weakset"), new JSValue[]{value1}));
-        assertPendingException(context);
+        assertErrorWithJavet("WeakSet.prototype.has.call('not weakset', {});");
     }
 }

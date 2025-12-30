@@ -21,6 +21,7 @@ package com.caoccao.qjs4j.core;
  * These correspond to [[Constructor]] internal slots in the ECMAScript specification.
  */
 public enum ConstructorType {
+    ARRAY,
     ARRAY_BUFFER,
     BIG_INT,
     BOOLEAN,
