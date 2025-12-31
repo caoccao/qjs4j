@@ -1060,6 +1060,7 @@ public final class GlobalObject {
         stringPrototype.set("replaceAll", new JSNativeFunction("replaceAll", 2, StringPrototype::replaceAll));
         stringPrototype.set("match", new JSNativeFunction("match", 1, StringPrototype::match));
         stringPrototype.set("matchAll", new JSNativeFunction("matchAll", 1, StringPrototype::matchAll));
+        stringPrototype.set("search", new JSNativeFunction("search", 1, StringPrototype::search));
         stringPrototype.set("slice", new JSNativeFunction("slice", 2, StringPrototype::slice));
         stringPrototype.set("split", new JSNativeFunction("split", 2, StringPrototype::split));
         stringPrototype.set("substring", new JSNativeFunction("substring", 2, StringPrototype::substring));

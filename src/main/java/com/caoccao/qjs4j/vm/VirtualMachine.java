@@ -676,17 +676,10 @@ public final class VirtualMachine {
                 JSValue result = nativeFunc.call(context, receiver, args);
                 // Check for pending exception after native function call
                 if (context.hasPendingException()) {
-                    // Throw immediately to propagate the exception
-                    JSValue exception = context.getPendingException();
-                    // Get error message safely
-                    String errorMsg = "Unhandled exception";
-                    if (exception instanceof JSObject errorObj) {
-                        JSValue msgValue = errorObj.get("message");
-                        if (msgValue instanceof JSString msgStr) {
-                            errorMsg = msgStr.value();
-                        }
-                    }
-                    throw new VMException(errorMsg);
+                    // Set pending exception in VM and push placeholder
+                    // The main loop will handle the exception on next iteration
+                    pendingException = context.getPendingException();
+                    valueStack.push(JSUndefined.INSTANCE);
                 } else {
                     valueStack.push(result);
                 }

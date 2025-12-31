@@ -728,6 +728,7 @@ public final class BytecodeCompiler {
         List<Statement> body = program.body();
         int lastIndex = body.size() - 1;
         boolean lastIsExpression = false;
+        boolean lastProducesValue = false;
 
         for (int i = 0; i < body.size(); i++) {
             boolean isLast = (i == lastIndex);
@@ -735,13 +736,17 @@ public final class BytecodeCompiler {
 
             if (isLast && stmt instanceof ExpressionStatement) {
                 lastIsExpression = true;
+                lastProducesValue = true;
+            } else if (isLast && stmt instanceof TryStatement) {
+                // Try statements can produce values
+                lastProducesValue = true;
             }
 
             compileStatement(stmt, isLast);
         }
 
-        // If last statement wasn't an expression, push undefined
-        if (!lastIsExpression) {
+        // If last statement didn't produce a value, push undefined
+        if (!lastProducesValue) {
             emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
@@ -890,8 +895,8 @@ public final class BytecodeCompiler {
             catchJump = emitter.emitJump(Opcode.CATCH);
         }
 
-        // Compile try block
-        compileBlockStatement(tryStmt.block());
+        // Compile try block - preserve value of last expression
+        compileTryFinallyBlock(tryStmt.block());
 
         // Jump over catch block
         int jumpOverCatch = emitter.emitJump(Opcode.GOTO);
@@ -909,13 +914,36 @@ public final class BytecodeCompiler {
                 String paramName = handler.param().name();
                 int localIndex = currentScope().declareLocal(paramName);
                 emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
-            }
-
-            // Compile catch body
-            compileBlockStatement(handler.body());
-
-            if (handler.param() != null) {
+                
+                // Compile catch body in the SAME scope as the parameter
+                List<Statement> body = handler.body().body();
+                for (int i = 0; i < body.size(); i++) {
+                    boolean isLast = (i == body.size() - 1);
+                    Statement stmt = body.get(i);
+                    
+                    if (stmt instanceof ExpressionStatement exprStmt) {
+                        compileExpression(exprStmt.expression());
+                        // Keep the value on stack for the last expression, drop otherwise
+                        if (!isLast) {
+                            emitter.emitOpcode(Opcode.DROP);
+                        }
+                    } else {
+                        compileStatement(stmt, false);
+                        // If last statement is not an expression, push undefined
+                        if (isLast) {
+                            emitter.emitOpcode(Opcode.UNDEFINED);
+                        }
+                    }
+                }
+                // If block is empty, push undefined
+                if (body.isEmpty()) {
+                    emitter.emitOpcode(Opcode.UNDEFINED);
+                }
+                
                 exitScope();
+            } else {
+                // No parameter, compile catch body without binding
+                compileTryFinallyBlock(handler.body());
             }
         }
 
@@ -924,8 +952,39 @@ public final class BytecodeCompiler {
 
         // Compile finally block
         if (tryStmt.finalizer() != null) {
-            compileBlockStatement(tryStmt.finalizer());
+            compileTryFinallyBlock(tryStmt.finalizer());
         }
+    }
+    
+    /**
+     * Compile a block for try/catch/finally, preserving the value of the last expression.
+     */
+    private void compileTryFinallyBlock(BlockStatement block) {
+        enterScope();
+        List<Statement> body = block.body();
+        for (int i = 0; i < body.size(); i++) {
+            boolean isLast = (i == body.size() - 1);
+            Statement stmt = body.get(i);
+            
+            if (stmt instanceof ExpressionStatement exprStmt) {
+                compileExpression(exprStmt.expression());
+                // Keep the value on stack for the last expression, drop otherwise
+                if (!isLast) {
+                    emitter.emitOpcode(Opcode.DROP);
+                }
+            } else {
+                compileStatement(stmt, false);
+                // If last statement is not an expression, push undefined
+                if (isLast) {
+                    emitter.emitOpcode(Opcode.UNDEFINED);
+                }
+            }
+        }
+        // If block is empty, push undefined
+        if (body.isEmpty()) {
+            emitter.emitOpcode(Opcode.UNDEFINED);
+        }
+        exitScope();
     }
 
     private void compileUnaryExpression(UnaryExpression unaryExpr) {

@@ -236,68 +236,47 @@ public final class StringPrototype {
             regexp = new JSRegExp(pattern, "");
         }
 
-        // Use QuickJS engine
-        RegExpEngine engine = regexp.getEngine();
-
         // Check if global flag is set
         if (regexp.isGlobal()) {
-            // Global match: return array of all matches
+            // Global match: set lastIndex to 0 and collect all matches
+            regexp.setLastIndex(0);
             JSArray results = new JSArray();
-            int lastIndex = 0;
+            int n = 0;
 
-            while (lastIndex <= s.length()) {
-                RegExpEngine.MatchResult result = engine.exec(s, lastIndex);
-                if (result == null || !result.matched()) {
+            while (true) {
+                // Call exec (which is like JS_RegExpExec)
+                JSValue result = RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString(s)});
+
+                if (result instanceof JSNull) {
                     break;
                 }
 
-                // Add the full match to results
-                String match = result.getMatch();
-                if (match != null) {
-                    results.push(new JSString(match));
-                }
+                // Extract the matched string (index 0 of the result array)
+                if (result instanceof JSArray resultArray) {
+                    JSValue matchStr = resultArray.get(0);
+                    if (matchStr instanceof JSString) {
+                        results.push(matchStr);
+                        n++;
 
-                // Update lastIndex
-                int[][] indices = result.indices();
-                if (indices != null && indices.length > 0) {
-                    lastIndex = indices[0][1];
-                    if (lastIndex == indices[0][0]) {
-                        lastIndex++; // Prevent infinite loop on zero-width matches
+                        // Check for empty match to prevent infinite loop
+                        if (((JSString) matchStr).value().isEmpty()) {
+                            // Advance lastIndex to prevent infinite loop
+                            int thisIndex = regexp.getLastIndex();
+                            // Note: fullUnicode advancement not implemented yet, just advance by 1
+                            regexp.setLastIndex(thisIndex + 1);
+                        }
                     }
-                } else {
-                    break;
                 }
             }
 
-            return results.getLength() > 0 ? results : JSNull.INSTANCE;
-        } else {
-            // Non-global match: return array with match and captures
-            RegExpEngine.MatchResult result = engine.exec(s, 0);
-            if (result == null || !result.matched()) {
+            // Return null if no matches found
+            if (n == 0) {
                 return JSNull.INSTANCE;
             }
-
-            // Create result array with full match and captures
-            JSArray matchArray = new JSArray();
-            String[] captures = result.captures();
-            for (int i = 0; i < captures.length; i++) {
-                if (captures[i] != null) {
-                    matchArray.push(new JSString(captures[i]));
-                } else {
-                    matchArray.push(JSUndefined.INSTANCE);
-                }
-            }
-
-            // Add 'index' property
-            int[][] indices = result.indices();
-            if (indices != null && indices.length > 0) {
-                matchArray.set("index", new JSNumber(indices[0][0]));
-            }
-
-            // Add 'input' property
-            matchArray.set("input", new JSString(s));
-
-            return matchArray;
+            return results;
+        } else {
+            // Non-global match: just call exec and return result
+            return RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString(s)});
         }
     }
 
@@ -467,7 +446,8 @@ public final class StringPrototype {
 
     /**
      * String.prototype.replace(searchValue, replaceValue)
-     * ES2020 21.1.3.14 (simplified - no regex support)
+     * ES2020 21.1.3.14
+     * Accepts a string or regular expression as the first argument.
      */
     public static JSValue replace(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(context, thisArg);
@@ -477,8 +457,58 @@ public final class StringPrototype {
             return str;
         }
 
-        String searchStr = JSTypeConversions.toString(context, args[0]).value();
+        JSValue searchValue = args[0];
         String replaceStr = args.length > 1 ? JSTypeConversions.toString(context, args[1]).value() : "undefined";
+
+        // Handle RegExp
+        if (searchValue instanceof JSRegExp regexp) {
+            if (regexp.isGlobal()) {
+                return replaceAll(context, thisArg, args);
+            } else {
+                RegExpEngine engine = regexp.getEngine();
+                RegExpEngine.MatchResult result = engine.exec(s, 0);
+
+                if (result == null || !result.matched()) {
+                    return str;
+                }
+
+                int[][] indices = result.indices();
+                if (indices == null || indices.length == 0) {
+                    return str;
+                }
+
+                int matchStart = indices[0][0];
+                int matchEnd = indices[0][1];
+
+                // Build result with replacement
+                String replacement = replaceStr;
+
+                // Handle special replacement patterns like $1, $2, etc.
+                String[] captures = result.captures();
+                if (captures != null) {
+                    for (int i = captures.length - 1; i >= 0; i--) {
+                        if (captures[i] != null) {
+                            replacement = replacement.replace("$" + i, captures[i]);
+                        }
+                    }
+                    // Replace $& with the full match
+                    if (captures.length > 0 && captures[0] != null) {
+                        replacement = replacement.replace("$&", captures[0]);
+                    }
+                }
+
+                String resultStr = s.substring(0, matchStart) + replacement + s.substring(matchEnd);
+                return new JSString(resultStr);
+            }
+        }
+
+        // Handle string search
+        String searchStr = JSTypeConversions.toString(context, searchValue).value();
+
+        // Handle empty search string: insert at position 0
+        if (searchStr.isEmpty()) {
+            return new JSString(replaceStr + s);
+        }
 
         int index = s.indexOf(searchStr);
         if (index < 0) {
@@ -491,7 +521,9 @@ public final class StringPrototype {
 
     /**
      * String.prototype.replaceAll(searchValue, replaceValue)
-     * ES2020 21.1.3.15 (simplified - no regex support)
+     * ES2020 21.1.3.15
+     * Accepts a string or regular expression as the first argument.
+     * If a RegExp is provided, it must have the global (g) flag.
      */
     public static JSValue replaceAll(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(context, thisArg);
@@ -501,14 +533,146 @@ public final class StringPrototype {
             return str;
         }
 
-        String searchStr = JSTypeConversions.toString(context, args[0]).value();
+        JSValue searchValue = args[0];
         String replaceStr = args.length > 1 ? JSTypeConversions.toString(context, args[1]).value() : "undefined";
 
-        if (searchStr.isEmpty()) {
-            return str;
+        // Handle RegExp
+        if (searchValue instanceof JSRegExp regexp) {
+            // replaceAll requires global flag
+            if (!regexp.isGlobal()) {
+                return context.throwTypeError("String.prototype.replaceAll called with a non-global RegExp argument");
+            }
+
+            RegExpEngine engine = regexp.getEngine();
+            StringBuilder result = new StringBuilder();
+            int lastIndex = 0;
+
+            while (lastIndex <= s.length()) {
+                RegExpEngine.MatchResult matchResult = engine.exec(s, lastIndex);
+
+                if (matchResult == null || !matchResult.matched()) {
+                    // No more matches, append the rest
+                    result.append(s.substring(lastIndex));
+                    break;
+                }
+
+                int[][] indices = matchResult.indices();
+                if (indices == null || indices.length == 0) {
+                    result.append(s.substring(lastIndex));
+                    break;
+                }
+
+                int matchStart = indices[0][0];
+                int matchEnd = indices[0][1];
+
+                // Append text before match
+                result.append(s, lastIndex, matchStart);
+
+                // Build replacement with special patterns
+                String replacement = replaceStr;
+                String[] captures = matchResult.captures();
+                if (captures != null) {
+                    for (int i = captures.length - 1; i >= 0; i--) {
+                        if (captures[i] != null) {
+                            replacement = replacement.replace("$" + i, captures[i]);
+                        }
+                    }
+                    // Replace $& with the full match
+                    if (captures.length > 0 && captures[0] != null) {
+                        replacement = replacement.replace("$&", captures[0]);
+                    }
+                }
+
+                // Append replacement
+                result.append(replacement);
+
+                // Move past the match
+                lastIndex = matchEnd;
+
+                // Prevent infinite loop on zero-width matches
+                if (matchStart == matchEnd) {
+                    if (lastIndex < s.length()) {
+                        result.append(s.charAt(lastIndex));
+                        lastIndex++;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            return new JSString(result.toString());
         }
 
-        return new JSString(s.replace(searchStr, replaceStr));
+        // Handle string search
+        String searchStr = JSTypeConversions.toString(context, searchValue).value();
+
+        // Handle empty search string: insert replacement at every position
+        if (searchStr.isEmpty()) {
+            StringBuilder result = new StringBuilder();
+            for (int i = 0; i < s.length(); i++) {
+                result.append(replaceStr);
+                result.append(s.charAt(i));
+            }
+            result.append(replaceStr);
+            return new JSString(result.toString());
+        }
+
+        // Handle non-empty search string
+        StringBuilder result = new StringBuilder();
+        int pos = 0;
+        int index;
+        while ((index = s.indexOf(searchStr, pos)) >= 0) {
+            result.append(s, pos, index);
+            result.append(replaceStr);
+            pos = index + searchStr.length();
+        }
+        result.append(s.substring(pos));
+        return new JSString(result.toString());
+    }
+
+    /**
+     * String.prototype.search(regexp)
+     * ES2020 21.1.3.15
+     * Accepts a regular expression or string.
+     * Returns the index of the first match, or -1.
+     */
+    public static JSValue search(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSString str = JSTypeConversions.toString(context, thisArg);
+        String s = str.value();
+
+        if (args.length == 0) {
+            return new JSNumber(-1);
+        }
+
+        JSValue regexpArg = args[0];
+
+        // Convert to RegExp if not already
+        JSRegExp regexp;
+        if (regexpArg instanceof JSRegExp) {
+            regexp = (JSRegExp) regexpArg;
+        } else if (regexpArg instanceof JSString regexpStr) {
+            regexp = new JSRegExp(regexpStr.value(), "");
+        } else {
+            // Convert to string and create RegExp
+            String pattern = JSTypeConversions.toString(context, regexpArg).value();
+            regexp = new JSRegExp(pattern, "");
+        }
+
+        // Use QuickJS engine to find match
+        RegExpEngine engine = regexp.getEngine();
+        RegExpEngine.MatchResult result = engine.exec(s, 0);
+
+        if (result == null || !result.matched()) {
+            return new JSNumber(-1);
+        }
+
+        // Return the starting index of the match
+        int[][] indices = result.indices();
+        if (indices != null && indices.length > 0) {
+            return new JSNumber(indices[0][0]);
+        }
+
+        return new JSNumber(-1);
     }
 
     /**
@@ -571,7 +735,7 @@ public final class StringPrototype {
 
             while (start <= s.length() && arr.getLength() < limit) {
                 RegExpEngine.MatchResult result = engine.exec(s, start);
-                
+
                 if (result == null || !result.matched()) {
                     // No more matches, add the rest of the string
                     if (arr.getLength() < limit) {
@@ -602,7 +766,7 @@ public final class StringPrototype {
 
                     // Move past the match
                     start = matchEnd;
-                    
+
                     // Prevent infinite loop on zero-width matches
                     if (matchStart == matchEnd) {
                         if (start < s.length()) {
