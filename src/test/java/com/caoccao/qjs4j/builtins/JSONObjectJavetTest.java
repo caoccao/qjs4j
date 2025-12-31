@@ -19,6 +19,8 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigInteger;
+
 /**
  * Javet-based tests for JSON.stringify() and JSON.parse() methods.
  * Tests cover replacer/reviver functionality, edge cases, and error conditions.
@@ -280,7 +282,29 @@ public class JSONObjectJavetTest extends BaseJavetTest {
     }
 
     @Test
-    public void testRoundTripWithReplacerReviver() {
+    public void testRoundTripWithReplacerReviverForBigInt() {
+        String code = """
+                var original = {a: 1n, b: 2n, c: 3};
+                var json = JSON.stringify(original, function(key, value) {
+                  if (typeof value === "bigint") {
+                    return value.toString() + "n";
+                  }
+                  return value;
+                });
+                var parsed = JSON.parse(json, function(key, value) {
+                  if (typeof value === 'string' && /^\\d+n$/.test(value)) {
+                    return BigInt(value.slice(0, -1));
+                  }
+                  return value;
+                });
+                parsed.b""";
+        assertWithJavet(
+                () -> BigInteger.valueOf(v8Runtime.getExecutor(code).executeLong()),
+                () -> context.eval(code).toJavaObject());
+    }
+
+    @Test
+    public void testRoundTripWithReplacerReviverForNumber() {
         String code = """
                 var original = {a: 1, b: 2, c: 3};
                 var json = JSON.stringify(original, function(key, value) {

@@ -236,7 +236,7 @@ public final class StringPrototype {
             regexp = new JSRegExp(pattern, "");
         }
 
-        // Get the regex engine
+        // Use QuickJS engine
         RegExpEngine engine = regexp.getEngine();
 
         // Check if global flag is set
@@ -247,20 +247,25 @@ public final class StringPrototype {
 
             while (lastIndex <= s.length()) {
                 RegExpEngine.MatchResult result = engine.exec(s, lastIndex);
-
                 if (result == null || !result.matched()) {
                     break;
                 }
 
                 // Add the full match to results
-                String matchedText = s.substring(result.startIndex(), result.endIndex());
-                results.push(new JSString(matchedText));
+                String match = result.getMatch();
+                if (match != null) {
+                    results.push(new JSString(match));
+                }
 
-                // Move to next position
-                lastIndex = result.endIndex();
-                if (lastIndex == result.startIndex()) {
-                    // Avoid infinite loop on zero-width matches
-                    lastIndex++;
+                // Update lastIndex
+                int[][] indices = result.indices();
+                if (indices != null && indices.length > 0) {
+                    lastIndex = indices[0][1];
+                    if (lastIndex == indices[0][0]) {
+                        lastIndex++; // Prevent infinite loop on zero-width matches
+                    }
+                } else {
+                    break;
                 }
             }
 
@@ -268,29 +273,26 @@ public final class StringPrototype {
         } else {
             // Non-global match: return array with match and captures
             RegExpEngine.MatchResult result = engine.exec(s, 0);
-
             if (result == null || !result.matched()) {
                 return JSNull.INSTANCE;
             }
 
-            // Create result array with full match
+            // Create result array with full match and captures
             JSArray matchArray = new JSArray();
-            String matchedText = s.substring(result.startIndex(), result.endIndex());
-            matchArray.push(new JSString(matchedText));
-
-            // Add capture groups
-            if (result.captures() != null) {
-                for (String capture : result.captures()) {
-                    if (capture != null) {
-                        matchArray.push(new JSString(capture));
-                    } else {
-                        matchArray.push(JSUndefined.INSTANCE);
-                    }
+            String[] captures = result.captures();
+            for (int i = 0; i < captures.length; i++) {
+                if (captures[i] != null) {
+                    matchArray.push(new JSString(captures[i]));
+                } else {
+                    matchArray.push(JSUndefined.INSTANCE);
                 }
             }
 
             // Add 'index' property
-            matchArray.set("index", new JSNumber(result.startIndex()));
+            int[][] indices = result.indices();
+            if (indices != null && indices.length > 0) {
+                matchArray.set("index", new JSNumber(indices[0][0]));
+            }
 
             // Add 'input' property
             matchArray.set("input", new JSString(s));
@@ -340,41 +342,37 @@ public final class StringPrototype {
 
         while (lastIndex <= s.length()) {
             RegExpEngine.MatchResult result = engine.exec(s, lastIndex);
-
             if (result == null || !result.matched()) {
                 break;
             }
 
             // Create match array for this result
             JSArray matchArray = new JSArray();
-            String matchedText = s.substring(result.startIndex(), result.endIndex());
-            matchArray.push(new JSString(matchedText));
-
-            // Add capture groups
-            if (result.captures() != null) {
-                for (String capture : result.captures()) {
-                    if (capture != null) {
-                        matchArray.push(new JSString(capture));
-                    } else {
-                        matchArray.push(JSUndefined.INSTANCE);
-                    }
+            String[] captures = result.captures();
+            for (int i = 0; i < captures.length; i++) {
+                if (captures[i] != null) {
+                    matchArray.push(new JSString(captures[i]));
+                } else {
+                    matchArray.push(JSUndefined.INSTANCE);
                 }
             }
 
-            // Add 'index' property
-            matchArray.set("index", new JSNumber(result.startIndex()));
+            // Add 'index' property and update lastIndex
+            int[][] indices = result.indices();
+            if (indices != null && indices.length > 0) {
+                matchArray.set("index", new JSNumber(indices[0][0]));
+                lastIndex = indices[0][1];
+                if (lastIndex == indices[0][0]) {
+                    lastIndex++; // Prevent infinite loop on zero-width matches
+                }
+            } else {
+                break;
+            }
 
             // Add 'input' property
             matchArray.set("input", new JSString(s));
 
             matches.push(matchArray);
-
-            // Move to next position
-            lastIndex = result.endIndex();
-            if (lastIndex == result.startIndex()) {
-                // Avoid infinite loop on zero-width matches
-                lastIndex++;
-            }
         }
 
         // Return an iterator over the matches
@@ -547,7 +545,7 @@ public final class StringPrototype {
 
     /**
      * String.prototype.split(separator[, limit])
-     * ES2020 21.1.3.17 (simplified - no regex support)
+     * ES2020 21.1.3.17
      */
     public static JSValue split(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(context, thisArg);
@@ -559,12 +557,70 @@ public final class StringPrototype {
             return arr;
         }
 
-        String separator = JSTypeConversions.toString(context, args[0]).value();
+        JSValue separatorArg = args[0];
         long limit = args.length > 1 && !(args[1] instanceof JSUndefined)
                 ? JSTypeConversions.toUint32(context, args[1])
                 : Long.MAX_VALUE;
 
         JSArray arr = new JSArray();
+
+        // Handle RegExp separator
+        if (separatorArg instanceof JSRegExp regexp) {
+            RegExpEngine engine = regexp.getEngine();
+            int start = 0;
+
+            while (start <= s.length() && arr.getLength() < limit) {
+                RegExpEngine.MatchResult result = engine.exec(s, start);
+                
+                if (result == null || !result.matched()) {
+                    // No more matches, add the rest of the string
+                    if (arr.getLength() < limit) {
+                        arr.push(new JSString(s.substring(start)));
+                    }
+                    break;
+                }
+
+                int[][] indices = result.indices();
+                if (indices != null && indices.length > 0) {
+                    int matchStart = indices[0][0];
+                    int matchEnd = indices[0][1];
+
+                    // Add the substring before the match
+                    arr.push(new JSString(s.substring(start, matchStart)));
+
+                    // Add capture groups if any
+                    String[] captures = result.captures();
+                    if (captures != null && captures.length > 1) {
+                        for (int i = 1; i < captures.length && arr.getLength() < limit; i++) {
+                            if (captures[i] != null) {
+                                arr.push(new JSString(captures[i]));
+                            } else {
+                                arr.push(JSUndefined.INSTANCE);
+                            }
+                        }
+                    }
+
+                    // Move past the match
+                    start = matchEnd;
+                    
+                    // Prevent infinite loop on zero-width matches
+                    if (matchStart == matchEnd) {
+                        if (start < s.length()) {
+                            start++;
+                        } else {
+                            break;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            return arr;
+        }
+
+        // Handle string separator
+        String separator = JSTypeConversions.toString(context, separatorArg).value();
 
         if (separator.isEmpty()) {
             // Split into individual characters
@@ -574,9 +630,17 @@ public final class StringPrototype {
             return arr;
         }
 
-        String[] parts = s.split(java.util.regex.Pattern.quote(separator), -1);
-        for (int i = 0; i < parts.length && i < limit; i++) {
-            arr.push(new JSString(parts[i]));
+        // Manual split without using Java regex
+        int start = 0;
+        int index;
+        while ((index = s.indexOf(separator, start)) != -1 && arr.getLength() < limit) {
+            arr.push(new JSString(s.substring(start, index)));
+            start = index + separator.length();
+        }
+
+        // Add the remaining part if we haven't reached the limit
+        if (arr.getLength() < limit) {
+            arr.push(new JSString(s.substring(start)));
         }
 
         return arr;

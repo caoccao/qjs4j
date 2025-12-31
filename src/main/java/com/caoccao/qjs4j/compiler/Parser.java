@@ -799,6 +799,11 @@ public final class Parser {
                 advance();
                 yield new Literal(value, location);
             }
+            case REGEX -> {
+                String value = currentToken.value();
+                advance();
+                yield new Literal(value, location);
+            }
             case TRUE -> {
                 advance();
                 yield new Literal(true, location);

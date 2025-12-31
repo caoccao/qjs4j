@@ -82,6 +82,7 @@ public final class Lexer {
 
     private final String source;
     private int column;
+    private TokenType lastTokenType;
     private int line;
     private Token lookahead;
     private int position;
@@ -92,6 +93,7 @@ public final class Lexer {
         this.line = 1;
         this.column = 1;
         this.lookahead = null;
+        this.lastTokenType = null;
     }
 
     private char advance() {
@@ -99,6 +101,36 @@ public final class Lexer {
         position++;
         column++;
         return c;
+    }
+
+    /**
+     * Determine if the current context expects a regex literal.
+     * Regex can appear after operators, keywords, or at the start of an expression.
+     */
+    private boolean expectRegex() {
+        if (lastTokenType == null) {
+            return true; // Start of input
+        }
+
+        return switch (lastTokenType) {
+            // After operators
+            case ASSIGN, EQ, NE, STRICT_EQ, STRICT_NE, LT, LE, GT, GE,
+                 PLUS, MINUS, MUL, DIV, MOD, EXP,
+                 BIT_AND, BIT_OR, BIT_XOR, BIT_NOT,
+                 LOGICAL_AND, LOGICAL_OR, NOT,
+                 LSHIFT, RSHIFT, URSHIFT,
+                 PLUS_ASSIGN, MINUS_ASSIGN, MUL_ASSIGN, DIV_ASSIGN, MOD_ASSIGN,
+                 EXP_ASSIGN, AND_ASSIGN, OR_ASSIGN, XOR_ASSIGN,
+                 LSHIFT_ASSIGN, RSHIFT_ASSIGN, URSHIFT_ASSIGN,
+                 NULLISH_COALESCING,
+                 // After punctuation
+                 LPAREN, LBRACKET, LBRACE, COMMA, SEMICOLON, COLON, QUESTION,
+                 ARROW,
+                 // After keywords that start expressions
+                 RETURN, THROW, TYPEOF, VOID, DELETE, NEW,
+                 IF, WHILE, FOR, CASE -> true;
+            default -> false;
+        };
     }
 
     private boolean isAtEnd() {
@@ -167,6 +199,7 @@ public final class Lexer {
         line = 1;
         column = 1;
         lookahead = null;
+        lastTokenType = null;
     }
 
     private Token scanBinaryNumber(int startPos, int startLine, int startColumn) {
@@ -279,6 +312,14 @@ public final class Lexer {
     }
 
     private Token scanOperatorOrPunctuation(char c, int startPos, int startLine, int startColumn) {
+        // Special case: check for regex literal when encountering '/'
+        if (c == '/' && expectRegex()) {
+            // Back up one position and scan as regex
+            position = startPos;
+            column = startColumn;
+            return scanRegex(startPos, startLine, startColumn);
+        }
+
         TokenType type = switch (c) {
             case '(' -> TokenType.LPAREN;
             case ')' -> TokenType.RPAREN;
@@ -407,6 +448,56 @@ public final class Lexer {
         return new Token(type, value, startLine, startColumn, startPos);
     }
 
+    private Token scanRegex(int startPos, int startLine, int startColumn) {
+        advance(); // consume opening /
+
+        StringBuilder pattern = new StringBuilder();
+        boolean inCharClass = false;
+
+        while (!isAtEnd()) {
+            char c = peek();
+
+            // End of regex
+            if (c == '/' && !inCharClass) {
+                advance(); // consume closing /
+                break;
+            }
+
+            // Track character classes [...]
+            if (c == '[' && !inCharClass) {
+                inCharClass = true;
+            } else if (c == ']' && inCharClass) {
+                inCharClass = false;
+            }
+
+            // Handle escape sequences
+            if (c == '\\') {
+                pattern.append(advance()); // append backslash
+                if (!isAtEnd()) {
+                    pattern.append(advance()); // append escaped character
+                }
+                continue;
+            }
+
+            // Newlines terminate regex
+            if (c == '\n' || c == '\r') {
+                break;
+            }
+
+            pattern.append(advance());
+        }
+
+        // Scan flags (g, i, m, s, u, y)
+        StringBuilder flags = new StringBuilder();
+        while (!isAtEnd() && isIdentifierPart(peek())) {
+            flags.append(advance());
+        }
+
+        // Combine pattern and flags in the value
+        String value = "/" + pattern + "/" + flags;
+        return new Token(TokenType.REGEX, value, startLine, startColumn, startPos);
+    }
+
     private Token scanString(char quote, int startPos, int startLine, int startColumn) {
         StringBuilder value = new StringBuilder();
 
@@ -513,7 +604,9 @@ public final class Lexer {
         skipWhitespaceAndComments();
 
         if (isAtEnd()) {
-            return makeToken(TokenType.EOF, "");
+            Token token = makeToken(TokenType.EOF, "");
+            lastTokenType = TokenType.EOF;
+            return token;
         }
 
         int startPos = position;
@@ -524,26 +617,36 @@ public final class Lexer {
 
         // Identifiers and keywords
         if (isIdentifierStart(c)) {
-            return scanIdentifier(startPos, startLine, startColumn);
+            Token token = scanIdentifier(startPos, startLine, startColumn);
+            lastTokenType = token.type();
+            return token;
         }
 
         // Numbers
         if (Character.isDigit(c)) {
-            return scanNumber(startPos, startLine, startColumn);
+            Token token = scanNumber(startPos, startLine, startColumn);
+            lastTokenType = token.type();
+            return token;
         }
 
         // Strings
         if (c == '"' || c == '\'') {
-            return scanString(c, startPos, startLine, startColumn);
+            Token token = scanString(c, startPos, startLine, startColumn);
+            lastTokenType = token.type();
+            return token;
         }
 
         // Template literals
         if (c == '`') {
-            return scanTemplate(startPos, startLine, startColumn);
+            Token token = scanTemplate(startPos, startLine, startColumn);
+            lastTokenType = token.type();
+            return token;
         }
 
         // Operators and punctuation
-        return scanOperatorOrPunctuation(c, startPos, startLine, startColumn);
+        Token token = scanOperatorOrPunctuation(c, startPos, startLine, startColumn);
+        lastTokenType = token.type();
+        return token;
     }
 
     private void skipWhitespaceAndComments() {

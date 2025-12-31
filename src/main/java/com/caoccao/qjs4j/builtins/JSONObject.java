@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.util.DtoaConverter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,12 +47,10 @@ public final class JSONObject {
      * Helper method to internalize a value that's already been retrieved
      */
     private static JSValue internalizeJSONPropertyForValue(JSContext context, JSValue holder, String name, JSValue val, JSFunction reviver) {
-        if (val instanceof JSObject && !(val instanceof JSFunction)) {
-            JSObject obj = (JSObject) val;
+        if (val instanceof JSObject obj && !(val instanceof JSFunction)) {
 
-            if (val instanceof JSArray) {
+            if (val instanceof JSArray arr) {
                 // Process array elements
-                JSArray arr = (JSArray) val;
                 long len = arr.getLength();
                 for (long i = 0; i < len; i++) {
                     JSValue element = arr.get(i);
@@ -94,11 +91,9 @@ public final class JSONObject {
     private static JSValue jsonCheck(JSContext context, StringifyContext ctx, JSValue holder, JSValue val, JSValue key) {
         // Check for toJSON method
         if ((val instanceof JSObject || val instanceof JSBigInt) && !(val instanceof JSFunction)) {
-            if (val instanceof JSObject) {
-                JSObject obj = (JSObject) val;
+            if (val instanceof JSObject obj) {
                 JSValue toJSON = obj.get("toJSON");
-                if (toJSON instanceof JSFunction) {
-                    JSFunction toJSONFunc = (JSFunction) toJSON;
+                if (toJSON instanceof JSFunction toJSONFunc) {
                     val = toJSONFunc.call(context, val, new JSValue[]{key});
                 }
             }
@@ -121,8 +116,13 @@ public final class JSONObject {
      * Convert value to JSON string representation
      * Based on QuickJS js_json_to_str
      */
-    private static boolean jsonToStr(JSContext context, StringifyContext ctx, StringBuilder sb,
-                                     JSValue holder, JSValue val, String currentIndent) {
+    private static boolean jsonToStr(
+            JSContext context,
+            StringifyContext stringifyContext,
+            StringBuilder sb,
+            JSValue holder,
+            JSValue val,
+            String currentIndent) {
         // Handle primitives
         if (val instanceof JSNull || val instanceof JSUndefined) {
             sb.append("null");
@@ -159,22 +159,67 @@ public final class JSONObject {
         // Handle objects and arrays
         if (val instanceof JSObject && !(val instanceof JSFunction)) {
             // Check for circular reference
-            if (ctx.stack.contains(val)) {
+            if (stringifyContext.stack.contains(val)) {
                 // Circular reference - throw error
-                return false;
+                // Find where this object appears in the stack
+                int circularIndex = stringifyContext.stack.indexOf(val);
+
+                StringBuilder errorMessage = new StringBuilder("Converting circular structure to JSON\n");
+                errorMessage.append("    --> starting at object with constructor '")
+                        .append((val instanceof JSArray) ? "Array" : "Object")
+                        .append("'\n");
+
+                // Add intermediate path entries
+                for (int i = circularIndex; i < stringifyContext.path.size(); i++) {
+                    PathEntry entry = stringifyContext.path.get(i);
+                    errorMessage.append("    |     ");
+                    if (entry.isArrayIndex) {
+                        errorMessage.append("index ").append(entry.property);
+                    } else {
+                        errorMessage.append("property '").append(entry.property).append("'");
+                    }
+                    errorMessage.append(" -> object with constructor '");
+                    errorMessage.append((entry.object instanceof JSArray) ? "Array" : "Object");
+                    errorMessage.append("'\n");
+                }
+
+                // Add the closing property
+                if (stringifyContext.currentProperty != null) {
+                    errorMessage.append("    --- ");
+                    if (stringifyContext.isArrayIndex) {
+                        errorMessage.append("index ").append(stringifyContext.currentProperty);
+                    } else {
+                        errorMessage.append("property '").append(stringifyContext.currentProperty).append("'");
+                    }
+                    errorMessage.append(" closes the circle");
+                }
+                throw new CircularReferenceException(errorMessage.toString());
             }
 
-            ctx.stack.add(val);
-            String newIndent = currentIndent + ctx.gap;
+            stringifyContext.stack.add(val);
+            // Add to path if we have a current property (not the root)
+            if (stringifyContext.currentProperty != null) {
+                stringifyContext.path.add(new PathEntry(
+                        stringifyContext.currentProperty,
+                        stringifyContext.isArrayIndex,
+                        val
+                ));
+            }
+
+            String newIndent = currentIndent + stringifyContext.gap;
             boolean result;
 
             if (val instanceof JSArray) {
-                result = stringifyArrayWithContext(context, ctx, sb, (JSArray) val, currentIndent, newIndent);
+                result = stringifyArrayWithContext(context, stringifyContext, sb, (JSArray) val, currentIndent, newIndent);
             } else {
-                result = stringifyObjectWithContext(context, ctx, sb, (JSObject) val, currentIndent, newIndent);
+                result = stringifyObjectWithContext(context, stringifyContext, sb, (JSObject) val, currentIndent, newIndent);
             }
 
-            ctx.stack.remove(ctx.stack.size() - 1);
+            stringifyContext.stack.remove(stringifyContext.stack.size() - 1);
+            // Remove from path if we added to it
+            if (stringifyContext.currentProperty != null && !stringifyContext.path.isEmpty()) {
+                stringifyContext.path.remove(stringifyContext.path.size() - 1);
+            }
             return result;
         }
 
@@ -207,8 +252,7 @@ public final class JSONObject {
         }
 
         // If reviver function is provided, apply it
-        if (args.length > 1 && args[1] instanceof JSFunction) {
-            JSFunction reviver = (JSFunction) args[1];
+        if (args.length > 1 && args[1] instanceof JSFunction reviver) {
             JSObject root = new JSObject();
             root.set("", obj);
             return internalizeJSONProperty(context, root, "", reviver);
@@ -547,9 +591,8 @@ public final class JSONObject {
             JSValue replacer = args[1];
             if (replacer instanceof JSFunction) {
                 ctx.replacerFunc = (JSFunction) replacer;
-            } else if (replacer instanceof JSArray) {
+            } else if (replacer instanceof JSArray replacerArray) {
                 // Build property list from array
-                JSArray replacerArray = (JSArray) replacer;
                 List<String> propertyList = new ArrayList<>();
                 long len = replacerArray.getLength();
                 for (long i = 0; i < len; i++) {
@@ -560,9 +603,8 @@ public final class JSONObject {
                         propName = ((JSString) item).value();
                     } else if (item instanceof JSNumber) {
                         propName = String.valueOf((long) ((JSNumber) item).value());
-                    } else if (item instanceof JSObject) {
+                    } else if (item instanceof JSObject obj) {
                         // Handle String/Number objects
-                        JSObject obj = (JSObject) item;
                         // Simplified: just convert to string
                         propName = JSTypeConversions.toString(context, item).value();
                     }
@@ -613,10 +655,13 @@ public final class JSONObject {
         try {
             StringBuilder sb = new StringBuilder();
             ctx.stack = new ArrayList<>();
+            ctx.path = new ArrayList<>();
             if (jsonToStr(context, ctx, sb, wrapper, processedValue, "")) {
                 return new JSString(sb.toString());
             }
             return JSUndefined.INSTANCE;
+        } catch (CircularReferenceException e) {
+            return context.throwTypeError(e.getMessage());
         } catch (Exception e) {
             return JSUndefined.INSTANCE;
         }
@@ -644,12 +689,22 @@ public final class JSONObject {
             JSValue elem = arr.get(i);
             JSValue processedElem = jsonCheck(context, ctx, arr, elem, new JSString(String.valueOf(i)));
 
-            if (processedElem instanceof JSUndefined) {
-                sb.append("null");
-            } else {
-                if (!jsonToStr(context, ctx, sb, arr, processedElem, newIndent)) {
+            // Track current index for circular reference errors
+            String previousProperty = ctx.currentProperty;
+            boolean previousIsArrayIndex = ctx.isArrayIndex;
+            ctx.currentProperty = String.valueOf(i);
+            ctx.isArrayIndex = true;
+            try {
+                if (processedElem instanceof JSUndefined) {
                     sb.append("null");
+                } else {
+                    if (!jsonToStr(context, ctx, sb, arr, processedElem, newIndent)) {
+                        sb.append("null");
+                    }
                 }
+            } finally {
+                ctx.currentProperty = previousProperty;
+                ctx.isArrayIndex = previousIsArrayIndex;
             }
         }
 
@@ -689,25 +744,35 @@ public final class JSONObject {
             if (!(processedValue instanceof JSUndefined)) {
                 // Try stringifying the value first in a temporary buffer
                 StringBuilder tempSb = new StringBuilder();
-                if (jsonToStr(context, ctx, tempSb, obj, processedValue, newIndent)) {
-                    // Successfully stringified, add to output
-                    if (hasContent) {
-                        sb.append(',');
+                // Track current property for circular reference errors
+                String previousProperty = ctx.currentProperty;
+                boolean previousIsArrayIndex = ctx.isArrayIndex;
+                ctx.currentProperty = key;
+                ctx.isArrayIndex = false;
+                try {
+                    if (jsonToStr(context, ctx, tempSb, obj, processedValue, newIndent)) {
+                        // Successfully stringified, add to output
+                        if (hasContent) {
+                            sb.append(',');
+                        }
+
+                        if (!ctx.gap.isEmpty()) {
+                            sb.append('\n').append(newIndent);
+                        }
+
+                        sb.append(stringifyString(key));
+                        sb.append(':');
+
+                        if (!ctx.gap.isEmpty()) {
+                            sb.append(' ');
+                        }
+
+                        sb.append(tempSb);
+                        hasContent = true;
                     }
-
-                    if (!ctx.gap.isEmpty()) {
-                        sb.append('\n').append(newIndent);
-                    }
-
-                    sb.append(stringifyString(key));
-                    sb.append(':');
-
-                    if (!ctx.gap.isEmpty()) {
-                        sb.append(' ');
-                    }
-
-                    sb.append(tempSb);
-                    hasContent = true;
+                } finally {
+                    ctx.currentProperty = previousProperty;
+                    ctx.isArrayIndex = previousIsArrayIndex;
                 }
             }
         }
@@ -746,6 +811,15 @@ public final class JSONObject {
     // ========== JSON Stringification Helper Methods ==========
 
     /**
+     * Custom exception for circular references during JSON stringification
+     */
+    private static class CircularReferenceException extends RuntimeException {
+        CircularReferenceException(String message) {
+            super(message);
+        }
+    }
+
+    /**
      * Custom exception for JSON parsing errors with position information
      */
     private static class JSONParseException extends RuntimeException {
@@ -755,32 +829,27 @@ public final class JSONObject {
     }
 
     /**
-     * Context for JSON parsing with position tracking
-     */
-    private static class ParseContext {
-        final String text;
-
-        ParseContext(String text) {
-            this.text = text;
-        }
+         * Context for JSON parsing with position tracking
+         */
+        private record ParseContext(String text) {
 
         /**
-         * Get line and column from position (0-based position, 1-based line/column)
-         */
-        String getPositionInfo(int position) {
-            int line = 1;
-            int column = 1;
-            for (int i = 0; i < position && i < text.length(); i++) {
-                if (text.charAt(i) == '\n') {
-                    line++;
-                    column = 1;
-                } else {
-                    column++;
+             * Get line and column from position (0-based position, 1-based line/column)
+             */
+            String getPositionInfo(int position) {
+                int line = 1;
+                int column = 1;
+                for (int i = 0; i < position && i < text.length(); i++) {
+                    if (text.charAt(i) == '\n') {
+                        line++;
+                        column = 1;
+                    } else {
+                        column++;
+                    }
                 }
+                return "at position " + position + " (line " + line + " column " + column + ")";
             }
-            return "at position " + position + " (line " + line + " column " + column + ")";
         }
-    }
 
     private static class ParseResult {
         int endIndex;
@@ -793,10 +862,28 @@ public final class JSONObject {
     }
 
     /**
+     * Entry in the path for circular reference tracking
+     */
+    private static class PathEntry {
+        boolean isArrayIndex;
+        JSValue object;
+        String property;
+
+        PathEntry(String property, boolean isArrayIndex, JSValue object) {
+            this.property = property;
+            this.isArrayIndex = isArrayIndex;
+            this.object = object;
+        }
+    }
+
+    /**
      * Context for JSON stringification
      */
     private static class StringifyContext {
+        String currentProperty = null; // Track the property being processed for circular reference errors
         String gap = "";
+        boolean isArrayIndex = false; // Track if current property is an array index
+        List<PathEntry> path = null; // Track the full path for circular reference error messages
         List<String> propertyList = null;
         JSFunction replacerFunc = null;
         List<JSValue> stack = null;

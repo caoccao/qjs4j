@@ -62,6 +62,8 @@ public enum RegExpOpcode {
     RANGE32(38, 3),                         // 32-bit character range (variable length)
     RANGE32_I(39, 3),                       // 32-bit character range (case insensitive)
     LOOKAHEAD(40, 5),                       // positive lookahead
+    NOT_RANGE(64, 3),                       // inverted character range (variable length)
+    NOT_RANGE_I(65, 3),                     // inverted character range (case insensitive)
     NEGATIVE_LOOKAHEAD(41, 5),              // negative lookahead
     SET_CHAR_POS(42, 2),                    // store character position to register
     CHECK_ADVANCE(43, 2),                   // check that register != character position

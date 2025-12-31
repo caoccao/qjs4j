@@ -604,6 +604,22 @@ public final class BytecodeCompiler {
             // Otherwise emit as constant
             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(num.doubleValue()));
         } else if (value instanceof String str) {
+            // Check if it's a regex literal (starts with /)
+            if (str.startsWith("/") && str.length() > 1) {
+                // Parse regex literal
+                int lastSlash = str.lastIndexOf('/');
+                if (lastSlash > 0) {
+                    String pattern = str.substring(1, lastSlash);
+                    String flags = lastSlash < str.length() - 1 ? str.substring(lastSlash + 1) : "";
+                    try {
+                        JSRegExp regexp = new JSRegExp(pattern, flags);
+                        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, regexp);
+                        return;
+                    } catch (Exception e) {
+                        // Not a valid regex, treat as string
+                    }
+                }
+            }
             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
         } else {
             // Other types as constants

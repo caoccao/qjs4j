@@ -254,7 +254,7 @@ public class JSONObjectTest extends BaseTest {
             JSValue value = args[1];
 
             if (key.equals("age") && value instanceof JSNumber num) {
-                return new JSString(String.valueOf((int) num.value()) + " years");
+                return new JSString((int) num.value() + " years");
             }
             return value;
         });

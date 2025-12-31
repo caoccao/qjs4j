@@ -38,43 +38,44 @@ public final class RegExpPrototype {
         String str = args.length > 0 ? JSTypeConversions.toString(context, args[0]).value() : "";
 
         // Get lastIndex
-        int lastIndex = regexp.isGlobal() ? regexp.getLastIndex() : 0;
+        int lastIndex = regexp.isGlobal() || regexp.isSticky() ? regexp.getLastIndex() : 0;
 
-        // Execute regex
-        RegExpEngine.MatchResult result = regexp.getEngine().exec(str, lastIndex);
+        // Execute regex using QuickJS engine
+        RegExpEngine engine = regexp.getEngine();
+        RegExpEngine.MatchResult result = engine.exec(str, lastIndex);
 
         if (result != null && result.matched()) {
             // Create result array
             JSArray array = new JSArray();
 
-            // Add matched string
-            String matched = str.substring(result.startIndex(), result.endIndex());
-            array.push(new JSString(matched));
-
-            // Add capture groups
-            if (result.captures() != null) {
-                for (String capture : result.captures()) {
-                    if (capture != null) {
-                        array.push(new JSString(capture));
-                    } else {
-                        array.push(JSUndefined.INSTANCE);
-                    }
+            // Add matched string and capture groups
+            String[] captures = result.captures();
+            for (int i = 0; i < captures.length; i++) {
+                if (captures[i] != null) {
+                    array.push(new JSString(captures[i]));
+                } else {
+                    array.push(JSUndefined.INSTANCE);
                 }
             }
 
             // Set properties
-            array.set("index", new JSNumber(result.startIndex()));
+            int[][] indices = result.indices();
+            if (indices != null && indices.length > 0) {
+                array.set("index", new JSNumber(indices[0][0]));
+            }
             array.set("input", new JSString(str));
 
-            // Update lastIndex for global regexes
-            if (regexp.isGlobal()) {
-                regexp.setLastIndex(result.endIndex());
+            // Update lastIndex for global/sticky regexes
+            if (regexp.isGlobal() || regexp.isSticky()) {
+                if (indices != null && indices.length > 0) {
+                    regexp.setLastIndex(indices[0][1]);
+                }
             }
 
             return array;
         } else {
-            // Reset lastIndex on failure for global regexes
-            if (regexp.isGlobal()) {
+            // Reset lastIndex on failure for global/sticky regexes
+            if (regexp.isGlobal() || regexp.isSticky()) {
                 regexp.setLastIndex(0);
             }
             return JSNull.INSTANCE;
@@ -154,20 +155,26 @@ public final class RegExpPrototype {
         String str = args.length > 0 ? JSTypeConversions.toString(context, args[0]).value() : "";
 
         // Get lastIndex
-        int lastIndex = regexp.isGlobal() ? regexp.getLastIndex() : 0;
+        int lastIndex = regexp.isGlobal() || regexp.isSticky() ? regexp.getLastIndex() : 0;
 
-        // Execute regex
-        RegExpEngine.MatchResult result = regexp.getEngine().exec(str, lastIndex);
+        // Execute regex using QuickJS engine
+        RegExpEngine engine = regexp.getEngine();
+        RegExpEngine.MatchResult result = engine.exec(str, lastIndex);
 
-        if (result != null && result.matched()) {
-            // Update lastIndex for global regexes
-            if (regexp.isGlobal()) {
-                regexp.setLastIndex(result.endIndex());
+        boolean matched = result != null && result.matched();
+
+        if (matched) {
+            // Update lastIndex for global/sticky regexes
+            if (regexp.isGlobal() || regexp.isSticky()) {
+                int[][] indices = result.indices();
+                if (indices != null && indices.length > 0) {
+                    regexp.setLastIndex(indices[0][1]);
+                }
             }
             return JSBoolean.TRUE;
         } else {
-            // Reset lastIndex on failure for global regexes
-            if (regexp.isGlobal()) {
+            // Reset lastIndex on failure for global/sticky regexes
+            if (regexp.isGlobal() || regexp.isSticky()) {
                 regexp.setLastIndex(0);
             }
             return JSBoolean.FALSE;

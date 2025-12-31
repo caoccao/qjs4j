@@ -68,10 +68,23 @@ public final class RegExpEngine {
      * Execute the bytecode starting from the given instruction pointer.
      */
     private boolean execute(ExecutionContext executionContext) {
+        // Backtracking stack: stores (pc, pos, captures snapshot)
+        java.util.Stack<BacktrackPoint> backtrackStack = new java.util.Stack<>();
         byte[] bc = executionContext.bytecode;
         int pc = 0;
 
-        while (pc < bc.length) {
+        while (true) {
+            if (pc >= bc.length) {
+                // Ran off the end without matching - try backtracking
+                if (!backtrackStack.isEmpty()) {
+                    BacktrackPoint bp = backtrackStack.pop();
+                    pc = bp.pc;
+                    executionContext.restoreState(bp);
+                    continue;
+                }
+                return false;
+            }
+
             int opcode = bc[pc] & 0xFF;
             RegExpOpcode op = RegExpOpcode.fromCode(opcode);
 
@@ -79,6 +92,12 @@ public final class RegExpEngine {
                 case CHAR -> {
                     int ch = readU16(bc, pc + 1);
                     if (!executionContext.matchChar(ch)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
                         return false;
                     }
                     pc += 3;
@@ -87,6 +106,12 @@ public final class RegExpEngine {
                 case CHAR_I -> {
                     int ch = readU16(bc, pc + 1);
                     if (!executionContext.matchCharIgnoreCase(ch)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
                         return false;
                     }
                     pc += 3;
@@ -95,6 +120,12 @@ public final class RegExpEngine {
                 case CHAR32 -> {
                     int ch = readU32(bc, pc + 1);
                     if (!executionContext.matchChar(ch)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
                         return false;
                     }
                     pc += 5;
@@ -103,6 +134,12 @@ public final class RegExpEngine {
                 case CHAR32_I -> {
                     int ch = readU32(bc, pc + 1);
                     if (!executionContext.matchCharIgnoreCase(ch)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
                         return false;
                     }
                     pc += 5;
@@ -110,6 +147,12 @@ public final class RegExpEngine {
 
                 case DOT -> {
                     if (!executionContext.matchDot()) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
                         return false;
                     }
                     pc += 1;
@@ -117,6 +160,12 @@ public final class RegExpEngine {
 
                 case ANY -> {
                     if (!executionContext.matchAny()) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
                         return false;
                     }
                     pc += 1;
@@ -124,6 +173,12 @@ public final class RegExpEngine {
 
                 case LINE_START, LINE_START_M -> {
                     if (!executionContext.matchLineStart(op == RegExpOpcode.LINE_START_M)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
                         return false;
                     }
                     pc += 1;
@@ -131,6 +186,12 @@ public final class RegExpEngine {
 
                 case LINE_END, LINE_END_M -> {
                     if (!executionContext.matchLineEnd(op == RegExpOpcode.LINE_END_M)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
                         return false;
                     }
                     pc += 1;
@@ -138,6 +199,78 @@ public final class RegExpEngine {
 
                 case MATCH -> {
                     // Successful match
+                    return true;
+                }
+
+                case LOOKAHEAD -> {
+                    // Positive lookahead: execute sub-pattern without consuming input
+                    int len = readU32(bc, pc + 1);
+                    int savedPos = executionContext.pos;
+                    // Create a new execution context for the lookahead
+                    ExecutionContext lookaheadContext = new ExecutionContext(
+                            executionContext.input,
+                            executionContext.bytecode,
+                            executionContext.captureCount,
+                            executionContext.ignoreCase,
+                            executionContext.multiline,
+                            executionContext.dotAll,
+                            executionContext.unicode
+                    );
+                    lookaheadContext.pos = savedPos;
+                    // Copy capture state
+                    System.arraycopy(executionContext.captureStarts, 0, lookaheadContext.captureStarts, 0, executionContext.captureCount);
+                    System.arraycopy(executionContext.captureEnds, 0, lookaheadContext.captureEnds, 0, executionContext.captureCount);
+                    
+                    boolean matched = executeLookahead(lookaheadContext, pc + 5);
+                    // Don't restore position - lookahead doesn't consume
+                    if (!matched) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 5 + len;
+                }
+
+                case NEGATIVE_LOOKAHEAD -> {
+                    // Negative lookahead: execute sub-pattern, succeed if it fails
+                    int len = readU32(bc, pc + 1);
+                    int savedPos = executionContext.pos;
+                    // Create a new execution context for the lookahead
+                    ExecutionContext lookaheadContext = new ExecutionContext(
+                            executionContext.input,
+                            executionContext.bytecode,
+                            executionContext.captureCount,
+                            executionContext.ignoreCase,
+                            executionContext.multiline,
+                            executionContext.dotAll,
+                            executionContext.unicode
+                    );
+                    lookaheadContext.pos = savedPos;
+                    // Copy capture state
+                    System.arraycopy(executionContext.captureStarts, 0, lookaheadContext.captureStarts, 0, executionContext.captureCount);
+                    System.arraycopy(executionContext.captureEnds, 0, lookaheadContext.captureEnds, 0, executionContext.captureCount);
+                    
+                    boolean matched = executeLookahead(lookaheadContext, pc + 5);
+                    // Don't restore position - lookahead doesn't consume
+                    if (matched) {
+                        // Negative lookahead fails if pattern matches
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 5 + len;
+                }
+
+                case LOOKAHEAD_MATCH, NEGATIVE_LOOKAHEAD_MATCH -> {
+                    // End of lookahead - return success
                     return true;
                 }
 
@@ -153,14 +286,239 @@ public final class RegExpEngine {
                     pc += 2;
                 }
 
+                case RANGE -> {
+                    int len = readU16(bc, pc + 1);
+                    if (!executionContext.matchRange(bc, pc + 3, len, false)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 3 + len;
+                }
+
+                case RANGE_I -> {
+                    int len = readU16(bc, pc + 1);
+                    if (!executionContext.matchRange(bc, pc + 3, len, true)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 3 + len;
+                }
+
+                case SPACE -> {
+                    if (!executionContext.matchSpace()) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 1;
+                }
+
+                case NOT_SPACE -> {
+                    if (!executionContext.matchNotSpace()) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 1;
+                }
+
+                case NOT_RANGE -> {
+                    int len = readU16(bc, pc + 1);
+                    if (!executionContext.matchNotRange(bc, pc + 3, len, false)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 3 + len;
+                }
+
+                case NOT_RANGE_I -> {
+                    int len = readU16(bc, pc + 1);
+                    if (!executionContext.matchNotRange(bc, pc + 3, len, true)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 3 + len;
+                }
+
+                case BACK_REFERENCE -> {
+                    int groupNum = bc[pc + 1] & 0xFF;
+                    if (!executionContext.matchBackReference(groupNum, false)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 2;
+                }
+
+                case BACK_REFERENCE_I -> {
+                    int groupNum = bc[pc + 1] & 0xFF;
+                    if (!executionContext.matchBackReference(groupNum, true)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 2;
+                }
+
+                case GOTO -> {
+                    int offset = readU32(bc, pc + 1);
+                    pc += 5 + offset;
+                }
+
+                case WORD_BOUNDARY, WORD_BOUNDARY_I -> {
+                    if (!executionContext.matchWordBoundary(op == RegExpOpcode.WORD_BOUNDARY_I)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 1;
+                }
+
+                case NOT_WORD_BOUNDARY, NOT_WORD_BOUNDARY_I -> {
+                    if (!executionContext.matchNotWordBoundary(op == RegExpOpcode.NOT_WORD_BOUNDARY_I)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 1;
+                }
+
+                case SPLIT_GOTO_FIRST -> {
+                    // Try goto path first, save next path for backtracking
+                    int offset = readU32(bc, pc + 1);
+                    int pcNext = pc + 5; // Alternative: continue to next instruction
+                    int pcGoto = pc + 5 + offset; // First choice: jump
+
+                    // Save the next path for backtracking
+                    backtrackStack.push(executionContext.createBacktrackPoint(pcNext));
+
+                    // Take the goto path
+                    pc = pcGoto;
+                }
+
+                case SPLIT_NEXT_FIRST -> {
+                    // Try next path first, save goto path for backtracking
+                    int offset = readU32(bc, pc + 1);
+                    int pcNext = pc + 5; // First choice: continue to next instruction
+                    int pcGoto = pc + 5 + offset; // Alternative: jump
+
+                    // Save the goto path for backtracking
+                    backtrackStack.push(executionContext.createBacktrackPoint(pcGoto));
+
+                    // Take the next path
+                    pc = pcNext;
+                }
+
                 default -> {
-                    // Unsupported opcode - fail match
+                    // Unsupported opcode - try backtracking
+                    if (!backtrackStack.isEmpty()) {
+                        BacktrackPoint bp = backtrackStack.pop();
+                        pc = bp.pc;
+                        executionContext.restoreState(bp);
+                        continue;
+                    }
                     return false;
                 }
             }
         }
+    }
 
-        return false;
+    /**
+     * Execute lookahead pattern starting at the given PC.
+     * Similar to execute() but starts at a specific PC location.
+     */
+    private boolean executeLookahead(ExecutionContext executionContext, int startPc) {
+        java.util.Stack<BacktrackPoint> backtrackStack = new java.util.Stack<>();
+        byte[] bc = executionContext.bytecode;
+        int pc = startPc;
+
+        while (true) {
+            if (pc >= bc.length) {
+                if (!backtrackStack.isEmpty()) {
+                    BacktrackPoint bp = backtrackStack.pop();
+                    pc = bp.pc;
+                    executionContext.restoreState(bp);
+                    continue;
+                }
+                return false;
+            }
+
+            int opcode = bc[pc] & 0xFF;
+            RegExpOpcode op = RegExpOpcode.fromCode(opcode);
+
+            switch (op) {
+                case LOOKAHEAD_MATCH, NEGATIVE_LOOKAHEAD_MATCH -> {
+                    // End of lookahead - return success
+                    return true;
+                }
+                // For all other opcodes, we can reuse the main execute logic
+                // But to avoid code duplication, we'll just execute the minimal set
+                default -> {
+                    // For now, create a temporary full execution from this point
+                    // This is a simplified implementation
+                    executionContext.reset(executionContext.pos);
+                    byte[] tempBytecode = new byte[bc.length - startPc + 1];
+                    System.arraycopy(bc, startPc, tempBytecode, 0, bc.length - startPc);
+                    tempBytecode[tempBytecode.length - 1] = (byte) RegExpOpcode.MATCH.getCode();
+                    
+                    ExecutionContext tempContext = new ExecutionContext(
+                            executionContext.input,
+                            tempBytecode,
+                            executionContext.captureCount,
+                            executionContext.ignoreCase,
+                            executionContext.multiline,
+                            executionContext.dotAll,
+                            executionContext.unicode
+                    );
+                    tempContext.pos = executionContext.pos;
+                    return execute(tempContext);
+                }
+            }
+        }
     }
 
     /**
@@ -185,6 +543,22 @@ public final class RegExpEngine {
      */
     public boolean test(String input) {
         return exec(input, 0) != null;
+    }
+
+    /**
+     * Represents a point in execution that can be backtracked to.
+     *
+     * @param pc            Program counter (instruction pointer)
+     * @param pos           Position in input string
+     * @param captureStarts Copy of capture group start positions
+     * @param captureEnds   Copy of capture group end positions
+     */
+    private record BacktrackPoint(
+            int pc,
+            int pos,
+            int[] captureStarts,
+            int[] captureEnds
+    ) {
     }
 
     /**
@@ -217,6 +591,10 @@ public final class RegExpEngine {
             this.captureEnds = new int[captureCount];
             Arrays.fill(captureStarts, -1);
             Arrays.fill(captureEnds, -1);
+        }
+
+        BacktrackPoint createBacktrackPoint(int pc) {
+            return new BacktrackPoint(pc, pos, captureStarts.clone(), captureEnds.clone());
         }
 
         MatchResult createResult(boolean matched) {
@@ -332,6 +710,199 @@ public final class RegExpEngine {
             return false;
         }
 
+        boolean matchNotSpace() {
+            if (pos >= codePoints.length) {
+                return false;
+            }
+            int ch = codePoints[pos];
+            // JavaScript whitespace: space, tab, line terminators, Unicode Zs category
+            if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' ||
+                    ch == 0x0B || ch == 0x00A0 || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029 ||
+                    Character.getType(ch) == Character.SPACE_SEPARATOR) {
+                return false;
+            }
+            pos++;
+            return true;
+        }
+
+        boolean matchWordBoundary(boolean ignoreCase) {
+            // Word boundary: transition between word and non-word character
+            // Check character before current position
+            boolean prevIsWord;
+            if (pos == 0) {
+                prevIsWord = false;
+            } else {
+                int prevCh = codePoints[pos - 1];
+                prevIsWord = isWordChar(prevCh, ignoreCase);
+            }
+
+            // Check character at current position
+            boolean currIsWord;
+            if (pos >= codePoints.length) {
+                currIsWord = false;
+            } else {
+                int currCh = codePoints[pos];
+                currIsWord = isWordChar(currCh, ignoreCase);
+            }
+
+            // Boundary exists if one is word char and the other is not
+            return prevIsWord != currIsWord;
+        }
+
+        boolean matchNotWordBoundary(boolean ignoreCase) {
+            return !matchWordBoundary(ignoreCase);
+        }
+
+        private boolean isWordChar(int ch, boolean ignoreCase) {
+            // Word characters: [a-zA-Z0-9_]
+            if (ch < 256) {
+                return (ch >= 'a' && ch <= 'z') ||
+                       (ch >= 'A' && ch <= 'Z') ||
+                       (ch >= '0' && ch <= '9') ||
+                       ch == '_';
+            }
+            // For Unicode mode with ignore case, handle special characters
+            // 0x017f: Latin Small Letter Long S
+            // 0x212a: Kelvin Sign
+            if (ignoreCase && (ch == 0x017f || ch == 0x212a)) {
+                return true;
+            }
+            return false;
+        }
+
+        boolean matchBackReference(int groupNum, boolean ignoreCase) {
+            // Check if the capture group has been captured
+            if (groupNum >= captureCount || captureStarts[groupNum] == -1 || captureEnds[groupNum] == -1) {
+                // Group not captured yet - match empty string (succeeds)
+                return true;
+            }
+
+            int refStart = captureStarts[groupNum];
+            int refEnd = captureEnds[groupNum];
+
+            // Check if we have enough characters left to match
+            int refLen = refEnd - refStart;
+            if (pos + refLen > codePoints.length) {
+                return false;
+            }
+
+            // Match the captured text
+            for (int i = 0; i < refLen; i++) {
+                int refCh = codePoints[refStart + i];
+                int currCh = codePoints[pos + i];
+
+                if (ignoreCase) {
+                    if (Character.toLowerCase(refCh) != Character.toLowerCase(currCh)) {
+                        return false;
+                    }
+                } else {
+                    if (refCh != currCh) {
+                        return false;
+                    }
+                }
+            }
+
+            // Advance position by the matched length
+            pos += refLen;
+            return true;
+        }
+
+        boolean matchRange(byte[] bc, int offset, int len, boolean ignoreCase) {
+            if (pos >= codePoints.length) {
+                return false;
+            }
+            int ch = codePoints[pos];
+
+            // Read number of ranges
+            int numRanges = readU16(bc, offset);
+            offset += 2;
+
+            // Check if character is in any of the ranges
+            for (int i = 0; i < numRanges; i++) {
+                int start = readU32(bc, offset);
+                int end = readU32(bc, offset + 4);
+                offset += 8;
+
+                if (ignoreCase) {
+                    int chLower = Character.toLowerCase(ch);
+                    int startLower = Character.toLowerCase(start);
+                    int endLower = Character.toLowerCase(end);
+                    if (chLower >= startLower && chLower <= endLower) {
+                        pos++;
+                        return true;
+                    }
+                } else {
+                    if (ch >= start && ch <= end) {
+                        pos++;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        boolean matchNotRange(byte[] bc, int offset, int len, boolean ignoreCase) {
+            if (pos >= codePoints.length) {
+                return false;
+            }
+            int ch = codePoints[pos];
+
+            // Read number of ranges
+            int numRanges = readU16(bc, offset);
+            offset += 2;
+
+            // Check if character is NOT in any of the ranges
+            for (int i = 0; i < numRanges; i++) {
+                int start = readU32(bc, offset);
+                int end = readU32(bc, offset + 4);
+                offset += 8;
+
+                if (ignoreCase) {
+                    int chLower = Character.toLowerCase(ch);
+                    int startLower = Character.toLowerCase(start);
+                    int endLower = Character.toLowerCase(end);
+                    if (chLower >= startLower && chLower <= endLower) {
+                        // Character is in range, so inverted match fails
+                        return false;
+                    }
+                } else {
+                    if (ch >= start && ch <= end) {
+                        // Character is in range, so inverted match fails
+                        return false;
+                    }
+                }
+            }
+            // Character is not in any range, so inverted match succeeds
+            pos++;
+            return true;
+        }
+
+        boolean matchSpace() {
+            if (pos >= codePoints.length) {
+                return false;
+            }
+            int ch = codePoints[pos];
+            // JavaScript whitespace: space, tab, line terminators, Unicode Zs category
+            if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' ||
+                    ch == 0x0B || ch == 0x00A0 || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029 ||
+                    Character.getType(ch) == Character.SPACE_SEPARATOR) {
+                pos++;
+                return true;
+            }
+            return false;
+        }
+
+        private int readU16(byte[] bc, int offset) {
+            return (bc[offset] & 0xFF) | ((bc[offset + 1] & 0xFF) << 8);
+        }
+
+        private int readU32(byte[] bc, int offset) {
+            return (bc[offset] & 0xFF) |
+                    ((bc[offset + 1] & 0xFF) << 8) |
+                    ((bc[offset + 2] & 0xFF) << 16) |
+                    ((bc[offset + 3] & 0xFF) << 24);
+        }
+
         void reset(int startPos) {
             this.pos = startPos;
             Arrays.fill(captureStarts, -1);
@@ -339,6 +910,12 @@ public final class RegExpEngine {
             if (captureCount > 0) {
                 captureStarts[0] = startPos;
             }
+        }
+
+        void restoreState(BacktrackPoint bp) {
+            this.pos = bp.pos;
+            this.captureStarts = bp.captureStarts.clone();
+            this.captureEnds = bp.captureEnds.clone();
         }
 
         void saveEnd(int captureIndex) {

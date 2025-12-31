@@ -22,12 +22,12 @@ import com.caoccao.qjs4j.regexp.RegExpEngine;
 
 /**
  * Represents a JavaScript RegExp object.
- * Wraps a compiled regular expression with flags.
+ * Uses QuickJS-based regex compiler and execution engine.
  */
 public final class JSRegExp extends JSObject {
+    private final RegExpBytecode bytecode;
     private final RegExpEngine engine;
     private final String flags;
-    private final int lastIndex = 0;
     private final String pattern;
 
     /**
@@ -41,7 +41,7 @@ public final class JSRegExp extends JSObject {
         // Compile the pattern to bytecode
         try {
             RegExpCompiler compiler = new RegExpCompiler();
-            RegExpBytecode bytecode = compiler.compile(this.pattern, this.flags);
+            this.bytecode = compiler.compile(this.pattern, this.flags);
             this.engine = new RegExpEngine(bytecode);
         } catch (Exception e) {
             throw new RuntimeException("Invalid regular expression: " + e.getMessage(), e);
@@ -60,7 +60,14 @@ public final class JSRegExp extends JSObject {
     }
 
     /**
-     * Get the RegExp engine.
+     * Get the bytecode for this regex.
+     */
+    public RegExpBytecode getBytecode() {
+        return bytecode;
+    }
+
+    /**
+     * Get the execution engine.
      */
     public RegExpEngine getEngine() {
         return engine;
@@ -96,6 +103,13 @@ public final class JSRegExp extends JSObject {
      */
     public boolean isGlobal() {
         return flags.contains("g");
+    }
+
+    /**
+     * Check if sticky flag is set.
+     */
+    public boolean isSticky() {
+        return flags.contains("y");
     }
 
     /**

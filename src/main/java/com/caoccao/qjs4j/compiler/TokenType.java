@@ -24,6 +24,7 @@ public enum TokenType {
     EOF,
     IDENTIFIER,
     NUMBER,
+    REGEX,
     STRING,
     TEMPLATE,
 

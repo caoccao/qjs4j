@@ -118,7 +118,20 @@ public final class VirtualMachine {
                     }
                     case PUSH_CONST -> {
                         int constIndex = bytecode.readU32(pc + 1);
-                        valueStack.push(bytecode.getConstants()[constIndex]);
+                        JSValue constValue = bytecode.getConstants()[constIndex];
+
+                        // Set prototype for RegExp objects created from literals
+                        if (constValue instanceof JSRegExp regexp) {
+                            JSValue regexpCtor = context.getGlobalObject().get("RegExp");
+                            if (regexpCtor instanceof JSObject ctorObj) {
+                                JSValue prototypeValue = ctorObj.get("prototype");
+                                if (prototypeValue instanceof JSObject prototype) {
+                                    regexp.setPrototype(prototype);
+                                }
+                            }
+                        }
+
+                        valueStack.push(constValue);
                         pc += op.getSize();
                     }
                     case FCLOSURE -> {
@@ -483,7 +496,16 @@ public final class VirtualMachine {
                         pc += op.getSize();
                     }
                     case ARRAY_NEW -> {
-                        valueStack.push(new JSArray());
+                        JSArray array = new JSArray();
+                        // Set prototype to Array.prototype
+                        JSObject arrayPrototype = (JSObject) context.getGlobalObject().get("Array");
+                        if (arrayPrototype instanceof JSObject) {
+                            JSValue protoValue = arrayPrototype.get("prototype");
+                            if (protoValue instanceof JSObject proto) {
+                                array.setPrototype(proto);
+                            }
+                        }
+                        valueStack.push(array);
                         pc += op.getSize();
                     }
                     case PUSH_ARRAY -> {
@@ -1829,6 +1851,20 @@ public final class VirtualMachine {
                     JSObject wrapper = new JSObject();
                     wrapper.setPrototype(protoObj);
                     wrapper.setPrimitiveValue(bool);
+                    return wrapper;
+                }
+            }
+        }
+
+        if (value instanceof JSBigInt bigInt) {
+            // Get BigInt.prototype from global object
+            JSObject global = context.getGlobalObject();
+            JSValue bigIntCtor = global.get("BigInt");
+            if (bigIntCtor instanceof JSObject ctorObj) {
+                JSValue prototype = ctorObj.get("prototype");
+                if (prototype instanceof JSObject protoObj) {
+                    JSBigIntObject wrapper = new JSBigIntObject(bigInt);
+                    wrapper.setPrototype(protoObj);
                     return wrapper;
                 }
             }

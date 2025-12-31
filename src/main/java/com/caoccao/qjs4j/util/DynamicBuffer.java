@@ -189,10 +189,34 @@ public final class DynamicBuffer {
     }
 
     /**
+     * Get a range of bytes from the buffer.
+     */
+    public byte[] getRange(int offset, int length) {
+        if (offset < 0 || length < 0 || offset + length > size) {
+            throw new IndexOutOfBoundsException("Invalid range");
+        }
+        return Arrays.copyOfRange(buffer, offset, offset + length);
+    }
+
+    /**
      * Check if an error occurred during buffer operations.
      */
     public boolean hasError() {
         return error;
+    }
+
+    /**
+     * Insert bytes at the specified position.
+     */
+    public void insert(int position, int length) {
+        if (position < 0 || position > size) {
+            throw new IndexOutOfBoundsException("Invalid position");
+        }
+        ensureCapacity(size + length);
+        if (!error) {
+            System.arraycopy(buffer, position, buffer, position + length, size - position);
+            size += length;
+        }
     }
 
     /**
@@ -204,6 +228,29 @@ public final class DynamicBuffer {
         }
         size = 0;
         error = false;
+    }
+
+    /**
+     * Set a 32-bit value at the specified position (little-endian).
+     */
+    public void setU32(int position, int value) {
+        if (position < 0 || position + 4 > size) {
+            throw new IndexOutOfBoundsException("Invalid position");
+        }
+        buffer[position] = (byte) (value & 0xFF);
+        buffer[position + 1] = (byte) ((value >> 8) & 0xFF);
+        buffer[position + 2] = (byte) ((value >> 16) & 0xFF);
+        buffer[position + 3] = (byte) ((value >> 24) & 0xFF);
+    }
+
+    /**
+     * Set a single byte at the specified position.
+     */
+    public void setU8(int position, int value) {
+        if (position < 0 || position >= size) {
+            throw new IndexOutOfBoundsException("Invalid position");
+        }
+        buffer[position] = (byte) value;
     }
 
     /**
@@ -230,5 +277,15 @@ public final class DynamicBuffer {
     @Override
     public String toString() {
         return "DynamicBuffer{size=" + size + ", capacity=" + buffer.length + ", error=" + error + "}";
+    }
+
+    /**
+     * Truncate the buffer to the specified size.
+     */
+    public void truncate(int newSize) {
+        if (newSize < 0 || newSize > size) {
+            throw new IllegalArgumentException("Invalid size");
+        }
+        size = newSize;
     }
 }

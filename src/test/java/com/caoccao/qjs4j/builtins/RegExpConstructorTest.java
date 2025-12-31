@@ -34,7 +34,7 @@ public class RegExpConstructorTest extends BaseTest {
         // Normal case: match
         JSValue result = RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString("hello world")});
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
-            assertThat(arr.getLength()).isEqualTo(2); // At least the matched string
+            assertThat(arr.getLength()).isEqualTo(1); // Just the matched string, no captures
             assertThat(arr.get(0)).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("hello"));
 
             // Check index property
