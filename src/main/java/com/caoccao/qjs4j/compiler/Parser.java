@@ -251,6 +251,55 @@ public final class Parser {
 
         Expression left = parseConditionalExpression();
 
+        // After parsing conditional expression, check if it's actually an arrow function
+        // Pattern: identifier => expr  OR  (params) => expr
+        if (match(TokenType.ARROW)) {
+            // Convert the parsed expression to arrow function parameters
+            List<Identifier> params = new ArrayList<>();
+            
+            if (left instanceof Identifier) {
+                // Single parameter without or with parentheses: x => x + 1  OR  (x) => x + 1
+                params.add((Identifier) left);
+            } else if (left instanceof ArrayExpression) {
+                // ArrayExpression is used as a marker for:
+                // 1. Empty parameter list: () => expr
+                // 2. Multiple parameters: (x, y, z) => expr
+                ArrayExpression arrayExpr = (ArrayExpression) left;
+                if (arrayExpr.elements().isEmpty()) {
+                    // Empty parameter list
+                    // params stays empty
+                } else {
+                    // Multiple parameters
+                    for (Expression expr : arrayExpr.elements()) {
+                        if (expr instanceof Identifier) {
+                            params.add((Identifier) expr);
+                        } else {
+                            throw new RuntimeException("Invalid arrow function parameter at line " +
+                                    currentToken.line() + ", column " + currentToken.column());
+                        }
+                    }
+                }
+            } else {
+                // Could be other complex cases that we don't support yet
+                // For simplicity, we'll throw an error
+                throw new RuntimeException("Unsupported arrow function parameters at line " +
+                        currentToken.line() + ", column " + currentToken.column());
+            }
+            
+            advance(); // consume '=>'
+            
+            // Parse body
+            ASTNode body;
+            if (match(TokenType.LBRACE)) {
+                body = parseBlockStatement();
+            } else {
+                // Expression body
+                body = parseAssignmentExpression();
+            }
+            
+            return new ArrowFunctionExpression(params, body, false, location);
+        }
+
         if (isAssignmentOperator(currentToken.type())) {
             TokenType op = currentToken.type();
             location = getLocation();
@@ -822,10 +871,69 @@ public final class Parser {
                 yield new Identifier("this", location);
             }
             case LPAREN -> {
-                advance();
-                Expression expr = parseExpression();
-                expect(TokenType.RPAREN);
-                yield expr;
+                // This could be either:
+                // 1. A grouped expression: (expr)
+                // 2. An arrow function parameter list: (params) => body
+                // We need to distinguish between them
+                
+                // Try to detect arrow function by looking ahead
+                // Patterns: () => or (id) => or (id, id, ...) =>
+                
+                advance(); // consume (
+                
+                // Check for empty parameter list: () which could be arrow function
+                if (match(TokenType.RPAREN)) {
+                    // Could be () => ... 
+                    // Return an empty ArrayExpression as a marker for empty parameter list
+                    advance();
+                    yield new ArrayExpression(new ArrayList<>(), location);
+                }
+                
+                // Try to parse as potential arrow function parameters
+                // This is a simplified heuristic: if we see identifier(s) and commas, followed by ), =>
+                // then treat it as arrow function params
+                // Otherwise parse as expression
+                
+                // Check if next token is identifier - could be arrow function param
+                if (match(TokenType.IDENTIFIER)) {
+                    // Could be (id) or (id, id, ...)
+                    // Parse as parameter list tentatively
+                    List<Identifier> potentialParams = new ArrayList<>();
+                    potentialParams.add(parseIdentifier());
+                    
+                    // Check for more parameters
+                    while (match(TokenType.COMMA)) {
+                        advance(); // consume comma
+                        if (!match(TokenType.IDENTIFIER)) {
+                            // Not a simple parameter list, might be complex expression
+                            // For now, throw error
+                            throw new RuntimeException("Complex arrow function parameters not yet supported at line " +
+                                    currentToken.line() + ", column " + currentToken.column());
+                        }
+                        potentialParams.add(parseIdentifier());
+                    }
+                    
+                    expect(TokenType.RPAREN);
+                    
+                    // Now check if followed by =>
+                    // If yes, this is an arrow function parameter list
+                    // If no, this was a grouped identifier (or sequence)
+                    // For now, we'll create a custom marker for this case
+                    
+                    // Return first param if single, or create a marker for multiple
+                    if (potentialParams.size() == 1) {
+                        yield potentialParams.get(0);
+                    } else {
+                        // Multiple parameters - create an ArrayExpression with identifiers as marker
+                        List<Expression> paramExprs = new ArrayList<>(potentialParams);
+                        yield new ArrayExpression(paramExprs, location);
+                    }
+                } else {
+                    // Not starting with identifier, parse as expression
+                    Expression expr = parseExpression();
+                    expect(TokenType.RPAREN);
+                    yield expr;
+                }
             }
             case LBRACKET -> parseArrayExpression();
             case LBRACE -> parseObjectExpression();

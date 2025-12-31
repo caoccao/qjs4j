@@ -354,7 +354,6 @@ public final class StringPrototype {
             matches.push(matchArray);
         }
 
-        // Return an iterator over the matches
         return JSIterator.arrayIterator(matches);
     }
 

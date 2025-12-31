@@ -34,6 +34,19 @@ public class JSIterator extends JSObject {
         super();
         this.iteratorFunction = iteratorFunction;
         this.exhausted = false;
+        
+        // Set up 'next' method as a property (required by iterator protocol)
+        JSNativeFunction nextMethod = new JSNativeFunction("next", 0, (context, thisArg, args) -> {
+            if (thisArg instanceof JSIterator iter) {
+                return iter.next();
+            }
+            return this.next();
+        });
+        this.set("next", nextMethod);
+
+        // Make the iterator iterable by adding [Symbol.iterator] method
+        JSNativeFunction iteratorMethod = new JSNativeFunction("@@iterator", 0, (context, thisArg, args) -> this);
+        this.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), iteratorMethod);
     }
 
     /**

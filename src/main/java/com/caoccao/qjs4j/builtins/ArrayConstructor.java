@@ -25,6 +25,22 @@ import com.caoccao.qjs4j.core.*;
 public final class ArrayConstructor {
 
     /**
+     * Helper method to create a new array with the proper prototype chain
+     */
+    private static JSArray createArray(JSContext context) {
+        JSArray array = new JSArray();
+        // Set prototype to Array.prototype
+        JSValue arrayCtor = context.getGlobalObject().get("Array");
+        if (arrayCtor instanceof JSObject) {
+            JSValue protoValue = ((JSObject) arrayCtor).get("prototype");
+            if (protoValue instanceof JSObject proto) {
+                array.setPrototype(proto);
+            }
+        }
+        return array;
+    }
+
+    /**
      * Array.from(arrayLike, mapFn, thisArg)
      * ES2020 22.1.2.1
      * Creates a new Array instance from an array-like or iterable object.
@@ -43,7 +59,7 @@ public final class ArrayConstructor {
             return context.throwTypeError("Array.from: when provided, the second argument must be a function");
         }
 
-        JSArray result = new JSArray();
+        JSArray result = createArray(context);
 
         // Handle JSArray input
         if (arrayLike instanceof JSArray sourceArray) {
@@ -165,7 +181,7 @@ public final class ArrayConstructor {
 
                                 // Apply mapping function if provided
                                 if (mapFn instanceof JSFunction mappingFunc) {
-                                    JSArray mappedArray = new JSArray();
+                                    JSArray mappedArray = createArray(context);
                                     for (int i = 0; i < collectedArray.getLength(); i++) {
                                         JSValue value = collectedArray.get(i);
                                         JSValue[] mapArgs = new JSValue[]{value, new JSNumber(i)};
@@ -197,7 +213,7 @@ public final class ArrayConstructor {
 
         // Handle JSArray input (sync fallback)
         if (arrayLike instanceof JSArray sourceArray) {
-            JSArray result = new JSArray();
+            JSArray result = createArray(context);
             for (int i = 0; i < sourceArray.getLength(); i++) {
                 JSValue value = sourceArray.get(i);
                 if (mapFn instanceof JSFunction mappingFunc) {
@@ -215,7 +231,7 @@ public final class ArrayConstructor {
             JSValue lengthValue = obj.get("length");
             if (lengthValue instanceof JSNumber num) {
                 int length = (int) num.value();
-                JSArray result = new JSArray();
+                JSArray result = createArray(context);
                 for (int i = 0; i < length; i++) {
                     JSValue value = obj.get(i);
                     if (mapFn instanceof JSFunction mappingFunc) {
@@ -232,7 +248,7 @@ public final class ArrayConstructor {
         // Handle string (sync fallback)
         if (arrayLike instanceof JSString str) {
             String value = str.value();
-            JSArray result = new JSArray();
+            JSArray result = createArray(context);
             for (int i = 0; i < value.length(); i++) {
                 JSValue charValue = new JSString(String.valueOf(value.charAt(i)));
                 if (mapFn instanceof JSFunction mappingFunc) {
@@ -247,7 +263,7 @@ public final class ArrayConstructor {
 
         // Try to use Symbol.iterator for general iterables (sync fallback)
         if (JSIteratorHelper.isIterable(arrayLike)) {
-            JSArray result = new JSArray();
+            JSArray result = createArray(context);
             final int[] index = {0};
             JSIteratorHelper.forOf(arrayLike, (value) -> {
                 JSValue itemValue = value;
@@ -296,7 +312,7 @@ public final class ArrayConstructor {
      * Creates a new Array instance with a variable number of arguments.
      */
     public static JSValue of(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSArray array = new JSArray();
+        JSArray array = createArray(context);
 
         for (JSValue item : args) {
             array.push(item);
