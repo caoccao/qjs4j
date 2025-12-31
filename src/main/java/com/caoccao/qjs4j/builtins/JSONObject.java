@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.util.DtoaConverter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,188 +36,360 @@ import java.util.List;
 public final class JSONObject {
 
     /**
-     * JSON.parse(text[, reviver])
-     * ES2020 24.5.1
-     * Simplified implementation - basic JSON parsing
+     * Recursive internalize operation for JSON.parse reviver
+     * Based on ES2020 24.5.1.1 and QuickJS internalize_json_property
      */
-    public static JSValue parse(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwSyntaxError("JSON.parse requires at least 1 argument");
-        }
-
-        String text = JSTypeConversions.toString(context, args[0]).value();
-
-        try {
-            return parseValue(text.strip(), 0).value;
-        } catch (Exception e) {
-            return context.throwSyntaxError("Invalid JSON: " + e.getMessage());
-        }
+    private static JSValue internalizeJSONProperty(JSContext context, JSValue holder, String name, JSFunction reviver) {
+        JSValue val = ((JSObject) holder).get(name);
+        return internalizeJSONPropertyForValue(context, holder, name, val, reviver);
     }
 
-    private static ParseResult parseArray(String text, int start) {
-        if (text.charAt(start) != '[') {
-            throw new IllegalArgumentException("Expected '['");
+    /**
+     * Helper method to internalize a value that's already been retrieved
+     */
+    private static JSValue internalizeJSONPropertyForValue(JSContext context, JSValue holder, String name, JSValue val, JSFunction reviver) {
+        if (val instanceof JSObject && !(val instanceof JSFunction)) {
+            JSObject obj = (JSObject) val;
+
+            if (val instanceof JSArray) {
+                // Process array elements
+                JSArray arr = (JSArray) val;
+                long len = arr.getLength();
+                for (long i = 0; i < len; i++) {
+                    JSValue element = arr.get(i);
+                    JSValue newElement = internalizeJSONPropertyForValue(context, val, String.valueOf(i), element, reviver);
+                    if (newElement instanceof JSUndefined) {
+                        arr.delete(PropertyKey.fromIndex((int) i));
+                    } else {
+                        arr.set(i, newElement);
+                    }
+                }
+            } else {
+                // Process object properties
+                List<PropertyKey> keys = obj.getOwnPropertyKeys();
+                for (PropertyKey key : keys) {
+                    if (key.isString()) {
+                        String prop = key.asString();
+                        JSValue newElement = internalizeJSONProperty(context, val, prop, reviver);
+                        if (newElement instanceof JSUndefined) {
+                            obj.delete(prop);
+                        } else {
+                            obj.set(prop, newElement);
+                        }
+                    }
+                }
+            }
         }
 
-        JSArray arr = new JSArray();
-        int i = skipWhitespace(text, start + 1);
+        // Call reviver function with (key, value)
+        JSValue nameValue = new JSString(name);
+        JSValue result = reviver.call(context, holder, new JSValue[]{nameValue, val});
+        return result;
+    }
 
-        // Empty array
-        if (i < text.length() && text.charAt(i) == ']') {
-            return new ParseResult(arr, i + 1);
+    /**
+     * Check and transform value according to toJSON and replacer
+     * Based on QuickJS js_json_check
+     */
+    private static JSValue jsonCheck(JSContext context, StringifyContext ctx, JSValue holder, JSValue val, JSValue key) {
+        // Check for toJSON method
+        if ((val instanceof JSObject || val instanceof JSBigInt) && !(val instanceof JSFunction)) {
+            if (val instanceof JSObject) {
+                JSObject obj = (JSObject) val;
+                JSValue toJSON = obj.get("toJSON");
+                if (toJSON instanceof JSFunction) {
+                    JSFunction toJSONFunc = (JSFunction) toJSON;
+                    val = toJSONFunc.call(context, val, new JSValue[]{key});
+                }
+            }
         }
 
-        while (i < text.length()) {
-            // Parse value
-            ParseResult valueResult = parseValue(text, i);
-            arr.push(valueResult.value);
-            i = skipWhitespace(text, valueResult.endIndex);
-
-            // Check for comma or end
-            if (i >= text.length()) {
-                throw new IllegalArgumentException("Unexpected end of array");
-            }
-
-            if (text.charAt(i) == ']') {
-                return new ParseResult(arr, i + 1);
-            }
-
-            if (text.charAt(i) != ',') {
-                throw new IllegalArgumentException("Expected ',' or ']'");
-            }
-
-            i = skipWhitespace(text, i + 1);
+        // Apply replacer function
+        if (ctx.replacerFunc != null) {
+            val = ctx.replacerFunc.call(context, holder, new JSValue[]{key, val});
         }
 
-        throw new IllegalArgumentException("Unterminated array");
+        // Filter out functions, symbols, and undefined (except in arrays where they become null)
+        if (val instanceof JSFunction) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return val;
+    }
+
+    /**
+     * Convert value to JSON string representation
+     * Based on QuickJS js_json_to_str
+     */
+    private static boolean jsonToStr(JSContext context, StringifyContext ctx, StringBuilder sb,
+                                     JSValue holder, JSValue val, String currentIndent) {
+        // Handle primitives
+        if (val instanceof JSNull || val instanceof JSUndefined) {
+            sb.append("null");
+            return true;
+        }
+
+        if (val instanceof JSBoolean b) {
+            sb.append(b.value() ? "true" : "false");
+            return true;
+        }
+
+        if (val instanceof JSNumber n) {
+            double d = n.value();
+            if (Double.isNaN(d) || Double.isInfinite(d)) {
+                sb.append("null");
+            } else if (d == Math.floor(d) && !Double.isInfinite(d)) {
+                sb.append((long) d);
+            } else {
+                sb.append(n);
+            }
+            return true;
+        }
+
+        if (val instanceof JSString s) {
+            sb.append(stringifyString(s.value()));
+            return true;
+        }
+
+        if (val instanceof JSBigInt) {
+            // BigInt cannot be serialized in JSON
+            return false;
+        }
+
+        // Handle objects and arrays
+        if (val instanceof JSObject && !(val instanceof JSFunction)) {
+            // Check for circular reference
+            if (ctx.stack.contains(val)) {
+                // Circular reference - throw error
+                return false;
+            }
+
+            ctx.stack.add(val);
+            String newIndent = currentIndent + ctx.gap;
+            boolean result;
+
+            if (val instanceof JSArray) {
+                result = stringifyArrayWithContext(context, ctx, sb, (JSArray) val, currentIndent, newIndent);
+            } else {
+                result = stringifyObjectWithContext(context, ctx, sb, (JSObject) val, currentIndent, newIndent);
+            }
+
+            ctx.stack.remove(ctx.stack.size() - 1);
+            return result;
+        }
+
+        // Anything else (symbols, etc.) returns undefined
+        return false;
     }
 
     // ========== JSON Parsing Helper Methods ==========
 
-    private static ParseResult parseFalse(String text, int start) {
-        if (text.startsWith("false", start)) {
+    /**
+     * JSON.parse(text[, reviver])
+     * ES2020 24.5.1
+     * Parses JSON text with optional reviver function support
+     */
+    public static JSValue parse(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (args.length == 0) {
+            return context.throwSyntaxError("\"undefined\" is not valid JSON");
+        }
+
+        String text = JSTypeConversions.toString(context, args[0]).value();
+
+        JSValue obj;
+        try {
+            ParseContext parseContext = new ParseContext(text.strip());
+            obj = parseValue(parseContext, 0).value;
+        } catch (JSONParseException e) {
+            return context.throwSyntaxError(e.getMessage());
+        } catch (Exception e) {
+            return context.throwSyntaxError(e.getMessage());
+        }
+
+        // If reviver function is provided, apply it
+        if (args.length > 1 && args[1] instanceof JSFunction) {
+            JSFunction reviver = (JSFunction) args[1];
+            JSObject root = new JSObject();
+            root.set("", obj);
+            return internalizeJSONProperty(context, root, "", reviver);
+        }
+
+        return obj;
+    }
+
+    private static ParseResult parseArray(ParseContext ctx, int start) {
+        if (ctx.text.charAt(start) != '[') {
+            throw new JSONParseException("Expected '[' " + ctx.getPositionInfo(start));
+        }
+
+        JSArray arr = new JSArray();
+        int i = skipWhitespace(ctx.text, start + 1);
+
+        // Empty array
+        if (i < ctx.text.length() && ctx.text.charAt(i) == ']') {
+            return new ParseResult(arr, i + 1);
+        }
+
+        while (i < ctx.text.length()) {
+            // Parse value
+            ParseResult valueResult = parseValue(ctx, i);
+            arr.push(valueResult.value);
+            i = skipWhitespace(ctx.text, valueResult.endIndex);
+
+            // Check for comma or end
+            if (i >= ctx.text.length()) {
+                throw new JSONParseException("Expected ',' or ']' after array element in JSON " + ctx.getPositionInfo(i));
+            }
+
+            if (ctx.text.charAt(i) == ']') {
+                return new ParseResult(arr, i + 1);
+            }
+
+            if (ctx.text.charAt(i) != ',') {
+                throw new JSONParseException("Expected ',' or ']' after array element in JSON " + ctx.getPositionInfo(i));
+            }
+
+            i = skipWhitespace(ctx.text, i + 1);
+        }
+
+        throw new JSONParseException("Unterminated array in JSON " + ctx.getPositionInfo(i));
+    }
+
+    private static ParseResult parseFalse(ParseContext ctx, int start) {
+        if (ctx.text.startsWith("false", start)) {
             return new ParseResult(JSBoolean.FALSE, start + 5);
         }
-        throw new IllegalArgumentException("Invalid literal");
+        throw new JSONParseException("Invalid literal " + ctx.getPositionInfo(start));
     }
 
-    private static ParseResult parseNull(String text, int start) {
-        if (text.startsWith("null", start)) {
+    private static ParseResult parseNull(ParseContext ctx, int start) {
+        if (ctx.text.startsWith("null", start)) {
             return new ParseResult(JSNull.INSTANCE, start + 4);
         }
-        throw new IllegalArgumentException("Invalid literal");
+        throw new JSONParseException("Invalid literal " + ctx.getPositionInfo(start));
     }
 
-    private static ParseResult parseNumber(String text, int start) {
+    private static ParseResult parseNumber(ParseContext ctx, int start) {
         int i = start;
 
         // Optional minus
-        if (i < text.length() && text.charAt(i) == '-') {
+        if (i < ctx.text.length() && ctx.text.charAt(i) == '-') {
             i++;
         }
 
         // Digits
-        if (i >= text.length() || !Character.isDigit(text.charAt(i))) {
-            throw new IllegalArgumentException("Invalid number");
+        if (i >= ctx.text.length() || !Character.isDigit(ctx.text.charAt(i))) {
+            throw new JSONParseException("Invalid number in JSON " + ctx.getPositionInfo(i));
         }
 
         // Integer part
-        if (text.charAt(i) == '0') {
+        if (ctx.text.charAt(i) == '0') {
             i++;
+            // Leading zero must not be followed by another digit
+            if (i < ctx.text.length() && Character.isDigit(ctx.text.charAt(i))) {
+                throw new JSONParseException("Unexpected number in JSON " + ctx.getPositionInfo(i));
+            }
         } else {
-            while (i < text.length() && Character.isDigit(text.charAt(i))) {
+            while (i < ctx.text.length() && Character.isDigit(ctx.text.charAt(i))) {
                 i++;
             }
         }
 
         // Optional fraction
-        if (i < text.length() && text.charAt(i) == '.') {
+        if (i < ctx.text.length() && ctx.text.charAt(i) == '.') {
             i++;
-            if (i >= text.length() || !Character.isDigit(text.charAt(i))) {
-                throw new IllegalArgumentException("Invalid number");
+            if (i >= ctx.text.length() || !Character.isDigit(ctx.text.charAt(i))) {
+                throw new JSONParseException("Invalid number in JSON " + ctx.getPositionInfo(i));
             }
-            while (i < text.length() && Character.isDigit(text.charAt(i))) {
+            while (i < ctx.text.length() && Character.isDigit(ctx.text.charAt(i))) {
                 i++;
             }
         }
 
         // Optional exponent
-        if (i < text.length() && (text.charAt(i) == 'e' || text.charAt(i) == 'E')) {
+        if (i < ctx.text.length() && (ctx.text.charAt(i) == 'e' || ctx.text.charAt(i) == 'E')) {
             i++;
-            if (i < text.length() && (text.charAt(i) == '+' || text.charAt(i) == '-')) {
+            if (i < ctx.text.length() && (ctx.text.charAt(i) == '+' || ctx.text.charAt(i) == '-')) {
                 i++;
             }
-            if (i >= text.length() || !Character.isDigit(text.charAt(i))) {
-                throw new IllegalArgumentException("Invalid number");
+            if (i >= ctx.text.length() || !Character.isDigit(ctx.text.charAt(i))) {
+                throw new JSONParseException("Invalid number in JSON " + ctx.getPositionInfo(i));
             }
-            while (i < text.length() && Character.isDigit(text.charAt(i))) {
+            while (i < ctx.text.length() && Character.isDigit(ctx.text.charAt(i))) {
                 i++;
             }
         }
 
-        String numStr = text.substring(start, i);
+        String numStr = ctx.text.substring(start, i);
         return new ParseResult(new JSNumber(Double.parseDouble(numStr)), i);
     }
 
-    private static ParseResult parseObject(String text, int start) {
-        if (text.charAt(start) != '{') {
-            throw new IllegalArgumentException("Expected '{'");
+    private static ParseResult parseObject(ParseContext ctx, int start) {
+        if (ctx.text.charAt(start) != '{') {
+            throw new JSONParseException("Expected '{' " + ctx.getPositionInfo(start));
         }
 
         JSObject obj = new JSObject();
-        int i = skipWhitespace(text, start + 1);
+        int propertyCount = 0;
+        int i = skipWhitespace(ctx.text, start + 1);
 
         // Empty object
-        if (i < text.length() && text.charAt(i) == '}') {
+        if (i < ctx.text.length() && ctx.text.charAt(i) == '}') {
             return new ParseResult(obj, i + 1);
         }
 
-        while (i < text.length()) {
+        while (i < ctx.text.length()) {
             // Parse key (must be string)
-            ParseResult keyResult = parseString(text, i);
+            ParseResult keyResult = parsePropertyName(ctx, i, propertyCount);
             String key = ((JSString) keyResult.value).value();
-            i = skipWhitespace(text, keyResult.endIndex);
+            i = skipWhitespace(ctx.text, keyResult.endIndex);
 
             // Expect colon
-            if (i >= text.length() || text.charAt(i) != ':') {
-                throw new IllegalArgumentException("Expected ':'");
+            if (i >= ctx.text.length() || ctx.text.charAt(i) != ':') {
+                throw new JSONParseException("Expected ':' after property name in JSON " + ctx.getPositionInfo(i));
             }
-            i = skipWhitespace(text, i + 1);
+            i = skipWhitespace(ctx.text, i + 1);
 
             // Parse value
-            ParseResult valueResult = parseValue(text, i);
+            ParseResult valueResult = parseValue(ctx, i);
             obj.set(key, valueResult.value);
-            i = skipWhitespace(text, valueResult.endIndex);
+            propertyCount++;
+            i = skipWhitespace(ctx.text, valueResult.endIndex);
 
             // Check for comma or end
-            if (i >= text.length()) {
-                throw new IllegalArgumentException("Unexpected end of object");
+            if (i >= ctx.text.length()) {
+                throw new JSONParseException("Expected ',' or '}' after property value in JSON " + ctx.getPositionInfo(i));
             }
 
-            if (text.charAt(i) == '}') {
+            if (ctx.text.charAt(i) == '}') {
                 return new ParseResult(obj, i + 1);
             }
 
-            if (text.charAt(i) != ',') {
-                throw new IllegalArgumentException("Expected ',' or '}'");
+            if (ctx.text.charAt(i) != ',') {
+                throw new JSONParseException("Expected ',' or '}' after property value in JSON " + ctx.getPositionInfo(i));
             }
 
-            i = skipWhitespace(text, i + 1);
+            i = skipWhitespace(ctx.text, i + 1);
         }
 
-        throw new IllegalArgumentException("Unterminated object");
+        throw new JSONParseException("Unterminated object in JSON " + ctx.getPositionInfo(i));
     }
 
-    private static ParseResult parseString(String text, int start) {
-        if (text.charAt(start) != '"') {
-            throw new IllegalArgumentException("Expected '\"'");
+    private static ParseResult parsePropertyName(ParseContext ctx, int start, int propertyCount) {
+        char firstChar = ctx.text.charAt(start);
+        if (firstChar != '"') {
+            if (propertyCount > 0) {
+                throw new JSONParseException("Expected double-quoted property name in JSON " + ctx.getPositionInfo(start));
+            } else {
+                throw new JSONParseException("Expected property name or '}' in JSON " + ctx.getPositionInfo(start));
+            }
         }
 
         StringBuilder sb = new StringBuilder();
         int i = start + 1;
 
-        while (i < text.length()) {
-            char ch = text.charAt(i);
+        while (i < ctx.text.length()) {
+            char ch = ctx.text.charAt(i);
 
             if (ch == '"') {
                 return new ParseResult(new JSString(sb.toString()), i + 1);
@@ -224,10 +397,10 @@ public final class JSONObject {
 
             if (ch == '\\') {
                 i++;
-                if (i >= text.length()) {
-                    throw new IllegalArgumentException("Unexpected end in string");
+                if (i >= ctx.text.length()) {
+                    throw new JSONParseException("Unexpected end in property name " + ctx.getPositionInfo(i));
                 }
-                char escaped = text.charAt(i);
+                char escaped = ctx.text.charAt(i);
                 switch (escaped) {
                     case '"' -> sb.append('"');
                     case '\\' -> sb.append('\\');
@@ -239,14 +412,15 @@ public final class JSONObject {
                     case 't' -> sb.append('\t');
                     case 'u' -> {
                         // Unicode escape
-                        if (i + 4 >= text.length()) {
-                            throw new IllegalArgumentException("Invalid unicode escape");
+                        if (i + 4 >= ctx.text.length()) {
+                            throw new JSONParseException("Invalid unicode escape in property name " + ctx.getPositionInfo(i));
                         }
-                        String hex = text.substring(i + 1, i + 5);
+                        String hex = ctx.text.substring(i + 1, i + 5);
                         sb.append((char) Integer.parseInt(hex, 16));
                         i += 4;
                     }
-                    default -> throw new IllegalArgumentException("Invalid escape: \\" + escaped);
+                    default ->
+                            throw new JSONParseException("Invalid escape in property name: \\" + escaped + ctx.getPositionInfo(i));
                 }
             } else {
                 sb.append(ch);
@@ -254,34 +428,84 @@ public final class JSONObject {
             i++;
         }
 
-        throw new IllegalArgumentException("Unterminated string");
+        throw new JSONParseException("Unterminated property name in JSON " + ctx.getPositionInfo(i));
     }
 
-    private static ParseResult parseTrue(String text, int start) {
-        if (text.startsWith("true", start)) {
+    private static ParseResult parseString(ParseContext ctx, int start) {
+        if (ctx.text.charAt(start) != '"') {
+            throw new JSONParseException("Expected '\"' " + ctx.getPositionInfo(start));
+        }
+
+        StringBuilder sb = new StringBuilder();
+        int i = start + 1;
+
+        while (i < ctx.text.length()) {
+            char ch = ctx.text.charAt(i);
+
+            if (ch == '"') {
+                return new ParseResult(new JSString(sb.toString()), i + 1);
+            }
+
+            if (ch == '\\') {
+                i++;
+                if (i >= ctx.text.length()) {
+                    throw new JSONParseException("Unexpected end in string " + ctx.getPositionInfo(i));
+                }
+                char escaped = ctx.text.charAt(i);
+                switch (escaped) {
+                    case '"' -> sb.append('"');
+                    case '\\' -> sb.append('\\');
+                    case '/' -> sb.append('/');
+                    case 'b' -> sb.append('\b');
+                    case 'f' -> sb.append('\f');
+                    case 'n' -> sb.append('\n');
+                    case 'r' -> sb.append('\r');
+                    case 't' -> sb.append('\t');
+                    case 'u' -> {
+                        // Unicode escape
+                        if (i + 4 >= ctx.text.length()) {
+                            throw new JSONParseException("Invalid unicode escape " + ctx.getPositionInfo(i));
+                        }
+                        String hex = ctx.text.substring(i + 1, i + 5);
+                        sb.append((char) Integer.parseInt(hex, 16));
+                        i += 4;
+                    }
+                    default -> throw new JSONParseException("Invalid escape: \\" + escaped + ctx.getPositionInfo(i));
+                }
+            } else {
+                sb.append(ch);
+            }
+            i++;
+        }
+
+        throw new JSONParseException("Unterminated string in JSON " + ctx.getPositionInfo(i));
+    }
+
+    private static ParseResult parseTrue(ParseContext ctx, int start) {
+        if (ctx.text.startsWith("true", start)) {
             return new ParseResult(JSBoolean.TRUE, start + 4);
         }
-        throw new IllegalArgumentException("Invalid literal");
+        throw new JSONParseException("Invalid literal " + ctx.getPositionInfo(start));
     }
 
-    private static ParseResult parseValue(String text, int start) {
-        int i = skipWhitespace(text, start);
+    private static ParseResult parseValue(ParseContext ctx, int start) {
+        int i = skipWhitespace(ctx.text, start);
 
-        if (i >= text.length()) {
-            throw new IllegalArgumentException("Unexpected end of JSON input");
+        if (i >= ctx.text.length()) {
+            throw new JSONParseException("Unexpected end of JSON input " + ctx.getPositionInfo(i));
         }
 
-        char ch = text.charAt(i);
+        char ch = ctx.text.charAt(i);
 
         return switch (ch) {
-            case '"' -> parseString(text, i);
-            case '{' -> parseObject(text, i);
-            case '[' -> parseArray(text, i);
-            case 't' -> parseTrue(text, i);
-            case 'f' -> parseFalse(text, i);
-            case 'n' -> parseNull(text, i);
-            case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' -> parseNumber(text, i);
-            default -> throw new IllegalArgumentException("Unexpected character: " + ch);
+            case '"' -> parseString(ctx, i);
+            case '{' -> parseObject(ctx, i);
+            case '[' -> parseArray(ctx, i);
+            case 't' -> parseTrue(ctx, i);
+            case 'f' -> parseFalse(ctx, i);
+            case 'n' -> parseNull(ctx, i);
+            case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' -> parseNumber(ctx, i);
+            default -> throw new JSONParseException("Unexpected character: " + ch + ctx.getPositionInfo(i));
         };
     }
 
@@ -301,7 +525,7 @@ public final class JSONObject {
     /**
      * JSON.stringify(value[, replacer[, space]])
      * ES2020 24.5.2
-     * Simplified implementation - basic JSON stringification
+     * Converts a JavaScript value to a JSON string with support for replacer and space parameters
      */
     public static JSValue stringify(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -315,115 +539,184 @@ public final class JSONObject {
             return JSUndefined.INSTANCE;
         }
 
-        // Handle space parameter for indentation (simplified)
+        // Create stringify context
+        StringifyContext ctx = new StringifyContext();
+
+        // Process replacer parameter
+        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+            JSValue replacer = args[1];
+            if (replacer instanceof JSFunction) {
+                ctx.replacerFunc = (JSFunction) replacer;
+            } else if (replacer instanceof JSArray) {
+                // Build property list from array
+                JSArray replacerArray = (JSArray) replacer;
+                List<String> propertyList = new ArrayList<>();
+                long len = replacerArray.getLength();
+                for (long i = 0; i < len; i++) {
+                    JSValue item = replacerArray.get(i);
+                    String propName = null;
+
+                    if (item instanceof JSString) {
+                        propName = ((JSString) item).value();
+                    } else if (item instanceof JSNumber) {
+                        propName = String.valueOf((long) ((JSNumber) item).value());
+                    } else if (item instanceof JSObject) {
+                        // Handle String/Number objects
+                        JSObject obj = (JSObject) item;
+                        // Simplified: just convert to string
+                        propName = JSTypeConversions.toString(context, item).value();
+                    }
+
+                    if (propName != null && !propertyList.contains(propName)) {
+                        propertyList.add(propName);
+                    }
+                }
+                ctx.propertyList = propertyList.isEmpty() ? null : propertyList;
+            }
+        }
+
+        // Handle space parameter for indentation
         String indent = "";
-        if (args.length > 2 && args[2] instanceof JSNumber num) {
-            int spaces = Math.min(10, Math.max(0, (int) num.value()));
-            indent = " ".repeat(spaces);
-        } else if (args.length > 2 && args[2] instanceof JSString str) {
-            indent = str.value().substring(0, Math.min(10, str.value().length()));
+        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
+            JSValue space = args[2];
+
+            // Handle Number/String objects
+            if (space instanceof JSObject && !(space instanceof JSFunction)) {
+                // Simplified: convert to primitive
+                if (space instanceof JSNumber) {
+                    space = space; // already a number
+                } else {
+                    space = JSTypeConversions.toString(context, space);
+                }
+            }
+
+            if (space instanceof JSNumber num) {
+                int spaces = Math.min(10, Math.max(0, (int) num.value()));
+                indent = " ".repeat(spaces);
+            } else if (space instanceof JSString str) {
+                indent = str.value().substring(0, Math.min(10, str.value().length()));
+            }
+        }
+        ctx.gap = indent;
+
+        // Create wrapper object to hold the value
+        JSObject wrapper = new JSObject();
+        wrapper.set("", value);
+
+        // Apply initial check (handles toJSON and replacer)
+        JSValue processedValue = jsonCheck(context, ctx, wrapper, value, new JSString(""));
+
+        if (processedValue instanceof JSUndefined) {
+            return JSUndefined.INSTANCE;
         }
 
         try {
-            String result = stringifyValue(value, indent, "");
-            if (result == null) {
-                return JSUndefined.INSTANCE;
+            StringBuilder sb = new StringBuilder();
+            ctx.stack = new ArrayList<>();
+            if (jsonToStr(context, ctx, sb, wrapper, processedValue, "")) {
+                return new JSString(sb.toString());
             }
-            return new JSString(result);
+            return JSUndefined.INSTANCE;
         } catch (Exception e) {
             return JSUndefined.INSTANCE;
         }
     }
 
-    private static String stringifyArray(JSArray arr, String indent, String currentIndent) {
-        if (indent.isEmpty()) {
-            // Compact format
-            StringBuilder sb = new StringBuilder("[");
-            for (long i = 0; i < arr.getLength(); i++) {
-                if (i > 0) sb.append(",");
-                String elem = stringifyValue(arr.get(i), indent, currentIndent);
-                if (elem == null) {
+    /**
+     * Stringify array with context
+     */
+    private static boolean stringifyArrayWithContext(JSContext context, StringifyContext ctx, StringBuilder sb,
+                                                     JSArray arr, String currentIndent, String newIndent) {
+        sb.append('[');
+        long len = arr.getLength();
+        boolean hasContent = false;
+
+        for (long i = 0; i < len; i++) {
+            if (hasContent) {
+                sb.append(',');
+            }
+            hasContent = true;
+
+            if (!ctx.gap.isEmpty()) {
+                sb.append('\n').append(newIndent);
+            }
+
+            JSValue elem = arr.get(i);
+            JSValue processedElem = jsonCheck(context, ctx, arr, elem, new JSString(String.valueOf(i)));
+
+            if (processedElem instanceof JSUndefined) {
+                sb.append("null");
+            } else {
+                if (!jsonToStr(context, ctx, sb, arr, processedElem, newIndent)) {
                     sb.append("null");
-                } else {
-                    sb.append(elem);
                 }
             }
-            sb.append("]");
-            return sb.toString();
-        } else {
-            // Pretty format
-            StringBuilder sb = new StringBuilder("[\n");
-            String newIndent = currentIndent + indent;
-            for (long i = 0; i < arr.getLength(); i++) {
-                if (i > 0) sb.append(",\n");
-                sb.append(newIndent);
-                String elem = stringifyValue(arr.get(i), indent, newIndent);
-                if (elem == null) {
-                    sb.append("null");
-                } else {
-                    sb.append(elem);
-                }
-            }
-            sb.append("\n").append(currentIndent).append("]");
-            return sb.toString();
         }
+
+        if (hasContent && !ctx.gap.isEmpty()) {
+            sb.append('\n').append(currentIndent);
+        }
+        sb.append(']');
+        return true;
     }
 
-    // ========== JSON Stringification Helper Methods ==========
+    /**
+     * Stringify object with context
+     */
+    private static boolean stringifyObjectWithContext(JSContext context, StringifyContext ctx, StringBuilder sb,
+                                                      JSObject obj, String currentIndent, String newIndent) {
+        sb.append('{');
+        boolean hasContent = false;
 
-    private static String stringifyObject(JSObject obj, String indent, String currentIndent) {
-        // Get all own property keys
-        List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
-        List<String> keys = new ArrayList<>();
-
-        // Convert PropertyKeys to strings, filtering out non-enumerable properties
-        for (PropertyKey key : propertyKeys) {
-            if (key.isString()) {
-                keys.add(key.asString());
-            }
-        }
-
-        if (keys.isEmpty()) {
-            return "{}";
-        }
-
-        if (indent.isEmpty()) {
-            // Compact format
-            StringBuilder sb = new StringBuilder("{");
-            boolean first = true;
-            for (String key : keys) {
-                if (!first) sb.append(",");
-                first = false;
-                sb.append(stringifyString(key));
-                sb.append(":");
-                JSValue val = obj.get(key);
-                String valStr = stringifyValue(val, indent, currentIndent);
-                if (valStr != null) {
-                    sb.append(valStr);
-                }
-            }
-            sb.append("}");
-            return sb.toString();
+        // Determine which properties to stringify
+        List<String> keys;
+        if (ctx.propertyList != null) {
+            keys = ctx.propertyList;
         } else {
-            // Pretty format
-            StringBuilder sb = new StringBuilder("{\n");
-            String newIndent = currentIndent + indent;
-            boolean first = true;
-            for (String key : keys) {
-                if (!first) sb.append(",\n");
-                first = false;
-                sb.append(newIndent);
-                sb.append(stringifyString(key));
-                sb.append(": ");
-                JSValue val = obj.get(key);
-                String valStr = stringifyValue(val, indent, newIndent);
-                if (valStr != null) {
-                    sb.append(valStr);
+            keys = new ArrayList<>();
+            List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
+            for (PropertyKey key : propertyKeys) {
+                if (key.isString()) {
+                    keys.add(key.asString());
                 }
             }
-            sb.append("\n").append(currentIndent).append("}");
-            return sb.toString();
         }
+
+        for (String key : keys) {
+            JSValue propValue = obj.get(key);
+            JSValue processedValue = jsonCheck(context, ctx, obj, propValue, new JSString(key));
+
+            if (!(processedValue instanceof JSUndefined)) {
+                // Try stringifying the value first in a temporary buffer
+                StringBuilder tempSb = new StringBuilder();
+                if (jsonToStr(context, ctx, tempSb, obj, processedValue, newIndent)) {
+                    // Successfully stringified, add to output
+                    if (hasContent) {
+                        sb.append(',');
+                    }
+
+                    if (!ctx.gap.isEmpty()) {
+                        sb.append('\n').append(newIndent);
+                    }
+
+                    sb.append(stringifyString(key));
+                    sb.append(':');
+
+                    if (!ctx.gap.isEmpty()) {
+                        sb.append(' ');
+                    }
+
+                    sb.append(tempSb);
+                    hasContent = true;
+                }
+            }
+        }
+
+        if (hasContent && !ctx.gap.isEmpty()) {
+            sb.append('\n').append(currentIndent);
+        }
+        sb.append('}');
+        return true;
     }
 
     private static String stringifyString(String str) {
@@ -450,47 +743,43 @@ public final class JSONObject {
         return sb.toString();
     }
 
-    private static String stringifyValue(JSValue value, String indent, String currentIndent) {
-        if (value instanceof JSNull || value instanceof JSUndefined) {
-            return "null";
+    // ========== JSON Stringification Helper Methods ==========
+
+    /**
+     * Custom exception for JSON parsing errors with position information
+     */
+    private static class JSONParseException extends RuntimeException {
+        JSONParseException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Context for JSON parsing with position tracking
+     */
+    private static class ParseContext {
+        final String text;
+
+        ParseContext(String text) {
+            this.text = text;
         }
 
-        if (value instanceof JSBoolean b) {
-            return b.value() ? "true" : "false";
-        }
-
-        if (value instanceof JSNumber n) {
-            double d = n.value();
-            if (Double.isNaN(d) || Double.isInfinite(d)) {
-                return "null";
+        /**
+         * Get line and column from position (0-based position, 1-based line/column)
+         */
+        String getPositionInfo(int position) {
+            int line = 1;
+            int column = 1;
+            for (int i = 0; i < position && i < text.length(); i++) {
+                if (text.charAt(i) == '\n') {
+                    line++;
+                    column = 1;
+                } else {
+                    column++;
+                }
             }
-            // Check if it's an integer
-            if (d == Math.floor(d) && !Double.isInfinite(d)) {
-                return String.valueOf((long) d);
-            }
-            return String.valueOf(d);
+            return "at position " + position + " (line " + line + " column " + column + ")";
         }
-
-        if (value instanceof JSString s) {
-            return stringifyString(s.value());
-        }
-
-        if (value instanceof JSArray arr) {
-            return stringifyArray(arr, indent, currentIndent);
-        }
-
-        // Functions are not serializable in JSON
-        // Check before JSObject since JSFunction extends JSObject
-        if (value instanceof JSFunction) {
-            return null;
-        }
-
-        if (value instanceof JSObject obj) {
-            return stringifyObject(obj, indent, currentIndent);
-        }
-
-        // Symbols are not serializable
-        return null;
     }
 
     private static class ParseResult {
@@ -501,5 +790,15 @@ public final class JSONObject {
             this.value = value;
             this.endIndex = endIndex;
         }
+    }
+
+    /**
+     * Context for JSON stringification
+     */
+    private static class StringifyContext {
+        String gap = "";
+        List<String> propertyList = null;
+        JSFunction replacerFunc = null;
+        List<JSValue> stack = null;
     }
 }

@@ -16,12 +16,14 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.JSNumber;
 import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
 import org.junit.jupiter.api.Test;
+
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.offset;
@@ -29,7 +31,7 @@ import static org.assertj.core.api.Assertions.offset;
 /**
  * Unit tests for Math object methods.
  */
-public class MathObjectTest extends BaseTest {
+public class MathObjectTest extends BaseJavetTest {
 
     @Test
     public void testAbs() {
@@ -60,6 +62,21 @@ public class MathObjectTest extends BaseTest {
         // Edge case: string coercion
         result = MathObject.abs(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("-42")});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
+    }
+
+    @Test
+    public void testAdd() {
+        Stream.of(
+                "1 + 1",
+                "var a = 1; var b = 2; a + b").forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeInteger().doubleValue(),
+                        () -> context.eval(code).toJavaObject()));
+        Stream.of(
+                "2**32 + 2**32").forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeLong().doubleValue(),
+                        () -> context.eval(code).toJavaObject()));
     }
 
     @Test
@@ -113,6 +130,23 @@ public class MathObjectTest extends BaseTest {
         assertThat(MathObject.PI).isCloseTo(Math.PI, offset(1e-15));
         assertThat(MathObject.SQRT2).isCloseTo(Math.sqrt(2), offset(1e-15));
         assertThat(MathObject.SQRT1_2).isCloseTo(Math.sqrt(0.5), offset(1e-15));
+    }
+
+    @Test
+    public void testDivide() {
+        Stream.of(
+                "1 / 1").forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeInteger().doubleValue(),
+                        () -> context.eval(code).toJavaObject()));
+        Stream.of(
+                "var a = 1; var b = 2; a / b",
+                "-2 / -3",
+                "1 / 0",
+                "Infinity / -Infinity").forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeDouble(),
+                        () -> context.eval(code).toJavaObject()));
     }
 
     @Test
@@ -279,6 +313,17 @@ public class MathObjectTest extends BaseTest {
     }
 
     @Test
+    public void testMultiply() {
+        Stream.of(
+                "1 * 1",
+                "var a = 1; var b = 2; a * b",
+                "-2 * -3").forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeInteger().doubleValue(),
+                        () -> context.eval(code).toJavaObject()));
+    }
+
+    @Test
     public void testPow() {
         // Normal case: positive base, positive exponent
         JSValue result = MathObject.pow(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(2), new JSNumber(3)});
@@ -412,6 +457,17 @@ public class MathObjectTest extends BaseTest {
         // Edge case: no arguments
         result = MathObject.sqrt(context, JSUndefined.INSTANCE, new JSValue[]{});
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+    }
+
+    @Test
+    public void testSubtract() {
+        Stream.of(
+                "1 - 1",
+                "var a = 1; var b = 2; a - b",
+                "2**32 - 2**32").forEach(code ->
+                assertWithJavet(
+                        () -> v8Runtime.getExecutor(code).executeInteger().doubleValue(),
+                        () -> context.eval(code).toJavaObject()));
     }
 
     @Test

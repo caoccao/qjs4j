@@ -533,7 +533,14 @@ public final class BytecodeCompiler {
             emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
         } else {
             // In function scope, check locals first
-            Integer localIndex = currentScope().getLocal(name);
+            // Search through all scopes in the stack, from innermost to outermost
+            Integer localIndex = null;
+            for (Scope scope : scopes) {
+                localIndex = scope.getLocal(name);
+                if (localIndex != null) {
+                    break;
+                }
+            }
 
             if (localIndex != null) {
                 emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);

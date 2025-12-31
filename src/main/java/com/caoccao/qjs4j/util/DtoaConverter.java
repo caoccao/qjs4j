@@ -106,6 +106,22 @@ public final class DtoaConverter {
             String result = Double.toString(value);
             // Convert uppercase 'E' to lowercase 'e' for JavaScript standard
             result = result.replace('E', 'e');
+            
+            // Clean up mantissa: remove trailing zeros and unnecessary decimal point
+            // Split by 'e' to get mantissa and exponent parts
+            int eIndex = result.indexOf('e');
+            if (eIndex != -1) {
+                String mantissa = result.substring(0, eIndex);
+                String exp = result.substring(eIndex);
+                
+                // Remove trailing zeros and decimal point from mantissa
+                if (mantissa.contains(".")) {
+                    mantissa = mantissa.replaceAll("0+$", "").replaceAll("\\.$", "");
+                }
+                
+                result = mantissa + exp;
+            }
+            
             return result;
         }
 
