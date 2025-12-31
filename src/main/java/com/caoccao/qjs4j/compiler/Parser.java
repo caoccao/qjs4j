@@ -256,15 +256,14 @@ public final class Parser {
         if (match(TokenType.ARROW)) {
             // Convert the parsed expression to arrow function parameters
             List<Identifier> params = new ArrayList<>();
-            
+
             if (left instanceof Identifier) {
                 // Single parameter without or with parentheses: x => x + 1  OR  (x) => x + 1
                 params.add((Identifier) left);
-            } else if (left instanceof ArrayExpression) {
+            } else if (left instanceof ArrayExpression arrayExpr) {
                 // ArrayExpression is used as a marker for:
                 // 1. Empty parameter list: () => expr
                 // 2. Multiple parameters: (x, y, z) => expr
-                ArrayExpression arrayExpr = (ArrayExpression) left;
                 if (arrayExpr.elements().isEmpty()) {
                     // Empty parameter list
                     // params stays empty
@@ -285,9 +284,9 @@ public final class Parser {
                 throw new RuntimeException("Unsupported arrow function parameters at line " +
                         currentToken.line() + ", column " + currentToken.column());
             }
-            
+
             advance(); // consume '=>'
-            
+
             // Parse body
             ASTNode body;
             if (match(TokenType.LBRACE)) {
@@ -296,7 +295,7 @@ public final class Parser {
                 // Expression body
                 body = parseAssignmentExpression();
             }
-            
+
             return new ArrowFunctionExpression(params, body, false, location);
         }
 
@@ -388,7 +387,12 @@ public final class Parser {
         Expression expr = parseMemberExpression();
 
         while (true) {
-            if (match(TokenType.LPAREN)) {
+            if (match(TokenType.TEMPLATE)) {
+                // Tagged template: expr`template`
+                SourceLocation location = getLocation();
+                TemplateLiteral template = parseTemplateLiteral();
+                expr = new TaggedTemplateExpression(expr, template, location);
+            } else if (match(TokenType.LPAREN)) {
                 SourceLocation location = getLocation();
                 advance();
                 List<Expression> args = new ArrayList<>();
@@ -853,6 +857,9 @@ public final class Parser {
                 advance();
                 yield new Literal(value, location);
             }
+            case TEMPLATE -> {
+                yield parseTemplateLiteral();
+            }
             case TRUE -> {
                 advance();
                 yield new Literal(true, location);
@@ -875,12 +882,12 @@ public final class Parser {
                 // 1. A grouped expression: (expr)
                 // 2. An arrow function parameter list: (params) => body
                 // We need to distinguish between them
-                
+
                 // Try to detect arrow function by looking ahead
                 // Patterns: () => or (id) => or (id, id, ...) =>
-                
+
                 advance(); // consume (
-                
+
                 // Check for empty parameter list: () which could be arrow function
                 if (match(TokenType.RPAREN)) {
                     // Could be () => ... 
@@ -888,19 +895,19 @@ public final class Parser {
                     advance();
                     yield new ArrayExpression(new ArrayList<>(), location);
                 }
-                
+
                 // Try to parse as potential arrow function parameters
                 // This is a simplified heuristic: if we see identifier(s) and commas, followed by ), =>
                 // then treat it as arrow function params
                 // Otherwise parse as expression
-                
+
                 // Check if next token is identifier - could be arrow function param
                 if (match(TokenType.IDENTIFIER)) {
                     // Could be (id) or (id, id, ...)
                     // Parse as parameter list tentatively
                     List<Identifier> potentialParams = new ArrayList<>();
                     potentialParams.add(parseIdentifier());
-                    
+
                     // Check for more parameters
                     while (match(TokenType.COMMA)) {
                         advance(); // consume comma
@@ -912,14 +919,14 @@ public final class Parser {
                         }
                         potentialParams.add(parseIdentifier());
                     }
-                    
+
                     expect(TokenType.RPAREN);
-                    
+
                     // Now check if followed by =>
                     // If yes, this is an arrow function parameter list
                     // If no, this was a grouped identifier (or sequence)
                     // For now, we'll create a custom marker for this case
-                    
+
                     // Return first param if single, or create a marker for multiple
                     if (potentialParams.size() == 1) {
                         yield potentialParams.get(0);
@@ -1122,6 +1129,71 @@ public final class Parser {
         return new SwitchStatement(discriminant, cases, location);
     }
 
+    private TemplateLiteral parseTemplateLiteral() {
+        SourceLocation location = getLocation();
+        String templateStr = currentToken.value();
+        advance();
+
+        // Parse template literal and extract parts and expressions
+        List<String> quasis = new ArrayList<>();
+        List<Expression> expressions = new ArrayList<>();
+
+        // Parse the template string to extract static parts and ${...} expressions
+        int pos = 0;
+        StringBuilder currentQuasi = new StringBuilder();
+
+        while (pos < templateStr.length()) {
+            if (pos + 1 < templateStr.length() && templateStr.charAt(pos) == '$' && templateStr.charAt(pos + 1) == '{') {
+                // Found ${...} - add current quasi and parse expression
+                quasis.add(processEscapeSequences(currentQuasi.toString()));
+                currentQuasi = new StringBuilder();
+
+                // Find matching }
+                pos += 2; // skip ${
+                int braceCount = 1;
+                StringBuilder exprStr = new StringBuilder();
+
+                while (pos < templateStr.length() && braceCount > 0) {
+                    char c = templateStr.charAt(pos);
+                    if (c == '{') {
+                        braceCount++;
+                    } else if (c == '}') {
+                        braceCount--;
+                        if (braceCount == 0) {
+                            break;
+                        }
+                    }
+                    exprStr.append(c);
+                    pos++;
+                }
+
+                // Parse the expression
+                Lexer exprLexer = new Lexer(exprStr.toString());
+                Parser exprParser = new Parser(exprLexer);
+                Expression expr = exprParser.parseExpression();
+                expressions.add(expr);
+
+                pos++; // skip closing }
+            } else if (templateStr.charAt(pos) == '\\' && pos + 1 < templateStr.length()) {
+                // Escape sequence - keep as-is for now, will be processed later
+                currentQuasi.append(templateStr.charAt(pos));
+                pos++;
+                if (pos < templateStr.length()) {
+                    currentQuasi.append(templateStr.charAt(pos));
+                    pos++;
+                }
+            } else {
+                currentQuasi.append(templateStr.charAt(pos));
+                pos++;
+            }
+        }
+
+        // Add the final quasi
+        quasis.add(processEscapeSequences(currentQuasi.toString()));
+
+        return new TemplateLiteral(quasis, expressions, location);
+    }
+
     private Statement parseThrowStatement() {
         SourceLocation location = getLocation();
         expect(TokenType.THROW);
@@ -1236,5 +1308,42 @@ public final class Parser {
 
     private Token peek() {
         return nextToken;
+    }
+
+    /**
+     * Process escape sequences in template literal strings.
+     * For cooked strings, escape sequences are processed.
+     * This handles common escape sequences like \\n, \\t, \\\\, etc.
+     */
+    private String processEscapeSequences(String str) {
+        StringBuilder result = new StringBuilder();
+        int i = 0;
+        while (i < str.length()) {
+            if (str.charAt(i) == '\\' && i + 1 < str.length()) {
+                char next = str.charAt(i + 1);
+                switch (next) {
+                    case 'n' -> result.append('\n');
+                    case 't' -> result.append('\t');
+                    case 'r' -> result.append('\r');
+                    case '\\' -> result.append('\\');
+                    case '\'' -> result.append('\'');
+                    case '"' -> result.append('"');
+                    case 'b' -> result.append('\b');
+                    case 'f' -> result.append('\f');
+                    case 'v' -> result.append('\u000B');
+                    case '0' -> result.append('\0');
+                    default -> {
+                        // For unrecognized escapes, keep the backslash
+                        result.append('\\');
+                        result.append(next);
+                    }
+                }
+                i += 2;
+            } else {
+                result.append(str.charAt(i));
+                i++;
+            }
+        }
+        return result.toString();
     }
 }

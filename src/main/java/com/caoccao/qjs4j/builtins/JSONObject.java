@@ -829,27 +829,27 @@ public final class JSONObject {
     }
 
     /**
-         * Context for JSON parsing with position tracking
-         */
-        private record ParseContext(String text) {
+     * Context for JSON parsing with position tracking
+     */
+    private record ParseContext(String text) {
 
         /**
-             * Get line and column from position (0-based position, 1-based line/column)
-             */
-            String getPositionInfo(int position) {
-                int line = 1;
-                int column = 1;
-                for (int i = 0; i < position && i < text.length(); i++) {
-                    if (text.charAt(i) == '\n') {
-                        line++;
-                        column = 1;
-                    } else {
-                        column++;
-                    }
+         * Get line and column from position (0-based position, 1-based line/column)
+         */
+        String getPositionInfo(int position) {
+            int line = 1;
+            int column = 1;
+            for (int i = 0; i < position && i < text.length(); i++) {
+                if (text.charAt(i) == '\n') {
+                    line++;
+                    column = 1;
+                } else {
+                    column++;
                 }
-                return "at position " + position + " (line " + line + " column " + column + ")";
             }
+            return "at position " + position + " (line " + line + " column " + column + ")";
         }
+    }
 
     private static class ParseResult {
         int endIndex;

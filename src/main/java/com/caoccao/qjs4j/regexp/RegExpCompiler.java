@@ -375,7 +375,7 @@ public final class RegExpCompiler {
                         break;
                     }
                 }
-                
+
                 if (groupNum >= captureCount) {
                     // Invalid back reference - treat as literal
                     compileLiteralChar(context, ch);
@@ -506,6 +506,20 @@ public final class RegExpCompiler {
         context.pos++; // Skip ')'
     }
 
+    private void compileLiteralChar(CompileContext context, int ch) {
+        if (ch <= 0xFFFF) {
+            context.buffer.appendU8(context.isIgnoreCase() ?
+                    RegExpOpcode.CHAR_I.getCode() :
+                    RegExpOpcode.CHAR.getCode());
+            context.buffer.appendU16(ch);
+        } else {
+            context.buffer.appendU8(context.isIgnoreCase() ?
+                    RegExpOpcode.CHAR32_I.getCode() :
+                    RegExpOpcode.CHAR32.getCode());
+            context.buffer.appendU32(ch);
+        }
+    }
+
     private void compileLookahead(CompileContext context, boolean isNegative) {
         // (?=...) positive lookahead or (?!...) negative lookahead
         int lookaheadStart = context.buffer.size();
@@ -532,21 +546,6 @@ public final class RegExpCompiler {
             throw new RegExpSyntaxException("Unclosed lookahead");
         }
         context.pos++; // Skip ')'
-    }
-
-
-    private void compileLiteralChar(CompileContext context, int ch) {
-        if (ch <= 0xFFFF) {
-            context.buffer.appendU8(context.isIgnoreCase() ?
-                    RegExpOpcode.CHAR_I.getCode() :
-                    RegExpOpcode.CHAR.getCode());
-            context.buffer.appendU16(ch);
-        } else {
-            context.buffer.appendU8(context.isIgnoreCase() ?
-                    RegExpOpcode.CHAR32_I.getCode() :
-                    RegExpOpcode.CHAR32.getCode());
-            context.buffer.appendU32(ch);
-        }
     }
 
     private void compilePattern(CompileContext context) {
@@ -646,7 +645,7 @@ public final class RegExpCompiler {
             context.buffer.append(atomCode);
             int loopStart = context.buffer.size() - atomSize;
             context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_GOTO_FIRST.getCode() :
-                                             RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
+                    RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
             int offset = loopStart - (context.buffer.size() + 4);
             context.buffer.appendU32(offset);
         } else {

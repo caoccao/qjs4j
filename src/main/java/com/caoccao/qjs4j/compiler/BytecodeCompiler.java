@@ -336,6 +336,10 @@ public final class BytecodeCompiler {
             compileArrayExpression(arrayExpr);
         } else if (expr instanceof ObjectExpression objExpr) {
             compileObjectExpression(objExpr);
+        } else if (expr instanceof TemplateLiteral templateLiteral) {
+            compileTemplateLiteral(templateLiteral);
+        } else if (expr instanceof TaggedTemplateExpression taggedTemplate) {
+            compileTaggedTemplateExpression(taggedTemplate);
         }
     }
 
@@ -885,9 +889,166 @@ public final class BytecodeCompiler {
         loopStack.pop();
     }
 
+    private void compileTaggedTemplateExpression(TaggedTemplateExpression taggedTemplate) {
+        // Tagged template: tag`template`
+        // The tag function receives:
+        // 1. A template object (array-like) with cooked strings and a 'raw' property
+        // 2. The values of the substitutions as additional arguments
+
+        TemplateLiteral template = taggedTemplate.quasi();
+        List<String> quasis = template.quasis();
+        List<Expression> expressions = template.expressions();
+
+        // Check if this is a method call (tag is a member expression)
+        if (taggedTemplate.tag() instanceof MemberExpression memberExpr) {
+            // For method calls: obj.method`template`
+            // We need to preserve obj as the 'this' value
+
+            // Push object (receiver)
+            compileExpression(memberExpr.object());
+
+            // Duplicate it (one copy for 'this', one for property access)
+            emitter.emitOpcode(Opcode.DUP);
+
+            // Get the method
+            if (memberExpr.computed()) {
+                // obj[expr]
+                compileExpression(memberExpr.property());
+                emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+            } else if (memberExpr.property() instanceof Identifier propId) {
+                // obj.prop
+                emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+            }
+
+            // Now stack is: receiver, method
+            // Swap so method is on top: method, receiver
+            emitter.emitOpcode(Opcode.SWAP);
+        } else {
+            // Regular function call: func`template`
+            // Compile the tag function first (will be the callee)
+            compileExpression(taggedTemplate.tag());
+
+            // Add undefined as receiver/thisArg
+            emitter.emitOpcode(Opcode.UNDEFINED);
+        }
+
+        // Stack is now: function, receiver
+
+        // Create the template array (with cooked strings)
+        emitter.emitOpcode(Opcode.ARRAY_NEW);
+        for (String quasi : quasis) {
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
+            emitter.emitOpcode(Opcode.PUSH_ARRAY);
+        }
+        // Stack: function, receiver, template_array
+        
+        // Duplicate template_array because we'll need it after setting the raw property
+        emitter.emitOpcode(Opcode.DUP);
+        // Stack: function, receiver, template_array, template_array
+
+        // Create the raw array
+        emitter.emitOpcode(Opcode.ARRAY_NEW);
+        for (String quasi : quasis) {
+            // For raw strings, use the same quasi (we already have the raw form)
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
+            emitter.emitOpcode(Opcode.PUSH_ARRAY);
+        }
+        // Stack: function, receiver, template_array, template_array, raw_array
+
+        // Set the raw property: template_array.raw = raw_array
+        // PUT_FIELD expects: value (raw_array) on stack, object (template_array) on stack top-1
+        // We have: template_array at top-2, raw_array at top
+        // SWAP them: function, receiver, template_array, raw_array, template_array
+        emitter.emitOpcode(Opcode.SWAP);
+        // Now PUT_FIELD: pops template_array (object), peeks raw_array (value)
+        emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "raw");
+        // Stack: function, receiver, template_array, raw_array (raw_array left as result)
+        
+        // Drop the raw_array
+        emitter.emitOpcode(Opcode.DROP);
+        // Stack: function, receiver, template_array
+
+        // Add substitution expressions as additional arguments
+        for (Expression expr : expressions) {
+            compileExpression(expr);
+        }
+
+        // Call the tag function
+        // argCount = 1 (template array) + number of expressions
+        int argCount = 1 + expressions.size();
+        emitter.emitOpcode(Opcode.CALL);
+        emitter.emitU32(argCount);
+    }
+
+    private void compileTemplateLiteral(TemplateLiteral templateLiteral) {
+        // For untagged template literals, concatenate strings and expressions
+        // Example: `Hello ${name}!` becomes "Hello " + name + "!"
+
+        List<String> quasis = templateLiteral.quasis();
+        List<Expression> expressions = templateLiteral.expressions();
+
+        if (quasis.isEmpty()) {
+            // Empty template literal
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(""));
+            return;
+        }
+
+        // Start with the first quasi
+        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasis.get(0)));
+
+        // Add each expression and subsequent quasi using string concatenation (ADD)
+        for (int i = 0; i < expressions.size(); i++) {
+            // Compile the expression
+            compileExpression(expressions.get(i));
+
+            // Concatenate using ADD opcode (JavaScript + operator)
+            emitter.emitOpcode(Opcode.ADD);
+
+            // Add the next quasi if it exists
+            if (i + 1 < quasis.size()) {
+                String quasi = quasis.get(i + 1);
+                if (!quasi.isEmpty()) {
+                    emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
+                    emitter.emitOpcode(Opcode.ADD);
+                }
+            }
+        }
+    }
+
     private void compileThrowStatement(ThrowStatement throwStmt) {
         compileExpression(throwStmt.argument());
         emitter.emitOpcode(Opcode.THROW);
+    }
+
+    /**
+     * Compile a block for try/catch/finally, preserving the value of the last expression.
+     */
+    private void compileTryFinallyBlock(BlockStatement block) {
+        enterScope();
+        List<Statement> body = block.body();
+        for (int i = 0; i < body.size(); i++) {
+            boolean isLast = (i == body.size() - 1);
+            Statement stmt = body.get(i);
+
+            if (stmt instanceof ExpressionStatement exprStmt) {
+                compileExpression(exprStmt.expression());
+                // Keep the value on stack for the last expression, drop otherwise
+                if (!isLast) {
+                    emitter.emitOpcode(Opcode.DROP);
+                }
+            } else {
+                compileStatement(stmt, false);
+                // If last statement is not an expression, push undefined
+                if (isLast) {
+                    emitter.emitOpcode(Opcode.UNDEFINED);
+                }
+            }
+        }
+        // If block is empty, push undefined
+        if (body.isEmpty()) {
+            emitter.emitOpcode(Opcode.UNDEFINED);
+        }
+        exitScope();
     }
 
     private void compileTryStatement(TryStatement tryStmt) {
@@ -916,17 +1077,17 @@ public final class BytecodeCompiler {
                 // Catch block creates a local scope - variables should use GET_LOCAL
                 boolean savedGlobalScope = inGlobalScope;
                 inGlobalScope = false;
-                
+
                 String paramName = handler.param().name();
                 int localIndex = currentScope().declareLocal(paramName);
                 emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
-                
+
                 // Compile catch body in the SAME scope as the parameter
                 List<Statement> body = handler.body().body();
                 for (int i = 0; i < body.size(); i++) {
                     boolean isLast = (i == body.size() - 1);
                     Statement stmt = body.get(i);
-                    
+
                     if (stmt instanceof ExpressionStatement exprStmt) {
                         compileExpression(exprStmt.expression());
                         // Keep the value on stack for the last expression, drop otherwise
@@ -945,7 +1106,7 @@ public final class BytecodeCompiler {
                 if (body.isEmpty()) {
                     emitter.emitOpcode(Opcode.UNDEFINED);
                 }
-                
+
                 inGlobalScope = savedGlobalScope;
                 exitScope();
             } else {
@@ -961,37 +1122,6 @@ public final class BytecodeCompiler {
         if (tryStmt.finalizer() != null) {
             compileTryFinallyBlock(tryStmt.finalizer());
         }
-    }
-    
-    /**
-     * Compile a block for try/catch/finally, preserving the value of the last expression.
-     */
-    private void compileTryFinallyBlock(BlockStatement block) {
-        enterScope();
-        List<Statement> body = block.body();
-        for (int i = 0; i < body.size(); i++) {
-            boolean isLast = (i == body.size() - 1);
-            Statement stmt = body.get(i);
-            
-            if (stmt instanceof ExpressionStatement exprStmt) {
-                compileExpression(exprStmt.expression());
-                // Keep the value on stack for the last expression, drop otherwise
-                if (!isLast) {
-                    emitter.emitOpcode(Opcode.DROP);
-                }
-            } else {
-                compileStatement(stmt, false);
-                // If last statement is not an expression, push undefined
-                if (isLast) {
-                    emitter.emitOpcode(Opcode.UNDEFINED);
-                }
-            }
-        }
-        // If block is empty, push undefined
-        if (body.isEmpty()) {
-            emitter.emitOpcode(Opcode.UNDEFINED);
-        }
-        exitScope();
     }
 
     private void compileUnaryExpression(UnaryExpression unaryExpr) {
@@ -1039,6 +1169,8 @@ public final class BytecodeCompiler {
 
         emitter.emitOpcode(op);
     }
+
+    // ==================== Scope Management ====================
 
     private void compileVariableDeclaration(VariableDeclaration varDecl) {
         for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
@@ -1090,8 +1222,6 @@ public final class BytecodeCompiler {
         loopStack.pop();
     }
 
-    // ==================== Scope Management ====================
-
     private Scope currentScope() {
         if (scopes.isEmpty()) {
             throw new CompilerException("No scope available");
@@ -1106,13 +1236,13 @@ public final class BytecodeCompiler {
 
     private void exitScope() {
         Scope exitingScope = scopes.pop();
-        
+
         // Track the maximum local count reached
         int localCount = exitingScope.getLocalCount();
         if (localCount > maxLocalCount) {
             maxLocalCount = localCount;
         }
-        
+
         // Update parent scope's nextLocalIndex to reflect locals allocated in child scope
         if (!scopes.isEmpty()) {
             Scope parentScope = currentScope();

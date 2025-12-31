@@ -34,7 +34,7 @@ public class JSIterator extends JSObject {
         super();
         this.iteratorFunction = iteratorFunction;
         this.exhausted = false;
-        
+
         // Set up 'next' method as a property (required by iterator protocol)
         JSNativeFunction nextMethod = new JSNativeFunction("next", 0, (context, thisArg, args) -> {
             if (thisArg instanceof JSIterator iter) {

@@ -577,17 +577,17 @@ public final class Lexer {
     }
 
     private Token scanTemplate(int startPos, int startLine, int startColumn) {
+        // Store the complete template literal including ${...} expressions
+        // The parser will handle breaking it down into parts and expressions
         StringBuilder value = new StringBuilder();
 
         while (!isAtEnd() && peek() != '`') {
             if (peek() == '\\') {
-                advance();
+                // Handle escape sequences - store them as-is for raw strings
+                value.append(advance());
                 if (!isAtEnd()) {
                     value.append(advance());
                 }
-            } else if (peek() == '$' && position + 1 < source.length() && source.charAt(position + 1) == '{') {
-                // Template interpolation - for now, just include it
-                value.append(advance());
             } else {
                 value.append(advance());
             }

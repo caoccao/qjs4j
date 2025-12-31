@@ -220,7 +220,7 @@ public final class RegExpEngine {
                     // Copy capture state
                     System.arraycopy(executionContext.captureStarts, 0, lookaheadContext.captureStarts, 0, executionContext.captureCount);
                     System.arraycopy(executionContext.captureEnds, 0, lookaheadContext.captureEnds, 0, executionContext.captureCount);
-                    
+
                     boolean matched = executeLookahead(lookaheadContext, pc + 5);
                     // Don't restore position - lookahead doesn't consume
                     if (!matched) {
@@ -253,7 +253,7 @@ public final class RegExpEngine {
                     // Copy capture state
                     System.arraycopy(executionContext.captureStarts, 0, lookaheadContext.captureStarts, 0, executionContext.captureCount);
                     System.arraycopy(executionContext.captureEnds, 0, lookaheadContext.captureEnds, 0, executionContext.captureCount);
-                    
+
                     boolean matched = executeLookahead(lookaheadContext, pc + 5);
                     // Don't restore position - lookahead doesn't consume
                     if (matched) {
@@ -504,7 +504,7 @@ public final class RegExpEngine {
                     byte[] tempBytecode = new byte[bc.length - startPc + 1];
                     System.arraycopy(bc, startPc, tempBytecode, 0, bc.length - startPc);
                     tempBytecode[tempBytecode.length - 1] = (byte) RegExpOpcode.MATCH.getCode();
-                    
+
                     ExecutionContext tempContext = new ExecutionContext(
                             executionContext.input,
                             tempBytecode,
@@ -642,11 +642,62 @@ public final class RegExpEngine {
             return new MatchResult(true, startIndex, endIndex, captures, indices);
         }
 
+        private boolean isWordChar(int ch, boolean ignoreCase) {
+            // Word characters: [a-zA-Z0-9_]
+            if (ch < 256) {
+                return (ch >= 'a' && ch <= 'z') ||
+                        (ch >= 'A' && ch <= 'Z') ||
+                        (ch >= '0' && ch <= '9') ||
+                        ch == '_';
+            }
+            // For Unicode mode with ignore case, handle special characters
+            // 0x017f: Latin Small Letter Long S
+            // 0x212a: Kelvin Sign
+            return ignoreCase && (ch == 0x017f || ch == 0x212a);
+        }
+
         boolean matchAny() {
             if (pos >= codePoints.length) {
                 return false;
             }
             pos++;
+            return true;
+        }
+
+        boolean matchBackReference(int groupNum, boolean ignoreCase) {
+            // Check if the capture group has been captured
+            if (groupNum >= captureCount || captureStarts[groupNum] == -1 || captureEnds[groupNum] == -1) {
+                // Group not captured yet - match empty string (succeeds)
+                return true;
+            }
+
+            int refStart = captureStarts[groupNum];
+            int refEnd = captureEnds[groupNum];
+
+            // Check if we have enough characters left to match
+            int refLen = refEnd - refStart;
+            if (pos + refLen > codePoints.length) {
+                return false;
+            }
+
+            // Match the captured text
+            for (int i = 0; i < refLen; i++) {
+                int refCh = codePoints[refStart + i];
+                int currCh = codePoints[pos + i];
+
+                if (ignoreCase) {
+                    if (Character.toLowerCase(refCh) != Character.toLowerCase(currCh)) {
+                        return false;
+                    }
+                } else {
+                    if (refCh != currCh) {
+                        return false;
+                    }
+                }
+            }
+
+            // Advance position by the matched length
+            pos += refLen;
             return true;
         }
 
@@ -710,137 +761,6 @@ public final class RegExpEngine {
             return false;
         }
 
-        boolean matchNotSpace() {
-            if (pos >= codePoints.length) {
-                return false;
-            }
-            int ch = codePoints[pos];
-            // JavaScript whitespace: space, tab, line terminators, Unicode Zs category
-            if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' ||
-                    ch == 0x0B || ch == 0x00A0 || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029 ||
-                    Character.getType(ch) == Character.SPACE_SEPARATOR) {
-                return false;
-            }
-            pos++;
-            return true;
-        }
-
-        boolean matchWordBoundary(boolean ignoreCase) {
-            // Word boundary: transition between word and non-word character
-            // Check character before current position
-            boolean prevIsWord;
-            if (pos == 0) {
-                prevIsWord = false;
-            } else {
-                int prevCh = codePoints[pos - 1];
-                prevIsWord = isWordChar(prevCh, ignoreCase);
-            }
-
-            // Check character at current position
-            boolean currIsWord;
-            if (pos >= codePoints.length) {
-                currIsWord = false;
-            } else {
-                int currCh = codePoints[pos];
-                currIsWord = isWordChar(currCh, ignoreCase);
-            }
-
-            // Boundary exists if one is word char and the other is not
-            return prevIsWord != currIsWord;
-        }
-
-        boolean matchNotWordBoundary(boolean ignoreCase) {
-            return !matchWordBoundary(ignoreCase);
-        }
-
-        private boolean isWordChar(int ch, boolean ignoreCase) {
-            // Word characters: [a-zA-Z0-9_]
-            if (ch < 256) {
-                return (ch >= 'a' && ch <= 'z') ||
-                       (ch >= 'A' && ch <= 'Z') ||
-                       (ch >= '0' && ch <= '9') ||
-                       ch == '_';
-            }
-            // For Unicode mode with ignore case, handle special characters
-            // 0x017f: Latin Small Letter Long S
-            // 0x212a: Kelvin Sign
-            if (ignoreCase && (ch == 0x017f || ch == 0x212a)) {
-                return true;
-            }
-            return false;
-        }
-
-        boolean matchBackReference(int groupNum, boolean ignoreCase) {
-            // Check if the capture group has been captured
-            if (groupNum >= captureCount || captureStarts[groupNum] == -1 || captureEnds[groupNum] == -1) {
-                // Group not captured yet - match empty string (succeeds)
-                return true;
-            }
-
-            int refStart = captureStarts[groupNum];
-            int refEnd = captureEnds[groupNum];
-
-            // Check if we have enough characters left to match
-            int refLen = refEnd - refStart;
-            if (pos + refLen > codePoints.length) {
-                return false;
-            }
-
-            // Match the captured text
-            for (int i = 0; i < refLen; i++) {
-                int refCh = codePoints[refStart + i];
-                int currCh = codePoints[pos + i];
-
-                if (ignoreCase) {
-                    if (Character.toLowerCase(refCh) != Character.toLowerCase(currCh)) {
-                        return false;
-                    }
-                } else {
-                    if (refCh != currCh) {
-                        return false;
-                    }
-                }
-            }
-
-            // Advance position by the matched length
-            pos += refLen;
-            return true;
-        }
-
-        boolean matchRange(byte[] bc, int offset, int len, boolean ignoreCase) {
-            if (pos >= codePoints.length) {
-                return false;
-            }
-            int ch = codePoints[pos];
-
-            // Read number of ranges
-            int numRanges = readU16(bc, offset);
-            offset += 2;
-
-            // Check if character is in any of the ranges
-            for (int i = 0; i < numRanges; i++) {
-                int start = readU32(bc, offset);
-                int end = readU32(bc, offset + 4);
-                offset += 8;
-
-                if (ignoreCase) {
-                    int chLower = Character.toLowerCase(ch);
-                    int startLower = Character.toLowerCase(start);
-                    int endLower = Character.toLowerCase(end);
-                    if (chLower >= startLower && chLower <= endLower) {
-                        pos++;
-                        return true;
-                    }
-                } else {
-                    if (ch >= start && ch <= end) {
-                        pos++;
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
         boolean matchNotRange(byte[] bc, int offset, int len, boolean ignoreCase) {
             if (pos >= codePoints.length) {
                 return false;
@@ -877,6 +797,59 @@ public final class RegExpEngine {
             return true;
         }
 
+        boolean matchNotSpace() {
+            if (pos >= codePoints.length) {
+                return false;
+            }
+            int ch = codePoints[pos];
+            // JavaScript whitespace: space, tab, line terminators, Unicode Zs category
+            if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' ||
+                    ch == 0x0B || ch == 0x00A0 || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029 ||
+                    Character.getType(ch) == Character.SPACE_SEPARATOR) {
+                return false;
+            }
+            pos++;
+            return true;
+        }
+
+        boolean matchNotWordBoundary(boolean ignoreCase) {
+            return !matchWordBoundary(ignoreCase);
+        }
+
+        boolean matchRange(byte[] bc, int offset, int len, boolean ignoreCase) {
+            if (pos >= codePoints.length) {
+                return false;
+            }
+            int ch = codePoints[pos];
+
+            // Read number of ranges
+            int numRanges = readU16(bc, offset);
+            offset += 2;
+
+            // Check if character is in any of the ranges
+            for (int i = 0; i < numRanges; i++) {
+                int start = readU32(bc, offset);
+                int end = readU32(bc, offset + 4);
+                offset += 8;
+
+                if (ignoreCase) {
+                    int chLower = Character.toLowerCase(ch);
+                    int startLower = Character.toLowerCase(start);
+                    int endLower = Character.toLowerCase(end);
+                    if (chLower >= startLower && chLower <= endLower) {
+                        pos++;
+                        return true;
+                    }
+                } else {
+                    if (ch >= start && ch <= end) {
+                        pos++;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         boolean matchSpace() {
             if (pos >= codePoints.length) {
                 return false;
@@ -890,6 +863,30 @@ public final class RegExpEngine {
                 return true;
             }
             return false;
+        }
+
+        boolean matchWordBoundary(boolean ignoreCase) {
+            // Word boundary: transition between word and non-word character
+            // Check character before current position
+            boolean prevIsWord;
+            if (pos == 0) {
+                prevIsWord = false;
+            } else {
+                int prevCh = codePoints[pos - 1];
+                prevIsWord = isWordChar(prevCh, ignoreCase);
+            }
+
+            // Check character at current position
+            boolean currIsWord;
+            if (pos >= codePoints.length) {
+                currIsWord = false;
+            } else {
+                int currCh = codePoints[pos];
+                currIsWord = isWordChar(currCh, ignoreCase);
+            }
+
+            // Boundary exists if one is word char and the other is not
+            return prevIsWord != currIsWord;
         }
 
         private int readU16(byte[] bc, int offset) {

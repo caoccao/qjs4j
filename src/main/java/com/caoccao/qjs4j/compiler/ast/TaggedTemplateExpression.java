@@ -17,12 +17,20 @@
 package com.caoccao.qjs4j.compiler.ast;
 
 /**
- * Base sealed interface for all expression nodes.
+ * Tagged template expression.
+ * Represents tagged template literals like String.raw`hello`.
+ *
+ * @param tag      The tag function expression
+ * @param quasi    The template literal
+ * @param location Source location
  */
-public sealed interface Expression extends ASTNode permits
-        Literal, Identifier, BinaryExpression, UnaryExpression,
-        AssignmentExpression, ConditionalExpression, CallExpression,
-        MemberExpression, NewExpression, FunctionExpression,
-        ArrowFunctionExpression, ArrayExpression, ObjectExpression, AwaitExpression,
-        TemplateLiteral, TaggedTemplateExpression {
+public record TaggedTemplateExpression(
+        Expression tag,
+        TemplateLiteral quasi,
+        SourceLocation location
+) implements Expression {
+    @Override
+    public SourceLocation getLocation() {
+        return location;
+    }
 }

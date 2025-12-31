@@ -92,13 +92,13 @@ public final class GlobalObject {
             case JSAggregateError.NAME -> new JSAggregateError(context);
             default -> new JSError(context);
         };
-        
+
         errorPrototype.set("toString", new JSNativeFunction("toString", 0, GlobalObject::errorToString));
 
         // For now, Error constructor is a placeholder (like Array, String, etc.)
         JSObject errorConstructor = new JSObject();
         errorConstructor.set("prototype", errorPrototype);
-        
+
         // Set constructor type based on error name
         ConstructorType constructorType = switch (errorName) {
             case JSTypeError.NAME -> ConstructorType.TYPE_ERROR;
@@ -111,7 +111,7 @@ public final class GlobalObject {
             default -> ConstructorType.ERROR;
         };
         errorConstructor.setConstructorType(constructorType);
-        
+
         // Store error name for constructor use
         errorConstructor.set("[[ErrorName]]", new JSString(errorName));
 
@@ -1104,6 +1104,11 @@ public final class GlobalObject {
         stringConstructor.setConstructorType(ConstructorType.STRING); // Mark as String constructor
         stringPrototype.set("constructor", stringConstructor);
 
+        // Add static methods
+        stringConstructor.set("fromCharCode", new JSNativeFunction("fromCharCode", 1, StringConstructor::fromCharCode));
+        stringConstructor.set("fromCodePoint", new JSNativeFunction("fromCodePoint", 1, StringConstructor::fromCodePoint));
+        stringConstructor.set("raw", new JSNativeFunction("raw", 1, StringConstructor::raw));
+
         global.set("String", stringConstructor);
     }
 
@@ -1120,7 +1125,7 @@ public final class GlobalObject {
                 objectPrototype = (JSObject) objProto;
             }
         }
-        
+
         // Create Symbol.prototype
         JSObject symbolPrototype = new JSObject(objectPrototype);
         JSNativeFunction symbolToString = new JSNativeFunction("toString", 0, SymbolPrototype::toString);
