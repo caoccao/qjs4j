@@ -941,7 +941,7 @@ public final class BytecodeCompiler {
             emitter.emitOpcode(Opcode.PUSH_ARRAY);
         }
         // Stack: function, receiver, template_array
-        
+
         // Duplicate template_array because we'll need it after setting the raw property
         emitter.emitOpcode(Opcode.DUP);
         // Stack: function, receiver, template_array, template_array
@@ -963,7 +963,7 @@ public final class BytecodeCompiler {
         // Now PUT_FIELD: pops template_array (object), peeks raw_array (value)
         emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "raw");
         // Stack: function, receiver, template_array, raw_array (raw_array left as result)
-        
+
         // Drop the raw_array
         emitter.emitOpcode(Opcode.DROP);
         // Stack: function, receiver, template_array
@@ -977,7 +977,7 @@ public final class BytecodeCompiler {
         // argCount = 1 (template array) + number of expressions
         int argCount = 1 + expressions.size();
         emitter.emitOpcode(Opcode.CALL);
-        emitter.emitU32(argCount);
+        emitter.emitU16(argCount);
     }
 
     private void compileTemplateLiteral(TemplateLiteral templateLiteral) {

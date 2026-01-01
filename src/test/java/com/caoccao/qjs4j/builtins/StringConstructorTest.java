@@ -332,9 +332,9 @@ public class StringConstructorTest extends BaseJavetTest {
     @Test
     public void testTaggedTemplateLiterals() {
         // Test String.raw with template literal
-        JSValue result1 = context.eval("String.raw`Hello\\nWorld`");
+        JSValue result1 = context.eval("String.raw`Hello\nWorld`");
         assertThat(result1).isInstanceOfSatisfying(JSString.class, jsStr ->
-                assertThat(jsStr.value()).isEqualTo("Hello\\nWorld"));
+                assertThat(jsStr.value()).isEqualTo("Hello\nWorld"));
 
         // Test String.raw with expressions
         JSValue result2 = context.eval("String.raw`Hello ${'beautiful'} World`");
@@ -346,12 +346,11 @@ public class StringConstructorTest extends BaseJavetTest {
         assertThat(result3).isInstanceOfSatisfying(JSString.class, jsStr ->
                 assertThat(jsStr.value()).isEqualTo("1+2=3"));
 
-        assertWithJavet(
-                () -> v8Runtime.getExecutor("String.raw`Hello\\nWorld`").executeString(),
-                () -> context.eval("String.raw`Hello\\nWorld`").toJavaObject());
-        assertWithJavet(
-                () -> v8Runtime.getExecutor("String.raw`Value: ${42}`").executeString(),
-                () -> context.eval("String.raw`Value: ${42}`").toJavaObject());
+        Stream.of("String.raw`Hello\nWorld`", "String.raw`Value: ${42}`")
+                .forEach(code ->
+                        assertWithJavet(
+                                () -> v8Runtime.getExecutor(code).executeString(),
+                                () -> context.eval(code).toJavaObject()));
     }
 
     @Test
