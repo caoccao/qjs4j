@@ -18,8 +18,10 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -64,11 +66,15 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertStringWithJavet("var target = {a: 1}; Object.assign(target, {b: 2}, {c: 3}); JSON.stringify(target)");
     }
 
-    @Disabled
     @Test
     public void testBuiltInObjects() {
-        assertObjectWithJavet(
-                "Object.getOwnPropertyNames(globalThis).sort()");
+        Set<String> ignoredProperties = Set.of("AsyncDisposableStack", "DisposableStack", "WebAssembly");
+        String code = "Object.getOwnPropertyNames(globalThis).sort()";
+        assertWithJavet(
+                () -> ((List<?>) v8Runtime.getExecutor(code).executeObject()).stream()
+                        .filter(property -> !ignoredProperties.contains(property.toString()))
+                        .toList(),
+                () -> context.eval(code).toJavaObject());
     }
 
     @Test

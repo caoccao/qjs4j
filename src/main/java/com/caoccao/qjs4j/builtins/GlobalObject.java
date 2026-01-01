@@ -244,6 +244,42 @@ public final class GlobalObject {
     }
 
     /**
+     * escape(string)
+     * Deprecated function that encodes a string for use in a URL.
+     * Encodes all characters except: A-Z a-z 0-9 @ * _ + - . /
+     * Uses %XX for characters < 256 and %uXXXX for characters >= 256.
+     *
+     * @see <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/escape">MDN escape</a>
+     */
+    public static JSValue escape(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSValue stringValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        String str = JSTypeConversions.toString(context, stringValue).value();
+
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+
+            // Check if character should not be escaped
+            if (isUnescaped(c)) {
+                result.append(c);
+            } else {
+                // Escape the character
+                if (c < 256) {
+                    // Use %XX format for characters < 256
+                    result.append('%');
+                    result.append(String.format("%02X", (int) c));
+                } else {
+                    // Use %uXXXX format for characters >= 256
+                    result.append("%u");
+                    result.append(String.format("%04X", (int) c));
+                }
+            }
+        }
+
+        return new JSString(result.toString());
+    }
+
+    /**
      * eval(code)
      * Evaluate JavaScript code in the current context.
      *
@@ -307,13 +343,14 @@ public final class GlobalObject {
         global.set("isNaN", new JSNativeFunction("isNaN", 1, GlobalObject::isNaN));
         global.set("isFinite", new JSNativeFunction("isFinite", 1, GlobalObject::isFinite));
         global.set("eval", new JSNativeFunction("eval", 1, GlobalObject::eval));
-        global.set("queueMicrotask", new JSNativeFunction("queueMicrotask", 1, GlobalObject::queueMicrotask));
 
         // URI handling functions
         global.set("encodeURI", new JSNativeFunction("encodeURI", 1, GlobalObject::encodeURI));
         global.set("decodeURI", new JSNativeFunction("decodeURI", 1, GlobalObject::decodeURI));
         global.set("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, GlobalObject::encodeURIComponent));
         global.set("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, GlobalObject::decodeURIComponent));
+        global.set("escape", new JSNativeFunction("escape", 1, GlobalObject::escape));
+        global.set("unescape", new JSNativeFunction("unescape", 1, GlobalObject::unescape));
 
         // Console object for debugging
         initializeConsoleObject(context, global);
@@ -837,8 +874,6 @@ public final class GlobalObject {
         global.set("Map", mapConstructor);
     }
 
-    // Global function implementations
-
     /**
      * Initialize Math object.
      */
@@ -924,6 +959,8 @@ public final class GlobalObject {
 
         global.set("Number", numberConstructor);
     }
+
+    // Global function implementations
 
     /**
      * Initialize Object constructor and static methods.
@@ -1477,6 +1514,18 @@ public final class GlobalObject {
     }
 
     /**
+     * Helper function to check if a character should not be escaped.
+     * Returns true for: A-Z a-z 0-9 @ * _ + - . /
+     */
+    private static boolean isUnescaped(char c) {
+        return (c >= 'A' && c <= 'Z') ||
+                (c >= 'a' && c <= 'z') ||
+                (c >= '0' && c <= '9') ||
+                c == '@' || c == '*' || c == '_' ||
+                c == '+' || c == '-' || c == '.' || c == '/';
+    }
+
+    /**
      * parseFloat(string)
      * Parse a string and return a floating point number.
      *
@@ -1619,27 +1668,53 @@ public final class GlobalObject {
         return new JSNumber(sign * result);
     }
 
+
+
     /**
-     * queueMicrotask(callback)
-     * Queues a microtask to be executed.
+     * unescape(string)
+     * Deprecated function that decodes a string encoded by escape().
+     * Decodes %XX and %uXXXX sequences.
      *
-     * @see <a href="https://html.spec.whatwg.org/multipage/timers-and-user-prompts.html#microtask-queuing">HTML queueMicrotask</a>
+     * @see <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/unescape">MDN unescape</a>
      */
-    public static JSValue queueMicrotask(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
-            return context.throwTypeError("queueMicrotask requires a function argument");
+    public static JSValue unescape(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSValue stringValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        String str = JSTypeConversions.toString(context, stringValue).value();
+
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+
+            if (c == '%') {
+                // Try to parse %uXXXX format
+                if (i + 6 <= str.length() && str.charAt(i + 1) == 'u') {
+                    try {
+                        int codePoint = Integer.parseInt(str.substring(i + 2, i + 6), 16);
+                        result.append((char) codePoint);
+                        i += 5; // Skip the next 5 characters (uXXXX)
+                        continue;
+                    } catch (NumberFormatException e) {
+                        // Not a valid %uXXXX sequence, treat as literal
+                    }
+                }
+
+                // Try to parse %XX format
+                if (i + 3 <= str.length()) {
+                    try {
+                        int codePoint = Integer.parseInt(str.substring(i + 1, i + 3), 16);
+                        result.append((char) codePoint);
+                        i += 2; // Skip the next 2 characters (XX)
+                        continue;
+                    } catch (NumberFormatException e) {
+                        // Not a valid %XX sequence, treat as literal
+                    }
+                }
+            }
+
+            // Not an escape sequence, append as is
+            result.append(c);
         }
 
-        // Enqueue the callback as a microtask
-        context.enqueueMicrotask(() -> {
-            try {
-                callback.call(context, JSUndefined.INSTANCE, new JSValue[0]);
-            } catch (Exception e) {
-                // In a full implementation, this would trigger the unhandled rejection handler
-                System.err.println("Microtask error: " + e.getMessage());
-            }
-        });
-
-        return JSUndefined.INSTANCE;
+        return new JSString(result.toString());
     }
 }
