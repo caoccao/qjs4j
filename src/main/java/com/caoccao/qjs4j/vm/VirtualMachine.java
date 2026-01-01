@@ -538,7 +538,7 @@ public final class VirtualMachine {
                         pc += op.getSize();
                     }
                     case ARRAY_NEW -> {
-                        JSArray array = new JSArray();
+                        JSArray array = context.createJSArray();
                         // Set prototype to Array.prototype
                         JSObject arrayPrototype = (JSObject) context.getGlobalObject().get("Array");
                         if (arrayPrototype instanceof JSObject) {
@@ -1787,7 +1787,7 @@ public final class VirtualMachine {
         }
 
         // Create arguments array
-        JSArray argArray = new JSArray();
+        JSArray argArray = context.createJSArray(0, args.length);
         for (JSValue arg : args) {
             argArray.push(arg);
         }
@@ -1863,7 +1863,7 @@ public final class VirtualMachine {
         }
 
         // Create arguments array
-        JSArray argArray = new JSArray();
+        JSArray argArray = context.createJSArray(0, args.length);
         for (JSValue arg : args) {
             argArray.push(arg);
         }

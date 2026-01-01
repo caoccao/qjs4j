@@ -19,9 +19,8 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -35,6 +34,44 @@ public class StringPrototypeTest extends BaseJavetTest {
     public void setUp() throws Exception {
         super.setUp();
         str = new JSString("hello world");
+    }
+
+    @Test
+    public void testAnchor() {
+        assertStringWithJavet(
+                "'test'.anchor('myAnchor')",
+                "'hello'.anchor('link1')",
+                "''.anchor('x')",
+                "'text'.anchor('')");
+
+        // Test quote escaping
+        JSValue result = StringPrototype.anchor(context, new JSString("test"), new JSValue[]{new JSString("my\"anchor")});
+        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr ->
+                assertThat(jsStr.value()).isEqualTo("<a name=\"my&quot;anchor\">test</a>"));
+    }
+
+    @Test
+    public void testBig() {
+        assertStringWithJavet(
+                "'test'.big()",
+                "'hello'.big()",
+                "''.big()");
+    }
+
+    @Test
+    public void testBlink() {
+        assertStringWithJavet(
+                "'test'.blink()",
+                "'hello'.blink()",
+                "''.blink()");
+    }
+
+    @Test
+    public void testBold() {
+        assertStringWithJavet(
+                "'test'.bold()",
+                "'hello world'.bold()",
+                "''.bold()");
     }
 
     @Test
@@ -203,6 +240,37 @@ public class StringPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testFixed() {
+        assertStringWithJavet(
+                "'test'.fixed()",
+                "'hello'.fixed()",
+                "''.fixed()");
+    }
+
+    @Test
+    public void testFontcolor() {
+        assertStringWithJavet(
+                "'test'.fontcolor('red')",
+                "'hello'.fontcolor('#FF0000')",
+                "''.fontcolor('blue')",
+                "'text'.fontcolor('')");
+
+        // Test quote escaping
+        JSValue result = StringPrototype.fontcolor(context, new JSString("test"), new JSValue[]{new JSString("\"red\"")});
+        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr ->
+                assertThat(jsStr.value()).isEqualTo("<font color=\"&quot;red&quot;\">test</font>"));
+    }
+
+    @Test
+    public void testFontsize() {
+        assertStringWithJavet(
+                "'test'.fontsize('5')",
+                "'hello'.fontsize('3')",
+                "''.fontsize('7')",
+                "'text'.fontsize('1')");
+    }
+
+    @Test
     public void testGetLength() {
         // ASCII string
         assertThat(str.value().length()).isEqualTo(11);
@@ -239,6 +307,13 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "String['prototype'].length.call('abc')",
                 "String.prototype.length.call(null)",
                 "String.prototype.length.call(undefined)");
+    }
+
+    @Disabled
+    @Test
+    public void testGetOwnPropertyNamesFromStringPrototype() {
+        assertObjectWithJavet(
+                "Object.getOwnPropertyNames(String.prototype).sort()");
     }
 
     @Test
@@ -295,6 +370,33 @@ public class StringPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testIsWellFormed() {
+        assertBooleanWithJavet(
+                "'hello'.isWellFormed()",
+                "''.isWellFormed()",
+                "'test string'.isWellFormed()",
+                "'abc123'.isWellFormed()",
+                // Test with valid surrogate pairs (emoji)
+                "'\\uD83D\\uDE00'.isWellFormed()", // 😀 emoji
+                "'hello\\uD83D\\uDE00world'.isWellFormed()");
+
+        // Test unpaired surrogates
+        JSValue result = StringPrototype.isWellFormed(context, new JSString("hello\uD800world"), new JSValue[]{});
+        assertThat(result).isInstanceOfSatisfying(JSBoolean.class, jsBool -> assertThat(jsBool.value()).isFalse());
+
+        result = StringPrototype.isWellFormed(context, new JSString("\uDFFFtest"), new JSValue[]{});
+        assertThat(result).isInstanceOfSatisfying(JSBoolean.class, jsBool -> assertThat(jsBool.value()).isFalse());
+    }
+
+    @Test
+    public void testItalics() {
+        assertStringWithJavet(
+                "'test'.italics()",
+                "'hello world'.italics()",
+                "''.italics()");
+    }
+
+    @Test
     public void testLastIndexOf() {
         // Normal case
         JSValue result = StringPrototype.lastIndexOf(context, str, new JSValue[]{new JSString("o")});
@@ -319,6 +421,20 @@ public class StringPrototypeTest extends BaseJavetTest {
         JSString empty = new JSString("");
         result = StringPrototype.lastIndexOf(context, empty, new JSValue[]{new JSString("test")});
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(-1.0));
+    }
+
+    @Test
+    public void testLink() {
+        assertStringWithJavet(
+                "'test'.link('http://example.com')",
+                "'click here'.link('https://google.com')",
+                "''.link('url')",
+                "'text'.link('')");
+
+        // Test quote escaping
+        JSValue result = StringPrototype.link(context, new JSString("test"), new JSValue[]{new JSString("http://example.com?q=\"hello\"")});
+        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr ->
+                assertThat(jsStr.value()).isEqualTo("<a href=\"http://example.com?q=&quot;hello&quot;\">test</a>"));
     }
 
     @Test
@@ -355,11 +471,53 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "JSON.stringify(Array.from('hello world'.matchAll('o')).map(m => m[0]))",
                 "JSON.stringify(Array.from('hello world'.matchAll('l')).map(m => m[0]))",
                 // No matches
-                "JSON.stringify(Array.from('hello world'.matchAll(/xyz/g)).map(m => m[0]))");
-
-        // Test non-global regex throws error
-        assertStringWithJavet(
+                "JSON.stringify(Array.from('hello world'.matchAll(/xyz/g)).map(m => m[0]))",
+                // Test non-global regex throws error
                 "try { 'hello world'.matchAll(/o/); 'no error'; } catch(e) { e.message; }");
+    }
+
+    @Test
+    public void testNormalize() {
+        assertStringWithJavet(
+                // Test default (NFC)
+                "'hello'.normalize()",
+                "'test'.normalize()",
+                "''.normalize()",
+                // Test NFC - basic ASCII should remain unchanged
+                "'abc'.normalize('NFC')",
+                // Test NFD - basic ASCII should remain unchanged
+                "'abc'.normalize('NFD')",
+                // Test NFKC
+                "'abc'.normalize('NFKC')",
+                // Test NFKD
+                "'abc'.normalize('NFKD')");
+
+        // Test that Angstrom sign normalizes correctly
+        JSValue result = StringPrototype.normalize(context, new JSString("\u212B"), new JSValue[]{new JSString("NFC")});
+        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
+            // Both \u212B (Angstrom) and \u00C5 (A with ring) normalize to \u00C5 in NFC
+            assertThat(jsStr.value()).isEqualTo("\u00C5");
+        });
+
+        // Test NFD produces decomposed form
+        result = StringPrototype.normalize(context, new JSString("\u00C5"), new JSValue[]{new JSString("NFD")});
+        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
+            // \u00C5 decomposes to A (\u0041) + combining ring above (\u030A)
+            assertThat(jsStr.value()).isEqualTo("\u0041\u030A");
+        });
+
+        // Test undefined form defaults to NFC
+        JSValue result1 = StringPrototype.normalize(context, new JSString("\u212B"), new JSValue[]{JSUndefined.INSTANCE});
+        JSValue result2 = StringPrototype.normalize(context, new JSString("\u212B"), new JSValue[]{new JSString("NFC")});
+        assertThat(result1).isInstanceOfSatisfying(JSString.class, jsStr1 ->
+                assertThat(result2).isInstanceOfSatisfying(JSString.class, jsStr2 ->
+                        assertThat(jsStr1.value()).isEqualTo(jsStr2.value())));
+
+        // Test invalid form
+        assertErrorWithJavet(
+                "'test'.normalize('INVALID')",
+                "'test'.normalize('nfc')",
+                "'test'.normalize('ABC')");
     }
 
     @Test
@@ -495,10 +653,8 @@ public class StringPrototypeTest extends BaseJavetTest {
                 // Edge cases
                 "''.replaceAll('test', 'xyz')",
                 "''.replaceAll('', 'xyz')",
-                "'hello world'.replaceAll('', 'X')");
-
-        // Test non-global regex throws error
-        assertStringWithJavet(
+                "'hello world'.replaceAll('', 'X')",
+                // Test non-global regex throws error
                 "try { 'hello world'.replaceAll(/o/, 'x'); 'no error'; } catch(e) { e.message; }");
     }
 
@@ -569,6 +725,14 @@ public class StringPrototypeTest extends BaseJavetTest {
         JSString empty = new JSString("");
         result = StringPrototype.slice(context, empty, new JSValue[]{new JSNumber(0)});
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
+    }
+
+    @Test
+    public void testSmall() {
+        assertStringWithJavet(
+                "'test'.small()",
+                "'hello'.small()",
+                "''.small()");
     }
 
     @Test
@@ -653,6 +817,22 @@ public class StringPrototypeTest extends BaseJavetTest {
         JSString empty = new JSString("");
         result = StringPrototype.startsWith(context, empty, new JSValue[]{new JSString("")});
         assertThat(result).isEqualTo(JSBoolean.TRUE);
+    }
+
+    @Test
+    public void testStrike() {
+        assertStringWithJavet(
+                "'test'.strike()",
+                "'hello world'.strike()",
+                "''.strike()");
+    }
+
+    @Test
+    public void testSub() {
+        assertStringWithJavet(
+                "'test'.sub()",
+                "'H2O'.sub()",
+                "''.sub()");
     }
 
     @Test
@@ -743,6 +923,46 @@ public class StringPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testSup() {
+        assertStringWithJavet(
+                "'test'.sup()",
+                "'x2'.sup()",
+                "''.sup()");
+    }
+
+    @Test
+    public void testToLocaleLowerCase() {
+        assertStringWithJavet(
+                "'HELLO'.toLocaleLowerCase()",
+                "'WORLD'.toLocaleLowerCase()",
+                "'TeSt'.toLocaleLowerCase()",
+                "''.toLocaleLowerCase()",
+                "'abc'.toLocaleLowerCase()",
+                "'ABC123'.toLocaleLowerCase()");
+
+        // Test with locale parameter (currently ignored, but should work)
+        JSValue result = StringPrototype.toLocaleLowerCase(context, new JSString("HELLO"), new JSValue[]{new JSString("en-US")});
+        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr ->
+                assertThat(jsStr.value()).isEqualTo("hello"));
+    }
+
+    @Test
+    public void testToLocaleUpperCase() {
+        assertStringWithJavet(
+                "'hello'.toLocaleUpperCase()",
+                "'world'.toLocaleUpperCase()",
+                "'TeSt'.toLocaleUpperCase()",
+                "''.toLocaleUpperCase()",
+                "'ABC'.toLocaleUpperCase()",
+                "'abc123'.toLocaleUpperCase()");
+
+        // Test with locale parameter (currently ignored, but should work)
+        JSValue result = StringPrototype.toLocaleUpperCase(context, new JSString("hello"), new JSValue[]{new JSString("en-US")});
+        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr ->
+                assertThat(jsStr.value()).isEqualTo("HELLO"));
+    }
+
+    @Test
     public void testToLowerCase() {
         JSString upper = new JSString("HELLO WORLD");
         JSValue result = StringPrototype.toLowerCase(context, upper, new JSValue[]{});
@@ -806,6 +1026,31 @@ public class StringPrototypeTest extends BaseJavetTest {
         JSString empty = new JSString("");
         result = StringPrototype.toUpperCase(context, empty, new JSValue[]{});
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
+    }
+
+    @Test
+    public void testToWellFormed() {
+        assertStringWithJavet(
+                "'hello'.toWellFormed()",
+                "''.toWellFormed()",
+                "'test string'.toWellFormed()",
+                // Test with valid surrogate pairs
+                "'\\uD83D\\uDE00'.toWellFormed()", // 😀 emoji
+                "'hello\\uD83D\\uDE00world'.toWellFormed()");
+
+        // Test unpaired surrogates get replaced with U+FFFD
+        JSValue result = StringPrototype.toWellFormed(context, new JSString("hello\uD800world"), new JSValue[]{});
+        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr ->
+                assertThat(jsStr.value()).isEqualTo("hello\uFFFDworld"));
+
+        result = StringPrototype.toWellFormed(context, new JSString("\uDFFFtest"), new JSValue[]{});
+        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr ->
+                assertThat(jsStr.value()).isEqualTo("\uFFFDtest"));
+
+        // Already well-formed should return same string
+        JSString wellFormed = new JSString("hello");
+        result = StringPrototype.toWellFormed(context, wellFormed, new JSValue[]{});
+        assertThat(result).isSameAs(wellFormed);
     }
 
     @Test

@@ -64,7 +64,7 @@ public final class MapPrototype {
             return context.throwTypeError("Map.prototype.entries called on non-Map");
         }
 
-        return JSIterator.mapEntriesIterator(map);
+        return JSIterator.mapEntriesIterator(context, map);
     }
 
     /**

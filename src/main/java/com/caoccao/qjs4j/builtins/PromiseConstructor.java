@@ -49,12 +49,12 @@ public final class PromiseConstructor {
         // Empty array resolves immediately
         if (length == 0) {
             JSPromise promise = createPromise(context);
-            promise.fulfill(new JSArray());
+            promise.fulfill(context.createJSArray());
             return promise;
         }
 
         JSPromise resultPromise = createPromise(context);
-        JSArray results = new JSArray();
+        JSArray results = context.createJSArray();
         final int[] remaining = {length}; // How many promises left to resolve
 
         for (int i = 0; i < length; i++) {
@@ -124,12 +124,12 @@ public final class PromiseConstructor {
         // Empty array resolves immediately
         if (length == 0) {
             JSPromise promise = createPromise(context);
-            promise.fulfill(new JSArray());
+            promise.fulfill(context.createJSArray());
             return promise;
         }
 
         JSPromise resultPromise = createPromise(context);
-        JSArray results = new JSArray();
+        JSArray results = context.createJSArray();
         final int[] remaining = {length};
 
         for (int i = 0; i < length; i++) {
@@ -216,7 +216,7 @@ public final class PromiseConstructor {
         }
 
         JSPromise resultPromise = createPromise(context);
-        JSArray errors = new JSArray();
+        JSArray errors = context.createJSArray();
         final int[] remaining = {length};
 
         for (int i = 0; i < length; i++) {

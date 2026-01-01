@@ -543,7 +543,16 @@ public non-sealed class JSObject implements JSValue {
 
     @Override
     public Object toJavaObject() {
-        return this;
+        Map<String, Object> objMap = new LinkedHashMap<>();
+        // Get all own property keys in order (shaped properties first, then sparse)
+        List<PropertyKey> keys = getOwnPropertyKeys();
+        for (PropertyKey key : keys) {
+            JSValue value = get(key);
+            if (value != null) {
+                objMap.put(key.toPropertyString(), value.toJavaObject());
+            }
+        }
+        return objMap;
     }
 
     @Override

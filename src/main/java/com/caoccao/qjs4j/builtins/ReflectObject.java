@@ -166,7 +166,7 @@ public final class ReflectObject {
             return context.throwTypeError("Reflect.ownKeys called on non-object");
         }
 
-        JSArray result = new JSArray();
+        JSArray result = context.createJSArray();
         for (PropertyKey key : target.ownPropertyKeys()) {
             if (key.isString()) {
                 result.push(new JSString(key.asString()));

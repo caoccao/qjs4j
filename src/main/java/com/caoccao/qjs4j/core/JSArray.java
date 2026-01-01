@@ -16,7 +16,10 @@
 
 package com.caoccao.qjs4j.core;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 
 /**
  * Represents a JavaScript Array object.
@@ -29,7 +32,7 @@ import java.util.Arrays;
  * Automatically switches between dense and sparse based on usage patterns.
  */
 public final class JSArray extends JSObject {
-    private static final int INITIAL_CAPACITY = 8;
+    public static final int INITIAL_CAPACITY = 8;
     private static final int MAX_DENSE_SIZE = 10000;
 
     private JSValue[] denseArray;
@@ -39,19 +42,23 @@ public final class JSArray extends JSObject {
      * Create an empty array.
      */
     public JSArray() {
-        super();
-        this.denseArray = new JSValue[INITIAL_CAPACITY];
-        this.length = 0;
-        initializeLengthProperty();
+        this(0);
     }
 
     /**
      * Create an array with a specific initial length.
      */
     public JSArray(long length) {
+        this(length, INITIAL_CAPACITY);
+    }
+
+    /**
+     * Create an array with a specific initial length.
+     */
+    public JSArray(long length, int capacity) {
         super();
         this.length = length;
-        int capacity = (int) Math.min(length, INITIAL_CAPACITY);
+        capacity = Math.min(capacity, INITIAL_CAPACITY);
         this.denseArray = new JSValue[capacity];
         initializeLengthProperty();
     }
@@ -368,6 +375,14 @@ public final class JSArray extends JSObject {
             result[i] = get(i);
         }
         return result;
+    }
+
+    @Override
+    public Object toJavaObject() {
+        return LongStream.range(0, length)
+                .mapToObj(this::get)
+                .map(JSValue::toJavaObject)
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     @Override

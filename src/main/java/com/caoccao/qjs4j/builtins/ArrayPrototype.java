@@ -65,15 +65,16 @@ public final class ArrayPrototype {
      * Merges arrays and/or values.
      */
     public static JSValue concat(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
+        if (!(thisArg instanceof JSArray jsArray)) {
             return context.throwTypeError("Array.prototype.concat called on non-array");
         }
 
-        JSArray result = new JSArray();
+        int length = (int) jsArray.getLength();
+        JSArray result = context.createJSArray(0, length * 2);
 
         // Add original array elements
-        for (int i = 0; i < arr.getLength(); i++) {
-            result.push(arr.get(i));
+        for (int i = 0; i < length; i++) {
+            result.push(jsArray.get(i));
         }
 
         // Add arguments
@@ -224,7 +225,7 @@ public final class ArrayPrototype {
      * Creates a new array with elements that pass the test.
      */
     public static JSValue filter(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
+        if (!(thisArg instanceof JSArray jsArray)) {
             return context.throwTypeError("Array.prototype.filter called on non-array");
         }
 
@@ -233,12 +234,12 @@ public final class ArrayPrototype {
         }
 
         JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        long length = arr.getLength();
-        JSArray result = new JSArray();
+        int length = (int) jsArray.getLength();
+        JSArray result = context.createJSArray(0, length);
 
         for (long i = 0; i < length; i++) {
-            JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i), arr};
+            JSValue element = jsArray.get(i);
+            JSValue[] callbackArgs = {element, new JSNumber(i), jsArray};
             JSValue keep = callback.call(context, callbackThis, callbackArgs);
 
             if (JSTypeConversions.toBoolean(keep) == JSBoolean.TRUE) {
@@ -377,9 +378,8 @@ public final class ArrayPrototype {
         if (!(thisArg instanceof JSArray arr)) {
             return context.throwTypeError("Array.prototype.flat called on non-array");
         }
-
         int depth = args.length > 0 ? JSTypeConversions.toInt32(context, args[0]) : 1;
-        return internalFlattenArray(arr, depth);
+        return internalFlattenArray(context, arr, depth);
     }
 
     /**
@@ -388,7 +388,7 @@ public final class ArrayPrototype {
      * Maps each element using callback, then flattens the result by one level.
      */
     public static JSValue flatMap(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
+        if (!(thisArg instanceof JSArray jsArray)) {
             return context.throwTypeError("Array.prototype.flatMap called on non-array");
         }
 
@@ -398,16 +398,17 @@ public final class ArrayPrototype {
 
         JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
-        JSArray result = new JSArray();
+        int length = (int) jsArray.getLength();
+        JSArray result = context.createJSArray(0, length);
 
-        for (int i = 0; i < arr.getLength(); i++) {
-            JSValue element = arr.get(i);
+        for (int i = 0; i < length; i++) {
+            JSValue element = jsArray.get(i);
 
             // Call the callback with (element, index, array)
             JSValue[] callbackArgs = new JSValue[]{
                     element,
                     new JSNumber(i),
-                    arr
+                    jsArray
             };
             JSValue mapped = callback.call(context, callbackThisArg, callbackArgs);
 
@@ -562,14 +563,13 @@ public final class ArrayPrototype {
         return new JSNumber(-1);
     }
 
-    private static JSArray internalFlattenArray(JSArray arr, int depth) {
-        JSArray result = new JSArray();
-
-        for (int i = 0; i < arr.getLength(); i++) {
-            JSValue element = arr.get(i);
-
-            if (depth > 0 && element instanceof JSArray subArr) {
-                JSArray flattened = internalFlattenArray(subArr, depth - 1);
+    private static JSArray internalFlattenArray(JSContext context, JSArray jsArray, int depth) {
+        int length = (int) jsArray.getLength();
+        JSArray result = context.createJSArray(0, length);
+        for (int i = 0; i < length; i++) {
+            JSValue element = jsArray.get(i);
+            if (depth > 0 && element instanceof JSArray childJSArray) {
+                JSArray flattened = internalFlattenArray(context, childJSArray, depth - 1);
                 for (int j = 0; j < flattened.getLength(); j++) {
                     result.push(flattened.get(j));
                 }
@@ -577,7 +577,6 @@ public final class ArrayPrototype {
                 result.push(element);
             }
         }
-
         return result;
     }
 
@@ -661,7 +660,7 @@ public final class ArrayPrototype {
      * Creates a new array with the results of calling a function on every element.
      */
     public static JSValue map(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
+        if (!(thisArg instanceof JSArray jsArray)) {
             return context.throwTypeError("Array.prototype.map called on non-array");
         }
 
@@ -670,12 +669,12 @@ public final class ArrayPrototype {
         }
 
         JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        long length = arr.getLength();
-        JSArray result = new JSArray();
+        int length = (int) jsArray.getLength();
+        JSArray result = context.createJSArray(0, length);
 
         for (long i = 0; i < length; i++) {
-            JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i), arr};
+            JSValue element = jsArray.get(i);
+            JSValue[] callbackArgs = {element, new JSNumber(i), jsArray};
             JSValue mapped = callback.call(context, callbackThis, callbackArgs);
             result.push(mapped);
         }
@@ -823,13 +822,13 @@ public final class ArrayPrototype {
      * Returns a shallow copy of a portion of an array.
      */
     public static JSValue slice(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
+        if (!(thisArg instanceof JSArray jsArray)) {
             return context.throwTypeError("Array.prototype.slice called on non-array");
         }
 
-        long length = arr.getLength();
-        long begin = 0;
-        long end = length;
+        int length = (int) jsArray.getLength();
+        int begin = 0;
+        int end = length;
 
         if (args.length > 0) {
             begin = JSTypeConversions.toInt32(context, args[0]);
@@ -849,9 +848,9 @@ public final class ArrayPrototype {
             }
         }
 
-        JSArray result = new JSArray();
+        JSArray result = context.createJSArray(0, end - begin);
         for (long i = begin; i < end; i++) {
-            result.push(arr.get(i));
+            result.push(jsArray.get(i));
         }
 
         return result;
@@ -930,12 +929,12 @@ public final class ArrayPrototype {
      * Changes the contents of an array by removing or replacing elements.
      */
     public static JSValue splice(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
+        if (!(thisArg instanceof JSArray jsArray)) {
             return context.throwTypeError("Array.prototype.splice called on non-array");
         }
 
-        long length = arr.getLength();
-        long start = args.length > 0 ? JSTypeConversions.toInt32(context, args[0]) : 0;
+        int length = (int) jsArray.getLength();
+        int start = args.length > 0 ? JSTypeConversions.toInt32(context, args[0]) : 0;
 
         if (start < 0) {
             start = Math.max(length + start, 0);
@@ -943,23 +942,23 @@ public final class ArrayPrototype {
             start = Math.min(start, length);
         }
 
-        long deleteCount = length - start;
+        int deleteCount = length - start;
         if (args.length > 1) {
             deleteCount = Math.max(0, Math.min(JSTypeConversions.toInt32(context, args[1]), length - start));
         }
 
         // Collect deleted elements
-        JSArray deleted = new JSArray();
-        for (long i = 0; i < deleteCount; i++) {
-            deleted.push(arr.get(start + i));
+        JSArray deleted = context.createJSArray(0, deleteCount);
+        for (int i = 0; i < deleteCount; i++) {
+            deleted.push(jsArray.get(start + i));
         }
 
         // Create new array with spliced result
-        JSArray result = new JSArray();
+        JSArray result = context.createJSArray(0, length - deleteCount + (args.length - 2));
 
         // Copy elements before start
         for (long i = 0; i < start; i++) {
-            result.push(arr.get(i));
+            result.push(jsArray.get(i));
         }
 
         // Insert new elements
@@ -969,13 +968,13 @@ public final class ArrayPrototype {
 
         // Copy elements after deleted portion
         for (long i = start + deleteCount; i < length; i++) {
-            result.push(arr.get(i));
+            result.push(jsArray.get(i));
         }
 
         // Replace original array contents
-        arr.setLength(0);
+        jsArray.setLength(0);
         for (long i = 0; i < result.getLength(); i++) {
-            arr.push(result.get(i));
+            jsArray.push(result.get(i));
         }
 
         return deleted;
@@ -1017,16 +1016,16 @@ public final class ArrayPrototype {
      * Returns a new array with elements in reversed order (immutable version of reverse).
      */
     public static JSValue toReversed(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
+        if (!(thisArg instanceof JSArray jsArray)) {
             return context.throwTypeError("Array.prototype.toReversed called on non-array");
         }
 
-        long length = arr.getLength();
-        JSArray result = new JSArray();
+        int length = (int) jsArray.getLength();
+        JSArray result = context.createJSArray(0, length);
 
         // Copy elements in reverse order
-        for (long i = length - 1; i >= 0; i--) {
-            result.push(arr.get(i));
+        for (int i = length - 1; i >= 0; i--) {
+            result.push(jsArray.get(i));
         }
 
         return result;
@@ -1038,7 +1037,7 @@ public final class ArrayPrototype {
      * Returns a new sorted array (immutable version of sort).
      */
     public static JSValue toSorted(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
+        if (!(thisArg instanceof JSArray jsArray)) {
             return context.throwTypeError("Array.prototype.toSorted called on non-array");
         }
 
@@ -1047,13 +1046,13 @@ public final class ArrayPrototype {
 
         // Create a copy of the array elements
         List<JSValue> elements = new ArrayList<>();
-        long length = arr.getLength();
-        for (long i = 0; i < length; i++) {
-            elements.add(arr.get(i));
+        int length = (int) jsArray.getLength();
+        for (int i = 0; i < length; i++) {
+            elements.add(jsArray.get(i));
         }
 
         // Sort the copy
-        Collections.sort(elements, (a, b) -> {
+        elements.sort((a, b) -> {
             if (compareFn != null) {
                 JSValue[] compareArgs = {a, b};
                 JSValue result = compareFn.call(context, JSUndefined.INSTANCE, compareArgs);
@@ -1067,7 +1066,7 @@ public final class ArrayPrototype {
         });
 
         // Create new array with sorted elements
-        JSArray result = new JSArray();
+        JSArray result = context.createJSArray(0, elements.size());
         for (JSValue element : elements) {
             result.push(element);
         }
@@ -1081,12 +1080,12 @@ public final class ArrayPrototype {
      * Returns a new array with elements removed and/or added (immutable version of splice).
      */
     public static JSValue toSpliced(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
+        if (!(thisArg instanceof JSArray jsArray)) {
             return context.throwTypeError("Array.prototype.toSpliced called on non-array");
         }
 
-        long length = arr.getLength();
-        long start = args.length > 0 ? JSTypeConversions.toInt32(context, args[0]) : 0;
+        int length = (int) jsArray.getLength();
+        int start = args.length > 0 ? JSTypeConversions.toInt32(context, args[0]) : 0;
 
         // Normalize start index
         if (start < 0) {
@@ -1096,17 +1095,17 @@ public final class ArrayPrototype {
         }
 
         // Calculate delete count
-        long deleteCount = length - start;
+        int deleteCount = length - start;
         if (args.length > 1) {
             deleteCount = Math.max(0, Math.min(JSTypeConversions.toInt32(context, args[1]), length - start));
         }
 
         // Create new array with spliced result
-        JSArray result = new JSArray();
+        JSArray result = context.createJSArray(0, length);
 
         // Copy elements before start
         for (long i = 0; i < start; i++) {
-            result.push(arr.get(i));
+            result.push(jsArray.get(i));
         }
 
         // Insert new elements
@@ -1116,7 +1115,7 @@ public final class ArrayPrototype {
 
         // Copy elements after deleted portion
         for (long i = start + deleteCount; i < length; i++) {
-            result.push(arr.get(i));
+            result.push(jsArray.get(i));
         }
 
         return result;
@@ -1158,7 +1157,7 @@ public final class ArrayPrototype {
      * Returns a new array with the element at the given index replaced (immutable version of arr[index] = value).
      */
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
+        if (!(thisArg instanceof JSArray jsArray)) {
             return context.throwTypeError("Array.prototype.with called on non-array");
         }
 
@@ -1166,8 +1165,8 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.with requires 2 arguments");
         }
 
-        long length = arr.getLength();
-        long index = JSTypeConversions.toInt32(context, args[0]);
+        int length = (int) jsArray.getLength();
+        int index = JSTypeConversions.toInt32(context, args[0]);
 
         // Normalize negative index
         if (index < 0) {
@@ -1182,12 +1181,12 @@ public final class ArrayPrototype {
         JSValue newValue = args[1];
 
         // Create a copy of the array
-        JSArray result = new JSArray();
+        JSArray result = context.createJSArray(0, length);
         for (long i = 0; i < length; i++) {
             if (i == index) {
                 result.push(newValue);
             } else {
-                result.push(arr.get(i));
+                result.push(jsArray.get(i));
             }
         }
 

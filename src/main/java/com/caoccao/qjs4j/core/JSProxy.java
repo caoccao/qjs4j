@@ -131,7 +131,7 @@ public final class JSProxy extends JSObject {
      * Helper to create an arguments array from JSValue[].
      */
     private JSArray createArgumentsArray(JSValue[] args) {
-        JSArray array = new JSArray();
+        JSArray array = context.createJSArray(0, args.length);
         for (int i = 0; i < args.length; i++) {
             array.set(i, args[i]);
         }

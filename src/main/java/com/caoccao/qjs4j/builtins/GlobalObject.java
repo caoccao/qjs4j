@@ -413,53 +413,52 @@ public final class GlobalObject {
     private static void initializeArrayConstructor(JSContext context, JSObject global) {
         // Create Array.prototype
         JSObject arrayPrototype = new JSObject();
-        arrayPrototype.set("push", new JSNativeFunction("push", 1, ArrayPrototype::push));
-        arrayPrototype.set("pop", new JSNativeFunction("pop", 0, ArrayPrototype::pop));
-        arrayPrototype.set("shift", new JSNativeFunction("shift", 0, ArrayPrototype::shift));
-        arrayPrototype.set("unshift", new JSNativeFunction("unshift", 1, ArrayPrototype::unshift));
-        arrayPrototype.set("slice", new JSNativeFunction("slice", 2, ArrayPrototype::slice));
-        arrayPrototype.set("splice", new JSNativeFunction("splice", 2, ArrayPrototype::splice));
-        arrayPrototype.set("toSpliced", new JSNativeFunction("toSpliced", 2, ArrayPrototype::toSpliced));
-        arrayPrototype.set("with", new JSNativeFunction("with", 2, ArrayPrototype::with));
-        arrayPrototype.set("concat", new JSNativeFunction("concat", 1, ArrayPrototype::concat));
-        arrayPrototype.set("join", new JSNativeFunction("join", 1, ArrayPrototype::join));
-        arrayPrototype.set("reverse", new JSNativeFunction("reverse", 0, ArrayPrototype::reverse));
-        arrayPrototype.set("toReversed", new JSNativeFunction("toReversed", 0, ArrayPrototype::toReversed));
-        arrayPrototype.set("sort", new JSNativeFunction("sort", 1, ArrayPrototype::sort));
-        arrayPrototype.set("toSorted", new JSNativeFunction("toSorted", 1, ArrayPrototype::toSorted));
-        arrayPrototype.set("indexOf", new JSNativeFunction("indexOf", 1, ArrayPrototype::indexOf));
-        arrayPrototype.set("lastIndexOf", new JSNativeFunction("lastIndexOf", 1, ArrayPrototype::lastIndexOf));
-        arrayPrototype.set("includes", new JSNativeFunction("includes", 1, ArrayPrototype::includes));
-        arrayPrototype.set("at", new JSNativeFunction("at", 1, ArrayPrototype::at));
-        arrayPrototype.set("map", new JSNativeFunction("map", 1, ArrayPrototype::map));
-        arrayPrototype.set("filter", new JSNativeFunction("filter", 1, ArrayPrototype::filter));
-        arrayPrototype.set("reduce", new JSNativeFunction("reduce", 1, ArrayPrototype::reduce));
-        arrayPrototype.set("reduceRight", new JSNativeFunction("reduceRight", 1, ArrayPrototype::reduceRight));
-        arrayPrototype.set("forEach", new JSNativeFunction("forEach", 1, ArrayPrototype::forEach));
-        // Array.prototype.values and Array.prototype[Symbol.iterator] should be the same function
         JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, IteratorPrototype::arrayValues);
-        arrayPrototype.set("values", valuesFunction);
-        arrayPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction);
-        arrayPrototype.set("keys", new JSNativeFunction("keys", 0, IteratorPrototype::arrayKeys));
+        arrayPrototype.set("at", new JSNativeFunction("at", 1, ArrayPrototype::at));
+        arrayPrototype.set("concat", new JSNativeFunction("concat", 1, ArrayPrototype::concat));
+        arrayPrototype.set("copyWithin", new JSNativeFunction("copyWithin", 2, ArrayPrototype::copyWithin));
         arrayPrototype.set("entries", new JSNativeFunction("entries", 0, IteratorPrototype::arrayEntries));
+        arrayPrototype.set("every", new JSNativeFunction("every", 1, ArrayPrototype::every));
+        arrayPrototype.set("fill", new JSNativeFunction("fill", 1, ArrayPrototype::fill));
+        arrayPrototype.set("filter", new JSNativeFunction("filter", 1, ArrayPrototype::filter));
         arrayPrototype.set("find", new JSNativeFunction("find", 1, ArrayPrototype::find));
         arrayPrototype.set("findIndex", new JSNativeFunction("findIndex", 1, ArrayPrototype::findIndex));
         arrayPrototype.set("findLast", new JSNativeFunction("findLast", 1, ArrayPrototype::findLast));
         arrayPrototype.set("findLastIndex", new JSNativeFunction("findLastIndex", 1, ArrayPrototype::findLastIndex));
-        arrayPrototype.set("every", new JSNativeFunction("every", 1, ArrayPrototype::every));
-        arrayPrototype.set("some", new JSNativeFunction("some", 1, ArrayPrototype::some));
         arrayPrototype.set("flat", new JSNativeFunction("flat", 0, ArrayPrototype::flat));
         arrayPrototype.set("flatMap", new JSNativeFunction("flatMap", 1, ArrayPrototype::flatMap));
-        arrayPrototype.set("toString", new JSNativeFunction("toString", 0, ArrayPrototype::toString));
+        arrayPrototype.set("forEach", new JSNativeFunction("forEach", 1, ArrayPrototype::forEach));
+        arrayPrototype.set("includes", new JSNativeFunction("includes", 1, ArrayPrototype::includes));
+        arrayPrototype.set("indexOf", new JSNativeFunction("indexOf", 1, ArrayPrototype::indexOf));
+        arrayPrototype.set("join", new JSNativeFunction("join", 1, ArrayPrototype::join));
+        arrayPrototype.set("keys", new JSNativeFunction("keys", 0, IteratorPrototype::arrayKeys));
+        arrayPrototype.set("lastIndexOf", new JSNativeFunction("lastIndexOf", 1, ArrayPrototype::lastIndexOf));
+        arrayPrototype.set("map", new JSNativeFunction("map", 1, ArrayPrototype::map));
+        arrayPrototype.set("pop", new JSNativeFunction("pop", 0, ArrayPrototype::pop));
+        arrayPrototype.set("push", new JSNativeFunction("push", 1, ArrayPrototype::push));
+        arrayPrototype.set("reduce", new JSNativeFunction("reduce", 1, ArrayPrototype::reduce));
+        arrayPrototype.set("reduceRight", new JSNativeFunction("reduceRight", 1, ArrayPrototype::reduceRight));
+        arrayPrototype.set("reverse", new JSNativeFunction("reverse", 0, ArrayPrototype::reverse));
+        arrayPrototype.set("shift", new JSNativeFunction("shift", 0, ArrayPrototype::shift));
+        arrayPrototype.set("slice", new JSNativeFunction("slice", 2, ArrayPrototype::slice));
+        arrayPrototype.set("some", new JSNativeFunction("some", 1, ArrayPrototype::some));
+        arrayPrototype.set("sort", new JSNativeFunction("sort", 1, ArrayPrototype::sort));
+        arrayPrototype.set("splice", new JSNativeFunction("splice", 2, ArrayPrototype::splice));
         arrayPrototype.set("toLocaleString", new JSNativeFunction("toLocaleString", 0, ArrayPrototype::toLocaleString));
-        arrayPrototype.set("copyWithin", new JSNativeFunction("copyWithin", 2, ArrayPrototype::copyWithin));
-        arrayPrototype.set("fill", new JSNativeFunction("fill", 1, ArrayPrototype::fill));
+        arrayPrototype.set("toReversed", new JSNativeFunction("toReversed", 0, ArrayPrototype::toReversed));
+        arrayPrototype.set("toSorted", new JSNativeFunction("toSorted", 1, ArrayPrototype::toSorted));
+        arrayPrototype.set("toSpliced", new JSNativeFunction("toSpliced", 2, ArrayPrototype::toSpliced));
+        arrayPrototype.set("toString", new JSNativeFunction("toString", 0, ArrayPrototype::toString));
+        arrayPrototype.set("unshift", new JSNativeFunction("unshift", 1, ArrayPrototype::unshift));
+        arrayPrototype.set("values", valuesFunction);
+        arrayPrototype.set("with", new JSNativeFunction("with", 2, ArrayPrototype::with));
 
         // Array.prototype.length is a data property with value 0 (not writable, not enumerable, not configurable)
         arrayPrototype.defineProperty(PropertyKey.fromString("length"),
                 PropertyDescriptor.dataDescriptor(new JSNumber(0), false, false, false));
 
-        // Array.prototype[Symbol.unscopables]
+        // Array.prototype[Symbol.*]
+        arrayPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction);
         JSNativeFunction unscopablesGetter = new JSNativeFunction("get [Symbol.unscopables]", 0, ArrayPrototype::getSymbolUnscopables);
         arrayPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.UNSCOPABLES),
                 PropertyDescriptor.accessorDescriptor(unscopablesGetter, null, false, true));
@@ -471,10 +470,10 @@ public final class GlobalObject {
         arrayPrototype.set("constructor", arrayConstructor);
 
         // Array static methods
-        arrayConstructor.set("isArray", new JSNativeFunction("isArray", 1, ArrayConstructor::isArray));
-        arrayConstructor.set("of", new JSNativeFunction("of", 0, ArrayConstructor::of));
         arrayConstructor.set("from", new JSNativeFunction("from", 1, ArrayConstructor::from));
         arrayConstructor.set("fromAsync", new JSNativeFunction("fromAsync", 1, ArrayConstructor::fromAsync));
+        arrayConstructor.set("isArray", new JSNativeFunction("isArray", 1, ArrayConstructor::isArray));
+        arrayConstructor.set("of", new JSNativeFunction("of", 0, ArrayConstructor::of));
 
         // Symbol.species getter
         JSNativeFunction arraySpeciesGetter = new JSNativeFunction("get [Symbol.species]", 0, ArrayConstructor::getSpecies);
@@ -1106,6 +1105,29 @@ public final class GlobalObject {
         stringPrototype.set("trimEnd", new JSNativeFunction("trimEnd", 0, StringPrototype::trimEnd));
         stringPrototype.set("trimStart", new JSNativeFunction("trimStart", 0, StringPrototype::trimStart));
         stringPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, StringPrototype::valueOf));
+
+        // HTML wrapper methods (deprecated but still part of spec)
+        stringPrototype.set("anchor", new JSNativeFunction("anchor", 1, StringPrototype::anchor));
+        stringPrototype.set("big", new JSNativeFunction("big", 0, StringPrototype::big));
+        stringPrototype.set("blink", new JSNativeFunction("blink", 0, StringPrototype::blink));
+        stringPrototype.set("bold", new JSNativeFunction("bold", 0, StringPrototype::bold));
+        stringPrototype.set("fixed", new JSNativeFunction("fixed", 0, StringPrototype::fixed));
+        stringPrototype.set("fontcolor", new JSNativeFunction("fontcolor", 1, StringPrototype::fontcolor));
+        stringPrototype.set("fontsize", new JSNativeFunction("fontsize", 1, StringPrototype::fontsize));
+        stringPrototype.set("italics", new JSNativeFunction("italics", 0, StringPrototype::italics));
+        stringPrototype.set("link", new JSNativeFunction("link", 1, StringPrototype::link));
+        stringPrototype.set("small", new JSNativeFunction("small", 0, StringPrototype::small));
+        stringPrototype.set("strike", new JSNativeFunction("strike", 0, StringPrototype::strike));
+        stringPrototype.set("sub", new JSNativeFunction("sub", 0, StringPrototype::sub));
+        stringPrototype.set("sup", new JSNativeFunction("sup", 0, StringPrototype::sup));
+
+        // Unicode methods
+        stringPrototype.set("isWellFormed", new JSNativeFunction("isWellFormed", 0, StringPrototype::isWellFormed));
+        stringPrototype.set("normalize", new JSNativeFunction("normalize", 0, StringPrototype::normalize));
+        stringPrototype.set("toLocaleLowerCase", new JSNativeFunction("toLocaleLowerCase", 0, StringPrototype::toLocaleLowerCase));
+        stringPrototype.set("toLocaleUpperCase", new JSNativeFunction("toLocaleUpperCase", 0, StringPrototype::toLocaleUpperCase));
+        stringPrototype.set("toWellFormed", new JSNativeFunction("toWellFormed", 0, StringPrototype::toWellFormed));
+
         // String.prototype[Symbol.iterator]
         stringPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), new JSNativeFunction("[Symbol.iterator]", 0, IteratorPrototype::stringIterator));
 

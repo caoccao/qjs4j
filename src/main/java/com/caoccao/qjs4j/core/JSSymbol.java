@@ -88,8 +88,11 @@ public final class JSSymbol implements JSValue {
     }
 
     @Override
-    public Object toJavaObject() {
-        return this;
+    public String toJavaObject() {
+        if (description == null) {
+            return "Symbol()";
+        }
+        return "Symbol(" + description + ")";
     }
 
     public String toString(JSContext context) {

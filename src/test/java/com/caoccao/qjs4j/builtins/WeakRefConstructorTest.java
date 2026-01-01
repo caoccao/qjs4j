@@ -19,8 +19,6 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-import java.util.stream.Stream;
-
 /**
  * Unit tests for WeakRef constructor.
  */

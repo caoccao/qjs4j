@@ -221,7 +221,7 @@ public final class JSClass extends JSFunction {
 
     @Override
     public Object toJavaObject() {
-        return this;
+        return toString();
     }
 
     @Override

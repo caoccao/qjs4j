@@ -18,9 +18,8 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -63,6 +62,13 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertPendingException(context);
 
         assertStringWithJavet("var target = {a: 1}; Object.assign(target, {b: 2}, {c: 3}); JSON.stringify(target)");
+    }
+
+    @Disabled
+    @Test
+    public void testBuiltInObjects() {
+        assertObjectWithJavet(
+                "Object.getOwnPropertyNames(globalThis).sort()");
     }
 
     @Test
@@ -287,6 +293,17 @@ public class ObjectConstructorTest extends BaseJavetTest {
         // Edge case: non-object
         assertTypeError(ObjectConstructor.getOwnPropertyNames(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not object")}));
         assertPendingException(context);
+
+        assertObjectWithJavet(
+                "var obj = {first: 'John', last: 'Doe'}; Object.getOwnPropertyNames(obj)",
+                "Object.getOwnPropertyNames([])",
+                "Object.getOwnPropertyNames(['a','b'])",
+                "Object.getOwnPropertyNames([null, undefined, 1])",
+                "var a = [1,2]; a['x'] = 'x'; Object.getOwnPropertyNames(a)");
+
+        assertErrorWithJavet(
+                "Object.getOwnPropertyNames(undefined)",
+                "Object.getOwnPropertyNames()");
     }
 
     @Test

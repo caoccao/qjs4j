@@ -160,6 +160,47 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Create a new JSArray with proper prototype chain.
+     * Sets the array's prototype to Array.prototype from the global object.
+     *
+     * @return A new JSArray instance with prototype set
+     */
+    public JSArray createJSArray() {
+        return createJSArray(0);
+    }
+
+    /**
+     * Create a new JSArray with specified length and proper prototype chain.
+     * Sets the array's prototype to Array.prototype from the global object.
+     *
+     * @param length Initial length of the array
+     * @return A new JSArray instance with prototype set
+     */
+    public JSArray createJSArray(long length) {
+        return createJSArray(length, (int) length);
+    }
+
+    /**
+     * Create a new JSArray with specified length, capacity, and proper prototype chain.
+     * Sets the array's prototype to Array.prototype from the global object.
+     *
+     * @param length   Initial length of the array
+     * @param capacity Initial capacity of the array
+     * @return A new JSArray instance with prototype set
+     */
+    public JSArray createJSArray(long length, int capacity) {
+        JSArray array = new JSArray(length, capacity);
+        JSValue arrayCtor = globalObject.get("Array");
+        if (arrayCtor instanceof JSObject) {
+            JSValue arrayProto = ((JSObject) arrayCtor).get("prototype");
+            if (arrayProto instanceof JSObject) {
+                array.setPrototype((JSObject) arrayProto);
+            }
+        }
+        return array;
+    }
+
+    /**
      * Enqueue a microtask to be executed.
      *
      * @param microtask The microtask to enqueue

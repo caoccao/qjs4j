@@ -20,8 +20,6 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
-import java.util.stream.Stream;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -224,7 +222,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         // Normal case: get keys
         JSValue result = MapPrototype.keys(context, map, new JSValue[]{});
         JSIterator keys = result.asIterator().orElseThrow();
-        JSArray jsArray = JSIteratorHelper.toArray(keys);
+        JSArray jsArray = JSIteratorHelper.toArray(context, keys);
         assertThat(jsArray.getLength()).isEqualTo(2);
         assertThat(jsArray.get(0).asString().map(JSString::value).orElse(null)).isEqualTo("key1");
         assertThat(jsArray.get(1).asString().map(JSString::value).orElse(null)).isEqualTo("key2");
@@ -233,7 +231,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         JSMap emptyMap = new JSMap();
         result = MapPrototype.keys(context, emptyMap, new JSValue[]{});
         keys = result.asIterator().orElseThrow();
-        jsArray = JSIteratorHelper.toArray(keys);
+        jsArray = JSIteratorHelper.toArray(context, keys);
         assertThat(jsArray.getLength()).isEqualTo(0);
 
         // Edge case: called on non-Map
@@ -277,7 +275,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         // Normal case: get values
         JSValue result = MapPrototype.values(context, map, new JSValue[]{});
         JSIterator values = result.asIterator().orElseThrow();
-        JSArray jsArray = JSIteratorHelper.toArray(values);
+        JSArray jsArray = JSIteratorHelper.toArray(context, values);
         assertThat(jsArray.getLength()).isEqualTo(2);
         assertThat(jsArray.get(0).asString().map(JSString::value).orElse(null)).isEqualTo("value1");
         assertThat(jsArray.get(1).asString().map(JSString::value).orElse(null)).isEqualTo("value2");
@@ -286,7 +284,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         JSMap emptyMap = new JSMap();
         result = MapPrototype.values(context, emptyMap, new JSValue[]{});
         values = result.asIterator().orElseThrow();
-        jsArray = JSIteratorHelper.toArray(values);
+        jsArray = JSIteratorHelper.toArray(context, values);
         assertThat(jsArray.getLength()).isEqualTo(0);
 
         // Edge case: called on non-Map

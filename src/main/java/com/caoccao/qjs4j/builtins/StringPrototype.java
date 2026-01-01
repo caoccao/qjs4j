@@ -18,12 +18,21 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.regexp.RegExpEngine;
+import com.caoccao.qjs4j.unicode.UnicodeNormalization;
 
 /**
  * Implementation of JavaScript String.prototype methods.
  * Based on ES2020 String.prototype specification.
  */
 public final class StringPrototype {
+
+    /**
+     * String.prototype.anchor(name)
+     * Creates an HTML anchor element with a name attribute.
+     */
+    public static JSValue anchor(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "a", "name");
+    }
 
     /**
      * String.prototype.at(index)
@@ -52,6 +61,30 @@ public final class StringPrototype {
         }
 
         return new JSString(String.valueOf(s.charAt((int) index)));
+    }
+
+    /**
+     * String.prototype.big()
+     * Wraps string in <big> element.
+     */
+    public static JSValue big(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "big", null);
+    }
+
+    /**
+     * String.prototype.blink()
+     * Wraps string in <blink> element.
+     */
+    public static JSValue blink(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "blink", null);
+    }
+
+    /**
+     * String.prototype.bold()
+     * Wraps string in <b> element.
+     */
+    public static JSValue bold(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "b", null);
     }
 
     /**
@@ -118,6 +151,41 @@ public final class StringPrototype {
     }
 
     /**
+     * Helper method to create HTML wrapper strings.
+     * Used by anchor(), big(), blink(), bold(), etc.
+     */
+    private static JSValue createHTML(JSContext context, JSValue thisArg, JSValue[] args,
+                                      String tag, String attr) {
+        JSString str = JSTypeConversions.toString(context, thisArg);
+        StringBuilder result = new StringBuilder();
+
+        result.append('<').append(tag);
+
+        if (attr != null) {
+            // Attribute requires a value from args[0]
+            JSValue attrValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            JSString attrStr = JSTypeConversions.toString(context, attrValue);
+            String attrText = attrStr.value();
+
+            result.append(' ').append(attr).append("=\"");
+            // Escape quotes in attribute value
+            for (int i = 0; i < attrText.length(); i++) {
+                char c = attrText.charAt(i);
+                if (c == '"') {
+                    result.append("&quot;");
+                } else {
+                    result.append(c);
+                }
+            }
+            result.append('"');
+        }
+
+        result.append('>').append(str.value()).append("</").append(tag).append('>');
+
+        return new JSString(result.toString());
+    }
+
+    /**
      * String.prototype.endsWith(searchString[, endPosition])
      * ES2020 21.1.3.6
      */
@@ -139,6 +207,56 @@ public final class StringPrototype {
         }
 
         return JSBoolean.valueOf(s.substring(start, (int) endPosition).equals(searchStr));
+    }
+
+    /**
+     * Helper method to find the first invalid code point in a string.
+     * Returns the index of the first unpaired surrogate, or -1 if the string is well-formed.
+     */
+    private static int findInvalidCodePoint(String str) {
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+
+            // Check if it's a surrogate character
+            if (Character.isSurrogate(c)) {
+                // High surrogate must be followed by low surrogate
+                if (Character.isHighSurrogate(c)) {
+                    if (i + 1 < str.length() && Character.isLowSurrogate(str.charAt(i + 1))) {
+                        i++; // Valid surrogate pair, skip the low surrogate
+                    } else {
+                        return i; // Unpaired high surrogate
+                    }
+                } else {
+                    // Unpaired low surrogate
+                    return i;
+                }
+            }
+        }
+        return -1; // String is well-formed
+    }
+
+    /**
+     * String.prototype.fixed()
+     * Wraps string in <tt> element.
+     */
+    public static JSValue fixed(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "tt", null);
+    }
+
+    /**
+     * String.prototype.fontcolor(color)
+     * Wraps string in <font> element with color attribute.
+     */
+    public static JSValue fontcolor(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "font", "color");
+    }
+
+    /**
+     * String.prototype.fontsize(size)
+     * Wraps string in <font> element with size attribute.
+     */
+    public static JSValue fontsize(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "font", "size");
     }
 
     /**
@@ -201,6 +319,24 @@ public final class StringPrototype {
     }
 
     /**
+     * String.prototype.isWellFormed()
+     * Returns true if the string contains no unpaired surrogates.
+     */
+    public static JSValue isWellFormed(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSString str = JSTypeConversions.toString(context, thisArg);
+        boolean wellFormed = findInvalidCodePoint(str.value()) < 0;
+        return JSBoolean.valueOf(wellFormed);
+    }
+
+    /**
+     * String.prototype.italics()
+     * Wraps string in <i> element.
+     */
+    public static JSValue italics(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "i", null);
+    }
+
+    /**
      * String.prototype.lastIndexOf(searchString[, position])
      * ES2020 21.1.3.9
      */
@@ -218,6 +354,14 @@ public final class StringPrototype {
 
         int index = s.lastIndexOf(searchStr, (int) position);
         return new JSNumber(index);
+    }
+
+    /**
+     * String.prototype.link(url)
+     * Creates an HTML anchor element with an href attribute.
+     */
+    public static JSValue link(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "a", "href");
     }
 
     /**
@@ -251,7 +395,7 @@ public final class StringPrototype {
         if (regexp.isGlobal()) {
             // Global match: set lastIndex to 0 and collect all matches
             regexp.setLastIndex(0);
-            JSArray results = new JSArray();
+            JSArray results = context.createJSArray();
             int n = 0;
 
             while (true) {
@@ -326,7 +470,7 @@ public final class StringPrototype {
         }
 
         // Collect all matches into an array and return an iterator
-        JSArray matches = new JSArray();
+        JSArray matches = context.createJSArray();
         RegExpEngine engine = regexp.getEngine();
         int lastIndex = 0;
 
@@ -337,7 +481,7 @@ public final class StringPrototype {
             }
 
             // Create match array for this result
-            JSArray matchArray = new JSArray();
+            JSArray matchArray = context.createJSArray();
             String[] captures = result.captures();
             for (int i = 0; i < captures.length; i++) {
                 if (captures[i] != null) {
@@ -366,6 +510,44 @@ public final class StringPrototype {
         }
 
         return JSIterator.arrayIterator(matches);
+    }
+
+    /**
+     * String.prototype.normalize([form])
+     * Returns the Unicode Normalization Form of the string.
+     * Valid forms: "NFC" (default), "NFD", "NFKC", "NFKD"
+     */
+    public static JSValue normalize(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSString str = JSTypeConversions.toString(context, thisArg);
+
+        // Default to NFC
+        UnicodeNormalization.Form form = UnicodeNormalization.Form.NFC;
+
+        if (args.length > 0 && !JSUndefined.INSTANCE.equals(args[0])) {
+            JSString formStr = JSTypeConversions.toString(context, args[0]);
+            String formName = formStr.value();
+
+            // Parse normalization form
+            switch (formName) {
+                case "NFC":
+                    form = UnicodeNormalization.Form.NFC;
+                    break;
+                case "NFD":
+                    form = UnicodeNormalization.Form.NFD;
+                    break;
+                case "NFKC":
+                    form = UnicodeNormalization.Form.NFKC;
+                    break;
+                case "NFKD":
+                    form = UnicodeNormalization.Form.NFKD;
+                    break;
+                default:
+                    return context.throwRangeError("The normalization form should be one of NFC, NFD, NFKC, NFKD.");
+            }
+        }
+
+        String normalized = UnicodeNormalization.normalize(str.value(), form);
+        return new JSString(normalized);
     }
 
     /**
@@ -718,6 +900,14 @@ public final class StringPrototype {
     }
 
     /**
+     * String.prototype.small()
+     * Wraps string in <small> element.
+     */
+    public static JSValue small(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "small", null);
+    }
+
+    /**
      * String.prototype.split(separator[, limit])
      * ES2020 21.1.3.17
      */
@@ -726,7 +916,7 @@ public final class StringPrototype {
         String s = str.value();
 
         if (args.length == 0 || args[0] instanceof JSUndefined) {
-            JSArray arr = new JSArray();
+            JSArray arr = context.createJSArray();
             arr.push(str);
             return arr;
         }
@@ -736,7 +926,7 @@ public final class StringPrototype {
                 ? JSTypeConversions.toUint32(context, args[1])
                 : Long.MAX_VALUE;
 
-        JSArray arr = new JSArray();
+        JSArray arr = context.createJSArray();
 
         // Handle RegExp separator
         if (separatorArg instanceof JSRegExp regexp) {
@@ -840,6 +1030,22 @@ public final class StringPrototype {
     }
 
     /**
+     * String.prototype.strike()
+     * Wraps string in <strike> element.
+     */
+    public static JSValue strike(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "strike", null);
+    }
+
+    /**
+     * String.prototype.sub()
+     * Wraps string in <sub> element.
+     */
+    public static JSValue sub(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "sub", null);
+    }
+
+    /**
      * String.prototype.substr(start[, length])
      * ES2020 B.2.3.1 (Deprecated, but still widely used)
      */
@@ -890,6 +1096,36 @@ public final class StringPrototype {
     }
 
     /**
+     * String.prototype.sup()
+     * Wraps string in <sup> element.
+     */
+    public static JSValue sup(JSContext context, JSValue thisArg, JSValue[] args) {
+        return createHTML(context, thisArg, args, "sup", null);
+    }
+
+    /**
+     * String.prototype.toLocaleLowerCase([locale])
+     * Converts string to lowercase according to locale-specific rules.
+     * For now, this is the same as toLowerCase() (locale parameter is ignored).
+     */
+    public static JSValue toLocaleLowerCase(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSString str = JSTypeConversions.toString(context, thisArg);
+        // In QuickJS, this just calls toLowerCase() - locale is ignored
+        return new JSString(str.value().toLowerCase());
+    }
+
+    /**
+     * String.prototype.toLocaleUpperCase([locale])
+     * Converts string to uppercase according to locale-specific rules.
+     * For now, this is the same as toUpperCase() (locale parameter is ignored).
+     */
+    public static JSValue toLocaleUpperCase(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSString str = JSTypeConversions.toString(context, thisArg);
+        // In QuickJS, this just calls toUpperCase() - locale is ignored
+        return new JSString(str.value().toUpperCase());
+    }
+
+    /**
      * String.prototype.toLowerCase()
      * ES2020 21.1.3.22
      */
@@ -915,6 +1151,44 @@ public final class StringPrototype {
     public static JSValue toUpperCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(context, thisArg);
         return new JSString(str.value().toUpperCase());
+    }
+
+    /**
+     * String.prototype.toWellFormed()
+     * Returns a string where all unpaired surrogates are replaced with U+FFFD (replacement character).
+     */
+    public static JSValue toWellFormed(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSString str = JSTypeConversions.toString(context, thisArg);
+        String s = str.value();
+
+        // Check if string is already well-formed
+        int firstInvalid = findInvalidCodePoint(s);
+        if (firstInvalid < 0) {
+            // Already well-formed, return original string
+            return str;
+        }
+
+        // Replace unpaired surrogates with U+FFFD
+        StringBuilder result = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+
+            if (Character.isSurrogate(c)) {
+                if (Character.isHighSurrogate(c) && i + 1 < s.length() && Character.isLowSurrogate(s.charAt(i + 1))) {
+                    // Valid surrogate pair
+                    result.append(c);
+                    result.append(s.charAt(i + 1));
+                    i++;
+                } else {
+                    // Unpaired surrogate, replace with replacement character
+                    result.append('\uFFFD');
+                }
+            } else {
+                result.append(c);
+            }
+        }
+
+        return new JSString(result.toString());
     }
 
     /**

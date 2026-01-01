@@ -231,7 +231,7 @@ public final class ObjectPrototype {
         }
 
         if (!(arg instanceof JSObject obj)) {
-            return new JSArray();
+            return context.createJSArray();
         }
 
         PropertyKey[] enumerableKeys = obj.enumerableKeys();
@@ -290,7 +290,7 @@ public final class ObjectPrototype {
         }
 
         if (!(arg instanceof JSObject obj)) {
-            return new JSArray();
+            return context.createJSArray();
         }
 
         PropertyKey[] enumerableKeys = obj.enumerableKeys();
@@ -437,7 +437,7 @@ public final class ObjectPrototype {
         }
 
         if (!(arg instanceof JSObject obj)) {
-            return new JSArray();
+            return context.createJSArray();
         }
 
         PropertyKey[] enumerableKeys = obj.enumerableKeys();

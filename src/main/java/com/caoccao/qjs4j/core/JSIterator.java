@@ -66,12 +66,12 @@ public class JSIterator extends JSObject {
     /**
      * Create a Map entries iterator.
      */
-    public static JSIterator mapEntriesIterator(JSMap map) {
+    public static JSIterator mapEntriesIterator(JSContext context, JSMap map) {
         final java.util.Iterator<java.util.Map.Entry<JSMap.KeyWrapper, JSValue>> iter = map.entries().iterator();
         return new JSIterator(() -> {
             if (iter.hasNext()) {
                 java.util.Map.Entry<JSMap.KeyWrapper, JSValue> entry = iter.next();
-                JSArray pair = new JSArray();
+                JSArray pair = context.createJSArray();
                 pair.push(entry.getKey().value());
                 pair.push(entry.getValue());
                 return IteratorResult.of(pair);
@@ -112,12 +112,12 @@ public class JSIterator extends JSObject {
      * Create a Set entries iterator.
      * Returns [value, value] pairs (Set uses value twice for consistency with Map).
      */
-    public static JSIterator setEntriesIterator(JSSet set) {
+    public static JSIterator setEntriesIterator(JSContext context, JSSet set) {
         final java.util.Iterator<JSMap.KeyWrapper> iter = set.values().iterator();
         return new JSIterator(() -> {
             if (iter.hasNext()) {
                 JSValue value = iter.next().value();
-                JSArray pair = new JSArray();
+                JSArray pair = context.createJSArray();
                 pair.push(value);
                 pair.push(value); // In Set, both elements are the same value
                 return IteratorResult.of(pair);

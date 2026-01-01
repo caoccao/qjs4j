@@ -28,14 +28,14 @@ public final class JSAggregateError extends JSError {
      * Create an AggregateError with an empty errors array.
      */
     public JSAggregateError(JSContext context) {
-        this(context, new JSArray(), "");
+        this(context, context.createJSArray(), "");
     }
 
     /**
      * Create an AggregateError with a message.
      */
     public JSAggregateError(JSContext context, String message) {
-        this(context, new JSArray(), message);
+        this(context, context.createJSArray(), message);
     }
 
     /**

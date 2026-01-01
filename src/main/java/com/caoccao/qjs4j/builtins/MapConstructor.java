@@ -58,7 +58,7 @@ public final class MapConstructor {
             if (existingGroup instanceof JSArray) {
                 group = (JSArray) existingGroup;
             } else {
-                group = new JSArray();
+                group = context.createJSArray();
                 result.mapSet(keyValue, group);
             }
 

@@ -157,7 +157,7 @@ public final class JSIteratorHelper {
      * @return A JSArray containing all values from the iterable
      */
     public static JSArray toArray(JSValue iterable, JSContext context) {
-        JSArray result = new JSArray();
+        JSArray result = context.createJSArray();
 
         forOf(iterable, (value) -> {
             result.push(value);
@@ -170,11 +170,12 @@ public final class JSIteratorHelper {
     /**
      * Convert a JSIterator to an array.
      *
+     * @param context  the context
      * @param iterator The iterator to convert
      * @return A JSArray containing all values from the iterator
      */
-    public static JSArray toArray(JSIterator iterator) {
-        JSArray result = new JSArray();
+    public static JSArray toArray(JSContext context, JSIterator iterator) {
+        JSArray result = context.createJSArray();
         while (true) {
             JSObject iterResult = iterator.next();
             JSValue doneValue = iterResult.get("done");

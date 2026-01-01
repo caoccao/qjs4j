@@ -77,7 +77,7 @@ public final class SetPrototype {
             return context.throwTypeError("Set.prototype.entries called on non-Set");
         }
 
-        return JSIterator.setEntriesIterator(set);
+        return JSIterator.setEntriesIterator(context, set);
     }
 
     /**

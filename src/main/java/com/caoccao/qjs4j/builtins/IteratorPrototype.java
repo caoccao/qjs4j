@@ -36,7 +36,7 @@ public final class IteratorPrototype {
         final int[] index = {0};
         return new JSIterator(() -> {
             if (index[0] < array.getLength()) {
-                JSArray pair = new JSArray();
+                JSArray pair = context.createJSArray();
                 pair.push(new JSNumber(index[0]));
                 pair.push(array.get(index[0]));
                 index[0]++;
@@ -85,7 +85,7 @@ public final class IteratorPrototype {
             return context.throwTypeError("Map.prototype.entries called on non-Map");
         }
 
-        return JSIterator.mapEntriesIterator(map);
+        return JSIterator.mapEntriesIterator(context, map);
     }
 
     /**
@@ -137,7 +137,7 @@ public final class IteratorPrototype {
         return new JSIterator(() -> {
             if (iter.hasNext()) {
                 JSValue value = iter.next().value();
-                JSArray pair = new JSArray();
+                JSArray pair = context.createJSArray();
                 pair.push(value);
                 pair.push(value); // In Set, both elements are the same
                 return JSIterator.IteratorResult.of(pair);

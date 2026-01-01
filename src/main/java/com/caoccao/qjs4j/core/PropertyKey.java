@@ -178,7 +178,7 @@ public final class PropertyKey {
             return i.toString();
         }
         if (value instanceof JSSymbol s) {
-            return "Symbol(" + (s.getDescription() != null ? s.getDescription() : "") + ")";
+            return s.toJavaObject();
         }
         return value.toString();
     }

@@ -208,7 +208,7 @@ public final class JSAsyncIteratorHelper {
      */
     public static JSPromise toArray(JSValue iterable, JSContext context) {
         JSPromise resultPromise = new JSPromise();
-        JSArray array = new JSArray();
+        JSArray array = context.createJSArray();
 
         // Use for-await-of to collect all values
         forAwaitOf(iterable, (value) -> {

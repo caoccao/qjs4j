@@ -28,7 +28,7 @@ public final class ArrayConstructor {
      * Helper method to create a new array with the proper prototype chain
      */
     private static JSArray createArray(JSContext context) {
-        JSArray array = new JSArray();
+        JSArray array = context.createJSArray();
         // Set prototype to Array.prototype
         JSValue arrayCtor = context.getGlobalObject().get("Array");
         if (arrayCtor instanceof JSObject) {

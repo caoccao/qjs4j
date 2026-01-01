@@ -46,7 +46,7 @@ public final class RegExpPrototype {
 
         if (result != null && result.matched()) {
             // Create result array
-            JSArray array = new JSArray();
+            JSArray array = context.createJSArray();
 
             // Add matched string and capture groups
             String[] captures = result.captures();

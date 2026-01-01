@@ -23,8 +23,6 @@ import com.caoccao.qjs4j.core.JSStringObject;
 import com.caoccao.qjs4j.core.JSValue;
 import org.junit.jupiter.api.Test;
 
-import java.util.stream.Stream;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**

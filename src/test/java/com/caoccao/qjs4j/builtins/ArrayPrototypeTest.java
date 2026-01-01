@@ -1282,6 +1282,12 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSValue nonArray = new JSString("not an array");
         assertTypeError(ArrayPrototype.sort(context, nonArray, new JSValue[]{}));
         assertPendingException(context);
+
+        assertObjectWithJavet(
+                "[].sort()",
+                "[1.1,2.1]",
+                "['b','a']",
+                "['a',null,undefined,[],'b']");
     }
 
     @Test

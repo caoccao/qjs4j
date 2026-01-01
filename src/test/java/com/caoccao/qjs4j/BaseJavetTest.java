@@ -20,19 +20,19 @@ import static org.assertj.core.api.Assertions.*;
 public class BaseJavetTest extends BaseTest {
     protected V8Runtime v8Runtime;
 
-    protected void assertBigIntegerWithJavet(String... codeArray) {
-        for (String code : codeArray) {
-            assertWithJavet(
-                    () -> BigInteger.valueOf(v8Runtime.getExecutor(code).executeLong()),
-                    () -> context.eval(code).toJavaObject());
-        }
-    }
-
     protected void assertBigIntegerObjectWithJavet(String... codeArray) {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> BigInteger.valueOf(v8Runtime.getExecutor(code).executeLong()),
                     () -> context.eval(code).asBigIntObject().map(JSBigIntObject::getValue).map(JSBigInt::value).orElseThrow());
+        }
+    }
+
+    protected void assertBigIntegerWithJavet(String... codeArray) {
+        for (String code : codeArray) {
+            assertWithJavet(
+                    () -> BigInteger.valueOf(v8Runtime.getExecutor(code).executeLong()),
+                    () -> context.eval(code).toJavaObject());
         }
     }
 
@@ -82,6 +82,14 @@ public class BaseJavetTest extends BaseTest {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> v8Runtime.getExecutor(code).executeLong().doubleValue(),
+                    () -> context.eval(code).toJavaObject());
+        }
+    }
+
+    protected void assertObjectWithJavet(String... codeArray) {
+        for (String code : codeArray) {
+            assertWithJavet(
+                    () -> v8Runtime.getExecutor(code).executeObject(),
                     () -> context.eval(code).toJavaObject());
         }
     }

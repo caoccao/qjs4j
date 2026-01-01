@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 import java.util.List;
+import java.util.stream.LongStream;
 
 /**
  * Implementation of Object constructor and static methods.
@@ -340,30 +341,23 @@ public final class ObjectConstructor {
         if (args.length == 0) {
             return context.throwTypeError("Object.entries called on non-object");
         }
-
         JSValue arg = args[0];
-
         // Null and undefined throw TypeError
-        if (arg instanceof JSNull || arg instanceof JSUndefined) {
+        if (arg.isNullOrUndefined()) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
-
-        if (!(arg instanceof JSObject obj)) {
-            return new JSArray();
-        }
-
-        List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
-        JSArray result = new JSArray();
-
-        for (PropertyKey key : propertyKeys) {
-            if (key.isString()) {
-                JSArray entry = new JSArray();
-                entry.push(new JSString(key.asString()));
-                entry.push(obj.get(key));
-                result.push(entry);
+        JSArray result = context.createJSArray();
+        if (arg instanceof JSObject jsObject) {
+            List<PropertyKey> propertyKeys = jsObject.getOwnPropertyKeys();
+            for (PropertyKey key : propertyKeys) {
+                if (key.isString()) {
+                    JSArray entry = context.createJSArray();
+                    entry.push(new JSString(key.asString()));
+                    entry.push(jsObject.get(key));
+                    result.push(entry);
+                }
             }
         }
-
         return result;
     }
 
@@ -584,26 +578,27 @@ public final class ObjectConstructor {
      * Returns an array of all own property names (including non-enumerable).
      */
     public static JSValue getOwnPropertyNames(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Object.getOwnPropertyNames called on non-object");
-        }
+        if (args.length > 0) {
+            JSValue objArg = args[0];
+            JSArray result = context.createJSArray();
 
-        JSValue objArg = args[0];
-        if (!(objArg instanceof JSObject obj)) {
-            return context.throwTypeError("Object.getOwnPropertyNames called on non-object");
-        }
-
-        List<PropertyKey> keys = obj.getOwnPropertyKeys();
-        JSArray result = new JSArray();
-
-        for (PropertyKey key : keys) {
-            // Only include string keys (not symbols)
-            if (!key.isSymbol()) {
-                result.push(new JSString(key.toPropertyString()));
+            if (objArg instanceof JSArray jsArray) {
+                LongStream.range(0, jsArray.getLength()).forEach(l -> result.push(new JSString(String.valueOf(l))));
             }
+            if (objArg instanceof JSObject jsObject) {
+                List<PropertyKey> keys = jsObject.getOwnPropertyKeys();
+                for (PropertyKey key : keys) {
+                    // Only include string keys (not symbols)
+                    if (!key.isSymbol()) {
+                        result.push(new JSString(key.toPropertyString()));
+                    }
+                }
+            } else {
+                return context.throwTypeError("Cannot convert undefined or null to object");
+            }
+            return result;
         }
-
-        return result;
+        return context.throwTypeError("Cannot convert undefined or null to object");
     }
 
     /**
@@ -613,16 +608,16 @@ public final class ObjectConstructor {
      */
     public static JSValue getOwnPropertySymbols(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSArray();
+            return context.createJSArray();
         }
 
         JSValue objArg = args[0];
         if (!(objArg instanceof JSObject obj)) {
-            return new JSArray();
+            return context.createJSArray();
         }
 
         List<PropertyKey> keys = obj.getOwnPropertyKeys();
-        JSArray result = new JSArray();
+        JSArray result = context.createJSArray();
 
         for (PropertyKey key : keys) {
             // Only include symbol keys
@@ -693,7 +688,7 @@ public final class ObjectConstructor {
             if (existingGroup instanceof JSArray) {
                 group = (JSArray) existingGroup;
             } else {
-                group = new JSArray();
+                group = context.createJSArray();
                 result.set(key, group);
             }
 
@@ -867,11 +862,11 @@ public final class ObjectConstructor {
 
         if (!(arg instanceof JSObject obj)) {
             // Other primitive values are coerced to objects (return empty array)
-            return new JSArray();
+            return context.createJSArray();
         }
 
         List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
-        JSArray result = new JSArray();
+        JSArray result = context.createJSArray();
 
         for (PropertyKey key : propertyKeys) {
             if (key.isString()) {
@@ -971,11 +966,11 @@ public final class ObjectConstructor {
         }
 
         if (!(arg instanceof JSObject obj)) {
-            return new JSArray();
+            return context.createJSArray();
         }
 
         List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
-        JSArray result = new JSArray();
+        JSArray result = context.createJSArray();
 
         for (PropertyKey key : propertyKeys) {
             if (key.isString()) {

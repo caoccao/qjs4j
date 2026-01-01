@@ -20,8 +20,6 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
-import java.util.stream.Stream;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 
