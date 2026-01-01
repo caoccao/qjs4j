@@ -320,6 +320,88 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testPrototype() {
+        assertObjectWithJavet(
+                "Object.getOwnPropertyNames(Function.prototype).sort()");
+    }
+
+    @Test
+    public void testPrototypeArguments() {
+        // Test that 'arguments' property exists
+        assertBooleanWithJavet("'arguments' in Function.prototype");
+
+        // Test that accessing 'arguments' throws TypeError
+        assertStringWithJavet(
+                "try { Function.prototype.arguments; 'no error' } catch (e) { `${e.name}: ${e.message}` }");
+
+        // Test that setting 'arguments' throws TypeError
+        assertStringWithJavet(
+                "try { Function.prototype.arguments = 'test'; 'no error' } catch (e) { `${e.name}: ${e.message}` }");
+
+        // Test property descriptor
+        assertObjectWithJavet(
+                "Object.getOwnPropertyDescriptor(Function.prototype, 'arguments')");
+    }
+
+    @Test
+    public void testPrototypeCaller() {
+        // Test that 'caller' property exists
+        assertBooleanWithJavet("'caller' in Function.prototype");
+
+        // Test that accessing 'caller' throws TypeError
+        assertStringWithJavet(
+                "try { Function.prototype.caller; 'no error' } catch (e) { `${e.name}: ${e.message}` }");
+
+        // Test that setting 'caller' throws TypeError
+        assertStringWithJavet(
+                "try { Function.prototype.caller = 'test'; 'no error' } catch (e) { `${e.name}: ${e.message}` }");
+
+        // Test property descriptor
+        assertObjectWithJavet(
+                "Object.getOwnPropertyDescriptor(Function.prototype, 'caller')");
+    }
+
+    @Test
+    public void testPrototypeLength() {
+        // Test that 'length' property value is 0
+        assertIntegerWithJavet("Function.prototype.length");
+
+        // Test property descriptor
+        assertStringWithJavet(
+                "JSON.stringify(Object.getOwnPropertyDescriptor(Function.prototype, 'length'))");
+
+        assertBooleanWithJavet(
+                // Test that length is not enumerable
+                "Object.keys(Function.prototype).includes('length')",
+                // Test that length is configurable
+                "Object.getOwnPropertyDescriptor(Function.prototype, 'length').configurable");
+
+        // Test that length is not writable
+        assertErrorWithJavet(
+                "'use strict';\nFunction.prototype.length = 5; Function.prototype.length");
+    }
+
+    @Test
+    public void testPrototypeName() {
+        // Test that 'name' property value is empty string
+        assertStringWithJavet("Function.prototype.name");
+
+        // Test property descriptor
+        assertObjectWithJavet(
+                "Object.getOwnPropertyDescriptor(Function.prototype, 'name')");
+
+        // Test that name is not writable
+        assertErrorWithJavet(
+                "'use strict';\nFunction.prototype.name = 'test';");
+
+        assertBooleanWithJavet(
+                // Test that name is not enumerable
+                "Object.keys(Function.prototype).includes('name')",
+                // Test that name is configurable
+                "Object.getOwnPropertyDescriptor(Function.prototype, 'name').configurable");
+    }
+
+    @Test
     public void testToString() {
         // Normal case: function with name
         JSFunction testFunc = new JSNativeFunction("testFunction", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);

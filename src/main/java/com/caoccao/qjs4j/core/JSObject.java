@@ -263,7 +263,12 @@ public non-sealed class JSObject implements JSValue {
                 JSFunction getter = desc.getGetter();
                 if (getter != null && context != null) {
                     // Call the getter with the ORIGINAL receiver as 'this', not the prototype
-                    return getter.call(context, receiver, new JSValue[0]);
+                    JSValue result = getter.call(context, receiver, new JSValue[0]);
+                    // Check if getter threw an exception - return the error value or undefined
+                    if (context.hasPendingException()) {
+                        return result != null ? result : context.getPendingException();
+                    }
+                    return result;
                 }
                 // Getter is explicitly undefined or no context available
                 return JSUndefined.INSTANCE;
@@ -499,6 +504,8 @@ public non-sealed class JSObject implements JSValue {
                 if (setter != null && context != null) {
                     // Call the setter with 'this' as the object and value as argument
                     setter.call(context, this, new JSValue[]{value});
+                    // If setter threw an exception, it remains pending in context
+                    // The VM will check for it after property access
                 }
                 // If setter is null/undefined or no context, the assignment does nothing (silently fails)
                 return;
@@ -506,7 +513,15 @@ public non-sealed class JSObject implements JSValue {
 
             // Regular property - check if writable
             if (!desc.isWritable() || frozen) {
-                // In strict mode, this would throw TypeError
+                // In strict mode, throw TypeError
+                if (context != null && context.isStrictMode()) {
+                    // Get better description of object for error message
+                    String objectDesc = this instanceof JSFunction func ?
+                            "function '" + func + "'" : this.toString();
+                    context.throwTypeError(
+                            "Cannot assign to read only property '" + key.asString() + "' of " + objectDesc);
+                }
+                // In non-strict mode, silently fail
                 return;
             }
             propertyValues[offset] = value;
@@ -547,10 +562,9 @@ public non-sealed class JSObject implements JSValue {
         // Get all own property keys in order (shaped properties first, then sparse)
         List<PropertyKey> keys = getOwnPropertyKeys();
         for (PropertyKey key : keys) {
-            JSValue value = get(key);
-            if (value != null) {
-                objMap.put(key.toPropertyString(), value.toJavaObject());
-            }
+            Optional.of(get(key))
+                    .map(JSValue::toJavaObject)
+                    .ifPresent(valueObject -> objMap.put(key.toPropertyString(), valueObject));
         }
         return objMap;
     }

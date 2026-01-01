@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.core;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
@@ -226,7 +228,7 @@ public final class JSArray extends JSObject {
         } else {
             // Use sparse storage for large indices
             if (sparseProperties == null) {
-                sparseProperties = new java.util.HashMap<>();
+                sparseProperties = new HashMap<>();
             }
             sparseProperties.put((int) index, value);
         }
@@ -325,8 +327,8 @@ public final class JSArray extends JSObject {
 
         // Handle sparse properties
         if (sparseProperties != null) {
-            java.util.Map<Integer, JSValue> newSparse = new java.util.HashMap<>();
-            for (java.util.Map.Entry<Integer, JSValue> entry : sparseProperties.entrySet()) {
+            Map<Integer, JSValue> newSparse = new HashMap<>();
+            for (Map.Entry<Integer, JSValue> entry : sparseProperties.entrySet()) {
                 int index = entry.getKey();
                 if (index >= start + count) {
                     newSparse.put(index - count, entry.getValue());
@@ -352,7 +354,7 @@ public final class JSArray extends JSObject {
             } else if (denseArray[i] != null) {
                 // Move to sparse storage
                 if (sparseProperties == null) {
-                    sparseProperties = new java.util.HashMap<>();
+                    sparseProperties = new HashMap<>();
                 }
                 sparseProperties.put(i + count, denseArray[i]);
             }

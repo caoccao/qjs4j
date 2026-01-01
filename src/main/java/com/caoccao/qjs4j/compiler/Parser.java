@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.compiler.ast.*;
 import com.caoccao.qjs4j.compiler.ast.BinaryExpression.BinaryOperator;
 import com.caoccao.qjs4j.compiler.ast.UnaryExpression.UnaryOperator;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -852,13 +853,13 @@ public final class Parser {
                 // Parse BigInt literal - handle different radixes
                 java.math.BigInteger bigIntValue;
                 if (value.startsWith("0x") || value.startsWith("0X")) {
-                    bigIntValue = new java.math.BigInteger(value.substring(2), 16);
+                    bigIntValue = new BigInteger(value.substring(2), 16);
                 } else if (value.startsWith("0b") || value.startsWith("0B")) {
-                    bigIntValue = new java.math.BigInteger(value.substring(2), 2);
+                    bigIntValue = new BigInteger(value.substring(2), 2);
                 } else if (value.startsWith("0o") || value.startsWith("0O")) {
-                    bigIntValue = new java.math.BigInteger(value.substring(2), 8);
+                    bigIntValue = new BigInteger(value.substring(2), 8);
                 } else {
-                    bigIntValue = new java.math.BigInteger(value);
+                    bigIntValue = new BigInteger(value);
                 }
                 yield new Literal(bigIntValue, location);
             }

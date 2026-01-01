@@ -53,4 +53,9 @@ public abstract sealed class JSFunction extends JSObject
             }
         }
     }
+
+    @Override
+    public Object toJavaObject() {
+        return null;
+    }
 }

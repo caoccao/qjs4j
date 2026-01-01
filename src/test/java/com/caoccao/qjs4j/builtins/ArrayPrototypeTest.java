@@ -971,6 +971,12 @@ public class ArrayPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testPrototype() {
+        assertObjectWithJavet(
+                "Object.getOwnPropertyNames(Array.prototype).sort()");
+    }
+
+    @Test
     public void testPush() {
         // Normal case
         JSArray arr = new JSArray();

@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
  * Unit tests for SymbolPrototype methods.
  */
 public class SymbolPrototypeTest extends BaseJavetTest {
-
     @Test
     public void testGetDescription() {
         assertStringWithJavet(

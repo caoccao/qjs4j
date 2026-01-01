@@ -1033,11 +1033,8 @@ public class StringPrototypeTest extends BaseJavetTest {
         } catch (Exception e) {
             assertThat(e.getMessage()).isEqualTo("TypeError: String.prototype.toString requires that 'this' be a String");
         }
-        try {
-            context.eval("String.prototype.toString.call(123)");
-        } catch (Exception e) {
-            assertThat(e.getMessage()).isEqualTo("TypeError: String.prototype.toString requires that 'this' be a String");
-        }
+        assertErrorWithJavet(
+                "String.prototype.toString.call(123)");
     }
 
     @Test

@@ -41,11 +41,11 @@ public final class JSSuppressedError extends JSError {
 
     /**
      * Create a SuppressedError with error, suppressed error, and message.
-     * 
-     * @param context The JavaScript context
-     * @param error The main (primary) error
+     *
+     * @param context    The JavaScript context
+     * @param error      The main (primary) error
      * @param suppressed The error that was suppressed during cleanup/dispose
-     * @param message Optional custom message
+     * @param message    Optional custom message
      */
     public JSSuppressedError(JSContext context, JSValue error, JSValue suppressed, String message) {
         super(context, NAME, message);

@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.types;
 
+import com.caoccao.qjs4j.compiler.Compiler;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSObject;
@@ -132,7 +133,7 @@ public final class ModuleLoader implements JSModule.ModuleResolver {
         // Compile module
         JSBytecodeFunction moduleFunction;
         try {
-            moduleFunction = com.caoccao.qjs4j.compiler.Compiler.compileModule(source, absoluteUrl);
+            moduleFunction = Compiler.compileModule(source, absoluteUrl);
         } catch (Exception e) {
             throw new JSModule.ModuleLinkingException("Cannot compile module " + specifier + ": " + e.getMessage(), e);
         }

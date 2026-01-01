@@ -16,9 +16,7 @@
 
 package com.caoccao.qjs4j.vm;
 
-import com.caoccao.qjs4j.builtins.BigIntConstructor;
-import com.caoccao.qjs4j.builtins.SharedArrayBufferConstructor;
-import com.caoccao.qjs4j.builtins.SymbolConstructor;
+import com.caoccao.qjs4j.builtins.*;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
@@ -103,7 +101,10 @@ public final class VirtualMachine {
                     if (!foundHandler) {
                         // No handler found - propagate exception
                         currentFrame = previousFrame;
-                        throw new JSVirtualMachineException("Unhandled exception: " + exception);
+                        if (exception instanceof JSError jsError) {
+                            throw new JSVirtualMachineException(jsError);
+                        }
+                        throw new JSVirtualMachineException("Unhandled exception: " + JSTypeConversions.toString(context, exception).value());
                     }
 
                     // Continue execution at catch handler
@@ -398,14 +399,21 @@ public final class VirtualMachine {
                         JSObject targetObj = toObject(obj);
                         if (targetObj != null) {
                             JSValue result = targetObj.get(PropertyKey.fromString(fieldName), context);
-                            // Track property access for better error messages (unless locked)
-                            if (!propertyAccessLock) {
-                                if (!propertyAccessChain.isEmpty()) {
-                                    propertyAccessChain.append('.');
+                            // Check if getter threw an exception
+                            if (context.hasPendingException()) {
+                                pendingException = context.getPendingException();
+                                context.clearPendingException();
+                                valueStack.push(JSUndefined.INSTANCE);
+                            } else {
+                                // Track property access for better error messages (unless locked)
+                                if (!propertyAccessLock) {
+                                    if (!propertyAccessChain.isEmpty()) {
+                                        propertyAccessChain.append('.');
+                                    }
+                                    propertyAccessChain.append(fieldName);
                                 }
-                                propertyAccessChain.append(fieldName);
+                                valueStack.push(result);
                             }
-                            valueStack.push(result);
                         } else {
                             resetPropertyAccessTracking();
                             valueStack.push(JSUndefined.INSTANCE);
@@ -420,6 +428,11 @@ public final class VirtualMachine {
                         JSValue putFieldValue = valueStack.peek(0);
                         if (putFieldObj instanceof JSObject jsObj) {
                             jsObj.set(PropertyKey.fromString(putFieldName), putFieldValue, context);
+                            // Check if setter threw an exception
+                            if (context.hasPendingException()) {
+                                pendingException = context.getPendingException();
+                                context.clearPendingException();
+                            }
                         }
                         pc += op.getSize();
                     }
@@ -432,25 +445,32 @@ public final class VirtualMachine {
                         if (targetObj != null) {
                             PropertyKey key = PropertyKey.fromValue(context, index);
                             JSValue result = targetObj.get(key, context);
-                            // Track property access for better error messages (unless locked)
-                            if (!propertyAccessLock) {
-                                if (index instanceof JSString jsString) {
-                                    String propertyName = jsString.value();
-                                    if (!propertyAccessChain.isEmpty()) {
-                                        propertyAccessChain.append('.');
+                            // Check if getter threw an exception
+                            if (context.hasPendingException()) {
+                                pendingException = context.getPendingException();
+                                context.clearPendingException();
+                                valueStack.push(JSUndefined.INSTANCE);
+                            } else {
+                                // Track property access for better error messages (unless locked)
+                                if (!propertyAccessLock) {
+                                    if (index instanceof JSString jsString) {
+                                        String propertyName = jsString.value();
+                                        if (!propertyAccessChain.isEmpty()) {
+                                            propertyAccessChain.append('.');
+                                        }
+                                        propertyAccessChain.append(propertyName);
+                                    } else if (index instanceof JSNumber jsNumber) {
+                                        String propertyName = JSTypeConversions.toString(context, jsNumber).value();
+                                        if (!propertyAccessChain.isEmpty()) {
+                                            propertyAccessChain.append('.');
+                                        }
+                                        propertyAccessChain.append(propertyName);
+                                    } else if (index instanceof JSSymbol jsSymbol) {
+                                        propertyAccessChain.append("[Symbol.").append(jsSymbol.getDescription()).append("]");
                                     }
-                                    propertyAccessChain.append(propertyName);
-                                } else if (index instanceof JSNumber jsNumber) {
-                                    String propertyName = JSTypeConversions.toString(context, jsNumber).value();
-                                    if (!propertyAccessChain.isEmpty()) {
-                                        propertyAccessChain.append('.');
-                                    }
-                                    propertyAccessChain.append(propertyName);
-                                } else if (index instanceof JSSymbol jsSymbol) {
-                                    propertyAccessChain.append("[Symbol.").append(jsSymbol.getDescription()).append("]");
                                 }
+                                valueStack.push(result);
                             }
-                            valueStack.push(result);
                         } else {
                             resetPropertyAccessTracking();
                             valueStack.push(JSUndefined.INSTANCE);
@@ -465,6 +485,11 @@ public final class VirtualMachine {
                         if (putElObj instanceof JSObject jsObj) {
                             PropertyKey key = PropertyKey.fromValue(context, putElIndex);
                             jsObj.set(key, putElValue, context);
+                            // Check if setter threw an exception
+                            if (context.hasPendingException()) {
+                                pendingException = context.getPendingException();
+                                context.clearPendingException();
+                            }
                         }
                         // Assignment expressions return the assigned value
                         valueStack.push(putElValue);
@@ -611,6 +636,7 @@ public final class VirtualMachine {
             // Restore stack and strict mode on exception
             valueStack.setStackTop(savedStackTop);
             currentFrame = previousFrame;
+            resetPropertyAccessTracking();
             if (savedStrictMode) {
                 context.enterStrictMode();
             } else {
@@ -621,6 +647,7 @@ public final class VirtualMachine {
             // Restore stack and strict mode on exception
             valueStack.setStackTop(savedStackTop);
             currentFrame = previousFrame;
+            resetPropertyAccessTracking();
             if (savedStrictMode) {
                 context.enterStrictMode();
             } else {
@@ -1291,7 +1318,7 @@ public final class VirtualMachine {
                     return;
                 }
 
-                JSValue result = com.caoccao.qjs4j.builtins.WeakRefConstructor.createWeakRef(context, args[0]);
+                JSValue result = WeakRefConstructor.createWeakRef(context, args[0]);
                 if (result instanceof JSWeakRef weakRef) {
                     // Set prototype
                     JSValue prototypeValue = ctorObj.get("prototype");
@@ -1315,7 +1342,7 @@ public final class VirtualMachine {
                     return;
                 }
 
-                JSValue result = com.caoccao.qjs4j.builtins.FinalizationRegistryConstructor.createFinalizationRegistry(context, args[0]);
+                JSValue result = FinalizationRegistryConstructor.createFinalizationRegistry(context, args[0]);
                 if (result instanceof JSFinalizationRegistry registry) {
                     // Set prototype
                     JSValue prototypeValue = ctorObj.get("prototype");
@@ -1439,7 +1466,7 @@ public final class VirtualMachine {
 
                 // Create Error object of the proper type
                 JSError errorObj;
-                
+
                 if (ctorType == ConstructorType.SUPPRESSED_ERROR) {
                     // SuppressedError has special constructor: new SuppressedError(error, suppressed, message)
                     JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;

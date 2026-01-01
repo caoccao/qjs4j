@@ -32,7 +32,8 @@ public final class JSNativeFunction extends JSFunction {
 
         // Set up function properties on the object
         // Functions are objects in JavaScript and have these standard properties
-        this.set("name", new JSString(this.name));
+        // Use empty string for name property if name is null (e.g., Function.prototype)
+        this.set("name", new JSString(this.name != null ? this.name : ""));
         this.set("length", new JSNumber(this.length));
 
         // Native functions also have a prototype property
@@ -58,8 +59,15 @@ public final class JSNativeFunction extends JSFunction {
 
     @Override
     public String toString() {
-        String functionName = name != null && !name.isEmpty() ? name : "anonymous";
-        return "function " + functionName + "() { [native code] }";
+        // null name means no name at all (e.g., Function.prototype)
+        // empty string name means use "anonymous" (e.g., unnamed functions)
+        if (name == null) {
+            return "function () { [native code] }";
+        } else if (name.isEmpty()) {
+            return "function anonymous() { [native code] }";
+        } else {
+            return "function " + name + "() { [native code] }";
+        }
     }
 
     @Override

@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.types.JSModule;
+import com.caoccao.qjs4j.vm.VirtualMachine;
 
 import java.util.*;
 
@@ -48,7 +49,7 @@ public final class JSContext implements AutoCloseable {
     private final JSMicrotaskQueue microtaskQueue;
     private final Map<String, JSModule> moduleCache;
     private final JSRuntime runtime;
-    private final com.caoccao.qjs4j.vm.VirtualMachine virtualMachine;
+    private final VirtualMachine virtualMachine;
     private JSValue currentThis;
     private boolean inCatchHandler;
     private int maxStackDepth;
@@ -74,7 +75,7 @@ public final class JSContext implements AutoCloseable {
         this.currentThis = globalObject;
         this.errorStackTrace = new ArrayList<>();
         this.microtaskQueue = new JSMicrotaskQueue();
-        this.virtualMachine = new com.caoccao.qjs4j.vm.VirtualMachine(this);
+        this.virtualMachine = new VirtualMachine(this);
 
         initializeGlobalObject();
     }
@@ -83,7 +84,7 @@ public final class JSContext implements AutoCloseable {
      * Capture stack trace when exception is thrown.
      */
     private void captureErrorStackTrace() {
-        errorStackTrace.clear();
+        clearErrorStackTrace();
         for (StackFrame frame : callStack) {
             errorStackTrace.add(new StackTraceElement(
                     "JavaScript",
@@ -121,15 +122,24 @@ public final class JSContext implements AutoCloseable {
      */
     public void clearAllPendingExceptions() {
         clearPendingException();
+        clearErrorStackTrace();
         virtualMachine.clearPendingException();
     }
 
     // Module system
 
+    private void clearCallStack() {
+        callStack.clear();
+    }
+
+    private void clearErrorStackTrace() {
+        this.errorStackTrace.clear();
+    }
+
     /**
      * Clear the module cache.
      */
-    public void clearModuleCache() {
+    private void clearModuleCache() {
         moduleCache.clear();
     }
 
@@ -138,7 +148,6 @@ public final class JSContext implements AutoCloseable {
      */
     public void clearPendingException() {
         this.pendingException = null;
-        this.errorStackTrace.clear();
     }
 
     /**
@@ -148,13 +157,10 @@ public final class JSContext implements AutoCloseable {
     @Override
     public void close() {
         // Clear all caches
-        moduleCache.clear();
-        callStack.clear();
-        errorStackTrace.clear();
-
-        // Clear exception state
-        pendingException = null;
-
+        clearModuleCache();
+        clearCallStack();
+        clearPendingException();
+        clearErrorStackTrace();
         // Remove from runtime
         runtime.destroyContext(this);
     }
@@ -655,7 +661,7 @@ public final class JSContext implements AutoCloseable {
 
         try {
             // Phase 1-3: Lexer → Parser → Compiler (compile to bytecode)
-            JSBytecodeFunction func = com.caoccao.qjs4j.compiler.Compiler.compile(code, filename);
+            JSBytecodeFunction func = Compiler.compile(code, filename);
 
             // Initialize the function's prototype chain so it inherits from Function.prototype
             func.initializePrototypeChain(this);
@@ -666,7 +672,6 @@ public final class JSContext implements AutoCloseable {
             // Check if there's a pending exception
             if (hasPendingException()) {
                 JSValue exception = getPendingException();
-                clearPendingException();
                 throw new JSException(exception);
             }
 
@@ -675,7 +680,6 @@ public final class JSContext implements AutoCloseable {
 
             return result != null ? result : JSUndefined.INSTANCE;
         } catch (JSException e) {
-            // JavaScript exception thrown during execution
             throw e;
         } catch (Compiler.CompilerException e) {
             JSValue error = throwError("SyntaxError", e.getMessage());
@@ -687,7 +691,6 @@ public final class JSContext implements AutoCloseable {
             }
             if (hasPendingException()) {
                 JSValue exception = getPendingException();
-                clearPendingException();
                 throw new JSException(exception);
             }
             JSValue error = throwError("Error", "VM error: " + e.getMessage());
@@ -697,6 +700,12 @@ public final class JSContext implements AutoCloseable {
             throw new JSException(error);
         } finally {
             popStackFrame();
+            // Clear ALL possible dirty state to ensure clean slate for next eval()
+            stackDepth = callStack.size();
+            inCatchHandler = false;
+            currentThis = globalObject;
+            clearPendingException();
+            clearErrorStackTrace();
         }
     }
 

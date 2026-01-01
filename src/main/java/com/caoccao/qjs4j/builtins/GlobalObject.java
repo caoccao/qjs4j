@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSException;
 
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -294,7 +295,14 @@ public final class GlobalObject {
         }
 
         String code = ((JSString) x).value();
-        return context.eval(code);
+        try {
+            return context.eval(code);
+        } catch (JSException e) {
+            // Re-throw as pending exception so JavaScript try-catch can handle it
+            // Don't set pending exception here - instead, convert to a throw by setting pending and returning undefined
+            context.setPendingException(e.getErrorValue());
+            return JSUndefined.INSTANCE;
+        }
     }
 
     /**
@@ -728,12 +736,36 @@ public final class GlobalObject {
      * Initialize Function constructor and prototype.
      */
     private static void initializeFunctionConstructor(JSContext context, JSObject global) {
-        // Create Function.prototype
-        JSObject functionPrototype = new JSObject();
+        // Create Function.prototype as a function (not a plain object)
+        // According to ECMAScript spec, Function.prototype is itself a function
+        // Use null name so toString() shows "function () {}" not "function anonymous() {}"
+        JSNativeFunction functionPrototype = new JSNativeFunction(null, 0, (ctx, thisObj, args) -> JSUndefined.INSTANCE);
+        // Remove the auto-created properties - Function.prototype has custom property descriptors
+        functionPrototype.delete(PropertyKey.fromString("prototype"));
+        functionPrototype.delete(PropertyKey.fromString("length"));
+        functionPrototype.delete(PropertyKey.fromString("name"));
+
         functionPrototype.set("call", new JSNativeFunction("call", 1, FunctionPrototype::call));
         functionPrototype.set("apply", new JSNativeFunction("apply", 2, FunctionPrototype::apply));
         functionPrototype.set("bind", new JSNativeFunction("bind", 1, FunctionPrototype::bind));
         functionPrototype.set("toString", new JSNativeFunction("toString", 0, FunctionPrototype::toString_));
+
+        // Add 'arguments' and 'caller' as accessor properties that throw TypeError
+        // These properties exist for backwards compatibility but throw when accessed
+        JSNativeFunction throwTypeError = new JSNativeFunction("throwTypeError", 0, (ctx, thisObj, args) -> {
+            return ctx.throwTypeError("'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them");
+        });
+
+        functionPrototype.defineProperty(PropertyKey.fromString("arguments"),
+                PropertyDescriptor.accessorDescriptor(throwTypeError, throwTypeError, false, true));
+        functionPrototype.defineProperty(PropertyKey.fromString("caller"),
+                PropertyDescriptor.accessorDescriptor(throwTypeError, throwTypeError, false, true));
+
+        // Add 'length' and 'name' data properties
+        functionPrototype.defineProperty(PropertyKey.fromString("length"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(0), false, false, true));
+        functionPrototype.defineProperty(PropertyKey.fromString("name"),
+                PropertyDescriptor.dataDescriptor(new JSString(""), false, false, true));
 
         // Function constructor should be a function, not a plain object
         JSNativeFunction functionConstructor = new JSNativeFunction("Function", 1, FunctionConstructor::call);
@@ -1667,7 +1699,6 @@ public final class GlobalObject {
 
         return new JSNumber(sign * result);
     }
-
 
 
     /**

@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.regexp;
 
 import java.util.Arrays;
+import java.util.Stack;
 
 /**
  * Regular expression bytecode executor.
@@ -69,7 +70,7 @@ public final class RegExpEngine {
      */
     private boolean execute(ExecutionContext executionContext) {
         // Backtracking stack: stores (pc, pos, captures snapshot)
-        java.util.Stack<BacktrackPoint> backtrackStack = new java.util.Stack<>();
+        Stack<BacktrackPoint> backtrackStack = new Stack<>();
         byte[] bc = executionContext.bytecode;
         int pc = 0;
 
@@ -472,7 +473,7 @@ public final class RegExpEngine {
      * Similar to execute() but starts at a specific PC location.
      */
     private boolean executeLookahead(ExecutionContext executionContext, int startPc) {
-        java.util.Stack<BacktrackPoint> backtrackStack = new java.util.Stack<>();
+        Stack<BacktrackPoint> backtrackStack = new Stack<>();
         byte[] bc = executionContext.bytecode;
         int pc = startPc;
 
