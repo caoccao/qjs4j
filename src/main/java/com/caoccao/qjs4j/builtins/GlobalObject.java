@@ -1101,6 +1101,7 @@ public final class GlobalObject {
         stringPrototype.set("includes", new JSNativeFunction("includes", 1, StringPrototype::includes));
         stringPrototype.set("indexOf", new JSNativeFunction("indexOf", 1, StringPrototype::indexOf));
         stringPrototype.set("lastIndexOf", new JSNativeFunction("lastIndexOf", 1, StringPrototype::lastIndexOf));
+        stringPrototype.set("localeCompare", new JSNativeFunction("localeCompare", 1, StringPrototype::localeCompare));
         stringPrototype.set("match", new JSNativeFunction("match", 1, StringPrototype::match));
         stringPrototype.set("matchAll", new JSNativeFunction("matchAll", 1, StringPrototype::matchAll));
         stringPrototype.set("padEnd", new JSNativeFunction("padEnd", 1, StringPrototype::padEnd));
@@ -1120,6 +1121,8 @@ public final class GlobalObject {
         stringPrototype.set("trim", new JSNativeFunction("trim", 0, StringPrototype::trim));
         stringPrototype.set("trimEnd", new JSNativeFunction("trimEnd", 0, StringPrototype::trimEnd));
         stringPrototype.set("trimStart", new JSNativeFunction("trimStart", 0, StringPrototype::trimStart));
+        stringPrototype.set("trimLeft", new JSNativeFunction("trimLeft", 0, StringPrototype::trimStart));   // Alias for trimStart
+        stringPrototype.set("trimRight", new JSNativeFunction("trimRight", 0, StringPrototype::trimEnd));   // Alias for trimEnd
         stringPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, StringPrototype::valueOf));
 
         // HTML wrapper methods (deprecated but still part of spec)
@@ -1304,6 +1307,16 @@ public final class GlobalObject {
         uint32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSUint32Array.BYTES_PER_ELEMENT));
         uint32ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSUint32Array.BYTES_PER_ELEMENT));
         global.set("Uint32Array", uint32ArrayConstructor);
+
+        // Float16Array
+        JSObject float16ArrayPrototype = new JSObject();
+        JSObject float16ArrayConstructor = new JSObject();
+        float16ArrayConstructor.set("prototype", float16ArrayPrototype);
+        float16ArrayPrototype.set("constructor", float16ArrayConstructor);
+        float16ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_FLOAT16);
+        float16ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSFloat16Array.BYTES_PER_ELEMENT));
+        float16ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSFloat16Array.BYTES_PER_ELEMENT));
+        global.set("Float16Array", float16ArrayConstructor);
 
         // Float32Array
         JSObject float32ArrayPrototype = new JSObject();

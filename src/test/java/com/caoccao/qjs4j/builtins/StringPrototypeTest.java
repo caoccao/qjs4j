@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -439,6 +438,33 @@ public class StringPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testLocaleCompare() {
+        assertIntegerWithJavet(
+                // Test basic string comparison
+                "'a'.localeCompare('b')",
+                "'b'.localeCompare('a')",
+                "'hello'.localeCompare('hello')",
+                "'apple'.localeCompare('banana')",
+                "'zebra'.localeCompare('apple')",
+                // Test with different lengths
+                "'abc'.localeCompare('ab')",
+                "'ab'.localeCompare('abc')",
+                // Test with empty strings
+                "''.localeCompare('')",
+                "'a'.localeCompare('')",
+                "''.localeCompare('a')",
+                // Test case sensitivity
+                "'A'.localeCompare('a')",
+                "'a'.localeCompare('A')",
+                // Test with numbers in strings
+                "'1'.localeCompare('2')",
+                "'10'.localeCompare('2')",
+                // Test with special characters
+                "'hello world'.localeCompare('hello world')",
+                "'test!'.localeCompare('test?')");
+    }
+
+    @Test
     public void testMatch() {
         assertStringWithJavet(
                 // Match with string
@@ -577,7 +603,6 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("*****"));
     }
 
-    @Disabled
     @Test
     public void testPrototype() {
         assertObjectWithJavet(
@@ -1080,5 +1105,55 @@ public class StringPrototypeTest extends BaseJavetTest {
         JSString empty = new JSString("");
         result = StringPrototype.trim(context, empty, new JSValue[]{});
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
+    }
+
+    @Test
+    public void testTrimAliases() {
+        // Test that trimLeft and trimRight work together
+        assertStringWithJavet(
+                "'  hello  '.trimLeft().trimRight()",
+                "'  hello  '.trimRight().trimLeft()",
+                "'\\t\\nhello\\t\\n'.trimLeft().trimRight()"
+        );
+
+        // Test combined trimming equals trim()
+        assertBooleanWithJavet(
+                "'  test  '.trimLeft().trimRight() === '  test  '.trim()",
+                "'\\t\\ntest\\t\\n'.trimLeft().trimRight() === '\\t\\ntest\\t\\n'.trim()"
+        );
+    }
+
+    @Test
+    public void testTrimLeft() {
+        // Test trimLeft as alias for trimStart
+        assertStringWithJavet(
+                "'  hello'.trimLeft()",
+                "'\\t\\nhello'.trimLeft()",
+                "'hello  '.trimLeft()",
+                "'  hello  '.trimLeft()",
+                "'hello'.trimLeft()",
+                "'   '.trimLeft()",
+                "''.trimLeft()");
+
+        // Verify it's identical to trimStart
+        assertBooleanWithJavet(
+                "'  test  '.trimLeft() === '  test  '.trimStart()");
+    }
+
+    @Test
+    public void testTrimRight() {
+        // Test trimRight as alias for trimEnd
+        assertStringWithJavet(
+                "'hello  '.trimRight()",
+                "'hello\\t\\n'.trimRight()",
+                "'  hello'.trimRight()",
+                "'  hello  '.trimRight()",
+                "'hello'.trimRight()",
+                "'   '.trimRight()",
+                "''.trimRight()");
+
+        // Verify it's identical to trimEnd
+        assertBooleanWithJavet(
+                "'  test  '.trimRight() === '  test  '.trimEnd()");
     }
 }

@@ -365,6 +365,31 @@ public final class StringPrototype {
     }
 
     /**
+     * String.prototype.localeCompare(that [, locales [, options]])
+     * ES2020 21.1.3.11
+     * Compares two strings in the current locale.
+     * <p>
+     * Note: This is a simplified implementation that uses Java's String.compareTo()
+     * and doesn't support locale-specific collation or options.
+     */
+    public static JSValue localeCompare(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSString str = JSTypeConversions.toString(context, thisArg);
+        String thisStr = str.value();
+
+        if (args.length == 0) {
+            return new JSNumber(0);
+        }
+
+        JSString thatStr = JSTypeConversions.toString(context, args[0]);
+        String that = thatStr.value();
+
+        // Simple implementation using Java's compareTo
+        // A full implementation would need to support locales and collation options
+        int result = thisStr.compareTo(that);
+        return new JSNumber(result);
+    }
+
+    /**
      * String.prototype.match(regexp)
      * ES2020 21.1.3.10
      * Returns an array of matches when matching a string against a regular expression.

@@ -4,6 +4,7 @@ import com.caoccao.javet.exceptions.JavetException;
 import com.caoccao.javet.interfaces.IJavetSupplier;
 import com.caoccao.javet.interop.V8Host;
 import com.caoccao.javet.interop.V8Runtime;
+import com.caoccao.javet.interop.options.V8RuntimeOptions;
 import com.caoccao.qjs4j.core.JSBigInt;
 import com.caoccao.qjs4j.core.JSBigIntObject;
 import com.caoccao.qjs4j.core.JSBoolean;
@@ -118,6 +119,7 @@ public class BaseJavetTest extends BaseTest {
     @Override
     public void setUp() throws Exception {
         super.setUp();
+        V8RuntimeOptions.V8_FLAGS.setJsFloat16Array(true);
         v8Runtime = V8Host.getV8Instance().createV8Runtime();
     }
 

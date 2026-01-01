@@ -164,6 +164,15 @@ public sealed interface JSValue extends JSStackValue permits
     }
 
     /**
+     * Attempt to cast this value to JSFloat16Array.
+     *
+     * @return Optional containing the JSFloat16Array if this value is a Float16Array, empty otherwise
+     */
+    default Optional<JSFloat16Array> asFloat16Array() {
+        return this instanceof JSFloat16Array v ? Optional.of(v) : Optional.empty();
+    }
+
+    /**
      * Attempt to cast this value to JSFloat32Array.
      *
      * @return Optional containing the JSFloat32Array if this value is a Float32Array, empty otherwise
@@ -630,6 +639,15 @@ public sealed interface JSValue extends JSStackValue permits
      */
     default boolean isFinalizationRegistry() {
         return this instanceof JSFinalizationRegistry;
+    }
+
+    /**
+     * Check if this value is a Float16Array.
+     *
+     * @return true if this value is a Float16Array, false otherwise
+     */
+    default boolean isFloat16Array() {
+        return this instanceof JSFloat16Array;
     }
 
     /**

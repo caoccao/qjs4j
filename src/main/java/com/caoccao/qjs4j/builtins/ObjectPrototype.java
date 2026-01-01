@@ -602,6 +602,9 @@ public final class ObjectPrototype {
             if (thisArg instanceof JSUint32Array) {
                 return new JSString("[object Uint32Array]");
             }
+            if (thisArg instanceof JSFloat16Array) {
+                return new JSString("[object Float16Array]");
+            }
             if (thisArg instanceof JSFloat32Array) {
                 return new JSString("[object Float32Array]");
             }

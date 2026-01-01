@@ -293,6 +293,24 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Create a new JSFloat16Array with proper prototype chain.
+     *
+     * @param length The length of the array
+     * @return A new JSFloat16Array instance with prototype set
+     */
+    public JSFloat16Array createJSFloat16Array(int length) {
+        JSFloat16Array jsFloat16Array = new JSFloat16Array(length);
+        JSValue float16ArrayCtor = globalObject.get("Float16Array");
+        if (float16ArrayCtor instanceof JSObject) {
+            JSValue float16ArrayProto = ((JSObject) float16ArrayCtor).get("prototype");
+            if (float16ArrayProto instanceof JSObject) {
+                jsFloat16Array.setPrototype((JSObject) float16ArrayProto);
+            }
+        }
+        return jsFloat16Array;
+    }
+
+    /**
      * Create a new JSFloat32Array with proper prototype chain.
      *
      * @param length The length of the array

@@ -57,6 +57,10 @@ public class ArrayBufferConstructorTest extends BaseTest {
         result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{int32Array});
         assertThat(result.isBooleanTrue()).isTrue();
 
+        JSFloat16Array float16Array = new JSFloat16Array(buffer, 0, 8);
+        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{float16Array});
+        assertThat(result.isBooleanTrue()).isTrue();
+
         JSFloat32Array float32Array = new JSFloat32Array(buffer, 0, 4);
         result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{float32Array});
         assertThat(result.isBooleanTrue()).isTrue();
