@@ -189,15 +189,391 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSArray instance with prototype set
      */
     public JSArray createJSArray(long length, int capacity) {
-        JSArray array = new JSArray(length, capacity);
+        JSArray jsArray = new JSArray(length, capacity);
         JSValue arrayCtor = globalObject.get("Array");
         if (arrayCtor instanceof JSObject) {
             JSValue arrayProto = ((JSObject) arrayCtor).get("prototype");
             if (arrayProto instanceof JSObject) {
-                array.setPrototype((JSObject) arrayProto);
+                jsArray.setPrototype((JSObject) arrayProto);
             }
         }
-        return array;
+        return jsArray;
+    }
+
+    /**
+     * Create a new JSArrayBuffer with proper prototype chain.
+     *
+     * @param byteLength The length in bytes
+     * @return A new JSArrayBuffer instance with prototype set
+     */
+    public JSArrayBuffer createJSArrayBuffer(int byteLength) {
+        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(byteLength);
+        JSValue arrayBufferCtor = globalObject.get("ArrayBuffer");
+        if (arrayBufferCtor instanceof JSObject) {
+            JSValue arrayBufferProto = ((JSObject) arrayBufferCtor).get("prototype");
+            if (arrayBufferProto instanceof JSObject) {
+                jsArrayBuffer.setPrototype((JSObject) arrayBufferProto);
+            }
+        }
+        return jsArrayBuffer;
+    }
+
+    /**
+     * Create a new JSDataView with proper prototype chain.
+     *
+     * @param buffer     The ArrayBuffer to view
+     * @param byteOffset The offset in bytes
+     * @param byteLength The length in bytes
+     * @return A new JSDataView instance with prototype set
+     */
+    public JSDataView createJSDataView(JSArrayBuffer buffer, int byteOffset, int byteLength) {
+        JSDataView jsDataView = new JSDataView(buffer, byteOffset, byteLength);
+        JSValue dataViewCtor = globalObject.get("DataView");
+        if (dataViewCtor instanceof JSObject) {
+            JSValue dataViewProto = ((JSObject) dataViewCtor).get("prototype");
+            if (dataViewProto instanceof JSObject) {
+                jsDataView.setPrototype((JSObject) dataViewProto);
+            }
+        }
+        return jsDataView;
+    }
+
+    /**
+     * Create a new JSDate with proper prototype chain.
+     *
+     * @param timeValue The time value in milliseconds
+     * @return A new JSDate instance with prototype set
+     */
+    public JSDate createJSDate(long timeValue) {
+        JSDate jsDate = new JSDate(timeValue);
+        JSValue dateCtor = globalObject.get("Date");
+        if (dateCtor instanceof JSObject) {
+            JSValue dateProto = ((JSObject) dateCtor).get("prototype");
+            if (dateProto instanceof JSObject) {
+                jsDate.setPrototype((JSObject) dateProto);
+            }
+        }
+        return jsDate;
+    }
+
+    /**
+     * Create a new JSFloat32Array with proper prototype chain.
+     *
+     * @param length The length of the array
+     * @return A new JSFloat32Array instance with prototype set
+     */
+    public JSFloat32Array createJSFloat32Array(int length) {
+        JSFloat32Array jsFloat32Array = new JSFloat32Array(length);
+        JSValue float32ArrayCtor = globalObject.get("Float32Array");
+        if (float32ArrayCtor instanceof JSObject) {
+            JSValue float32ArrayProto = ((JSObject) float32ArrayCtor).get("prototype");
+            if (float32ArrayProto instanceof JSObject) {
+                jsFloat32Array.setPrototype((JSObject) float32ArrayProto);
+            }
+        }
+        return jsFloat32Array;
+    }
+
+    /**
+     * Create a new JSFloat64Array with proper prototype chain.
+     *
+     * @param length The length of the array
+     * @return A new JSFloat64Array instance with prototype set
+     */
+    public JSFloat64Array createJSFloat64Array(int length) {
+        JSFloat64Array jsFloat64Array = new JSFloat64Array(length);
+        JSValue float64ArrayCtor = globalObject.get("Float64Array");
+        if (float64ArrayCtor instanceof JSObject) {
+            JSValue float64ArrayProto = ((JSObject) float64ArrayCtor).get("prototype");
+            if (float64ArrayProto instanceof JSObject) {
+                jsFloat64Array.setPrototype((JSObject) float64ArrayProto);
+            }
+        }
+        return jsFloat64Array;
+    }
+
+    /**
+     * Create a new JSInt16Array with proper prototype chain.
+     *
+     * @param length The length of the array
+     * @return A new JSInt16Array instance with prototype set
+     */
+    public JSInt16Array createJSInt16Array(int length) {
+        JSInt16Array jsInt16Array = new JSInt16Array(length);
+        JSValue int16ArrayCtor = globalObject.get("Int16Array");
+        if (int16ArrayCtor instanceof JSObject) {
+            JSValue int16ArrayProto = ((JSObject) int16ArrayCtor).get("prototype");
+            if (int16ArrayProto instanceof JSObject) {
+                jsInt16Array.setPrototype((JSObject) int16ArrayProto);
+            }
+        }
+        return jsInt16Array;
+    }
+
+    /**
+     * Create a new JSInt32Array with proper prototype chain.
+     *
+     * @param length The length of the array
+     * @return A new JSInt32Array instance with prototype set
+     */
+    public JSInt32Array createJSInt32Array(int length) {
+        JSInt32Array jsInt32Array = new JSInt32Array(length);
+        JSValue int32ArrayCtor = globalObject.get("Int32Array");
+        if (int32ArrayCtor instanceof JSObject) {
+            JSValue int32ArrayProto = ((JSObject) int32ArrayCtor).get("prototype");
+            if (int32ArrayProto instanceof JSObject) {
+                jsInt32Array.setPrototype((JSObject) int32ArrayProto);
+            }
+        }
+        return jsInt32Array;
+    }
+
+    /**
+     * Create a new JSInt8Array with proper prototype chain.
+     *
+     * @param length The length of the array
+     * @return A new JSInt8Array instance with prototype set
+     */
+    public JSInt8Array createJSInt8Array(int length) {
+        JSInt8Array jsInt8Array = new JSInt8Array(length);
+        JSValue int8ArrayCtor = globalObject.get("Int8Array");
+        if (int8ArrayCtor instanceof JSObject) {
+            JSValue int8ArrayProto = ((JSObject) int8ArrayCtor).get("prototype");
+            if (int8ArrayProto instanceof JSObject) {
+                jsInt8Array.setPrototype((JSObject) int8ArrayProto);
+            }
+        }
+        return jsInt8Array;
+    }
+
+    /**
+     * Create a new JSMap with proper prototype chain.
+     *
+     * @return A new JSMap instance with prototype set
+     */
+    public JSMap createJSMap() {
+        JSMap jsMap = new JSMap();
+        JSValue mapCtor = globalObject.get("Map");
+        if (mapCtor instanceof JSObject) {
+            JSValue mapProto = ((JSObject) mapCtor).get("prototype");
+            if (mapProto instanceof JSObject) {
+                jsMap.setPrototype((JSObject) mapProto);
+            }
+        }
+        return jsMap;
+    }
+
+    /**
+     * Create a new JSObject with proper prototype chain.
+     * Sets the object's prototype to Object.prototype from the global object.
+     *
+     * @return A new JSObject instance with prototype set
+     */
+    public JSObject createJSObject() {
+        JSObject jsObject = new JSObject();
+        JSValue objectCtor = globalObject.get("Object");
+        if (objectCtor instanceof JSObject) {
+            JSValue objectProto = ((JSObject) objectCtor).get("prototype");
+            if (objectProto instanceof JSObject) {
+                jsObject.setPrototype((JSObject) objectProto);
+            }
+        }
+        return jsObject;
+    }
+
+    /**
+     * Create a new JSPromise with proper prototype chain.
+     *
+     * @return A new JSPromise instance with prototype set
+     */
+    public JSPromise createJSPromise() {
+        JSPromise jsPromise = new JSPromise();
+        JSValue promiseCtor = globalObject.get("Promise");
+        if (promiseCtor instanceof JSObject) {
+            JSValue promiseProto = ((JSObject) promiseCtor).get("prototype");
+            if (promiseProto instanceof JSObject) {
+                jsPromise.setPrototype((JSObject) promiseProto);
+            }
+        }
+        return jsPromise;
+    }
+
+    /**
+     * Create a new JSRegExp with proper prototype chain.
+     *
+     * @param pattern The regular expression pattern
+     * @param flags   The regular expression flags
+     * @return A new JSRegExp instance with prototype set
+     */
+    public JSRegExp createJSRegExp(String pattern, String flags) {
+        JSRegExp jsRegExp = new JSRegExp(pattern, flags);
+        JSValue regExpCtor = globalObject.get("RegExp");
+        if (regExpCtor instanceof JSObject) {
+            JSValue regExpProto = ((JSObject) regExpCtor).get("prototype");
+            if (regExpProto instanceof JSObject) {
+                jsRegExp.setPrototype((JSObject) regExpProto);
+            }
+        }
+        return jsRegExp;
+    }
+
+    /**
+     * Create a new JSSet with proper prototype chain.
+     *
+     * @return A new JSSet instance with prototype set
+     */
+    public JSSet createJSSet() {
+        JSSet jsSet = new JSSet();
+        JSValue setCtor = globalObject.get("Set");
+        if (setCtor instanceof JSObject) {
+            JSValue setProto = ((JSObject) setCtor).get("prototype");
+            if (setProto instanceof JSObject) {
+                jsSet.setPrototype((JSObject) setProto);
+            }
+        }
+        return jsSet;
+    }
+
+    /**
+     * Create a new JSUint16Array with proper prototype chain.
+     *
+     * @param length The length of the array
+     * @return A new JSUint16Array instance with prototype set
+     */
+    public JSUint16Array createJSUint16Array(int length) {
+        JSUint16Array jsUint16Array = new JSUint16Array(length);
+        JSValue uint16ArrayCtor = globalObject.get("Uint16Array");
+        if (uint16ArrayCtor instanceof JSObject) {
+            JSValue uint16ArrayProto = ((JSObject) uint16ArrayCtor).get("prototype");
+            if (uint16ArrayProto instanceof JSObject) {
+                jsUint16Array.setPrototype((JSObject) uint16ArrayProto);
+            }
+        }
+        return jsUint16Array;
+    }
+
+    /**
+     * Create a new JSUint32Array with proper prototype chain.
+     *
+     * @param length The length of the array
+     * @return A new JSUint32Array instance with prototype set
+     */
+    public JSUint32Array createJSUint32Array(int length) {
+        JSUint32Array jsUint32Array = new JSUint32Array(length);
+        JSValue uint32ArrayCtor = globalObject.get("Uint32Array");
+        if (uint32ArrayCtor instanceof JSObject) {
+            JSValue uint32ArrayProto = ((JSObject) uint32ArrayCtor).get("prototype");
+            if (uint32ArrayProto instanceof JSObject) {
+                jsUint32Array.setPrototype((JSObject) uint32ArrayProto);
+            }
+        }
+        return jsUint32Array;
+    }
+
+    /**
+     * Create a new JSUint8Array with proper prototype chain.
+     *
+     * @param length The length of the array
+     * @return A new JSUint8Array instance with prototype set
+     */
+    public JSUint8Array createJSUint8Array(int length) {
+        JSUint8Array jsUint8Array = new JSUint8Array(length);
+        JSValue uint8ArrayCtor = globalObject.get("Uint8Array");
+        if (uint8ArrayCtor instanceof JSObject) {
+            JSValue uint8ArrayProto = ((JSObject) uint8ArrayCtor).get("prototype");
+            if (uint8ArrayProto instanceof JSObject) {
+                jsUint8Array.setPrototype((JSObject) uint8ArrayProto);
+            }
+        }
+        return jsUint8Array;
+    }
+
+    /**
+     * Create a new JSUint8ClampedArray with proper prototype chain.
+     *
+     * @param length The length of the array
+     * @return A new JSUint8ClampedArray instance with prototype set
+     */
+    public JSUint8ClampedArray createJSUint8ClampedArray(int length) {
+        JSUint8ClampedArray jsUint8ClampedArray = new JSUint8ClampedArray(length);
+        JSValue uint8ClampedArrayCtor = globalObject.get("Uint8ClampedArray");
+        if (uint8ClampedArrayCtor instanceof JSObject) {
+            JSValue uint8ClampedArrayProto = ((JSObject) uint8ClampedArrayCtor).get("prototype");
+            if (uint8ClampedArrayProto instanceof JSObject) {
+                jsUint8ClampedArray.setPrototype((JSObject) uint8ClampedArrayProto);
+            }
+        }
+        return jsUint8ClampedArray;
+    }
+
+    /**
+     * Create a new JSBigInt64Array with proper prototype chain.
+     *
+     * @param length The length of the array
+     * @return A new JSBigInt64Array instance with prototype set
+     */
+    public JSBigInt64Array createJSBigInt64Array(int length) {
+        JSBigInt64Array jsBigInt64Array = new JSBigInt64Array(length);
+        JSValue bigInt64ArrayCtor = globalObject.get("BigInt64Array");
+        if (bigInt64ArrayCtor instanceof JSObject) {
+            JSValue bigInt64ArrayProto = ((JSObject) bigInt64ArrayCtor).get("prototype");
+            if (bigInt64ArrayProto instanceof JSObject) {
+                jsBigInt64Array.setPrototype((JSObject) bigInt64ArrayProto);
+            }
+        }
+        return jsBigInt64Array;
+    }
+
+    /**
+     * Create a new JSBigUint64Array with proper prototype chain.
+     *
+     * @param length The length of the array
+     * @return A new JSBigUint64Array instance with prototype set
+     */
+    public JSBigUint64Array createJSBigUint64Array(int length) {
+        JSBigUint64Array jsBigUint64Array = new JSBigUint64Array(length);
+        JSValue bigUint64ArrayCtor = globalObject.get("BigUint64Array");
+        if (bigUint64ArrayCtor instanceof JSObject) {
+            JSValue bigUint64ArrayProto = ((JSObject) bigUint64ArrayCtor).get("prototype");
+            if (bigUint64ArrayProto instanceof JSObject) {
+                jsBigUint64Array.setPrototype((JSObject) bigUint64ArrayProto);
+            }
+        }
+        return jsBigUint64Array;
+    }
+
+    /**
+     * Create a new JSWeakMap with proper prototype chain.
+     *
+     * @return A new JSWeakMap instance with prototype set
+     */
+    public JSWeakMap createJSWeakMap() {
+        JSWeakMap jsWeakMap = new JSWeakMap();
+        JSValue weakMapCtor = globalObject.get("WeakMap");
+        if (weakMapCtor instanceof JSObject) {
+            JSValue weakMapProto = ((JSObject) weakMapCtor).get("prototype");
+            if (weakMapProto instanceof JSObject) {
+                jsWeakMap.setPrototype((JSObject) weakMapProto);
+            }
+        }
+        return jsWeakMap;
+    }
+
+    /**
+     * Create a new JSWeakSet with proper prototype chain.
+     *
+     * @return A new JSWeakSet instance with prototype set
+     */
+    public JSWeakSet createJSWeakSet() {
+        JSWeakSet jsWeakSet = new JSWeakSet();
+        JSValue weakSetCtor = globalObject.get("WeakSet");
+        if (weakSetCtor instanceof JSObject) {
+            JSValue weakSetProto = ((JSObject) weakSetCtor).get("prototype");
+            if (weakSetProto instanceof JSObject) {
+                jsWeakSet.setPrototype((JSObject) weakSetProto);
+            }
+        }
+        return jsWeakSet;
     }
 
     /**

@@ -178,6 +178,14 @@ public class StringPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testConstructor() {
+        assertStringWithJavet(
+                "'123'.constructor.name",
+                "'123'.substring(1).constructor.name",
+                "'123'.constructor.name.constructor.name");
+    }
+
+    @Test
     public void testEndsWith() {
         // Normal case
         JSValue result = StringPrototype.endsWith(context, str, new JSValue[]{new JSString("world")});
@@ -307,13 +315,6 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "String['prototype'].length.call('abc')",
                 "String.prototype.length.call(null)",
                 "String.prototype.length.call(undefined)");
-    }
-
-    @Disabled
-    @Test
-    public void testGetOwnPropertyNamesFromStringPrototype() {
-        assertObjectWithJavet(
-                "Object.getOwnPropertyNames(String.prototype).sort()");
     }
 
     @Test
@@ -574,6 +575,13 @@ public class StringPrototypeTest extends BaseJavetTest {
         JSString empty = new JSString("");
         result = StringPrototype.padStart(context, empty, new JSValue[]{new JSNumber(5), new JSString("*")});
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("*****"));
+    }
+
+    @Disabled
+    @Test
+    public void testPrototype() {
+        assertObjectWithJavet(
+                "Object.getOwnPropertyNames(String.prototype).sort()");
     }
 
     @Test

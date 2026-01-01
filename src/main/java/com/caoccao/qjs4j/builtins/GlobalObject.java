@@ -1220,58 +1220,114 @@ public final class GlobalObject {
      */
     private static void initializeTypedArrayConstructors(JSContext context, JSObject global) {
         // Int8Array
+        JSObject int8ArrayPrototype = new JSObject();
         JSObject int8ArrayConstructor = new JSObject();
+        int8ArrayConstructor.set("prototype", int8ArrayPrototype);
+        int8ArrayPrototype.set("constructor", int8ArrayConstructor);
         int8ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_INT8);
-        int8ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(1));
+        int8ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSInt8Array.BYTES_PER_ELEMENT));
+        int8ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSInt8Array.BYTES_PER_ELEMENT));
         global.set("Int8Array", int8ArrayConstructor);
 
         // Uint8Array
+        JSObject uint8ArrayPrototype = new JSObject();
         JSObject uint8ArrayConstructor = new JSObject();
+        uint8ArrayConstructor.set("prototype", uint8ArrayPrototype);
+        uint8ArrayPrototype.set("constructor", uint8ArrayConstructor);
         uint8ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_UINT8);
-        uint8ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(1));
+        uint8ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSUint8Array.BYTES_PER_ELEMENT));
+        uint8ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSUint8Array.BYTES_PER_ELEMENT));
         global.set("Uint8Array", uint8ArrayConstructor);
 
         // Uint8ClampedArray
+        JSObject uint8ClampedArrayPrototype = new JSObject();
         JSObject uint8ClampedArrayConstructor = new JSObject();
+        uint8ClampedArrayConstructor.set("prototype", uint8ClampedArrayPrototype);
+        uint8ClampedArrayPrototype.set("constructor", uint8ClampedArrayConstructor);
         uint8ClampedArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_UINT8_CLAMPED);
-        uint8ClampedArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(1));
+        uint8ClampedArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSUint8ClampedArray.BYTES_PER_ELEMENT));
+        uint8ClampedArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSUint8ClampedArray.BYTES_PER_ELEMENT));
         global.set("Uint8ClampedArray", uint8ClampedArrayConstructor);
 
         // Int16Array
+        JSObject int16ArrayPrototype = new JSObject();
         JSObject int16ArrayConstructor = new JSObject();
+        int16ArrayConstructor.set("prototype", int16ArrayPrototype);
+        int16ArrayPrototype.set("constructor", int16ArrayConstructor);
         int16ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_INT16);
-        int16ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(2));
+        int16ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSInt16Array.BYTES_PER_ELEMENT));
+        int16ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSInt16Array.BYTES_PER_ELEMENT));
         global.set("Int16Array", int16ArrayConstructor);
 
         // Uint16Array
+        JSObject uint16ArrayPrototype = new JSObject();
         JSObject uint16ArrayConstructor = new JSObject();
+        uint16ArrayConstructor.set("prototype", uint16ArrayPrototype);
+        uint16ArrayPrototype.set("constructor", uint16ArrayConstructor);
         uint16ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_UINT16);
-        uint16ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(2));
+        uint16ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSUint16Array.BYTES_PER_ELEMENT));
+        uint16ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSUint16Array.BYTES_PER_ELEMENT));
         global.set("Uint16Array", uint16ArrayConstructor);
 
         // Int32Array
+        JSObject int32ArrayPrototype = new JSObject();
         JSObject int32ArrayConstructor = new JSObject();
+        int32ArrayConstructor.set("prototype", int32ArrayPrototype);
+        int32ArrayPrototype.set("constructor", int32ArrayConstructor);
         int32ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_INT32);
-        int32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(4));
+        int32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSInt32Array.BYTES_PER_ELEMENT));
+        int32ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSInt32Array.BYTES_PER_ELEMENT));
         global.set("Int32Array", int32ArrayConstructor);
 
         // Uint32Array
+        JSObject uint32ArrayPrototype = new JSObject();
         JSObject uint32ArrayConstructor = new JSObject();
+        uint32ArrayConstructor.set("prototype", uint32ArrayPrototype);
+        uint32ArrayPrototype.set("constructor", uint32ArrayConstructor);
         uint32ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_UINT32);
-        uint32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(4));
+        uint32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSUint32Array.BYTES_PER_ELEMENT));
+        uint32ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSUint32Array.BYTES_PER_ELEMENT));
         global.set("Uint32Array", uint32ArrayConstructor);
 
         // Float32Array
+        JSObject float32ArrayPrototype = new JSObject();
         JSObject float32ArrayConstructor = new JSObject();
+        float32ArrayConstructor.set("prototype", float32ArrayPrototype);
+        float32ArrayPrototype.set("constructor", float32ArrayConstructor);
         float32ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_FLOAT32);
-        float32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(4));
+        float32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSFloat32Array.BYTES_PER_ELEMENT));
+        float32ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSFloat32Array.BYTES_PER_ELEMENT));
         global.set("Float32Array", float32ArrayConstructor);
 
         // Float64Array
+        JSObject float64ArrayPrototype = new JSObject();
         JSObject float64ArrayConstructor = new JSObject();
+        float64ArrayConstructor.set("prototype", float64ArrayPrototype);
+        float64ArrayPrototype.set("constructor", float64ArrayConstructor);
         float64ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_FLOAT64);
-        float64ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(8));
+        float64ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSFloat64Array.BYTES_PER_ELEMENT));
+        float64ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSFloat64Array.BYTES_PER_ELEMENT));
         global.set("Float64Array", float64ArrayConstructor);
+
+        // BigInt64Array
+        JSObject bigInt64ArrayPrototype = new JSObject();
+        JSObject bigInt64ArrayConstructor = new JSObject();
+        bigInt64ArrayConstructor.set("prototype", bigInt64ArrayPrototype);
+        bigInt64ArrayPrototype.set("constructor", bigInt64ArrayConstructor);
+        bigInt64ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_BIGINT64);
+        bigInt64ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSBigInt64Array.BYTES_PER_ELEMENT));
+        bigInt64ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSBigInt64Array.BYTES_PER_ELEMENT));
+        global.set("BigInt64Array", bigInt64ArrayConstructor);
+
+        // BigUint64Array
+        JSObject bigUint64ArrayPrototype = new JSObject();
+        JSObject bigUint64ArrayConstructor = new JSObject();
+        bigUint64ArrayConstructor.set("prototype", bigUint64ArrayPrototype);
+        bigUint64ArrayPrototype.set("constructor", bigUint64ArrayConstructor);
+        bigUint64ArrayConstructor.setConstructorType(ConstructorType.TYPED_ARRAY_BIGUINT64);
+        bigUint64ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSBigUint64Array.BYTES_PER_ELEMENT));
+        bigUint64ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSBigUint64Array.BYTES_PER_ELEMENT));
+        global.set("BigUint64Array", bigUint64ArrayConstructor);
     }
 
     /**
