@@ -77,6 +77,72 @@ public final class IteratorPrototype {
     }
 
     /**
+     * Iterator.prototype.drop(limit)
+     * Returns an iterator that skips the first limit elements.
+     */
+    public static JSValue drop(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwError("Iterator.prototype.drop not yet implemented");
+    }
+
+    /**
+     * Iterator.prototype.every(predicate)
+     * Tests whether all elements satisfy the predicate.
+     */
+    public static JSValue every(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwError("Iterator.prototype.every not yet implemented");
+    }
+
+    /**
+     * Iterator.prototype.filter(predicate)
+     * Returns an iterator of elements that satisfy the predicate.
+     */
+    public static JSValue filter(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwError("Iterator.prototype.filter not yet implemented");
+    }
+
+    /**
+     * Iterator.prototype.find(predicate)
+     * Returns the first element that satisfies the predicate.
+     */
+    public static JSValue find(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwError("Iterator.prototype.find not yet implemented");
+    }
+
+    /**
+     * Iterator.prototype.flatMap(mapper)
+     * Returns an iterator that applies mapper and flattens the result.
+     */
+    public static JSValue flatMap(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwError("Iterator.prototype.flatMap not yet implemented");
+    }
+
+    /**
+     * Iterator.prototype.forEach(fn)
+     * Calls fn for each element.
+     */
+    public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwError("Iterator.prototype.forEach not yet implemented");
+    }
+
+    /**
+     * Iterator.from(object)
+     * Creates an iterator from an iterable object.
+     */
+    public static JSValue from(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwError("Iterator.from not yet implemented");
+    }
+
+    /**
+     * Iterator.prototype.map(mapper)
+     * Returns an iterator of mapped values.
+     */
+    public static JSValue map(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwError("Iterator.prototype.map not yet implemented");
+    }
+
+    // Iterator helper methods (ES2024) - Placeholders for now
+
+    /**
      * Map.prototype.entries() - returns iterator
      * Returns an iterator of [key, value] pairs.
      */
@@ -125,6 +191,14 @@ public final class IteratorPrototype {
     }
 
     /**
+     * Iterator.prototype.reduce(reducer, initialValue)
+     * Reduces the iterator to a single value.
+     */
+    public static JSValue reduce(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwError("Iterator.prototype.reduce not yet implemented");
+    }
+
+    /**
      * Set.prototype.entries() - returns iterator
      * Returns an iterator of [value, value] pairs.
      */
@@ -167,6 +241,14 @@ public final class IteratorPrototype {
     }
 
     /**
+     * Iterator.prototype.some(predicate)
+     * Tests whether any element satisfies the predicate.
+     */
+    public static JSValue some(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwError("Iterator.prototype.some not yet implemented");
+    }
+
+    /**
      * String.prototype[Symbol.iterator]()
      * Returns an iterator of string characters.
      */
@@ -183,5 +265,21 @@ public final class IteratorPrototype {
         }
 
         return JSIterator.stringIterator(str);
+    }
+
+    /**
+     * Iterator.prototype.take(limit)
+     * Returns an iterator of the first limit elements.
+     */
+    public static JSValue take(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwError("Iterator.prototype.take not yet implemented");
+    }
+
+    /**
+     * Iterator.prototype.toArray()
+     * Converts the iterator to an array.
+     */
+    public static JSValue toArray(JSContext context, JSValue thisArg, JSValue[] args) {
+        return context.throwError("Iterator.prototype.toArray not yet implemented");
     }
 }

@@ -90,6 +90,7 @@ public final class GlobalObject {
             case JSURIError.NAME -> new JSURIError(context);
             case JSEvalError.NAME -> new JSEvalError(context);
             case JSAggregateError.NAME -> new JSAggregateError(context);
+            case JSSuppressedError.NAME -> new JSSuppressedError(context);
             default -> new JSError(context);
         };
 
@@ -108,6 +109,7 @@ public final class GlobalObject {
             case JSURIError.NAME -> ConstructorType.URI_ERROR;
             case JSEvalError.NAME -> ConstructorType.EVAL_ERROR;
             case JSAggregateError.NAME -> ConstructorType.AGGREGATE_ERROR;
+            case JSSuppressedError.NAME -> ConstructorType.SUPPRESSED_ERROR;
             default -> ConstructorType.ERROR;
         };
         errorConstructor.setConstructorType(constructorType);
@@ -342,6 +344,7 @@ public final class GlobalObject {
         initializeProxyConstructor(context, global);
         initializePromiseConstructor(context, global);
         initializeGeneratorPrototype(context, global);
+        initializeIteratorConstructor(context, global);
 
         // Binary data constructors
         initializeArrayBufferConstructor(context, global);
@@ -664,6 +667,7 @@ public final class GlobalObject {
         global.set("URIError", createErrorConstructor(context, "URIError"));
         global.set("EvalError", createErrorConstructor(context, "EvalError"));
         global.set("AggregateError", createErrorConstructor(context, "AggregateError"));
+        global.set("SuppressedError", createErrorConstructor(context, "SuppressedError"));
     }
 
     /**
@@ -745,13 +749,46 @@ public final class GlobalObject {
         // Generator.prototype[Symbol.iterator] returns this
         generatorPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
                 new JSNativeFunction("[Symbol.iterator]", 0, (childContext, thisArg, args) -> thisArg));
+    }
 
-        // Create GeneratorFunction constructor (placeholder)
-        JSObject generatorFunction = new JSObject();
-        generatorFunction.set("prototype", generatorPrototype);
+    /**
+     * Initialize Iterator constructor and prototype.
+     * Based on ECMAScript 2024 Iterator specification.
+     */
+    private static void initializeIteratorConstructor(JSContext context, JSObject global) {
+        // Create Iterator.prototype with helper methods
+        JSObject iteratorPrototype = new JSObject();
 
-        // Store for use by generator instances
-        global.set("GeneratorFunction", generatorFunction);
+        // Iterator.prototype methods (ES2024)
+        // Note: These are placeholders. Full implementation requires iterator helper support.
+        iteratorPrototype.set("drop", new JSNativeFunction("drop", 1, IteratorPrototype::drop));
+        iteratorPrototype.set("filter", new JSNativeFunction("filter", 1, IteratorPrototype::filter));
+        iteratorPrototype.set("flatMap", new JSNativeFunction("flatMap", 1, IteratorPrototype::flatMap));
+        iteratorPrototype.set("map", new JSNativeFunction("map", 1, IteratorPrototype::map));
+        iteratorPrototype.set("take", new JSNativeFunction("take", 1, IteratorPrototype::take));
+        iteratorPrototype.set("every", new JSNativeFunction("every", 1, IteratorPrototype::every));
+        iteratorPrototype.set("find", new JSNativeFunction("find", 1, IteratorPrototype::find));
+        iteratorPrototype.set("forEach", new JSNativeFunction("forEach", 1, IteratorPrototype::forEach));
+        iteratorPrototype.set("some", new JSNativeFunction("some", 1, IteratorPrototype::some));
+        iteratorPrototype.set("reduce", new JSNativeFunction("reduce", 1, IteratorPrototype::reduce));
+        iteratorPrototype.set("toArray", new JSNativeFunction("toArray", 0, IteratorPrototype::toArray));
+
+        // Iterator.prototype[Symbol.iterator] returns this
+        iteratorPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
+                new JSNativeFunction("[Symbol.iterator]", 0, (childContext, thisArg, args) -> thisArg));
+
+        // Create Iterator constructor
+        JSObject iteratorConstructor = new JSObject();
+        iteratorConstructor.set("prototype", iteratorPrototype);
+
+        // Iterator static methods (ES2024)
+        iteratorConstructor.set("from", new JSNativeFunction("from", 1, IteratorPrototype::from));
+
+        // Set Iterator.prototype.constructor
+        iteratorPrototype.set("constructor", iteratorConstructor);
+
+        // Add Iterator to global object
+        global.set("Iterator", iteratorConstructor);
     }
 
     /**

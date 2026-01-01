@@ -1434,26 +1434,41 @@ public final class VirtualMachine {
                     ctorType == ConstructorType.SYNTAX_ERROR ||
                     ctorType == ConstructorType.URI_ERROR ||
                     ctorType == ConstructorType.EVAL_ERROR ||
-                    ctorType == ConstructorType.AGGREGATE_ERROR) {
-
-                // Get message from first argument
-                String message = "";
-                if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-                    JSString messageStr = JSTypeConversions.toString(context, args[0]);
-                    message = messageStr.value();
-                }
+                    ctorType == ConstructorType.AGGREGATE_ERROR ||
+                    ctorType == ConstructorType.SUPPRESSED_ERROR) {
 
                 // Create Error object of the proper type
-                JSError errorObj = switch (ctorType) {
-                    case TYPE_ERROR -> new JSTypeError(context, message);
-                    case RANGE_ERROR -> new JSRangeError(context, message);
-                    case REFERENCE_ERROR -> new JSReferenceError(context, message);
-                    case SYNTAX_ERROR -> new JSSyntaxError(context, message);
-                    case URI_ERROR -> new JSURIError(context, message);
-                    case EVAL_ERROR -> new JSEvalError(context, message);
-                    case AGGREGATE_ERROR -> new JSAggregateError(context, message);
-                    default -> new JSError(context, message);
-                };
+                JSError errorObj;
+                
+                if (ctorType == ConstructorType.SUPPRESSED_ERROR) {
+                    // SuppressedError has special constructor: new SuppressedError(error, suppressed, message)
+                    JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                    JSValue suppressed = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+                    String message = "";
+                    if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
+                        JSString messageStr = JSTypeConversions.toString(context, args[2]);
+                        message = messageStr.value();
+                    }
+                    errorObj = new JSSuppressedError(context, error, suppressed, message);
+                } else {
+                    // Get message from first argument for other error types
+                    String message = "";
+                    if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
+                        JSString messageStr = JSTypeConversions.toString(context, args[0]);
+                        message = messageStr.value();
+                    }
+
+                    errorObj = switch (ctorType) {
+                        case TYPE_ERROR -> new JSTypeError(context, message);
+                        case RANGE_ERROR -> new JSRangeError(context, message);
+                        case REFERENCE_ERROR -> new JSReferenceError(context, message);
+                        case SYNTAX_ERROR -> new JSSyntaxError(context, message);
+                        case URI_ERROR -> new JSURIError(context, message);
+                        case EVAL_ERROR -> new JSEvalError(context, message);
+                        case AGGREGATE_ERROR -> new JSAggregateError(context, message);
+                        default -> new JSError(context, message);
+                    };
+                }
 
                 // Set prototype from constructor
                 JSValue prototypeValue = ctorObj.get("prototype");

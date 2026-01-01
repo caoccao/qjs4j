@@ -41,6 +41,7 @@ public enum ConstructorType {
     SET,
     SHARED_ARRAY_BUFFER,
     STRING,
+    SUPPRESSED_ERROR,
     SYMBOL,
     SYNTAX_ERROR,
     TYPE_ERROR,

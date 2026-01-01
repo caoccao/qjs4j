@@ -23,7 +23,7 @@ import java.util.Objects;
  * Base class for all JavaScript error types.
  */
 public sealed class JSError extends JSObject permits
-        JSAggregateError, JSRangeError, JSReferenceError, JSSyntaxError, JSTypeError, JSEvalError, JSURIError {
+        JSAggregateError, JSRangeError, JSReferenceError, JSSyntaxError, JSTypeError, JSEvalError, JSURIError, JSSuppressedError {
     public static final String NAME = "Error";
     protected final JSContext context;
 
