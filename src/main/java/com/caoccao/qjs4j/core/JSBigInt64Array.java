@@ -23,6 +23,7 @@ import java.nio.ByteBuffer;
  * 64-bit signed integer array.
  */
 public final class JSBigInt64Array extends JSTypedArray {
+    public static final String NAME = "BigInt64Array";
     public static final int BYTES_PER_ELEMENT = 8;
 
     /**
@@ -37,6 +38,54 @@ public final class JSBigInt64Array extends JSTypedArray {
      */
     public JSBigInt64Array(JSArrayBufferable buffer, int byteOffset, int length) {
         super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        int length = 0;
+        if (args.length >= 1) {
+            JSValue firstArg = args[0];
+            if (firstArg instanceof JSNumber lengthNum) {
+                length = (int) JSTypeConversions.toLength(context, lengthNum);
+            } else if (firstArg instanceof JSArrayBufferable jsArrayBufferable) {
+                length = -1;
+                int byteOffset = 0;
+                if (args.length >= 2) {
+                    byteOffset = (int) JSTypeConversions.toInteger(context, args[1]);
+                }
+                if (args.length >= 3) {
+                    length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, args[2]));
+                }
+                return new JSBigInt64Array(jsArrayBufferable, byteOffset, length >= 0 ? length : jsArrayBufferable.getByteLength() / BYTES_PER_ELEMENT);
+            } else if (firstArg instanceof JSTypedArray jsTypedArray) {
+                length = jsTypedArray.getLength();
+                JSTypedArray newTypedArray = new JSBigInt64Array(length);
+                newTypedArray.setArray(context, jsTypedArray, 0);
+                return newTypedArray;
+            } else if (firstArg instanceof JSArray jsArray) {
+                length = (int) jsArray.getLength();
+                JSTypedArray jsTypedArray = new JSBigInt64Array(length);
+                jsTypedArray.setArray(context, jsArray, 0);
+                return jsTypedArray;
+            } else if (firstArg instanceof JSIterator jsIterator) {
+                JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
+                length = (int) jsArray.getLength();
+                JSTypedArray jsTypedArray = new JSBigInt64Array(length);
+                jsTypedArray.setArray(context, jsArray, 0);
+                return jsTypedArray;
+            } else if (firstArg instanceof JSObject jsObject) {
+                length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, jsObject.get("length")));
+                JSTypedArray jsTypedArray = new JSBigInt64Array(length);
+                for (int i = 0; i < length; i++) {
+                    jsTypedArray.setElement(i, JSTypeConversions.toNumber(context, jsObject.get(i)).value());
+                }
+                return jsTypedArray;
+            } else {
+                length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, firstArg));
+            }
+        }
+        JSObject jsObject = new JSBigInt64Array(length);
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+        return jsObject;
     }
 
     @Override

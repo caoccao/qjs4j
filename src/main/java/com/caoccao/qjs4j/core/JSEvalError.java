@@ -36,4 +36,14 @@ public final class JSEvalError extends JSError {
     public JSEvalError(JSContext context, String message) {
         super(context, NAME, message);
     }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        String message = "";
+        if (args.length > 0 && !args[0].isUndefined()) {
+            message = JSTypeConversions.toString(context, args[0]).value();
+        }
+        JSObject jsObject = new JSEvalError(context, message);
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+        return jsObject;
+    }
 }

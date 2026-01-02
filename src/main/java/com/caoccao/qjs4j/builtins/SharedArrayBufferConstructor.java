@@ -38,31 +38,4 @@ public final class SharedArrayBufferConstructor {
         // If called directly, it's an error
         return context.throwTypeError("SharedArrayBuffer constructor must be called with 'new'");
     }
-
-    /**
-     * Create a SharedArrayBuffer instance.
-     * Called by VM when 'new SharedArrayBuffer(length)' is executed.
-     *
-     * @param context The execution context
-     * @param length  The byte length
-     * @return A new SharedArrayBuffer instance or error
-     */
-    public static JSValue createSharedArrayBuffer(JSContext context, JSValue length) {
-        // Convert length to integer
-        int byteLength = 0;
-        if (length instanceof JSNumber num) {
-            byteLength = (int) num.value();
-        } else if (length instanceof JSUndefined) {
-            byteLength = 0;
-        } else {
-            return context.throwTypeError("SharedArrayBuffer length must be a number");
-        }
-
-        if (byteLength < 0) {
-            return context.throwRangeError("SharedArrayBuffer byteLength must be non-negative");
-        }
-
-        // Create and return SharedArrayBuffer
-        return new JSSharedArrayBuffer(byteLength);
-    }
 }

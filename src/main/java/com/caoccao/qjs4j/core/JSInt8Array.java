@@ -23,6 +23,7 @@ import java.nio.ByteBuffer;
  * 8-bit signed integer array.
  */
 public final class JSInt8Array extends JSTypedArray {
+    public static final String NAME = "Int8Array";
     public static final int BYTES_PER_ELEMENT = 1;
 
     /**
@@ -38,6 +39,55 @@ public final class JSInt8Array extends JSTypedArray {
     public JSInt8Array(JSArrayBufferable buffer, int byteOffset, int length) {
         super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        int length = 0;
+        if (args.length >= 1) {
+            JSValue firstArg = args[0];
+            if (firstArg instanceof JSNumber lengthNum) {
+                length = (int) JSTypeConversions.toLength(context, lengthNum);
+            } else if (firstArg instanceof JSArrayBufferable jsArrayBufferable) {
+                length = -1;
+                int byteOffset = 0;
+                if (args.length >= 2) {
+                    byteOffset = (int) JSTypeConversions.toInteger(context, args[1]);
+                }
+                if (args.length >= 3) {
+                    length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, args[2]));
+                }
+                return new JSInt8Array(jsArrayBufferable, byteOffset, length >= 0 ? length : jsArrayBufferable.getByteLength() / BYTES_PER_ELEMENT);
+            } else if (firstArg instanceof JSTypedArray jsTypedArray) {
+                length = jsTypedArray.getLength();
+                JSTypedArray newTypedArray = new JSInt8Array(length);
+                newTypedArray.setArray(context, jsTypedArray, 0);
+                return newTypedArray;
+            } else if (firstArg instanceof JSArray jsArray) {
+                length = (int) jsArray.getLength();
+                JSTypedArray jsTypedArray = new JSInt8Array(length);
+                jsTypedArray.setArray(context, jsArray, 0);
+                return jsTypedArray;
+            } else if (firstArg instanceof JSIterator jsIterator) {
+                JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
+                length = (int) jsArray.getLength();
+                JSTypedArray jsTypedArray = new JSInt8Array(length);
+                jsTypedArray.setArray(context, jsArray, 0);
+                return jsTypedArray;
+            } else if (firstArg instanceof JSObject jsObject) {
+                length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, jsObject.get("length")));
+                JSTypedArray jsTypedArray = new JSInt8Array(length);
+                for (int i = 0; i < length; i++) {
+                    jsTypedArray.setElement(i, JSTypeConversions.toNumber(context, jsObject.get(i)).value());
+                }
+                return jsTypedArray;
+            } else {
+                length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, firstArg));
+            }
+        }
+        JSObject jsObject = new JSInt8Array(length);
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+        return jsObject;
+    }
+
 
     @Override
     public double getElement(int index) {

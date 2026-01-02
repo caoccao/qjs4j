@@ -26,6 +26,7 @@ import java.util.Map;
  * Maps maintain insertion order and use SameValueZero equality for keys.
  */
 public final class JSMap extends JSObject {
+    public static final String NAME = "Map";
     // Use LinkedHashMap to maintain insertion order
     // Use a wrapper class for keys to handle JSValue equality properly
     private final Map<KeyWrapper, JSValue> data;
@@ -38,7 +39,7 @@ public final class JSMap extends JSObject {
         this.data = new LinkedHashMap<>();
     }
 
-    public static JSMap createMap(JSContext context, JSValue... args) {
+    public static JSObject create(JSContext context, JSValue... args) {
         // Create Map object
         JSMap mapObj = new JSMap();
         // If an iterable is provided, populate the map
@@ -49,7 +50,7 @@ public final class JSMap extends JSObject {
                 for (long i = 0; i < arr.getLength(); i++) {
                     JSValue entry = arr.get((int) i);
                     if (!(entry instanceof JSObject entryObj)) {
-                        throw new JSException(context.throwTypeError("Iterator value must be an object"));
+                        return context.throwTypeError("Iterator value must be an object");
                     }
                     // Get key and value from entry [key, value]
                     JSValue key = entryObj.get(0);
@@ -72,7 +73,7 @@ public final class JSMap extends JSObject {
                         }
                         JSValue entry = nextResult.get("value");
                         if (!(entry instanceof JSObject entryObj)) {
-                            throw new JSException(context.throwTypeError("Iterator value must be an object"));
+                            return context.throwTypeError("Iterator value must be an object");
                         }
                         // Get key and value from entry [key, value]
                         JSValue key = entryObj.get(0);
@@ -82,6 +83,7 @@ public final class JSMap extends JSObject {
                 }
             }
         }
+        context.getGlobalObject().get(NAME).asObject().ifPresent(mapObj::transferPrototypeFrom);
         return mapObj;
     }
 

@@ -41,19 +41,18 @@ public class SharedArrayBufferConstructorTest extends BaseJavetTest {
     @Test
     public void testCreateSharedArrayBuffer() {
         // Normal case: create with valid length
-        JSValue result = SharedArrayBufferConstructor.createSharedArrayBuffer(context, new JSNumber(32));
+        JSValue result = JSSharedArrayBuffer.create(context, new JSNumber(32));
         assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class, jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(32));
 
         // Normal case: create with zero length
-        result = SharedArrayBufferConstructor.createSharedArrayBuffer(context, new JSNumber(0));
+        result = JSSharedArrayBuffer.create(context, new JSNumber(0));
         assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class, jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(0));
 
         // Edge case: negative length
-        assertRangeError(SharedArrayBufferConstructor.createSharedArrayBuffer(context, new JSNumber(-1)));
-        assertPendingException(context);
+        assertRangeError(JSSharedArrayBuffer.create(context, new JSNumber(-1)));
 
         // Edge case: non-numeric length
-        assertTypeError(SharedArrayBufferConstructor.createSharedArrayBuffer(context, new JSString("32")));
-        assertPendingException(context);
+        result = JSSharedArrayBuffer.create(context, new JSString("32"));
+        assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class, jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(32));
     }
 }

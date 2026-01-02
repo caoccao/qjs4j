@@ -35,6 +35,7 @@ import java.nio.ByteOrder;
  * - Direct ByteBuffer for efficient multi-threaded access
  */
 public final class JSSharedArrayBuffer extends JSObject implements JSArrayBufferable {
+    public static final String NAME = "SharedArrayBuffer";
     private final ByteBuffer buffer;
     private final int byteLength;
 
@@ -46,12 +47,25 @@ public final class JSSharedArrayBuffer extends JSObject implements JSArrayBuffer
     public JSSharedArrayBuffer(int byteLength) {
         super();
         if (byteLength < 0) {
-            throw new IllegalArgumentException("SharedArrayBuffer byteLength must be non-negative");
+            throw new IllegalArgumentException("Invalid array buffer length");
         }
         // Use direct buffer for sharing across threads
         this.buffer = ByteBuffer.allocateDirect(byteLength);
         this.buffer.order(ByteOrder.LITTLE_ENDIAN); // JavaScript uses little-endian
         this.byteLength = byteLength;
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        int length = 0;
+        if (args.length > 0) {
+            length = (int) JSTypeConversions.toInteger(context, args[0]);
+        }
+        if (length < 0) {
+            return context.throwRangeError("Invalid array buffer length");
+        }
+        JSObject jsObject = new JSSharedArrayBuffer(length);
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+        return jsObject;
     }
 
     /**

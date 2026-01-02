@@ -25,6 +25,7 @@ import java.util.List;
  * Promises represent the eventual result of an asynchronous operation.
  */
 public final class JSPromise extends JSObject {
+    public static final String NAME = "Promise";
     private final List<ReactionRecord> fulfillReactions;
     private final List<ReactionRecord> rejectReactions;
     private JSValue result;
@@ -39,6 +40,38 @@ public final class JSPromise extends JSObject {
         this.result = JSUndefined.INSTANCE;
         this.fulfillReactions = new ArrayList<>();
         this.rejectReactions = new ArrayList<>();
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        // Promise requires an executor function
+        if (args.length == 0 || !(args[0] instanceof JSFunction executor)) {
+            return context.throwTypeError("Promise constructor requires an executor function");
+        }
+        // Create Promise object
+        JSPromise jsPromise = new JSPromise();
+        // Create resolve and reject functions
+        JSNativeFunction resolveFunc = new JSNativeFunction("resolve", 1,
+                (childContext, thisArg, funcArgs) -> {
+                    JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                    jsPromise.fulfill(value);
+                    return JSUndefined.INSTANCE;
+                });
+        JSNativeFunction rejectFunc = new JSNativeFunction("reject", 1,
+                (childContext, thisArg, funcArgs) -> {
+                    JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                    jsPromise.reject(reason);
+                    return JSUndefined.INSTANCE;
+                });
+        // Call the executor with resolve and reject
+        try {
+            JSValue[] executorArgs = new JSValue[]{resolveFunc, rejectFunc};
+            executor.call(context, JSUndefined.INSTANCE, executorArgs);
+        } catch (Exception e) {
+            // If executor throws, reject the promise
+            jsPromise.reject(new JSString("Error in Promise executor: " + e.getMessage()));
+        }
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsPromise::transferPrototypeFrom);
+        return jsPromise;
     }
 
     /**

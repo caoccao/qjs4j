@@ -26,6 +26,7 @@ import com.caoccao.qjs4j.regexp.RegExpEngine;
  * Uses QuickJS-based regex compiler and execution engine.
  */
 public final class JSRegExp extends JSObject {
+    public static final String NAME = "RegExp";
     private final RegExpBytecode bytecode;
     private final RegExpEngine engine;
     private final String flags;
@@ -60,7 +61,7 @@ public final class JSRegExp extends JSObject {
         this.set("lastIndex", new JSNumber(0));
     }
 
-    public static JSRegExp createRegExp(JSContext context, JSValue... args) {
+    public static JSObject create(JSContext context, JSValue... args) {
         String pattern = "";
         String flags = "";
         if (args.length > 0) {
@@ -80,9 +81,11 @@ public final class JSRegExp extends JSObject {
             }
         }
         try {
-            return new JSRegExp(pattern, flags);
+            JSObject jsObject = new JSRegExp(pattern, flags);
+            context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+            return jsObject;
         } catch (Exception e) {
-            throw new JSException(context.throwSyntaxError("Invalid regular expression: " + e.getMessage()));
+            return context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
         }
     }
 

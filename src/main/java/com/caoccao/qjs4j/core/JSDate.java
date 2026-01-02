@@ -25,6 +25,8 @@ import java.time.ZonedDateTime;
  * Wraps a timestamp (milliseconds since Unix epoch).
  */
 public final class JSDate extends JSObject {
+    public static final String NAME = "Date";
+
     private final long timeValue; // milliseconds since 1970-01-01T00:00:00.000Z
 
     /**
@@ -44,7 +46,7 @@ public final class JSDate extends JSObject {
         this.timeValue = timeValue;
     }
 
-    public static JSDate createDate(JSContext context, JSValue... args) {
+    public static JSObject create(JSContext context, JSValue... args) {
         long timeValue;
         if (args.length == 0) {
             timeValue = System.currentTimeMillis();
@@ -61,7 +63,9 @@ public final class JSDate extends JSObject {
             // Simplified: just use current time for now
             timeValue = System.currentTimeMillis();
         }
-        return new JSDate(timeValue);
+        JSObject jsObject = new JSDate(timeValue);
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+        return jsObject;
     }
 
     /**

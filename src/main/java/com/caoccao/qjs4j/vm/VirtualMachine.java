@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.builtins.BigIntConstructor;
-import com.caoccao.qjs4j.builtins.SharedArrayBufferConstructor;
 import com.caoccao.qjs4j.builtins.SymbolConstructor;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSException;
@@ -730,7 +729,7 @@ public final class VirtualMachine {
 
         // Special handling for Symbol constructor (must be called without new)
         if (callee instanceof JSObject calleeObj) {
-            if (calleeObj.getConstructorType() == ConstructorType.SYMBOL) {
+            if (calleeObj.getConstructorType() == JSConstructorType.SYMBOL_OBJECT) {
                 // Call Symbol() function
                 JSValue result = SymbolConstructor.call(context, receiver, args);
                 valueStack.push(result);
@@ -738,7 +737,7 @@ public final class VirtualMachine {
             }
 
             // Special handling for BigInt constructor (must be called without new)
-            if (calleeObj.getConstructorType() == ConstructorType.BIG_INT) {
+            if (calleeObj.getConstructorType() == JSConstructorType.BIG_INT_OBJECT) {
                 // Call BigInt() function
                 JSValue result = BigIntConstructor.call(context, receiver, args);
                 valueStack.push(result);
@@ -816,7 +815,7 @@ public final class VirtualMachine {
             JSObject instance = jsClass.construct(context, args);
             valueStack.push(instance);
         } else if (constructor instanceof JSFunction jsFunction) {
-            ConstructorType constructorType = jsFunction.getConstructorType();
+            JSConstructorType constructorType = jsFunction.getConstructorType();
             if (constructorType == null) {
                 JSObject thisObject = new JSObject();
                 // Get the prototype property from the constructor
@@ -857,205 +856,31 @@ public final class VirtualMachine {
             } else {
                 JSObject result = null;
                 switch (jsFunction.getConstructorType()) {
-                    case BOOLEAN -> result = JSBooleanObject.createBooleanObject(context, args);
-                    case NUMBER -> result = JSNumberObject.createNumberObject(context, args);
-                    case STRING -> result = JSStringObject.createStringObject(context, args);
-                    case BIG_INT -> valueStack.push(context.throwTypeError("BigInt is not a constructor"));
-                    case SYMBOL -> valueStack.push(context.throwTypeError("Symbol is not a constructor"));
-                    case TYPED_ARRAY_INT8, TYPED_ARRAY_INT16, TYPED_ARRAY_UINT8_CLAMPED, TYPED_ARRAY_UINT8,
+                    case BOOLEAN_OBJECT, NUMBER_OBJECT, STRING_OBJECT, BIG_INT_OBJECT, SYMBOL_OBJECT,
+                         TYPED_ARRAY_INT8, TYPED_ARRAY_INT16, TYPED_ARRAY_UINT8_CLAMPED, TYPED_ARRAY_UINT8,
                          TYPED_ARRAY_UINT16, TYPED_ARRAY_INT32, TYPED_ARRAY_UINT32, TYPED_ARRAY_FLOAT16,
                          TYPED_ARRAY_FLOAT32, TYPED_ARRAY_FLOAT64, TYPED_ARRAY_BIGINT64, TYPED_ARRAY_BIGUINT64 ->
-                            result = JSTypedArray.createTypedArray(context, constructorType, args);
+                            result = constructorType.create(context, args);
                 }
                 if (result != null) {
-                    JSValue prototypeValue = jsFunction.get("prototype");
-                    if (prototypeValue instanceof JSObject prototype) {
-                        result.setPrototype(prototype);
+                    if (!result.isError()) {
+                        result.transferPrototypeFrom(jsFunction);
                     }
                     valueStack.push(result);
                 }
             }
         } else if (constructor instanceof JSObject jsObject) {
-            ConstructorType constructorType = jsObject.getConstructorType();
+            JSConstructorType constructorType = jsObject.getConstructorType();
             JSObject resultObject = null;
             switch (constructorType) {
-                case DATE -> resultObject = JSDate.createDate(context, args);
-                case SYMBOL -> {
-                    valueStack.push(context.throwTypeError("Symbol is not a constructor"));
-                    return;
-                }
-                case BIG_INT -> {
-                    valueStack.push(context.throwTypeError("BigInt is not a constructor"));
-                    return;
-                }
-                case REGEXP -> resultObject = JSRegExp.createRegExp(context, args);
-                case MAP -> resultObject = JSMap.createMap(context, args);
-                case SET -> resultObject = JSSet.createSet(context, args);
-                case WEAK_MAP -> resultObject = JSWeakMap.createWeakMap(context, args);
-                case WEAK_SET -> resultObject = JSWeakSet.createWeakSet(context, args);
-                case WEAK_REF -> resultObject = JSWeakRef.createWeakRef(context, args);
-                case FINALIZATION_REGISTRY ->
-                        resultObject = JSFinalizationRegistry.createFinalizationRegistry(context, args);
+                case DATE, SYMBOL_OBJECT, BIG_INT_OBJECT, PROXY, PROMISE, SHARED_ARRAY_BUFFER,
+                     REGEXP, MAP, SET, FINALIZATION_REGISTRY, WEAK_MAP, WEAK_SET, WEAK_REF,
+                     ERROR, TYPE_ERROR, RANGE_ERROR, REFERENCE_ERROR, SYNTAX_ERROR,
+                     URI_ERROR, EVAL_ERROR, AGGREGATE_ERROR, SUPPRESSED_ERROR ->
+                        resultObject = constructorType.create(context, args);
             }
             if (resultObject != null) {
-                JSValue prototypeValue = jsObject.get("prototype");
-                if (prototypeValue instanceof JSObject prototype) {
-                    resultObject.setPrototype(prototype);
-                }
                 valueStack.push(resultObject);
-                return;
-            }
-
-            // Check for Proxy constructor
-            if (jsObject.getConstructorType() == ConstructorType.PROXY) {
-                // Proxy requires exactly 2 arguments: target and handler
-                if (args.length < 2) {
-                    context.throwTypeError("Proxy constructor requires target and handler");
-                    valueStack.push(JSUndefined.INSTANCE);
-                    return;
-                }
-
-                // Target must be an object (since JSFunction extends JSObject, this covers both)
-                JSValue target = args[0];
-                if (!(target instanceof JSObject)) {
-                    context.throwTypeError("Proxy target must be an object");
-                    valueStack.push(JSUndefined.INSTANCE);
-                    return;
-                }
-
-                if (!(args[1] instanceof JSObject handler)) {
-                    context.throwTypeError("Proxy handler must be an object");
-                    valueStack.push(JSUndefined.INSTANCE);
-                    return;
-                }
-
-                // Create Proxy object
-                JSProxy proxyObj = new JSProxy(target, handler, context);
-                valueStack.push(proxyObj);
-                return;
-            }
-
-            // Check for Promise constructor
-            if (jsObject.getConstructorType() == ConstructorType.PROMISE) {
-                // Promise requires an executor function
-                if (args.length == 0 || !(args[0] instanceof JSFunction executor)) {
-                    context.throwTypeError("Promise constructor requires an executor function");
-                    valueStack.push(JSUndefined.INSTANCE);
-                    return;
-                }
-
-                // Create Promise object
-                JSPromise promiseObj = new JSPromise();
-
-                // Set prototype
-                JSValue prototypeValue = jsObject.get("prototype");
-                if (prototypeValue instanceof JSObject prototype) {
-                    promiseObj.setPrototype(prototype);
-                }
-
-                // Create resolve and reject functions
-                JSNativeFunction resolveFunc = new JSNativeFunction("resolve", 1,
-                        (childContext, thisArg, funcArgs) -> {
-                            JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                            promiseObj.fulfill(value);
-                            return JSUndefined.INSTANCE;
-                        });
-
-                JSNativeFunction rejectFunc = new JSNativeFunction("reject", 1,
-                        (childContext, thisArg, funcArgs) -> {
-                            JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                            promiseObj.reject(reason);
-                            return JSUndefined.INSTANCE;
-                        });
-
-                // Call the executor with resolve and reject
-                try {
-                    JSValue[] executorArgs = new JSValue[]{resolveFunc, rejectFunc};
-                    executor.call(context, JSUndefined.INSTANCE, executorArgs);
-                } catch (Exception e) {
-                    // If executor throws, reject the promise
-                    promiseObj.reject(new JSString("Error in Promise executor: " + e.getMessage()));
-                }
-
-                valueStack.push(promiseObj);
-                return;
-            }
-
-            // Check for SharedArrayBuffer constructor
-            if (jsObject.getConstructorType() == ConstructorType.SHARED_ARRAY_BUFFER) {
-                // Get length argument
-                JSValue lengthArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-
-                // Create SharedArrayBuffer
-                JSValue result = SharedArrayBufferConstructor.createSharedArrayBuffer(context, lengthArg);
-
-                if (result instanceof JSSharedArrayBuffer sharedArrayBuffer) {
-                    // Set prototype
-                    JSValue prototypeValue = jsObject.get("prototype");
-                    if (prototypeValue instanceof JSObject prototype) {
-                        sharedArrayBuffer.setPrototype(prototype);
-                    }
-                }
-
-                valueStack.push(result);
-                return;
-            }
-
-            ConstructorType ctorType = jsObject.getConstructorType();
-
-            // Handle Error constructors
-            if (ctorType == ConstructorType.ERROR ||
-                    ctorType == ConstructorType.TYPE_ERROR ||
-                    ctorType == ConstructorType.RANGE_ERROR ||
-                    ctorType == ConstructorType.REFERENCE_ERROR ||
-                    ctorType == ConstructorType.SYNTAX_ERROR ||
-                    ctorType == ConstructorType.URI_ERROR ||
-                    ctorType == ConstructorType.EVAL_ERROR ||
-                    ctorType == ConstructorType.AGGREGATE_ERROR ||
-                    ctorType == ConstructorType.SUPPRESSED_ERROR) {
-
-                // Create Error object of the proper type
-                JSError errorObj;
-
-                if (ctorType == ConstructorType.SUPPRESSED_ERROR) {
-                    // SuppressedError has special constructor: new SuppressedError(error, suppressed, message)
-                    JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                    JSValue suppressed = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-                    String message = "";
-                    if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
-                        JSString messageStr = JSTypeConversions.toString(context, args[2]);
-                        message = messageStr.value();
-                    }
-                    errorObj = new JSSuppressedError(context, error, suppressed, message);
-                } else {
-                    // Get message from first argument for other error types
-                    String message = "";
-                    if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-                        JSString messageStr = JSTypeConversions.toString(context, args[0]);
-                        message = messageStr.value();
-                    }
-
-                    errorObj = switch (ctorType) {
-                        case TYPE_ERROR -> new JSTypeError(context, message);
-                        case RANGE_ERROR -> new JSRangeError(context, message);
-                        case REFERENCE_ERROR -> new JSReferenceError(context, message);
-                        case SYNTAX_ERROR -> new JSSyntaxError(context, message);
-                        case URI_ERROR -> new JSURIError(context, message);
-                        case EVAL_ERROR -> new JSEvalError(context, message);
-                        case AGGREGATE_ERROR -> new JSAggregateError(context, message);
-                        default -> new JSError(context, message);
-                    };
-                }
-
-                // Set prototype from constructor
-                JSValue prototypeValue = jsObject.get("prototype");
-                if (prototypeValue instanceof JSObject prototype) {
-                    errorObj.setPrototype(prototype);
-                }
-
-                valueStack.push(errorObj);
-            } else {
-                throw new JSVirtualMachineException("Cannot construct non-function value");
             }
         } else {
             throw new JSVirtualMachineException("Cannot construct non-function value");

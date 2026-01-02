@@ -633,6 +633,15 @@ public sealed interface JSValue extends JSStackValue permits
     }
 
     /**
+     * Check if this value is an Error.
+     *
+     * @return true if this value is an Error, false otherwise
+     */
+    default boolean isError() {
+        return this instanceof JSError;
+    }
+
+    /**
      * Check if this value is a FinalizationRegistry.
      *
      * @return true if this value is a FinalizationRegistry, false otherwise

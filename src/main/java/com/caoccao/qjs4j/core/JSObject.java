@@ -32,7 +32,7 @@ import java.util.*;
 public non-sealed class JSObject implements JSValue {
     // ThreadLocal to track visited objects during prototype chain traversal
     private static final ThreadLocal<Set<JSObject>> visitedObjects = ThreadLocal.withInitial(HashSet::new);
-    protected ConstructorType constructorType; // Internal slot for [[Constructor]] type (not accessible from JS)
+    protected JSConstructorType constructorType; // Internal slot for [[Constructor]] type (not accessible from JS)
     protected boolean extensible = true;
     protected boolean frozen = false;
     protected JSValue primitiveValue; // Internal slot for [[PrimitiveValue]] (not accessible from JS)
@@ -311,7 +311,7 @@ public non-sealed class JSObject implements JSValue {
      * Get the constructor type internal slot.
      * This is for internal use only - not accessible from JavaScript.
      */
-    public ConstructorType getConstructorType() {
+    public JSConstructorType getConstructorType() {
         return constructorType;
     }
 
@@ -538,7 +538,7 @@ public non-sealed class JSObject implements JSValue {
      * Set the constructor type internal slot.
      * This is for internal use only - not accessible from JavaScript.
      */
-    public void setConstructorType(ConstructorType type) {
+    public void setConstructorType(JSConstructorType type) {
         this.constructorType = type;
     }
 
@@ -572,6 +572,12 @@ public non-sealed class JSObject implements JSValue {
     @Override
     public String toString() {
         return "[object Object]";
+    }
+
+    public void transferPrototypeFrom(JSObject parentObject) {
+        if (parentObject.get("prototype") instanceof JSObject proto) {
+            this.prototype = proto;
+        }
     }
 
     @Override

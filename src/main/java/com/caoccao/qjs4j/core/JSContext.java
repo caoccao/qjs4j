@@ -963,14 +963,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSError throwError(JSError jsError) {
-        // Set prototype from the global error constructor
-        JSValue errorCtor = globalObject.get(jsError.getName().value());
-        if (errorCtor instanceof JSObject ctorObj) {
-            JSValue prototypeValue = ctorObj.get("prototype");
-            if (prototypeValue instanceof JSObject prototype) {
-                jsError.setPrototype(prototype);
-            }
-        }
+        globalObject.get(jsError.getName().value()).asObject().ifPresent(jsError::transferPrototypeFrom);
         // Capture stack trace
         captureStackTrace(jsError);
         // Set as pending exception

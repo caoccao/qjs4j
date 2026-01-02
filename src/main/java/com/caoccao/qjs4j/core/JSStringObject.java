@@ -43,6 +43,7 @@ package com.caoccao.qjs4j.core;
  * @see JSString
  */
 public final class JSStringObject extends JSObject {
+    public static final String NAME = "String";
     private final JSString value;
 
     /**
@@ -67,14 +68,16 @@ public final class JSStringObject extends JSObject {
         this.set("length", new JSNumber(value.value().length()));
     }
 
-    public static JSStringObject createStringObject(JSContext context, JSValue... args) {
+    public static JSObject create(JSContext context, JSValue... args) {
         JSString strValue;
         if (args.length == 0) {
             strValue = new JSString("");
         } else {
             strValue = JSTypeConversions.toString(context, args[0]);
         }
-        return new JSStringObject(strValue);
+        JSObject jsObject = new JSStringObject(strValue);
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+        return jsObject;
     }
 
     /**

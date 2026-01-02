@@ -51,6 +51,16 @@ public sealed class JSError extends JSObject permits
         set("message", new JSString(message));
     }
 
+    public static JSObject create(JSContext context, JSValue... args) {
+        String message = "";
+        if (args.length > 0 && !args[0].isUndefined()) {
+            message = JSTypeConversions.toString(context, args[0]).value();
+        }
+        JSObject jsObject = new JSError(context, message);
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+        return jsObject;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) return false;

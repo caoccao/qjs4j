@@ -43,6 +43,7 @@ package com.caoccao.qjs4j.core;
  * @see JSBoolean
  */
 public final class JSBooleanObject extends JSObject {
+    public static final String NAME = "Boolean";
     private final JSBoolean value;
 
     /**
@@ -65,10 +66,12 @@ public final class JSBooleanObject extends JSObject {
         this.setPrimitiveValue(value);
     }
 
-    public static JSBooleanObject createBooleanObject(JSContext context, JSValue... args) {
+    public static JSObject create(JSContext context, JSValue... args) {
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSBoolean boolValue = JSTypeConversions.toBoolean(value);
-        return new JSBooleanObject(boolValue);
+        JSObject jsObject = new JSBooleanObject(boolValue);
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+        return jsObject;
     }
 
     /**

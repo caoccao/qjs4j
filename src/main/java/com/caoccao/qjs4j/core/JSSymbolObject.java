@@ -73,6 +73,10 @@ public final class JSSymbolObject extends JSObject {
         this.setPrimitiveValue(value);
     }
 
+    public static JSObject create(JSContext context, JSValue... args) {
+        return context.throwTypeError("Symbol is not a constructor");
+    }
+
     /**
      * Get the JSSymbol value wrapped by this Symbol object.
      *

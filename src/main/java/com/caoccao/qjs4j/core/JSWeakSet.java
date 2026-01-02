@@ -16,8 +16,6 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.exceptions.JSException;
-
 import java.util.Collections;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -28,6 +26,7 @@ import java.util.WeakHashMap;
  * WeakSets are not enumerable.
  */
 public final class JSWeakSet extends JSObject {
+    public static final String NAME = "WeakSet";
     // Use WeakHashMap with dummy values to implement WeakSet
     // Keys are compared by identity (reference equality)
     private final Set<JSObject> data;
@@ -41,7 +40,7 @@ public final class JSWeakSet extends JSObject {
         this.data = Collections.newSetFromMap(new WeakHashMap<>());
     }
 
-    public static JSWeakSet createWeakSet(JSContext context, JSValue... args) {
+    public static JSObject create(JSContext context, JSValue... args) {
         // Create WeakSet object
         JSWeakSet weakSetObj = new JSWeakSet();
         // If an iterable is provided, populate the weakset
@@ -53,8 +52,7 @@ public final class JSWeakSet extends JSObject {
                     JSValue value = arr.get((int) i);
                     // WeakSet requires object values
                     if (!(value instanceof JSObject)) {
-                        context.throwTypeError("WeakSet value must be an object");
-                        throw new JSException(JSUndefined.INSTANCE);
+                        return context.throwTypeError("WeakSet value must be an object");
                     }
                     weakSetObj.weakSetAdd((JSObject) value);
                 }
@@ -75,14 +73,14 @@ public final class JSWeakSet extends JSObject {
                         JSValue value = nextResult.get("value");
                         // WeakSet requires object values
                         if (!(value instanceof JSObject)) {
-                            context.throwTypeError("WeakSet value must be an object");
-                            throw new JSException(JSUndefined.INSTANCE);
+                            return context.throwTypeError("WeakSet value must be an object");
                         }
                         weakSetObj.weakSetAdd((JSObject) value);
                     }
                 }
             }
         }
+        context.getGlobalObject().get(NAME).asObject().ifPresent(weakSetObj::transferPrototypeFrom);
         return weakSetObj;
     }
 

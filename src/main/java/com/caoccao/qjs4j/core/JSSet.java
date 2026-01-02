@@ -23,6 +23,7 @@ import java.util.LinkedHashSet;
  * Sets maintain insertion order and use SameValueZero equality for values.
  */
 public final class JSSet extends JSObject {
+    public static final String NAME = "Set";
     // Use LinkedHashSet to maintain insertion order
     // Use KeyWrapper from JSMap for consistent SameValueZero equality
     private final LinkedHashSet<JSMap.KeyWrapper> data;
@@ -35,7 +36,7 @@ public final class JSSet extends JSObject {
         this.data = new LinkedHashSet<>();
     }
 
-    public static JSSet createSet(JSContext context, JSValue... args) {
+    public static JSSet create(JSContext context, JSValue... args) {
         // Create Set object
         JSSet setObj = new JSSet();
         // If an iterable is provided, populate the set
@@ -67,6 +68,7 @@ public final class JSSet extends JSObject {
                 }
             }
         }
+        context.getGlobalObject().get(NAME).asObject().ifPresent(setObj::transferPrototypeFrom);
         return setObj;
     }
 

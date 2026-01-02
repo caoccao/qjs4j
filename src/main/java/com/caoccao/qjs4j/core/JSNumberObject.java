@@ -43,6 +43,7 @@ package com.caoccao.qjs4j.core;
  * @see JSNumber
  */
 public final class JSNumberObject extends JSObject {
+    public static final String NAME = "Number";
     private final JSNumber value;
 
     /**
@@ -65,14 +66,16 @@ public final class JSNumberObject extends JSObject {
         this.setPrimitiveValue(value);
     }
 
-    public static JSNumberObject createNumberObject(JSContext context, JSValue... args) {
+    public static JSObject create(JSContext context, JSValue... args) {
         JSNumber numValue;
         if (args.length == 0) {
             numValue = new JSNumber(0.0);
         } else {
             numValue = JSTypeConversions.toNumber(context, args[0]);
         }
-        return new JSNumberObject(numValue);
+        JSObject jsObject = new JSNumberObject(numValue);
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+        return jsObject;
     }
 
     /**

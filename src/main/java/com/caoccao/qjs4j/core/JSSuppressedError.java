@@ -53,6 +53,20 @@ public final class JSSuppressedError extends JSError {
         set("suppressed", suppressed);
     }
 
+    public static JSObject create(JSContext context, JSValue... args) {
+        // SuppressedError has special constructor: new SuppressedError(error, suppressed, message)
+        JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue suppressed = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        String message = "";
+        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
+            JSString messageStr = JSTypeConversions.toString(context, args[2]);
+            message = messageStr.value();
+        }
+        JSObject jsObject = new JSSuppressedError(context, error, suppressed, message);
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+        return jsObject;
+    }
+
     /**
      * Get the main error.
      */

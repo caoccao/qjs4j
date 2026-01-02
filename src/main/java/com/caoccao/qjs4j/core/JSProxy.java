@@ -29,6 +29,7 @@ import java.util.Set;
  * Based on ES2020 Proxy specification (simplified).
  */
 public final class JSProxy extends JSObject {
+    public static final String NAME = "Proxy";
     private final JSContext context;
     private final JSObject handler;
     private final boolean isFunc;
@@ -48,6 +49,25 @@ public final class JSProxy extends JSObject {
         this.handler = handler;
         this.context = context;
         this.isFunc = JSTypeChecking.isFunction(target);
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        // Proxy requires exactly 2 arguments: target and handler
+        if (args.length < 2) {
+            return context.throwTypeError("Proxy constructor requires target and handler");
+        }
+        // Target must be an object (since JSFunction extends JSObject, this covers both)
+        JSValue target = args[0];
+        if (!(target instanceof JSObject)) {
+            return context.throwTypeError("Proxy target must be an object");
+        }
+        if (!(args[1] instanceof JSObject handler)) {
+            return context.throwTypeError("Proxy handler must be an object");
+        }
+        // Create Proxy object
+        JSObject jsObject = new JSProxy(target, handler, context);
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+        return jsObject;
     }
 
     /**

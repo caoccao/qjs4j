@@ -38,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * - Part of the WeakRefs proposal (ES2021)
  */
 public final class JSFinalizationRegistry extends JSObject {
+    public static final String NAME = "FinalizationRegistry";
     private final JSFunction cleanupCallback;
     private final Thread cleanupThread;
     private final JSContext context;
@@ -101,15 +102,17 @@ public final class JSFinalizationRegistry extends JSObject {
         }));
     }
 
-    public static JSFinalizationRegistry createFinalizationRegistry(JSContext context, JSValue... args) {
+    public static JSObject create(JSContext context, JSValue... args) {
         // FinalizationRegistry requires exactly 1 argument: cleanupCallback
         if (args.length == 0) {
-            throw new JSException(context.throwTypeError("FinalizationRegistry constructor requires a cleanup callback"));
+            return context.throwTypeError("FinalizationRegistry constructor requires a cleanup callback");
         }
         if (!(args[0] instanceof JSFunction callback)) {
-            throw new JSException(context.throwTypeError("FinalizationRegistry cleanup callback must be a function"));
+            return context.throwTypeError("FinalizationRegistry cleanup callback must be a function");
         }
-        return new JSFinalizationRegistry(context, callback);
+        JSObject jsObject = new JSFinalizationRegistry(context, callback);
+        context.getGlobalObject().get(NAME).asObject().ifPresent(jsObject::transferPrototypeFrom);
+        return jsObject;
     }
 
     /**

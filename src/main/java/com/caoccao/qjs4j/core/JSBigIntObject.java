@@ -70,6 +70,10 @@ public final class JSBigIntObject extends JSObject {
         this.setPrimitiveValue(value);
     }
 
+    public static JSObject create(JSContext context, JSValue... args) {
+        return context.throwTypeError("BigInt is not a constructor");
+    }
+
     /**
      * Get the JSBigInt value wrapped by this BigInt object.
      *
