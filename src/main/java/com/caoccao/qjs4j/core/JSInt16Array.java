@@ -67,9 +67,4 @@ public final class JSInt16Array extends JSTypedArray {
 
         return new JSInt16Array(buffer, newByteOffset, newLength);
     }
-
-    @Override
-    public String toString() {
-        return "[object Int16Array]";
-    }
 }

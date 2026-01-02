@@ -67,6 +67,16 @@ public final class JSStringObject extends JSObject {
         this.set("length", new JSNumber(value.value().length()));
     }
 
+    public static JSStringObject createStringObject(JSContext context, JSValue... args) {
+        JSString strValue;
+        if (args.length == 0) {
+            strValue = new JSString("");
+        } else {
+            strValue = JSTypeConversions.toString(context, args[0]);
+        }
+        return new JSStringObject(strValue);
+    }
+
     /**
      * Override get to support indexed character access.
      * String objects are array-like and support accessing characters by index.

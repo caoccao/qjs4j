@@ -43,21 +43,4 @@ public final class WeakRefConstructor {
         // If called directly, it's an error
         return context.throwTypeError("WeakRef constructor must be called with 'new'");
     }
-
-    /**
-     * Create a WeakRef instance.
-     * Called by VM when 'new WeakRef(target)' is executed.
-     *
-     * @param context The execution context
-     * @param target  The target object
-     * @return A new WeakRef instance or error
-     */
-    public static JSValue createWeakRef(JSContext context, JSValue target) {
-        // Validate target is an object
-        if (!(target instanceof JSObject targetObj)) {
-            return context.throwTypeError("WeakRef: invalid target");
-        }
-        // Create and return WeakRef
-        return new JSWeakRef(targetObj);
-    }
 }

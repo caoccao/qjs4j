@@ -216,10 +216,4 @@ public class JSFloat16ArrayTest extends BaseTest {
         JSTypedArray sub3 = array.subarray(-7, -2);
         assertThat(sub3.getLength()).isEqualTo(5);
     }
-
-    @Test
-    public void testToString() {
-        JSFloat16Array array = new JSFloat16Array(5);
-        assertThat(array.toString()).isEqualTo("[object Float16Array]");
-    }
 }

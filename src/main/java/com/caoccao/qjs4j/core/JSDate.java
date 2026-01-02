@@ -44,6 +44,26 @@ public final class JSDate extends JSObject {
         this.timeValue = timeValue;
     }
 
+    public static JSDate createDate(JSContext context, JSValue... args) {
+        long timeValue;
+        if (args.length == 0) {
+            timeValue = System.currentTimeMillis();
+        } else if (args.length == 1) {
+            JSValue arg = args[0];
+            if (arg instanceof JSNumber num) {
+                timeValue = (long) num.value();
+            } else {
+                JSString str = JSTypeConversions.toString(context, arg);
+                timeValue = System.currentTimeMillis();
+            }
+        } else {
+            // Multiple arguments: year, month, date, etc.
+            // Simplified: just use current time for now
+            timeValue = System.currentTimeMillis();
+        }
+        return new JSDate(timeValue);
+    }
+
     /**
      * Get ZonedDateTime representation (local timezone).
      */

@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
+
 import java.lang.ref.WeakReference;
 
 /**
@@ -48,6 +50,18 @@ public final class JSWeakRef extends JSObject {
 
         // Add deref() method
         this.set("deref", new JSNativeFunction("deref", 0, (childContext, thisArg, args) -> deref()));
+    }
+
+    public static JSWeakRef createWeakRef(JSContext context, JSValue... args) {
+        // WeakRef requires exactly 1 argument: target
+        if (args.length == 0) {
+            throw new JSException(context.throwTypeError("WeakRef constructor requires a target object"));
+        }
+        JSValue targetArg = args[0];
+        if (!(targetArg instanceof JSObject targetObj)) {
+            throw new JSException(context.throwTypeError("WeakRef: invalid target"));
+        }
+        return new JSWeakRef(targetObj);
     }
 
     /**

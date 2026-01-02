@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.RangeError;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -200,11 +202,5 @@ public final class JSDataView extends JSObject {
     @Override
     public String toString() {
         return "[object DataView]";
-    }
-
-    public static class RangeError extends RuntimeException {
-        public RangeError(String message) {
-            super(message);
-        }
     }
 }

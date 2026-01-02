@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
+
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.util.Map;
@@ -47,10 +49,10 @@ public final class JSFinalizationRegistry extends JSObject {
     /**
      * Create a new FinalizationRegistry.
      *
-     * @param cleanupCallback Callback function called with held values
      * @param context         The execution context
+     * @param cleanupCallback Callback function called with held values
      */
-    public JSFinalizationRegistry(JSFunction cleanupCallback, JSContext context) {
+    public JSFinalizationRegistry(JSContext context, JSFunction cleanupCallback) {
         super();
         this.cleanupCallback = cleanupCallback;
         this.context = context;
@@ -97,6 +99,17 @@ public final class JSFinalizationRegistry extends JSObject {
             boolean removed = unregister(unregisterToken);
             return JSBoolean.valueOf(removed);
         }));
+    }
+
+    public static JSFinalizationRegistry createFinalizationRegistry(JSContext context, JSValue... args) {
+        // FinalizationRegistry requires exactly 1 argument: cleanupCallback
+        if (args.length == 0) {
+            throw new JSException(context.throwTypeError("FinalizationRegistry constructor requires a cleanup callback"));
+        }
+        if (!(args[0] instanceof JSFunction callback)) {
+            throw new JSException(context.throwTypeError("FinalizationRegistry cleanup callback must be a function"));
+        }
+        return new JSFinalizationRegistry(context, callback);
     }
 
     /**

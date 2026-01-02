@@ -39,7 +39,7 @@ public final class PromiseConstructor {
         if (args[0] instanceof JSArray jsArray) {
             array = jsArray;
         } else if (JSIteratorHelper.isIterable(args[0])) {
-            array = JSIteratorHelper.toArray(args[0], context);
+            array = JSIteratorHelper.toArray(context, args[0]);
         } else {
             return context.throwTypeError("Promise.all requires an iterable");
         }
@@ -114,7 +114,7 @@ public final class PromiseConstructor {
         if (args[0] instanceof JSArray jsArray) {
             array = jsArray;
         } else if (JSIteratorHelper.isIterable(args[0])) {
-            array = JSIteratorHelper.toArray(args[0], context);
+            array = JSIteratorHelper.toArray(context, args[0]);
         } else {
             return context.throwTypeError("Promise.allSettled requires an iterable");
         }
@@ -201,7 +201,7 @@ public final class PromiseConstructor {
         if (args[0] instanceof JSArray jsArray) {
             array = jsArray;
         } else if (JSIteratorHelper.isIterable(args[0])) {
-            array = JSIteratorHelper.toArray(args[0], context);
+            array = JSIteratorHelper.toArray(context, args[0]);
         } else {
             return context.throwTypeError("Promise.any requires an iterable");
         }
@@ -298,7 +298,7 @@ public final class PromiseConstructor {
         if (args[0] instanceof JSArray jsArray) {
             array = jsArray;
         } else if (JSIteratorHelper.isIterable(args[0])) {
-            array = JSIteratorHelper.toArray(args[0], context);
+            array = JSIteratorHelper.toArray(context, args[0]);
         } else {
             return context.throwTypeError("Promise.race requires an iterable");
         }

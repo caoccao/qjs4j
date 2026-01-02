@@ -43,22 +43,4 @@ public final class FinalizationRegistryConstructor {
         // If called directly, it's an error
         return context.throwTypeError("FinalizationRegistry constructor must be called with 'new'");
     }
-
-    /**
-     * Create a FinalizationRegistry instance.
-     * Called by VM when 'new FinalizationRegistry(cleanupCallback)' is executed.
-     *
-     * @param context         The execution context
-     * @param cleanupCallback The cleanup callback function
-     * @return A new FinalizationRegistry instance or error
-     */
-    public static JSValue createFinalizationRegistry(JSContext context, JSValue cleanupCallback) {
-        // Validate cleanupCallback is a function
-        if (!(cleanupCallback instanceof JSFunction callback)) {
-            return context.throwTypeError("FinalizationRegistry cleanup callback must be a function");
-        }
-
-        // Create and return FinalizationRegistry
-        return new JSFinalizationRegistry(callback, context);
-    }
 }

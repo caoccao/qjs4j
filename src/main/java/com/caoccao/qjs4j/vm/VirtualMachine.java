@@ -16,7 +16,9 @@
 
 package com.caoccao.qjs4j.vm;
 
-import com.caoccao.qjs4j.builtins.*;
+import com.caoccao.qjs4j.builtins.BigIntConstructor;
+import com.caoccao.qjs4j.builtins.SharedArrayBufferConstructor;
+import com.caoccao.qjs4j.builtins.SymbolConstructor;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
@@ -795,570 +797,117 @@ public final class VirtualMachine {
         for (int i = argCount - 1; i >= 0; i--) {
             args[i] = valueStack.pop();
         }
-
         // Pop constructor
         JSValue constructor = valueStack.pop();
-
         // Handle proxy construct trap (QuickJS: js_proxy_call_constructor)
-        if (constructor instanceof JSProxy proxy) {
+        if (constructor instanceof JSProxy jsProxy) {
             // Following QuickJS JS_CallConstructorInternal:
             // Check if target is a constructor BEFORE checking for construct trap
-            JSValue target = proxy.getTarget();
-            if (!(target instanceof JSFunction)) {
-                throw new JSException(context.throwTypeError("proxy is not a constructor"));
+            JSValue target = jsProxy.getTarget();
+            if (target instanceof JSFunction) {
+                valueStack.push(proxyConstruct(jsProxy, args));
+            } else {
+                context.throwTypeError("proxy is not a constructor");
+                valueStack.push(JSUndefined.INSTANCE);
             }
-
-            JSValue result = proxyConstruct(proxy, args);
-            valueStack.push(result);
-            return;
-        }
-
-        // Check for ES6 class constructor
-        if (constructor instanceof JSClass classConstructor) {
+        } else if (constructor instanceof JSClass jsClass) {
+            // Check for ES6 class constructor
             // Use the class's construct() method
-            JSObject instance = classConstructor.construct(context, args);
+            JSObject instance = jsClass.construct(context, args);
             valueStack.push(instance);
-            return;
-        }
-
-        // Check for Boolean constructor (must come before generic JSFunction check)
-        if (constructor instanceof JSObject ctorObj) {
-            if (ctorObj.getConstructorType() == ConstructorType.BOOLEAN) {
-                // Get the value to convert to boolean
-                JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-
-                // Convert to boolean using ToBoolean
-                JSBoolean boolValue = JSTypeConversions.toBoolean(value);
-
-                // Create Boolean object wrapper
-                JSBooleanObject boolObj = new JSBooleanObject(boolValue);
-
-                // Set prototype
-                JSValue prototypeValue = ctorObj.get("prototype");
-                if (prototypeValue instanceof JSObject prototype) {
-                    boolObj.setPrototype(prototype);
+        } else if (constructor instanceof JSFunction jsFunction) {
+            ConstructorType constructorType = jsFunction.getConstructorType();
+            if (constructorType == null) {
+                JSObject thisObject = new JSObject();
+                // Get the prototype property from the constructor
+                JSValue prototypeValue = jsFunction.get("prototype");
+                if (prototypeValue instanceof JSObject prototypeObj) {
+                    thisObject.setPrototype(prototypeObj);
                 }
-
-                valueStack.push(boolObj);
-                return;
-            }
-
-            // Check for Number constructor (must come before generic JSFunction check)
-            if (ctorObj.getConstructorType() == ConstructorType.NUMBER) {
-                // ES2020: If no argument is passed, use +0
-                JSNumber numValue;
-                if (args.length == 0) {
-                    numValue = new JSNumber(0.0);
-                } else {
-                    // Convert to number using ToNumber
-                    numValue = JSTypeConversions.toNumber(context, args[0]);
-                }
-
-                // Create Number object wrapper
-                JSNumberObject numObj = new JSNumberObject(numValue);
-
-                // Set prototype
-                JSValue prototypeValue = ctorObj.get("prototype");
-                if (prototypeValue instanceof JSObject prototype) {
-                    numObj.setPrototype(prototype);
-                }
-
-                valueStack.push(numObj);
-                return;
-            }
-
-            // Check for String constructor (must come before generic JSFunction check)
-            if (ctorObj.getConstructorType() == ConstructorType.STRING) {
-                // ES2020: If no argument is passed, use empty string
-                JSString strValue;
-                if (args.length == 0) {
-                    strValue = new JSString("");
-                } else {
-                    // Convert to string using ToString
-                    strValue = JSTypeConversions.toString(context, args[0]);
-                }
-
-                // Create String object wrapper
-                JSStringObject strObj = new JSStringObject(strValue);
-
-                // Set prototype
-                JSValue prototypeValue = ctorObj.get("prototype");
-                if (prototypeValue instanceof JSObject prototype) {
-                    strObj.setPrototype(prototype);
-                }
-
-                valueStack.push(strObj);
-                return;
-            }
-
-            // Check for BigInt constructor
-            // Note: BigInt cannot be called with 'new' operator per ES2020 spec
-            if (ctorObj.getConstructorType() == ConstructorType.BIG_INT) {
-                // ES2020: BigInt cannot be used as a constructor
-                valueStack.push(context.throwTypeError("BigInt is not a constructor"));
-                return;
-            }
-
-            // Check for Symbol constructor
-            // Note: Symbol cannot be called with 'new' operator per ES2020 spec
-            if (ctorObj.getConstructorType() == ConstructorType.SYMBOL) {
-                // ES2020: Symbol cannot be used as a constructor
-                valueStack.push(context.throwTypeError("Symbol is not a constructor"));
-                return;
-            }
-        }
-
-        if (constructor instanceof JSFunction func) {
-            // Following QuickJS js_create_from_ctor:
-            // Create new object with prototype from constructor.prototype
-            JSObject newObj = new JSObject();
-
-            // Get the prototype property from the constructor
-            JSValue prototypeValue = func.get("prototype");
-            if (prototypeValue instanceof JSObject prototypeObj) {
-                newObj.setPrototype(prototypeObj);
-            }
-
-            // Call constructor with new object as this
-            JSValue result;
-            if (constructor instanceof JSNativeFunction nativeFunc) {
-                result = nativeFunc.call(context, newObj, args);
-                // Check for pending exception after native constructor call
-                if (context.hasPendingException()) {
-                    // Throw immediately to propagate the exception
-                    JSValue exception = context.getPendingException();
-                    // Get error message safely
-                    String errorMsg = "Unhandled exception in constructor";
-                    if (exception instanceof JSObject errorObj) {
-                        JSValue msgValue = errorObj.get("message");
-                        if (msgValue instanceof JSString msgStr) {
-                            errorMsg = msgStr.value();
+                // Call constructor with new object as this
+                JSValue result;
+                if (constructor instanceof JSNativeFunction nativeFunc) {
+                    result = nativeFunc.call(context, thisObject, args);
+                    // Check for pending exception after native constructor call
+                    if (context.hasPendingException()) {
+                        // Throw immediately to propagate the exception
+                        JSValue exception = context.getPendingException();
+                        // Get error message safely
+                        String errorMsg = "Unhandled exception in constructor";
+                        if (exception instanceof JSObject errorObj) {
+                            JSValue msgValue = errorObj.get("message");
+                            if (msgValue instanceof JSString msgStr) {
+                                errorMsg = msgStr.value();
+                            }
                         }
+                        throw new JSVirtualMachineException(errorMsg);
                     }
-                    throw new JSVirtualMachineException(errorMsg);
+                } else if (constructor instanceof JSBytecodeFunction bytecodeFunc) {
+                    result = execute(bytecodeFunc, thisObject, args);
+                } else {
+                    result = JSUndefined.INSTANCE;
                 }
-            } else if (constructor instanceof JSBytecodeFunction bytecodeFunc) {
-                result = execute(bytecodeFunc, newObj, args);
+                // Following QuickJS JS_CallConstructorInternal:
+                // If constructor returns an object, use that; otherwise use newObj
+                if (result instanceof JSObject) {
+                    valueStack.push(result);
+                } else {
+                    valueStack.push(thisObject);
+                }
             } else {
-                result = JSUndefined.INSTANCE;
-            }
-
-            // Following QuickJS JS_CallConstructorInternal:
-            // If constructor returns an object, use that; otherwise use newObj
-            if (result instanceof JSObject) {
-                valueStack.push(result);
-            } else {
-                valueStack.push(newObj);
-            }
-        } else if (constructor instanceof JSObject ctorObj) {
-            // Check for ES6 class constructor marker
-            JSValue isClassCtor = ctorObj.get("[[ClassConstructor]]");
-            if (isClassCtor instanceof JSBoolean && ((JSBoolean) isClassCtor).value()) {
-                context.throwTypeError("Class constructor cannot be invoked without 'new'");
-                valueStack.push(JSUndefined.INSTANCE);
-                return;
-            }
-            // Check for Date constructor
-            if (ctorObj.getConstructorType() == ConstructorType.DATE) {
-                // Create Date object
-                long timeValue;
-                if (args.length == 0) {
-                    // No arguments: current time
-                    timeValue = System.currentTimeMillis();
-                } else if (args.length == 1) {
-                    // Single argument: timestamp or parseable string
-                    JSValue arg = args[0];
-                    if (arg instanceof JSNumber num) {
-                        timeValue = (long) num.value();
-                    } else {
-                        // Try to parse as string
-                        JSString str = JSTypeConversions.toString(context, arg);
-                        // Simplified: just use current time for now
-                        timeValue = System.currentTimeMillis();
-                    }
-                } else {
-                    // Multiple arguments: year, month, date, etc.
-                    // Simplified: just use current time for now
-                    timeValue = System.currentTimeMillis();
+                JSObject result = null;
+                switch (jsFunction.getConstructorType()) {
+                    case BOOLEAN -> result = JSBooleanObject.createBooleanObject(context, args);
+                    case NUMBER -> result = JSNumberObject.createNumberObject(context, args);
+                    case STRING -> result = JSStringObject.createStringObject(context, args);
+                    case BIG_INT -> valueStack.push(context.throwTypeError("BigInt is not a constructor"));
+                    case SYMBOL -> valueStack.push(context.throwTypeError("Symbol is not a constructor"));
+                    case TYPED_ARRAY_INT8, TYPED_ARRAY_INT16, TYPED_ARRAY_UINT8_CLAMPED, TYPED_ARRAY_UINT8,
+                         TYPED_ARRAY_UINT16, TYPED_ARRAY_INT32, TYPED_ARRAY_UINT32, TYPED_ARRAY_FLOAT16,
+                         TYPED_ARRAY_FLOAT32, TYPED_ARRAY_FLOAT64, TYPED_ARRAY_BIGINT64, TYPED_ARRAY_BIGUINT64 ->
+                            result = JSTypedArray.createTypedArray(context, constructorType, args);
                 }
-
-                JSDate dateObj = new JSDate(timeValue);
-
-                // Set prototype
-                JSValue prototypeValue = ctorObj.get("prototype");
-                if (prototypeValue instanceof JSObject prototype) {
-                    dateObj.setPrototype(prototype);
-                }
-
-                valueStack.push(dateObj);
-                return;
-            }
-
-            // Check for Symbol constructor (throws error when used with new)
-            if (ctorObj.getConstructorType() == ConstructorType.SYMBOL) {
-                context.throwTypeError("Symbol is not a constructor");
-                valueStack.push(JSUndefined.INSTANCE);
-                return;
-            }
-
-            // Check for BigInt constructor (throws error when used with new)
-            if (ctorObj.getConstructorType() == ConstructorType.BIG_INT) {
-                context.throwTypeError("BigInt is not a constructor");
-                valueStack.push(JSUndefined.INSTANCE);
-                return;
-            }
-
-            // Check for RegExp constructor
-            if (ctorObj.getConstructorType() == ConstructorType.REGEXP) {
-                // Create RegExp object
-                String pattern = "";
-                String flags = "";
-
-                if (args.length > 0) {
-                    // First argument is the pattern
-                    JSValue patternArg = args[0];
-                    if (patternArg instanceof JSRegExp existingRegExp) {
-                        // Copy from existing RegExp
-                        pattern = existingRegExp.getPattern();
-                        flags = args.length > 1 && !(args[1] instanceof JSUndefined)
-                                ? JSTypeConversions.toString(context, args[1]).value()
-                                : existingRegExp.getFlags();
-                    } else if (!(patternArg instanceof JSUndefined)) {
-                        pattern = JSTypeConversions.toString(context, patternArg).value();
-                        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-                            flags = JSTypeConversions.toString(context, args[1]).value();
-                        }
-                    }
-                }
-
-                try {
-                    JSRegExp regexpObj = new JSRegExp(pattern, flags);
-
-                    // Set prototype
-                    JSValue prototypeValue = ctorObj.get("prototype");
+                if (result != null) {
+                    JSValue prototypeValue = jsFunction.get("prototype");
                     if (prototypeValue instanceof JSObject prototype) {
-                        regexpObj.setPrototype(prototype);
+                        result.setPrototype(prototype);
                     }
-
-                    valueStack.push(regexpObj);
-                } catch (Exception e) {
-                    // Invalid regex - throw SyntaxError
-                    context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
-                    valueStack.push(JSUndefined.INSTANCE);
-                }
-                return;
-            }
-
-            // Check for Map constructor
-            if (ctorObj.getConstructorType() == ConstructorType.MAP) {
-                // Create Map object
-                JSMap mapObj = new JSMap();
-
-                // Set prototype
-                JSValue prototypeValue = ctorObj.get("prototype");
-                if (prototypeValue instanceof JSObject prototype) {
-                    mapObj.setPrototype(prototype);
-                }
-
-                // If an iterable is provided, populate the map
-                if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
-                    JSValue iterableArg = args[0];
-
-                    // Handle array directly for efficiency
-                    if (iterableArg instanceof JSArray arr) {
-                        for (long i = 0; i < arr.getLength(); i++) {
-                            JSValue entry = arr.get((int) i);
-                            if (!(entry instanceof JSObject entryObj)) {
-                                context.throwTypeError("Iterator value must be an object");
-                                valueStack.push(JSUndefined.INSTANCE);
-                                return;
-                            }
-
-                            // Get key and value from entry [key, value]
-                            JSValue key = entryObj.get(0);
-                            JSValue value = entryObj.get(1);
-                            mapObj.mapSet(key, value);
-                        }
-                    } else if (iterableArg instanceof JSObject) {
-                        // Try to get iterator
-                        JSValue iterator = JSIteratorHelper.getIterator(iterableArg, context);
-                        if (iterator instanceof JSIterator iter) {
-                            // Iterate and populate
-                            while (true) {
-                                JSObject nextResult = iter.next();
-                                if (nextResult == null) {
-                                    break;
-                                }
-
-                                JSValue done = nextResult.get("done");
-                                if (done == JSBoolean.TRUE) {
-                                    break;
-                                }
-
-                                JSValue entry = nextResult.get("value");
-                                if (!(entry instanceof JSObject entryObj)) {
-                                    context.throwTypeError("Iterator value must be an object");
-                                    valueStack.push(JSUndefined.INSTANCE);
-                                    return;
-                                }
-
-                                // Get key and value from entry [key, value]
-                                JSValue key = entryObj.get(0);
-                                JSValue value = entryObj.get(1);
-                                mapObj.mapSet(key, value);
-                            }
-                        }
-                    }
-                }
-
-                valueStack.push(mapObj);
-                return;
-            }
-
-            // Check for Set constructor
-            if (ctorObj.getConstructorType() == ConstructorType.SET) {
-                // Create Set object
-                JSSet setObj = new JSSet();
-
-                // Set prototype
-                JSValue prototypeValue = ctorObj.get("prototype");
-                if (prototypeValue instanceof JSObject prototype) {
-                    setObj.setPrototype(prototype);
-                }
-
-                // If an iterable is provided, populate the set
-                if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
-                    JSValue iterableArg = args[0];
-
-                    // Handle array directly for efficiency
-                    if (iterableArg instanceof JSArray arr) {
-                        for (long i = 0; i < arr.getLength(); i++) {
-                            JSValue value = arr.get((int) i);
-                            setObj.setAdd(value);
-                        }
-                    } else if (iterableArg instanceof JSObject) {
-                        // Try to get iterator
-                        JSValue iterator = JSIteratorHelper.getIterator(iterableArg, context);
-                        if (iterator instanceof JSIterator iter) {
-                            // Iterate and populate
-                            while (true) {
-                                JSObject nextResult = iter.next();
-                                if (nextResult == null) {
-                                    break;
-                                }
-
-                                JSValue done = nextResult.get("done");
-                                if (done == JSBoolean.TRUE) {
-                                    break;
-                                }
-
-                                JSValue value = nextResult.get("value");
-                                setObj.setAdd(value);
-                            }
-                        }
-                    }
-                }
-
-                valueStack.push(setObj);
-                return;
-            }
-
-            // Check for WeakMap constructor
-            if (ctorObj.getConstructorType() == ConstructorType.WEAK_MAP) {
-                // Create WeakMap object
-                JSWeakMap weakMapObj = new JSWeakMap();
-
-                // Set prototype
-                JSValue prototypeValue = ctorObj.get("prototype");
-                if (prototypeValue instanceof JSObject prototype) {
-                    weakMapObj.setPrototype(prototype);
-                }
-
-                // If an iterable is provided, populate the weakmap
-                if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
-                    JSValue iterableArg = args[0];
-
-                    // Handle array directly for efficiency
-                    if (iterableArg instanceof JSArray arr) {
-                        for (long i = 0; i < arr.getLength(); i++) {
-                            JSValue entry = arr.get((int) i);
-                            if (!(entry instanceof JSObject entryObj)) {
-                                context.throwTypeError("Iterator value must be an object");
-                                valueStack.push(JSUndefined.INSTANCE);
-                                return;
-                            }
-
-                            // Get key and value from entry [key, value]
-                            JSValue key = entryObj.get(0);
-                            JSValue value = entryObj.get(1);
-
-                            // WeakMap requires object keys
-                            if (!(key instanceof JSObject)) {
-                                context.throwTypeError("WeakMap key must be an object");
-                                valueStack.push(JSUndefined.INSTANCE);
-                                return;
-                            }
-
-                            weakMapObj.weakMapSet((JSObject) key, value);
-                        }
-                    } else if (iterableArg instanceof JSObject) {
-                        // Try to get iterator
-                        JSValue iterator = JSIteratorHelper.getIterator(iterableArg, context);
-                        if (iterator instanceof JSIterator iter) {
-                            // Iterate and populate
-                            while (true) {
-                                JSObject nextResult = iter.next();
-                                if (nextResult == null) {
-                                    break;
-                                }
-
-                                JSValue done = nextResult.get("done");
-                                if (done == JSBoolean.TRUE) {
-                                    break;
-                                }
-
-                                JSValue entry = nextResult.get("value");
-                                if (!(entry instanceof JSObject entryObj)) {
-                                    context.throwTypeError("Iterator value must be an object");
-                                    valueStack.push(JSUndefined.INSTANCE);
-                                    return;
-                                }
-
-                                // Get key and value from entry [key, value]
-                                JSValue key = entryObj.get(0);
-                                JSValue value = entryObj.get(1);
-
-                                // WeakMap requires object keys
-                                if (!(key instanceof JSObject)) {
-                                    context.throwTypeError("WeakMap key must be an object");
-                                    valueStack.push(JSUndefined.INSTANCE);
-                                    return;
-                                }
-
-                                weakMapObj.weakMapSet((JSObject) key, value);
-                            }
-                        }
-                    }
-                }
-
-                valueStack.push(weakMapObj);
-                return;
-            }
-
-            // Check for WeakSet constructor
-            if (ctorObj.getConstructorType() == ConstructorType.WEAK_SET) {
-                // Create WeakSet object
-                JSWeakSet weakSetObj = new JSWeakSet();
-
-                // Set prototype
-                JSValue prototypeValue = ctorObj.get("prototype");
-                if (prototypeValue instanceof JSObject prototype) {
-                    weakSetObj.setPrototype(prototype);
-                }
-
-                // If an iterable is provided, populate the weakset
-                if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
-                    JSValue iterableArg = args[0];
-
-                    // Handle array directly for efficiency
-                    if (iterableArg instanceof JSArray arr) {
-                        for (long i = 0; i < arr.getLength(); i++) {
-                            JSValue value = arr.get((int) i);
-
-                            // WeakSet requires object values
-                            if (!(value instanceof JSObject)) {
-                                context.throwTypeError("WeakSet value must be an object");
-                                valueStack.push(JSUndefined.INSTANCE);
-                                return;
-                            }
-
-                            weakSetObj.weakSetAdd((JSObject) value);
-                        }
-                    } else if (iterableArg instanceof JSObject) {
-                        // Try to get iterator
-                        JSValue iterator = JSIteratorHelper.getIterator(iterableArg, context);
-                        if (iterator instanceof JSIterator iter) {
-                            // Iterate and populate
-                            while (true) {
-                                JSObject nextResult = iter.next();
-                                if (nextResult == null) {
-                                    break;
-                                }
-
-                                JSValue done = nextResult.get("done");
-                                if (done == JSBoolean.TRUE) {
-                                    break;
-                                }
-
-                                JSValue value = nextResult.get("value");
-
-                                // WeakSet requires object values
-                                if (!(value instanceof JSObject)) {
-                                    context.throwTypeError("WeakSet value must be an object");
-                                    valueStack.push(JSUndefined.INSTANCE);
-                                    return;
-                                }
-
-                                weakSetObj.weakSetAdd((JSObject) value);
-                            }
-                        }
-                    }
-                }
-
-                valueStack.push(weakSetObj);
-                return;
-            }
-
-            // Check for WeakRef constructor
-            if (ctorObj.getConstructorType() == ConstructorType.WEAK_REF) {
-                // WeakRef requires exactly 1 argument: target
-                if (args.length == 0) {
-                    context.throwTypeError("WeakRef constructor requires a target object");
-                    valueStack.push(JSUndefined.INSTANCE);
-                    return;
-                }
-
-                JSValue result = WeakRefConstructor.createWeakRef(context, args[0]);
-                if (result instanceof JSWeakRef weakRef) {
-                    // Set prototype
-                    JSValue prototypeValue = ctorObj.get("prototype");
-                    if (prototypeValue instanceof JSObject prototype) {
-                        weakRef.setPrototype(prototype);
-                    }
-                    valueStack.push(weakRef);
-                } else {
-                    // Error was thrown
                     valueStack.push(result);
                 }
-                return;
             }
-
-            // Check for FinalizationRegistry constructor
-            if (ctorObj.getConstructorType() == ConstructorType.FINALIZATION_REGISTRY) {
-                // FinalizationRegistry requires exactly 1 argument: cleanupCallback
-                if (args.length == 0) {
-                    context.throwTypeError("FinalizationRegistry constructor requires a cleanup callback");
-                    valueStack.push(JSUndefined.INSTANCE);
+        } else if (constructor instanceof JSObject jsObject) {
+            ConstructorType constructorType = jsObject.getConstructorType();
+            JSObject resultObject = null;
+            switch (constructorType) {
+                case DATE -> resultObject = JSDate.createDate(context, args);
+                case SYMBOL -> {
+                    valueStack.push(context.throwTypeError("Symbol is not a constructor"));
                     return;
                 }
-
-                JSValue result = FinalizationRegistryConstructor.createFinalizationRegistry(context, args[0]);
-                if (result instanceof JSFinalizationRegistry registry) {
-                    // Set prototype
-                    JSValue prototypeValue = ctorObj.get("prototype");
-                    if (prototypeValue instanceof JSObject prototype) {
-                        registry.setPrototype(prototype);
-                    }
-                    valueStack.push(registry);
-                } else {
-                    // Error was thrown
-                    valueStack.push(result);
+                case BIG_INT -> {
+                    valueStack.push(context.throwTypeError("BigInt is not a constructor"));
+                    return;
                 }
+                case REGEXP -> resultObject = JSRegExp.createRegExp(context, args);
+                case MAP -> resultObject = JSMap.createMap(context, args);
+                case SET -> resultObject = JSSet.createSet(context, args);
+                case WEAK_MAP -> resultObject = JSWeakMap.createWeakMap(context, args);
+                case WEAK_SET -> resultObject = JSWeakSet.createWeakSet(context, args);
+                case WEAK_REF -> resultObject = JSWeakRef.createWeakRef(context, args);
+                case FINALIZATION_REGISTRY ->
+                        resultObject = JSFinalizationRegistry.createFinalizationRegistry(context, args);
+            }
+            if (resultObject != null) {
+                JSValue prototypeValue = jsObject.get("prototype");
+                if (prototypeValue instanceof JSObject prototype) {
+                    resultObject.setPrototype(prototype);
+                }
+                valueStack.push(resultObject);
                 return;
             }
 
             // Check for Proxy constructor
-            if (ctorObj.getConstructorType() == ConstructorType.PROXY) {
+            if (jsObject.getConstructorType() == ConstructorType.PROXY) {
                 // Proxy requires exactly 2 arguments: target and handler
                 if (args.length < 2) {
                     context.throwTypeError("Proxy constructor requires target and handler");
@@ -1387,7 +936,7 @@ public final class VirtualMachine {
             }
 
             // Check for Promise constructor
-            if (ctorObj.getConstructorType() == ConstructorType.PROMISE) {
+            if (jsObject.getConstructorType() == ConstructorType.PROMISE) {
                 // Promise requires an executor function
                 if (args.length == 0 || !(args[0] instanceof JSFunction executor)) {
                     context.throwTypeError("Promise constructor requires an executor function");
@@ -1399,7 +948,7 @@ public final class VirtualMachine {
                 JSPromise promiseObj = new JSPromise();
 
                 // Set prototype
-                JSValue prototypeValue = ctorObj.get("prototype");
+                JSValue prototypeValue = jsObject.get("prototype");
                 if (prototypeValue instanceof JSObject prototype) {
                     promiseObj.setPrototype(prototype);
                 }
@@ -1433,7 +982,7 @@ public final class VirtualMachine {
             }
 
             // Check for SharedArrayBuffer constructor
-            if (ctorObj.getConstructorType() == ConstructorType.SHARED_ARRAY_BUFFER) {
+            if (jsObject.getConstructorType() == ConstructorType.SHARED_ARRAY_BUFFER) {
                 // Get length argument
                 JSValue lengthArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
@@ -1442,7 +991,7 @@ public final class VirtualMachine {
 
                 if (result instanceof JSSharedArrayBuffer sharedArrayBuffer) {
                     // Set prototype
-                    JSValue prototypeValue = ctorObj.get("prototype");
+                    JSValue prototypeValue = jsObject.get("prototype");
                     if (prototypeValue instanceof JSObject prototype) {
                         sharedArrayBuffer.setPrototype(prototype);
                     }
@@ -1452,8 +1001,9 @@ public final class VirtualMachine {
                 return;
             }
 
+            ConstructorType ctorType = jsObject.getConstructorType();
+
             // Handle Error constructors
-            ConstructorType ctorType = ctorObj.getConstructorType();
             if (ctorType == ConstructorType.ERROR ||
                     ctorType == ConstructorType.TYPE_ERROR ||
                     ctorType == ConstructorType.RANGE_ERROR ||
@@ -1498,7 +1048,7 @@ public final class VirtualMachine {
                 }
 
                 // Set prototype from constructor
-                JSValue prototypeValue = ctorObj.get("prototype");
+                JSValue prototypeValue = jsObject.get("prototype");
                 if (prototypeValue instanceof JSObject prototype) {
                     errorObj.setPrototype(prototype);
                 }

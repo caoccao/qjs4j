@@ -65,6 +65,16 @@ public final class JSNumberObject extends JSObject {
         this.setPrimitiveValue(value);
     }
 
+    public static JSNumberObject createNumberObject(JSContext context, JSValue... args) {
+        JSNumber numValue;
+        if (args.length == 0) {
+            numValue = new JSNumber(0.0);
+        } else {
+            numValue = JSTypeConversions.toNumber(context, args[0]);
+        }
+        return new JSNumberObject(numValue);
+    }
+
     /**
      * Get the JSNumber value wrapped by this Number object.
      *

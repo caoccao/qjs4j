@@ -71,9 +71,4 @@ public final class JSFloat16Array extends JSTypedArray {
 
         return new JSFloat16Array(buffer, newByteOffset, newLength);
     }
-
-    @Override
-    public String toString() {
-        return "[object Float16Array]";
-    }
 }

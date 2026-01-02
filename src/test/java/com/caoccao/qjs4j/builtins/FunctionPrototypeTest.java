@@ -330,17 +330,13 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         // Test that 'arguments' property exists
         assertBooleanWithJavet("'arguments' in Function.prototype");
 
-        // Test that accessing 'arguments' throws TypeError
         assertStringWithJavet(
-                "try { Function.prototype.arguments; 'no error' } catch (e) { `${e.name}: ${e.message}` }");
-
-        // Test that setting 'arguments' throws TypeError
-        assertStringWithJavet(
-                "try { Function.prototype.arguments = 'test'; 'no error' } catch (e) { `${e.name}: ${e.message}` }");
-
-        // Test property descriptor
-        assertObjectWithJavet(
-                "Object.getOwnPropertyDescriptor(Function.prototype, 'arguments')");
+                // Test that accessing 'arguments' throws TypeError
+                "try { Function.prototype.arguments; 'no error' } catch (e) { `${e.name}: ${e.message}` }",
+                // Test that setting 'arguments' throws TypeError
+                "try { Function.prototype.arguments = 'test'; 'no error' } catch (e) { `${e.name}: ${e.message}` }",
+                // Test property descriptor
+                "JSON.stringify(Object.getOwnPropertyDescriptor(Function.prototype, 'arguments'))");
     }
 
     @Test

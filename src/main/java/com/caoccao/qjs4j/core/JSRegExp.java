@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.regexp.RegExpBytecode;
 import com.caoccao.qjs4j.regexp.RegExpCompiler;
 import com.caoccao.qjs4j.regexp.RegExpEngine;
@@ -57,6 +58,32 @@ public final class JSRegExp extends JSObject {
         this.set("unicode", JSBoolean.valueOf(this.flags.contains("u")));
         this.set("sticky", JSBoolean.valueOf(this.flags.contains("y")));
         this.set("lastIndex", new JSNumber(0));
+    }
+
+    public static JSRegExp createRegExp(JSContext context, JSValue... args) {
+        String pattern = "";
+        String flags = "";
+        if (args.length > 0) {
+            // First argument is the pattern
+            JSValue patternArg = args[0];
+            if (patternArg instanceof JSRegExp existingRegExp) {
+                // Copy from existing RegExp
+                pattern = existingRegExp.getPattern();
+                flags = args.length > 1 && !(args[1] instanceof JSUndefined)
+                        ? JSTypeConversions.toString(context, args[1]).value()
+                        : existingRegExp.getFlags();
+            } else if (!(patternArg instanceof JSUndefined)) {
+                pattern = JSTypeConversions.toString(context, patternArg).value();
+                if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+                    flags = JSTypeConversions.toString(context, args[1]).value();
+                }
+            }
+        }
+        try {
+            return new JSRegExp(pattern, flags);
+        } catch (Exception e) {
+            throw new JSException(context.throwSyntaxError("Invalid regular expression: " + e.getMessage()));
+        }
     }
 
     /**

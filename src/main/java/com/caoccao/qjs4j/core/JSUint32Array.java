@@ -67,9 +67,4 @@ public final class JSUint32Array extends JSTypedArray {
 
         return new JSUint32Array(buffer, newByteOffset, newLength);
     }
-
-    @Override
-    public String toString() {
-        return "[object Uint32Array]";
-    }
 }

@@ -35,6 +35,41 @@ public final class JSSet extends JSObject {
         this.data = new LinkedHashSet<>();
     }
 
+    public static JSSet createSet(JSContext context, JSValue... args) {
+        // Create Set object
+        JSSet setObj = new JSSet();
+        // If an iterable is provided, populate the set
+        if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
+            JSValue iterableArg = args[0];
+            // Handle array directly for efficiency
+            if (iterableArg instanceof JSArray arr) {
+                for (long i = 0; i < arr.getLength(); i++) {
+                    JSValue value = arr.get((int) i);
+                    setObj.setAdd(value);
+                }
+            } else if (iterableArg instanceof JSObject) {
+                // Try to get iterator
+                JSValue iterator = JSIteratorHelper.getIterator(iterableArg, context);
+                if (iterator instanceof JSIterator iter) {
+                    // Iterate and populate
+                    while (true) {
+                        JSObject nextResult = iter.next();
+                        if (nextResult == null) {
+                            break;
+                        }
+                        JSValue done = nextResult.get("done");
+                        if (done == JSBoolean.TRUE) {
+                            break;
+                        }
+                        JSValue value = nextResult.get("value");
+                        setObj.setAdd(value);
+                    }
+                }
+            }
+        }
+        return setObj;
+    }
+
     /**
      * Add a value to the Set.
      */

@@ -457,7 +457,8 @@ public final class JSTypeConversions {
                 || value.isBoolean()
                 || value.isBooleanObject()
                 || value.isNumber()
-                || value.isNumberObject()) {
+                || value.isNumberObject()
+                || value.isTypedArray()) {
             return new JSString(value.toString());
         } else if (value instanceof JSString s) {
             return s;

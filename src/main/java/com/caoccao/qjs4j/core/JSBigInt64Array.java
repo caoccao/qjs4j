@@ -67,9 +67,4 @@ public final class JSBigInt64Array extends JSTypedArray {
 
         return new JSBigInt64Array(buffer, newByteOffset, newLength);
     }
-
-    @Override
-    public String toString() {
-        return "[object BigInt64Array]";
-    }
 }

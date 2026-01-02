@@ -82,9 +82,4 @@ public final class JSUint8ClampedArray extends JSTypedArray {
 
         return new JSUint8ClampedArray(buffer, newByteOffset, newLength);
     }
-
-    @Override
-    public String toString() {
-        return "[object Uint8ClampedArray]";
-    }
 }

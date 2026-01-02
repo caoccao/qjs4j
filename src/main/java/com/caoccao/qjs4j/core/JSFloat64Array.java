@@ -67,9 +67,4 @@ public final class JSFloat64Array extends JSTypedArray {
 
         return new JSFloat64Array(buffer, newByteOffset, newLength);
     }
-
-    @Override
-    public String toString() {
-        return "[object Float64Array]";
-    }
 }

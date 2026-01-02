@@ -71,9 +71,6 @@ public final class JSClass extends JSFunction {
 
         // Set prototype property on class
         this.set("prototype", prototype);
-
-        // Mark as a class constructor
-        this.set("[[ClassConstructor]]", JSBoolean.TRUE);
     }
 
     /**

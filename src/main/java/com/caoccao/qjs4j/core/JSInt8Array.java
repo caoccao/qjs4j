@@ -67,9 +67,4 @@ public final class JSInt8Array extends JSTypedArray {
 
         return new JSInt8Array(buffer, newByteOffset, newLength);
     }
-
-    @Override
-    public String toString() {
-        return "[object Int8Array]";
-    }
 }

@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -26,7 +28,7 @@ import java.util.Map;
 public final class JSMap extends JSObject {
     // Use LinkedHashMap to maintain insertion order
     // Use a wrapper class for keys to handle JSValue equality properly
-    private final LinkedHashMap<KeyWrapper, JSValue> data;
+    private final Map<KeyWrapper, JSValue> data;
 
     /**
      * Create an empty Map.
@@ -34,6 +36,53 @@ public final class JSMap extends JSObject {
     public JSMap() {
         super();
         this.data = new LinkedHashMap<>();
+    }
+
+    public static JSMap createMap(JSContext context, JSValue... args) {
+        // Create Map object
+        JSMap mapObj = new JSMap();
+        // If an iterable is provided, populate the map
+        if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
+            JSValue iterableArg = args[0];
+            // Handle array directly for efficiency
+            if (iterableArg instanceof JSArray arr) {
+                for (long i = 0; i < arr.getLength(); i++) {
+                    JSValue entry = arr.get((int) i);
+                    if (!(entry instanceof JSObject entryObj)) {
+                        throw new JSException(context.throwTypeError("Iterator value must be an object"));
+                    }
+                    // Get key and value from entry [key, value]
+                    JSValue key = entryObj.get(0);
+                    JSValue value = entryObj.get(1);
+                    mapObj.mapSet(key, value);
+                }
+            } else if (iterableArg instanceof JSObject) {
+                // Try to get iterator
+                JSValue iterator = JSIteratorHelper.getIterator(iterableArg, context);
+                if (iterator instanceof JSIterator iter) {
+                    // Iterate and populate
+                    while (true) {
+                        JSObject nextResult = iter.next();
+                        if (nextResult == null) {
+                            break;
+                        }
+                        JSValue done = nextResult.get("done");
+                        if (done == JSBoolean.TRUE) {
+                            break;
+                        }
+                        JSValue entry = nextResult.get("value");
+                        if (!(entry instanceof JSObject entryObj)) {
+                            throw new JSException(context.throwTypeError("Iterator value must be an object"));
+                        }
+                        // Get key and value from entry [key, value]
+                        JSValue key = entryObj.get(0);
+                        JSValue value = entryObj.get(1);
+                        mapObj.mapSet(key, value);
+                    }
+                }
+            }
+        }
+        return mapObj;
     }
 
     /**

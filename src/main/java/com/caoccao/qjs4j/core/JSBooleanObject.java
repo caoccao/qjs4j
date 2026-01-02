@@ -65,6 +65,12 @@ public final class JSBooleanObject extends JSObject {
         this.setPrimitiveValue(value);
     }
 
+    public static JSBooleanObject createBooleanObject(JSContext context, JSValue... args) {
+        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSBoolean boolValue = JSTypeConversions.toBoolean(value);
+        return new JSBooleanObject(boolValue);
+    }
+
     /**
      * Get the JSBoolean value wrapped by this Boolean object.
      *

@@ -156,7 +156,7 @@ public final class JSIteratorHelper {
      * @param context  The execution context
      * @return A JSArray containing all values from the iterable
      */
-    public static JSArray toArray(JSValue iterable, JSContext context) {
+    public static JSArray toArray(JSContext context, JSValue iterable) {
         JSArray result = context.createJSArray();
 
         forOf(iterable, (value) -> {

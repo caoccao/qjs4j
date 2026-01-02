@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
+
 import java.util.Collections;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -37,6 +39,51 @@ public final class JSWeakSet extends JSObject {
         super();
         // WeakHashMap's keySet backed by weak references
         this.data = Collections.newSetFromMap(new WeakHashMap<>());
+    }
+
+    public static JSWeakSet createWeakSet(JSContext context, JSValue... args) {
+        // Create WeakSet object
+        JSWeakSet weakSetObj = new JSWeakSet();
+        // If an iterable is provided, populate the weakset
+        if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
+            JSValue iterableArg = args[0];
+            // Handle array directly for efficiency
+            if (iterableArg instanceof JSArray arr) {
+                for (long i = 0; i < arr.getLength(); i++) {
+                    JSValue value = arr.get((int) i);
+                    // WeakSet requires object values
+                    if (!(value instanceof JSObject)) {
+                        context.throwTypeError("WeakSet value must be an object");
+                        throw new JSException(JSUndefined.INSTANCE);
+                    }
+                    weakSetObj.weakSetAdd((JSObject) value);
+                }
+            } else if (iterableArg instanceof JSObject) {
+                // Try to get iterator
+                JSValue iterator = JSIteratorHelper.getIterator(iterableArg, context);
+                if (iterator instanceof JSIterator iter) {
+                    // Iterate and populate
+                    while (true) {
+                        JSObject nextResult = iter.next();
+                        if (nextResult == null) {
+                            break;
+                        }
+                        JSValue done = nextResult.get("done");
+                        if (done == JSBoolean.TRUE) {
+                            break;
+                        }
+                        JSValue value = nextResult.get("value");
+                        // WeakSet requires object values
+                        if (!(value instanceof JSObject)) {
+                            context.throwTypeError("WeakSet value must be an object");
+                            throw new JSException(JSUndefined.INSTANCE);
+                        }
+                        weakSetObj.weakSetAdd((JSObject) value);
+                    }
+                }
+            }
+        }
+        return weakSetObj;
     }
 
     @Override
