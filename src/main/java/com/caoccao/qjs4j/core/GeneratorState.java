@@ -36,6 +36,7 @@ public final class GeneratorState {
     private boolean isCompleted;
     private State state;
     private int yieldCount;  // Track how many times we've yielded (workaround for no PC saving)
+
     public GeneratorState(JSBytecodeFunction function, JSValue thisArg, JSValue[] args) {
         this.function = function;
         this.thisArg = thisArg;

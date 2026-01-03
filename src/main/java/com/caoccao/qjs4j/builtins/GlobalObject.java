@@ -373,6 +373,7 @@ public final class GlobalObject {
         initializeStringConstructor(context, global);
         initializeNumberConstructor(context, global);
         initializeFunctionConstructor(context, global);
+        initializeAsyncFunctionConstructor(context, global);
         initializeDateConstructor(context, global);
         initializeRegExpConstructor(context, global);
         initializeSymbolConstructor(context, global);
@@ -529,6 +530,27 @@ public final class GlobalObject {
                 PropertyDescriptor.accessorDescriptor(arraySpeciesGetter, null, false, true));
 
         global.set("Array", arrayConstructor);
+    }
+
+    /**
+     * Initialize AsyncFunction constructor and prototype.
+     * AsyncFunction is not exposed in global scope but is available via async function constructors.
+     */
+    private static void initializeAsyncFunctionConstructor(JSContext context, JSObject global) {
+        // Create AsyncFunction.prototype that inherits from Function.prototype
+        JSObject asyncFunctionPrototype = new JSObject();
+        global.get("Function").asObject().ifPresent(asyncFunctionPrototype::transferPrototypeFrom);
+
+        // Create AsyncFunction constructor
+        // AsyncFunction is not normally exposed but we need it for the prototype chain
+        JSNativeFunction asyncFunctionConstructor = new JSNativeFunction("AsyncFunction", 1,
+                (ctx, thisObj, args) -> ctx.throwTypeError("AsyncFunction is not a constructor"));
+        asyncFunctionConstructor.set("prototype", asyncFunctionPrototype);
+        asyncFunctionPrototype.set("constructor", asyncFunctionConstructor);
+
+        // Store AsyncFunction in the context (not in global scope)
+        // This is used internally for setting up prototype chains for async bytecode functions
+        context.setAsyncFunctionConstructor(asyncFunctionConstructor);
     }
 
     /**
@@ -1278,18 +1300,10 @@ public final class GlobalObject {
      * Initialize Symbol constructor and static methods.
      */
     private static void initializeSymbolConstructor(JSContext context, JSObject global) {
-        // Get Object.prototype to set as Symbol.prototype's prototype
-        JSValue objectCtor = global.get("Object");
-        JSObject objectPrototype = null;
-        if (objectCtor instanceof JSObject) {
-            JSValue objProto = ((JSObject) objectCtor).get("prototype");
-            if (objProto instanceof JSObject) {
-                objectPrototype = (JSObject) objProto;
-            }
-        }
+        // Create Symbol.prototype that inherits from Object.prototype
+        JSObject symbolPrototype = new JSObject();
+        global.get("Object").asObject().ifPresent(symbolPrototype::transferPrototypeFrom);
 
-        // Create Symbol.prototype
-        JSObject symbolPrototype = new JSObject(objectPrototype);
         JSNativeFunction symbolToString = new JSNativeFunction("toString", 0, SymbolPrototype::toString);
         symbolToString.initializePrototypeChain(context);
         symbolPrototype.set("toString", symbolToString);

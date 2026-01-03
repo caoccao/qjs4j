@@ -44,6 +44,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private final int length;
     private final String name;
     private final JSObject prototype;
+    private final String sourceCode;
     private final boolean strict;
 
     /**
@@ -54,7 +55,7 @@ public final class JSBytecodeFunction extends JSFunction {
      * @param length   Number of formal parameters
      */
     public JSBytecodeFunction(Bytecode bytecode, String name, int length) {
-        this(bytecode, name, length, new JSValue[0], null, true, false, false, false);
+        this(bytecode, name, length, new JSValue[0], null, true, false, false, false, null);
     }
 
     /**
@@ -66,7 +67,20 @@ public final class JSBytecodeFunction extends JSFunction {
      * @param strict   Whether the function is in strict mode
      */
     public JSBytecodeFunction(Bytecode bytecode, String name, int length, boolean strict) {
-        this(bytecode, name, length, new JSValue[0], null, true, false, false, strict);
+        this(bytecode, name, length, new JSValue[0], null, true, false, false, strict, null);
+    }
+
+    /**
+     * Create a bytecode function with strict mode and source code.
+     *
+     * @param bytecode   The compiled bytecode
+     * @param name       Function name (empty string for anonymous)
+     * @param length     Number of formal parameters
+     * @param strict     Whether the function is in strict mode
+     * @param sourceCode The original source code of the function (for toString())
+     */
+    public JSBytecodeFunction(Bytecode bytecode, String name, int length, boolean strict, String sourceCode) {
+        this(bytecode, name, length, new JSValue[0], null, true, false, false, strict, sourceCode);
     }
 
     /**
@@ -74,7 +88,8 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public JSBytecodeFunction(Bytecode bytecode, String name, int length,
                               JSValue[] closureVars, JSObject prototype,
-                              boolean isConstructor, boolean isAsync, boolean isGenerator, boolean strict) {
+                              boolean isConstructor, boolean isAsync, boolean isGenerator, boolean strict,
+                              String sourceCode) {
         super(); // Initialize as JSObject
         this.bytecode = bytecode;
         this.name = name != null ? name : "";
@@ -85,6 +100,7 @@ public final class JSBytecodeFunction extends JSFunction {
         this.isAsync = isAsync;
         this.isGenerator = isGenerator;
         this.strict = strict;
+        this.sourceCode = sourceCode;
 
         // Set up function properties on the object
         // Functions are objects in JavaScript and have these standard properties
@@ -261,6 +277,12 @@ public final class JSBytecodeFunction extends JSFunction {
 
     @Override
     public String toString() {
+        // If source code is available, return it
+        if (sourceCode != null) {
+            return sourceCode;
+        }
+
+        // Otherwise, return a default representation
         StringBuilder sb = new StringBuilder();
         if (isAsync) sb.append("async ");
         sb.append("function");

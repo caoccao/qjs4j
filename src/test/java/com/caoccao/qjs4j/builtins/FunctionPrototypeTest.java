@@ -416,5 +416,16 @@ public class FunctionPrototypeTest extends BaseJavetTest {
                     assertThat(name.value()).isEqualTo("TypeError"));
         });
         assertThat(context.getPendingException()).isNotNull();
+        context.clearPendingException();  // Clear the exception before next test
+
+        assertStringWithJavet("""
+                function f1() {
+                    return 1; // Test
+                }
+                String(f1);""", """
+                function f2() {
+                    return 1; // Test
+                }
+                f2.toString();""");
     }
 }

@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.compiler.ast;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -53,11 +52,9 @@ public class AsyncTest extends BaseJavetTest {
                 JSON.stringify(test());""");
     }
 
-    @Disabled
     @Test
     void testAsyncFunctionErrorHandling() {
-        // Test that errors in async functions are caught and wrapped in rejected promises
-        assertErrorWithJavet("""
+        assertUndefinedWithJavet("""
                 async function test() {
                     throw 'test error';
                 }
@@ -67,7 +64,6 @@ public class AsyncTest extends BaseJavetTest {
                 }""");
     }
 
-    @Disabled
     @Test
     void testAsyncFunctionIsAsync() {
         // Test that a bytecode function has the isAsync flag set correctly
@@ -87,12 +83,11 @@ public class AsyncTest extends BaseJavetTest {
                 test();""");
     }
 
-    @Disabled
     @Test
     void testAsyncFunctionToString() {
         assertStringWithJavet("""
                 async function myAsyncFunction() {
-                    return 1;
+                    return 1; // Test
                 }
                 String(myAsyncFunction);""");
     }
@@ -125,14 +120,13 @@ public class AsyncTest extends BaseJavetTest {
                 [resolved, result];""");
     }
 
-    @Disabled
     @Test
     void testAsyncFunctionWithoutReturn() {
-        assertStringWithJavet("""
+        assertBooleanWithJavet("""
                 async function test() {
                     const x = 42;
                 }
-                String(await test());""");
+                test() === undefined;""");
     }
 
     @Test

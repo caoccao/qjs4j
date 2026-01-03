@@ -48,11 +48,12 @@ public final class Compiler {
 
             // Stage 3: Code Generation (AST → Bytecode)
             BytecodeCompiler compiler = new BytecodeCompiler();
+            compiler.setSourceCode(source);  // Store source for extracting function source
             Bytecode bytecode = compiler.compile(ast);
 
             // Create and return bytecode function
             String name = filename != null ? filename : "<script>";
-            return new JSBytecodeFunction(bytecode, name, 0, ast.strict());
+            return new JSBytecodeFunction(bytecode, name, 0, ast.strict(), null);
 
         } catch (BytecodeCompiler.CompilerException e) {
             throw new CompilerException("Bytecode compiler error: " + e.getMessage(), e);
@@ -97,13 +98,14 @@ public final class Compiler {
 
             // Stage 3: Code Generation (AST → Bytecode)
             BytecodeCompiler compiler = new BytecodeCompiler();
+            compiler.setSourceCode(source);  // Store source for extracting function source
             // TODO: compiler.setModuleMode(true); // Compile in module mode
             Bytecode bytecode = compiler.compile(ast);
 
             // Create and return bytecode function
             // Note: Module code is always strict mode
             String name = filename != null ? filename : "<module>";
-            return new JSBytecodeFunction(bytecode, name, 0, true);
+            return new JSBytecodeFunction(bytecode, name, 0, true, null);
 
         } catch (BytecodeCompiler.CompilerException e) {
             throw new CompilerException("Module compiler error: " + e.getMessage(), e);

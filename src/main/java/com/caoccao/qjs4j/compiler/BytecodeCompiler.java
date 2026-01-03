@@ -35,6 +35,7 @@ public final class BytecodeCompiler {
     private boolean inGlobalScope;
     private boolean isInAsyncFunction;  // Track if we're currently compiling an async function
     private int maxLocalCount;
+    private String sourceCode;  // Original source code for extracting function sources
 
     public BytecodeCompiler() {
         this.emitter = new BytecodeEmitter();
@@ -43,6 +44,7 @@ public final class BytecodeCompiler {
         this.inGlobalScope = false;
         this.isInAsyncFunction = false;
         this.maxLocalCount = 0;
+        this.sourceCode = null;
     }
 
     /**
@@ -57,8 +59,6 @@ public final class BytecodeCompiler {
         return emitter.build(maxLocalCount);
     }
 
-    // ==================== Program Compilation ====================
-
     private void compileArrayExpression(ArrayExpression arrayExpr) {
         emitter.emitOpcode(Opcode.ARRAY_NEW);
 
@@ -69,8 +69,6 @@ public final class BytecodeCompiler {
             }
         }
     }
-
-    // ==================== Statement Compilation ====================
 
     private void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
@@ -116,6 +114,9 @@ public final class BytecodeCompiler {
         // Arrow functions are always anonymous
         String functionName = "";
 
+        // Extract function source code from original source
+        String functionSource = extractSourceCode(arrowExpr.getLocation());
+
         // Create JSBytecodeFunction
         // Arrow functions cannot be constructors
         JSBytecodeFunction function = new JSBytecodeFunction(
@@ -127,7 +128,8 @@ public final class BytecodeCompiler {
                 false,           // isConstructor - arrow functions cannot be constructors
                 arrowExpr.isAsync(),
                 false,           // Arrow functions cannot be generators
-                false            // strict - TODO: inherit from enclosing scope
+                false,           // strict - TODO: inherit from enclosing scope
+                functionSource   // source code for toString()
         );
 
         // Prototype chain will be initialized when the function is loaded
@@ -136,6 +138,8 @@ public final class BytecodeCompiler {
         // Emit FCLOSURE opcode with function in constant pool
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
     }
+
+    // ==================== Program Compilation ====================
 
     private void compileAssignmentExpression(AssignmentExpression assignExpr) {
         Expression left = assignExpr.left();
@@ -222,6 +226,8 @@ public final class BytecodeCompiler {
             }
         }
     }
+
+    // ==================== Statement Compilation ====================
 
     private void compileAwaitExpression(AwaitExpression awaitExpr) {
         // Compile the argument expression
@@ -645,6 +651,30 @@ public final class BytecodeCompiler {
         // Get function name
         String functionName = funcDecl.id().name();
 
+        // Extract function source code from original source
+        String functionSource = extractSourceCode(funcDecl.getLocation());
+
+        // Trim trailing whitespace from the extracted source
+        // This is needed because the parser's end offset may include whitespace after the closing brace
+        if (functionSource != null) {
+            functionSource = functionSource.stripTrailing();
+        }
+
+        // If extraction failed, build a simplified representation
+        if (functionSource == null || functionSource.isEmpty()) {
+            StringBuilder funcSource = new StringBuilder();
+            if (funcDecl.isAsync()) funcSource.append("async ");
+            funcSource.append("function");
+            if (funcDecl.isGenerator()) funcSource.append("*");
+            funcSource.append(" ").append(functionName).append("(");
+            for (int i = 0; i < funcDecl.params().size(); i++) {
+                if (i > 0) funcSource.append(", ");
+                funcSource.append(funcDecl.params().get(i).name());
+            }
+            funcSource.append(") { [function body] }");
+            functionSource = funcSource.toString();
+        }
+
         // Create JSBytecodeFunction
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
@@ -655,7 +685,8 @@ public final class BytecodeCompiler {
                 true,            // isConstructor - regular functions can be constructors
                 funcDecl.isAsync(),
                 funcDecl.isGenerator(),
-                false            // strict - TODO: parse directives in function body
+                false,           // strict - TODO: parse directives in function body
+                functionSource   // source code for toString()
         );
 
         // Emit FCLOSURE opcode with function in constant pool
@@ -716,6 +747,9 @@ public final class BytecodeCompiler {
         // Get function name (empty string for anonymous)
         String functionName = funcExpr.id() != null ? funcExpr.id().name() : "";
 
+        // Extract function source code from original source
+        String functionSource = extractSourceCode(funcExpr.getLocation());
+
         // Create JSBytecodeFunction
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
@@ -726,7 +760,8 @@ public final class BytecodeCompiler {
                 true,            // isConstructor - regular functions can be constructors
                 funcExpr.isAsync(),
                 funcExpr.isGenerator(),
-                false            // strict - TODO: parse directives in function body
+                false,           // strict - TODO: parse directives in function body
+                functionSource   // source code for toString()
         );
 
         // Prototype chain will be initialized when the function is loaded
@@ -843,8 +878,6 @@ public final class BytecodeCompiler {
         }
     }
 
-    // ==================== Expression Compilation ====================
-
     private void compileMemberExpression(MemberExpression memberExpr) {
         compileExpression(memberExpr.object());
 
@@ -870,6 +903,8 @@ public final class BytecodeCompiler {
         // Call constructor
         emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, newExpr.arguments().size());
     }
+
+    // ==================== Expression Compilation ====================
 
     private void compileObjectExpression(ObjectExpression objExpr) {
         emitter.emitOpcode(Opcode.OBJECT_NEW);
@@ -1399,8 +1434,6 @@ public final class BytecodeCompiler {
         }
     }
 
-    // ==================== Scope Management ====================
-
     private void compileWhileStatement(WhileStatement whileStmt) {
         int loopStart = emitter.currentOffset();
         LoopContext loop = new LoopContext(loopStart);
@@ -1458,6 +1491,8 @@ public final class BytecodeCompiler {
         }
     }
 
+    // ==================== Scope Management ====================
+
     private Scope currentScope() {
         if (scopes.isEmpty()) {
             throw new CompilerException("No scope available");
@@ -1488,6 +1523,25 @@ public final class BytecodeCompiler {
         }
     }
 
+    /**
+     * Extract source code substring from a source location.
+     * Returns null if source code is not available or location is invalid.
+     */
+    private String extractSourceCode(SourceLocation location) {
+        if (sourceCode == null || location == null) {
+            return null;
+        }
+
+        int startOffset = location.offset();
+        int endOffset = location.endOffset();
+
+        if (startOffset < 0 || endOffset > sourceCode.length() || startOffset > endOffset) {
+            return null;
+        }
+
+        return sourceCode.substring(startOffset, endOffset);
+    }
+
     private Integer findLocalInScopes(String name) {
         // Search from innermost scope (most recently pushed) to outermost
         for (Scope scope : scopes) {
@@ -1497,6 +1551,13 @@ public final class BytecodeCompiler {
             }
         }
         return null;
+    }
+
+    /**
+     * Set the original source code (used for extracting function source in toString()).
+     */
+    public void setSourceCode(String sourceCode) {
+        this.sourceCode = sourceCode;
     }
 
     /**

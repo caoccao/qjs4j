@@ -19,5 +19,11 @@ package com.caoccao.qjs4j.compiler.ast;
 /**
  * Represents source code location information.
  */
-public record SourceLocation(int line, int column, int offset) {
+public record SourceLocation(int line, int column, int offset, int endOffset) {
+    /**
+     * Constructor for a single-point location (no end offset).
+     */
+    public SourceLocation(int line, int column, int offset) {
+        this(line, column, offset, offset);
+    }
 }

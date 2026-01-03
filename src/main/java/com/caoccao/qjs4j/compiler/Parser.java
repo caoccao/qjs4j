@@ -238,7 +238,15 @@ public final class Parser {
                                 body = parseAssignmentExpression();
                             }
 
-                            return new ArrowFunctionExpression(params, body, true, location);
+                            // Update location to include end offset
+                            SourceLocation fullLocation = new SourceLocation(
+                                    location.line(),
+                                    location.column(),
+                                    location.offset(),
+                                    currentToken.offset()
+                            );
+
+                            return new ArrowFunctionExpression(params, body, true, fullLocation);
                         }
                     }
                 }
@@ -297,7 +305,15 @@ public final class Parser {
                 body = parseAssignmentExpression();
             }
 
-            return new ArrowFunctionExpression(params, body, false, location);
+            // Update location to include end offset
+            SourceLocation fullLocation = new SourceLocation(
+                    location.line(),
+                    location.column(),
+                    location.offset(),
+                    currentToken.offset()
+            );
+
+            return new ArrowFunctionExpression(params, body, false, fullLocation);
         }
 
         if (isAssignmentOperator(currentToken.type())) {
@@ -634,7 +650,12 @@ public final class Parser {
     }
 
     private FunctionDeclaration parseFunctionDeclaration(boolean isAsync, boolean isGenerator) {
-        SourceLocation location = getLocation();
+        return parseFunctionDeclaration(isAsync, isGenerator, null);
+    }
+
+    private FunctionDeclaration parseFunctionDeclaration(boolean isAsync, boolean isGenerator, SourceLocation startLocation) {
+        // Use provided start location (for async functions) or get current location
+        SourceLocation location = startLocation != null ? startLocation : getLocation();
         expect(TokenType.FUNCTION);
 
         // Check for generator function: function* or async function*
@@ -661,7 +682,15 @@ public final class Parser {
         expect(TokenType.RPAREN);
         BlockStatement body = parseBlockStatement();
 
-        return new FunctionDeclaration(id, params, body, isAsync, isGenerator, location);
+        // Update location to include end offset (current token offset after parsing body)
+        SourceLocation fullLocation = new SourceLocation(
+                location.line(),
+                location.column(),
+                location.offset(),
+                currentToken.offset()
+        );
+
+        return new FunctionDeclaration(id, params, body, isAsync, isGenerator, fullLocation);
     }
 
     private Expression parseFunctionExpression() {
@@ -696,7 +725,15 @@ public final class Parser {
         expect(TokenType.RPAREN);
         BlockStatement body = parseBlockStatement();
 
-        return new FunctionExpression(id, params, body, false, isGenerator, location);
+        // Update location to include end offset (current token offset after parsing body)
+        SourceLocation fullLocation = new SourceLocation(
+                location.line(),
+                location.column(),
+                location.offset(),
+                currentToken.offset()
+        );
+
+        return new FunctionExpression(id, params, body, false, isGenerator, fullLocation);
     }
 
     private Identifier parseIdentifier() {
@@ -1169,10 +1206,12 @@ public final class Parser {
             case LBRACE -> parseBlockStatement();
             case VAR, LET, CONST -> parseVariableDeclaration();
             case ASYNC -> {
+                // Capture location at 'async' keyword for proper source extraction
+                SourceLocation asyncLocation = getLocation();
                 // Consume 'async' and check if it's an async function declaration
                 advance();
                 if (match(TokenType.FUNCTION)) {
-                    yield parseFunctionDeclaration(true, false);
+                    yield parseFunctionDeclaration(true, false, asyncLocation);
                 } else {
                     // Otherwise, it's an error - async must be followed by function
                     throw new RuntimeException("Expected 'function' after 'async'");

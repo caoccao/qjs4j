@@ -261,26 +261,8 @@ public final class PromiseConstructor {
      */
     private static JSPromise createPromise(JSContext context) {
         JSPromise promise = new JSPromise();
-        JSObject prototype = getPromisePrototype(context);
-        if (prototype != null) {
-            promise.setPrototype(prototype);
-        }
+        context.getGlobalObject().get("Promise").asObject().ifPresent(promise::transferPrototypeFrom);
         return promise;
-    }
-
-    /**
-     * Helper method to get the Promise prototype from the global object.
-     * This is needed to set the [[Prototype]] on newly created promises.
-     */
-    private static JSObject getPromisePrototype(JSContext context) {
-        JSValue promiseConstructor = context.getGlobalObject().get("Promise");
-        if (promiseConstructor instanceof JSObject) {
-            JSValue prototype = ((JSObject) promiseConstructor).get("prototype");
-            if (prototype instanceof JSObject) {
-                return (JSObject) prototype;
-            }
-        }
-        return null;
     }
 
     /**

@@ -90,66 +90,31 @@ public final class ObjectConstructor {
         // Wrap primitive values in their respective object wrappers
         if (value instanceof JSNumber num) {
             JSNumberObject wrapper = new JSNumberObject(num);
-            // Set Number.prototype
-            JSValue numberCtor = global.get("Number");
-            if (numberCtor instanceof JSObject) {
-                JSValue prototype = ((JSObject) numberCtor).get("prototype");
-                if (prototype instanceof JSObject) {
-                    wrapper.setPrototype((JSObject) prototype);
-                }
-            }
+            global.get("Number").asObject().ifPresent(wrapper::transferPrototypeFrom);
             return wrapper;
         }
 
         if (value instanceof JSString str) {
             JSStringObject wrapper = new JSStringObject(str);
-            // Set String.prototype
-            JSValue stringCtor = global.get("String");
-            if (stringCtor instanceof JSObject) {
-                JSValue prototype = ((JSObject) stringCtor).get("prototype");
-                if (prototype instanceof JSObject) {
-                    wrapper.setPrototype((JSObject) prototype);
-                }
-            }
+            global.get("String").asObject().ifPresent(wrapper::transferPrototypeFrom);
             return wrapper;
         }
 
         if (value instanceof JSBoolean bool) {
             JSBooleanObject wrapper = new JSBooleanObject(bool);
-            // Set Boolean.prototype
-            JSValue booleanCtor = global.get("Boolean");
-            if (booleanCtor instanceof JSObject) {
-                JSValue prototype = ((JSObject) booleanCtor).get("prototype");
-                if (prototype instanceof JSObject) {
-                    wrapper.setPrototype((JSObject) prototype);
-                }
-            }
+            global.get("Boolean").asObject().ifPresent(wrapper::transferPrototypeFrom);
             return wrapper;
         }
 
         if (value instanceof JSSymbol sym) {
             JSSymbolObject wrapper = new JSSymbolObject(sym);
-            // Set Symbol.prototype
-            JSValue symbolCtor = global.get("Symbol");
-            if (symbolCtor instanceof JSObject) {
-                JSValue prototype = ((JSObject) symbolCtor).get("prototype");
-                if (prototype instanceof JSObject) {
-                    wrapper.setPrototype((JSObject) prototype);
-                }
-            }
+            global.get("Symbol").asObject().ifPresent(wrapper::transferPrototypeFrom);
             return wrapper;
         }
 
         if (value instanceof JSBigInt bigInt) {
             JSBigIntObject wrapper = new JSBigIntObject(bigInt);
-            // Set BigInt.prototype
-            JSValue bigIntCtor = global.get("BigInt");
-            if (bigIntCtor instanceof JSObject) {
-                JSValue prototype = ((JSObject) bigIntCtor).get("prototype");
-                if (prototype instanceof JSObject) {
-                    wrapper.setPrototype((JSObject) prototype);
-                }
-            }
+            global.get("BigInt").asObject().ifPresent(wrapper::transferPrototypeFrom);
             return wrapper;
         }
 

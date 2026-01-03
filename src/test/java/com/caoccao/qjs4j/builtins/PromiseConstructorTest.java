@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSValue;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -58,35 +57,29 @@ public class PromiseConstructorTest extends BaseJavetTest {
         );
     }
 
-    @Disabled
     @Test
     public void testAsyncForAwaitOfLoopWithBreak() {
-        // Test async for-await-of loop with break statement
-        JSValue result = context.eval(
-                "async function test() { " +
-                        "  let sum = 0; " +
-                        "  const asyncIterable = { " +
-                        "    async *[Symbol.asyncIterator]() { " +
-                        "      yield 1; " +
-                        "      yield 2; " +
-                        "      yield 3; " +
-                        "      yield 4; " +
-                        "      yield 5; " +
-                        "    } " +
-                        "  }; " +
-                        "  for await (const item of asyncIterable) { " +
-                        "    if (item > 3) break; " +
-                        "    sum += item; " +
-                        "  } " +
-                        "  return sum; " +
-                        "} " +
-                        "test()"
-        );
-        assertThat(result).isNotNull();
-        // Result should be a promise that resolves to 6 (1 + 2 + 3)
+        assertIntegerWithJavet("""
+                async function test() {
+                  let sum = 0;
+                  const asyncIterable = {
+                    async *[Symbol.asyncIterator]() {
+                      yield 1;
+                      yield 2;
+                      yield 3;
+                      yield 4;
+                      yield 5;
+                    }
+                  };
+                  for await (const item of asyncIterable) {
+                    if (item > 3) break;
+                    sum += item;
+                  }
+                  return sum;
+                }
+                test()""");
     }
 
-    @Disabled
     @Test
     public void testAsyncForAwaitOfLoopWithSyncIterable() {
         assertIntegerWithJavet("""
@@ -103,11 +96,10 @@ public class PromiseConstructorTest extends BaseJavetTest {
 
     @Test
     public void testPromiseAllWithArray() {
-        String code = """
+        assertStringWithJavet("""
                 var p1 = Promise.resolve(1);
                 var p2 = Promise.resolve(2);
                 var p3 = Promise.resolve(3);
-                Promise.all([p1, p2, p3]).then(arr => JSON.stringify(arr))""";
-        assertStringWithJavet(code);
+                Promise.all([p1, p2, p3]).then(arr => JSON.stringify(arr))""");
     }
 }

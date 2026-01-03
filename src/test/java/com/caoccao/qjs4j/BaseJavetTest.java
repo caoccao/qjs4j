@@ -40,13 +40,14 @@ import java.util.function.Supplier;
 import static org.assertj.core.api.Assertions.*;
 
 public class BaseJavetTest extends BaseTest {
+    protected boolean moduleMode;
     protected V8Runtime v8Runtime;
 
     protected void assertBigIntegerObjectWithJavet(String... codeArray) {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> {
-                        try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                        try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
                                 assertThat(v8ValuePromise.getState()).as(code).isNotEqualTo(V8ValuePromise.STATE_PENDING);
@@ -72,7 +73,7 @@ public class BaseJavetTest extends BaseTest {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> {
-                        try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                        try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
                                 assertThat(v8ValuePromise.getState()).as(code).isNotEqualTo(V8ValuePromise.STATE_PENDING);
@@ -98,7 +99,7 @@ public class BaseJavetTest extends BaseTest {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> {
-                        try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                        try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
                                 assertThat(v8ValuePromise.getState()).as(code).isNotEqualTo(V8ValuePromise.STATE_PENDING);
@@ -124,7 +125,7 @@ public class BaseJavetTest extends BaseTest {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> {
-                        try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                        try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
                                 assertThat(v8ValuePromise.getState()).as(code).isNotEqualTo(V8ValuePromise.STATE_PENDING);
@@ -150,7 +151,7 @@ public class BaseJavetTest extends BaseTest {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> {
-                        try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                        try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
                                 assertThat(v8ValuePromise.getState()).isNotEqualTo(V8ValuePromise.STATE_PENDING);
@@ -174,7 +175,7 @@ public class BaseJavetTest extends BaseTest {
 
     protected void assertErrorWithJavet(String... codeArray) {
         for (String code : codeArray) {
-            String expectedMessage = assertThatThrownBy(() -> v8Runtime.getExecutor(code).executeVoid())
+            String expectedMessage = assertThatThrownBy(() -> v8Runtime.getExecutor(code).setModule(moduleMode).executeVoid())
                     .isInstanceOf(JavetException.class).actual().getMessage();
             assertThatThrownBy(() -> context.eval(code), expectedMessage)
                     .isInstanceOf(JSException.class)
@@ -186,7 +187,7 @@ public class BaseJavetTest extends BaseTest {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> {
-                        try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                        try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
                                 assertThat(v8ValuePromise.getState()).isNotEqualTo(V8ValuePromise.STATE_PENDING);
@@ -212,7 +213,7 @@ public class BaseJavetTest extends BaseTest {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> {
-                        try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                        try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
                                 assertThat(v8ValuePromise.getState()).as(code).isNotEqualTo(V8ValuePromise.STATE_PENDING);
@@ -238,7 +239,7 @@ public class BaseJavetTest extends BaseTest {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> {
-                        try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                        try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
                                 assertThat(v8ValuePromise.getState()).as(code).isNotEqualTo(V8ValuePromise.STATE_PENDING);
@@ -263,7 +264,7 @@ public class BaseJavetTest extends BaseTest {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> {
-                        try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                        try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
                                 assertThat(v8ValuePromise.getState()).as(code).isNotEqualTo(V8ValuePromise.STATE_PENDING);
@@ -285,6 +286,32 @@ public class BaseJavetTest extends BaseTest {
         }
     }
 
+    protected void assertUndefinedWithJavet(String... codeArray) {
+        for (String code : codeArray) {
+            assertWithJavet(
+                    () -> {
+                        try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
+                            if (v8Value instanceof V8ValuePromise v8ValuePromise) {
+                                v8Runtime.await();
+                                assertThat(v8ValuePromise.getState()).as(code).isNotEqualTo(V8ValuePromise.STATE_PENDING);
+                                return v8ValuePromise.getResult().isUndefined();
+                            } else {
+                                assertThat(v8Value).as(code).isInstanceOf(V8ValueUndefined.class);
+                                return true;
+                            }
+                        }
+                    },
+                    () -> {
+                        JSValue jsValue = context.eval(code);
+                        if (jsValue instanceof JSPromise jsPromise) {
+                            awaitPromise(jsPromise);
+                            jsValue = jsPromise.getResult();
+                        }
+                        return jsValue.isUndefined();
+                    });
+        }
+    }
+
     protected <E extends Exception, T> void assertWithJavet(
             IJavetSupplier<T, E> javetSupplier,
             Supplier<T> qjs4jSupplier) {
@@ -301,6 +328,7 @@ public class BaseJavetTest extends BaseTest {
     @Override
     public void setUp() throws Exception {
         super.setUp();
+        moduleMode = false;
         V8RuntimeOptions.V8_FLAGS.setJsFloat16Array(true);
         v8Runtime = V8Host.getV8Instance().createV8Runtime();
     }
@@ -310,6 +338,7 @@ public class BaseJavetTest extends BaseTest {
     public void tearDown() throws Exception {
         assertThat(v8Runtime.getReferenceCount()).as("V8 runtime reference count").isEqualTo(0);
         v8Runtime.close();
+        moduleMode = false;
         super.tearDown();
     }
 }

@@ -71,7 +71,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         Set<String> ignoredProperties = Set.of("AsyncDisposableStack", "DisposableStack", "WebAssembly");
         String code = "Object.getOwnPropertyNames(globalThis).sort()";
         assertWithJavet(
-                () -> ((List<?>) v8Runtime.getExecutor(code).executeObject()).stream()
+                () -> ((List<?>) v8Runtime.getExecutor(code).setModule(moduleMode).executeObject()).stream()
                         .filter(property -> !ignoredProperties.contains(property.toString()))
                         .toList(),
                 () -> context.eval(code).toJavaObject());
