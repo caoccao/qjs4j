@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.util.DtoaConverter;
+import com.caoccao.qjs4j.utils.DtoaConverter;
 
 /**
  * Represents a JavaScript number value (IEEE 754 double-precision).

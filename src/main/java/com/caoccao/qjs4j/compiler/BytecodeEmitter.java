@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.compiler;
 
 import com.caoccao.qjs4j.core.JSValue;
-import com.caoccao.qjs4j.util.AtomTable;
+import com.caoccao.qjs4j.utils.AtomTable;
 import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.Opcode;
 

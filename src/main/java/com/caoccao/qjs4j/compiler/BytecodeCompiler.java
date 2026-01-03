@@ -33,6 +33,7 @@ public final class BytecodeCompiler {
     private final Deque<LoopContext> loopStack;
     private final Deque<Scope> scopes;
     private boolean inGlobalScope;
+    private boolean isInAsyncFunction;  // Track if we're currently compiling an async function
     private int maxLocalCount;
 
     public BytecodeCompiler() {
@@ -40,6 +41,7 @@ public final class BytecodeCompiler {
         this.scopes = new ArrayDeque<>();
         this.loopStack = new ArrayDeque<>();
         this.inGlobalScope = false;
+        this.isInAsyncFunction = false;
         this.maxLocalCount = 0;
     }
 
@@ -77,6 +79,7 @@ public final class BytecodeCompiler {
         // Enter function scope and add parameters as locals
         functionCompiler.enterScope();
         functionCompiler.inGlobalScope = false;
+        functionCompiler.isInAsyncFunction = arrowExpr.isAsync();  // Track if this is an async function
 
         for (Identifier param : arrowExpr.params()) {
             functionCompiler.currentScope().declareLocal(param.name());
@@ -94,12 +97,14 @@ public final class BytecodeCompiler {
             List<Statement> bodyStatements = block.body();
             if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
                 functionCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
-                functionCompiler.emitter.emitOpcode(Opcode.RETURN);
+                // Emit RETURN_ASYNC for async functions, RETURN for sync functions
+                functionCompiler.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
             }
         } else if (arrowExpr.body() instanceof Expression expr) {
             // Expression body - implicitly returns the expression value
             functionCompiler.compileExpression(expr);
-            functionCompiler.emitter.emitOpcode(Opcode.RETURN);
+            // Emit RETURN_ASYNC for async functions, RETURN for sync functions
+            functionCompiler.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
         int localCount = functionCompiler.currentScope().getLocalCount();
@@ -133,15 +138,63 @@ public final class BytecodeCompiler {
     }
 
     private void compileAssignmentExpression(AssignmentExpression assignExpr) {
-        // Compile right side
-        compileExpression(assignExpr.right());
-
-        // Handle assignment to different patterns
         Expression left = assignExpr.left();
+        AssignmentExpression.AssignmentOperator operator = assignExpr.operator();
 
+        // For compound assignments (+=, -=, etc.), we need to load the current value first
+        if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+            // Load current value of left side
+            if (left instanceof Identifier id) {
+                String name = id.name();
+                Integer localIndex = findLocalInScopes(name);
+                if (localIndex != null) {
+                    emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                } else {
+                    emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
+                }
+            } else if (left instanceof MemberExpression memberExpr) {
+                // For obj.prop += value, we need DUP2 pattern or similar
+                compileExpression(memberExpr.object());
+                if (memberExpr.computed()) {
+                    compileExpression(memberExpr.property());
+                    emitter.emitOpcode(Opcode.DUP2);  // Duplicate obj and prop
+                    emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                } else if (memberExpr.property() instanceof Identifier propId) {
+                    emitter.emitOpcode(Opcode.DUP);  // Duplicate object
+                    emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                }
+            }
+
+            // Compile right side
+            compileExpression(assignExpr.right());
+
+            // Perform the compound operation
+            switch (operator) {
+                case PLUS_ASSIGN -> emitter.emitOpcode(Opcode.ADD);
+                case MINUS_ASSIGN -> emitter.emitOpcode(Opcode.SUB);
+                case MUL_ASSIGN -> emitter.emitOpcode(Opcode.MUL);
+                case DIV_ASSIGN -> emitter.emitOpcode(Opcode.DIV);
+                case MOD_ASSIGN -> emitter.emitOpcode(Opcode.MOD);
+                case EXP_ASSIGN -> emitter.emitOpcode(Opcode.EXP);
+                case LSHIFT_ASSIGN -> emitter.emitOpcode(Opcode.SHL);
+                case RSHIFT_ASSIGN -> emitter.emitOpcode(Opcode.SAR);
+                case URSHIFT_ASSIGN -> emitter.emitOpcode(Opcode.SHR);
+                case AND_ASSIGN -> emitter.emitOpcode(Opcode.AND);
+                case OR_ASSIGN -> emitter.emitOpcode(Opcode.OR);
+                case XOR_ASSIGN -> emitter.emitOpcode(Opcode.XOR);
+                case LOGICAL_AND_ASSIGN, LOGICAL_OR_ASSIGN, NULLISH_ASSIGN ->
+                        throw new CompilerException("Logical assignment operators not yet implemented");
+                default -> throw new CompilerException("Unknown assignment operator: " + operator);
+            }
+        } else {
+            // Simple assignment: compile right side
+            compileExpression(assignExpr.right());
+        }
+
+        // Store the result to left side
         if (left instanceof Identifier id) {
             String name = id.name();
-            Integer localIndex = currentScope().getLocal(name);
+            Integer localIndex = findLocalInScopes(name);
 
             if (localIndex != null) {
                 emitter.emitOpcodeU16(Opcode.SET_LOCAL, localIndex);
@@ -150,13 +203,22 @@ public final class BytecodeCompiler {
             }
         } else if (left instanceof MemberExpression memberExpr) {
             // obj[prop] = value or obj.prop = value
-            compileExpression(memberExpr.object());
-
-            if (memberExpr.computed()) {
-                compileExpression(memberExpr.property());
-                emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
-            } else if (memberExpr.property() instanceof Identifier propId) {
-                emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+            if (operator == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                // For simple assignment, compile object and property now
+                compileExpression(memberExpr.object());
+                if (memberExpr.computed()) {
+                    compileExpression(memberExpr.property());
+                    emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                } else if (memberExpr.property() instanceof Identifier propId) {
+                    emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+                }
+            } else {
+                // For compound assignment, object and property are already on stack from DUP
+                if (memberExpr.computed()) {
+                    emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                } else if (memberExpr.property() instanceof Identifier propId) {
+                    emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+                }
             }
         }
     }
@@ -405,6 +467,137 @@ public final class BytecodeCompiler {
         exitScope();
     }
 
+    private void compileForOfStatement(ForOfStatement forOfStmt) {
+        enterScope();
+
+        // Compile the iterable expression
+        compileExpression(forOfStmt.right());
+
+        // Emit FOR_OF_START (sync) or FOR_AWAIT_OF_START (async) to get iterator, next method, and catch offset
+        // Stack after: iter, next, catch_offset
+        if (forOfStmt.isAsync()) {
+            emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
+        } else {
+            emitter.emitOpcode(Opcode.FOR_OF_START);
+        }
+
+        // Declare the loop variable
+        VariableDeclaration varDecl = forOfStmt.left();
+        if (varDecl.declarations().size() != 1) {
+            throw new CompilerException("for-of loop must have exactly one variable");
+        }
+        Pattern pattern = varDecl.declarations().get(0).id();
+        if (!(pattern instanceof Identifier id)) {
+            throw new CompilerException("for-of loop variable must be an identifier");
+        }
+        String varName = id.name();
+        currentScope().declareLocal(varName);
+        Integer varIndex = currentScope().getLocal(varName);
+
+        // Start of loop
+        int loopStart = emitter.currentOffset();
+        LoopContext loop = new LoopContext(loopStart);
+        loopStack.push(loop);
+
+        // Emit FOR_OF_NEXT (sync) or FOR_AWAIT_OF_NEXT (async) to get next value
+        int jumpToEnd;
+
+        if (forOfStmt.isAsync()) {
+            // Async for-of: FOR_AWAIT_OF_NEXT pushes result object
+            // Stack before: iter, next, catch_offset
+            // Stack after: iter, next, catch_offset, result
+            emitter.emitOpcode(Opcode.FOR_AWAIT_OF_NEXT);
+
+            // Extract {value, done} from the iterator result object
+            // Stack: iter, next, catch_offset, result
+
+            // Duplicate result object so we can extract both properties
+            emitter.emitOpcode(Opcode.DUP);
+            // Stack: iter, next, catch_offset, result, result
+
+            // Get 'done' property and check if iteration is complete
+            emitter.emitOpcodeAtom(Opcode.GET_FIELD, "done");
+            // Stack: iter, next, catch_offset, result, done
+
+            // If done === true, exit the loop
+            jumpToEnd = emitter.emitJump(Opcode.IF_TRUE);
+            // Stack: iter, next, catch_offset, result
+
+            // Get 'value' property from result
+            emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
+            // Stack: iter, next, catch_offset, value
+
+            // Store value in loop variable
+            if (varIndex != null) {
+                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
+            } else {
+                emitter.emitOpcode(Opcode.DROP);
+            }
+            // Stack: iter, next, catch_offset
+        } else {
+            // Sync for-of: FOR_OF_NEXT pushes value and done separately
+            // Stack before: iter, next, catch_offset
+            // Stack after: iter, next, catch_offset, value, done
+            emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);  // offset parameter (0 for now)
+
+            // Check done flag
+            // Stack: iter, next, catch_offset, value, done
+            jumpToEnd = emitter.emitJump(Opcode.IF_TRUE);
+            // Stack: iter, next, catch_offset, value
+
+            // Store value in loop variable
+            if (varIndex != null) {
+                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
+            } else {
+                emitter.emitOpcode(Opcode.DROP);
+            }
+            // Stack: iter, next, catch_offset
+        }
+
+        // Compile loop body
+        compileStatement(forOfStmt.body());
+
+        // Jump back to loop start
+        emitter.emitOpcode(Opcode.GOTO);
+        int backJumpPos = emitter.currentOffset();
+        emitter.emitU32(loopStart - (backJumpPos + 4));
+
+        // Loop end - patch the done check jump
+        int loopEnd = emitter.currentOffset();
+        emitter.patchJump(jumpToEnd, loopEnd);
+
+        // When done === true, clean up remaining values on stack
+        if (forOfStmt.isAsync()) {
+            // Async: need to drop the result object still on stack
+            emitter.emitOpcode(Opcode.DROP);  // result
+        } else {
+            // Sync: need to drop the value still on stack
+            emitter.emitOpcode(Opcode.DROP);  // value
+        }
+
+        // Break target - break statements jump here (after dropping value)
+        int breakTarget = emitter.currentOffset();
+
+        // Patch break statements to jump after the value drop
+        for (int breakPos : loop.breakPositions) {
+            emitter.patchJump(breakPos, breakTarget);
+        }
+
+        // Patch continue statements (jump back to loop start)
+        for (int continuePos : loop.continuePositions) {
+            emitter.patchJump(continuePos, loopStart);
+        }
+
+        // Clean up iterator from stack
+        // Pop iter, next, catch_offset
+        emitter.emitOpcode(Opcode.DROP);  // catch_offset
+        emitter.emitOpcode(Opcode.DROP);  // next
+        emitter.emitOpcode(Opcode.DROP);  // iter
+
+        loopStack.pop();
+        exitScope();
+    }
+
     private void compileFunctionDeclaration(FunctionDeclaration funcDecl) {
         // Create a new compiler for the function body
         BytecodeCompiler functionCompiler = new BytecodeCompiler();
@@ -412,6 +605,7 @@ public final class BytecodeCompiler {
         // Enter function scope and add parameters as locals
         functionCompiler.enterScope();
         functionCompiler.inGlobalScope = false;
+        functionCompiler.isInAsyncFunction = funcDecl.isAsync();  // Track if this is an async function
 
         for (Identifier param : funcDecl.params()) {
             functionCompiler.currentScope().declareLocal(param.name());
@@ -426,7 +620,8 @@ public final class BytecodeCompiler {
         List<Statement> bodyStatements = funcDecl.body().body();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             functionCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
-            functionCompiler.emitter.emitOpcode(Opcode.RETURN);
+            // Emit RETURN_ASYNC for async functions, RETURN for sync functions
+            functionCompiler.emitter.emitOpcode(funcDecl.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
         int localCount = functionCompiler.currentScope().getLocalCount();
@@ -769,7 +964,8 @@ public final class BytecodeCompiler {
         } else {
             emitter.emitOpcode(Opcode.UNDEFINED);
         }
-        emitter.emitOpcode(Opcode.RETURN);
+        // Emit RETURN_ASYNC for async functions, RETURN for sync functions
+        emitter.emitOpcode(isInAsyncFunction ? Opcode.RETURN_ASYNC : Opcode.RETURN);
     }
 
     private void compileStatement(Statement stmt) {
@@ -791,6 +987,8 @@ public final class BytecodeCompiler {
             compileWhileStatement(whileStmt);
         } else if (stmt instanceof ForStatement forStmt) {
             compileForStatement(forStmt);
+        } else if (stmt instanceof ForOfStatement forOfStmt) {
+            compileForOfStatement(forOfStmt);
         } else if (stmt instanceof ReturnStatement retStmt) {
             compileReturnStatement(retStmt);
         } else if (stmt instanceof BreakStatement breakStmt) {
@@ -1250,6 +1448,17 @@ public final class BytecodeCompiler {
                 parentScope.setLocalCount(localCount);
             }
         }
+    }
+
+    private Integer findLocalInScopes(String name) {
+        // Search from innermost scope (most recently pushed) to outermost
+        for (Scope scope : scopes) {
+            Integer localIndex = scope.getLocal(name);
+            if (localIndex != null) {
+                return localIndex;
+            }
+        }
+        return null;
     }
 
     /**

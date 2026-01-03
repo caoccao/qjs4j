@@ -17,11 +17,20 @@
 package com.caoccao.qjs4j.compiler.ast;
 
 /**
- * Base sealed interface for all statement nodes.
+ * Represents a for-of statement: for (variable of iterable) { ... }
+ * or async for-of: for await (variable of iterable) { ... }
+ * <p>
+ * Based on ES2015 for-of loops and ES2018 async iteration.
  */
-public sealed interface Statement extends ASTNode permits
-        ExpressionStatement, BlockStatement, IfStatement, WhileStatement,
-        ForStatement, ForOfStatement, ReturnStatement, BreakStatement, ContinueStatement,
-        ThrowStatement, TryStatement, SwitchStatement, VariableDeclaration,
-        Declaration {
+public record ForOfStatement(
+        VariableDeclaration left,    // Variable declaration (let x, const x, var x)
+        Expression right,             // Iterable expression
+        Statement body,               // Loop body
+        boolean isAsync,              // true for 'for await', false for 'for'
+        SourceLocation location
+) implements Statement {
+    @Override
+    public SourceLocation getLocation() {
+        return location;
+    }
 }

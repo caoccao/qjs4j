@@ -5,10 +5,10 @@ import com.caoccao.javet.interfaces.IJavetSupplier;
 import com.caoccao.javet.interop.V8Host;
 import com.caoccao.javet.interop.V8Runtime;
 import com.caoccao.javet.interop.options.V8RuntimeOptions;
-import com.caoccao.qjs4j.core.JSBigInt;
-import com.caoccao.qjs4j.core.JSBigIntObject;
-import com.caoccao.qjs4j.core.JSBoolean;
-import com.caoccao.qjs4j.core.JSBooleanObject;
+import com.caoccao.javet.values.V8Value;
+import com.caoccao.javet.values.primitive.*;
+import com.caoccao.javet.values.reference.V8ValuePromise;
+import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +37,35 @@ public class BaseJavetTest extends BaseTest {
         }
     }
 
+    protected void assertBigIntegerWithJavet(boolean async, String... codeArray) {
+        if (async) {
+            for (String code : codeArray) {
+                assertWithJavet(
+                        () -> {
+                            try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                                assertThat(v8Value).isInstanceOf(V8ValuePromise.class);
+                                V8ValuePromise v8ValuePromise = (V8ValuePromise) v8Value;
+                                v8Runtime.await();
+                                assertThat(v8ValuePromise.getState()).isNotEqualTo(V8ValuePromise.STATE_PENDING);
+                                try (V8Value v8Result = v8ValuePromise.getResult()) {
+                                    assertThat(v8Result).isInstanceOf(V8ValueLong.class);
+                                    return ((V8ValueLong) v8Result).getValue();
+                                }
+                            }
+                        },
+                        () -> {
+                            JSPromise jsPromise = context.eval(code).asPromise().orElseThrow();
+                            awaitPromise(jsPromise);
+                            JSValue jsResult = jsPromise.getResult();
+                            assertThat(jsResult).isInstanceOf(JSBigInt.class);
+                            return ((JSBigInt) jsResult).value();
+                        });
+            }
+        } else {
+            assertBigIntegerWithJavet(codeArray);
+        }
+    }
+
     protected void assertBooleanObjectWithJavet(String... codeArray) {
         for (String code : codeArray) {
             assertWithJavet(
@@ -53,11 +82,69 @@ public class BaseJavetTest extends BaseTest {
         }
     }
 
+    protected void assertBooleanWithJavet(boolean async, String... codeArray) {
+        if (async) {
+            for (String code : codeArray) {
+                assertWithJavet(
+                        () -> {
+                            try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                                assertThat(v8Value).isInstanceOf(V8ValuePromise.class);
+                                V8ValuePromise v8ValuePromise = (V8ValuePromise) v8Value;
+                                v8Runtime.await();
+                                assertThat(v8ValuePromise.getState()).isNotEqualTo(V8ValuePromise.STATE_PENDING);
+                                try (V8Value v8Result = v8ValuePromise.getResult()) {
+                                    assertThat(v8Result).isInstanceOf(V8ValueBoolean.class);
+                                    return ((V8ValueBoolean) v8Result).getValue();
+                                }
+                            }
+                        },
+                        () -> {
+                            JSPromise jsPromise = context.eval(code).asPromise().orElseThrow();
+                            awaitPromise(jsPromise);
+                            JSValue jsResult = jsPromise.getResult();
+                            assertThat(jsResult).isInstanceOf(JSBoolean.class);
+                            return ((JSBoolean) jsResult).value();
+                        });
+            }
+        } else {
+            assertBooleanWithJavet(codeArray);
+        }
+    }
+
     protected void assertDoubleWithJavet(String... codeArray) {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> v8Runtime.getExecutor(code).executeDouble(),
                     () -> context.eval(code).toJavaObject());
+        }
+    }
+
+    protected void assertDoubleWithJavet(boolean async, String... codeArray) {
+        if (async) {
+            for (String code : codeArray) {
+                assertWithJavet(
+                        () -> {
+                            try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                                assertThat(v8Value).isInstanceOf(V8ValuePromise.class);
+                                V8ValuePromise v8ValuePromise = (V8ValuePromise) v8Value;
+                                v8Runtime.await();
+                                assertThat(v8ValuePromise.getState()).isNotEqualTo(V8ValuePromise.STATE_PENDING);
+                                try (V8Value v8Result = v8ValuePromise.getResult()) {
+                                    assertThat(v8Result).isInstanceOf(V8ValueDouble.class);
+                                    return ((V8ValueDouble) v8Result).getValue();
+                                }
+                            }
+                        },
+                        () -> {
+                            JSPromise jsPromise = context.eval(code).asPromise().orElseThrow();
+                            awaitPromise(jsPromise);
+                            JSValue jsResult = jsPromise.getResult();
+                            assertThat(jsResult).isInstanceOf(JSNumber.class);
+                            return ((JSNumber) jsResult).value();
+                        });
+            }
+        } else {
+            assertDoubleWithJavet(codeArray);
         }
     }
 
@@ -79,11 +166,69 @@ public class BaseJavetTest extends BaseTest {
         }
     }
 
+    protected void assertIntegerWithJavet(boolean async, String... codeArray) {
+        if (async) {
+            for (String code : codeArray) {
+                assertWithJavet(
+                        () -> {
+                            try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                                assertThat(v8Value).isInstanceOf(V8ValuePromise.class);
+                                V8ValuePromise v8ValuePromise = (V8ValuePromise) v8Value;
+                                v8Runtime.await();
+                                assertThat(v8ValuePromise.getState()).isNotEqualTo(V8ValuePromise.STATE_PENDING);
+                                try (V8Value v8Result = v8ValuePromise.getResult()) {
+                                    assertThat(v8Result).isInstanceOf(V8ValueInteger.class);
+                                    return ((V8ValueInteger) v8Result).getValue().doubleValue();
+                                }
+                            }
+                        },
+                        () -> {
+                            JSPromise jsPromise = context.eval(code).asPromise().orElseThrow();
+                            awaitPromise(jsPromise);
+                            JSValue jsResult = jsPromise.getResult();
+                            assertThat(jsResult).isInstanceOf(JSNumber.class);
+                            return ((JSNumber) jsResult).value();
+                        });
+            }
+        } else {
+            assertIntegerWithJavet(codeArray);
+        }
+    }
+
     protected void assertLongWithJavet(String... codeArray) {
         for (String code : codeArray) {
             assertWithJavet(
                     () -> v8Runtime.getExecutor(code).executeLong().doubleValue(),
                     () -> context.eval(code).toJavaObject());
+        }
+    }
+
+    protected void assertLongWithJavet(boolean async, String... codeArray) {
+        if (async) {
+            for (String code : codeArray) {
+                assertWithJavet(
+                        () -> {
+                            try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                                assertThat(v8Value).isInstanceOf(V8ValuePromise.class);
+                                V8ValuePromise v8ValuePromise = (V8ValuePromise) v8Value;
+                                v8Runtime.await();
+                                assertThat(v8ValuePromise.getState()).isNotEqualTo(V8ValuePromise.STATE_PENDING);
+                                try (V8Value v8Result = v8ValuePromise.getResult()) {
+                                    assertThat(v8Result).isInstanceOf(V8ValueLong.class);
+                                    return ((V8ValueLong) v8Result).getValue().doubleValue();
+                                }
+                            }
+                        },
+                        () -> {
+                            JSPromise jsPromise = context.eval(code).asPromise().orElseThrow();
+                            awaitPromise(jsPromise);
+                            JSValue jsResult = jsPromise.getResult();
+                            assertThat(jsResult).isInstanceOf(JSNumber.class);
+                            return ((JSNumber) jsResult).value();
+                        });
+            }
+        } else {
+            assertLongWithJavet(codeArray);
         }
     }
 
@@ -100,6 +245,35 @@ public class BaseJavetTest extends BaseTest {
             assertWithJavet(
                     () -> v8Runtime.getExecutor(code).executeString(),
                     () -> context.eval(code).toJavaObject());
+        }
+    }
+
+    protected void assertStringWithJavet(boolean async, String... codeArray) {
+        if (async) {
+            for (String code : codeArray) {
+                assertWithJavet(
+                        () -> {
+                            try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
+                                assertThat(v8Value).isInstanceOf(V8ValuePromise.class);
+                                V8ValuePromise v8ValuePromise = (V8ValuePromise) v8Value;
+                                v8Runtime.await();
+                                assertThat(v8ValuePromise.getState()).isNotEqualTo(V8ValuePromise.STATE_PENDING);
+                                try (V8Value v8Result = v8ValuePromise.getResult()) {
+                                    assertThat(v8Result).isInstanceOf(V8ValueString.class);
+                                    return ((V8ValueString) v8Result).getValue();
+                                }
+                            }
+                        },
+                        () -> {
+                            JSPromise jsPromise = context.eval(code).asPromise().orElseThrow();
+                            awaitPromise(jsPromise);
+                            JSValue jsResult = jsPromise.getResult();
+                            assertThat(jsResult).isInstanceOf(JSString.class);
+                            return ((JSString) jsResult).value();
+                        });
+            }
+        } else {
+            assertStringWithJavet(codeArray);
         }
     }
 

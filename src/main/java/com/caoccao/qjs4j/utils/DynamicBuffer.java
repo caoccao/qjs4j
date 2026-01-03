@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.util;
+package com.caoccao.qjs4j.utils;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;

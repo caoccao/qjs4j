@@ -237,7 +237,7 @@ public enum Opcode {
 
 #### 1.2 Utilities (Week 1)
 - **Input:** `cutils.c/h`, `dtoa.c/h`
-- **Output:** `com.caoccao.qjs4j.util.*`
+- **Output:** `com.caoccao.qjs4j.utils.*`
 
 **Tasks:**
 1. Dynamic buffer implementation

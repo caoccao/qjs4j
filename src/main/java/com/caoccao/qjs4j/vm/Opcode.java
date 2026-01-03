@@ -172,7 +172,14 @@ public enum Opcode {
     WITH_GET_REF_UNDEF(124, 10, 1, 0),
 
     // Async operations
-    AWAIT(125, 1, 1, 1);
+    AWAIT(125, 1, 1, 1),
+    RETURN_ASYNC(126, 1, 1, 0),  // Return from async function - pops value and returns
+    FOR_AWAIT_OF_START(127, 1, 1, 3),  // Start async iteration: iterable -> iter next catch_offset
+    FOR_AWAIT_OF_NEXT(128, 1, 3, 4),   // Get next from async iterator: iter next catch_offset -> iter next catch_offset obj
+
+    // Sync iteration operations
+    FOR_OF_START(129, 1, 1, 3),  // Start sync iteration: iterable -> iter next catch_offset
+    FOR_OF_NEXT(130, 2, 3, 5);   // Get next from sync iterator: iter next catch_offset -> iter next catch_offset value done
 
     // This is a subset of QuickJS opcodes - full implementation would have ~244 opcodes
 

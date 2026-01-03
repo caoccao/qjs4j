@@ -545,6 +545,20 @@ public final class VirtualMachine {
                         }
                         return JSUndefined.INSTANCE;
                     }
+                    case RETURN_ASYNC -> {
+                        // Return from async function - pops value from stack
+                        // The wrapping in a promise is handled by JSBytecodeFunction.call()
+                        JSValue returnValue = valueStack.pop();
+                        // Restore stack and strict mode before returning
+                        valueStack.setStackTop(savedStackTop);
+                        currentFrame = previousFrame;
+                        if (savedStrictMode) {
+                            context.enterStrictMode();
+                        } else {
+                            context.exitStrictMode();
+                        }
+                        return returnValue;
+                    }
 
                     // ==================== Function Calls ====================
                     case CALL -> {
@@ -628,6 +642,23 @@ public final class VirtualMachine {
                         handleAwait();
                         pc += op.getSize();
                     }
+                    case FOR_AWAIT_OF_START -> {
+                        handleForAwaitOfStart();
+                        pc += op.getSize();
+                    }
+                    case FOR_AWAIT_OF_NEXT -> {
+                        handleForAwaitOfNext();
+                        pc += op.getSize();
+                    }
+                    case FOR_OF_START -> {
+                        handleForOfStart();
+                        pc += op.getSize();
+                    }
+                    case FOR_OF_NEXT -> {
+                        int catchOffsetParam = bytecode.readU8(pc + 1);  // Read the U8 parameter
+                        handleForOfNext();
+                        pc += op.getSize();
+                    }
 
                     // ==================== Other Operations ====================
                     default -> throw new JSVirtualMachineException("Unimplemented opcode: " + op + " at PC " + pc);
@@ -703,6 +734,141 @@ public final class VirtualMachine {
         // and resume it when the promise settles. For now, this simple
         // implementation just returns the promise value.
         valueStack.push(promise);
+    }
+
+    private void handleForAwaitOfStart() {
+        // Pop the iterable from the stack
+        JSValue iterable = valueStack.pop();
+
+        // Get async iterator from the iterable
+        JSAsyncIterator iterator = JSAsyncIteratorHelper.getAsyncIterator(iterable, context);
+
+        if (iterator == null) {
+            throw new JSVirtualMachineException("Object is not async iterable");
+        }
+
+        // Get the next() method from the iterator
+        PropertyKey nextKey = PropertyKey.fromString("next");
+        JSValue nextMethod = iterator.get(nextKey);
+
+        if (!(nextMethod instanceof JSFunction)) {
+            throw new JSVirtualMachineException("Iterator must have a next method");
+        }
+
+        // Push iterator, next method, and catch offset (0) onto the stack
+        valueStack.push(iterator);         // Iterator object
+        valueStack.push(nextMethod);       // next() method
+        valueStack.push(new JSNumber(0));  // Catch offset (placeholder)
+    }
+
+    private void handleForAwaitOfNext() {
+        // Stack layout: iter, next, catch_offset (top to bottom)
+        // Pop catch offset (not used in current implementation)
+        JSValue catchOffset = valueStack.pop();
+
+        // Peek next method and iterator (don't pop - they stay for next iteration)
+        JSValue nextMethod = valueStack.peek(0);  // next method
+        JSValue iterator = valueStack.peek(1);    // iterator object
+
+        // Call iterator.next()
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            throw new JSVirtualMachineException("Next method must be a function");
+        }
+
+        JSValue result = nextFunc.call(context, iterator, new JSValue[0]);
+
+        // Push the result onto the stack
+        // The result should be a promise that resolves to {value, done}
+        valueStack.push(result);
+    }
+
+    private void handleForOfStart() {
+        // Pop the iterable from the stack
+        JSValue iterable = valueStack.pop();
+
+        // For JavaScript native objects (arrays, strings, etc.), we need to call Symbol.iterator
+        // directly as a JavaScript operation since JSIteratorHelper doesn't bridge properly
+        if (!(iterable instanceof JSObject iterableObj)) {
+            throw new JSVirtualMachineException("Object is not iterable");
+        }
+
+        // Get Symbol.iterator method
+        JSValue iteratorMethod = iterableObj.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR));
+
+        if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
+            throw new JSVirtualMachineException("Object is not iterable");
+        }
+
+        // Call the Symbol.iterator method to get an iterator
+        JSValue iterator = iteratorFunc.call(context, iterable, new JSValue[0]);
+
+        if (!(iterator instanceof JSObject iteratorObj)) {
+            throw new JSVirtualMachineException("Iterator method must return an object");
+        }
+
+        // Get the next() method from the iterator
+        JSValue nextMethod = iteratorObj.get(PropertyKey.fromString("next"));
+
+        if (!(nextMethod instanceof JSFunction)) {
+            String actualType = nextMethod == null ? "null" : nextMethod.getClass().getSimpleName();
+            throw new JSVirtualMachineException(
+                "Iterator must have a next method (got " + actualType + ", iterator=" + iteratorObj.getClass().getSimpleName() + ")"
+            );
+        }
+
+        // Push iterator, next method, and catch offset (0) onto the stack
+        valueStack.push(iterator);         // Iterator object
+        valueStack.push(nextMethod);       // next() method
+        valueStack.push(new JSNumber(0));  // Catch offset (placeholder)
+    }
+
+    private void handleForOfNext() {
+        // Stack layout before: iter, next, catch_offset (bottom to top)
+        // Stack layout after: iter, next, catch_offset, value, done (bottom to top)
+
+        // Pop catch offset temporarily
+        JSValue catchOffset = valueStack.pop();
+
+        // Peek next method and iterator (don't pop - they stay for next iteration)
+        JSValue nextMethod = valueStack.peek(0);  // next method
+        JSValue iterator = valueStack.peek(1);    // iterator object
+
+        // Call iterator.next()
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            String actualType = nextMethod == null ? "null" : nextMethod.getClass().getSimpleName();
+            String iterType = iterator == null ? "null" : iterator.getClass().getSimpleName();
+            throw new JSVirtualMachineException(
+                "Next method must be a function in FOR_OF_NEXT (nextMethod=" + actualType + ", iterator=" + iterType + ")"
+            );
+        }
+
+        JSValue result = nextFunc.call(context, iterator, new JSValue[0]);
+
+        // For sync iterators, extract value and done from the result object
+        // QuickJS FOR_OF_NEXT pushes: iter, next, catch_offset, value, done
+        // So we need to extract {value, done} from result
+
+        if (!(result instanceof JSObject resultObj)) {
+            throw new JSVirtualMachineException("Iterator result must be an object");
+        }
+
+        // Get the value property
+        JSValue value = resultObj.get("value");
+        if (value == null) {
+            value = JSUndefined.INSTANCE;
+        }
+
+        // Get the done property
+        JSValue doneValue = resultObj.get("done");
+        boolean done = false;
+        if (doneValue instanceof JSBoolean boolVal) {
+            done = boolVal.isBooleanTrue();
+        }
+
+        // Push catch_offset, value, and done onto the stack
+        valueStack.push(catchOffset);  // Restore catch_offset
+        valueStack.push(value);
+        valueStack.push(done ? JSBoolean.TRUE : JSBoolean.FALSE);
     }
 
     private void handleCall(int argCount) {

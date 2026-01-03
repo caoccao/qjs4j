@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.util.DtoaConverter;
+import com.caoccao.qjs4j.utils.DtoaConverter;
 
 /**
  * Implementation of JavaScript Number.prototype methods.

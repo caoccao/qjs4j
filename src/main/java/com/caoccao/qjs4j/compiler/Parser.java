@@ -560,11 +560,51 @@ public final class Parser {
     private Statement parseForStatement() {
         SourceLocation location = getLocation();
         expect(TokenType.FOR);
+
+        // Check for 'await' keyword (for await...of)
+        boolean isAwait = false;
+        if (match(TokenType.AWAIT)) {
+            isAwait = true;
+            advance();
+        }
+
         expect(TokenType.LPAREN);
 
-        // Init (can be var declaration or expression)
+        // Check if this is a for-of loop
+        // We need to peek ahead to see if there's 'of' after the variable declaration
+        boolean isForOf = false;
+        Statement parsedDecl = null;
+
+        // Try to parse as variable declaration
+        if (match(TokenType.VAR) || match(TokenType.LET) || match(TokenType.CONST)) {
+            parsedDecl = parseVariableDeclaration();
+            // Check if next token is 'of'
+            if (match(TokenType.OF)) {
+                isForOf = true;
+            }
+        }
+
+        if (isForOf) {
+            // This is a for-of loop: for (let x of iterable)
+            expect(TokenType.OF);
+            Expression iterable = parseExpression();
+            expect(TokenType.RPAREN);
+            Statement body = parseStatement();
+
+            // parsedDecl should be a VariableDeclaration
+            if (!(parsedDecl instanceof VariableDeclaration varDecl)) {
+                throw new RuntimeException("Expected VariableDeclaration in for-of loop");
+            }
+
+            return new ForOfStatement(varDecl, iterable, body, isAwait, location);
+        }
+
+        // Not a for-of loop, parse as traditional for loop
+        // Reset if we parsed a var declaration but it's not for-of
         Statement init = null;
-        if (!match(TokenType.SEMICOLON)) {
+        if (parsedDecl != null) {
+            init = parsedDecl;
+        } else if (!match(TokenType.SEMICOLON)) {
             if (match(TokenType.VAR) || match(TokenType.LET) || match(TokenType.CONST)) {
                 init = parseVariableDeclaration();
             } else {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.util;
+package com.caoccao.qjs4j.utils;
 
 import com.caoccao.qjs4j.BaseTest;
 import org.junit.jupiter.api.Test;

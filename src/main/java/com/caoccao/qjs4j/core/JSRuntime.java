@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.memory.GarbageCollector;
-import com.caoccao.qjs4j.util.AtomTable;
+import com.caoccao.qjs4j.utils.AtomTable;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.regexp;
 
-import com.caoccao.qjs4j.util.DynamicBuffer;
+import com.caoccao.qjs4j.utils.DynamicBuffer;
 
 import java.util.ArrayList;
 import java.util.List;
