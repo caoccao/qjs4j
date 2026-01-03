@@ -35,7 +35,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.math.BigInteger;
+import java.util.List;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -44,9 +46,10 @@ public class BaseJavetTest extends BaseTest {
     protected V8Runtime v8Runtime;
 
     protected void assertBigIntegerObjectWithJavet(String... codeArray) {
-        for (String code : codeArray) {
+        for (String code : getNormalizedCodeStrings(codeArray)) {
             assertWithJavet(
                     () -> {
+                        v8Runtime.resetContext();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -59,7 +62,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = context.eval(code);
+                        JSValue jsValue = resetContext().eval(code);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -70,9 +73,10 @@ public class BaseJavetTest extends BaseTest {
     }
 
     protected void assertBigIntegerWithJavet(String... codeArray) {
-        for (String code : codeArray) {
+        for (String code : getNormalizedCodeStrings(codeArray)) {
             assertWithJavet(
                     () -> {
+                        v8Runtime.resetContext();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -85,7 +89,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = context.eval(code);
+                        JSValue jsValue = resetContext().eval(code);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -96,9 +100,10 @@ public class BaseJavetTest extends BaseTest {
     }
 
     protected void assertBooleanObjectWithJavet(String... codeArray) {
-        for (String code : codeArray) {
+        for (String code : getNormalizedCodeStrings(codeArray)) {
             assertWithJavet(
                     () -> {
+                        v8Runtime.resetContext();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -111,7 +116,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = context.eval(code);
+                        JSValue jsValue = resetContext().eval(code);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -122,9 +127,10 @@ public class BaseJavetTest extends BaseTest {
     }
 
     protected void assertBooleanWithJavet(String... codeArray) {
-        for (String code : codeArray) {
+        for (String code : getNormalizedCodeStrings(codeArray)) {
             assertWithJavet(
                     () -> {
+                        v8Runtime.resetContext();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -137,7 +143,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = context.eval(code);
+                        JSValue jsValue = resetContext().eval(code);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -148,9 +154,10 @@ public class BaseJavetTest extends BaseTest {
     }
 
     protected void assertDoubleWithJavet(String... codeArray) {
-        for (String code : codeArray) {
+        for (String code : getNormalizedCodeStrings(codeArray)) {
             assertWithJavet(
                     () -> {
+                        v8Runtime.resetContext();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -163,7 +170,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = context.eval(code);
+                        JSValue jsValue = resetContext().eval(code);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -174,19 +181,24 @@ public class BaseJavetTest extends BaseTest {
     }
 
     protected void assertErrorWithJavet(String... codeArray) {
-        for (String code : codeArray) {
+        for (String code : getNormalizedCodeStrings(codeArray)) {
+            try {
+                v8Runtime.resetContext();
+            } catch (JavetException e) {
+            }
             String expectedMessage = assertThatThrownBy(() -> v8Runtime.getExecutor(code).setModule(moduleMode).executeVoid())
                     .isInstanceOf(JavetException.class).actual().getMessage();
-            assertThatThrownBy(() -> context.eval(code), expectedMessage)
+            assertThatThrownBy(() -> resetContext().eval(code), expectedMessage)
                     .isInstanceOf(JSException.class)
                     .hasMessageContaining(expectedMessage);
         }
     }
 
     protected void assertIntegerWithJavet(String... codeArray) {
-        for (String code : codeArray) {
+        for (String code : getNormalizedCodeStrings(codeArray)) {
             assertWithJavet(
                     () -> {
+                        v8Runtime.resetContext();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -199,7 +211,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = context.eval(code);
+                        JSValue jsValue = resetContext().eval(code);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -210,9 +222,10 @@ public class BaseJavetTest extends BaseTest {
     }
 
     protected void assertLongWithJavet(String... codeArray) {
-        for (String code : codeArray) {
+        for (String code : getNormalizedCodeStrings(codeArray)) {
             assertWithJavet(
                     () -> {
+                        v8Runtime.resetContext();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -225,7 +238,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = context.eval(code);
+                        JSValue jsValue = resetContext().eval(code);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -236,9 +249,10 @@ public class BaseJavetTest extends BaseTest {
     }
 
     protected void assertObjectWithJavet(String... codeArray) {
-        for (String code : codeArray) {
+        for (String code : getNormalizedCodeStrings(codeArray)) {
             assertWithJavet(
                     () -> {
+                        v8Runtime.resetContext();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -250,7 +264,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = context.eval(code);
+                        JSValue jsValue = resetContext().eval(code);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -261,9 +275,10 @@ public class BaseJavetTest extends BaseTest {
     }
 
     protected void assertStringWithJavet(String... codeArray) {
-        for (String code : codeArray) {
+        for (String code : getNormalizedCodeStrings(codeArray)) {
             assertWithJavet(
                     () -> {
+                        v8Runtime.resetContext();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -276,7 +291,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = context.eval(code);
+                        JSValue jsValue = resetContext().eval(code);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -287,9 +302,10 @@ public class BaseJavetTest extends BaseTest {
     }
 
     protected void assertUndefinedWithJavet(String... codeArray) {
-        for (String code : codeArray) {
+        for (String code : getNormalizedCodeStrings(codeArray)) {
             assertWithJavet(
                     () -> {
+                        v8Runtime.resetContext();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -302,7 +318,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = context.eval(code);
+                        JSValue jsValue = resetContext().eval(code);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -315,13 +331,33 @@ public class BaseJavetTest extends BaseTest {
     protected <E extends Exception, T> void assertWithJavet(
             IJavetSupplier<T, E> javetSupplier,
             Supplier<T> qjs4jSupplier) {
+        T expectedResult = null;
+        Throwable expectedException = null;
         try {
-            T expectedResult = javetSupplier.get();
-            T result = qjs4jSupplier.get();
-            assertThat(result).isEqualTo(expectedResult);
+            expectedResult = javetSupplier.get();
         } catch (Throwable t) {
-            fail(t);
+            expectedException = t;
         }
+        try {
+            T result = qjs4jSupplier.get();
+            if (expectedException == null) {
+                assertThat(result).isEqualTo(expectedResult);
+            } else {
+                fail("Expected exception to be thrown: " + expectedException);
+            }
+        } catch (Throwable t) {
+            if (expectedException == null) {
+                fail("Unexpected exception thrown: " + t);
+            } else {
+                assertThat(t.getMessage()).isEqualTo(expectedException.getMessage());
+            }
+        }
+    }
+
+    protected List<String> getNormalizedCodeStrings(String... codeArray) {
+        return Stream.of(codeArray)
+                .flatMap(code -> Stream.of(code, "'use strict';\n" + code))
+                .toList();
     }
 
     @BeforeEach
@@ -329,7 +365,7 @@ public class BaseJavetTest extends BaseTest {
     public void setUp() throws Exception {
         super.setUp();
         moduleMode = false;
-        V8RuntimeOptions.V8_FLAGS.setJsFloat16Array(true);
+        V8RuntimeOptions.V8_FLAGS.setJsFloat16Array(true).setUseStrict(false);
         v8Runtime = V8Host.getV8Instance().createV8Runtime();
     }
 

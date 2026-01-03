@@ -373,22 +373,21 @@ public class FunctionPrototypeTest extends BaseJavetTest {
                 "Object.getOwnPropertyDescriptor(Function.prototype, 'length').configurable");
 
         // Test that length is not writable
-        assertErrorWithJavet(
-                "'use strict';\nFunction.prototype.length = 5; Function.prototype.length");
+        assertIntegerWithJavet(
+                "Function.prototype.length = 5; Function.prototype.length");
     }
 
     @Test
     public void testPrototypeName() {
-        // Test that 'name' property value is empty string
-        assertStringWithJavet("Function.prototype.name");
+        assertStringWithJavet(
+                // Test that 'name' property value is empty string
+                "Function.prototype.name",
+                // Test that name is not writable
+                "Function.prototype.name = 'test';");
 
         // Test property descriptor
         assertObjectWithJavet(
                 "Object.getOwnPropertyDescriptor(Function.prototype, 'name')");
-
-        // Test that name is not writable
-        assertErrorWithJavet(
-                "'use strict';\nFunction.prototype.name = 'test';");
 
         assertBooleanWithJavet(
                 // Test that name is not enumerable

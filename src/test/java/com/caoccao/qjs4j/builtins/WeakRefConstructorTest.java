@@ -47,11 +47,10 @@ public class WeakRefConstructorTest extends BaseJavetTest {
                 var ref = new WeakRef(obj);
                 ref.deref().x;""");
 
-        // Edge case: target is null
-        assertErrorWithJavet("new WeakRef(null);");
-
-        // Edge case: target is not an object
         assertErrorWithJavet(
+                // Edge case: target is null
+                "new WeakRef(null);",
+                // Edge case: target is not an object
                 "new WeakRef('string');",
                 "new WeakRef(42);",
                 "new WeakRef(true);",

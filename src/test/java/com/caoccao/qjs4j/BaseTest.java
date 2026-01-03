@@ -72,6 +72,13 @@ public abstract class BaseTest {
         return promise.getState() != JSPromise.PromiseState.PENDING;
     }
 
+    protected JSContext resetContext() {
+        context.getRuntime().gc();
+        context.close();
+        context = new JSContext(new JSRuntime());
+        return context;
+    }
+
     @BeforeEach
     public void setUp() throws Exception {
         context = new JSContext(new JSRuntime());

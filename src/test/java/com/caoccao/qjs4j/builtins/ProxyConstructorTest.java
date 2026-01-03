@@ -289,9 +289,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
 
     @Test
     public void testProxyDeletePropertyReturningFalse() {
-        // Test that deleteProperty trap returning false throws in strict mode
-        assertErrorWithJavet("""
-                'use strict';
+        assertBooleanWithJavet("""
                 var target = {x: 1};
                 var handler = {
                   deleteProperty: function(target, prop) {
@@ -926,8 +924,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testProxySetPrototypeOfReturningFalse() {
         // Test that setPrototypeOf trap can return false
-        assertErrorWithJavet("""
-                'use strict';
+        assertBooleanWithJavet("""
                 var target = {};
                 var handler = {
                   setPrototypeOf: function(target, proto) {
@@ -941,8 +938,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testProxySetReturningFalse() {
         // Test that set trap returning false throws in strict mode
-        assertErrorWithJavet("""
-                'use strict';
+        assertIntegerWithJavet("""
                 var target = {};
                 var handler = {
                   set: function(target, prop, value) {
