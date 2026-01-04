@@ -1721,12 +1721,97 @@ public final class BytecodeCompiler {
             return;
         }
 
+        // INC and DEC operators - following QuickJS pattern:
+        // 1. Compile get_lvalue (loads current value)
+        // 2. Apply INC/DEC (prefix) or POST_INC/POST_DEC (postfix)  
+        // 3. Apply put_lvalue (stores with appropriate stack manipulation)
+        if (unaryExpr.operator() == UnaryExpression.UnaryOperator.INC || 
+            unaryExpr.operator() == UnaryExpression.UnaryOperator.DEC) {
+            Expression operand = unaryExpr.operand();
+            boolean isInc = unaryExpr.operator() == UnaryExpression.UnaryOperator.INC;
+            boolean isPrefix = unaryExpr.prefix();
+            
+            if (operand instanceof Identifier id) {
+                // Simple variable: get, inc/dec, set/put
+                compileExpression(operand);
+                emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
+                                             : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
+                Integer localIndex = currentScope().getLocal(id.name());
+                if (localIndex != null) {
+                    emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOCAL : Opcode.PUT_LOCAL, localIndex);
+                } else {
+                    emitter.emitOpcodeAtom(isPrefix ? Opcode.SET_VAR : Opcode.PUT_VAR, id.name());
+                }
+            } else if (operand instanceof MemberExpression memberExpr) {
+                if (memberExpr.computed()) {
+                    // Array element: obj[prop]  
+                    compileExpression(memberExpr.object());
+                    compileExpression(memberExpr.property());
+                    
+                    if (isPrefix) {
+                        // Prefix: ++arr[i] - returns new value
+                        emitter.emitOpcode(Opcode.DUP2);
+                        emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
+                        emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
+                        // Stack: [obj, prop, new_val] -> need [new_val, obj, prop]
+                        emitter.emitOpcode(Opcode.ROT3R);
+                        emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                    } else {
+                        // Postfix: arr[i]++ - returns old value
+                        emitter.emitOpcode(Opcode.DUP2); // obj prop obj prop
+                        emitter.emitOpcode(Opcode.GET_ARRAY_EL); // obj prop old_val
+                        emitter.emitOpcode(Opcode.DUP); // obj prop old_val old_val
+                        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
+                        emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj prop old_val new_val
+                        // SWAP2 to rearrange: [obj, prop, old_val, new_val] -> [old_val, new_val, obj, prop]
+                        emitter.emitOpcode(Opcode.SWAP2); // old_val new_val obj prop
+                        emitter.emitOpcode(Opcode.PUT_ARRAY_EL); // old_val new_val  
+                        emitter.emitOpcode(Opcode.DROP); // old_val
+                    }
+                } else {
+                    // Object property: obj.prop
+                    if (memberExpr.property() instanceof Identifier propId) {
+                        compileExpression(memberExpr.object());
+                        
+                        if (isPrefix) {
+                            // Prefix: ++obj.prop - returns new value
+                            emitter.emitOpcode(Opcode.DUP);
+                            emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
+                            emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
+                            // Stack: [obj, new_val] -> need [new_val, obj] for PUT_FIELD
+                            emitter.emitOpcode(Opcode.SWAP);
+                            // PUT_FIELD pops obj, peeks new_val, leaves [new_val]
+                            emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+                        } else {
+                            // Postfix: obj.prop++ - returns old value
+                            emitter.emitOpcode(Opcode.DUP); // obj obj
+                            emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name()); // obj old_val
+                            emitter.emitOpcode(Opcode.DUP); // obj old_val old_val
+                            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
+                            emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj old_val new_val
+                            // Stack: [obj, old_val, new_val] - need [old_val, new_val, obj] for PUT_FIELD
+                            // ROT3L: [old_val, new_val, obj]
+                            emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
+                            // PUT_FIELD pops obj, peeks new_val, leaves [old_val, new_val]
+                            emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name()); // old_val new_val
+                            emitter.emitOpcode(Opcode.DROP); // old_val
+                        }
+                    } else {
+                        throw new CompilerException("Invalid member expression property for increment/decrement");
+                    }
+                }
+            } else {
+                throw new CompilerException("Invalid operand for increment/decrement operator");
+            }
+            return;
+        }
+
         compileExpression(unaryExpr.operand());
 
         Opcode op = switch (unaryExpr.operator()) {
             case BIT_NOT -> Opcode.NOT;
-            case DEC -> Opcode.DEC;
-            case INC -> Opcode.INC;
             case MINUS -> Opcode.NEG;
             case NOT -> Opcode.LOGICAL_NOT;
             case PLUS -> Opcode.PLUS;

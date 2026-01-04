@@ -270,6 +270,19 @@ public final class VirtualMachine {
                         valueStack.push(b);
                         pc += op.getSize();
                     }
+                    case SWAP2 -> {
+                        // SWAP2: [a, b, c, d] -> [c, d, a, b]
+                        // Exchanges bottom 2 with top 2
+                        JSValue d = valueStack.pop();
+                        JSValue c = valueStack.pop();
+                        JSValue b = valueStack.pop();
+                        JSValue a = valueStack.pop();
+                        valueStack.push(c);
+                        valueStack.push(d);
+                        valueStack.push(a);
+                        valueStack.push(b);
+                        pc += op.getSize();
+                    }
 
                     // ==================== Arithmetic Operations ====================
                     case ADD -> {
@@ -310,6 +323,50 @@ public final class VirtualMachine {
                     }
                     case DEC -> {
                         handleDec();
+                        pc += op.getSize();
+                    }
+                    case POST_INC -> {
+                        handlePostInc();
+                        pc += op.getSize();
+                    }
+                    case POST_DEC -> {
+                        handlePostDec();
+                        pc += op.getSize();
+                    }
+                    case PERM3 -> {
+                        // PERM3: [a, b, c] -> [b, a, c] (QuickJS: obj a b -> a obj b)
+                        JSValue c = valueStack.pop();
+                        JSValue b = valueStack.pop();
+                        JSValue a = valueStack.pop();
+                        valueStack.push(b);
+                        valueStack.push(a);
+                        valueStack.push(c);
+                        pc += op.getSize();
+                    }
+                    case PERM4 -> {
+                        // PERM4: [a, b, c, d] -> [c, a, b, d] (QuickJS: obj prop a b -> a obj prop b)
+                        JSValue d = valueStack.pop();
+                        JSValue c = valueStack.pop();
+                        JSValue b = valueStack.pop();
+                        JSValue a = valueStack.pop();
+                        valueStack.push(c);
+                        valueStack.push(a);
+                        valueStack.push(b);
+                        valueStack.push(d);
+                        pc += op.getSize();
+                    }
+                    case PERM5 -> {
+                        // PERM5: [a, b, c, d, e] -> [d, a, b, c, e] (QuickJS: this obj prop a b -> a this obj prop b)
+                        JSValue e = valueStack.pop();
+                        JSValue d = valueStack.pop();
+                        JSValue c = valueStack.pop();
+                        JSValue b = valueStack.pop();
+                        JSValue a = valueStack.pop();
+                        valueStack.push(d);
+                        valueStack.push(a);
+                        valueStack.push(b);
+                        valueStack.push(c);
+                        valueStack.push(e);
                         pc += op.getSize();
                     }
 
@@ -1388,6 +1445,26 @@ public final class VirtualMachine {
         JSValue operand = valueStack.pop();
         double result = JSTypeConversions.toNumber(context, operand).value() + 1;
         valueStack.push(new JSNumber(result));
+    }
+
+    private void handlePostInc() {
+        // POST_INC: [value] -> [old_value, new_value]
+        // Takes value on top, pushes old value then new value
+        JSValue operand = valueStack.pop();
+        double oldValue = JSTypeConversions.toNumber(context, operand).value();
+        double newValue = oldValue + 1;
+        valueStack.push(new JSNumber(oldValue));
+        valueStack.push(new JSNumber(newValue));
+    }
+
+    private void handlePostDec() {
+        // POST_DEC: [value] -> [old_value, new_value]
+        // Takes value on top, pushes old value then new value
+        JSValue operand = valueStack.pop();
+        double oldValue = JSTypeConversions.toNumber(context, operand).value();
+        double newValue = oldValue - 1;
+        valueStack.push(new JSNumber(oldValue));
+        valueStack.push(new JSNumber(newValue));
     }
 
     private void handleInitialYield() {
