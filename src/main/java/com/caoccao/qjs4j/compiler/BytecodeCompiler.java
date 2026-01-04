@@ -447,7 +447,7 @@ public final class BytecodeCompiler {
         // Compile constructor function (or create default) with field initialization
         JSBytecodeFunction constructorFunc;
         if (constructor != null) {
-            constructorFunc = compileMethodAsFunction(constructor, className, classDecl.superClass() != null, instanceFields, privateSymbols);
+            constructorFunc = compileMethodAsFunction(constructor, className, classDecl.superClass() != null, instanceFields, privateSymbols, true);
         } else {
             // Create default constructor with field initialization
             constructorFunc = createDefaultConstructor(className, classDecl.superClass() != null, instanceFields, privateSymbols);
@@ -478,7 +478,7 @@ public final class BytecodeCompiler {
                 // Current: constructor proto
                 // Compile method (no field initialization for regular methods)
                 // Pass empty private symbols map since methods don't initialize fields
-                JSBytecodeFunction methodFunc = compileMethodAsFunction(method, getMethodName(method), false, List.of(), Map.of());
+                JSBytecodeFunction methodFunc = compileMethodAsFunction(method, getMethodName(method), false, List.of(), Map.of(), false);
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
                 // Stack: constructor proto method
 
@@ -583,7 +583,7 @@ public final class BytecodeCompiler {
         // Compile constructor function (or create default)
         JSBytecodeFunction constructorFunc;
         if (constructor != null) {
-            constructorFunc = compileMethodAsFunction(constructor, className, classExpr.superClass() != null, instanceFields, privateSymbols);
+            constructorFunc = compileMethodAsFunction(constructor, className, classExpr.superClass() != null, instanceFields, privateSymbols, true);
         } else {
             constructorFunc = createDefaultConstructor(className, classExpr.superClass() != null, instanceFields, privateSymbols);
         }
@@ -604,7 +604,7 @@ public final class BytecodeCompiler {
             if (method.isStatic()) {
                 throw new CompilerException("Static methods not yet implemented");
             } else {
-                JSBytecodeFunction methodFunc = compileMethodAsFunction(method, getMethodName(method), false, List.of(), Map.of());
+                JSBytecodeFunction methodFunc = compileMethodAsFunction(method, getMethodName(method), false, List.of(), Map.of(), false);
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
                 // Stack: constructor proto method
 
@@ -1500,7 +1500,8 @@ public final class BytecodeCompiler {
             String methodName,
             boolean isDerivedConstructor,
             List<ClassDeclaration.PropertyDefinition> instanceFields,
-            Map<String, JSSymbol> privateSymbols) {
+            Map<String, JSSymbol> privateSymbols,
+            boolean isConstructor) {
         BytecodeCompiler methodCompiler = new BytecodeCompiler();
         methodCompiler.privateSymbols = privateSymbols;  // Make private symbols available in method
 
@@ -1558,7 +1559,7 @@ public final class BytecodeCompiler {
                 funcExpr.params().size(),
                 closureVars,     // closure vars contain private symbols
                 null,            // prototype
-                false,           // isConstructor - methods are not constructors
+                isConstructor,   // isConstructor - true for class constructors, false for methods
                 funcExpr.isAsync(),
                 funcExpr.isGenerator(),
                 true,            // strict - classes are always strict mode

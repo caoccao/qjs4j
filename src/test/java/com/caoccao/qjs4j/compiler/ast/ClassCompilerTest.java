@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.compiler.ast;
 
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSRuntime;
 import com.caoccao.qjs4j.core.JSValue;
@@ -26,11 +27,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Test class declaration compilation and execution.
  */
-public class ClassCompilerTest {
+public class ClassCompilerTest extends BaseJavetTest {
 
     @Test
     public void testClassWithConstructor() throws Exception {
-        String source = """
+        assertIntegerWithJavet("""
                 class Point {
                     constructor(x, y) {
                         this.x = x;
@@ -38,19 +39,12 @@ public class ClassCompilerTest {
                     }
                 }
                 const p = new Point(1, 2);
-                p.x + p.y
-                """;
-
-        try (JSContext context = new JSContext(new JSRuntime())) {
-            JSValue result = context.eval(source);
-            assertThat(result).isNotNull();
-            System.out.println("Class with constructor test result: " + result);
-        }
+                p.x + p.y""");
     }
 
     @Test
     public void testClassWithFieldsAndConstructor() throws Exception {
-        String source = """
+        assertIntegerWithJavet("""
                 class Point {
                     z = 5;
                     constructor(x, y) {
@@ -59,14 +53,7 @@ public class ClassCompilerTest {
                     }
                 }
                 const p = new Point(1, 2);
-                p.x + p.y + p.z
-                """;
-
-        try (JSContext context = new JSContext(new JSRuntime())) {
-            JSValue result = context.eval(source);
-            assertThat(result).isNotNull();
-            System.out.println("Class with fields and constructor test result: " + result);
-        }
+                p.x + p.y + p.z""");
     }
 
     @Test
