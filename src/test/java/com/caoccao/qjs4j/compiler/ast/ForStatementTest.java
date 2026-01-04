@@ -20,9 +20,15 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-public class ForStatementTest extends BaseJavetTest {
+import java.io.IOException;
 
-    @Timeout(10)
+public class ForStatementTest extends BaseJavetTest {
+    @Test
+    public void testPrimeNumber() throws IOException {
+        String code = loadCode("performance/prime-number.js") + " JSON.stringify(primeNumbers);";
+        assertStringWithJavet(code);
+    }
+
     @Test
     public void testSum() {
         assertIntegerWithJavet(

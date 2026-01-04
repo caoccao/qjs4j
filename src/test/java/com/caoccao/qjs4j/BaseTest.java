@@ -17,8 +17,12 @@
 package com.caoccao.qjs4j;
 
 import com.caoccao.qjs4j.core.*;
+import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -70,6 +74,10 @@ public abstract class BaseTest {
             context.processMicrotasks();
         }
         return promise.getState() != JSPromise.PromiseState.PENDING;
+    }
+
+    protected String loadCode(String path) throws IOException {
+        return IOUtils.resourceToString(path, StandardCharsets.UTF_8, getClass().getClassLoader());
     }
 
     protected JSContext resetContext() {

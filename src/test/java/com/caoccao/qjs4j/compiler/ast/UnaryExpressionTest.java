@@ -27,8 +27,7 @@ public class UnaryExpressionTest extends BaseJavetTest {
                 """
                         let arr = [1, 2, 3];
                         let old = arr[1]++;
-                        old;""");
-        assertIntegerWithJavet(
+                        old;""",
                 """
                         let arr = [1, 2, 3];
                         arr[1]++;
@@ -41,8 +40,7 @@ public class UnaryExpressionTest extends BaseJavetTest {
                 """
                         let arr = [1, 2, 3];
                         let result = ++arr[1];
-                        result;""");
-        assertIntegerWithJavet(
+                        result;""",
                 """
                         let arr = [1, 2, 3];
                         ++arr[1];
@@ -55,8 +53,7 @@ public class UnaryExpressionTest extends BaseJavetTest {
                 """
                         let obj = { x: 5 };
                         let old = obj.x++;
-                        old;""");
-        assertIntegerWithJavet(
+                        old;""",
                 """
                         let obj = { x: 5 };
                         obj.x++;
@@ -69,8 +66,7 @@ public class UnaryExpressionTest extends BaseJavetTest {
                 """
                         let obj = { x: 5 };
                         let result = ++obj.x;
-                        result;""");
-        assertIntegerWithJavet(
+                        result;""",
                 """
                         let obj = { x: 5 };
                         ++obj.x;
@@ -83,8 +79,7 @@ public class UnaryExpressionTest extends BaseJavetTest {
                 """
                         let arr = [10, 20, 30];
                         let old = arr[0]--;
-                        old;""");
-        assertIntegerWithJavet(
+                        old;""",
                 """
                         let arr = [10, 20, 30];
                         arr[0]--;
@@ -97,8 +92,7 @@ public class UnaryExpressionTest extends BaseJavetTest {
                 """
                         let obj = { y: 10 };
                         let result = --obj.y;
-                        result;""");
-        assertIntegerWithJavet(
+                        result;""",
                 """
                         let obj = { y: 10 };
                         --obj.y;

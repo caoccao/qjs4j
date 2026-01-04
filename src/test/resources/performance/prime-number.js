@@ -8,7 +8,8 @@ function isPrime(number) {
     return true;
 }
 const primeNumbers = [];
-for (let number = 2; number < 50000; number++) {
+const upperLimit = 100;
+for (let number = 2; number < upperLimit; number++) {
     if (isPrime(number)) {
         primeNumbers.push(number);
     }

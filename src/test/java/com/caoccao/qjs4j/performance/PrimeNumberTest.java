@@ -22,7 +22,6 @@ import com.caoccao.javet.values.reference.V8ValueArray;
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.JSArray;
 import com.caoccao.qjs4j.core.JSValue;
-import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -33,7 +32,6 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,12 +49,12 @@ import static org.assertj.core.api.Fail.fail;
 @Fork(1)
 public class PrimeNumberTest extends BaseJavetTest {
 
-    private String primeNumberCode;
+    private String code;
 
     @Benchmark
     public void benchmarkQjs4j() {
         resetContext();
-        JSValue jsValue = context.eval(primeNumberCode);
+        JSValue jsValue = context.eval(code);
         assertThat(jsValue).isInstanceOfSatisfying(JSArray.class, jsArray ->
                 assertThat(jsArray.getLength()).isEqualTo(5133));
     }
@@ -64,7 +62,7 @@ public class PrimeNumberTest extends BaseJavetTest {
     @Benchmark
     public void benchmarkV8() throws JavetException {
         v8Runtime.resetContext();
-        try (V8Value v8Value = v8Runtime.getExecutor(primeNumberCode).execute()) {
+        try (V8Value v8Value = v8Runtime.getExecutor(code).execute()) {
             assertThat(v8Value).isInstanceOfSatisfying(V8ValueArray.class, v8ValueArray -> {
                 try {
                     assertThat(v8ValueArray.getLength()).isEqualTo(5133);
@@ -86,10 +84,8 @@ public class PrimeNumberTest extends BaseJavetTest {
     }
 
     private void loadPrimeNumberCode() throws IOException {
-        primeNumberCode = IOUtils.resourceToString(
-                "performance/prime-number.js",
-                StandardCharsets.UTF_8,
-                getClass().getClassLoader());
+        code = loadCode("performance/prime-number.js")
+                .replace("upperLimit = 100", "upperLimit = 50000");
     }
 
     @BeforeEach
