@@ -14,14 +14,26 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.compiler.ast;
+package com.caoccao.qjs4j.core;
 
 /**
- * Base sealed interface for all statement nodes.
+ * Internal value wrapper for VM-specific objects that shouldn't be exposed to JavaScript.
+ * Used for things like for-in enumerators that need to be on the value stack but
+ * aren't accessible from user code.
  */
-public sealed interface Statement extends ASTNode permits
-        ExpressionStatement, BlockStatement, IfStatement, WhileStatement,
-        ForStatement, ForOfStatement, ForInStatement, ReturnStatement, BreakStatement, ContinueStatement,
-        ThrowStatement, TryStatement, SwitchStatement, VariableDeclaration,
-        Declaration {
+public final class JSInternalValue implements JSStackValue {
+    private final Object value;
+
+    public JSInternalValue(Object value) {
+        this.value = value;
+    }
+
+    public Object getValue() {
+        return value;
+    }
+
+    @Override
+    public String toString() {
+        return "[Internal: " + value.getClass().getSimpleName() + "]";
+    }
 }

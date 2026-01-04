@@ -181,6 +181,11 @@ public enum Opcode {
     FOR_OF_START(129, 1, 1, 3),  // Start sync iteration: iterable -> iter next catch_offset
     FOR_OF_NEXT(130, 2, 3, 5),   // Get next from sync iterator: iter next catch_offset -> iter next catch_offset value done
 
+    // For-in iteration operations (object enumeration)
+    FOR_IN_START(136, 1, 1, 1),  // Start for-in enumeration: obj -> enum_obj
+    FOR_IN_NEXT(137, 1, 1, 2),   // Get next property: enum_obj -> enum_obj key
+    FOR_IN_END(138, 1, 1, 0),    // End for-in iteration: enum_obj ->
+
     // Private field operations
     GET_PRIVATE_FIELD(131, 1, 2, 1),     // Get private field: obj prop -> value
     PUT_PRIVATE_FIELD(132, 1, 3, 0),     // Set private field: obj value prop ->

@@ -840,6 +840,18 @@ public final class VirtualMachine {
                         handleForOfNext();
                         pc += op.getSize();
                     }
+                    case FOR_IN_START -> {
+                        handleForInStart();
+                        pc += op.getSize();
+                    }
+                    case FOR_IN_NEXT -> {
+                        handleForInNext();
+                        pc += op.getSize();
+                    }
+                    case FOR_IN_END -> {
+                        handleForInEnd();
+                        pc += op.getSize();
+                    }
 
                     // ==================== Generator Operations ====================
                     case INITIAL_YIELD -> {
@@ -1413,6 +1425,47 @@ public final class VirtualMachine {
         valueStack.push(iterator);         // Iterator object
         valueStack.push(nextMethod);       // next() method
         valueStack.push(new JSNumber(0));  // Catch offset (placeholder)
+    }
+
+    private void handleForInStart() {
+        // Pop the object from the stack
+        JSValue obj = valueStack.pop();
+
+        // Create a for-in enumerator
+        JSForInEnumerator enumerator = new JSForInEnumerator(obj);
+
+        // Push the enumerator onto the stack (wrapped in a special internal object)
+        // We'll use JSInternalValue to hold it
+        valueStack.pushStackValue(new JSInternalValue(enumerator));
+    }
+
+    private void handleForInNext() {
+        // The enumerator should be on top of the stack (peek at it, don't pop)
+        JSStackValue stackValue = valueStack.popStackValue();
+
+        if (!(stackValue instanceof JSInternalValue internal) ||
+            !(internal.getValue() instanceof JSForInEnumerator enumerator)) {
+            throw new JSVirtualMachineException("Invalid for-in enumerator");
+        }
+
+        // Get the next key from the enumerator
+        JSValue nextKey = enumerator.next();
+
+        // Push enumerator back first (so it stays at same position)
+        valueStack.pushStackValue(new JSInternalValue(enumerator));
+        
+        // Then push the key onto the stack
+        valueStack.push(nextKey);
+    }
+
+    private void handleForInEnd() {
+        // Clean up the enumerator from the stack
+        JSStackValue stackValue = valueStack.popStackValue();
+        if (!(stackValue instanceof JSInternalValue internal) ||
+            !(internal.getValue() instanceof JSForInEnumerator)) {
+            throw new JSVirtualMachineException("Invalid for-in enumerator in FOR_IN_END");
+        }
+        // Just pop it, no need to do anything else
     }
 
     private void handleGt() {

@@ -20,5 +20,5 @@ package com.caoccao.qjs4j.core;
  * Base interface for values that can be stored on the VM stack.
  * This includes both JavaScript values (JSValue) and internal VM markers (like CatchOffset).
  */
-public sealed interface JSStackValue permits JSValue, JSCatchOffset {
+public sealed interface JSStackValue permits JSValue, JSCatchOffset, JSInternalValue {
 }

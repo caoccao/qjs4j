@@ -146,6 +146,47 @@ tasks.register<Test>("performanceTest") {
     shouldRunAfter(tasks.test)
 }
 
+// Create a task for running test262 conformance tests
+tasks.register<JavaExec>("test262") {
+    group = "verification"
+    description = "Run Test262 ECMAScript conformance tests"
+    
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
+    
+    // Pass test262 root path (default: ../test262)
+    args = listOf("../test262")
+    
+    // Increase heap for large test suite
+    jvmArgs = listOf("-Xmx2g")
+}
+
+// Quick test262 validation (limited tests)
+tasks.register<JavaExec>("test262Quick") {
+    group = "verification"
+    description = "Run a quick subset of Test262 tests for validation"
+    
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
+    
+    args = listOf("../test262", "--quick")
+    
+    jvmArgs = listOf("-Xmx1g")
+}
+
+// Language tests only
+tasks.register<JavaExec>("test262Language") {
+    group = "verification"
+    description = "Run Test262 language tests only"
+    
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
+    
+    args = listOf("../test262", "--language")
+    
+    jvmArgs = listOf("-Xmx2g")
+}
+
 tasks {
     withType<JavaCompile> {
         options.encoding = "UTF-8"

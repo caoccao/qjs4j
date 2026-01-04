@@ -17,11 +17,18 @@
 package com.caoccao.qjs4j.compiler.ast;
 
 /**
- * Base sealed interface for all statement nodes.
+ * Represents a for-in statement: for (variable in object) { ... }
+ * <p>
+ * Based on ES5 for-in loops.
  */
-public sealed interface Statement extends ASTNode permits
-        ExpressionStatement, BlockStatement, IfStatement, WhileStatement,
-        ForStatement, ForOfStatement, ForInStatement, ReturnStatement, BreakStatement, ContinueStatement,
-        ThrowStatement, TryStatement, SwitchStatement, VariableDeclaration,
-        Declaration {
+public record ForInStatement(
+        VariableDeclaration left,    // Variable declaration (let x, const x, var x)
+        Expression right,             // Object expression
+        Statement body,               // Loop body
+        SourceLocation location
+) implements Statement {
+    @Override
+    public SourceLocation getLocation() {
+        return location;
+    }
 }

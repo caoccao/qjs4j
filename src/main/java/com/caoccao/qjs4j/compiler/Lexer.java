@@ -726,13 +726,7 @@ public final class Lexer {
         while (!isAtEnd()) {
             char c = peek();
 
-            // Whitespace
-            if (UnicodeData.isWhiteSpace(c)) {
-                advance();
-                continue;
-            }
-
-            // Line terminators
+            // Line terminators (must be checked BEFORE isWhiteSpace)
             if (c == '\n' || c == '\r') {
                 if (c == '\r' && position + 1 < source.length() && source.charAt(position + 1) == '\n') {
                     advance(); // consume \r
@@ -740,6 +734,12 @@ public final class Lexer {
                 advance(); // consume \n
                 line++;
                 column = 1;
+                continue;
+            }
+
+            // Whitespace
+            if (UnicodeData.isWhiteSpace(c)) {
+                advance();
                 continue;
             }
 

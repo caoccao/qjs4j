@@ -672,6 +672,89 @@ public final class BytecodeCompiler {
         exitScope();
     }
 
+    private void compileForInStatement(ForInStatement forInStmt) {
+        enterScope();
+
+        // Get the loop variable name
+        VariableDeclaration varDecl = forInStmt.left();
+        if (varDecl.declarations().size() != 1) {
+            throw new CompilerException("for-in loop must have exactly one variable");
+        }
+        Pattern pattern = varDecl.declarations().get(0).id();
+        if (!(pattern instanceof Identifier id)) {
+            throw new CompilerException("for-in loop variable must be an identifier");
+        }
+        String varName = id.name();
+        currentScope().declareLocal(varName);
+        Integer varIndex = currentScope().getLocal(varName);
+
+        // Compile the object expression
+        compileExpression(forInStmt.right());
+        // Stack: obj
+
+        // Emit FOR_IN_START to create enumerator
+        emitter.emitOpcode(Opcode.FOR_IN_START);
+        // Stack: enum_obj
+
+        // Start of loop
+        int loopStart = emitter.currentOffset();
+        LoopContext loop = new LoopContext(loopStart);
+        loopStack.push(loop);
+
+        // Emit FOR_IN_NEXT to get next key
+        emitter.emitOpcode(Opcode.FOR_IN_NEXT);
+        // Stack: enum_obj key
+        // key is null/undefined when iteration is done
+
+        // Check if key is null/undefined (iteration complete)
+        emitter.emitOpcode(Opcode.DUP);
+        // Stack: enum_obj key key
+        emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+        // Stack: enum_obj key is_done
+        int jumpToEnd = emitter.emitJump(Opcode.IF_TRUE);
+        // Stack: enum_obj key
+
+        // Store key in loop variable
+        if (varIndex != null) {
+            emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
+        } else {
+            emitter.emitOpcode(Opcode.DROP);
+        }
+        // Stack: enum_obj
+
+        // Compile loop body
+        compileStatement(forInStmt.body());
+
+        // Jump back to loop start
+        emitter.emitOpcode(Opcode.GOTO);
+        int backJumpPos = emitter.currentOffset();
+        emitter.emitU32(loopStart - (backJumpPos + 4));
+
+        // Break target - patch the jump to end
+        emitter.patchJump(jumpToEnd, emitter.currentOffset());
+        // Stack: enum_obj key (where key is null/undefined)
+
+        // Clean up: drop the null/undefined key
+        emitter.emitOpcode(Opcode.DROP);
+        // Stack: enum_obj
+
+        // Patch break statements
+        for (int breakPos : loop.breakPositions) {
+            emitter.patchJump(breakPos, emitter.currentOffset());
+        }
+
+        // Patch continue statements
+        for (int continuePos : loop.continuePositions) {
+            emitter.patchJump(continuePos, loopStart);
+        }
+
+        // Clean up stack: drop enum_obj using FOR_IN_END
+        emitter.emitOpcode(Opcode.FOR_IN_END);
+
+        loopStack.pop();
+        exitScope();
+    }
+
     private void compileForStatement(ForStatement forStmt) {
         enterScope();
 
@@ -1361,6 +1444,8 @@ public final class BytecodeCompiler {
             compileWhileStatement(whileStmt);
         } else if (stmt instanceof ForStatement forStmt) {
             compileForStatement(forStmt);
+        } else if (stmt instanceof ForInStatement forInStmt) {
+            compileForInStatement(forInStmt);
         } else if (stmt instanceof ForOfStatement forOfStmt) {
             compileForOfStatement(forOfStmt);
         } else if (stmt instanceof ReturnStatement retStmt) {

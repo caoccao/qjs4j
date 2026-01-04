@@ -434,6 +434,10 @@ public final class Parser {
                     do {
                         if (match(TokenType.COMMA)) {
                             advance();
+                            // Handle trailing comma
+                            if (match(TokenType.RPAREN)) {
+                                break;
+                            }
                         }
                         args.add(parseExpression());
                     } while (match(TokenType.COMMA));
@@ -758,17 +762,20 @@ public final class Parser {
 
         expect(TokenType.LPAREN);
 
-        // Check if this is a for-of loop
-        // We need to peek ahead to see if there's 'of' after the variable declaration
+        // Check if this is a for-of or for-in loop
+        // We need to peek ahead to see if there's 'of' or 'in' after the variable declaration
         boolean isForOf = false;
+        boolean isForIn = false;
         Statement parsedDecl = null;
 
         // Try to parse as variable declaration
         if (match(TokenType.VAR) || match(TokenType.LET) || match(TokenType.CONST)) {
             parsedDecl = parseVariableDeclaration();
-            // Check if next token is 'of'
+            // Check if next token is 'of' or 'in'
             if (match(TokenType.OF)) {
                 isForOf = true;
+            } else if (match(TokenType.IN)) {
+                isForIn = true;
             }
         }
 
@@ -785,6 +792,21 @@ public final class Parser {
             }
 
             return new ForOfStatement(varDecl, iterable, body, isAwait, location);
+        }
+
+        if (isForIn) {
+            // This is a for-in loop: for (var x in obj)
+            expect(TokenType.IN);
+            Expression object = parseExpression();
+            expect(TokenType.RPAREN);
+            Statement body = parseStatement();
+
+            // parsedDecl should be a VariableDeclaration
+            if (!(parsedDecl instanceof VariableDeclaration varDecl)) {
+                throw new RuntimeException("Expected VariableDeclaration in for-in loop");
+            }
+
+            return new ForInStatement(varDecl, object, body, location);
         }
 
         // Not a for-of loop, parse as traditional for loop
