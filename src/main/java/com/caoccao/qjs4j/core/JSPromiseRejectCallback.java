@@ -22,7 +22,7 @@ package com.caoccao.qjs4j.core;
  * allowing custom handling of the rejection before the exception is propagated.
  */
 @FunctionalInterface
-public interface PromiseRejectCallback {
+public interface JSPromiseRejectCallback {
     /**
      * Called when a promise rejection event occurs.
      *

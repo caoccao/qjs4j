@@ -236,7 +236,7 @@ public final class JSArray extends JSObject {
         // Check if array is not extensible/frozen before adding new elements
         if (isAddingNewElement && !extensible) {
             // In strict mode, throw TypeError when trying to add to non-extensible/frozen array
-            if (context != null && context.isStrictMode()) {
+            if (context != null) {
                 context.throwTypeError(
                         "Cannot add property " + index + ", object is not extensible");
             }

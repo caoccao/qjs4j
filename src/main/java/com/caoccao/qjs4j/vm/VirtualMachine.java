@@ -885,7 +885,7 @@ public final class VirtualMachine {
             valueStack.push(promise.getResult());
         } else if (promise.getState() == JSPromise.PromiseState.REJECTED) {
             // Check if there's a promise rejection callback
-            PromiseRejectCallback callback = context.getPromiseRejectCallback();
+            JSPromiseRejectCallback callback = context.getPromiseRejectCallback();
             if (callback != null) {
                 // Callback handles the rejection, set pending exception so catch clause can handle it
                 JSValue result = promise.getResult();

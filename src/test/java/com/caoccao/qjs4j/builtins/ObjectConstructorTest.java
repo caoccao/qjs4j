@@ -156,7 +156,6 @@ public class ObjectConstructorTest extends BaseJavetTest {
                 JSON.stringify(Object.entries(obj))""");
     }
 
-    @Disabled
     @Test
     public void testFreeze() {
         JSObject obj = new JSObject();

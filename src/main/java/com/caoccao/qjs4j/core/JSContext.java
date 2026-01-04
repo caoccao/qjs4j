@@ -60,7 +60,7 @@ public final class JSContext implements AutoCloseable {
     // Exception state
     private JSValue pendingException;
     // Promise rejection callback
-    private PromiseRejectCallback promiseRejectCallback;
+    private JSPromiseRejectCallback promiseRejectCallback;
     private int stackDepth;
     // Execution state
     private boolean strictMode;
@@ -669,7 +669,7 @@ public final class JSContext implements AutoCloseable {
         return pendingException;
     }
 
-    public PromiseRejectCallback getPromiseRejectCallback() {
+    public JSPromiseRejectCallback getPromiseRejectCallback() {
         return promiseRejectCallback;
     }
 
@@ -828,7 +828,7 @@ public final class JSContext implements AutoCloseable {
      * If the callback returns true, the rejection is considered handled and the catch
      * clause will take effect instead of throwing an exception.
      */
-    public void setPromiseRejectCallback(PromiseRejectCallback callback) {
+    public void setPromiseRejectCallback(JSPromiseRejectCallback callback) {
         this.promiseRejectCallback = callback;
     }
 

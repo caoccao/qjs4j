@@ -92,7 +92,7 @@ public final class JSMicrotaskQueue {
                         microtask.execute();
                     } catch (Exception e) {
                         // Trigger unhandled rejection handler if set
-                        PromiseRejectCallback callback = context.getPromiseRejectCallback();
+                        JSPromiseRejectCallback callback = context.getPromiseRejectCallback();
                         if (callback != null && e instanceof JSException jsException) {
                             JSValue reason = jsException.getErrorValue();
                             callback.callback(PromiseRejectEvent.PromiseRejectWithNoHandler, null, reason);

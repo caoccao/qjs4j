@@ -173,7 +173,6 @@ public class AsyncTest extends BaseJavetTest {
                 test();""");
     }
 
-    @Disabled
     @Test
     void testAwaitRejectedPromise() {
         AtomicBoolean called = new AtomicBoolean(false);
