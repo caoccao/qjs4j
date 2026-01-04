@@ -52,6 +52,9 @@ object Config {
         // https://mvnrepository.com/artifact/org.assertj/assertj-core
         const val ASSERTJ_CORE = "org.assertj:assertj-core:${Versions.ASSERTJ_CORE}"
 
+        // https://mvnrepository.com/artifact/commons-io/commons-io
+        const val COMMONS_IO = "commons-io:commons-io:${Versions.COMMONS_IO}"
+
         // https://mvnrepository.com/artifact/net.javacrumbs.json-unit/json-unit-assertj
         const val JSON_UNIT_ASSERTJ = "net.javacrumbs.json-unit:json-unit-assertj:${Versions.JSON_UNIT_ASSERTJ}"
 
@@ -60,13 +63,19 @@ object Config {
         const val JUNIT_JUPITER = "org.junit.jupiter:junit-jupiter"
         const val JUNIT_JUPITER_LAUNCHER = "org.junit.platform:junit-platform-launcher"
 
+        // https://mvnrepository.com/artifact/org.openjdk.jmh/jmh-core
+        const val JMH_CORE = "org.openjdk.jmh:jmh-core:${Versions.JMH}"
+        const val JMH_GENERATOR_ANNPROCESS = "org.openjdk.jmh:jmh-generator-annprocess:${Versions.JMH}"
+
         const val JAVET = "com.caoccao.javet:javet:${Versions.JAVET}"
     }
 
     object Versions {
         const val ASSERTJ_CORE = "3.27.6"
+        const val COMMONS_IO = "2.18.0"
         const val JAVA_VERSION = "17"
         const val JAVET = "5.0.2"
+        const val JMH = "1.37"
         const val JSON_UNIT_ASSERTJ = "5.1.0"
         const val JUNIT = "6.0.1"
         const val QJS4J = "0.1.0"
@@ -105,6 +114,7 @@ val archType = if (arch == "aarch64" || arch == "arm64") "arm64" else "x86_64"
 dependencies {
     // https://mvnrepository.com/artifact/org.assertj/assertj-core
     testImplementation(Config.Projects.ASSERTJ_CORE)
+    testImplementation(Config.Projects.COMMONS_IO)
     testImplementation(Config.Projects.JSON_UNIT_ASSERTJ)
 
     // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
@@ -112,12 +122,28 @@ dependencies {
     testImplementation(Config.Projects.JUNIT_JUPITER)
     testRuntimeOnly(Config.Projects.JUNIT_JUPITER_LAUNCHER)
 
+    // https://mvnrepository.com/artifact/org.openjdk.jmh/jmh-core
+    testImplementation(Config.Projects.JMH_CORE)
+    testAnnotationProcessor(Config.Projects.JMH_GENERATOR_ANNPROCESS)
+
     testImplementation(Config.Projects.JAVET)
     testImplementation("com.caoccao.javet:javet-v8-$osType-$archType:${Config.Versions.JAVET}")
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags("performance")
+    }
+}
+
+// Create a separate task for performance tests
+tasks.register<Test>("performanceTest") {
+    useJUnitPlatform {
+        includeTags("performance")
+    }
+    group = "verification"
+    description = "Runs performance tests using JMH"
+    shouldRunAfter(tasks.test)
 }
 
 tasks {
