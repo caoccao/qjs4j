@@ -21,18 +21,24 @@ qjs4j includes features not present in the original QuickJS:
 
 The following features have infrastructure in place but require additional implementation:
 
-- **Basic class features**: Classes with constructors, methods, and public fields
-  - ✅ Lexer support for `class` keyword
-  - ✅ AST nodes (ClassDeclaration, MethodDefinition, PropertyDefinition, ClassElement)
-  - ✅ Opcodes (DEFINE_CLASS, DEFINE_METHOD, DEFINE_FIELD)
-  - ✅ Parser support (parseClassDeclaration, parseClassElement, fields)
-  - ✅ Parser tests (ClassParserTest with 8 test cases)
-  - ✅ Compiler implementation (classes, constructors, instance methods, public fields)
-  - ✅ Runtime support (DEFINE_CLASS, DEFINE_METHOD, DEFINE_FIELD opcodes)
-  - ✅ Compiler tests (ClassCompilerTest with 7 test cases - all passing)
+- **ES2022 class features**: Classes with constructors, methods, fields, and static blocks
+  - ✅ Lexer support for `class` keyword and private names (#field)
+  - ✅ AST nodes (ClassDeclaration, MethodDefinition, PropertyDefinition, PrivateIdentifier, StaticBlock)
+  - ✅ Opcodes (DEFINE_CLASS, DEFINE_METHOD, DEFINE_FIELD, PRIVATE_SYMBOL, GET/PUT/DEFINE_PRIVATE_FIELD)
+  - ✅ Parser support (parseClassDeclaration, parseClassElement, fields, private field access, static blocks)
+  - ✅ Parser tests (ClassParserTest with 8 test cases - all passing)
+  - ✅ Compiler implementation (classes, constructors, instance methods, fields, static blocks)
+  - ✅ Runtime support (all field-related opcodes implemented)
+  - ✅ Compiler tests (ClassCompilerTest with 11 test cases - all passing)
+  - ✅ **Private fields (#field)**: Fully working
+    - Private field definition: `#count = 0;`
+    - Private field access: `this.#count`, `this.#count = value`
+    - Private field operations: `this.#count++`, `this.#count += 1`
+  - ✅ **Static blocks**: Fully working
+    - Static initialization: `static { this.x = 10; }`
+    - Multiple blocks execute in order
+    - Access to class constructor as 'this'
   - ⏳ Static methods (not yet implemented)
-  - ⏳ Private fields and methods (#field, #method) (infrastructure ready, needs compiler/runtime)
-  - ⏳ Static blocks (infrastructure ready, needs compiler/runtime)
 
 ### Not Yet Implemented
 

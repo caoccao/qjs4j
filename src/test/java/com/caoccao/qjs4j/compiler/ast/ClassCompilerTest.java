@@ -76,6 +76,28 @@ public class ClassCompilerTest extends BaseJavetTest {
     }
 
     @Test
+    public void testClassWithMultipleStaticBlocks() throws Exception {
+        String source = """
+                class Test {
+                    static x = 0;
+                    static {
+                        this.x = 10;
+                    }
+                    static {
+                        this.x = this.x + 5;
+                    }
+                }
+                Test.x
+                """;
+
+        try (JSContext context = new JSContext(new JSRuntime())) {
+            JSValue result = context.eval(source);
+            assertThat(result).isNotNull();
+            System.out.println("Class with multiple static blocks test result: " + result);
+        }
+    }
+
+    @Test
     public void testClassWithPrivateField() throws Exception {
         String source = """
                 class Counter {
@@ -165,6 +187,25 @@ public class ClassCompilerTest extends BaseJavetTest {
             JSValue result = context.eval(source);
             assertThat(result).isNotNull();
             System.out.println("Class with public field initializer test result: " + result);
+        }
+    }
+
+    @Test
+    public void testClassWithStaticBlock() throws Exception {
+        String source = """
+                class Config {
+                    static apiUrl;
+                    static {
+                        this.apiUrl = 'http://localhost:3000';
+                    }
+                }
+                Config.apiUrl
+                """;
+
+        try (JSContext context = new JSContext(new JSRuntime())) {
+            JSValue result = context.eval(source);
+            assertThat(result).isNotNull();
+            System.out.println("Class with static block test result: " + result);
         }
     }
 

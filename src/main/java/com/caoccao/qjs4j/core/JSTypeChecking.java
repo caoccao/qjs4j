@@ -99,13 +99,10 @@ public final class JSTypeChecking {
             return bytecodeFunc.isConstructor();
         } else if (value instanceof JSNativeFunction nativeFunc) {
             return nativeFunc.isConstructor();
-        } else if (value instanceof JSClass) {
+        } else // Other function types (bound functions) default to true
+            if (value instanceof JSClass) {
             return true;
-        } else if (value instanceof JSFunction) {
-            // Other function types (bound functions) default to true
-            return true;
-        }
-        return false;
+        } else return value instanceof JSFunction;
     }
 
     /**

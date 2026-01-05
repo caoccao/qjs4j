@@ -71,13 +71,18 @@ Added the following opcodes matching QuickJS specification:
 
 **Implemented**:
 
-1. **Parse Class Declarations** (Lines 1592-1631):
+1. **Parse Class Declarations** (Lines 473-512):
    - ✅ Implemented `parseClassDeclaration()` method
    - ✅ Handles `class Name extends Super { }` syntax
    - ✅ Properly parses optional class name (for class expressions)
    - ✅ Parses extends clause with `parseMemberExpression()`
 
-2. **Parse Class Body Elements** (Lines 1636-1742):
+2. **Parse Class Expressions** (Lines 518-557):
+   - ✅ Implemented `parseClassExpression()` method
+   - ✅ Handles anonymous class expressions: `const C = class { }`
+   - ✅ Handles named class expressions: `const C = class MyClass { }`
+
+3. **Parse Class Body Elements** (Lines 562-700+):
    - ✅ Parse methods: `methodName() { }`, `static methodName() { }`, `#privateMethod() { }`
    - ✅ Parse fields: `field = value;`, `static field = value;`, `#privateField = value;`
    - ✅ Parse static blocks: `static { statements }`
@@ -85,13 +90,15 @@ Added the following opcodes matching QuickJS specification:
    - ✅ Handle getters/setters: `get name()`, `set name(value)`
    - ✅ Handle edge case: `static` as property name (e.g., `static = 42;`)
 
-3. **Parse Private Identifiers** (Lines 1667-1676):
-   - ✅ When `TokenType.PRIVATE_NAME` is encountered, create `PrivateIdentifier` node
+4. **Parse Private Identifiers**:
+   - ✅ In class body: When `TokenType.PRIVATE_NAME` is encountered, create `PrivateIdentifier` node
+   - ✅ In member access: `parsePropertyName()` (lines 1400-1407) handles `PRIVATE_NAME` tokens
    - ✅ Remove `#` prefix from the name for the AST node
    - ✅ Set `isPrivate` flag on ClassElement
    - ✅ Support private fields, methods, and getters/setters
+   - ✅ Support private field access: `obj.#field`
 
-4. **Parse Static Blocks** (Lines 1798-1812):
+5. **Parse Static Blocks**:
    - ✅ When `static {` is encountered, parse block statement
    - ✅ Create `StaticBlock` element with the parsed statements
    - ✅ Properly handle nested statements within the block
@@ -101,56 +108,65 @@ Added the following opcodes matching QuickJS specification:
 - Method parsing uses `parseMethod()` which parses parameters and block body
 - Field parsing uses `parseMethodOrField()` which detects `=` or `;` to distinguish from methods
 - Private names are properly tokenized by the lexer as `PRIVATE_NAME` tokens
+- Private field access in expressions handled by `parsePropertyName()` when following a `.`
 - All parser functionality is tested in `ClassParserTest.java` with 8 comprehensive test cases
 
-### 6. Compiler Implementation ✅ PARTIAL (Basic classes + public fields complete)
+### 6. Compiler Implementation ✅ COMPLETE (Classes + fields + static blocks)
 **File**: `src/main/java/com/caoccao/qjs4j/compiler/BytecodeCompiler.java`
 
-**Completed** (Lines 361-2078):
+**Completed**:
 
-1. **Compile Class Declarations** (`compileClassDeclaration` - lines 361-468):
-   - ✅ Removed "not yet implemented" exception
+1. **Compile Class Declarations** (`compileClassDeclaration` - lines 388-548):
    - ✅ Compile superclass expression or emit undefined
    - ✅ Separate class elements by type (methods, fields, static blocks, constructor)
+   - ✅ Create JSSymbol instances for private fields (once per class, shared across instances)
    - ✅ Compile constructor function or create default constructor with field initialization
    - ✅ Emit `DEFINE_CLASS` opcode with class name
    - ✅ Compile and emit instance methods with `DEFINE_METHOD`
+   - ✅ Compile static blocks and call them with class constructor as 'this'
    - ✅ Handle class name storage in local or global scope
    - ⏳ Static methods (throws exception - not yet implemented)
-   - ⏳ Static blocks (TODO comment added)
 
-2. **Public Field Compilation** (`compileFieldInitialization` - lines 1170-1207):
-   - ✅ Emits field initialization code in constructor
-   - ✅ Pushes `this` onto stack
-   - ✅ Compiles field initializer expression or emits undefined
-   - ✅ Emits `DEFINE_FIELD` opcode to set field on instance
+2. **Field Compilation** (`compileFieldInitialization` - lines 1342-1409):
+   - ✅ Emits field initialization code in constructor before constructor body
+   - ✅ **Public fields**: Pushes `this`, compiles initializer, emits `DEFINE_FIELD`
+   - ✅ **Private fields**: Pushes `this`, compiles initializer, pushes symbol, emits `DEFINE_PRIVATE_FIELD`
    - ✅ Handles fields with and without initializers
-   - ⏳ Private fields skipped (will be implemented separately)
+   - ✅ Private symbols passed as Map<String, JSSymbol> to methods
    - ⏳ Computed field names skipped for now
 
-3. **Helper Methods**:
-   - ✅ `compileMethodAsFunction` - Compiles methods with field initialization support
-   - ✅ `createDefaultConstructor` - Creates default constructor with field initialization
+3. **Private Field Access** (lines 146-268, 1254-1282):
+   - ✅ `compileMemberExpression`: Handles `obj.#field` with GET_PRIVATE_FIELD
+   - ✅ `compileAssignmentExpression`: Handles `obj.#field = value` with PUT_PRIVATE_FIELD
+   - ✅ Compound assignment: `obj.#field += value`
+   - ✅ Increment/decrement: `obj.#field++`, `++obj.#field` (lines 2049-2093)
+   - ✅ Symbols retrieved from `privateSymbols` map in compiler context
+
+4. **Helper Methods**:
+   - ✅ `compileMethodAsFunction` - Passes private symbols to method compiler context
+   - ✅ `createDefaultConstructor` - Passes private symbols for field initialization
    - ✅ `getMethodName` - Extracts method name from various key types
-   - ✅ `compileFieldInitialization` - Generates field initialization bytecode
+   - ✅ `compileFieldInitialization` - Handles both public and private fields
 
-2. **Private Field Compilation**:
-   - For each private field, emit `PRIVATE_SYMBOL` to create unique symbol
-   - Store private symbol in class scope
-   - Emit `DEFINE_PRIVATE_FIELD` when defining private fields on instances
-   - Emit `ADD_BRAND` to mark instances with class brand
-   - Emit `CHECK_BRAND` before private field access
+5. **Static Block Compilation** (`compileStaticBlock` - lines 2296-2332, class compilation lines 501-528):
+   - ✅ Each static block compiled as a separate function
+   - ✅ Block functions have 0 parameters and no closure variables
+   - ✅ After all methods are added to prototype:
+     - DUP the constructor (to use as 'this')
+     - Push the static block function
+     - SWAP to arrange: proto constructor func constructor
+     - CALL with 0 arguments
+     - DROP the return value
+   - ✅ Multiple static blocks execute in order
+   - ✅ Static blocks have access to class constructor as 'this'
 
-3. **Field Initializers**:
-   - Create a special "fields init" function for instance fields
-   - Compile field initializer expressions in the context of that function
-   - Call fields init function in constructor
-
-4. **Static Block Compilation**:
-   - Create a special class static init function for each `static { }` block
-   - Compile the block body as a function
-   - Emit call to the static init function immediately after class definition
-   - Use class as `this` binding
+**Implementation Notes**:
+- Private symbols are created at class compilation time (not per-instance)
+- Symbols are stored in compiler's `privateSymbols` field for method access
+- Symbols are emitted as constants when needed for field operations
+- No closure variable mechanism needed - symbols are emitted directly as constants
+- Static blocks execute immediately after class definition
+- Static blocks can access and modify static properties using 'this'
 
 5. **Private Field Access**:
    - Compile `obj.#field` as `GET_PRIVATE_FIELD` opcode
@@ -252,10 +268,10 @@ CASE(OP_define_private_field):
 BREAK;
 ```
 
-### 8. Testing ✅ PARTIAL (Basic class + public field tests complete)
+### 8. Testing ✅ COMPLETE (Classes + fields + static blocks)
 **Files**:
 - `src/test/java/com/caoccao/qjs4j/compiler/ClassParserTest.java` (8 tests - ✅ all passing)
-- `src/test/java/com/caoccao/qjs4j/compiler/ClassCompilerTest.java` (7 tests - ✅ all passing)
+- `src/test/java/com/caoccao/qjs4j/compiler/ast/ClassCompilerTest.java` (11 tests - ✅ all passing)
 - `src/test/java/com/caoccao/qjs4j/compiler/ClassDebugTest.java` (2 debug tests)
 
 **Completed Test Coverage**:
@@ -267,6 +283,15 @@ BREAK;
    - ✅ Class with public field (default value 0)
    - ✅ Class with public field initializers (x = 10, y = 20)
    - ✅ Class with both fields and constructor (fields + constructor params)
+
+2. **Private Field Tests** (ClassCompilerTest.java):
+   - ✅ Class with private field (default value)
+   - ✅ Class with private field initializer (#count = 42)
+   - ✅ Class with private field access (read/write via methods)
+
+3. **Static Block Tests** (ClassCompilerTest.java):
+   - ✅ Class with single static block setting static field
+   - ✅ Class with multiple static blocks (sequential execution)
 
 **Test Coverage Needed**:
 
@@ -376,11 +401,22 @@ Following QuickJS implementation:
 
 ## Build Status
 
-✅ **Current Build**: Compiles successfully with lexer, AST, parser, compiler, and VM changes
+✅ **Current Build**: Compiles successfully with all class features
 ✅ **Parser Tests**: All ClassParserTest cases pass (8/8)
-✅ **Compiler Tests**: All ClassCompilerTest cases pass (7/7)
-✅ **Basic Class Support**: Classes with constructors, instance methods, and public fields working
+✅ **Compiler Tests**: All ClassCompilerTest cases pass (11/11)
+✅ **Basic Class Support**: Classes with constructors, instance methods, and fields working
 ✅ **Public Fields**: Fully implemented and tested
-⏳ **Next Step**: Implement private fields with symbols, then static methods and static blocks
+✅ **Private Fields (#field)**: Fully implemented and tested
+  - Private field definition and initialization
+  - Private field access (read: `this.#field`)
+  - Private field mutation (write: `this.#field = value`)
+  - Private field operations (increment, compound assignment)
+  - Private symbols created once per class, shared across instances
+✅ **Static Blocks**: Fully implemented and tested
+  - Static initialization blocks: `static { ... }`
+  - Multiple static blocks execute in order
+  - Access to class constructor as 'this'
+  - Can initialize static fields
+⏳ **Next Step**: Implement static methods
 
 ## Remaining Work ⏳

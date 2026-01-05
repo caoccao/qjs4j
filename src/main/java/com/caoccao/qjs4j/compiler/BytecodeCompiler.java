@@ -498,8 +498,34 @@ public final class BytecodeCompiler {
         emitter.emitOpcode(Opcode.SWAP);
         // Stack: proto constructor
 
-        // For now, we'll skip field and static block compilation
-        // TODO: Implement field initialization and static blocks
+        // Execute static blocks
+        // Following QuickJS pattern: compile each static block as a function,
+        // then call it with the constructor as 'this'
+        for (ClassDeclaration.StaticBlock staticBlock : staticBlocks) {
+            // Compile the static block as a function
+            JSBytecodeFunction staticBlockFunc = compileStaticBlock(staticBlock, className);
+
+            // Stack: proto constructor
+            // DUP the constructor to use as 'this'
+            emitter.emitOpcode(Opcode.DUP);
+            // Stack: proto constructor constructor
+
+            // Push the static block function
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, staticBlockFunc);
+            // Stack: proto constructor constructor func
+
+            // SWAP so we have: proto constructor func constructor
+            emitter.emitOpcode(Opcode.SWAP);
+            // Stack: proto constructor func constructor
+
+            // Call the function with 0 arguments, using constructor as 'this'
+            emitter.emitOpcodeU16(Opcode.CALL, 0);
+            // Stack: proto constructor returnValue
+
+            // Drop the return value
+            emitter.emitOpcode(Opcode.DROP);
+            // Stack: proto constructor
+        }
 
         // Drop prototype, keep constructor
         emitter.emitOpcode(Opcode.NIP);
@@ -526,7 +552,7 @@ public final class BytecodeCompiler {
     private void compileClassExpression(ClassExpression classExpr) {
         // Class expressions are almost identical to class declarations,
         // but they leave the constructor on the stack instead of binding it to a variable
-        
+
         String className = classExpr.id() != null ? classExpr.id().name() : "";
 
         // Compile superclass expression or emit undefined
@@ -621,7 +647,7 @@ public final class BytecodeCompiler {
         // Drop prototype, keep constructor on stack
         emitter.emitOpcode(Opcode.NIP);
         // Stack: constructor
-        
+
         // For class expressions, we leave the constructor on the stack
         // (unlike class declarations which bind it to a variable)
     }
@@ -1740,6 +1766,44 @@ public final class BytecodeCompiler {
         }
     }
 
+    /**
+     * Compile a static block as a function.
+     * Static blocks are executed immediately after class definition with the class constructor as 'this'.
+     */
+    private JSBytecodeFunction compileStaticBlock(ClassDeclaration.StaticBlock staticBlock, String className) {
+        BytecodeCompiler blockCompiler = new BytecodeCompiler();
+
+        blockCompiler.enterScope();
+        blockCompiler.inGlobalScope = false;
+
+        // Compile all statements in the static block
+        for (Statement stmt : staticBlock.body()) {
+            blockCompiler.compileStatement(stmt);
+        }
+
+        // Static blocks always return undefined
+        blockCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
+        blockCompiler.emitter.emitOpcode(Opcode.RETURN);
+
+        int localCount = blockCompiler.currentScope().getLocalCount();
+        blockCompiler.exitScope();
+
+        Bytecode blockBytecode = blockCompiler.emitter.build(localCount);
+
+        return new JSBytecodeFunction(
+                blockBytecode,
+                "<static initializer>",  // Static blocks are anonymous
+                0,                        // no parameters
+                new JSValue[0],           // no closure vars
+                null,                     // no prototype
+                false,                    // not a constructor
+                false,                    // not async
+                false,                    // not generator
+                true,                     // strict mode
+                "static { [initializer] }"
+        );
+    }
+
     private void compileSwitchStatement(SwitchStatement switchStmt) {
         // Compile discriminant
         compileExpression(switchStmt.discriminant());
@@ -2079,7 +2143,7 @@ public final class BytecodeCompiler {
 
         // INC and DEC operators - following QuickJS pattern:
         // 1. Compile get_lvalue (loads current value)
-        // 2. Apply INC/DEC (prefix) or POST_INC/POST_DEC (postfix)  
+        // 2. Apply INC/DEC (prefix) or POST_INC/POST_DEC (postfix)
         // 3. Apply put_lvalue (stores with appropriate stack manipulation)
         if (unaryExpr.operator() == UnaryExpression.UnaryOperator.INC ||
                 unaryExpr.operator() == UnaryExpression.UnaryOperator.DEC) {
@@ -2100,7 +2164,7 @@ public final class BytecodeCompiler {
                 }
             } else if (operand instanceof MemberExpression memberExpr) {
                 if (memberExpr.computed()) {
-                    // Array element: obj[prop]  
+                    // Array element: obj[prop]
                     compileExpression(memberExpr.object());
                     compileExpression(memberExpr.property());
 
@@ -2122,7 +2186,7 @@ public final class BytecodeCompiler {
                         emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj prop old_val new_val
                         // SWAP2 to rearrange: [obj, prop, old_val, new_val] -> [old_val, new_val, obj, prop]
                         emitter.emitOpcode(Opcode.SWAP2); // old_val new_val obj prop
-                        emitter.emitOpcode(Opcode.PUT_ARRAY_EL); // old_val new_val  
+                        emitter.emitOpcode(Opcode.PUT_ARRAY_EL); // old_val new_val
                         emitter.emitOpcode(Opcode.DROP); // old_val
                     }
                 } else {

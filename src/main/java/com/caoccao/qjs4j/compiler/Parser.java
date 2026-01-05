@@ -512,51 +512,6 @@ public final class Parser {
     }
 
     /**
-     * Parse a class expression (class used as an expression).
-     * Syntax: class [Name] [extends Super] { body }
-     */
-    private ClassExpression parseClassExpression() {
-        SourceLocation location = getLocation();
-        expect(TokenType.CLASS);
-
-        // Parse optional class name (class expressions can be anonymous)
-        Identifier id = null;
-        if (match(TokenType.IDENTIFIER)) {
-            String name = currentToken.value();
-            advance();
-            id = new Identifier(name, location);
-        }
-
-        // Parse optional extends clause
-        Expression superClass = null;
-        if (match(TokenType.EXTENDS)) {
-            advance();
-            superClass = parseMemberExpression();
-        }
-
-        // Parse class body
-        expect(TokenType.LBRACE);
-        List<ClassDeclaration.ClassElement> body = new ArrayList<>();
-
-        while (!match(TokenType.RBRACE) && !match(TokenType.EOF)) {
-            // Skip empty semicolons
-            if (match(TokenType.SEMICOLON)) {
-                advance();
-                continue;
-            }
-
-            ClassDeclaration.ClassElement element = parseClassElement();
-            if (element != null) {
-                body.add(element);
-            }
-        }
-
-        expect(TokenType.RBRACE);
-
-        return new ClassExpression(id, superClass, body, location);
-    }
-
-    /**
      * Parse a single class element (method, field, or static block).
      */
     private ClassDeclaration.ClassElement parseClassElement() {
@@ -665,6 +620,51 @@ public final class Parser {
         }
 
         return parseMethodOrField(key, isStatic, isPrivate, computed, location);
+    }
+
+    /**
+     * Parse a class expression (class used as an expression).
+     * Syntax: class [Name] [extends Super] { body }
+     */
+    private ClassExpression parseClassExpression() {
+        SourceLocation location = getLocation();
+        expect(TokenType.CLASS);
+
+        // Parse optional class name (class expressions can be anonymous)
+        Identifier id = null;
+        if (match(TokenType.IDENTIFIER)) {
+            String name = currentToken.value();
+            advance();
+            id = new Identifier(name, location);
+        }
+
+        // Parse optional extends clause
+        Expression superClass = null;
+        if (match(TokenType.EXTENDS)) {
+            advance();
+            superClass = parseMemberExpression();
+        }
+
+        // Parse class body
+        expect(TokenType.LBRACE);
+        List<ClassDeclaration.ClassElement> body = new ArrayList<>();
+
+        while (!match(TokenType.RBRACE) && !match(TokenType.EOF)) {
+            // Skip empty semicolons
+            if (match(TokenType.SEMICOLON)) {
+                advance();
+                continue;
+            }
+
+            ClassDeclaration.ClassElement element = parseClassElement();
+            if (element != null) {
+                body.add(element);
+            }
+        }
+
+        expect(TokenType.RBRACE);
+
+        return new ClassExpression(id, superClass, body, location);
     }
 
     private Expression parseConditionalExpression() {
