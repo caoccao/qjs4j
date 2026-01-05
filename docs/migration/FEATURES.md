@@ -32,6 +32,11 @@ This document provides a comprehensive list of all JavaScript features implement
 - **Function.prototype**: apply, call, bind
 - **Rest parameters**: ...args syntax
 - **Default parameters**: function(x = 10)
+- **arguments object**: ✅ Array-like object containing all arguments passed to function
+  - Available in regular functions (not arrow functions)
+  - Supports indexed access (arguments[0], arguments[1], etc.)
+  - Has length property
+  - Array-like iteration support
 
 ### Operators
 - **Arithmetic**: +, -, *, /, %, **

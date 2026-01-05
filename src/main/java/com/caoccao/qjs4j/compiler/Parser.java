@@ -510,12 +510,12 @@ public final class Parser {
         // Capture the end position before advancing past the closing brace
         int endOffset = currentToken.offset() + currentToken.value().length();
         expect(TokenType.RBRACE);
-        
+
         SourceLocation location = new SourceLocation(
-            startLocation.line(),
-            startLocation.column(),
-            startOffset,
-            endOffset
+                startLocation.line(),
+                startLocation.column(),
+                startOffset,
+                endOffset
         );
 
         return new ClassDeclaration(id, superClass, body, location);
@@ -676,12 +676,12 @@ public final class Parser {
         // Capture the end position before advancing past the closing brace
         int endOffset = currentToken.offset() + currentToken.value().length();
         expect(TokenType.RBRACE);
-        
+
         SourceLocation location = new SourceLocation(
-            startLocation.line(),
-            startLocation.column(),
-            startOffset,
-            endOffset
+                startLocation.line(),
+                startLocation.column(),
+                startOffset,
+                endOffset
         );
 
         return new ClassExpression(id, superClass, body, location);

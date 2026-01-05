@@ -44,8 +44,8 @@ public final class JSBytecodeFunction extends JSFunction {
     private final int length;
     private final String name;
     private final JSObject prototype;
-    private String sourceCode;
     private final boolean strict;
+    private String sourceCode;
 
     /**
      * Create a bytecode function.

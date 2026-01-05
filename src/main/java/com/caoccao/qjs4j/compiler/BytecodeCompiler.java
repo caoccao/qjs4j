@@ -1307,6 +1307,16 @@ public final class BytecodeCompiler {
             return;
         }
 
+        // Handle 'arguments' keyword in function scope
+        // Arguments is available in regular functions but not in arrow functions
+        // In QuickJS, this is handled via SPECIAL_OBJECT opcode
+        if (JSArguments.NAME.equals(name) && !inGlobalScope) {
+            // Emit SPECIAL_OBJECT opcode with type 0 (SPECIAL_OBJECT_ARGUMENTS)
+            emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+            emitter.emitU8(0);  // Type 0 = arguments object
+            return;
+        }
+
         if (inGlobalScope) {
             // In global scope, always use GET_VAR
             emitter.emitOpcodeAtom(Opcode.GET_VAR, name);

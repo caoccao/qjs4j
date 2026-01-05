@@ -25,6 +25,7 @@ import com.caoccao.qjs4j.core.JSValue;
  * Represents a call frame (activation record) on the call stack.
  */
 public final class StackFrame {
+    private final JSValue[] arguments;  // Original arguments passed to function
     private final StackFrame caller;
     private final JSValue[] closureVars;
     private final JSFunction function;
@@ -35,6 +36,7 @@ public final class StackFrame {
     public StackFrame(JSFunction function, JSValue thisArg, JSValue[] args, StackFrame caller) {
         this.function = function;
         this.thisArg = thisArg;
+        this.arguments = args;  // Store original arguments for arguments object
 
         // Allocate locals array based on function's local count
         // For bytecode functions, get local count from bytecode metadata
@@ -60,6 +62,10 @@ public final class StackFrame {
         this.closureVars = new JSValue[0];
         this.programCounter = 0;
         this.caller = caller;
+    }
+
+    public JSValue[] getArguments() {
+        return arguments;
     }
 
     public StackFrame getCaller() {

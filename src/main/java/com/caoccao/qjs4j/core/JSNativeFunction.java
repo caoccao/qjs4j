@@ -39,8 +39,30 @@ public final class JSNativeFunction extends JSFunction {
         // Set up function properties on the object
         // Functions are objects in JavaScript and have these standard properties
         // Use empty string for name property if name is null (e.g., Function.prototype)
-        this.set("name", new JSString(this.name != null ? this.name : ""));
-        this.set("length", new JSNumber(this.length));
+
+        // Per ECMAScript spec, the "name" property has attributes:
+        // { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
+        this.defineProperty(
+                PropertyKey.fromString("name"),
+                PropertyDescriptor.dataDescriptor(
+                        new JSString(this.name != null ? this.name : ""),
+                        false, // writable
+                        false, // enumerable
+                        true   // configurable
+                )
+        );
+
+        // Per ECMAScript spec, the "length" property has attributes:
+        // { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
+        this.defineProperty(
+                PropertyKey.fromString("length"),
+                PropertyDescriptor.dataDescriptor(
+                        new JSNumber(this.length),
+                        false, // writable
+                        false, // enumerable
+                        true   // configurable
+                )
+        );
 
         // Native functions have a prototype property only if they are constructors
         if (isConstructor) {

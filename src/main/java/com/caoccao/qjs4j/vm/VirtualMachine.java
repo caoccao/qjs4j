@@ -56,6 +56,58 @@ public final class VirtualMachine {
     }
 
     /**
+     * Create special runtime objects based on object type.
+     * Based on QuickJS OP_SPECIAL_OBJECT opcode (quickjs.c).
+     *
+     * @param objectType   Type identifier (0=arguments, 1=mapped_arguments, 2=this_func, etc.)
+     * @param currentFrame Current stack frame for context
+     * @return The created special object
+     */
+    private JSValue createSpecialObject(int objectType, StackFrame currentFrame) {
+        switch (objectType) {
+            case 0: // SPECIAL_OBJECT_ARGUMENTS
+                // Create non-mapped arguments object (strict mode or modern)
+                JSValue[] args = currentFrame.getArguments();
+                boolean isStrict = currentFrame.getFunction() instanceof JSBytecodeFunction func && func.isStrict();
+                return new JSArguments(context, args, isStrict);
+
+            case 1: // SPECIAL_OBJECT_MAPPED_ARGUMENTS
+                // Legacy mapped arguments (shares with function parameters)
+                // For now, treat same as normal arguments
+                // TODO: Implement mapped arguments if needed for legacy code
+                args = currentFrame.getArguments();
+                return new JSArguments(context, args, false);
+
+            case 2: // SPECIAL_OBJECT_THIS_FUNC
+                // Return the currently executing function
+                return currentFrame.getFunction();
+
+            case 3: // SPECIAL_OBJECT_NEW_TARGET
+                // Return new.target (for class constructors)
+                // For now return undefined - this needs new.target tracking
+                return JSUndefined.INSTANCE;
+
+            case 4: // SPECIAL_OBJECT_HOME_OBJECT
+                // Return the home object for super property access
+                // For now return undefined - needs super tracking
+                return JSUndefined.INSTANCE;
+
+            case 5: // SPECIAL_OBJECT_VAR_OBJECT
+                // Return the variable object (for with statement)
+                // For now return undefined
+                return JSUndefined.INSTANCE;
+
+            case 6: // SPECIAL_OBJECT_IMPORT_META
+                // Return import.meta object for ES6 modules
+                // For now return undefined - needs module support
+                return JSUndefined.INSTANCE;
+
+            default:
+                throw new JSVirtualMachineException("Unknown special object type: " + objectType);
+        }
+    }
+
+    /**
      * Execute a bytecode function.
      */
     public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args) {
@@ -109,7 +161,10 @@ public final class VirtualMachine {
                         if (exception instanceof JSError jsError) {
                             throw new JSVirtualMachineException(jsError);
                         }
-                        throw new JSVirtualMachineException("Unhandled exception: " + JSTypeConversions.toString(context, exception).value());
+                        // Safely convert exception to string without calling JavaScript methods
+                        // to avoid issues when already in exception state
+                        String exceptionMessage = safeExceptionToString(context, exception);
+                        throw new JSVirtualMachineException("Unhandled exception: " + exceptionMessage);
                     }
 
                     // Continue execution at catch handler
@@ -187,6 +242,14 @@ public final class VirtualMachine {
                     }
                     case PUSH_TRUE -> {
                         valueStack.push(JSBoolean.TRUE);
+                        pc += op.getSize();
+                    }
+                    case SPECIAL_OBJECT -> {
+                        // SPECIAL_OBJECT creates special runtime objects
+                        // Opcode format: SPECIAL_OBJECT type (1 byte for opcode + 1 byte for type)
+                        int objectType = bytecode.readU8(pc + 1);
+                        JSValue specialObj = createSpecialObject(objectType, currentFrame);
+                        valueStack.push(specialObj);
                         pc += op.getSize();
                     }
 
@@ -983,6 +1046,8 @@ public final class VirtualMachine {
         }
     }
 
+    // ==================== Arithmetic Operation Handlers ====================
+
     /**
      * Execute a generator function with state management.
      * Resumes from saved state if generator was previously yielded.
@@ -1014,8 +1079,6 @@ public final class VirtualMachine {
             return result;
         }
     }
-
-    // ==================== Arithmetic Operation Handlers ====================
 
     private void handleAdd() {
         JSValue right = valueStack.pop();
@@ -1388,6 +1451,8 @@ public final class VirtualMachine {
         valueStack.push(new JSNumber(0));  // Catch offset (placeholder)
     }
 
+    // ==================== Bitwise Operation Handlers ====================
+
     private void handleForInEnd() {
         // Clean up the enumerator from the stack
         JSStackValue stackValue = valueStack.popStackValue();
@@ -1397,8 +1462,6 @@ public final class VirtualMachine {
         }
         // Just pop it, no need to do anything else
     }
-
-    // ==================== Bitwise Operation Handlers ====================
 
     private void handleForInNext() {
         // The enumerator should be on top of the stack (peek at it, don't pop)
@@ -1611,6 +1674,8 @@ public final class VirtualMachine {
         valueStack.push(result ? JSBoolean.TRUE : JSBoolean.FALSE);
     }
 
+    // ==================== Comparison Operation Handlers ====================
+
     private void handleLogicalAnd() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -1621,8 +1686,6 @@ public final class VirtualMachine {
             valueStack.push(right);
         }
     }
-
-    // ==================== Comparison Operation Handlers ====================
 
     private void handleLogicalNot() {
         JSValue operand = valueStack.pop();
@@ -1689,6 +1752,8 @@ public final class VirtualMachine {
         valueStack.push(new JSNumber(result));
     }
 
+    // ==================== Logical Operation Handlers ====================
+
     private void handleNullishCoalesce() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -1699,8 +1764,6 @@ public final class VirtualMachine {
             valueStack.push(left);
         }
     }
-
-    // ==================== Logical Operation Handlers ====================
 
     private void handleOr() {
         JSValue right = valueStack.pop();
@@ -1725,6 +1788,8 @@ public final class VirtualMachine {
         valueStack.push(new JSNumber(newValue));
     }
 
+    // ==================== Type Operation Handlers ====================
+
     private void handlePostInc() {
         // POST_INC: [value] -> [old_value, new_value]
         // Takes value on top, pushes old value then new value
@@ -1735,8 +1800,6 @@ public final class VirtualMachine {
         valueStack.push(new JSNumber(newValue));
     }
 
-    // ==================== Type Operation Handlers ====================
-
     private void handleSar() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -1744,6 +1807,8 @@ public final class VirtualMachine {
         int rightInt = JSTypeConversions.toInt32(context, right);
         valueStack.push(new JSNumber(leftInt >> (rightInt & 0x1F)));
     }
+
+    // ==================== Async Operation Handlers ====================
 
     private void handleShl() {
         JSValue right = valueStack.pop();
@@ -1753,7 +1818,7 @@ public final class VirtualMachine {
         valueStack.push(new JSNumber(leftInt << (rightInt & 0x1F)));
     }
 
-    // ==================== Async Operation Handlers ====================
+    // ==================== Function Call Handlers ====================
 
     private void handleShr() {
         JSValue right = valueStack.pop();
@@ -1762,8 +1827,6 @@ public final class VirtualMachine {
         int rightInt = JSTypeConversions.toInt32(context, right);
         valueStack.push(new JSNumber((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
     }
-
-    // ==================== Function Call Handlers ====================
 
     private void handleStrictEq() {
         JSValue right = valueStack.pop();
@@ -1818,14 +1881,14 @@ public final class VirtualMachine {
         valueStack.push(value);
     }
 
+    // ==================== Generator Operation Handlers ====================
+
     private void handleYieldStar() {
         // TODO: Implement yield* (delegating yield)
         JSValue value = valueStack.pop();
         yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, value);
         valueStack.push(value);
     }
-
-    // ==================== Generator Operation Handlers ====================
 
     /**
      * Invoke proxy apply trap when calling a proxy as a function.
@@ -1973,6 +2036,47 @@ public final class VirtualMachine {
     private void resetPropertyAccessTracking() {
         this.propertyAccessChain.setLength(0);
         this.propertyAccessLock = false;
+    }
+
+    /**
+     * Safely convert an exception object to a string without calling JavaScript methods.
+     * This is used when already in an exception state to avoid cascading failures.
+     */
+    private String safeExceptionToString(JSContext context, JSValue exception) {
+        if (exception == null) {
+            return "null";
+        }
+
+        // For primitive values, use direct conversion
+        if (!(exception instanceof JSObject exceptionObj)) {
+            return exception.toString();
+        }
+
+        // Try to get the message property directly (without calling getters or toString)
+        // This avoids calling JavaScript code which might fail in exception state
+        try {
+            JSValue messageValue = exceptionObj.get(PropertyKey.fromString("message"), null);
+            if (messageValue instanceof JSString msgStr) {
+                return msgStr.value();
+            } else if (messageValue != null && !(messageValue instanceof JSUndefined)) {
+                return messageValue.toString();
+            }
+        } catch (Exception e) {
+            // Ignore errors when getting message
+        }
+
+        // Try to get the name property
+        try {
+            JSValue nameValue = exceptionObj.get(PropertyKey.fromString("name"), null);
+            if (nameValue instanceof JSString nameStr) {
+                return nameStr.value();
+            }
+        } catch (Exception e) {
+            // Ignore errors when getting name
+        }
+
+        // Fall back to Java toString
+        return exceptionObj.toString();
     }
 
     /**

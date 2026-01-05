@@ -10,57 +10,44 @@ public class GlobalObjectTest extends BaseJavetTest {
 
     @Test
     public void testEscape() {
-        // Test basic ASCII characters that should not be escaped
         assertStringWithJavet(
+                // Test basic ASCII characters that should not be escaped
                 "escape('abc')",
                 "escape('ABC')",
                 "escape('123')",
-                "escape('@*_+-./')"
-        );
-
-        // Test characters that should be escaped with %XX format
-        assertStringWithJavet(
+                "escape('@*_+-./')",
+                // Test characters that should be escaped with %XX format
                 "escape('Hello World')",
                 "escape('a b c')",
                 "escape('!#$%&()=')",
                 "escape('a=b&c=d')",
                 "escape('test:value')",
-                "escape('<script>')"
-        );
-
-        // Test Unicode characters (should use %uXXXX format)
-        assertStringWithJavet(
+                "escape('<script>')",
+                // Test Unicode characters (should use %uXXXX format)
                 "escape('你好')",
                 "escape('世界')",
                 "escape('Hello 世界')",
-                "escape('abc中def')"
-        );
-
-        // Test empty string
-        assertStringWithJavet("escape('')");
-
-        // Test special cases
-        assertStringWithJavet(
+                "escape('abc中def')",
+                // Test empty string
+                "escape('')",
+                // Test special cases
                 "escape('100% correct')",
                 "escape('email@domain.com')",
-                "escape('path/to/file.txt')"
-        );
+                "escape('path/to/file.txt')",
+                "JSON.stringify(Object.getOwnPropertyDescriptor(escape, \"name\"))",
+                "JSON.stringify(Object.getOwnPropertyDescriptor(escape, \"length\"))");
     }
 
     @Test
     public void testEscapeEdgeCases() {
-        // Test with numbers and other types (should convert to string first)
         assertStringWithJavet(
+                // Test with numbers and other types (should convert to string first)
                 "escape('42')",
-                "escape('3.14')"
-        );
-
-        // Test consecutive spaces and special characters
-        assertStringWithJavet(
+                "escape('3.14')",
+                // Test consecutive spaces and special characters
                 "escape('  ')",
                 "escape('!!!')",
-                "escape('###')"
-        );
+                "escape('###')");
     }
 
     @Test
@@ -73,45 +60,33 @@ public class GlobalObjectTest extends BaseJavetTest {
                 "unescape(escape('你好世界'))",
                 "unescape(escape('Hello 世界!'))",
                 "unescape(escape('!@#$%^&*()'))",
-                "unescape(escape(''))"
-        );
+                "unescape(escape(''))");
     }
 
     @Test
     public void testUnescape() {
-        // Test basic %XX sequences
         assertStringWithJavet(
+                // Test basic %XX sequences
                 "unescape('%20')",
                 "unescape('%21')",
-                "unescape('%40')"
-        );
-
-        // Test %uXXXX sequences for Unicode
-        assertStringWithJavet(
+                "unescape('%40')",
+                // Test %uXXXX sequences for Unicode
                 "unescape('%u4F60')",
                 "unescape('%u597D')",
-                "unescape('%u4F60%u597D')"
-        );
-
-        // Test mixed sequences
-        assertStringWithJavet(
+                "unescape('%u4F60%u597D')",
+                // Test mixed sequences
                 "unescape('Hello%20World')",
                 "unescape('%21%23%24')",
-                "unescape('test%3Avalue')"
-        );
-
-        // Test strings without escape sequences
-        assertStringWithJavet(
+                "unescape('test%3Avalue')",
+                // Test strings without escape sequences
                 "unescape('abc')",
                 "unescape('123')",
-                "unescape('')"
-        );
-
-        // Test invalid sequences (should be treated as literals)
-        assertStringWithJavet(
+                "unescape('')",
+                // Test invalid sequences (should be treated as literals)
                 "unescape('%')",
                 "unescape('%Z')",
-                "unescape('%uGGGG')"
-        );
+                "unescape('%uGGGG')",
+                "JSON.stringify(Object.getOwnPropertyDescriptor(unescape, \"name\"))",
+                "JSON.stringify(Object.getOwnPropertyDescriptor(unescape, \"length\"))");
     }
 }
