@@ -86,17 +86,15 @@ public class JSArgumentsTest extends BaseJavetTest {
                 test();""");
     }
 
-    @Disabled
     @Test
     public void testArgumentsCallerInStrictMode() {
-        // In strict mode, accessing arguments.caller throws TypeError
         assertObjectWithJavet("""
                 function test() {
                     'use strict';
                     try {
-                        return arguments.caller;
+                        return typeof arguments.caller;
                     } catch (e) {
-                        return e instanceof TypeError;
+                        return e.message;
                     }
                 }
                 test();""");

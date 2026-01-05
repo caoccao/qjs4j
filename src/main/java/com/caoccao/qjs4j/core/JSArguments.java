@@ -82,7 +82,7 @@ public final class JSArguments extends JSObject {
 
         // Handle callee and caller properties based on strict mode
         if (isStrict) {
-            // In strict mode, callee and caller are accessor properties that throw TypeError
+            // In strict mode, callee is an accessor property that throws TypeError
             // Create a thrower function that returns TypeError when called
             JSNativeFunction thrower = new JSNativeFunction(
                     "ThrowTypeError",
@@ -101,14 +101,8 @@ public final class JSArguments extends JSObject {
             );
             defineProperty(PropertyKey.fromString("callee"), calleeDesc);
 
-            // Define caller as accessor with thrower for both get and set
-            PropertyDescriptor callerDesc = PropertyDescriptor.accessorDescriptor(
-                    thrower,  // getter throws
-                    thrower,  // setter throws
-                    false,    // non-enumerable
-                    false     // non-configurable
-            );
-            defineProperty(PropertyKey.fromString("caller"), callerDesc);
+            // Note: arguments.caller is NOT defined in strict mode (returns undefined when accessed)
+            // This matches V8 behavior where arguments.caller is always undefined
         } else {
             // In non-strict mode, callee is a data property referencing the function
             if (callee != null) {
@@ -121,8 +115,8 @@ public final class JSArguments extends JSObject {
                 defineProperty(PropertyKey.fromString("callee"), calleeDesc);
             }
 
-            // caller property is deprecated and not widely implemented
-            // We leave it undefined for non-strict mode
+            // Note: arguments.caller is NOT defined (returns undefined when accessed)
+            // This matches V8 behavior where arguments.caller is deprecated and undefined
         }
 
         // Add Symbol.iterator property (points to Array.prototype[Symbol.iterator])
