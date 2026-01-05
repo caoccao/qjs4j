@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -141,7 +140,6 @@ public class JSArgumentsTest extends BaseJavetTest {
                 test(1, 2, 3, 4);""");
     }
 
-    @Disabled("Arguments modification needs proper indexed property handling")
     @Test
     public void testArgumentsModification() {
         assertIntegerWithJavet("""

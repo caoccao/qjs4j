@@ -151,6 +151,23 @@ public final class JSArguments extends JSObject {
     }
 
     /**
+     * Override get to return from argumentValues for indexed properties.
+     * This ensures we return the most up-to-date value.
+     */
+    @Override
+    protected JSValue get(PropertyKey key, JSContext context, JSObject receiver) {
+        // For indexed properties within bounds, return from argumentValues
+        if (key.isIndex()) {
+            int index = key.asIndex();
+            if (index >= 0 && index < argumentValues.length) {
+                return argumentValues[index];
+            }
+        }
+        // For other properties, use parent implementation
+        return super.get(key, context, receiver);
+    }
+
+    /**
      * Get the argument values array.
      */
     public JSValue[] getArgumentValues() {
@@ -162,6 +179,25 @@ public final class JSArguments extends JSObject {
      */
     public boolean isStrict() {
         return isStrict;
+    }
+
+    /**
+     * Override set to handle indexed properties.
+     * When setting an indexed property, we need to update both the property descriptor
+     * AND the underlying argumentValues array to keep them in sync.
+     */
+    @Override
+    public void set(PropertyKey key, JSValue value, JSContext context) {
+        // First, call the parent implementation to handle the property descriptor
+        super.set(key, value, context);
+
+        // If this is an indexed property within the arguments range, also update the array
+        if (key.isIndex()) {
+            int index = key.asIndex();
+            if (index >= 0 && index < argumentValues.length) {
+                argumentValues[index] = value;
+            }
+        }
     }
 
     /**
