@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -381,10 +380,8 @@ public class JSSpreadOperatorTest extends BaseJavetTest {
                 "const [a, ...rest] = [...[1, 2, 3, 4]]; rest.length");
     }
 
-    @Disabled
     @Test
     public void testSpreadWithIterator() {
-        // TODO: Enable when generators are fully implemented
         assertStringWithJavet(
                 """
                         function* gen() {
@@ -393,6 +390,19 @@ public class JSSpreadOperatorTest extends BaseJavetTest {
                             yield 3;
                         }
                         JSON.stringify([...gen()])""");
+        assertBooleanWithJavet(
+                """
+                        function* gen() {
+                            yield 1;
+                        }
+                        const g = gen();
+                        typeof g[Symbol.iterator] === 'function'""",
+                """
+                        function* gen() {
+                            yield 1;
+                        }
+                        const g = gen();
+                        g[Symbol.iterator]() === g""");
     }
 
     @Test
