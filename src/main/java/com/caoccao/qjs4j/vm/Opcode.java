@@ -21,7 +21,7 @@ import java.util.stream.Stream;
 /**
  * Enumeration of all JavaScript bytecode opcodes.
  * Total: 262 opcodes (144 original + 118 newly added from QuickJS).
- *
+ * <p>
  * Note: This implementation uses custom opcode numbers that differ from QuickJS.
  * Comments indicate the corresponding QuickJS opcode number for reference.
  */

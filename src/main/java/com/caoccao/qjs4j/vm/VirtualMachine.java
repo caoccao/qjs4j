@@ -22,6 +22,9 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * The JavaScript virtual machine bytecode interpreter.
  * Executes compiled bytecode using a stack-based architecture.
@@ -840,7 +843,7 @@ public final class VirtualMachine {
                         // Stack: thisArg function argsArray -> result
                         // Parameter: isConstructorCall (0=regular, 1=constructor)
                         int isConstructorCall = bytecode.readU16(pc + 1);
-                        
+
                         JSValue argsArrayValue = valueStack.pop();
                         JSValue functionValue = valueStack.pop();
                         JSValue thisArgValue = valueStack.pop();
@@ -1134,8 +1137,8 @@ public final class VirtualMachine {
                         pc += op.getSize();
                     }
                     case FOR_OF_NEXT -> {
-                        int catchOffsetParam = bytecode.readU8(pc + 1);  // Read the U8 parameter
-                        handleForOfNext();
+                        int depth = bytecode.readU8(pc + 1);  // Read the depth parameter
+                        handleForOfNext(depth);
                         pc += op.getSize();
                     }
                     case FOR_IN_START -> {
@@ -1672,11 +1675,17 @@ public final class VirtualMachine {
         valueStack.pushStackValue(new JSInternalValue(enumerator));
     }
 
-    private void handleForOfNext() {
-        // Stack layout before: iter, next, catch_offset (bottom to top)
-        // Stack layout after: iter, next, catch_offset, value, done (bottom to top)
+    private void handleForOfNext(int depth) {
+        // Stack layout: ... iter next catch_offset [depth values] (bottom to top)
+        // The depth parameter tells us how many values are between catch_offset and top
+        // Following QuickJS: offset = -3 - depth
+        // iter is at peek(3 + depth), next is at peek(2 + depth), catch_offset is at peek(1 + depth)
 
-        // Pop catch offset temporarily
+        // Pop catch offset (after skipping depth values)
+        List<JSValue> tempValues = new ArrayList<>(depth);
+        for (int i = 0; i < depth; i++) {
+            tempValues.add(valueStack.pop());
+        }
         JSValue catchOffset = valueStack.pop();
 
         // Peek next method and iterator (don't pop - they stay for next iteration)
@@ -1715,8 +1724,11 @@ public final class VirtualMachine {
             done = boolVal.isBooleanTrue();
         }
 
-        // Push catch_offset, value, and done onto the stack
-        valueStack.push(catchOffset);  // Restore catch_offset
+        // Push catch_offset back, then restore temp values, then push value and done
+        valueStack.push(catchOffset);
+        for (int i = tempValues.size() - 1; i >= 0; i--) {
+            valueStack.push(tempValues.get(i));
+        }
         valueStack.push(value);
         valueStack.push(done ? JSBoolean.TRUE : JSBoolean.FALSE);
     }

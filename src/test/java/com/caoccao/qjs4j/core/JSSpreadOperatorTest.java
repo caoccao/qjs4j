@@ -375,10 +375,8 @@ public class JSSpreadOperatorTest extends BaseJavetTest {
                         JSON.stringify([0, ...(a.length > 0 ? a : b), 5])""");
     }
 
-    @Disabled
     @Test
     public void testSpreadWithDestructuring() {
-        // TODO: Enable when destructuring assignment is implemented
         assertIntegerWithJavet(
                 "const [a, ...rest] = [...[1, 2, 3, 4]]; rest.length");
     }

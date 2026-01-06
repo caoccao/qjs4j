@@ -41,6 +41,7 @@ public final class Parser {
     private final Lexer lexer;
     private Token currentToken;
     private Token nextToken; // Lookahead token
+
     public Parser(Lexer lexer) {
         this.lexer = lexer;
         this.currentToken = lexer.nextToken();
@@ -190,6 +191,19 @@ public final class Parser {
             if (match(TokenType.COMMA)) {
                 // Hole in array pattern: [a, , c]
                 elements.add(null);
+            } else if (match(TokenType.ELLIPSIS)) {
+                // Rest element: [a, ...rest]
+                SourceLocation restLocation = getLocation();
+                advance(); // consume '...'
+                Pattern argument = parsePattern();
+                elements.add(new RestElement(argument, restLocation));
+
+                // Rest element must be last
+                if (match(TokenType.COMMA)) {
+                    throw new RuntimeException("Rest element must be last in array pattern at line " +
+                            currentToken.line() + ", column " + currentToken.column());
+                }
+                break;
             } else {
                 elements.add(parsePattern());
             }
@@ -284,12 +298,12 @@ public final class Parser {
                     // Extract parameters and check for rest parameter
                     for (int i = 0; i < arrayExpr.elements().size(); i++) {
                         Expression expr = arrayExpr.elements().get(i);
-                        
+
                         if (expr instanceof SpreadElement spreadElem) {
                             // Rest parameter
                             if (spreadElem.argument() instanceof Identifier restId) {
                                 restParameter = new RestParameter(restId, spreadElem.getLocation());
-                                
+
                                 // Rest parameter must be last
                                 if (i != arrayExpr.elements().size() - 1) {
                                     throw new RuntimeException("Rest parameter must be last at line " +
@@ -1425,9 +1439,9 @@ public final class Parser {
                         advance(); // consume '...'
                         Identifier restArg = parseIdentifier();
                         RestParameter restParam = new RestParameter(restArg, restLocation);
-                        
+
                         expect(TokenType.RPAREN);
-                        
+
                         // Mark this as arrow function parameters with rest
                         // We'll use a special marker - an ArrayExpression with a SpreadElement
                         yield new ArrayExpression(
@@ -1435,7 +1449,7 @@ public final class Parser {
                                 location
                         );
                     }
-                    
+
                     // Peek ahead to distinguish between:
                     // (id) => expr (arrow function with single param)
                     // (id, id2) => expr (arrow function with multiple params)
@@ -1465,21 +1479,21 @@ public final class Parser {
                     // Check for more parameters or rest parameter
                     while (match(TokenType.COMMA)) {
                         advance(); // consume comma
-                        
+
                         // Check for rest parameter at end
                         if (match(TokenType.ELLIPSIS)) {
                             SourceLocation restLocation = getLocation();
                             advance(); // consume '...'
                             Identifier restArg = parseIdentifier();
                             RestParameter restParam = new RestParameter(restArg, restLocation);
-                            
+
                             // Add SpreadElement as marker for rest parameter
                             potentialParams.add(new SpreadElement(restArg, restLocation));
-                            
+
                             // Rest must be last, so break
                             break;
                         }
-                        
+
                         if (!match(TokenType.IDENTIFIER)) {
                             // Not a simple parameter list, might be complex expression
                             // For now, throw error

@@ -2035,23 +2035,115 @@ public final class BytecodeCompiler {
         } else if (pattern instanceof ArrayPattern arrPattern) {
             // Array destructuring: [a, b] = value
             // Stack: [array]
-            int index = 0;
-            for (Pattern element : arrPattern.elements()) {
-                if (element != null) {
-                    // Duplicate array
-                    emitter.emitOpcode(Opcode.DUP);
-                    // Push index
-                    emitter.emitOpcode(Opcode.PUSH_I32);
-                    emitter.emitI32(index);
-                    // Get array element
-                    emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-                    // Assign to the pattern
-                    compilePatternAssignment(element);
+
+            // Check if there's a rest element
+            boolean hasRest = false;
+            int restIndex = -1;
+            for (int i = 0; i < arrPattern.elements().size(); i++) {
+                if (arrPattern.elements().get(i) instanceof RestElement) {
+                    hasRest = true;
+                    restIndex = i;
+                    break;
                 }
-                index++;
             }
-            // Drop the original array
-            emitter.emitOpcode(Opcode.DROP);
+
+            if (hasRest) {
+                // Use iterator-based approach for rest elements (following QuickJS js_emit_spread_code)
+                // Stack: [iterable]
+
+                // Start iteration: iterable -> iter next catch_offset
+                emitter.emitOpcode(Opcode.FOR_OF_START);
+
+                // Process elements before rest
+                for (int i = 0; i < restIndex; i++) {
+                    Pattern element = arrPattern.elements().get(i);
+                    if (element != null) {
+                        // Get next value: iter next -> iter next catch_offset value done
+                        emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
+                        // Stack: iter next catch_offset value done
+                        // Drop done flag
+                        emitter.emitOpcode(Opcode.DROP);
+                        // Stack: iter next catch_offset value
+                        // Assign value to pattern
+                        compilePatternAssignment(element);
+                        // Stack: iter next catch_offset (after assignment drops the value)
+                    } else {
+                        // Skip element
+                        emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
+                        // Stack: iter next catch_offset value done
+                        emitter.emitOpcode(Opcode.DROP);  // Drop done
+                        emitter.emitOpcode(Opcode.DROP);  // Drop value
+                        // Stack: iter next catch_offset
+                    }
+                }
+
+                // Now handle the rest element
+                // Following QuickJS js_emit_spread_code at line 25663
+                // Stack: iter next catch_offset -> iter next catch_offset array
+
+                // Create empty array with 0 elements
+                emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
+                // Push initial index 0
+                emitter.emitOpcode(Opcode.PUSH_I32);
+                emitter.emitI32(0);
+
+                // Loop to collect remaining elements
+                int labelRestNext = emitter.currentOffset();
+
+                // Get next value: iter next catch_offset array idx -> iter next catch_offset array idx value done
+                emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 2);  // depth = 2 (array and idx)
+
+                // Check if done
+                int jumpRestDone = emitter.emitJump(Opcode.IF_TRUE);
+
+                // Not done: array idx value -> array idx
+                emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
+                // Increment index
+                emitter.emitOpcode(Opcode.INC);
+                // Continue loop - jump back to labelRestNext
+                emitter.emitOpcode(Opcode.GOTO);
+                int backJumpPos = emitter.currentOffset();
+                emitter.emitU32(labelRestNext - (backJumpPos + 4));
+
+                // Done collecting - patch the IF_TRUE jump
+                emitter.patchJump(jumpRestDone, emitter.currentOffset());
+                // Stack: iter next catch_offset array idx undef
+                // Drop undef and idx
+                emitter.emitOpcode(Opcode.DROP);
+                emitter.emitOpcode(Opcode.DROP);
+                // Stack: iter next catch_offset array
+
+                // Assign array to rest pattern
+                RestElement restElement = (RestElement) arrPattern.elements().get(restIndex);
+                compilePatternAssignment(restElement.argument());
+
+                // Clean up iterator state: drop catch_offset, next, iter
+                emitter.emitOpcode(Opcode.DROP);
+                emitter.emitOpcode(Opcode.DROP);
+                emitter.emitOpcode(Opcode.DROP);
+            } else {
+                // Simple indexed access (no rest element)
+                int index = 0;
+                for (Pattern element : arrPattern.elements()) {
+                    if (element != null) {
+                        // Duplicate array
+                        emitter.emitOpcode(Opcode.DUP);
+                        // Push index
+                        emitter.emitOpcode(Opcode.PUSH_I32);
+                        emitter.emitI32(index);
+                        // Get array element
+                        emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                        // Assign to the pattern
+                        compilePatternAssignment(element);
+                    }
+                    index++;
+                }
+                // Drop the original array
+                emitter.emitOpcode(Opcode.DROP);
+            }
+        } else if (pattern instanceof RestElement) {
+            // RestElement should only appear inside ArrayPattern, shouldn't reach here
+            throw new RuntimeException("RestElement can only appear inside ArrayPattern");
         }
     }
 

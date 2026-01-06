@@ -26,10 +26,7 @@ import com.caoccao.javet.values.primitive.*;
 import com.caoccao.javet.values.reference.V8ValueBooleanObject;
 import com.caoccao.javet.values.reference.V8ValueLongObject;
 import com.caoccao.javet.values.reference.V8ValuePromise;
-import com.caoccao.qjs4j.core.JSBigInt;
-import com.caoccao.qjs4j.core.JSBigIntObject;
-import com.caoccao.qjs4j.core.JSPromise;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -211,10 +208,10 @@ public class BaseJavetTest extends BaseTest {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
                                 assertThat(v8ValuePromise.getState()).isNotEqualTo(V8ValuePromise.STATE_PENDING);
-                                return (double) v8ValuePromise.getResultInteger();
+                                return v8ValuePromise.getResultInteger();
                             } else {
                                 assertThat(v8Value).isInstanceOf(V8ValueInteger.class);
-                                return (double) ((V8ValueInteger) v8Value).getValue();
+                                return ((V8ValueInteger) v8Value).getValue();
                             }
                         }
                     },
@@ -224,7 +221,8 @@ public class BaseJavetTest extends BaseTest {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
                         }
-                        return jsValue.toJavaObject();
+                        assertThat(jsValue).isInstanceOf(JSNumber.class);
+                        return Double.valueOf(((JSNumber) jsValue).value()).intValue();
                     });
         }
     }

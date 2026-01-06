@@ -17,8 +17,12 @@
 package com.caoccao.qjs4j.compiler.ast;
 
 /**
- * Base interface for destructuring patterns.
- * Patterns can be used in variable declarations and assignment expressions.
+ * Represents a rest element in array destructuring (...rest).
+ * ES2015 rest elements collect remaining array elements.
+ * Example: const [a, ...rest] = [1, 2, 3] // rest = [2, 3]
  */
-public sealed interface Pattern permits Identifier, ObjectPattern, ArrayPattern, RestElement {
+public record RestElement(
+        Pattern argument,
+        SourceLocation location
+) implements Pattern {
 }
