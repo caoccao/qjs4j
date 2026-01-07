@@ -27,7 +27,8 @@ import com.caoccao.qjs4j.core.JSValue;
  * FinalizationRegistry(cleanupCallback) creates a registry for cleanup callbacks.
  */
 public final class FinalizationRegistryConstructor {
-    private FinalizationRegistryConstructor() {}
+    private FinalizationRegistryConstructor() {
+    }
 
     /**
      * FinalizationRegistry constructor function.

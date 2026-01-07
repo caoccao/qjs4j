@@ -27,6 +27,19 @@ import com.caoccao.qjs4j.core.*;
 public final class ProxyConstructor {
 
     /**
+     * Proxy constructor call handler.
+     * Creates a new Proxy object.
+     *
+     * @param context The execution context
+     * @param thisArg The this value (unused for constructor)
+     * @param args    The arguments array (target and handler)
+     * @return New Proxy object
+     */
+    public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        return JSProxy.create(context, args);
+    }
+
+    /**
      * Proxy.revocable(target, handler)
      * ES2020 26.2.2.1
      * Creates a revocable proxy object.

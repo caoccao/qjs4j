@@ -25,19 +25,6 @@ import com.caoccao.qjs4j.core.*;
 public final class PromiseConstructor {
 
     /**
-     * Promise constructor call handler.
-     * Creates a new Promise object.
-     * 
-     * @param context The execution context
-     * @param thisArg The this value (unused for constructor)
-     * @param args The arguments array (executor function)
-     * @return New Promise object
-     */
-    public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
-        return JSPromise.create(context, args);
-    }
-
-    /**
      * Promise.all(iterable)
      * ES2020 25.6.4.1
      * Returns a Promise that fulfills when all promises fulfill, or rejects when any promise rejects.
@@ -267,6 +254,19 @@ public final class PromiseConstructor {
         }
 
         return resultPromise;
+    }
+
+    /**
+     * Promise constructor call handler.
+     * Creates a new Promise object.
+     *
+     * @param context The execution context
+     * @param thisArg The this value (unused for constructor)
+     * @param args    The arguments array (executor function)
+     * @return New Promise object
+     */
+    public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        return JSPromise.create(context, args);
     }
 
     /**

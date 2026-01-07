@@ -302,6 +302,14 @@ public final class JSBytecodeFunction extends JSFunction {
         return closureVars;
     }
 
+    /**
+     * Get the constructor's prototype property (for constructor calls / new).
+     * Note: This is different from getPrototype() which returns the internal [[Prototype]].
+     */
+    public JSObject getConstructorPrototype() {
+        return prototype;
+    }
+
     @Override
     public int getLength() {
         return length;
@@ -310,13 +318,6 @@ public final class JSBytecodeFunction extends JSFunction {
     @Override
     public String getName() {
         return name;
-    }
-
-    /**
-     * Get the prototype object (for constructor calls).
-     */
-    public JSObject getPrototype() {
-        return prototype;
     }
 
     /**

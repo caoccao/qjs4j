@@ -16,12 +16,13 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSValue;
 
 /**
  * Implementation of Iterator constructor.
  * Based on ES2024 Iterator specification.
- * 
+ * <p>
  * Iterator is an abstract class that cannot be directly constructed,
  * but serves as the base for iterator objects.
  */
@@ -29,15 +30,15 @@ public final class IteratorConstructor {
 
     /**
      * Iterator constructor call handler.
-     * 
+     * <p>
      * According to the ES2024 spec and quickjs implementation:
      * - Iterator requires 'new' (throws if called as a function)
      * - Iterator cannot be directly constructed (throws "abstract class not constructable")
      * - Only subclasses of Iterator can be constructed
-     * 
+     *
      * @param context The execution context
      * @param thisArg The this value (new.target for constructor calls)
-     * @param args The arguments array
+     * @param args    The arguments array
      * @return Never returns normally, always throws TypeError
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -80,7 +79,7 @@ public class MapConstructorTest extends BaseJavetTest {
     }
 
     @Test
-    void testMapConstructorBehavior() throws Exception {
+    void testMapConstructorBehavior() {
         // Map with iterable
         String code = """
                 const map = new Map([['a', 1], ['b', 2]]);
@@ -92,7 +91,7 @@ public class MapConstructorTest extends BaseJavetTest {
     }
 
     @Test
-    void testMapStaticMethods() throws Exception {
+    void testMapStaticMethods() {
         // Map.groupBy should still work
         assertStringWithJavet("typeof Map.groupBy");
         assertIntegerWithJavet("Map.groupBy.length");
@@ -105,7 +104,7 @@ public class MapConstructorTest extends BaseJavetTest {
     }
 
     @Test
-    void testMapTypeof() throws Exception {
+    void testMapTypeof() {
         // Map should be a function
         assertStringWithJavet("typeof Map");
 

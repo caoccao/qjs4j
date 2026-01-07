@@ -1507,18 +1507,43 @@ public final class VirtualMachine {
             } else {
                 JSObject result = null;
                 switch (jsFunction.getConstructorType()) {
-                    case ARRAY, ARRAY_BUFFER, DATA_VIEW, DATE, FINALIZATION_REGISTRY, MAP, PROMISE, BOOLEAN_OBJECT,
-                         NUMBER_OBJECT, STRING_OBJECT, BIG_INT_OBJECT,
+                    case AGGREGATE_ERROR,
+                         ARRAY,
+                         ARRAY_BUFFER,
+                         BIG_INT_OBJECT,
+                         BOOLEAN_OBJECT,
+                         DATA_VIEW,
+                         DATE,
+                         ERROR,
+                         EVAL_ERROR,
+                         FINALIZATION_REGISTRY,
+                         MAP,
+                         NUMBER_OBJECT,
+                         PROMISE,
+                         PROXY,
+                         RANGE_ERROR,
+                         REFERENCE_ERROR,
+                         STRING_OBJECT,
+                         SUPPRESSED_ERROR,
                          SYMBOL_OBJECT,
-                         TYPED_ARRAY_INT8, TYPED_ARRAY_INT16, TYPED_ARRAY_UINT8_CLAMPED, TYPED_ARRAY_UINT8,
-                         TYPED_ARRAY_UINT16, TYPED_ARRAY_INT32, TYPED_ARRAY_UINT32, TYPED_ARRAY_FLOAT16,
-                         TYPED_ARRAY_FLOAT32, TYPED_ARRAY_FLOAT64, TYPED_ARRAY_BIGINT64, TYPED_ARRAY_BIGUINT64,
-                         ERROR, TYPE_ERROR, RANGE_ERROR, REFERENCE_ERROR, SYNTAX_ERROR,
-                         URI_ERROR, EVAL_ERROR, AGGREGATE_ERROR, SUPPRESSED_ERROR ->
-                            result = constructorType.create(context, args);
+                         SYNTAX_ERROR,
+                         TYPED_ARRAY_BIGINT64,
+                         TYPED_ARRAY_BIGUINT64,
+                         TYPED_ARRAY_FLOAT16,
+                         TYPED_ARRAY_FLOAT32,
+                         TYPED_ARRAY_FLOAT64,
+                         TYPED_ARRAY_INT16,
+                         TYPED_ARRAY_INT32,
+                         TYPED_ARRAY_INT8,
+                         TYPED_ARRAY_UINT16,
+                         TYPED_ARRAY_UINT32,
+                         TYPED_ARRAY_UINT8,
+                         TYPED_ARRAY_UINT8_CLAMPED,
+                         TYPE_ERROR,
+                         URI_ERROR -> result = constructorType.create(context, args);
                 }
                 if (result != null) {
-                    if (!result.isError()) {
+                    if (!result.isError() && !result.isProxy()) {
                         context.transferPrototype(result, jsFunction);
                     }
                     valueStack.push(result);
@@ -1528,10 +1553,7 @@ public final class VirtualMachine {
             JSConstructorType constructorType = jsObject.getConstructorType();
             JSObject resultObject = null;
             switch (constructorType) {
-                case DATE, SYMBOL_OBJECT, BIG_INT_OBJECT, PROXY, SHARED_ARRAY_BUFFER,
-                     REGEXP, SET, FINALIZATION_REGISTRY, WEAK_MAP, WEAK_SET, WEAK_REF,
-                     ERROR, TYPE_ERROR, RANGE_ERROR, REFERENCE_ERROR, SYNTAX_ERROR,
-                     URI_ERROR, EVAL_ERROR, AGGREGATE_ERROR, SUPPRESSED_ERROR ->
+                case SHARED_ARRAY_BUFFER, REGEXP, SET, WEAK_MAP, WEAK_SET, WEAK_REF ->
                         resultObject = constructorType.create(context, args);
             }
             if (resultObject != null) {

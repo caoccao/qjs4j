@@ -54,7 +54,7 @@ public final class JSProxy extends JSObject {
     public static JSObject create(JSContext context, JSValue... args) {
         // Proxy requires exactly 2 arguments: target and handler
         if (args.length < 2) {
-            return context.throwTypeError("Proxy constructor requires target and handler");
+            return context.throwTypeError("Cannot create proxy with a non-object as target or handler");
         }
         // Target must be an object (since JSFunction extends JSObject, this covers both)
         JSValue target = args[0];
@@ -65,9 +65,9 @@ public final class JSProxy extends JSObject {
             return context.throwTypeError("Proxy handler must be an object");
         }
         // Create Proxy object
-        JSObject jsObject = new JSProxy(target, handler, context);
-        context.transferPrototype(jsObject, NAME);
-        return jsObject;
+        // Note: We don't set the proxy's internal prototype from the target.
+        // The proxy intercepts prototype operations via getPrototypeOf/setPrototypeOf traps.
+        return new JSProxy(target, handler, context);
     }
 
     /**
@@ -971,6 +971,7 @@ public final class JSProxy extends JSObject {
 
         JSValue trap = getTrapMethod("setPrototypeOf");
         if (trap instanceof JSUndefined) {
+            // No trap - forward to target per ES2020 9.5.2 step 5
             targetObj.setPrototype(proto);
             return;
         }

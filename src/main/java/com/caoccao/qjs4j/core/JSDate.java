@@ -27,12 +27,12 @@ import java.time.format.DateTimeFormatter;
  */
 public final class JSDate extends JSObject {
     public static final String NAME = "Date";
-    
+
     /**
      * V8-compatible toString format: "EEE MMM dd yyyy HH:mm:ss 'GMT'Z (z)"
      * Example: "Wed Jan 01 2025 01:00:00 GMT+0100 (CET)"
      */
-    public static final DateTimeFormatter TO_STRING_FORMATTER = 
+    public static final DateTimeFormatter TO_STRING_FORMATTER =
             DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z (z)");
 
     private final long timeValue; // milliseconds since 1970-01-01T00:00:00.000Z

@@ -473,7 +473,7 @@ public final class GlobalObject {
     private static void initializeAsyncFunctionConstructor(JSContext context, JSObject global) {
         // Create AsyncFunction.prototype that inherits from Function.prototype
         JSObject asyncFunctionPrototype = context.createJSObject();
-        context.transferPrototype(asyncFunctionPrototype, "Function");
+        context.transferPrototype(asyncFunctionPrototype, JSFunction.NAME);
 
         // Create AsyncFunction constructor
         // AsyncFunction is not normally exposed but we need it for the prototype chain
@@ -720,11 +720,11 @@ public final class GlobalObject {
                 PropertyDescriptor.dataDescriptor(new JSString(""), false, false, true));
 
         // Function constructor should be a function, not a plain object
-        JSNativeFunction functionConstructor = new JSNativeFunction("Function", 1, FunctionConstructor::call);
+        JSNativeFunction functionConstructor = new JSNativeFunction(JSFunction.NAME, 1, FunctionConstructor::call);
         functionConstructor.set("prototype", functionPrototype);
         functionPrototype.set("constructor", functionConstructor);
 
-        global.set("Function", functionConstructor);
+        global.set(JSFunction.NAME, functionConstructor);
     }
 
     /**
@@ -1038,9 +1038,11 @@ public final class GlobalObject {
      * Initialize Proxy constructor.
      */
     private static void initializeProxyConstructor(JSContext context, JSObject global) {
-        // Create Proxy constructor (special handling required in VM)
-        JSObject proxyConstructor = context.createJSObject();
+        // Create Proxy constructor as JSNativeFunction
+        // Proxy requires 'new' and takes 2 arguments (target, handler)
+        JSNativeFunction proxyConstructor = new JSNativeFunction("Proxy", 2, ProxyConstructor::call, true, true);
         proxyConstructor.setConstructorType(JSConstructorType.PROXY);
+        context.transferPrototype(proxyConstructor, JSFunction.NAME);
 
         // Add static methods
         proxyConstructor.set("revocable", new JSNativeFunction("revocable", 2, ProxyConstructor::revocable));

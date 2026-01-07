@@ -22,6 +22,7 @@ package com.caoccao.qjs4j.core;
  */
 public abstract sealed class JSFunction extends JSObject
         permits JSBytecodeFunction, JSNativeFunction, JSBoundFunction, JSClass {
+    public static final String NAME = "Function";
 
     /**
      * Call this function with the given context, this value, and arguments.
@@ -49,7 +50,7 @@ public abstract sealed class JSFunction extends JSObject
                 return;
             }
         }
-        context.transferPrototype(this, "Function");
+        context.transferPrototype(this, NAME);
     }
 
     @Override
