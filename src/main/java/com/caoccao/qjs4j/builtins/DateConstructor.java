@@ -29,6 +29,20 @@ import java.time.format.DateTimeFormatter;
 public final class DateConstructor {
 
     /**
+     * Date() function (called without new).
+     * Returns current date/time as a string.
+     * ES2020 20.3.2
+     */
+    public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        // When Date is called as a function (not constructor), return current date string
+        // Arguments are ignored
+        // V8 format matches Date.prototype.toString()
+        JSDate date = new JSDate(System.currentTimeMillis());
+        ZonedDateTime zdt = date.getLocalZonedDateTime();
+        return new JSString(zdt.format(JSDate.TO_STRING_FORMATTER));
+    }
+
+    /**
      * Date.UTC(year, month, date, hours, minutes, seconds, ms)
      * ES2020 20.3.3.4
      * Accepts the same parameters as the Date constructor, but treats them as UTC.

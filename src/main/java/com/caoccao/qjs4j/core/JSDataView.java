@@ -29,6 +29,7 @@ import java.nio.ByteOrder;
  * multiple number types in an ArrayBuffer.
  */
 public final class JSDataView extends JSObject {
+    public static String NAME = "DataView";
     private final JSArrayBuffer buffer;
     private final int byteLength;
     private final int byteOffset;
@@ -108,7 +109,9 @@ public final class JSDataView extends JSObject {
             byteLength = buffer.getByteLength() - byteOffset;
         }
 
-        return new JSDataView(buffer, byteOffset, byteLength);
+        JSObject jsObject = new JSDataView(buffer, byteOffset, byteLength);
+        context.transferPrototype(jsObject, NAME);
+        return jsObject;
     }
 
     private void checkOffset(int offset, int size) {

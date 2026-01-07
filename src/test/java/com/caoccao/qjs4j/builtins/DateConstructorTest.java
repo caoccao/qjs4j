@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +25,107 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Unit tests for Date constructor and Date.prototype methods.
  */
-public class DateConstructorTest extends BaseTest {
+public class DateConstructorTest extends BaseJavetTest {
+
+    @Test
+    public void testDateCalledWithNew() {
+        // new Date() creates a Date object
+        JSValue result = context.eval("new Date()");
+        assertThat(result).isInstanceOf(JSDate.class);
+
+        // Verify it has Date.prototype methods
+        JSValue timeResult = context.eval("new Date().getTime()");
+        assertThat(timeResult).isInstanceOf(JSNumber.class);
+    }
+
+    @Test
+    public void testDateCalledWithoutNew() {
+        // Date() without new returns a string representing current date/time
+        JSValue result = context.eval("Date()");
+        assertThat(result).isInstanceOf(JSString.class);
+
+        // The string should contain typical date components
+        String dateStr = ((JSString) result).value();
+        assertThat(dateStr).isNotEmpty();
+        // RFC 1123 format typically contains day name and month
+        assertThat(dateStr).matches(".*\\d{4}.*"); // Contains year
+    }
+
+    @Test
+    public void testDateFunctionVsConstructorBehavior() {
+        // Test the key difference: function call vs constructor call
+
+        // Function call: returns string, ignores arguments
+        assertStringWithJavet("typeof Date();");
+
+        // Constructor call: returns object
+        assertStringWithJavet("typeof new Date();");
+    }
+
+    @Test
+    public void testDateInstanceMethods() {
+        // Date instance should have prototype methods
+        assertStringWithJavet("var d = new Date(1750000000000); JSON.stringify([d.getTime(),d.toString()]);");
+    }
+
+    @Test
+    public void testDateIsConstructor() {
+        // Date should be recognized as a constructor
+        assertBooleanWithJavet("Date.prototype.constructor === Date;");
+    }
+
+    @Test
+    public void testDateLengthProperty() {
+        // Date.length should be 7 (max number of arguments)
+        assertIntegerWithJavet("Date.length;");
+    }
+
+    @Test
+    public void testDatePrototype() {
+        // Date.prototype should exist and be an object
+        JSValue prototype = context.eval("Date.prototype");
+        assertThat(prototype).isInstanceOf(JSObject.class);
+
+        // Date.prototype.constructor should be Date
+        JSValue constructor = context.eval("Date.prototype.constructor");
+        JSValue dateConstructor = context.eval("Date");
+        assertThat(constructor).isSameAs(dateConstructor);
+    }
+
+    @Test
+    public void testDateStaticMethods() {
+        // Date.now() should work
+        assertStringWithJavet("typeof Date.now;");
+
+        // Date.parse() should work
+        assertStringWithJavet("typeof Date.parse;");
+
+        // Date.UTC() should work
+        assertStringWithJavet("typeof Date.UTC;");
+    }
+
+    @Test
+    public void testDateTypeIsFunction() {
+        // typeof Date should be "function"
+        assertStringWithJavet("typeof Date;");
+    }
+
+    @Test
+    public void testDateWithArgumentsAsConstructor() {
+        // new Date(2025, 0, 1) creates a Date object with specified date
+        JSValue result = context.eval("new Date(1750000000000)"); // Specific timestamp
+        assertThat(result).isInstanceOf(JSDate.class);
+
+        JSDate date = (JSDate) result;
+        assertThat(date.getTimeValue()).isEqualTo(1750000000000L);
+    }
+
+    @Test
+    public void testDateWithArgumentsAsFunction() {
+        // Date(2025, 0, 1) without new still returns current date string (ignores args)
+        JSValue result = context.eval("Date(2025, 0, 1)");
+        assertThat(result).isInstanceOf(JSString.class);
+    }
 
     @Test
     public void testGetDate() {
@@ -287,18 +387,11 @@ public class DateConstructorTest extends BaseTest {
     }
 
     @Test
-    public void testToString() {
-        JSDate date = new JSDate(1735689600000L);
-
-        JSValue result = DatePrototype.toStringMethod(context, date, new JSValue[]{});
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
-            String str = jsStr.value();
-            assertThat(str).isNotEmpty();
-        });
-
-        // Edge case: called on non-Date
-        assertTypeError(DatePrototype.toStringMethod(context, new JSString("not date"), new JSValue[]{}));
-        assertPendingException(context);
+    public void testTypeof() {
+        assertStringWithJavet(
+                "typeof Date;");
+        assertIntegerWithJavet(
+                "Date.length;");
     }
 
     @Test

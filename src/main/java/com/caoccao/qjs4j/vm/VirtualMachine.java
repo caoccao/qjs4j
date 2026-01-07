@@ -1504,7 +1504,7 @@ public final class VirtualMachine {
             } else {
                 JSObject result = null;
                 switch (jsFunction.getConstructorType()) {
-                    case ARRAY, ARRAY_BUFFER, DATA_VIEW, BOOLEAN_OBJECT, NUMBER_OBJECT, STRING_OBJECT, BIG_INT_OBJECT,
+                    case ARRAY, ARRAY_BUFFER, DATA_VIEW, DATE, BOOLEAN_OBJECT, NUMBER_OBJECT, STRING_OBJECT, BIG_INT_OBJECT,
                          SYMBOL_OBJECT,
                          TYPED_ARRAY_INT8, TYPED_ARRAY_INT16, TYPED_ARRAY_UINT8_CLAMPED, TYPED_ARRAY_UINT8,
                          TYPED_ARRAY_UINT16, TYPED_ARRAY_INT32, TYPED_ARRAY_UINT32, TYPED_ARRAY_FLOAT16,

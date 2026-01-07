@@ -639,8 +639,10 @@ public final class GlobalObject {
         datePrototype.set("toString", new JSNativeFunction("toString", 0, DatePrototype::toStringMethod));
         datePrototype.set("valueOf", new JSNativeFunction("valueOf", 0, DatePrototype::valueOf));
 
-        // Create Date constructor with static methods
-        JSObject dateConstructor = context.createJSObject();
+        // Create Date constructor as a JSNativeFunction
+        // When called without 'new', DateConstructor.call returns a string
+        // When called with 'new', VM calls JSDate.create via constructorType
+        JSNativeFunction dateConstructor = new JSNativeFunction("Date", 7, DateConstructor::call);
         dateConstructor.set("prototype", datePrototype);
         dateConstructor.setConstructorType(JSConstructorType.DATE); // Mark as Date constructor
         datePrototype.set("constructor", dateConstructor);
