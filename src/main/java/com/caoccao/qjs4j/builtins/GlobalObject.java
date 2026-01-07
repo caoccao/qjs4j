@@ -1101,20 +1101,24 @@ public final class GlobalObject {
         setPrototype.set("clear", new JSNativeFunction("clear", 0, SetPrototype::clear));
         setPrototype.set("forEach", new JSNativeFunction("forEach", 1, SetPrototype::forEach));
         setPrototype.set("entries", new JSNativeFunction("entries", 0, IteratorPrototype::setEntriesIterator));
-        setPrototype.set("keys", new JSNativeFunction("keys", 0, IteratorPrototype::setKeysIterator));
-        setPrototype.set("values", new JSNativeFunction("values", 0, IteratorPrototype::setValuesIterator));
+        
+        // Create values function - keys and Symbol.iterator will alias to this
+        JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, IteratorPrototype::setValuesIterator);
+        setPrototype.set("values", valuesFunction);
+        // Set.prototype.keys is the same function object as values (ES spec requirement)
+        setPrototype.set("keys", valuesFunction);
         // Set.prototype[Symbol.iterator] is the same as values()
-        setPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), new JSNativeFunction("[Symbol.iterator]", 0, IteratorPrototype::setValuesIterator));
+        setPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction);
 
         // Set.prototype.size getter
         JSNativeFunction setSizeGetter = new JSNativeFunction("get size", 0, SetPrototype::getSize);
         setPrototype.defineProperty(PropertyKey.fromString("size"),
                 PropertyDescriptor.accessorDescriptor(setSizeGetter, null, false, true));
 
-        // Create Set constructor
-        JSObject setConstructor = context.createJSObject();
+        // Create Set constructor as a function
+        JSNativeFunction setConstructor = new JSNativeFunction("Set", 0, SetConstructor::call, true, true);
         setConstructor.set("prototype", setPrototype);
-        setConstructor.setConstructorType(JSConstructorType.SET); // Mark as Set constructor
+        setConstructor.setConstructorType(JSConstructorType.SET);
         setPrototype.set("constructor", setConstructor);
 
         global.set("Set", setConstructor);

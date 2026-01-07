@@ -169,6 +169,42 @@ public final class JSMap extends JSObject {
             return sameValueZero(this.value, other.value);
         }
 
+        @Override
+        public int hashCode() {
+            // Must ensure that values that are equal according to sameValueZero
+            // have the same hash code
+            if (value instanceof JSNumber num) {
+                double d = num.value();
+                // Normalize NaN to a canonical value
+                if (Double.isNaN(d)) {
+                    return Double.hashCode(Double.NaN);
+                }
+                // Normalize -0.0 to +0.0 for hash code consistency
+                // (SameValueZero treats +0 and -0 as equal)
+                if (d == 0.0) {
+                    return Double.hashCode(0.0);
+                }
+                return Double.hashCode(d);
+            }
+            if (value instanceof JSString str) {
+                return str.value().hashCode();
+            }
+            if (value instanceof JSBoolean bool) {
+                return Boolean.hashCode(bool.value());
+            }
+            if (value instanceof JSBigInt bigInt) {
+                return bigInt.value().hashCode();
+            }
+            if (value instanceof JSNull) {
+                return 0; // All null values are the same
+            }
+            if (value instanceof JSUndefined) {
+                return 1; // All undefined values are the same
+            }
+            // For objects and symbols, use identity hash code
+            return System.identityHashCode(value);
+        }
+
         /**
          * SameValueZero comparison.
          * Like === but NaN equals NaN, and +0 equals -0.

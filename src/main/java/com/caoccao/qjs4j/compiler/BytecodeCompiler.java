@@ -1624,27 +1624,16 @@ public final class BytecodeCompiler {
             return;
         }
 
-        if (inGlobalScope) {
-            // In global scope, always use GET_VAR
-            emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
-        } else {
-            // In function scope, check locals first
-            // Search from innermost scope (most recently pushed) to outermost
-            // ArrayDeque.push() adds to front, iterator() iterates from front to back
-            Integer localIndex = null;
-            for (Scope scope : scopes) {
-                localIndex = scope.getLocal(name);
-                if (localIndex != null) {
-                    break;
-                }
-            }
+        // Always check local scopes first, even in global scope (for nested blocks/loops)
+        // Search from innermost scope (most recently pushed) to outermost
+        // ArrayDeque.push() adds to front, iterator() iterates from front to back
+        Integer localIndex = findLocalInScopes(name);
 
-            if (localIndex != null) {
-                emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
-            } else {
-                // Try outer scopes or global
-                emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
-            }
+        if (localIndex != null) {
+            emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+        } else {
+            // Not found in local scopes, use global variable
+            emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
         }
     }
 

@@ -193,7 +193,7 @@ public final class VirtualMachine {
 
                 int opcode = bytecode.readOpcode(pc);
                 Opcode op = Opcode.fromInt(opcode);
-
+                
                 switch (op) {
                     // ==================== Constants and Literals ====================
                     case INVALID -> throw new JSVirtualMachineException("Invalid opcode at PC " + pc);
@@ -1524,6 +1524,7 @@ public final class VirtualMachine {
                          RANGE_ERROR,
                          REFERENCE_ERROR,
                          REGEXP,
+                         SET,
                          STRING_OBJECT,
                          SUPPRESSED_ERROR,
                          SYMBOL_OBJECT,
@@ -1554,7 +1555,7 @@ public final class VirtualMachine {
             JSConstructorType constructorType = jsObject.getConstructorType();
             JSObject resultObject = null;
             switch (constructorType) {
-                case SHARED_ARRAY_BUFFER, SET, WEAK_MAP, WEAK_SET, WEAK_REF ->
+                case SHARED_ARRAY_BUFFER, WEAK_MAP, WEAK_SET, WEAK_REF ->
                         resultObject = constructorType.create(context, args);
             }
             if (resultObject != null) {
@@ -1726,18 +1727,20 @@ public final class VirtualMachine {
         // Stack layout: ... iter next catch_offset [depth values] (bottom to top)
         // The depth parameter tells us how many values are between catch_offset and top
         // Following QuickJS: offset = -3 - depth
-        // iter is at peek(3 + depth), next is at peek(2 + depth), catch_offset is at peek(1 + depth)
+        // iter is at sp[offset] = sp[-3-depth], next is at sp[offset+1] = sp[-2-depth]
 
-        // Pop catch offset (after skipping depth values)
+        // Pop depth values temporarily
         List<JSValue> tempValues = new ArrayList<>(depth);
         for (int i = 0; i < depth; i++) {
             tempValues.add(valueStack.pop());
         }
+        // Now top of stack is catch_offset
         JSValue catchOffset = valueStack.pop();
 
-        // Peek next method and iterator (don't pop - they stay for next iteration)
-        JSValue nextMethod = valueStack.peek(0);  // next method
-        JSValue iterator = valueStack.peek(1);    // iterator object
+        // Now peek next method and iterator (don't pop - they stay for next iteration)
+        // Stack is now: ... iter next (top)
+        JSValue nextMethod = valueStack.peek(0);  // next method (top)
+        JSValue iterator = valueStack.peek(1);    // iterator object (below next)
 
         // Call iterator.next()
         if (!(nextMethod instanceof JSFunction nextFunc)) {

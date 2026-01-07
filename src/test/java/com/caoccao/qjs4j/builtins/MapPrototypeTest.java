@@ -28,6 +28,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
+    void testBooleanHashCodes() {
+        JSMap.KeyWrapper trueVal1 = new JSMap.KeyWrapper(JSBoolean.TRUE);
+        JSMap.KeyWrapper trueVal2 = new JSMap.KeyWrapper(JSBoolean.TRUE);
+        JSMap.KeyWrapper falseVal = new JSMap.KeyWrapper(JSBoolean.FALSE);
+
+        // Same booleans should have equal hash codes
+        assertThat(trueVal1.equals(trueVal2)).isTrue();
+        assertThat(trueVal1.hashCode()).isEqualTo(trueVal2.hashCode());
+
+        // Different booleans
+        assertThat(trueVal1.equals(falseVal)).isFalse();
+        assertThat(trueVal1.hashCode()).isNotEqualTo(falseVal.hashCode());
+    }
+
+    @Test
     public void testClear() {
         JSMap map = new JSMap();
         map.mapSet(new JSString("key1"), new JSString("value1"));
@@ -67,6 +82,17 @@ public class MapPrototypeTest extends BaseJavetTest {
         // Edge case: called on non-Map
         assertTypeError(MapPrototype.delete(context, new JSString("not map"), new JSValue[]{new JSString("key")}));
         assertPendingException(context);
+    }
+
+    @Test
+    void testDifferentNumbersHaveDifferentHashes() {
+        // Different numbers should (likely) have different hash codes
+        JSMap.KeyWrapper one = new JSMap.KeyWrapper(new JSNumber(1.0));
+        JSMap.KeyWrapper two = new JSMap.KeyWrapper(new JSNumber(2.0));
+
+        assertThat(one.equals(two)).isFalse();
+        // While not strictly required, good hash functions should produce different hashes
+        assertThat(one.hashCode()).isNotEqualTo(two.hashCode());
     }
 
     @Test
@@ -214,6 +240,18 @@ public class MapPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    void testHashCodeConsistency() {
+        // hashCode() should return the same value when called multiple times
+        JSMap.KeyWrapper key = new JSMap.KeyWrapper(new JSNumber(0.0));
+        int hash1 = key.hashCode();
+        int hash2 = key.hashCode();
+        int hash3 = key.hashCode();
+
+        assertThat(hash1).isEqualTo(hash2);
+        assertThat(hash2).isEqualTo(hash3);
+    }
+
+    @Test
     public void testKeys() {
         JSMap map = new JSMap();
         map.mapSet(new JSString("key1"), new JSString("value1"));
@@ -237,6 +275,68 @@ public class MapPrototypeTest extends BaseJavetTest {
         // Edge case: called on non-Map
         assertTypeError(MapPrototype.keys(context, new JSString("not map"), new JSValue[]{}));
         assertPendingException(context);
+    }
+
+    @Test
+    void testNaNHashCodeEquality() {
+        // Create KeyWrappers for different NaN representations
+        JSMap.KeyWrapper nan1 = new JSMap.KeyWrapper(new JSNumber(Double.NaN));
+        JSMap.KeyWrapper nan2 = new JSMap.KeyWrapper(new JSNumber(0.0 / 0.0));
+        JSMap.KeyWrapper nan3 = new JSMap.KeyWrapper(new JSNumber(Double.longBitsToDouble(0x7ff8000000000001L)));
+
+        // All NaN values should be equal according to SameValueZero
+        assertThat(nan1.equals(nan2)).isTrue();
+        assertThat(nan2.equals(nan3)).isTrue();
+
+        // They MUST have the same hashCode
+        assertThat(nan1.hashCode()).isEqualTo(nan2.hashCode());
+        assertThat(nan2.hashCode()).isEqualTo(nan3.hashCode());
+    }
+
+    @Test
+    void testNaNInRealHashSet() {
+        java.util.HashSet<JSMap.KeyWrapper> set = new java.util.HashSet<>();
+
+        JSMap.KeyWrapper nan1 = new JSMap.KeyWrapper(new JSNumber(Double.NaN));
+        JSMap.KeyWrapper nan2 = new JSMap.KeyWrapper(new JSNumber(0.0 / 0.0));
+
+        assertThat(set.add(nan1)).isTrue();
+        assertThat(set.add(nan2)).isFalse(); // Duplicate
+        assertThat(set.size()).isEqualTo(1);
+        assertThat(set.contains(nan2)).isTrue();
+    }
+
+    @Test
+    void testNullAndUndefinedHashCodes() {
+        JSMap.KeyWrapper null1 = new JSMap.KeyWrapper(JSNull.INSTANCE);
+        JSMap.KeyWrapper null2 = new JSMap.KeyWrapper(JSNull.INSTANCE);
+        JSMap.KeyWrapper undef1 = new JSMap.KeyWrapper(JSUndefined.INSTANCE);
+        JSMap.KeyWrapper undef2 = new JSMap.KeyWrapper(JSUndefined.INSTANCE);
+
+        // All nulls should have same hash code
+        assertThat(null1.hashCode()).isEqualTo(null2.hashCode());
+
+        // All undefineds should have same hash code
+        assertThat(undef1.hashCode()).isEqualTo(undef2.hashCode());
+
+        // Null and undefined should have different hash codes
+        assertThat(null1.hashCode()).isNotEqualTo(undef1.hashCode());
+    }
+
+    @Test
+    void testObjectHashCodesUseIdentity() {
+        JSObject obj1 = new JSObject();
+        JSObject obj2 = new JSObject();
+        JSMap.KeyWrapper key1 = new JSMap.KeyWrapper(obj1);
+        JSMap.KeyWrapper key2 = new JSMap.KeyWrapper(obj1); // Same object
+        JSMap.KeyWrapper key3 = new JSMap.KeyWrapper(obj2); // Different object
+
+        // Same object reference should have equal keys
+        assertThat(key1.equals(key2)).isTrue();
+        assertThat(key1.hashCode()).isEqualTo(key2.hashCode());
+
+        // Different objects should not be equal (compared by identity)
+        assertThat(key1.equals(key3)).isFalse();
     }
 
     @Test
@@ -267,6 +367,20 @@ public class MapPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    void testStringHashCodes() {
+        JSMap.KeyWrapper str1 = new JSMap.KeyWrapper(new JSString("test"));
+        JSMap.KeyWrapper str2 = new JSMap.KeyWrapper(new JSString("test"));
+        JSMap.KeyWrapper str3 = new JSMap.KeyWrapper(new JSString("other"));
+
+        // Equal strings should have equal hash codes
+        assertThat(str1.equals(str2)).isTrue();
+        assertThat(str1.hashCode()).isEqualTo(str2.hashCode());
+
+        // Different strings
+        assertThat(str1.equals(str3)).isFalse();
+    }
+
+    @Test
     public void testValues() {
         JSMap map = new JSMap();
         map.mapSet(new JSString("key1"), new JSString("value1"));
@@ -290,5 +404,41 @@ public class MapPrototypeTest extends BaseJavetTest {
         // Edge case: called on non-Map
         assertTypeError(MapPrototype.values(context, new JSString("not map"), new JSValue[]{}));
         assertPendingException(context);
+    }
+
+    @Test
+    void testZeroHashCodeEquality() {
+        // Create KeyWrappers for +0 and -0
+        JSMap.KeyWrapper plusZero = new JSMap.KeyWrapper(new JSNumber(0.0));
+        JSMap.KeyWrapper minusZero = new JSMap.KeyWrapper(new JSNumber(-0.0));
+
+        // They should be equal according to SameValueZero
+        assertThat(plusZero.equals(minusZero)).isTrue();
+        assertThat(minusZero.equals(plusZero)).isTrue();
+
+        // CRITICAL: They MUST have the same hashCode for HashMap/HashSet to work
+        assertThat(plusZero.hashCode()).isEqualTo(minusZero.hashCode());
+    }
+
+    @Test
+    void testZeroInRealHashSet() {
+        // This is the real-world test: Does it work in an actual HashSet?
+        java.util.HashSet<JSMap.KeyWrapper> set = new java.util.HashSet<>();
+
+        JSMap.KeyWrapper plusZero = new JSMap.KeyWrapper(new JSNumber(0.0));
+        JSMap.KeyWrapper minusZero = new JSMap.KeyWrapper(new JSNumber(-0.0));
+
+        // Add +0
+        assertThat(set.add(plusZero)).isTrue(); // First add succeeds
+
+        // Try to add -0 - should fail because +0 is already present
+        assertThat(set.add(minusZero)).isFalse(); // Should return false (duplicate)
+
+        // Set should have size 1
+        assertThat(set.size()).isEqualTo(1);
+
+        // Set should contain both +0 and -0 (they're the same)
+        assertThat(set.contains(plusZero)).isTrue();
+        assertThat(set.contains(minusZero)).isTrue();
     }
 }
