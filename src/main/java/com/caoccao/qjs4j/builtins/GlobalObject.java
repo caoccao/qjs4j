@@ -670,8 +670,10 @@ public final class GlobalObject {
         JSObject finalizationRegistryPrototype = context.createJSObject();
         // register() and unregister() methods are added in JSFinalizationRegistry constructor
 
-        // Create FinalizationRegistry constructor
-        JSObject finalizationRegistryConstructor = context.createJSObject();
+        // Create FinalizationRegistry constructor as JSNativeFunction
+        // FinalizationRegistry requires 'new'
+        JSNativeFunction finalizationRegistryConstructor = new JSNativeFunction(
+                "FinalizationRegistry", 1, FinalizationRegistryConstructor::call, true, true);
         finalizationRegistryConstructor.set("prototype", finalizationRegistryPrototype);
         finalizationRegistryConstructor.setConstructorType(JSConstructorType.FINALIZATION_REGISTRY);
         finalizationRegistryPrototype.set("constructor", finalizationRegistryConstructor);

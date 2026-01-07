@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
@@ -25,18 +25,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Unit tests for FinalizationRegistryConstructor methods.
  */
-public class FinalizationRegistryConstructorTest extends BaseTest {
+public class FinalizationRegistryConstructorTest extends BaseJavetTest {
 
     @Test
     public void testConstruct() {
-        // construct() should always throw TypeError when called directly
-        // (FinalizationRegistry must be called with 'new')
-        JSValue result = FinalizationRegistryConstructor.construct(context, JSUndefined.INSTANCE, new JSValue[0]);
-        assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
-                    assertThat(name.value()).isEqualTo("TypeError"));
-        });
-        assertThat(context.getPendingException()).isNotNull();
+        // FinalizationRegistry must be called with 'new'
+        // Calling without 'new' should throw TypeError
+        assertErrorWithJavet("FinalizationRegistry(function(){});");
     }
 
     @Test
@@ -81,5 +76,13 @@ public class FinalizationRegistryConstructorTest extends BaseTest {
                 .isInstanceOfSatisfying(JSTypeError.class,
                         error -> assertThat(error.getName().value()).isEqualTo("TypeError"));
         assertThat(context.getPendingException()).isNotNull();
+    }
+
+    @Test
+    public void testTypeof() {
+        assertStringWithJavet(
+                "typeof FinalizationRegistry;");
+        assertIntegerWithJavet(
+                "FinalizationRegistry.length;");
     }
 }
