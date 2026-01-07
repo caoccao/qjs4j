@@ -1080,10 +1080,10 @@ public final class GlobalObject {
         regexpPrototype.set("exec", new JSNativeFunction("exec", 1, RegExpPrototype::exec));
         regexpPrototype.set("toString", new JSNativeFunction("toString", 0, RegExpPrototype::toStringMethod));
 
-        // Create RegExp constructor
-        JSObject regexpConstructor = context.createJSObject();
+        // Create RegExp constructor as a function
+        JSNativeFunction regexpConstructor = new JSNativeFunction("RegExp", 2, RegExpConstructor::call);
         regexpConstructor.set("prototype", regexpPrototype);
-        regexpConstructor.setConstructorType(JSConstructorType.REGEXP); // Mark as RegExp constructor
+        regexpConstructor.setConstructorType(JSConstructorType.REGEXP);
         regexpPrototype.set("constructor", regexpConstructor);
 
         global.set("RegExp", regexpConstructor);

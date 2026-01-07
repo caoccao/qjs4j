@@ -190,6 +190,11 @@ public final class RegExpPrototype {
             return context.throwTypeError("RegExp.prototype.toString called on non-RegExp");
         }
 
-        return new JSString("/" + regexp.getPattern() + "/" + regexp.getFlags());
+        // Per ES spec, empty pattern should be "(?:)"
+        String pattern = regexp.getPattern();
+        if (pattern.isEmpty()) {
+            pattern = "(?:)";
+        }
+        return new JSString("/" + pattern + "/" + regexp.getFlags());
     }
 }

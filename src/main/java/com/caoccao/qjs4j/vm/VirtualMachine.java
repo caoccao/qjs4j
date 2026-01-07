@@ -1523,6 +1523,7 @@ public final class VirtualMachine {
                          PROXY,
                          RANGE_ERROR,
                          REFERENCE_ERROR,
+                         REGEXP,
                          STRING_OBJECT,
                          SUPPRESSED_ERROR,
                          SYMBOL_OBJECT,
@@ -1553,7 +1554,7 @@ public final class VirtualMachine {
             JSConstructorType constructorType = jsObject.getConstructorType();
             JSObject resultObject = null;
             switch (constructorType) {
-                case SHARED_ARRAY_BUFFER, REGEXP, SET, WEAK_MAP, WEAK_SET, WEAK_REF ->
+                case SHARED_ARRAY_BUFFER, SET, WEAK_MAP, WEAK_SET, WEAK_REF ->
                         resultObject = constructorType.create(context, args);
             }
             if (resultObject != null) {
