@@ -798,8 +798,9 @@ public final class GlobalObject {
         iteratorPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
                 new JSNativeFunction("[Symbol.iterator]", 0, (childContext, thisArg, args) -> thisArg));
 
-        // Create Iterator constructor
-        JSObject iteratorConstructor = context.createJSObject();
+        // Create Iterator constructor as JSNativeFunction
+        // Iterator is an abstract class - it requires 'new' but throws when constructed directly
+        JSNativeFunction iteratorConstructor = new JSNativeFunction("Iterator", 0, IteratorConstructor::call, true, true);
         iteratorConstructor.set("prototype", iteratorPrototype);
 
         // Iterator static methods (ES2024)
