@@ -109,4 +109,44 @@ public class WeakSetPrototypeTest extends BaseJavetTest {
         // Edge case: called on non-WeakSet
         assertErrorWithJavet("WeakSet.prototype.has.call('not weakset', {});");
     }
+
+    @Test
+    void testWeakSetBasicOperations() {
+        assertBooleanWithJavet("""
+                const ws = new WeakSet();
+                const obj = {};
+                ws.add(obj);
+                ws.has(obj);
+                """);
+    }
+
+    @Test
+    void testWeakSetChaining() {
+        assertBooleanWithJavet("""
+                const ws = new WeakSet();
+                const o1 = {}, o2 = {};
+                const result = ws.add(o1).add(o2);
+                result === ws && ws.has(o1) && ws.has(o2);
+                """);
+    }
+
+    @Test
+    void testWeakSetDelete() {
+        assertBooleanWithJavet("""
+                const ws = new WeakSet();
+                const obj = {};
+                ws.add(obj);
+                const result = ws.delete(obj);
+                result && !ws.has(obj);
+                """);
+    }
+
+    @Test
+    void testWeakSetWithIterable() {
+        assertBooleanWithJavet("""
+                const o1 = {}, o2 = {};
+                const ws = new WeakSet([o1, o2]);
+                ws.has(o1) && ws.has(o2);
+                """);
+    }
 }

@@ -16,10 +16,7 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.core.JSBoolean;
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSObject;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
 
 /**
  * Implementation of WeakSet.prototype methods.
@@ -69,6 +66,15 @@ public final class WeakSetPrototype {
                     return (JSValue) JSBoolean.valueOf(jsWeakSet.weakSetDelete(valueObj));
                 }))
                 .orElseGet(() -> context.throwTypeError("Method WeakSet.prototype.delete called on incompatible receiver not weakset"));
+    }
+
+    /**
+     * get WeakSet.prototype[@@toStringTag]
+     * ES2020 23.4.3.4
+     * Returns "WeakSet".
+     */
+    public static JSValue getToStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
+        return new JSString("WeakSet");
     }
 
     /**

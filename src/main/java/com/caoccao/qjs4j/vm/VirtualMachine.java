@@ -1543,7 +1543,10 @@ public final class VirtualMachine {
                          TYPED_ARRAY_UINT8,
                          TYPED_ARRAY_UINT8_CLAMPED,
                          TYPE_ERROR,
-                         URI_ERROR -> result = constructorType.create(context, args);
+                         URI_ERROR,
+                         WEAK_MAP,
+                         WEAK_REF,
+                         WEAK_SET -> result = constructorType.create(context, args);
                 }
                 if (result != null) {
                     if (!result.isError() && !result.isProxy()) {
@@ -1551,15 +1554,6 @@ public final class VirtualMachine {
                     }
                     valueStack.push(result);
                 }
-            }
-        } else if (constructor instanceof JSObject jsObject) {
-            JSConstructorType constructorType = jsObject.getConstructorType();
-            JSObject resultObject = null;
-            switch (constructorType) {
-                case WEAK_MAP, WEAK_SET, WEAK_REF -> resultObject = constructorType.create(context, args);
-            }
-            if (resultObject != null) {
-                valueStack.push(resultObject);
             }
         } else {
             throw new JSVirtualMachineException("Cannot construct non-function value");

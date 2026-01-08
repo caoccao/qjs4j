@@ -124,4 +124,45 @@ public class WeakMapPrototypeTest extends BaseJavetTest {
         // Edge case: called on non-WeakMap
         assertErrorWithJavet("WeakMap.prototype.set.call('not weakmap', {}, 'value');");
     }
+
+    @Test
+    void testWeakMapBasicOperations() {
+        assertBooleanWithJavet("""
+                const wm = new WeakMap();
+                const key = {};
+                wm.set(key, 42);
+                wm.get(key) === 42;
+                """);
+    }
+
+    @Test
+    void testWeakMapChaining() {
+        assertBooleanWithJavet("""
+                const wm = new WeakMap();
+                const k1 = {}, k2 = {};
+                const result = wm.set(k1, 1).set(k2, 2);
+                result === wm && wm.get(k1) === 1 && wm.get(k2) === 2;
+                """);
+    }
+
+    @Test
+    void testWeakMapDelete() {
+        assertBooleanWithJavet("""
+                const wm = new WeakMap();
+                const key = {};
+                wm.set(key, 'value');
+                const result = wm.delete(key);
+                result && !wm.has(key);
+                """);
+    }
+
+    @Test
+    void testWeakMapHas() {
+        assertBooleanWithJavet("""
+                const wm = new WeakMap();
+                const key = {};
+                wm.set(key, 'value');
+                wm.has(key);
+                """);
+    }
 }

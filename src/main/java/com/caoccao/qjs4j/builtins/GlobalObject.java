@@ -1452,10 +1452,21 @@ public final class GlobalObject {
         weakMapPrototype.set("has", new JSNativeFunction("has", 1, WeakMapPrototype::has));
         weakMapPrototype.set("delete", new JSNativeFunction("delete", 1, WeakMapPrototype::delete));
 
-        // Create WeakMap constructor
-        JSObject weakMapConstructor = context.createJSObject();
+        // Symbol.toStringTag
+        JSNativeFunction toStringTagGetter = new JSNativeFunction("get [Symbol.toStringTag]", 0, WeakMapPrototype::getToStringTag);
+        weakMapPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                PropertyDescriptor.accessorDescriptor(toStringTagGetter, null, false, true));
+
+        // Create WeakMap constructor as a function
+        JSNativeFunction weakMapConstructor = new JSNativeFunction(
+                "WeakMap",
+                0,
+                WeakMapConstructor::call,
+                true,  // isConstructor
+                true   // requiresNew - WeakMap() must be called with new
+        );
         weakMapConstructor.set("prototype", weakMapPrototype);
-        weakMapConstructor.setConstructorType(JSConstructorType.WEAK_MAP); // Mark as WeakMap constructor
+        weakMapConstructor.setConstructorType(JSConstructorType.WEAK_MAP);
         weakMapPrototype.set("constructor", weakMapConstructor);
 
         global.set("WeakMap", weakMapConstructor);
@@ -1469,10 +1480,21 @@ public final class GlobalObject {
         JSObject weakRefPrototype = context.createJSObject();
         // deref() method is added in JSWeakRef constructor
 
-        // Create WeakRef constructor
-        JSObject weakRefConstructor = context.createJSObject();
+        // Symbol.toStringTag
+        JSNativeFunction toStringTagGetter = new JSNativeFunction("get [Symbol.toStringTag]", 0, WeakRefPrototype::getToStringTag);
+        weakRefPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                PropertyDescriptor.accessorDescriptor(toStringTagGetter, null, false, true));
+
+        // Create WeakRef constructor as a function
+        JSNativeFunction weakRefConstructor = new JSNativeFunction(
+                "WeakRef",
+                1,
+                WeakRefConstructor::call,
+                true,  // isConstructor
+                true   // requiresNew - WeakRef() must be called with new
+        );
         weakRefConstructor.set("prototype", weakRefPrototype);
-        weakRefConstructor.setConstructorType(JSConstructorType.WEAK_REF); // Mark as WeakRef constructor
+        weakRefConstructor.setConstructorType(JSConstructorType.WEAK_REF);
         weakRefPrototype.set("constructor", weakRefConstructor);
 
         global.set("WeakRef", weakRefConstructor);
@@ -1488,10 +1510,21 @@ public final class GlobalObject {
         weakSetPrototype.set("has", new JSNativeFunction("has", 1, WeakSetPrototype::has));
         weakSetPrototype.set("delete", new JSNativeFunction("delete", 1, WeakSetPrototype::delete));
 
-        // Create WeakSet constructor
-        JSObject weakSetConstructor = context.createJSObject();
+        // Symbol.toStringTag
+        JSNativeFunction toStringTagGetter = new JSNativeFunction("get [Symbol.toStringTag]", 0, WeakSetPrototype::getToStringTag);
+        weakSetPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                PropertyDescriptor.accessorDescriptor(toStringTagGetter, null, false, true));
+
+        // Create WeakSet constructor as a function
+        JSNativeFunction weakSetConstructor = new JSNativeFunction(
+                "WeakSet",
+                0,
+                WeakSetConstructor::call,
+                true,  // isConstructor
+                true   // requiresNew - WeakSet() must be called with new
+        );
         weakSetConstructor.set("prototype", weakSetPrototype);
-        weakSetConstructor.setConstructorType(JSConstructorType.WEAK_SET); // Mark as WeakSet constructor
+        weakSetConstructor.setConstructorType(JSConstructorType.WEAK_SET);
         weakSetPrototype.set("constructor", weakSetConstructor);
 
         global.set("WeakSet", weakSetConstructor);

@@ -67,6 +67,15 @@ public final class WeakMapPrototype {
     }
 
     /**
+     * get WeakMap.prototype[@@toStringTag]
+     * ES2020 23.3.3.6
+     * Returns "WeakMap".
+     */
+    public static JSValue getToStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
+        return new JSString("WeakMap");
+    }
+
+    /**
      * WeakMap.prototype.has(key)
      * ES2020 23.3.3.4
      * Returns a boolean indicating whether an element with the specified key exists.

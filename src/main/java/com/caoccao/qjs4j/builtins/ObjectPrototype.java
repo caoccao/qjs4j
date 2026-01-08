@@ -546,7 +546,7 @@ public final class ObjectPrototype {
         if (thisArg instanceof JSObject obj) {
             // Try to get Symbol.toStringTag
             PropertyKey toStringTagKey = PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG);
-            JSValue tag = obj.get(toStringTagKey);
+            JSValue tag = obj.get(toStringTagKey, context);
 
             if (tag instanceof JSString tagStr) {
                 return new JSString("[object " + tagStr.value() + "]");

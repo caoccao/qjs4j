@@ -46,23 +46,22 @@ public final class JSWeakRef extends JSObject {
             throw new IllegalArgumentException("WeakRef target cannot be null");
         }
         this.targetRef = new WeakReference<>(target);
-
-        // Add deref() method
-        this.set("deref", new JSNativeFunction("deref", 0, (childContext, thisArg, args) -> deref()));
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
         // WeakRef requires exactly 1 argument: target
         if (args.length == 0) {
-            return context.throwTypeError("WeakRef constructor requires a target object");
+            return context.throwTypeError("WeakRef: invalid target");
         }
         JSValue targetArg = args[0];
         if (!(targetArg instanceof JSObject targetObj)) {
             return context.throwTypeError("WeakRef: invalid target");
         }
-        JSObject jsObject = new JSWeakRef(targetObj);
-        context.transferPrototype(jsObject, NAME);
-        return jsObject;
+        JSWeakRef weakRef = new JSWeakRef(targetObj);
+        context.transferPrototype(weakRef, NAME);
+        // Add deref() method AFTER transferPrototype
+        weakRef.set("deref", new JSNativeFunction("deref", 0, (childContext, thisArg, args1) -> weakRef.deref()));
+        return weakRef;
     }
 
     /**

@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.JSWeakRef;
 
 /**
  * WeakRef constructor implementation.
@@ -28,6 +29,16 @@ import com.caoccao.qjs4j.core.JSValue;
 public final class WeakRefConstructor {
 
     /**
+     * WeakRef constructor call/new.
+     * Delegates to JSWeakRef.create().
+     * <p>
+     * Based on ES2021 25.1.3.1
+     */
+    public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        return JSWeakRef.create(context, args);
+    }
+
+    /**
      * WeakRef constructor function.
      * Cannot be called without 'new'.
      *
@@ -35,7 +46,9 @@ public final class WeakRefConstructor {
      * @param thisArg The this value
      * @param args    Constructor arguments [target]
      * @return TypeError (WeakRef must be called with 'new')
+     * @deprecated Use call() method instead, which properly handles both new and direct calls
      */
+    @Deprecated
     public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
         // This should be called via VM's handleCallConstructor
         // If called directly, it's an error
