@@ -1193,18 +1193,19 @@ public final class BytecodeCompiler {
             emitter.emitOpcode(Opcode.FOR_OF_START);
         }
 
-        // Declare the loop variable
+        // Declare the loop variable(s) - supports both Identifier and destructuring patterns
         VariableDeclaration varDecl = forOfStmt.left();
         if (varDecl.declarations().size() != 1) {
             throw new CompilerException("for-of loop must have exactly one variable");
         }
         Pattern pattern = varDecl.declarations().get(0).id();
-        if (!(pattern instanceof Identifier id)) {
-            throw new CompilerException("for-of loop variable must be an identifier");
-        }
-        String varName = id.name();
-        currentScope().declareLocal(varName);
-        Integer varIndex = currentScope().getLocal(varName);
+
+        // Declare all variables in the pattern (handles Identifier, ArrayPattern, ObjectPattern)
+        declarePatternVariables(pattern);
+
+        // Save and temporarily disable inGlobalScope since for-of loop variables are always local
+        boolean savedInGlobalScope = inGlobalScope;
+        inGlobalScope = false;
 
         // Start of loop
         int loopStart = emitter.currentOffset();
@@ -1244,12 +1245,8 @@ public final class BytecodeCompiler {
             emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
             // Stack: iter, next, catch_offset, value
 
-            // Store value in loop variable
-            if (varIndex != null) {
-                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
-            } else {
-                emitter.emitOpcode(Opcode.DROP);
-            }
+            // Assign value to pattern (handles Identifier, ArrayPattern, ObjectPattern)
+            compilePatternAssignment(pattern);
             // Stack: iter, next, catch_offset
         } else {
             // Sync for-of: FOR_OF_NEXT pushes value and done separately
@@ -1262,12 +1259,8 @@ public final class BytecodeCompiler {
             jumpToEnd = emitter.emitJump(Opcode.IF_TRUE);
             // Stack: iter, next, catch_offset, value
 
-            // Store value in loop variable
-            if (varIndex != null) {
-                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
-            } else {
-                emitter.emitOpcode(Opcode.DROP);
-            }
+            // Assign value to pattern (handles Identifier, ArrayPattern, ObjectPattern)
+            compilePatternAssignment(pattern);
             // Stack: iter, next, catch_offset
         }
 
@@ -1312,6 +1305,10 @@ public final class BytecodeCompiler {
         emitter.emitOpcode(Opcode.DROP);  // iter
 
         loopStack.pop();
+
+        // Restore inGlobalScope flag
+        inGlobalScope = savedInGlobalScope;
+
         exitScope();
     }
 
@@ -1992,6 +1989,38 @@ public final class BytecodeCompiler {
 
             // Define property
             emitter.emitOpcode(Opcode.DEFINE_PROP);
+        }
+    }
+
+    /**
+     * Declare all variables in a pattern (used for for-of loops with destructuring).
+     * This recursively declares variables for Identifier, ArrayPattern, and ObjectPattern.
+     */
+    private void declarePatternVariables(Pattern pattern) {
+        if (pattern instanceof Identifier id) {
+            // Simple identifier: declare it as a local variable
+            currentScope().declareLocal(id.name());
+        } else if (pattern instanceof ArrayPattern arrPattern) {
+            // Array destructuring: declare all element variables
+            for (Pattern element : arrPattern.elements()) {
+                if (element != null) {
+                    if (element instanceof RestElement restElement) {
+                        // Rest element: declare the argument pattern
+                        declarePatternVariables(restElement.argument());
+                    } else {
+                        // Regular element: recursively declare
+                        declarePatternVariables(element);
+                    }
+                }
+            }
+        } else if (pattern instanceof ObjectPattern objPattern) {
+            // Object destructuring: declare all property variables
+            for (ObjectPattern.Property prop : objPattern.properties()) {
+                declarePatternVariables(prop.value());
+            }
+        } else if (pattern instanceof RestElement restElement) {
+            // Rest element at top level (shouldn't normally happen, but handle it)
+            declarePatternVariables(restElement.argument());
         }
     }
 

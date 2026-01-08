@@ -605,7 +605,26 @@ public class MapPrototypeTest extends BaseJavetTest {
                 obj.count""");
     }
 
-    @Disabled
+    @Test
+    void testForOfMapCheckEntryType() {
+        // Check what type each entry is
+        assertBooleanWithJavet("""
+                var allArrays = true;
+                for (var entry of new Map([[1, 'a'], [2, 'b']])) {
+                  if (!Array.isArray(entry)) allArrays = false;
+                }
+                allArrays""");
+    }
+
+    @Test
+    void testForOfMapWithDestructuring() {
+        // for-of over Map with destructuring (the target test)
+        assertStringWithJavet("""
+                var result = '';
+                for (var [k, v] of new Map([[1, 'a'], [2, 'b']])) result += k + v;
+                result""");
+    }
+
     @Test
     void testForOfUsesSymbolIterator() {
         // for-of uses Symbol.iterator (which is entries)
@@ -949,6 +968,21 @@ public class MapPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    void testMapEntriesManual() {
+        // Manual iteration over Map.entries() to verify entries work
+        assertStringWithJavet("""
+                var result = '';
+                var m = new Map([[1, 'a'], [2, 'b']]);
+                var it = m.entries();
+                var entry;
+                while (!(entry = it.next()).done) {
+                  var arr = entry.value;
+                  result += arr[0] + arr[1];
+                }
+                result""");
+    }
+
+    @Test
     void testMapEquality() {
         // Two maps with same entries are not equal
         assertBooleanWithJavet("new Map([[1, 'a']]) === new Map([[1, 'a']])");
@@ -957,10 +991,43 @@ public class MapPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    void testMapKeysWithForOf() {
+        // for-of over Map.keys()
+        assertStringWithJavet("""
+                var result = '';
+                for (var k of new Map([[1, 'a'], [2, 'b']]).keys()) result += k;
+                result""");
+    }
+
+    @Test
+    void testMapSymbolIteratorManual() {
+        // Manual iteration over Map[Symbol.iterator]() to verify it works
+        assertStringWithJavet("""
+                var result = '';
+                var m = new Map([[1, 'a'], [2, 'b']]);
+                var it = m[Symbol.iterator]();
+                var entry;
+                while (!(entry = it.next()).done) {
+                  var arr = entry.value;
+                  result += arr[0] + arr[1];
+                }
+                result""");
+    }
+
+    @Test
     void testMapToString() {
         // Map toString
         assertStringWithJavet("new Map().toString()");
         assertStringWithJavet("Object.prototype.toString.call(new Map())");
+    }
+
+    @Test
+    void testMapValuesWithForOf() {
+        // for-of over Map.values()
+        assertStringWithJavet("""
+                var result = '';
+                for (var v of new Map([[1, 'a'], [2, 'b']]).values()) result += v;
+                result""");
     }
 
     @Test
@@ -1179,6 +1246,15 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertStringWithJavet("var m = new Map(); m.set(0, 'a'); m.set(-0, 'b'); m.get(-0)");
         assertBooleanWithJavet("var m = new Map(); m.set(0, 'val'); m.has(-0)");
         assertBooleanWithJavet("var m = new Map(); m.set(-0, 'val'); m.has(0)");
+    }
+
+    @Test
+    void testSimpleForOfMap() {
+        // Simple for-of over Map without destructuring
+        assertIntegerWithJavet("""
+                var count = 0;
+                for (var entry of new Map([[1, 'a'], [2, 'b']])) count++;
+                count""");
     }
 
     @Test
