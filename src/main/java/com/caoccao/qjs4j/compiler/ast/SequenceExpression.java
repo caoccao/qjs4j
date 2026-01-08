@@ -16,14 +16,19 @@
 
 package com.caoccao.qjs4j.compiler.ast;
 
+import java.util.List;
+
 /**
- * Base sealed interface for all expression nodes.
+ * Represents a sequence expression (comma operator).
+ * Evaluates each expression in order and returns the value of the last one.
+ * Example: (a = 1, b = 2, a + b)
  */
-public sealed interface Expression extends ASTNode permits
-        Literal, Identifier, PrivateIdentifier, BinaryExpression, UnaryExpression,
-        AssignmentExpression, ConditionalExpression, CallExpression,
-        MemberExpression, NewExpression, FunctionExpression,
-        ArrowFunctionExpression, ArrayExpression, ObjectExpression, AwaitExpression,
-        YieldExpression, TemplateLiteral, TaggedTemplateExpression, ClassExpression,
-        SpreadElement, SequenceExpression {
+public record SequenceExpression(
+        List<Expression> expressions,
+        SourceLocation location
+) implements Expression {
+    @Override
+    public SourceLocation getLocation() {
+        return location;
+    }
 }

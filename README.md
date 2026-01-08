@@ -17,29 +17,6 @@ qjs4j includes features not present in the original QuickJS:
 - **Enhanced Module System**: Complete ES6 module implementation with dynamic import()
 - **Microtask Queue**: Full ES2020-compliant microtask infrastructure
 
-### Partially Implemented
-
-The following features have infrastructure in place but require additional implementation:
-
-- **ES2022 class features**: Classes with constructors, methods, fields, and static blocks
-  - ✅ Lexer support for `class` keyword and private names (#field)
-  - ✅ AST nodes (ClassDeclaration, MethodDefinition, PropertyDefinition, PrivateIdentifier, StaticBlock)
-  - ✅ Opcodes (DEFINE_CLASS, DEFINE_METHOD, DEFINE_FIELD, PRIVATE_SYMBOL, GET/PUT/DEFINE_PRIVATE_FIELD)
-  - ✅ Parser support (parseClassDeclaration, parseClassElement, fields, private field access, static blocks)
-  - ✅ Parser tests (ClassParserTest with 8 test cases - all passing)
-  - ✅ Compiler implementation (classes, constructors, instance methods, fields, static blocks)
-  - ✅ Runtime support (all field-related opcodes implemented)
-  - ✅ Compiler tests (ClassCompilerTest with 11 test cases - all passing)
-  - ✅ **Private fields (#field)**: Fully working
-    - Private field definition: `#count = 0;`
-    - Private field access: `this.#count`, `this.#count = value`
-    - Private field operations: `this.#count++`, `this.#count += 1`
-  - ✅ **Static blocks**: Fully working
-    - Static initialization: `static { this.x = 10; }`
-    - Multiple blocks execute in order
-    - Access to class constructor as 'this'
-  - ⏳ Static methods (not yet implemented)
-
 ### Not Yet Implemented
 
 The following QuickJS features are planned but not yet implemented:

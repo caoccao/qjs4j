@@ -985,6 +985,22 @@ public final class BytecodeCompiler {
         loopStack.peek().continuePositions.add(jumpPos);
     }
 
+    private void compileSequenceExpression(SequenceExpression seqExpr) {
+        // Following QuickJS: evaluate each expression in order,
+        // dropping all but the last one's value
+        List<Expression> expressions = seqExpr.expressions();
+        
+        for (int i = 0; i < expressions.size(); i++) {
+            compileExpression(expressions.get(i));
+            
+            // Drop the value of all expressions except the last one
+            if (i < expressions.size() - 1) {
+                emitter.emitOpcode(Opcode.DROP);
+            }
+        }
+        // The last expression's value remains on the stack
+    }
+
     private void compileExpression(Expression expr) {
         if (expr instanceof Literal literal) {
             compileLiteral(literal);
@@ -1022,6 +1038,8 @@ public final class BytecodeCompiler {
             compileTaggedTemplateExpression(taggedTemplate);
         } else if (expr instanceof ClassExpression classExpr) {
             compileClassExpression(classExpr);
+        } else if (expr instanceof SequenceExpression seqExpr) {
+            compileSequenceExpression(seqExpr);
         }
     }
 

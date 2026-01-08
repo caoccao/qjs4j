@@ -156,13 +156,13 @@ public final class Parser {
                     // Spread element: ...expr
                     SourceLocation spreadLocation = getLocation();
                     advance(); // consume ELLIPSIS
-                    Expression argument = parseExpression();
+                    Expression argument = parseAssignmentExpression();
                     elements.add(new SpreadElement(argument, spreadLocation));
                     if (match(TokenType.COMMA)) {
                         advance();
                     }
                 } else {
-                    elements.add(parseExpression());
+                    elements.add(parseAssignmentExpression());
                     if (match(TokenType.COMMA)) {
                         advance();
                     }
@@ -471,10 +471,10 @@ public final class Parser {
                             // Spread argument: ...expr
                             SourceLocation spreadLocation = getLocation();
                             advance(); // consume ELLIPSIS
-                            Expression argument = parseExpression();
+                            Expression argument = parseAssignmentExpression();
                             args.add(new SpreadElement(argument, spreadLocation));
                         } else {
-                            args.add(parseExpression());
+                            args.add(parseAssignmentExpression());
                         }
                     } while (match(TokenType.COMMA));
                 }
@@ -489,7 +489,7 @@ public final class Parser {
             } else if (match(TokenType.LBRACKET)) {
                 SourceLocation location = getLocation();
                 advance();
-                Expression property = parseExpression();
+                Expression property = parseAssignmentExpression();
                 expect(TokenType.RBRACKET);
                 expr = new MemberExpression(expr, property, true, location);
             } else {
@@ -729,9 +729,9 @@ public final class Parser {
         if (match(TokenType.QUESTION)) {
             SourceLocation location = getLocation();
             advance();
-            Expression consequent = parseExpression();
+            Expression consequent = parseAssignmentExpression();
             expect(TokenType.COLON);
-            Expression alternate = parseExpression();
+            Expression alternate = parseAssignmentExpression();
 
             return new ConditionalExpression(test, consequent, alternate, location);
         }
@@ -840,7 +840,24 @@ public final class Parser {
     }
 
     private Expression parseExpression() {
-        return parseAssignmentExpression();
+        SourceLocation location = getLocation();
+        List<Expression> expressions = new ArrayList<>();
+        
+        expressions.add(parseAssignmentExpression());
+        
+        // Check for comma operator
+        while (match(TokenType.COMMA)) {
+            advance(); // consume comma
+            expressions.add(parseAssignmentExpression());
+        }
+        
+        // If only one expression, return it directly (no sequence)
+        if (expressions.size() == 1) {
+            return expressions.get(0);
+        }
+        
+        // Multiple expressions - return a SequenceExpression
+        return new SequenceExpression(expressions, location);
     }
 
     private Statement parseExpressionStatement() {
@@ -1126,7 +1143,7 @@ public final class Parser {
                         if (match(TokenType.COMMA)) {
                             advance();
                         }
-                        args.add(parseExpression());
+                        args.add(parseAssignmentExpression());
                     } while (match(TokenType.COMMA));
                 }
                 expect(TokenType.RPAREN);
@@ -1251,7 +1268,7 @@ public final class Parser {
             } else {
                 // Regular property: key: value
                 expect(TokenType.COLON);
-                Expression value = parseExpression();
+                Expression value = parseAssignmentExpression();
                 properties.add(new ObjectExpression.Property(key, value, "init", false, false));
             }
 
@@ -1568,7 +1585,7 @@ public final class Parser {
             case LBRACKET -> {
                 // Computed property name: [expression]
                 advance();
-                Expression expr = parseExpression();
+                Expression expr = parseAssignmentExpression();
                 expect(TokenType.RBRACKET);
                 yield expr;
             }
@@ -1928,7 +1945,7 @@ public final class Parser {
 
             if (match(TokenType.ASSIGN)) {
                 advance();
-                init = parseExpression();
+                init = parseAssignmentExpression();
             }
 
             declarations.add(new VariableDeclaration.VariableDeclarator(id, init));
