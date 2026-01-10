@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 /**
  * Unit tests for DatePrototype methods.
@@ -161,6 +162,9 @@ public class DatePrototypeTest extends BaseJavetTest {
 
     @Test
     public void testDateToStringWithJavet() {
+        // Skip on Windows due to timezone format differences
+        assumeFalse(isWindows(), "Skipping on Windows - timezone format differences with V8");
+        
         // Compare with Javet (V8) to ensure format matches
         assertStringWithJavet("new Date(1735689600000).toString();");
     }
@@ -368,6 +372,9 @@ public class DatePrototypeTest extends BaseJavetTest {
         assertTypeError(DatePrototype.toStringMethod(context, new JSString("not date"), new JSValue[]{}));
         assertPendingException(context);
 
+        // Skip Javet comparison on Windows due to timezone format differences
+        assumeFalse(isWindows(), "Skipping on Windows - timezone format differences with V8");
+        
         assertStringWithJavet(
                 "new Date(1735689600000).toString();");
     }

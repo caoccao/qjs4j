@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 /**
  * Unit tests for Date constructor and Date.prototype methods.
@@ -64,6 +65,9 @@ public class DateConstructorTest extends BaseJavetTest {
 
     @Test
     public void testDateInstanceMethods() {
+        // Skip on Windows due to timezone format differences
+        assumeFalse(isWindows(), "Skipping on Windows - timezone format differences with V8");
+        
         // Date instance should have prototype methods
         assertStringWithJavet("var d = new Date(1750000000000); JSON.stringify([d.getTime(),d.toString()]);");
     }

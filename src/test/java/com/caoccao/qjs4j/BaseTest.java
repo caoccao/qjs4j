@@ -76,6 +76,10 @@ public abstract class BaseTest {
         return promise.getState() != JSPromise.PromiseState.PENDING;
     }
 
+    protected boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
+    }
+
     protected String loadCode(String path) throws IOException {
         return IOUtils.resourceToString(path, StandardCharsets.UTF_8, getClass().getClassLoader());
     }
