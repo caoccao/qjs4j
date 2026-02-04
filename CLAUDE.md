@@ -49,6 +49,21 @@ The project implements ES2024 features with full QuickJS specification complianc
 ./gradlew spotlessApply
 ```
 
+### Performance & Conformance Testing
+```bash
+# Run JMH performance benchmarks (excluded from regular tests)
+./gradlew performanceTest
+
+# Run full Test262 ECMAScript conformance suite (requires ../test262)
+./gradlew test262
+
+# Run quick subset of Test262 for validation
+./gradlew test262Quick
+
+# Run Test262 language tests only
+./gradlew test262Language
+```
+
 ### Other Useful Commands
 ```bash
 # Generate Javadoc
@@ -281,6 +296,8 @@ For detailed feature status and implementation notes:
 - **docs/migration/FEATURES.md**: Complete list of implemented JavaScript features
 - **docs/migration/ASYNC_AWAIT_ENHANCEMENTS.md**: Async/await and iteration implementation details
 - **docs/migration/MIGRATION_STATUS.md**: Overall migration progress from QuickJS C
+- **docs/migration/OPCODE_IMPLEMENTATION_STATUS.md**: Bytecode instruction coverage
+- **docs/migration/TEST262.md**: ECMAScript conformance test suite status
 
 ## Main Entry Point
 

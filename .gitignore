@@ -40,3 +40,6 @@ build/
 .project
 .settings/
 bin/
+
+# Claude
+.claude/
