@@ -149,9 +149,7 @@ Potential extensions to build on this implementation:
 
 1. **PRIVATE_IN operator**: Add compiler support for `#field in obj` syntax to check if an object has a specific private field
 
-2. **Static private fields**: Extend implementation to support `static #field` for class-level private fields
-
-3. **Private methods**: Support for `#method()` private method declarations
+2. **Private methods**: Support for `#method()` private method declarations
 
 ## QuickJS Alignment
 

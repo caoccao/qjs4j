@@ -696,9 +696,11 @@ public final class BytecodeCompiler {
             }
         }
 
-        // Create private symbols once for the class (not per instance)
-        // These symbols will be passed as closure variables to all methods
-        List<String> privateFieldNames = instanceFields.stream()
+        // Create private symbols once for the class (not per instance).
+        // Include both instance and static private fields so static methods/blocks can access static #names.
+        List<String> privateFieldNames = classDecl.body().stream()
+                .filter(ClassDeclaration.PropertyDefinition.class::isInstance)
+                .map(ClassDeclaration.PropertyDefinition.class::cast)
                 .filter(ClassDeclaration.PropertyDefinition::isPrivate)
                 .map(field -> {
                     if (field.key() instanceof PrivateIdentifier privateId) {
@@ -940,8 +942,11 @@ public final class BytecodeCompiler {
             }
         }
 
-        // Create private symbols once for the class
-        List<String> privateFieldNames = instanceFields.stream()
+        // Create private symbols once for the class.
+        // Include both instance and static private fields so static methods/blocks can access static #names.
+        List<String> privateFieldNames = classExpr.body().stream()
+                .filter(ClassDeclaration.PropertyDefinition.class::isInstance)
+                .map(ClassDeclaration.PropertyDefinition.class::cast)
                 .filter(ClassDeclaration.PropertyDefinition::isPrivate)
                 .map(field -> {
                     if (field.key() instanceof PrivateIdentifier privateId) {
@@ -2485,10 +2490,6 @@ public final class BytecodeCompiler {
             IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
             Map<String, JSSymbol> privateSymbols,
             String className) {
-        if (field.isPrivate()) {
-            throw new CompilerException("Static private fields not yet implemented");
-        }
-
         BytecodeCompiler initializerCompiler = new BytecodeCompiler();
         initializerCompiler.privateSymbols = privateSymbols;
 
@@ -2498,28 +2499,50 @@ public final class BytecodeCompiler {
         // Stack: this
         initializerCompiler.emitter.emitOpcode(Opcode.PUSH_THIS);
 
-        if (field.computed()) {
-            JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
-            if (computedFieldSymbol == null) {
-                throw new CompilerException("Computed static field key not found");
+        if (field.isPrivate()) {
+            if (!(field.key() instanceof PrivateIdentifier privateId)) {
+                throw new CompilerException("Invalid static private field key");
             }
-            // Load precomputed key from constructor hidden storage:
-            // this this hiddenSymbol -> this key
-            initializerCompiler.emitter.emitOpcode(Opcode.PUSH_THIS);
-            initializerCompiler.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
-            initializerCompiler.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        } else {
-            initializerCompiler.emitNonComputedPublicFieldKey(field.key());
-        }
 
-        if (field.value() != null) {
-            initializerCompiler.compileExpression(field.value());
-        } else {
-            initializerCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
-        }
+            JSSymbol symbol = privateSymbols.get(privateId.name());
+            if (symbol == null) {
+                throw new CompilerException("Static private field symbol not found: #" + privateId.name());
+            }
 
-        // Stack: this key value
-        initializerCompiler.emitter.emitOpcode(Opcode.DEFINE_PROP);
+            if (field.value() != null) {
+                initializerCompiler.compileExpression(field.value());
+            } else {
+                initializerCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
+            }
+
+            // Stack: this value symbol -> this symbol value
+            initializerCompiler.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+            initializerCompiler.emitter.emitOpcode(Opcode.SWAP);
+            initializerCompiler.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
+        } else {
+            if (field.computed()) {
+                JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
+                if (computedFieldSymbol == null) {
+                    throw new CompilerException("Computed static field key not found");
+                }
+                // Load precomputed key from constructor hidden storage:
+                // this this hiddenSymbol -> this key
+                initializerCompiler.emitter.emitOpcode(Opcode.PUSH_THIS);
+                initializerCompiler.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
+                initializerCompiler.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+            } else {
+                initializerCompiler.emitNonComputedPublicFieldKey(field.key());
+            }
+
+            if (field.value() != null) {
+                initializerCompiler.compileExpression(field.value());
+            } else {
+                initializerCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
+            }
+
+            // Stack: this key value
+            initializerCompiler.emitter.emitOpcode(Opcode.DEFINE_PROP);
+        }
         // Stack: this
         initializerCompiler.emitter.emitOpcode(Opcode.DROP);
         initializerCompiler.emitter.emitOpcode(Opcode.UNDEFINED);

@@ -31,12 +31,6 @@ This document tracks remaining features, known bugs, and planned enhancements fo
 
 ### Medium Priority - Class Features
 
-#### Static Private Fields
-- **Description**: `static #field` for class-level private fields
-- **Status**: Not implemented
-- **Prerequisite**: Private fields (completed)
-- **Reference**: [PRIVATE_FIELDS_IMPLEMENTATION.md](PRIVATE_FIELDS_IMPLEMENTATION.md#future-enhancements)
-
 #### Private Methods
 - **Description**: `#method()` private method declarations
 - **Status**: Not implemented
@@ -211,7 +205,7 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 
 ### Phase 3: Language Features
 1. Tagged template literals
-2. Private methods and static private fields
+2. Private methods
 
 ### Phase 4: Advanced Features
 1. Intl namespace (large undertaking)

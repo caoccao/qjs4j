@@ -434,7 +434,8 @@ This document provides a comprehensive list of all JavaScript features implement
   - ✅ Parser Tests: ClassParserTest with comprehensive test coverage
   - ✅ Compiler: Symbol creation, field initialization, and access compilation implemented
   - ✅ Runtime: PropertyKey.fromSymbol() for symbol-based storage, all opcodes implemented in VM
-  - ✅ Tests: All private field tests passing including method access
+  - ✅ Static private fields: `static #field` initialization and access
+  - ✅ Tests: Private field tests passing for instance + static scenarios
 
 - **Static class blocks**: static { }
   - ✅ AST: StaticBlock node as ClassElement

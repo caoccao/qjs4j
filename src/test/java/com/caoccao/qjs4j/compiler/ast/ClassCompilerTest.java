@@ -345,4 +345,76 @@ public class ClassCompilerTest extends BaseJavetTest {
                 }
                 MathUtils.add(5, 3)""");
     }
+
+    @Test
+    public void testClassWithStaticPrivateFieldInClassExpression() {
+        assertIntegerWithJavet("""
+                const C = class {
+                    static #value = 42;
+                    static getValue() {
+                        return this.#value;
+                    }
+                };
+                C.getValue()""");
+    }
+
+    @Test
+    public void testClassWithStaticPrivateFieldInMixedPrivateNamespace() {
+        assertIntegerWithJavet("""
+                class C {
+                    #instanceValue = 3;
+                    static #staticValue = 4;
+                    getInstanceValue() {
+                        return this.#instanceValue;
+                    }
+                    static getStaticValue() {
+                        return this.#staticValue;
+                    }
+                }
+                const c = new C();
+                c.getInstanceValue() + C.getStaticValue()""");
+    }
+
+    @Test
+    public void testClassWithStaticPrivateFieldInitializerAndMutation() {
+        assertIntegerWithJavet("""
+                class Counter {
+                    static #count = 1;
+                    static increment() {
+                        this.#count = this.#count + 1;
+                    }
+                    static getCount() {
+                        return this.#count;
+                    }
+                }
+                Counter.increment();
+                Counter.getCount()""");
+    }
+
+    @Test
+    public void testClassWithStaticPrivateFieldInitializedByStaticBlock() {
+        assertIntegerWithJavet("""
+                class C {
+                    static #value = 10;
+                    static {
+                        this.#value = this.#value + 5;
+                    }
+                    static getValue() {
+                        return this.#value;
+                    }
+                }
+                C.getValue()""");
+    }
+
+    @Test
+    public void testClassWithStaticPrivateFieldWithoutInitializer() {
+        assertBooleanWithJavet("""
+                class C {
+                    static #value;
+                    static getValue() {
+                        return this.#value;
+                    }
+                }
+                C.getValue() === undefined""");
+    }
 }
