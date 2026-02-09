@@ -17,7 +17,10 @@
 package com.caoccao.qjs4j.compiler.ast;
 
 import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Test class declaration compilation and execution.
@@ -416,5 +419,82 @@ public class ClassCompilerTest extends BaseJavetTest {
                     }
                 }
                 C.getValue() === undefined""");
+    }
+
+    @Test
+    public void testClassWithDuplicatePrivateMethodThrows() {
+        assertThatThrownBy(() -> resetContext().eval("class C { #m() {} #m() {} }"))
+                .isInstanceOf(JSException.class);
+    }
+
+    @Test
+    public void testClassWithPrivateMethod() {
+        assertIntegerWithJavet("""
+                class Calculator {
+                    #double(value) {
+                        return value * 2;
+                    }
+                    run(value) {
+                        return this.#double(value);
+                    }
+                }
+                new Calculator().run(21)""");
+    }
+
+    @Test
+    public void testClassWithPrivateMethodAccessibleDuringFieldInitialization() {
+        assertIntegerWithJavet("""
+                class C {
+                    value = this.#getValue();
+                    #getValue() {
+                        return 9;
+                    }
+                }
+                new C().value""");
+    }
+
+    @Test
+    public void testClassWithPrivateMethodNotExposedAsPublicProperty() {
+        assertBooleanWithJavet("""
+                class C {
+                    #hidden() {
+                        return 1;
+                    }
+                }
+                const c = new C();
+                c.hidden === undefined""");
+    }
+
+    @Test
+    public void testClassWithPrivateMethodReference() {
+        assertIntegerWithJavet("""
+                class C {
+                    constructor() {
+                        this.x = 5;
+                    }
+                    #read() {
+                        return this.x;
+                    }
+                    getReader() {
+                        return this.#read;
+                    }
+                }
+                const c = new C();
+                const fn = c.getReader();
+                fn.call(c)""");
+    }
+
+    @Test
+    public void testClassWithStaticPrivateMethod() {
+        assertIntegerWithJavet("""
+                class C {
+                    static #inc(value) {
+                        return value + 1;
+                    }
+                    static run(value) {
+                        return this.#inc(value);
+                    }
+                }
+                C.run(41)""");
     }
 }

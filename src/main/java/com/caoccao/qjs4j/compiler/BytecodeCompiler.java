@@ -663,6 +663,8 @@ public final class BytecodeCompiler {
 
         // Separate class elements by type
         List<ClassDeclaration.MethodDefinition> methods = new ArrayList<>();
+        List<ClassDeclaration.MethodDefinition> privateInstanceMethods = new ArrayList<>();
+        List<ClassDeclaration.MethodDefinition> privateStaticMethods = new ArrayList<>();
         List<ClassDeclaration.PropertyDefinition> instanceFields = new ArrayList<>();
         List<ClassDeclaration.ClassElement> staticInitializers = new ArrayList<>();
         List<ClassDeclaration.PropertyDefinition> computedFieldsInDefinitionOrder = new ArrayList<>();
@@ -674,6 +676,12 @@ public final class BytecodeCompiler {
                 // Check if it's a constructor
                 if (method.key() instanceof Identifier id && "constructor".equals(id.name()) && !method.isStatic()) {
                     constructor = method;
+                } else if (method.isPrivate()) {
+                    if (method.isStatic()) {
+                        privateStaticMethods.add(method);
+                    } else {
+                        privateInstanceMethods.add(method);
+                    }
                 } else {
                     methods.add(method);
                 }
@@ -696,27 +704,12 @@ public final class BytecodeCompiler {
             }
         }
 
-        // Create private symbols once for the class (not per instance).
-        // Include both instance and static private fields so static methods/blocks can access static #names.
-        List<String> privateFieldNames = classDecl.body().stream()
-                .filter(ClassDeclaration.PropertyDefinition.class::isInstance)
-                .map(ClassDeclaration.PropertyDefinition.class::cast)
-                .filter(ClassDeclaration.PropertyDefinition::isPrivate)
-                .map(field -> {
-                    if (field.key() instanceof PrivateIdentifier privateId) {
-                        return privateId.name();
-                    }
-                    return null;
-                })
-                .filter(Objects::nonNull)
-                .toList();
-
-        // Create JSSymbol instances for each private field
-        // These symbols are created once and shared across all instances
-        Map<String, JSSymbol> privateSymbols = new LinkedHashMap<>();
-        for (String privateFieldName : privateFieldNames) {
-            privateSymbols.put(privateFieldName, new JSSymbol(privateFieldName));
-        }
+        // Create symbols for all private names (fields + methods), once per class.
+        Map<String, JSSymbol> privateSymbols = createPrivateSymbols(classDecl.body());
+        LinkedHashMap<String, JSBytecodeFunction> privateInstanceMethodFunctions = compilePrivateMethodFunctions(
+                privateInstanceMethods, privateSymbols, computedFieldSymbols);
+        LinkedHashMap<String, JSBytecodeFunction> privateStaticMethodFunctions = compilePrivateMethodFunctions(
+                privateStaticMethods, privateSymbols, computedFieldSymbols);
 
         // Compile constructor function (or create default) with field initialization
         JSBytecodeFunction constructorFunc;
@@ -728,6 +721,7 @@ public final class BytecodeCompiler {
                     instanceFields,
                     privateSymbols,
                     computedFieldSymbols,
+                    privateInstanceMethodFunctions,
                     true
             );
         } else {
@@ -737,7 +731,8 @@ public final class BytecodeCompiler {
                     classDecl.superClass() != null,
                     instanceFields,
                     privateSymbols,
-                    computedFieldSymbols
+                    computedFieldSymbols,
+                    privateInstanceMethodFunctions
             );
         }
 
@@ -784,6 +779,7 @@ public final class BytecodeCompiler {
                         List.of(),
                         privateSymbols,
                         computedFieldSymbols,
+                        Map.of(),
                         false
                 );
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
@@ -809,6 +805,7 @@ public final class BytecodeCompiler {
                         List.of(),
                         privateSymbols,
                         computedFieldSymbols,
+                        Map.of(),
                         false
                 );
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
@@ -825,6 +822,8 @@ public final class BytecodeCompiler {
                 // Stack: constructor proto (method added to proto)
             }
         }
+
+        installPrivateStaticMethods(privateStaticMethodFunctions, privateSymbols);
 
         // Evaluate all computed field names once at class definition time.
         // This matches QuickJS behavior and avoids re-evaluating key side effects per instance.
@@ -909,6 +908,8 @@ public final class BytecodeCompiler {
 
         // Separate class elements by type
         List<ClassDeclaration.MethodDefinition> methods = new ArrayList<>();
+        List<ClassDeclaration.MethodDefinition> privateInstanceMethods = new ArrayList<>();
+        List<ClassDeclaration.MethodDefinition> privateStaticMethods = new ArrayList<>();
         List<ClassDeclaration.PropertyDefinition> instanceFields = new ArrayList<>();
         List<ClassDeclaration.ClassElement> staticInitializers = new ArrayList<>();
         List<ClassDeclaration.PropertyDefinition> computedFieldsInDefinitionOrder = new ArrayList<>();
@@ -920,6 +921,12 @@ public final class BytecodeCompiler {
                 // Check if it's a constructor
                 if (method.key() instanceof Identifier id && "constructor".equals(id.name()) && !method.isStatic()) {
                     constructor = method;
+                } else if (method.isPrivate()) {
+                    if (method.isStatic()) {
+                        privateStaticMethods.add(method);
+                    } else {
+                        privateInstanceMethods.add(method);
+                    }
                 } else {
                     methods.add(method);
                 }
@@ -942,25 +949,11 @@ public final class BytecodeCompiler {
             }
         }
 
-        // Create private symbols once for the class.
-        // Include both instance and static private fields so static methods/blocks can access static #names.
-        List<String> privateFieldNames = classExpr.body().stream()
-                .filter(ClassDeclaration.PropertyDefinition.class::isInstance)
-                .map(ClassDeclaration.PropertyDefinition.class::cast)
-                .filter(ClassDeclaration.PropertyDefinition::isPrivate)
-                .map(field -> {
-                    if (field.key() instanceof PrivateIdentifier privateId) {
-                        return privateId.name();
-                    }
-                    return null;
-                })
-                .filter(Objects::nonNull)
-                .toList();
-
-        Map<String, JSSymbol> privateSymbols = new LinkedHashMap<>();
-        for (String privateFieldName : privateFieldNames) {
-            privateSymbols.put(privateFieldName, new JSSymbol(privateFieldName));
-        }
+        Map<String, JSSymbol> privateSymbols = createPrivateSymbols(classExpr.body());
+        LinkedHashMap<String, JSBytecodeFunction> privateInstanceMethodFunctions = compilePrivateMethodFunctions(
+                privateInstanceMethods, privateSymbols, computedFieldSymbols);
+        LinkedHashMap<String, JSBytecodeFunction> privateStaticMethodFunctions = compilePrivateMethodFunctions(
+                privateStaticMethods, privateSymbols, computedFieldSymbols);
 
         // Compile constructor function (or create default)
         JSBytecodeFunction constructorFunc;
@@ -972,6 +965,7 @@ public final class BytecodeCompiler {
                     instanceFields,
                     privateSymbols,
                     computedFieldSymbols,
+                    privateInstanceMethodFunctions,
                     true
             );
         } else {
@@ -980,7 +974,8 @@ public final class BytecodeCompiler {
                     classExpr.superClass() != null,
                     instanceFields,
                     privateSymbols,
-                    computedFieldSymbols
+                    computedFieldSymbols,
+                    privateInstanceMethodFunctions
             );
         }
 
@@ -1020,6 +1015,7 @@ public final class BytecodeCompiler {
                         List.of(),
                         privateSymbols,
                         computedFieldSymbols,
+                        Map.of(),
                         false
                 );
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
@@ -1040,6 +1036,7 @@ public final class BytecodeCompiler {
                         List.of(),
                         privateSymbols,
                         computedFieldSymbols,
+                        Map.of(),
                         false
                 );
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
@@ -1050,6 +1047,8 @@ public final class BytecodeCompiler {
                 // Stack: constructor proto
             }
         }
+
+        installPrivateStaticMethods(privateStaticMethodFunctions, privateSymbols);
 
         // Evaluate all computed field names once at class definition time.
         for (ClassDeclaration.PropertyDefinition field : computedFieldsInDefinitionOrder) {
@@ -1289,6 +1288,65 @@ public final class BytecodeCompiler {
             // Drop 'this' from stack
             emitter.emitOpcode(Opcode.DROP);
         }
+    }
+
+    private LinkedHashMap<String, JSBytecodeFunction> compilePrivateMethodFunctions(
+            List<ClassDeclaration.MethodDefinition> privateMethods,
+            Map<String, JSSymbol> privateSymbols,
+            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
+        LinkedHashMap<String, JSBytecodeFunction> privateMethodFunctions = new LinkedHashMap<>();
+        for (ClassDeclaration.MethodDefinition method : privateMethods) {
+            String methodName = getMethodName(method);
+            JSBytecodeFunction methodFunc = compileMethodAsFunction(
+                    method,
+                    methodName,
+                    false,
+                    List.of(),
+                    privateSymbols,
+                    computedFieldSymbols,
+                    Map.of(),
+                    false
+            );
+            privateMethodFunctions.put(methodName, methodFunc);
+        }
+        return privateMethodFunctions;
+    }
+
+    private void compilePrivateMethodInitialization(
+            Map<String, JSBytecodeFunction> privateMethodFunctions,
+            Map<String, JSSymbol> privateSymbols) {
+        for (Map.Entry<String, JSBytecodeFunction> entry : privateMethodFunctions.entrySet()) {
+            JSSymbol symbol = privateSymbols.get(entry.getKey());
+            if (symbol == null) {
+                throw new CompilerException("Private method symbol not found: #" + entry.getKey());
+            }
+            emitter.emitOpcode(Opcode.PUSH_THIS);
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.getValue());
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+            emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
+            emitter.emitOpcode(Opcode.DROP);
+        }
+    }
+
+    private Map<String, JSSymbol> createPrivateSymbols(List<ClassDeclaration.ClassElement> classElements) {
+        LinkedHashMap<String, String> privateNameKinds = new LinkedHashMap<>();
+        for (ClassDeclaration.ClassElement element : classElements) {
+            if (element instanceof ClassDeclaration.PropertyDefinition field) {
+                if (field.isPrivate() && field.key() instanceof PrivateIdentifier privateId) {
+                    registerPrivateName(privateNameKinds, privateId.name(), "field");
+                }
+            } else if (element instanceof ClassDeclaration.MethodDefinition method) {
+                if (method.isPrivate() && method.key() instanceof PrivateIdentifier privateId) {
+                    registerPrivateName(privateNameKinds, privateId.name(), method.kind());
+                }
+            }
+        }
+        LinkedHashMap<String, JSSymbol> privateSymbols = new LinkedHashMap<>();
+        for (String privateName : privateNameKinds.keySet()) {
+            privateSymbols.put(privateName, new JSSymbol(privateName));
+        }
+        return privateSymbols;
     }
 
     private void compileForInStatement(ForInStatement forInStmt) {
@@ -2089,6 +2147,7 @@ public final class BytecodeCompiler {
             List<ClassDeclaration.PropertyDefinition> instanceFields,
             Map<String, JSSymbol> privateSymbols,
             IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
+            Map<String, JSBytecodeFunction> privateInstanceMethodFunctions,
             boolean isConstructor) {
         BytecodeCompiler methodCompiler = new BytecodeCompiler();
         methodCompiler.privateSymbols = privateSymbols;  // Make private symbols available in method
@@ -2109,10 +2168,14 @@ public final class BytecodeCompiler {
             methodCompiler.emitter.emitOpcode(Opcode.INITIAL_YIELD);
         }
 
-        // For constructors, emit field initialization BEFORE the constructor body
-        // This ensures fields are initialized before user code runs
-        if (!instanceFields.isEmpty()) {
-            methodCompiler.compileFieldInitialization(instanceFields, privateSymbols, computedFieldSymbols);
+        // For constructors, initialize private methods then fields before user code runs.
+        if (isConstructor) {
+            if (!privateInstanceMethodFunctions.isEmpty()) {
+                methodCompiler.compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
+            }
+            if (!instanceFields.isEmpty()) {
+                methodCompiler.compileFieldInitialization(instanceFields, privateSymbols, computedFieldSymbols);
+            }
         }
 
         // Compile method body statements
@@ -3139,14 +3202,18 @@ public final class BytecodeCompiler {
             boolean hasSuper,
             List<ClassDeclaration.PropertyDefinition> instanceFields,
             Map<String, JSSymbol> privateSymbols,
-            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
+            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
+            Map<String, JSBytecodeFunction> privateInstanceMethodFunctions) {
         BytecodeCompiler constructorCompiler = new BytecodeCompiler();
         constructorCompiler.privateSymbols = privateSymbols;  // Make private symbols available
 
         constructorCompiler.enterScope();
         constructorCompiler.inGlobalScope = false;
 
-        // Initialize fields before constructor body
+        // Initialize private methods and fields before constructor body
+        if (!privateInstanceMethodFunctions.isEmpty()) {
+            constructorCompiler.compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
+        }
         if (!instanceFields.isEmpty()) {
             constructorCompiler.compileFieldInitialization(instanceFields, privateSymbols, computedFieldSymbols);
         }
@@ -3316,6 +3383,43 @@ public final class BytecodeCompiler {
             // Computed property name - for now use a placeholder
             return "[computed]";
         }
+    }
+
+    private void installPrivateStaticMethods(
+            Map<String, JSBytecodeFunction> privateStaticMethodFunctions,
+            Map<String, JSSymbol> privateSymbols) {
+        for (Map.Entry<String, JSBytecodeFunction> entry : privateStaticMethodFunctions.entrySet()) {
+            JSSymbol symbol = privateSymbols.get(entry.getKey());
+            if (symbol == null) {
+                throw new CompilerException("Private static method symbol not found: #" + entry.getKey());
+            }
+
+            // Stack before: constructor proto
+            emitter.emitOpcode(Opcode.SWAP); // proto constructor
+            emitter.emitOpcode(Opcode.DUP);  // proto constructor constructor
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.getValue()); // proto constructor constructor method
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // proto constructor constructor method symbol
+            emitter.emitOpcode(Opcode.SWAP); // proto constructor constructor symbol method
+            emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD); // proto constructor constructor
+            emitter.emitOpcode(Opcode.DROP); // proto constructor
+            emitter.emitOpcode(Opcode.SWAP); // constructor proto
+        }
+    }
+
+    private void registerPrivateName(Map<String, String> privateNameKinds, String privateName, String kind) {
+        String existingKind = privateNameKinds.get(privateName);
+        if (existingKind == null) {
+            privateNameKinds.put(privateName, kind);
+            return;
+        }
+        boolean isGetterSetterPair =
+                ("get".equals(existingKind) && "set".equals(kind))
+                        || ("set".equals(existingKind) && "get".equals(kind));
+        if (isGetterSetterPair) {
+            privateNameKinds.put(privateName, "accessor");
+            return;
+        }
+        throw new CompilerException("private class field is already defined");
     }
 
     /**

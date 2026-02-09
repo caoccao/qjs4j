@@ -116,6 +116,28 @@ public class ClassParserTest {
     }
 
     @Test
+    public void testClassWithPrivateMethods() {
+        String source = "class Counter { #inc() { return 1; } static #version() { return 2; } }";
+        Parser parser = new Parser(new Lexer(source));
+        Program program = parser.parse();
+
+        ClassDeclaration classDecl = (ClassDeclaration) program.body().get(0);
+        assertThat(classDecl.body()).hasSize(2);
+
+        ClassDeclaration.MethodDefinition instanceMethod = (ClassDeclaration.MethodDefinition) classDecl.body().get(0);
+        assertThat(instanceMethod.key()).isInstanceOf(PrivateIdentifier.class);
+        assertThat(((PrivateIdentifier) instanceMethod.key()).name()).isEqualTo("inc");
+        assertThat(instanceMethod.isPrivate()).isTrue();
+        assertThat(instanceMethod.isStatic()).isFalse();
+
+        ClassDeclaration.MethodDefinition staticMethod = (ClassDeclaration.MethodDefinition) classDecl.body().get(1);
+        assertThat(staticMethod.key()).isInstanceOf(PrivateIdentifier.class);
+        assertThat(((PrivateIdentifier) staticMethod.key()).name()).isEqualTo("version");
+        assertThat(staticMethod.isPrivate()).isTrue();
+        assertThat(staticMethod.isStatic()).isTrue();
+    }
+
+    @Test
     public void testClassWithPublicField() {
         String source = "class Example { count = 0; }";
         Parser parser = new Parser(new Lexer(source));

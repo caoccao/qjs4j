@@ -423,6 +423,10 @@ Following QuickJS implementation:
   - Static private field definition: `static #field = value`
   - Static private field default initializer: `static #field`
   - Static private field access/mutation from static methods and static blocks
-⏳ **Next Step**: Implement private methods
+✅ **Private Methods**: Implemented and tested
+  - Instance private method definition and invocation: `#method()`
+  - Static private method definition and invocation: `static #method()`
+  - Private methods are stored by private symbols and not exposed as public properties
+⏳ **Next Step**: Implement `#field in obj` (PRIVATE_IN operator)
 
 ## Remaining Work ⏳

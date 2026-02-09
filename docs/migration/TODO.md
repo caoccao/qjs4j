@@ -23,11 +23,6 @@ This document tracks remaining features, known bugs, and planned enhancements fo
 
 ### Medium Priority - Class Features
 
-#### Private Methods
-- **Description**: `#method()` private method declarations
-- **Status**: Not implemented
-- **Reference**: [PRIVATE_FIELDS_IMPLEMENTATION.md](PRIVATE_FIELDS_IMPLEMENTATION.md#future-enhancements)
-
 #### PRIVATE_IN Operator
 - **Description**: `#field in obj` syntax to check if object has private field
 - **Status**: Opcode exists (PRIVATE_IN), compiler support incomplete
