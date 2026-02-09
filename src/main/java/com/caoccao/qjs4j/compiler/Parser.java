@@ -451,7 +451,7 @@ public final class Parser {
             if (match(TokenType.TEMPLATE)) {
                 // Tagged template: expr`template`
                 SourceLocation location = getLocation();
-                TemplateLiteral template = parseTemplateLiteral();
+                TemplateLiteral template = parseTemplateLiteral(true);
                 expr = new TaggedTemplateExpression(expr, template, location);
             } else if (match(TokenType.LPAREN)) {
                 SourceLocation location = getLocation();
@@ -1403,7 +1403,7 @@ public final class Parser {
                 yield new Literal(value, location);
             }
             case TEMPLATE -> {
-                yield parseTemplateLiteral();
+                yield parseTemplateLiteral(false);
             }
             case TRUE -> {
                 advance();
@@ -1767,69 +1767,45 @@ public final class Parser {
         return new SwitchStatement(discriminant, cases, location);
     }
 
-    private TemplateLiteral parseTemplateLiteral() {
+    private TemplateLiteral parseTemplateLiteral(boolean tagged) {
         SourceLocation location = getLocation();
         String templateStr = currentToken.value();
         advance();
 
-        // Parse template literal and extract parts and expressions
         List<String> quasis = new ArrayList<>();
+        List<String> rawQuasis = new ArrayList<>();
         List<Expression> expressions = new ArrayList<>();
 
-        // Parse the template string to extract static parts and ${...} expressions
+        int quasiStart = 0;
         int pos = 0;
-        StringBuilder currentQuasi = new StringBuilder();
-
         while (pos < templateStr.length()) {
-            if (pos + 1 < templateStr.length() && templateStr.charAt(pos) == '$' && templateStr.charAt(pos + 1) == '{') {
-                // Found ${...} - add current quasi and parse expression
-                quasis.add(processEscapeSequences(currentQuasi.toString()));
-                currentQuasi = new StringBuilder();
+            char c = templateStr.charAt(pos);
+            if (c == '\\' && pos + 1 < templateStr.length()) {
+                // Skip escaped character so \${ does not trigger interpolation.
+                pos += 2;
+                continue;
+            }
+            if (c == '$' && pos + 1 < templateStr.length() && templateStr.charAt(pos + 1) == '{') {
+                String rawQuasi = normalizeTemplateLineTerminators(templateStr.substring(quasiStart, pos));
+                rawQuasis.add(rawQuasi);
+                quasis.add(processTemplateEscapeSequences(rawQuasi, tagged));
 
-                // Find matching }
-                pos += 2; // skip ${
-                int braceCount = 1;
-                StringBuilder exprStr = new StringBuilder();
+                int exprStart = pos + 2;
+                int exprEnd = findTemplateExpressionEnd(templateStr, exprStart);
+                String expressionSource = templateStr.substring(exprStart, exprEnd);
+                expressions.add(parseTemplateExpression(expressionSource));
 
-                while (pos < templateStr.length() && braceCount > 0) {
-                    char c = templateStr.charAt(pos);
-                    if (c == '{') {
-                        braceCount++;
-                    } else if (c == '}') {
-                        braceCount--;
-                        if (braceCount == 0) {
-                            break;
-                        }
-                    }
-                    exprStr.append(c);
-                    pos++;
-                }
-
-                // Parse the expression
-                Lexer exprLexer = new Lexer(exprStr.toString());
-                Parser exprParser = new Parser(exprLexer);
-                Expression expr = exprParser.parseExpression();
-                expressions.add(expr);
-
-                pos++; // skip closing }
-            } else if (templateStr.charAt(pos) == '\\' && pos + 1 < templateStr.length()) {
-                // Escape sequence - keep as-is for now, will be processed later
-                currentQuasi.append(templateStr.charAt(pos));
-                pos++;
-                if (pos < templateStr.length()) {
-                    currentQuasi.append(templateStr.charAt(pos));
-                    pos++;
-                }
+                pos = exprEnd + 1; // skip closing }
+                quasiStart = pos;
             } else {
-                currentQuasi.append(templateStr.charAt(pos));
                 pos++;
             }
         }
 
-        // Add the final quasi
-        quasis.add(processEscapeSequences(currentQuasi.toString()));
-
-        return new TemplateLiteral(quasis, expressions, location);
+        String rawQuasi = normalizeTemplateLineTerminators(templateStr.substring(quasiStart));
+        rawQuasis.add(rawQuasi);
+        quasis.add(processTemplateEscapeSequences(rawQuasi, tagged));
+        return new TemplateLiteral(quasis, rawQuasis, expressions, location);
     }
 
     private Statement parseThrowStatement() {
@@ -1970,41 +1946,470 @@ public final class Parser {
         return nextToken;
     }
 
-    /**
-     * Process escape sequences in template literal strings.
-     * For cooked strings, escape sequences are processed.
-     * This handles common escape sequences like \\n, \\t, \\\\, etc.
-     */
-    private String processEscapeSequences(String str) {
-        StringBuilder result = new StringBuilder();
-        int i = 0;
-        while (i < str.length()) {
-            if (str.charAt(i) == '\\' && i + 1 < str.length()) {
-                char next = str.charAt(i + 1);
-                switch (next) {
-                    case 'n' -> result.append('\n');
-                    case 't' -> result.append('\t');
-                    case 'r' -> result.append('\r');
-                    case '\\' -> result.append('\\');
-                    case '\'' -> result.append('\'');
-                    case '"' -> result.append('"');
-                    case 'b' -> result.append('\b');
-                    case 'f' -> result.append('\f');
-                    case 'v' -> result.append('\u000B');
-                    case '0' -> result.append('\0');
-                    default -> {
-                        // For unrecognized escapes, keep the backslash
-                        result.append('\\');
-                        result.append(next);
+    private int findTemplateExpressionEnd(String templateStr, int expressionStart) {
+        int braceDepth = 1;
+        int pos = expressionStart;
+        boolean regexAllowed = true;
+
+        while (pos < templateStr.length()) {
+            char c = templateStr.charAt(pos);
+
+            if (Character.isWhitespace(c)) {
+                pos++;
+                continue;
+            }
+
+            if (c == '\'' || c == '"') {
+                pos = skipQuotedString(templateStr, pos, c);
+                regexAllowed = false;
+                continue;
+            }
+
+            if (c == '`') {
+                pos = skipNestedTemplateLiteral(templateStr, pos);
+                regexAllowed = false;
+                continue;
+            }
+
+            if (c == '/') {
+                if (pos + 1 < templateStr.length()) {
+                    char next = templateStr.charAt(pos + 1);
+                    if (next == '/') {
+                        pos = skipLineComment(templateStr, pos + 2);
+                        regexAllowed = true;
+                        continue;
+                    }
+                    if (next == '*') {
+                        pos = skipBlockComment(templateStr, pos + 2);
+                        regexAllowed = true;
+                        continue;
                     }
                 }
-                i += 2;
+
+                if (regexAllowed) {
+                    pos = skipRegexLiteral(templateStr, pos);
+                    regexAllowed = false;
+                    continue;
+                }
+
+                pos++;
+                if (pos < templateStr.length() && templateStr.charAt(pos) == '=') {
+                    pos++;
+                }
+                regexAllowed = true;
+                continue;
+            }
+
+            if (c == '{') {
+                braceDepth++;
+                pos++;
+                regexAllowed = true;
+                continue;
+            }
+
+            if (c == '}') {
+                braceDepth--;
+                if (braceDepth == 0) {
+                    return pos;
+                }
+                pos++;
+                regexAllowed = false;
+                continue;
+            }
+
+            if (c == '(' || c == '[' || c == ',' || c == ';' || c == ':') {
+                pos++;
+                regexAllowed = true;
+                continue;
+            }
+
+            if (c == ')' || c == ']') {
+                pos++;
+                regexAllowed = false;
+                continue;
+            }
+
+            if (c == '.') {
+                if (pos + 2 < templateStr.length()
+                        && templateStr.charAt(pos + 1) == '.'
+                        && templateStr.charAt(pos + 2) == '.') {
+                    pos += 3;
+                    regexAllowed = true;
+                } else if (pos + 1 < templateStr.length() && Character.isDigit(templateStr.charAt(pos + 1))) {
+                    pos = skipNumberLiteral(templateStr, pos);
+                    regexAllowed = false;
+                } else {
+                    pos++;
+                    regexAllowed = false;
+                }
+                continue;
+            }
+
+            if (isIdentifierStartChar(c)) {
+                int start = pos++;
+                while (pos < templateStr.length() && isIdentifierPartChar(templateStr.charAt(pos))) {
+                    pos++;
+                }
+                String identifier = templateStr.substring(start, pos);
+                regexAllowed = switch (identifier) {
+                    case "return", "throw", "case", "delete", "void", "typeof",
+                         "instanceof", "in", "of", "new", "do", "else", "yield", "await" -> true;
+                    default -> false;
+                };
+                continue;
+            }
+
+            if (Character.isDigit(c)) {
+                pos = skipNumberLiteral(templateStr, pos);
+                regexAllowed = false;
+                continue;
+            }
+
+            if ("+-*%&|^!~<>=?".indexOf(c) >= 0) {
+                pos++;
+                if (pos < templateStr.length()) {
+                    char next = templateStr.charAt(pos);
+                    if (next == '=' || (next == c && "&|+-<>?".indexOf(c) >= 0)) {
+                        pos++;
+                    } else if (c == '=' && next == '>') {
+                        pos++;
+                    }
+                }
+                if (c == '>' && pos < templateStr.length() && templateStr.charAt(pos) == '>') {
+                    pos++;
+                    if (pos < templateStr.length() && templateStr.charAt(pos) == '>') {
+                        pos++;
+                    }
+                    if (pos < templateStr.length() && templateStr.charAt(pos) == '=') {
+                        pos++;
+                    }
+                }
+                regexAllowed = true;
+                continue;
+            }
+
+            pos++;
+            regexAllowed = false;
+        }
+
+        throw new JSSyntaxErrorException("Unterminated template expression");
+    }
+
+    private String normalizeTemplateLineTerminators(String str) {
+        StringBuilder normalized = new StringBuilder(str.length());
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if (c == '\r') {
+                if (i + 1 < str.length() && str.charAt(i + 1) == '\n') {
+                    i++;
+                }
+                normalized.append('\n');
             } else {
-                result.append(str.charAt(i));
+                normalized.append(c);
+            }
+        }
+        return normalized.toString();
+    }
+
+    private Expression parseTemplateExpression(String expressionSource) {
+        if (expressionSource.isBlank()) {
+            throw new JSSyntaxErrorException("Empty template expression");
+        }
+
+        Parser expressionParser = new Parser(new Lexer(expressionSource));
+        Expression expression = expressionParser.parseExpression();
+        if (expressionParser.currentToken.type() != TokenType.EOF) {
+            throw new JSSyntaxErrorException("Invalid template expression");
+        }
+        return expression;
+    }
+
+    private String processTemplateEscapeSequences(String str, boolean tagged) {
+        StringBuilder result = new StringBuilder(str.length());
+        int i = 0;
+        while (i < str.length()) {
+            char c = str.charAt(i);
+            if (c != '\\') {
+                result.append(c);
                 i++;
+                continue;
+            }
+
+            if (i + 1 >= str.length()) {
+                if (tagged) {
+                    return null;
+                }
+                throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
+            }
+
+            char next = str.charAt(i + 1);
+            switch (next) {
+                case '\n' -> i += 2; // Line continuation
+                case '\r' -> {
+                    i += 2;
+                    if (i < str.length() && str.charAt(i) == '\n') {
+                        i++;
+                    }
+                }
+                case '\\', '\'', '"', '`', '$' -> {
+                    result.append(next);
+                    i += 2;
+                }
+                case 'b' -> {
+                    result.append('\b');
+                    i += 2;
+                }
+                case 'f' -> {
+                    result.append('\f');
+                    i += 2;
+                }
+                case 'n' -> {
+                    result.append('\n');
+                    i += 2;
+                }
+                case 'r' -> {
+                    result.append('\r');
+                    i += 2;
+                }
+                case 't' -> {
+                    result.append('\t');
+                    i += 2;
+                }
+                case 'v' -> {
+                    result.append('\u000B');
+                    i += 2;
+                }
+                case '0' -> {
+                    if (i + 2 < str.length() && Character.isDigit(str.charAt(i + 2))) {
+                        if (tagged) {
+                            return null;
+                        }
+                        throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
+                    }
+                    result.append('\0');
+                    i += 2;
+                }
+                case '1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
+                    if (tagged) {
+                        return null;
+                    }
+                    throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
+                }
+                case 'x' -> {
+                    if (i + 3 >= str.length()
+                            || Character.digit(str.charAt(i + 2), 16) < 0
+                            || Character.digit(str.charAt(i + 3), 16) < 0) {
+                        if (tagged) {
+                            return null;
+                        }
+                        throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
+                    }
+                    int value = Integer.parseInt(str.substring(i + 2, i + 4), 16);
+                    result.append((char) value);
+                    i += 4;
+                }
+                case 'u' -> {
+                    if (i + 2 < str.length() && str.charAt(i + 2) == '{') {
+                        int end = i + 3;
+                        while (end < str.length() && str.charAt(end) != '}') {
+                            if (Character.digit(str.charAt(end), 16) < 0) {
+                                if (tagged) {
+                                    return null;
+                                }
+                                throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
+                            }
+                            end++;
+                        }
+                        if (end >= str.length() || end == i + 3) {
+                            if (tagged) {
+                                return null;
+                            }
+                            throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
+                        }
+                        int codePoint;
+                        try {
+                            codePoint = Integer.parseInt(str.substring(i + 3, end), 16);
+                        } catch (NumberFormatException e) {
+                            if (tagged) {
+                                return null;
+                            }
+                            throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
+                        }
+                        if (codePoint < 0 || codePoint > 0x10FFFF) {
+                            if (tagged) {
+                                return null;
+                            }
+                            throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
+                        }
+                        result.appendCodePoint(codePoint);
+                        i = end + 1;
+                    } else {
+                        if (i + 5 >= str.length()) {
+                            if (tagged) {
+                                return null;
+                            }
+                            throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
+                        }
+                        int codeUnit = 0;
+                        for (int j = i + 2; j < i + 6; j++) {
+                            int digit = Character.digit(str.charAt(j), 16);
+                            if (digit < 0) {
+                                if (tagged) {
+                                    return null;
+                                }
+                                throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
+                            }
+                            codeUnit = (codeUnit << 4) | digit;
+                        }
+                        result.append((char) codeUnit);
+                        i += 6;
+                    }
+                }
+                default -> {
+                    // NonEscapeCharacter: keep the escaped character and drop '\'.
+                    result.append(next);
+                    i += 2;
+                }
             }
         }
         return result.toString();
+    }
+
+    private boolean isIdentifierPartChar(char c) {
+        return Character.isLetterOrDigit(c) || c == '_' || c == '$';
+    }
+
+    private boolean isIdentifierStartChar(char c) {
+        return Character.isLetter(c) || c == '_' || c == '$';
+    }
+
+    private int skipBlockComment(String source, int pos) {
+        while (pos + 1 < source.length()) {
+            if (source.charAt(pos) == '*' && source.charAt(pos + 1) == '/') {
+                return pos + 2;
+            }
+            pos++;
+        }
+        throw new JSSyntaxErrorException("Unterminated block comment in template expression");
+    }
+
+    private int skipLineComment(String source, int pos) {
+        while (pos < source.length() && source.charAt(pos) != '\n' && source.charAt(pos) != '\r') {
+            pos++;
+        }
+        return pos;
+    }
+
+    private int skipNestedTemplateLiteral(String source, int backtickPos) {
+        int pos = backtickPos + 1;
+        while (pos < source.length()) {
+            char c = source.charAt(pos);
+            if (c == '\\') {
+                pos = Math.min(pos + 2, source.length());
+                continue;
+            }
+            if (c == '`') {
+                return pos + 1;
+            }
+            if (c == '$' && pos + 1 < source.length() && source.charAt(pos + 1) == '{') {
+                int exprEnd = findTemplateExpressionEnd(source, pos + 2);
+                pos = exprEnd + 1;
+                continue;
+            }
+            pos++;
+        }
+        throw new JSSyntaxErrorException("Unterminated nested template literal");
+    }
+
+    private int skipNumberLiteral(String source, int pos) {
+        int start = pos;
+        if (source.charAt(pos) == '0' && pos + 1 < source.length()) {
+            char prefix = source.charAt(pos + 1);
+            if (prefix == 'x' || prefix == 'X' || prefix == 'b' || prefix == 'B' || prefix == 'o' || prefix == 'O') {
+                pos += 2;
+                while (pos < source.length() && isIdentifierPartChar(source.charAt(pos))) {
+                    pos++;
+                }
+                return pos;
+            }
+        }
+
+        while (pos < source.length() && Character.isDigit(source.charAt(pos))) {
+            pos++;
+        }
+        if (pos < source.length() && source.charAt(pos) == '.') {
+            pos++;
+            while (pos < source.length() && Character.isDigit(source.charAt(pos))) {
+                pos++;
+            }
+        }
+        if (pos < source.length() && (source.charAt(pos) == 'e' || source.charAt(pos) == 'E')) {
+            int expPos = pos + 1;
+            if (expPos < source.length() && (source.charAt(expPos) == '+' || source.charAt(expPos) == '-')) {
+                expPos++;
+            }
+            while (expPos < source.length() && Character.isDigit(source.charAt(expPos))) {
+                expPos++;
+            }
+            pos = expPos;
+        }
+        if (pos < source.length() && source.charAt(pos) == 'n') {
+            pos++;
+        }
+        return pos == start ? start + 1 : pos;
+    }
+
+    private int skipQuotedString(String source, int quotePos, char quote) {
+        int pos = quotePos + 1;
+        while (pos < source.length()) {
+            char c = source.charAt(pos);
+            if (c == '\\') {
+                pos = Math.min(pos + 2, source.length());
+                continue;
+            }
+            if (c == quote) {
+                return pos + 1;
+            }
+            if (c == '\n' || c == '\r') {
+                throw new JSSyntaxErrorException("Unterminated string in template expression");
+            }
+            pos++;
+        }
+        throw new JSSyntaxErrorException("Unterminated string in template expression");
+    }
+
+    private int skipRegexLiteral(String source, int slashPos) {
+        int pos = slashPos + 1;
+        boolean inCharacterClass = false;
+        while (pos < source.length()) {
+            char c = source.charAt(pos);
+            if (c == '\\') {
+                pos = Math.min(pos + 2, source.length());
+                continue;
+            }
+            if (c == '[') {
+                inCharacterClass = true;
+                pos++;
+                continue;
+            }
+            if (c == ']' && inCharacterClass) {
+                inCharacterClass = false;
+                pos++;
+                continue;
+            }
+            if (c == '/' && !inCharacterClass) {
+                pos++;
+                while (pos < source.length() && isIdentifierPartChar(source.charAt(pos))) {
+                    pos++;
+                }
+                return pos;
+            }
+            if (c == '\n' || c == '\r') {
+                throw new JSSyntaxErrorException("Unterminated regex literal in template expression");
+            }
+            pos++;
+        }
+        throw new JSSyntaxErrorException("Unterminated regex literal in template expression");
     }
 
     /**

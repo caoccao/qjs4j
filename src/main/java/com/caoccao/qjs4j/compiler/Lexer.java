@@ -627,25 +627,304 @@ public final class Lexer {
         return new Token(TokenType.STRING, value.toString(), startLine, startColumn, startPos);
     }
 
-    private Token scanTemplate(int startPos, int startLine, int startColumn) {
-        // Store the complete template literal including ${...} expressions
-        // The parser will handle breaking it down into parts and expressions
-        StringBuilder value = new StringBuilder();
+    private void scanTemplateBlockComment(StringBuilder value) {
+        value.append(advance()); // /
+        value.append(advance()); // *
+        while (!isAtEnd()) {
+            char c = advance();
+            value.append(c);
+            if (c == '*' && !isAtEnd() && peek() == '/') {
+                value.append(advance());
+                return;
+            }
+        }
+    }
 
-        while (!isAtEnd() && peek() != '`') {
-            if (peek() == '\\') {
-                // Handle escape sequences - store them as-is for raw strings
+    private void scanTemplateExpression(StringBuilder value) {
+        int braceDepth = 1;
+        boolean regexAllowed = true;
+        while (!isAtEnd() && braceDepth > 0) {
+            char c = peek();
+            if (Character.isWhitespace(c)) {
+                value.append(advance());
+                continue;
+            }
+            if (c == '\'' || c == '"') {
+                scanTemplateQuotedString(value, c);
+                regexAllowed = false;
+                continue;
+            }
+            if (c == '`') {
+                scanTemplateNestedTemplate(value);
+                regexAllowed = false;
+                continue;
+            }
+            if (c == '/' && position + 1 < source.length()) {
+                char next = source.charAt(position + 1);
+                if (next == '/') {
+                    scanTemplateLineComment(value);
+                    regexAllowed = true;
+                    continue;
+                }
+                if (next == '*') {
+                    scanTemplateBlockComment(value);
+                    regexAllowed = true;
+                    continue;
+                }
+                if (regexAllowed) {
+                    scanTemplateRegex(value);
+                    regexAllowed = false;
+                    continue;
+                }
+                value.append(advance());
+                if (!isAtEnd() && peek() == '=') {
+                    value.append(advance());
+                }
+                regexAllowed = true;
+                continue;
+            }
+
+            if (c == '{') {
+                value.append(advance());
+                braceDepth++;
+                regexAllowed = true;
+                continue;
+            }
+            if (c == '}') {
+                value.append(advance());
+                braceDepth--;
+                regexAllowed = false;
+                continue;
+            }
+            if (c == '(' || c == '[' || c == ',' || c == ';' || c == ':') {
+                value.append(advance());
+                regexAllowed = true;
+                continue;
+            }
+            if (c == ')' || c == ']') {
+                value.append(advance());
+                regexAllowed = false;
+                continue;
+            }
+
+            if (c == '.') {
+                if (position + 2 < source.length()
+                        && source.charAt(position + 1) == '.'
+                        && source.charAt(position + 2) == '.') {
+                    value.append(advance());
+                    value.append(advance());
+                    value.append(advance());
+                    regexAllowed = true;
+                } else if (position + 1 < source.length() && Character.isDigit(source.charAt(position + 1))) {
+                    scanTemplateNumber(value);
+                    regexAllowed = false;
+                } else {
+                    value.append(advance());
+                    regexAllowed = false;
+                }
+                continue;
+            }
+
+            if (isIdentifierStart(c)) {
+                String identifier = scanTemplateIdentifier(value);
+                regexAllowed = switch (identifier) {
+                    case "return", "throw", "case", "delete", "void", "typeof",
+                         "instanceof", "in", "of", "new", "do", "else", "yield", "await" -> true;
+                    default -> false;
+                };
+                continue;
+            }
+
+            if (Character.isDigit(c)) {
+                scanTemplateNumber(value);
+                regexAllowed = false;
+                continue;
+            }
+
+            if ("+-*%&|^!~<>=?".indexOf(c) >= 0) {
+                value.append(advance());
+                if (!isAtEnd()) {
+                    char next = peek();
+                    if (next == '=' || (next == c && "&|+-<>?".indexOf(c) >= 0)) {
+                        value.append(advance());
+                    } else if (c == '=' && next == '>') {
+                        value.append(advance());
+                    }
+                }
+                if (c == '>' && !isAtEnd() && peek() == '>') {
+                    value.append(advance());
+                    if (!isAtEnd() && peek() == '>') {
+                        value.append(advance());
+                    }
+                    if (!isAtEnd() && peek() == '=') {
+                        value.append(advance());
+                    }
+                }
+                regexAllowed = true;
+                continue;
+            }
+
+            value.append(advance());
+            regexAllowed = false;
+        }
+    }
+
+    private void scanTemplateLineComment(StringBuilder value) {
+        value.append(advance()); // /
+        value.append(advance()); // /
+        while (!isAtEnd()) {
+            char c = advance();
+            value.append(c);
+            if (c == '\n' || c == '\r') {
+                return;
+            }
+        }
+    }
+
+    private String scanTemplateIdentifier(StringBuilder value) {
+        int start = position;
+        value.append(advance());
+        while (!isAtEnd() && isIdentifierPart(peek())) {
+            value.append(advance());
+        }
+        return source.substring(start, position);
+    }
+
+    private void scanTemplateNestedTemplate(StringBuilder value) {
+        value.append(advance()); // opening `
+        while (!isAtEnd()) {
+            char c = peek();
+            if (c == '`') {
+                value.append(advance());
+                return;
+            }
+            if (c == '\\') {
                 value.append(advance());
                 if (!isAtEnd()) {
                     value.append(advance());
                 }
-            } else {
+                continue;
+            }
+            if (c == '$' && position + 1 < source.length() && source.charAt(position + 1) == '{') {
                 value.append(advance());
+                value.append(advance());
+                scanTemplateExpression(value);
+                continue;
+            }
+            value.append(advance());
+        }
+    }
+
+    private void scanTemplateQuotedString(StringBuilder value, char quote) {
+        value.append(advance()); // opening quote
+        while (!isAtEnd()) {
+            char c = peek();
+            if (c == '\\') {
+                value.append(advance());
+                if (!isAtEnd()) {
+                    value.append(advance());
+                }
+                continue;
+            }
+            value.append(advance());
+            if (c == quote) {
+                return;
+            }
+        }
+    }
+
+    private void scanTemplateRegex(StringBuilder value) {
+        value.append(advance()); // opening '/'
+        boolean inClass = false;
+        while (!isAtEnd()) {
+            char c = advance();
+            value.append(c);
+            if (c == '\\') {
+                if (!isAtEnd()) {
+                    value.append(advance());
+                }
+                continue;
+            }
+            if (c == '[') {
+                inClass = true;
+                continue;
+            }
+            if (c == ']' && inClass) {
+                inClass = false;
+                continue;
+            }
+            if (c == '/' && !inClass) {
+                break;
+            }
+            if (c == '\n' || c == '\r') {
+                return;
+            }
+        }
+        while (!isAtEnd() && isIdentifierPart(peek())) {
+            value.append(advance());
+        }
+    }
+
+    private void scanTemplateNumber(StringBuilder value) {
+        if (peek() == '0' && position + 1 < source.length()) {
+            char prefix = source.charAt(position + 1);
+            if (prefix == 'x' || prefix == 'X' || prefix == 'b' || prefix == 'B' || prefix == 'o' || prefix == 'O') {
+                value.append(advance());
+                value.append(advance());
+                while (!isAtEnd() && isIdentifierPart(peek())) {
+                    value.append(advance());
+                }
+                return;
             }
         }
 
-        if (!isAtEnd()) {
-            advance(); // consume closing backtick
+        while (!isAtEnd() && Character.isDigit(peek())) {
+            value.append(advance());
+        }
+        if (!isAtEnd() && peek() == '.') {
+            value.append(advance());
+            while (!isAtEnd() && Character.isDigit(peek())) {
+                value.append(advance());
+            }
+        }
+        if (!isAtEnd() && (peek() == 'e' || peek() == 'E')) {
+            value.append(advance());
+            if (!isAtEnd() && (peek() == '+' || peek() == '-')) {
+                value.append(advance());
+            }
+            while (!isAtEnd() && Character.isDigit(peek())) {
+                value.append(advance());
+            }
+        }
+        if (!isAtEnd() && peek() == 'n') {
+            value.append(advance());
+        }
+    }
+
+    private Token scanTemplate(int startPos, int startLine, int startColumn) {
+        // Store the complete template literal including ${...} expressions.
+        StringBuilder value = new StringBuilder();
+
+        while (!isAtEnd()) {
+            char c = peek();
+            if (c == '`') {
+                advance(); // consume closing backtick
+                break;
+            }
+            if (c == '\\') {
+                value.append(advance());
+                if (!isAtEnd()) {
+                    value.append(advance());
+                }
+                continue;
+            }
+            if (c == '$' && position + 1 < source.length() && source.charAt(position + 1) == '{') {
+                value.append(advance()); // $
+                value.append(advance()); // {
+                scanTemplateExpression(value);
+                continue;
+            }
+            value.append(advance());
         }
 
         return new Token(TokenType.TEMPLATE, value.toString(), startLine, startColumn, startPos);

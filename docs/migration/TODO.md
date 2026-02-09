@@ -14,11 +14,6 @@ This document tracks remaining features, known bugs, and planned enhancements fo
 - **Scope**: Parser, Compiler, VM
 - **Reference**: [FEATURES.md](FEATURES.md#not-yet-implemented-)
 
-#### Template Literal Enhancements
-- **Tagged templates**: `tag\`template ${expr}\`` - Not implemented
-- **String.raw**: Raw string template tag - Not implemented
-- **Status**: Parser supports basic template literals but not tagged variants
-
 ### Medium Priority - Built-in Objects
 
 #### Internationalization (Intl)

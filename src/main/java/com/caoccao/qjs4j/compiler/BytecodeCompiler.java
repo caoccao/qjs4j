@@ -2366,7 +2366,8 @@ public final class BytecodeCompiler {
         // 2. The values of the substitutions as additional arguments
 
         TemplateLiteral template = taggedTemplate.quasi();
-        List<String> quasis = template.quasis();
+        List<String> cookedQuasis = template.quasis();
+        List<String> rawQuasis = template.rawQuasis();
         List<Expression> expressions = template.expressions();
 
         // Check if this is a method call (tag is a member expression)
@@ -2406,8 +2407,12 @@ public final class BytecodeCompiler {
 
         // Create the template array (with cooked strings)
         emitter.emitOpcode(Opcode.ARRAY_NEW);
-        for (String quasi : quasis) {
-            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
+        for (String quasi : cookedQuasis) {
+            if (quasi == null) {
+                emitter.emitOpcode(Opcode.UNDEFINED);
+            } else {
+                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
+            }
             emitter.emitOpcode(Opcode.PUSH_ARRAY);
         }
         // Stack: function, receiver, template_array
@@ -2418,8 +2423,7 @@ public final class BytecodeCompiler {
 
         // Create the raw array
         emitter.emitOpcode(Opcode.ARRAY_NEW);
-        for (String quasi : quasis) {
-            // For raw strings, use the same quasi (we already have the raw form)
+        for (String quasi : rawQuasis) {
             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
             emitter.emitOpcode(Opcode.PUSH_ARRAY);
         }
@@ -2464,7 +2468,11 @@ public final class BytecodeCompiler {
         }
 
         // Start with the first quasi
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasis.get(0)));
+        String firstQuasi = quasis.get(0);
+        if (firstQuasi == null) {
+            throw new CompilerException("Invalid escape sequence in untagged template literal");
+        }
+        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(firstQuasi));
 
         // Add each expression and subsequent quasi using string concatenation (ADD)
         for (int i = 0; i < expressions.size(); i++) {
@@ -2477,6 +2485,9 @@ public final class BytecodeCompiler {
             // Add the next quasi if it exists
             if (i + 1 < quasis.size()) {
                 String quasi = quasis.get(i + 1);
+                if (quasi == null) {
+                    throw new CompilerException("Invalid escape sequence in untagged template literal");
+                }
                 if (!quasi.isEmpty()) {
                     emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
                     emitter.emitOpcode(Opcode.ADD);

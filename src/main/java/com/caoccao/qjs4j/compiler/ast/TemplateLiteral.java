@@ -22,12 +22,15 @@ import java.util.List;
  * Template literal expression.
  * Represents template strings like `hello ${world}`.
  *
- * @param quasis      List of template element strings (the static parts)
+ * @param quasis      List of cooked template element strings (the static parts)
+ *                    For tagged templates, entries can be null when an escape is invalid.
+ * @param rawQuasis   List of raw template element strings
  * @param expressions List of expressions to be interpolated
  * @param location    Source location
  */
 public record TemplateLiteral(
         List<String> quasis,
+        List<String> rawQuasis,
         List<Expression> expressions,
         SourceLocation location
 ) implements Expression {
