@@ -542,7 +542,9 @@ public final class JSContext implements AutoCloseable {
 
         try {
             // Phase 1-3: Lexer → Parser → Compiler (compile to bytecode)
-            JSBytecodeFunction func = Compiler.compile(code, filename);
+            JSBytecodeFunction func = isModule
+                    ? Compiler.compileModule(code, filename)
+                    : Compiler.compile(code, filename);
 
             // Initialize the function's prototype chain so it inherits from Function.prototype
             func.initializePrototypeChain(this);

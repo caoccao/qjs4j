@@ -6,14 +6,6 @@ This document tracks remaining features, known bugs, and planned enhancements fo
 
 ## Not Yet Implemented
 
-### High Priority - Core Language Features
-
-#### Top-Level Await
-- **Description**: Module-level await expressions (ES2022)
-- **Status**: Not implemented
-- **Scope**: Parser, Compiler, VM
-- **Reference**: [FEATURES.md](FEATURES.md#not-yet-implemented-)
-
 ### Medium Priority - Built-in Objects
 
 #### Internationalization (Intl)
@@ -210,7 +202,6 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 ### Phase 4: Advanced Features
 1. Intl namespace (large undertaking)
 2. AsyncDisposableStack and explicit resource management
-3. Top-level await
 
 ### Phase 5: Optimizations
 1. SHORT_OPCODES implementation

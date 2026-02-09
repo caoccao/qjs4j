@@ -672,7 +672,6 @@ All symbols available as Symbol.* properties and via getWellKnownSymbol() helper
 
 ### Phase 27: Remaining ES2020+ Features  
 - Internationalization (Intl object)
-- Top-level await (ES2022)
 - Additional ECMAScript features as needed
 
 ## Build Status

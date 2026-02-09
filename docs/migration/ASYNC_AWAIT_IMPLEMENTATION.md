@@ -246,7 +246,6 @@ const promise = mayFail(); // JSPromise rejected with Error
 1. Async arrow functions: `async () => {}`
 2. Async methods: `async method() {}`
 3. Async generators: `async function* gen() {}`
-4. Top-level await in modules
 
 ## Conclusion
 Core async/await functionality is now **fully implemented** with **87.5% test success rate** (21/24 tests passing). All core features work correctly:

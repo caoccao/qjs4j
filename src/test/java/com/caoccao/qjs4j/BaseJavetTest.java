@@ -40,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class BaseJavetTest extends BaseTest {
+    protected static final String FILE_NAME = "test.js";
     protected boolean debugMode;
     protected boolean moduleMode;
     protected V8Runtime v8Runtime;
@@ -62,7 +63,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = resetContext().eval(code);
+                        JSValue jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -90,7 +91,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = resetContext().eval(code);
+                        JSValue jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -118,7 +119,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = resetContext().eval(code);
+                        JSValue jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -146,7 +147,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = resetContext().eval(code);
+                        JSValue jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -174,7 +175,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = resetContext().eval(code);
+                        JSValue jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -192,7 +193,7 @@ public class BaseJavetTest extends BaseTest {
             }
             String expectedMessage = assertThatThrownBy(() -> v8Runtime.getExecutor(code).setModule(moduleMode).executeVoid())
                     .isInstanceOf(JavetException.class).actual().getMessage();
-            assertThatThrownBy(() -> resetContext().eval(code), expectedMessage)
+            assertThatThrownBy(() -> resetContext().eval(code, FILE_NAME, moduleMode), expectedMessage)
                     .isInstanceOf(JSException.class)
                     .hasMessageContaining(expectedMessage);
         }
@@ -216,7 +217,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = resetContext().eval(code);
+                        JSValue jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -245,7 +246,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = resetContext().eval(code);
+                        JSValue jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -272,7 +273,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = resetContext().eval(code);
+                        JSValue jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -300,7 +301,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = resetContext().eval(code);
+                        JSValue jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();
@@ -328,7 +329,7 @@ public class BaseJavetTest extends BaseTest {
                         }
                     },
                     () -> {
-                        JSValue jsValue = resetContext().eval(code);
+                        JSValue jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
                         if (jsValue instanceof JSPromise jsPromise) {
                             awaitPromise(jsPromise);
                             jsValue = jsPromise.getResult();

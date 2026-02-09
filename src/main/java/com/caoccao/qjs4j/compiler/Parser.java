@@ -39,11 +39,25 @@ import java.util.List;
  */
 public final class Parser {
     private final Lexer lexer;
+    private final boolean moduleMode;
+    private int asyncFunctionNesting;
     private Token currentToken;
+    private int functionNesting;
     private Token nextToken; // Lookahead token
 
     public Parser(Lexer lexer) {
+        this(lexer, false);
+    }
+
+    public Parser(Lexer lexer, boolean moduleMode) {
+        this(lexer, moduleMode, 0, 0);
+    }
+
+    private Parser(Lexer lexer, boolean moduleMode, int functionNesting, int asyncFunctionNesting) {
         this.lexer = lexer;
+        this.moduleMode = moduleMode;
+        this.functionNesting = functionNesting;
+        this.asyncFunctionNesting = asyncFunctionNesting;
         this.currentToken = lexer.nextToken();
         this.nextToken = lexer.nextToken();
     }
@@ -68,6 +82,13 @@ public final class Parser {
         Token token = currentToken;
         advance();
         return token;
+    }
+
+    private void exitFunctionContext(boolean asyncFunction) {
+        if (asyncFunction) {
+            asyncFunctionNesting--;
+        }
+        functionNesting--;
     }
 
     // Statement parsing
@@ -264,6 +285,42 @@ public final class Parser {
         return currentToken.type() == type;
     }
 
+    private void enterFunctionContext(boolean asyncFunction) {
+        functionNesting++;
+        if (asyncFunction) {
+            asyncFunctionNesting++;
+        }
+    }
+
+    private boolean isAwaitExpressionAllowed() {
+        return asyncFunctionNesting > 0 || (moduleMode && functionNesting == 0);
+    }
+
+    private boolean isAwaitIdentifierAllowed() {
+        return !moduleMode && asyncFunctionNesting == 0;
+    }
+
+    private boolean isExpressionStartToken(TokenType tokenType) {
+        return switch (tokenType) {
+            case ASYNC, AWAIT, BIGINT, CLASS, FALSE, FUNCTION, IDENTIFIER,
+                 LBRACE, LBRACKET, LPAREN, NEW, NULL, NUMBER, REGEX,
+                 STRING, TEMPLATE, THIS, TRUE -> true;
+            default -> false;
+        };
+    }
+
+    private boolean isValidContinuationAfterAwaitIdentifier() {
+        if (nextToken.line() > currentToken.line()) {
+            return true;
+        }
+        if (!isExpressionStartToken(nextToken.type())) {
+            return true;
+        }
+        return nextToken.type() == TokenType.LPAREN
+                || nextToken.type() == TokenType.LBRACKET
+                || nextToken.type() == TokenType.TEMPLATE;
+    }
+
     private String normalizeTemplateLineTerminators(String str) {
         StringBuilder normalized = new StringBuilder(str.length());
         for (int i = 0; i < str.length(); i++) {
@@ -297,7 +354,7 @@ public final class Parser {
             }
         }
 
-        return new Program(body, false, strict, location);
+        return new Program(body, moduleMode, strict || moduleMode, location);
     }
 
     private Expression parseAdditiveExpression() {
@@ -391,24 +448,13 @@ public final class Parser {
 
         // Check for async arrow function: async () => {} or async (params) => {}
         if (match(TokenType.ASYNC)) {
-            int savedPos = currentToken.offset();
             advance(); // consume 'async'
 
             // Check if followed by ( or identifier (for single param)
             if (match(TokenType.LPAREN) || match(TokenType.IDENTIFIER)) {
-                // Try to parse as arrow function
-                boolean isArrow = false;
-
                 if (match(TokenType.LPAREN)) {
-                    // Could be async (params) => or just async followed by something else
-                    // We need to look ahead to see if there's a =>
-                    int parenDepth = 0;
-                    int lookAheadPos = 0;
-                    Token lookAhead = currentToken;
-
-                    // Simple lookahead: scan for matching paren and then check for =>
-                    // This is a simplified implementation
-                    if (match(TokenType.LPAREN)) {
+                    enterFunctionContext(true);
+                    try {
                         advance(); // consume '('
 
                         // Parse parameters using the same function parameter parser
@@ -437,6 +483,8 @@ public final class Parser {
 
                             return new ArrowFunctionExpression(funcParams.params, funcParams.restParameter, body, true, fullLocation);
                         }
+                    } finally {
+                        exitFunctionContext(true);
                     }
                 }
             }
@@ -505,11 +553,16 @@ public final class Parser {
 
             // Parse body
             ASTNode body;
-            if (match(TokenType.LBRACE)) {
-                body = parseBlockStatement();
-            } else {
-                // Expression body
-                body = parseAssignmentExpression();
+            enterFunctionContext(false);
+            try {
+                if (match(TokenType.LBRACE)) {
+                    body = parseBlockStatement();
+                } else {
+                    // Expression body
+                    body = parseAssignmentExpression();
+                }
+            } finally {
+                exitFunctionContext(false);
             }
 
             // Update location to include end offset
@@ -1047,6 +1100,9 @@ public final class Parser {
         // Check for 'await' keyword (for await...of)
         boolean isAwait = false;
         if (match(TokenType.AWAIT)) {
+            if (!isAwaitExpressionAllowed()) {
+                throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+            }
             isAwait = true;
             advance();
         }
@@ -1100,6 +1156,10 @@ public final class Parser {
             return new ForInStatement(varDecl, object, body, location);
         }
 
+        if (isAwait) {
+            throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
+        }
+
         // Not a for-of loop, parse as traditional for loop
         // Reset if we parsed a var declaration but it's not for-of
         Statement init = null;
@@ -1150,22 +1210,27 @@ public final class Parser {
             isGenerator = true;
         }
 
-        Identifier id = parseIdentifier();
+        enterFunctionContext(isAsync);
+        try {
+            Identifier id = parseIdentifier();
 
-        expect(TokenType.LPAREN);
-        FunctionParams funcParams = parseFunctionParameters();
+            expect(TokenType.LPAREN);
+            FunctionParams funcParams = parseFunctionParameters();
 
-        BlockStatement body = parseBlockStatement();
+            BlockStatement body = parseBlockStatement();
 
-        // Update location to include end offset (current token offset after parsing body)
-        SourceLocation fullLocation = new SourceLocation(
-                location.line(),
-                location.column(),
-                location.offset(),
-                currentToken.offset()
-        );
+            // Update location to include end offset (current token offset after parsing body)
+            SourceLocation fullLocation = new SourceLocation(
+                    location.line(),
+                    location.column(),
+                    location.offset(),
+                    currentToken.offset()
+            );
 
-        return new FunctionDeclaration(id, funcParams.params, funcParams.restParameter, body, isAsync, isGenerator, fullLocation);
+            return new FunctionDeclaration(id, funcParams.params, funcParams.restParameter, body, isAsync, isGenerator, fullLocation);
+        } finally {
+            exitFunctionContext(isAsync);
+        }
     }
 
     private Expression parseFunctionExpression() {
@@ -1180,25 +1245,30 @@ public final class Parser {
             isGenerator = true;
         }
 
-        Identifier id = null;
-        if (match(TokenType.IDENTIFIER)) {
-            id = parseIdentifier();
+        enterFunctionContext(false);
+        try {
+            Identifier id = null;
+            if (match(TokenType.IDENTIFIER) || match(TokenType.AWAIT)) {
+                id = parseIdentifier();
+            }
+
+            expect(TokenType.LPAREN);
+            FunctionParams funcParams = parseFunctionParameters();
+
+            BlockStatement body = parseBlockStatement();
+
+            // Update location to include end offset (current token offset after parsing body)
+            SourceLocation fullLocation = new SourceLocation(
+                    location.line(),
+                    location.column(),
+                    location.offset(),
+                    currentToken.offset()
+            );
+
+            return new FunctionExpression(id, funcParams.params, funcParams.restParameter, body, false, isGenerator, fullLocation);
+        } finally {
+            exitFunctionContext(false);
         }
-
-        expect(TokenType.LPAREN);
-        FunctionParams funcParams = parseFunctionParameters();
-
-        BlockStatement body = parseBlockStatement();
-
-        // Update location to include end offset (current token offset after parsing body)
-        SourceLocation fullLocation = new SourceLocation(
-                location.line(),
-                location.column(),
-                location.offset(),
-                currentToken.offset()
-        );
-
-        return new FunctionExpression(id, funcParams.params, funcParams.restParameter, body, false, isGenerator, fullLocation);
     }
 
     /**
@@ -1251,9 +1321,21 @@ public final class Parser {
 
     private Identifier parseIdentifier() {
         SourceLocation location = getLocation();
-        String name = currentToken.value();
-        expect(TokenType.IDENTIFIER);
-        return new Identifier(name, location);
+        if (match(TokenType.IDENTIFIER)) {
+            String name = currentToken.value();
+            advance();
+            return new Identifier(name, location);
+        }
+        if (match(TokenType.AWAIT)) {
+            if (isAwaitIdentifierAllowed()) {
+                String name = currentToken.value();
+                advance();
+                return new Identifier(name, location);
+            }
+            throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+        }
+        throw new RuntimeException("Expected identifier but got " + currentToken.type() +
+                " at line " + currentToken.line() + ", column " + currentToken.column());
     }
 
     private Statement parseIfStatement() {
@@ -1339,7 +1421,13 @@ public final class Parser {
         FunctionParams funcParams = parseFunctionParameters();
 
         // Parse method body
-        BlockStatement body = parseBlockStatement();
+        enterFunctionContext(false);
+        BlockStatement body;
+        try {
+            body = parseBlockStatement();
+        } finally {
+            exitFunctionContext(false);
+        }
 
         return new FunctionExpression(null, funcParams.params, funcParams.restParameter, body, false, false, location);
     }
@@ -1355,7 +1443,12 @@ public final class Parser {
             Expression value = null;
             if (match(TokenType.ASSIGN)) {
                 advance();
-                value = parseAssignmentExpression();
+                enterFunctionContext(false);
+                try {
+                    value = parseAssignmentExpression();
+                } finally {
+                    exitFunctionContext(false);
+                }
             }
             consumeSemicolon();
             return new ClassDeclaration.PropertyDefinition(key, value, computed, isStatic, isPrivate);
@@ -1421,22 +1514,27 @@ public final class Parser {
             if (match(TokenType.LPAREN)) {
                 // Method shorthand: name() {} or async name() {} or *name() {} or async *name() {}
                 SourceLocation funcLocation = getLocation();
-                expect(TokenType.LPAREN);
-                List<Identifier> params = new ArrayList<>();
+                enterFunctionContext(isAsync);
+                Expression value;
+                try {
+                    expect(TokenType.LPAREN);
+                    List<Identifier> params = new ArrayList<>();
 
-                if (!match(TokenType.RPAREN)) {
-                    do {
-                        if (match(TokenType.COMMA)) {
-                            advance();
-                        }
-                        params.add(parseIdentifier());
-                    } while (match(TokenType.COMMA));
+                    if (!match(TokenType.RPAREN)) {
+                        do {
+                            if (match(TokenType.COMMA)) {
+                                advance();
+                            }
+                            params.add(parseIdentifier());
+                        } while (match(TokenType.COMMA));
+                    }
+
+                    expect(TokenType.RPAREN);
+                    BlockStatement body = parseBlockStatement();
+                    value = new FunctionExpression(null, params, null, body, isAsync, isGenerator, funcLocation);
+                } finally {
+                    exitFunctionContext(isAsync);
                 }
-
-                expect(TokenType.RPAREN);
-                BlockStatement body = parseBlockStatement();
-
-                Expression value = new FunctionExpression(null, params, null, body, isAsync, isGenerator, funcLocation);
                 properties.add(new ObjectExpression.Property(key, value, "init", false, false));
             } else {
                 // Regular property: key: value
@@ -1593,6 +1691,7 @@ public final class Parser {
                 yield new Literal(null, location);
             }
             case IDENTIFIER -> parseIdentifier();
+            case AWAIT -> parseIdentifier();
             case THIS -> {
                 advance();
                 yield new Identifier("this", location);
@@ -1880,11 +1979,16 @@ public final class Parser {
         expect(TokenType.LBRACE);
         List<Statement> statements = new ArrayList<>();
 
-        while (!match(TokenType.RBRACE) && !match(TokenType.EOF)) {
-            Statement stmt = parseStatement();
-            if (stmt != null) {
-                statements.add(stmt);
+        enterFunctionContext(false);
+        try {
+            while (!match(TokenType.RBRACE) && !match(TokenType.EOF)) {
+                Statement stmt = parseStatement();
+                if (stmt != null) {
+                    statements.add(stmt);
+                }
             }
+        } finally {
+            exitFunctionContext(false);
         }
 
         expect(TokenType.RBRACE);
@@ -1945,7 +2049,11 @@ public final class Parser {
             throw new JSSyntaxErrorException("Empty template expression");
         }
 
-        Parser expressionParser = new Parser(new Lexer(expressionSource));
+        Parser expressionParser = new Parser(
+                new Lexer(expressionSource),
+                moduleMode,
+                functionNesting,
+                asyncFunctionNesting);
         Expression expression = expressionParser.parseExpression();
         if (expressionParser.currentToken.type() != TokenType.EOF) {
             throw new JSSyntaxErrorException("Invalid template expression");
@@ -2032,6 +2140,12 @@ public final class Parser {
     private Expression parseUnaryExpression() {
         // Handle await expressions
         if (match(TokenType.AWAIT)) {
+            if (!isAwaitExpressionAllowed()) {
+                if (isAwaitIdentifierAllowed() && isValidContinuationAfterAwaitIdentifier()) {
+                    return parsePostfixExpression();
+                }
+                throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+            }
             SourceLocation location = getLocation();
             advance();
             Expression argument = parseUnaryExpression();

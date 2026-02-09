@@ -45,7 +45,7 @@ public final class Compiler {
         try {
             // Stage 1 & 2: Lexical and Syntax Analysis (Source → Tokens → AST)
             Lexer lexer = new Lexer(source);
-            Parser parser = new Parser(lexer);
+            Parser parser = new Parser(lexer, false);
             Program ast = parser.parse();
 
             // Stage 3: Code Generation (AST → Bytecode)
@@ -94,14 +94,12 @@ public final class Compiler {
         try {
             // Stage 1 & 2: Lexical and Syntax Analysis (Source → Tokens → AST)
             Lexer lexer = new Lexer(source);
-            Parser parser = new Parser(lexer);
-            // TODO: parser.setModuleMode(true); // Parse in module mode
+            Parser parser = new Parser(lexer, true);
             Program ast = parser.parse();
 
             // Stage 3: Code Generation (AST → Bytecode)
             BytecodeCompiler compiler = new BytecodeCompiler();
             compiler.setSourceCode(source);  // Store source for extracting function source
-            // TODO: compiler.setModuleMode(true); // Compile in module mode
             Bytecode bytecode = compiler.compile(ast);
 
             // Create and return bytecode function
@@ -134,7 +132,7 @@ public final class Compiler {
 
         try {
             Lexer lexer = new Lexer(source);
-            Parser parser = new Parser(lexer);
+            Parser parser = new Parser(lexer, false);
             return parser.parse();
 
         } catch (RuntimeException e) {

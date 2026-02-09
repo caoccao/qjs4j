@@ -455,9 +455,6 @@ This document provides a comprehensive list of all JavaScript features implement
 
 ## Not Yet Implemented ⏳
 
-### Syntax Features
-- **Top-level await**: Module-level await
-
 ### Built-in Objects
 - **Internationalization (Intl)**:
   - Intl.DateTimeFormat
