@@ -57,14 +57,11 @@ public class TemplateLiteralEnhancementTest extends BaseJavetTest {
     }
 
     @Test
-    public void testTemplateExpressionScannerEdgeCases() {
+    public void testStringRawUsesRawTemplateParts() {
         assertStringWithJavet(
-                "`${\"}\"}`",
-                "`${1 /* } */ + 1}`",
-                "`${/\\}/.test('}')}`",
-                "`${/[}]/.test('}')}`",
-                "`${6 / 2}`",
-                "`${`a${1}`}`");
+                "String.raw`line\\nend`",
+                "String.raw`a\\n${1}b`",
+                "String.raw`\\u{41}`");
     }
 
     @Test
@@ -85,6 +82,17 @@ public class TemplateLiteralEnhancementTest extends BaseJavetTest {
     }
 
     @Test
+    public void testTemplateExpressionScannerEdgeCases() {
+        assertStringWithJavet(
+                "`${\"}\"}`",
+                "`${1 /* } */ + 1}`",
+                "`${/\\}/.test('}')}`",
+                "`${/[}]/.test('}')}`",
+                "`${6 / 2}`",
+                "`${`a${1}`}`");
+    }
+
+    @Test
     public void testUntaggedTemplateInvalidEscapeThrows() {
         assertThatThrownBy(() -> new Parser(new Lexer("`bad\\u{110000}`;")).parse())
                 .isInstanceOf(JSSyntaxErrorException.class);
@@ -93,13 +101,5 @@ public class TemplateLiteralEnhancementTest extends BaseJavetTest {
     @Test
     public void testUntaggedTemplateUnicodeEscapes() {
         assertStringWithJavet("`\\u{41}\\x42`");
-    }
-
-    @Test
-    public void testStringRawUsesRawTemplateParts() {
-        assertStringWithJavet(
-                "String.raw`line\\nend`",
-                "String.raw`a\\n${1}b`",
-                "String.raw`\\u{41}`");
     }
 }

@@ -67,7 +67,7 @@ public class DateConstructorTest extends BaseJavetTest {
     public void testDateInstanceMethods() {
         // Skip on Windows due to timezone format differences
         assumeFalse(isWindows(), "Skipping on Windows - timezone format differences with V8");
-        
+
         // Date instance should have prototype methods
         assertStringWithJavet("var d = new Date(1750000000000); JSON.stringify([d.getTime(),d.toString()]);");
     }

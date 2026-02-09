@@ -664,8 +664,9 @@ public final class BytecodeCompiler {
         // Separate class elements by type
         List<ClassDeclaration.MethodDefinition> methods = new ArrayList<>();
         List<ClassDeclaration.PropertyDefinition> instanceFields = new ArrayList<>();
-        List<ClassDeclaration.PropertyDefinition> staticFields = new ArrayList<>();
-        List<ClassDeclaration.StaticBlock> staticBlocks = new ArrayList<>();
+        List<ClassDeclaration.ClassElement> staticInitializers = new ArrayList<>();
+        List<ClassDeclaration.PropertyDefinition> computedFieldsInDefinitionOrder = new ArrayList<>();
+        IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols = new IdentityHashMap<>();
         ClassDeclaration.MethodDefinition constructor = null;
 
         for (ClassDeclaration.ClassElement element : classDecl.body()) {
@@ -678,12 +679,20 @@ public final class BytecodeCompiler {
                 }
             } else if (element instanceof ClassDeclaration.PropertyDefinition field) {
                 if (field.isStatic()) {
-                    staticFields.add(field);
+                    staticInitializers.add(field);
                 } else {
                     instanceFields.add(field);
                 }
+
+                if (field.computed() && !field.isPrivate()) {
+                    computedFieldsInDefinitionOrder.add(field);
+                    computedFieldSymbols.put(
+                            field,
+                            new JSSymbol("__computed_field_" + computedFieldsInDefinitionOrder.size())
+                    );
+                }
             } else if (element instanceof ClassDeclaration.StaticBlock block) {
-                staticBlocks.add(block);
+                staticInitializers.add(block);
             }
         }
 
@@ -710,10 +719,24 @@ public final class BytecodeCompiler {
         // Compile constructor function (or create default) with field initialization
         JSBytecodeFunction constructorFunc;
         if (constructor != null) {
-            constructorFunc = compileMethodAsFunction(constructor, className, classDecl.superClass() != null, instanceFields, privateSymbols, true);
+            constructorFunc = compileMethodAsFunction(
+                    constructor,
+                    className,
+                    classDecl.superClass() != null,
+                    instanceFields,
+                    privateSymbols,
+                    computedFieldSymbols,
+                    true
+            );
         } else {
             // Create default constructor with field initialization
-            constructorFunc = createDefaultConstructor(className, classDecl.superClass() != null, instanceFields, privateSymbols);
+            constructorFunc = createDefaultConstructor(
+                    className,
+                    classDecl.superClass() != null,
+                    instanceFields,
+                    privateSymbols,
+                    computedFieldSymbols
+            );
         }
 
         // Set the source code for the constructor to be the entire class definition
@@ -752,7 +775,15 @@ public final class BytecodeCompiler {
                 // Stack: proto constructor
 
                 // Compile method. Static methods share the same private name scope.
-                JSBytecodeFunction methodFunc = compileMethodAsFunction(method, getMethodName(method), false, List.of(), privateSymbols, false);
+                JSBytecodeFunction methodFunc = compileMethodAsFunction(
+                        method,
+                        getMethodName(method),
+                        false,
+                        List.of(),
+                        privateSymbols,
+                        computedFieldSymbols,
+                        false
+                );
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
                 // Stack: proto constructor method
 
@@ -769,7 +800,15 @@ public final class BytecodeCompiler {
                 // Current: constructor proto
                 // Compile method (no field initialization for regular methods)
                 // Pass private symbols to methods so they can access private fields
-                JSBytecodeFunction methodFunc = compileMethodAsFunction(method, getMethodName(method), false, List.of(), privateSymbols, false);
+                JSBytecodeFunction methodFunc = compileMethodAsFunction(
+                        method,
+                        getMethodName(method),
+                        false,
+                        List.of(),
+                        privateSymbols,
+                        computedFieldSymbols,
+                        false
+                );
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
                 // Stack: constructor proto method
 
@@ -785,24 +824,36 @@ public final class BytecodeCompiler {
             }
         }
 
+        // Evaluate all computed field names once at class definition time.
+        // This matches QuickJS behavior and avoids re-evaluating key side effects per instance.
+        for (ClassDeclaration.PropertyDefinition field : computedFieldsInDefinitionOrder) {
+            compileComputedFieldNameCache(field, computedFieldSymbols);
+        }
+
         // Swap back to original order: proto constructor
         emitter.emitOpcode(Opcode.SWAP);
         // Stack: proto constructor
 
-        // Execute static blocks
-        // Following QuickJS pattern: compile each static block as a function,
-        // then call it with the constructor as 'this'
-        for (ClassDeclaration.StaticBlock staticBlock : staticBlocks) {
-            // Compile the static block as a function
-            JSBytecodeFunction staticBlockFunc = compileStaticBlock(staticBlock, className);
+        // Execute static initializers (static fields and static blocks) in source order.
+        // Each initializer runs with class constructor as `this`.
+        for (ClassDeclaration.ClassElement staticInitializer : staticInitializers) {
+            JSBytecodeFunction staticInitializerFunc;
+            if (staticInitializer instanceof ClassDeclaration.PropertyDefinition staticField) {
+                staticInitializerFunc = compileStaticFieldInitializer(
+                        staticField, computedFieldSymbols, privateSymbols, className);
+            } else if (staticInitializer instanceof ClassDeclaration.StaticBlock staticBlock) {
+                staticInitializerFunc = compileStaticBlock(staticBlock, className, privateSymbols);
+            } else {
+                continue;
+            }
 
             // Stack: proto constructor
             // DUP the constructor to use as 'this'
             emitter.emitOpcode(Opcode.DUP);
             // Stack: proto constructor constructor
 
-            // Push the static block function
-            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, staticBlockFunc);
+            // Push the static initializer function
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, staticInitializerFunc);
             // Stack: proto constructor constructor func
 
             // SWAP so we have: proto constructor func constructor
@@ -857,8 +908,9 @@ public final class BytecodeCompiler {
         // Separate class elements by type
         List<ClassDeclaration.MethodDefinition> methods = new ArrayList<>();
         List<ClassDeclaration.PropertyDefinition> instanceFields = new ArrayList<>();
-        List<ClassDeclaration.PropertyDefinition> staticFields = new ArrayList<>();
-        List<ClassDeclaration.StaticBlock> staticBlocks = new ArrayList<>();
+        List<ClassDeclaration.ClassElement> staticInitializers = new ArrayList<>();
+        List<ClassDeclaration.PropertyDefinition> computedFieldsInDefinitionOrder = new ArrayList<>();
+        IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols = new IdentityHashMap<>();
         ClassDeclaration.MethodDefinition constructor = null;
 
         for (ClassDeclaration.ClassElement element : classExpr.body()) {
@@ -871,12 +923,20 @@ public final class BytecodeCompiler {
                 }
             } else if (element instanceof ClassDeclaration.PropertyDefinition field) {
                 if (field.isStatic()) {
-                    staticFields.add(field);
+                    staticInitializers.add(field);
                 } else {
                     instanceFields.add(field);
                 }
+
+                if (field.computed() && !field.isPrivate()) {
+                    computedFieldsInDefinitionOrder.add(field);
+                    computedFieldSymbols.put(
+                            field,
+                            new JSSymbol("__computed_field_" + computedFieldsInDefinitionOrder.size())
+                    );
+                }
             } else if (element instanceof ClassDeclaration.StaticBlock block) {
-                staticBlocks.add(block);
+                staticInitializers.add(block);
             }
         }
 
@@ -900,9 +960,23 @@ public final class BytecodeCompiler {
         // Compile constructor function (or create default)
         JSBytecodeFunction constructorFunc;
         if (constructor != null) {
-            constructorFunc = compileMethodAsFunction(constructor, className, classExpr.superClass() != null, instanceFields, privateSymbols, true);
+            constructorFunc = compileMethodAsFunction(
+                    constructor,
+                    className,
+                    classExpr.superClass() != null,
+                    instanceFields,
+                    privateSymbols,
+                    computedFieldSymbols,
+                    true
+            );
         } else {
-            constructorFunc = createDefaultConstructor(className, classExpr.superClass() != null, instanceFields, privateSymbols);
+            constructorFunc = createDefaultConstructor(
+                    className,
+                    classExpr.superClass() != null,
+                    instanceFields,
+                    privateSymbols,
+                    computedFieldSymbols
+            );
         }
 
         // Set the source code for the constructor to be the entire class definition
@@ -934,7 +1008,15 @@ public final class BytecodeCompiler {
                 emitter.emitOpcode(Opcode.SWAP);
                 // Stack: proto constructor
 
-                JSBytecodeFunction methodFunc = compileMethodAsFunction(method, getMethodName(method), false, List.of(), privateSymbols, false);
+                JSBytecodeFunction methodFunc = compileMethodAsFunction(
+                        method,
+                        getMethodName(method),
+                        false,
+                        List.of(),
+                        privateSymbols,
+                        computedFieldSymbols,
+                        false
+                );
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
                 // Stack: proto constructor method
 
@@ -946,7 +1028,15 @@ public final class BytecodeCompiler {
                 emitter.emitOpcode(Opcode.SWAP);
                 // Stack: constructor proto
             } else {
-                JSBytecodeFunction methodFunc = compileMethodAsFunction(method, getMethodName(method), false, List.of(), privateSymbols, false);
+                JSBytecodeFunction methodFunc = compileMethodAsFunction(
+                        method,
+                        getMethodName(method),
+                        false,
+                        List.of(),
+                        privateSymbols,
+                        computedFieldSymbols,
+                        false
+                );
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
                 // Stack: constructor proto method
 
@@ -956,9 +1046,48 @@ public final class BytecodeCompiler {
             }
         }
 
+        // Evaluate all computed field names once at class definition time.
+        for (ClassDeclaration.PropertyDefinition field : computedFieldsInDefinitionOrder) {
+            compileComputedFieldNameCache(field, computedFieldSymbols);
+        }
+
         // Swap back to: proto constructor
         emitter.emitOpcode(Opcode.SWAP);
         // Stack: proto constructor
+
+        // Execute static initializers (static fields and static blocks) in source order.
+        for (ClassDeclaration.ClassElement staticInitializer : staticInitializers) {
+            JSBytecodeFunction staticInitializerFunc;
+            if (staticInitializer instanceof ClassDeclaration.PropertyDefinition staticField) {
+                staticInitializerFunc = compileStaticFieldInitializer(
+                        staticField, computedFieldSymbols, privateSymbols, className);
+            } else if (staticInitializer instanceof ClassDeclaration.StaticBlock staticBlock) {
+                staticInitializerFunc = compileStaticBlock(staticBlock, className, privateSymbols);
+            } else {
+                continue;
+            }
+
+            // Stack: proto constructor
+            // DUP the constructor to use as 'this'
+            emitter.emitOpcode(Opcode.DUP);
+            // Stack: proto constructor constructor
+
+            // Push the static initializer function
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, staticInitializerFunc);
+            // Stack: proto constructor constructor func
+
+            // SWAP so we have: proto constructor func constructor
+            emitter.emitOpcode(Opcode.SWAP);
+            // Stack: proto constructor func constructor
+
+            // Call the function with 0 arguments, using constructor as 'this'
+            emitter.emitOpcodeU16(Opcode.CALL, 0);
+            // Stack: proto constructor returnValue
+
+            // Drop the return value
+            emitter.emitOpcode(Opcode.DROP);
+            // Stack: proto constructor
+        }
 
         // Drop prototype, keep constructor on stack
         emitter.emitOpcode(Opcode.NIP);
@@ -966,6 +1095,36 @@ public final class BytecodeCompiler {
 
         // For class expressions, we leave the constructor on the stack
         // (unlike class declarations which bind it to a variable)
+    }
+
+    /**
+     * Evaluate and cache a computed class field name on the constructor object once.
+     * Expects stack before/after to be: constructor proto.
+     */
+    private void compileComputedFieldNameCache(
+            ClassDeclaration.PropertyDefinition field,
+            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
+        JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
+        if (computedFieldSymbol == null) {
+            throw new CompilerException("Computed field key symbol not found");
+        }
+
+        // constructor proto -> proto constructor
+        emitter.emitOpcode(Opcode.SWAP);
+        // proto constructor -> proto constructor constructor
+        emitter.emitOpcode(Opcode.DUP);
+        // proto constructor constructor -> proto constructor constructor hiddenSymbol
+        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
+        // proto constructor constructor hiddenSymbol -> proto constructor constructor hiddenSymbol rawKey
+        compileExpression(field.key());
+        // Convert once to property key (QuickJS OP_to_propkey behavior)
+        emitter.emitOpcode(Opcode.TO_PROPKEY);
+        // proto constructor constructor hiddenSymbol key -> proto constructor constructor
+        emitter.emitOpcode(Opcode.DEFINE_PROP);
+        // Drop duplicated constructor
+        emitter.emitOpcode(Opcode.DROP);
+        // Restore canonical order: constructor proto
+        emitter.emitOpcode(Opcode.SWAP);
     }
 
     private void compileConditionalExpression(ConditionalExpression condExpr) {
@@ -997,22 +1156,6 @@ public final class BytecodeCompiler {
         }
         int jumpPos = emitter.emitJump(Opcode.GOTO);
         loopStack.peek().continuePositions.add(jumpPos);
-    }
-
-    private void compileSequenceExpression(SequenceExpression seqExpr) {
-        // Following QuickJS: evaluate each expression in order,
-        // dropping all but the last one's value
-        List<Expression> expressions = seqExpr.expressions();
-        
-        for (int i = 0; i < expressions.size(); i++) {
-            compileExpression(expressions.get(i));
-            
-            // Drop the value of all expressions except the last one
-            if (i < expressions.size() - 1) {
-                emitter.emitOpcode(Opcode.DROP);
-            }
-        }
-        // The last expression's value remains on the stack
     }
 
     private void compileExpression(Expression expr) {
@@ -1063,34 +1206,27 @@ public final class BytecodeCompiler {
      * For private fields, uses the symbol from privateSymbols map.
      */
     private void compileFieldInitialization(List<ClassDeclaration.PropertyDefinition> fields,
-                                            Map<String, JSSymbol> privateSymbols) {
+                                            Map<String, JSSymbol> privateSymbols,
+                                            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
         for (ClassDeclaration.PropertyDefinition field : fields) {
-            // Get field name
-            String fieldName = null;
             boolean isPrivate = field.isPrivate();
-
-            if (isPrivate && field.key() instanceof PrivateIdentifier privateId) {
-                fieldName = privateId.name();
-            } else if (field.key() instanceof Identifier id) {
-                fieldName = id.name();
-            } else if (field.key() instanceof Literal literal) {
-                fieldName = literal.value().toString();
-            } else {
-                // Computed - skip for now
-                continue;
-            }
 
             // Push 'this' onto stack
             emitter.emitOpcode(Opcode.PUSH_THIS);
 
-            // Compile initializer or emit undefined
-            if (field.value() != null) {
-                compileExpression(field.value());
-            } else {
-                emitter.emitOpcode(Opcode.UNDEFINED);
-            }
-
             if (isPrivate) {
+                if (!(field.key() instanceof PrivateIdentifier privateId)) {
+                    throw new CompilerException("Invalid private field key");
+                }
+                String fieldName = privateId.name();
+
+                // Compile initializer or emit undefined
+                if (field.value() != null) {
+                    compileExpression(field.value());
+                } else {
+                    emitter.emitOpcode(Opcode.UNDEFINED);
+                }
+
                 // For private fields, we need to push the private symbol
                 // Stack: this value
                 // Need: this symbol value (for DEFINE_PRIVATE_FIELD)
@@ -1117,10 +1253,32 @@ public final class BytecodeCompiler {
                 }
             } else {
                 // Public field
-                // Stack: this value
-                // Emit DEFINE_FIELD to set the field on 'this'
-                emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, fieldName);
-                // Stack: this (DEFINE_FIELD pops value, modifies this, pushes this back)
+                if (field.computed()) {
+                    // Stack: this
+                    JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
+                    if (computedFieldSymbol == null) {
+                        throw new CompilerException("Computed field key not found");
+                    }
+                    // Load the precomputed key from the current constructor function:
+                    // Stack: this func symbol -> this key
+                    emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                    emitter.emitU8(2); // SPECIAL_OBJECT_THIS_FUNC
+                    emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
+                    emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                } else {
+                    emitNonComputedPublicFieldKey(field.key());
+                }
+
+                // Compile initializer or emit undefined
+                if (field.value() != null) {
+                    compileExpression(field.value());
+                } else {
+                    emitter.emitOpcode(Opcode.UNDEFINED);
+                }
+
+                // Stack: this key value
+                emitter.emitOpcode(Opcode.DEFINE_PROP);
+                // Stack: this
             }
 
             // Drop 'this' from stack
@@ -1925,6 +2083,7 @@ public final class BytecodeCompiler {
             boolean isDerivedConstructor,
             List<ClassDeclaration.PropertyDefinition> instanceFields,
             Map<String, JSSymbol> privateSymbols,
+            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
             boolean isConstructor) {
         BytecodeCompiler methodCompiler = new BytecodeCompiler();
         methodCompiler.privateSymbols = privateSymbols;  // Make private symbols available in method
@@ -1948,7 +2107,7 @@ public final class BytecodeCompiler {
         // For constructors, emit field initialization BEFORE the constructor body
         // This ensures fields are initialized before user code runs
         if (!instanceFields.isEmpty()) {
-            methodCompiler.compileFieldInitialization(instanceFields, privateSymbols);
+            methodCompiler.compileFieldInitialization(instanceFields, privateSymbols, computedFieldSymbols);
         }
 
         // Compile method body statements
@@ -2202,8 +2361,6 @@ public final class BytecodeCompiler {
         inGlobalScope = false;
     }
 
-    // ==================== Expression Compilation ====================
-
     private void compileReturnStatement(ReturnStatement retStmt) {
         if (retStmt.argument() != null) {
             compileExpression(retStmt.argument());
@@ -2214,9 +2371,27 @@ public final class BytecodeCompiler {
         emitter.emitOpcode(isInAsyncFunction ? Opcode.RETURN_ASYNC : Opcode.RETURN);
     }
 
+    private void compileSequenceExpression(SequenceExpression seqExpr) {
+        // Following QuickJS: evaluate each expression in order,
+        // dropping all but the last one's value
+        List<Expression> expressions = seqExpr.expressions();
+
+        for (int i = 0; i < expressions.size(); i++) {
+            compileExpression(expressions.get(i));
+
+            // Drop the value of all expressions except the last one
+            if (i < expressions.size() - 1) {
+                emitter.emitOpcode(Opcode.DROP);
+            }
+        }
+        // The last expression's value remains on the stack
+    }
+
     private void compileStatement(Statement stmt) {
         compileStatement(stmt, false);
     }
+
+    // ==================== Expression Compilation ====================
 
     private void compileStatement(Statement stmt, boolean isLastInProgram) {
         if (stmt instanceof ExpressionStatement exprStmt) {
@@ -2262,8 +2437,12 @@ public final class BytecodeCompiler {
      * Compile a static block as a function.
      * Static blocks are executed immediately after class definition with the class constructor as 'this'.
      */
-    private JSBytecodeFunction compileStaticBlock(ClassDeclaration.StaticBlock staticBlock, String className) {
+    private JSBytecodeFunction compileStaticBlock(
+            ClassDeclaration.StaticBlock staticBlock,
+            String className,
+            Map<String, JSSymbol> privateSymbols) {
         BytecodeCompiler blockCompiler = new BytecodeCompiler();
+        blockCompiler.privateSymbols = privateSymbols;
 
         blockCompiler.enterScope();
         blockCompiler.inGlobalScope = false;
@@ -2294,6 +2473,74 @@ public final class BytecodeCompiler {
                 false,                    // isArrow - static initializers are not arrows
                 true,                     // strict mode
                 "static { [initializer] }"
+        );
+    }
+
+    /**
+     * Compile a static field initializer as a function and return it.
+     * The function is called with class constructor as `this`.
+     */
+    private JSBytecodeFunction compileStaticFieldInitializer(
+            ClassDeclaration.PropertyDefinition field,
+            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
+            Map<String, JSSymbol> privateSymbols,
+            String className) {
+        if (field.isPrivate()) {
+            throw new CompilerException("Static private fields not yet implemented");
+        }
+
+        BytecodeCompiler initializerCompiler = new BytecodeCompiler();
+        initializerCompiler.privateSymbols = privateSymbols;
+
+        initializerCompiler.enterScope();
+        initializerCompiler.inGlobalScope = false;
+
+        // Stack: this
+        initializerCompiler.emitter.emitOpcode(Opcode.PUSH_THIS);
+
+        if (field.computed()) {
+            JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
+            if (computedFieldSymbol == null) {
+                throw new CompilerException("Computed static field key not found");
+            }
+            // Load precomputed key from constructor hidden storage:
+            // this this hiddenSymbol -> this key
+            initializerCompiler.emitter.emitOpcode(Opcode.PUSH_THIS);
+            initializerCompiler.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
+            initializerCompiler.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+        } else {
+            initializerCompiler.emitNonComputedPublicFieldKey(field.key());
+        }
+
+        if (field.value() != null) {
+            initializerCompiler.compileExpression(field.value());
+        } else {
+            initializerCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
+        }
+
+        // Stack: this key value
+        initializerCompiler.emitter.emitOpcode(Opcode.DEFINE_PROP);
+        // Stack: this
+        initializerCompiler.emitter.emitOpcode(Opcode.DROP);
+        initializerCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
+        initializerCompiler.emitter.emitOpcode(Opcode.RETURN);
+
+        int localCount = initializerCompiler.currentScope().getLocalCount();
+        initializerCompiler.exitScope();
+        Bytecode initializerBytecode = initializerCompiler.emitter.build(localCount);
+
+        return new JSBytecodeFunction(
+                initializerBytecode,
+                "<static field initializer>",
+                0,
+                new JSValue[0],
+                null,
+                false,
+                false,
+                false,
+                false,
+                true,
+                "static field initializer for " + className
         );
     }
 
@@ -2868,7 +3115,8 @@ public final class BytecodeCompiler {
             String className,
             boolean hasSuper,
             List<ClassDeclaration.PropertyDefinition> instanceFields,
-            Map<String, JSSymbol> privateSymbols) {
+            Map<String, JSSymbol> privateSymbols,
+            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
         BytecodeCompiler constructorCompiler = new BytecodeCompiler();
         constructorCompiler.privateSymbols = privateSymbols;  // Make private symbols available
 
@@ -2877,7 +3125,7 @@ public final class BytecodeCompiler {
 
         // Initialize fields before constructor body
         if (!instanceFields.isEmpty()) {
-            constructorCompiler.compileFieldInitialization(instanceFields, privateSymbols);
+            constructorCompiler.compileFieldInitialization(instanceFields, privateSymbols, computedFieldSymbols);
         }
 
         // Default constructor just returns undefined (or calls super for derived classes)
@@ -2947,6 +3195,31 @@ public final class BytecodeCompiler {
             // Rest element at top level (shouldn't normally happen, but handle it)
             declarePatternVariables(restElement.argument());
         }
+    }
+
+    private void emitNonComputedPublicFieldKey(Expression key) {
+        if (key instanceof Identifier id) {
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+            return;
+        }
+        if (key instanceof Literal literal) {
+            Object value = literal.value();
+            if (value == null) {
+                emitter.emitOpcode(Opcode.NULL);
+            } else if (value instanceof Boolean bool) {
+                emitter.emitOpcode(bool ? Opcode.PUSH_TRUE : Opcode.PUSH_FALSE);
+            } else if (value instanceof BigInteger bigInt) {
+                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSBigInt(bigInt));
+            } else if (value instanceof Number num) {
+                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(num.doubleValue()));
+            } else if (value instanceof String str) {
+                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
+            } else {
+                throw new CompilerException("Unsupported field key literal type: " + value.getClass());
+            }
+            return;
+        }
+        throw new CompilerException("Invalid non-computed field key");
     }
 
     // ==================== Scope Management ====================

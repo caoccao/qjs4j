@@ -734,6 +734,18 @@ public final class VirtualMachine {
                         valueStack.push(putElValue);
                         pc += op.getSize();
                     }
+                    case TO_PROPKEY -> {
+                        JSValue rawKey = valueStack.pop();
+                        valueStack.push(toPropertyKeyValue(rawKey));
+                        pc += op.getSize();
+                    }
+                    case TO_PROPKEY2 -> {
+                        JSValue rawKey = valueStack.pop();
+                        JSValue baseObject = valueStack.pop();
+                        valueStack.push(baseObject);
+                        valueStack.push(toPropertyKeyValue(rawKey));
+                        pc += op.getSize();
+                    }
 
                     // ==================== Control Flow ====================
                     case IF_FALSE -> {
@@ -1227,8 +1239,6 @@ public final class VirtualMachine {
         }
     }
 
-    // ==================== Arithmetic Operation Handlers ====================
-
     /**
      * Execute a generator function with state management.
      * Resumes from saved state if generator was previously yielded.
@@ -1674,8 +1684,6 @@ public final class VirtualMachine {
         valueStack.push(new JSNumber(0));  // Catch offset (placeholder)
     }
 
-    // ==================== Bitwise Operation Handlers ====================
-
     private void handleForInEnd() {
         // Clean up the enumerator from the stack
         JSStackValue stackValue = valueStack.popStackValue();
@@ -1908,8 +1916,6 @@ public final class VirtualMachine {
         valueStack.push(result ? JSBoolean.TRUE : JSBoolean.FALSE);
     }
 
-    // ==================== Comparison Operation Handlers ====================
-
     private void handleLogicalAnd() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -1986,8 +1992,6 @@ public final class VirtualMachine {
         valueStack.push(new JSNumber(result));
     }
 
-    // ==================== Logical Operation Handlers ====================
-
     private void handleNullishCoalesce() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -2022,8 +2026,6 @@ public final class VirtualMachine {
         valueStack.push(new JSNumber(newValue));
     }
 
-    // ==================== Type Operation Handlers ====================
-
     private void handlePostInc() {
         // POST_INC: [value] -> [old_value, new_value]
         // Takes value on top, pushes old value then new value
@@ -2042,8 +2044,6 @@ public final class VirtualMachine {
         valueStack.push(new JSNumber(leftInt >> (rightInt & 0x1F)));
     }
 
-    // ==================== Async Operation Handlers ====================
-
     private void handleShl() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -2051,8 +2051,6 @@ public final class VirtualMachine {
         int rightInt = JSTypeConversions.toInt32(context, right);
         valueStack.push(new JSNumber(leftInt << (rightInt & 0x1F)));
     }
-
-    // ==================== Function Call Handlers ====================
 
     private void handleShr() {
         JSValue right = valueStack.pop();
@@ -2114,8 +2112,6 @@ public final class VirtualMachine {
         // Push the value back so it can be returned
         valueStack.push(value);
     }
-
-    // ==================== Generator Operation Handlers ====================
 
     private void handleYieldStar() {
         // TODO: Implement yield* (delegating yield)
@@ -2410,5 +2406,20 @@ public final class VirtualMachine {
         }
 
         return null;
+    }
+
+    /**
+     * Convert a runtime value to an ECMAScript property key value (string or symbol).
+     */
+    private JSValue toPropertyKeyValue(JSValue rawKey) {
+        PropertyKey key = PropertyKey.fromValue(context, rawKey);
+        if (key.isSymbol()) {
+            return key.asSymbol();
+        }
+        if (key.isIndex()) {
+            return new JSNumber(key.asIndex());
+        }
+        String keyString = key.asString();
+        return new JSString(keyString != null ? keyString : key.toPropertyString());
     }
 }

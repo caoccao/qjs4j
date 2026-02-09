@@ -627,6 +627,35 @@ public final class Lexer {
         return new Token(TokenType.STRING, value.toString(), startLine, startColumn, startPos);
     }
 
+    private Token scanTemplate(int startPos, int startLine, int startColumn) {
+        // Store the complete template literal including ${...} expressions.
+        StringBuilder value = new StringBuilder();
+
+        while (!isAtEnd()) {
+            char c = peek();
+            if (c == '`') {
+                advance(); // consume closing backtick
+                break;
+            }
+            if (c == '\\') {
+                value.append(advance());
+                if (!isAtEnd()) {
+                    value.append(advance());
+                }
+                continue;
+            }
+            if (c == '$' && position + 1 < source.length() && source.charAt(position + 1) == '{') {
+                value.append(advance()); // $
+                value.append(advance()); // {
+                scanTemplateExpression(value);
+                continue;
+            }
+            value.append(advance());
+        }
+
+        return new Token(TokenType.TEMPLATE, value.toString(), startLine, startColumn, startPos);
+    }
+
     private void scanTemplateBlockComment(StringBuilder value) {
         value.append(advance()); // /
         value.append(advance()); // *
@@ -769,6 +798,15 @@ public final class Lexer {
         }
     }
 
+    private String scanTemplateIdentifier(StringBuilder value) {
+        int start = position;
+        value.append(advance());
+        while (!isAtEnd() && isIdentifierPart(peek())) {
+            value.append(advance());
+        }
+        return source.substring(start, position);
+    }
+
     private void scanTemplateLineComment(StringBuilder value) {
         value.append(advance()); // /
         value.append(advance()); // /
@@ -779,15 +817,6 @@ public final class Lexer {
                 return;
             }
         }
-    }
-
-    private String scanTemplateIdentifier(StringBuilder value) {
-        int start = position;
-        value.append(advance());
-        while (!isAtEnd() && isIdentifierPart(peek())) {
-            value.append(advance());
-        }
-        return source.substring(start, position);
     }
 
     private void scanTemplateNestedTemplate(StringBuilder value) {
@@ -811,6 +840,42 @@ public final class Lexer {
                 scanTemplateExpression(value);
                 continue;
             }
+            value.append(advance());
+        }
+    }
+
+    private void scanTemplateNumber(StringBuilder value) {
+        if (peek() == '0' && position + 1 < source.length()) {
+            char prefix = source.charAt(position + 1);
+            if (prefix == 'x' || prefix == 'X' || prefix == 'b' || prefix == 'B' || prefix == 'o' || prefix == 'O') {
+                value.append(advance());
+                value.append(advance());
+                while (!isAtEnd() && isIdentifierPart(peek())) {
+                    value.append(advance());
+                }
+                return;
+            }
+        }
+
+        while (!isAtEnd() && Character.isDigit(peek())) {
+            value.append(advance());
+        }
+        if (!isAtEnd() && peek() == '.') {
+            value.append(advance());
+            while (!isAtEnd() && Character.isDigit(peek())) {
+                value.append(advance());
+            }
+        }
+        if (!isAtEnd() && (peek() == 'e' || peek() == 'E')) {
+            value.append(advance());
+            if (!isAtEnd() && (peek() == '+' || peek() == '-')) {
+                value.append(advance());
+            }
+            while (!isAtEnd() && Character.isDigit(peek())) {
+                value.append(advance());
+            }
+        }
+        if (!isAtEnd() && peek() == 'n') {
             value.append(advance());
         }
     }
@@ -863,71 +928,6 @@ public final class Lexer {
         while (!isAtEnd() && isIdentifierPart(peek())) {
             value.append(advance());
         }
-    }
-
-    private void scanTemplateNumber(StringBuilder value) {
-        if (peek() == '0' && position + 1 < source.length()) {
-            char prefix = source.charAt(position + 1);
-            if (prefix == 'x' || prefix == 'X' || prefix == 'b' || prefix == 'B' || prefix == 'o' || prefix == 'O') {
-                value.append(advance());
-                value.append(advance());
-                while (!isAtEnd() && isIdentifierPart(peek())) {
-                    value.append(advance());
-                }
-                return;
-            }
-        }
-
-        while (!isAtEnd() && Character.isDigit(peek())) {
-            value.append(advance());
-        }
-        if (!isAtEnd() && peek() == '.') {
-            value.append(advance());
-            while (!isAtEnd() && Character.isDigit(peek())) {
-                value.append(advance());
-            }
-        }
-        if (!isAtEnd() && (peek() == 'e' || peek() == 'E')) {
-            value.append(advance());
-            if (!isAtEnd() && (peek() == '+' || peek() == '-')) {
-                value.append(advance());
-            }
-            while (!isAtEnd() && Character.isDigit(peek())) {
-                value.append(advance());
-            }
-        }
-        if (!isAtEnd() && peek() == 'n') {
-            value.append(advance());
-        }
-    }
-
-    private Token scanTemplate(int startPos, int startLine, int startColumn) {
-        // Store the complete template literal including ${...} expressions.
-        StringBuilder value = new StringBuilder();
-
-        while (!isAtEnd()) {
-            char c = peek();
-            if (c == '`') {
-                advance(); // consume closing backtick
-                break;
-            }
-            if (c == '\\') {
-                value.append(advance());
-                if (!isAtEnd()) {
-                    value.append(advance());
-                }
-                continue;
-            }
-            if (c == '$' && position + 1 < source.length() && source.charAt(position + 1) == '{') {
-                value.append(advance()); // $
-                value.append(advance()); // {
-                scanTemplateExpression(value);
-                continue;
-            }
-            value.append(advance());
-        }
-
-        return new Token(TokenType.TEMPLATE, value.toString(), startLine, startColumn, startPos);
     }
 
     private Token scanToken() {

@@ -72,6 +72,155 @@ public final class Parser {
 
     // Statement parsing
 
+    private int findTemplateExpressionEnd(String templateStr, int expressionStart) {
+        int braceDepth = 1;
+        int pos = expressionStart;
+        boolean regexAllowed = true;
+
+        while (pos < templateStr.length()) {
+            char c = templateStr.charAt(pos);
+
+            if (Character.isWhitespace(c)) {
+                pos++;
+                continue;
+            }
+
+            if (c == '\'' || c == '"') {
+                pos = skipQuotedString(templateStr, pos, c);
+                regexAllowed = false;
+                continue;
+            }
+
+            if (c == '`') {
+                pos = skipNestedTemplateLiteral(templateStr, pos);
+                regexAllowed = false;
+                continue;
+            }
+
+            if (c == '/') {
+                if (pos + 1 < templateStr.length()) {
+                    char next = templateStr.charAt(pos + 1);
+                    if (next == '/') {
+                        pos = skipLineComment(templateStr, pos + 2);
+                        regexAllowed = true;
+                        continue;
+                    }
+                    if (next == '*') {
+                        pos = skipBlockComment(templateStr, pos + 2);
+                        regexAllowed = true;
+                        continue;
+                    }
+                }
+
+                if (regexAllowed) {
+                    pos = skipRegexLiteral(templateStr, pos);
+                    regexAllowed = false;
+                    continue;
+                }
+
+                pos++;
+                if (pos < templateStr.length() && templateStr.charAt(pos) == '=') {
+                    pos++;
+                }
+                regexAllowed = true;
+                continue;
+            }
+
+            if (c == '{') {
+                braceDepth++;
+                pos++;
+                regexAllowed = true;
+                continue;
+            }
+
+            if (c == '}') {
+                braceDepth--;
+                if (braceDepth == 0) {
+                    return pos;
+                }
+                pos++;
+                regexAllowed = false;
+                continue;
+            }
+
+            if (c == '(' || c == '[' || c == ',' || c == ';' || c == ':') {
+                pos++;
+                regexAllowed = true;
+                continue;
+            }
+
+            if (c == ')' || c == ']') {
+                pos++;
+                regexAllowed = false;
+                continue;
+            }
+
+            if (c == '.') {
+                if (pos + 2 < templateStr.length()
+                        && templateStr.charAt(pos + 1) == '.'
+                        && templateStr.charAt(pos + 2) == '.') {
+                    pos += 3;
+                    regexAllowed = true;
+                } else if (pos + 1 < templateStr.length() && Character.isDigit(templateStr.charAt(pos + 1))) {
+                    pos = skipNumberLiteral(templateStr, pos);
+                    regexAllowed = false;
+                } else {
+                    pos++;
+                    regexAllowed = false;
+                }
+                continue;
+            }
+
+            if (isIdentifierStartChar(c)) {
+                int start = pos++;
+                while (pos < templateStr.length() && isIdentifierPartChar(templateStr.charAt(pos))) {
+                    pos++;
+                }
+                String identifier = templateStr.substring(start, pos);
+                regexAllowed = switch (identifier) {
+                    case "return", "throw", "case", "delete", "void", "typeof",
+                         "instanceof", "in", "of", "new", "do", "else", "yield", "await" -> true;
+                    default -> false;
+                };
+                continue;
+            }
+
+            if (Character.isDigit(c)) {
+                pos = skipNumberLiteral(templateStr, pos);
+                regexAllowed = false;
+                continue;
+            }
+
+            if ("+-*%&|^!~<>=?".indexOf(c) >= 0) {
+                pos++;
+                if (pos < templateStr.length()) {
+                    char next = templateStr.charAt(pos);
+                    if (next == '=' || (next == c && "&|+-<>?".indexOf(c) >= 0)) {
+                        pos++;
+                    } else if (c == '=' && next == '>') {
+                        pos++;
+                    }
+                }
+                if (c == '>' && pos < templateStr.length() && templateStr.charAt(pos) == '>') {
+                    pos++;
+                    if (pos < templateStr.length() && templateStr.charAt(pos) == '>') {
+                        pos++;
+                    }
+                    if (pos < templateStr.length() && templateStr.charAt(pos) == '=') {
+                        pos++;
+                    }
+                }
+                regexAllowed = true;
+                continue;
+            }
+
+            pos++;
+            regexAllowed = false;
+        }
+
+        throw new JSSyntaxErrorException("Unterminated template expression");
+    }
+
     private SourceLocation getLocation() {
         return new SourceLocation(currentToken.line(), currentToken.column(), currentToken.offset());
     }
@@ -103,8 +252,32 @@ public final class Parser {
                 type == TokenType.LOGICAL_OR_ASSIGN || type == TokenType.NULLISH_ASSIGN;
     }
 
+    private boolean isIdentifierPartChar(char c) {
+        return Character.isLetterOrDigit(c) || c == '_' || c == '$';
+    }
+
+    private boolean isIdentifierStartChar(char c) {
+        return Character.isLetter(c) || c == '_' || c == '$';
+    }
+
     private boolean match(TokenType type) {
         return currentToken.type() == type;
+    }
+
+    private String normalizeTemplateLineTerminators(String str) {
+        StringBuilder normalized = new StringBuilder(str.length());
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if (c == '\r') {
+                if (i + 1 < str.length() && str.charAt(i + 1) == '\n') {
+                    i++;
+                }
+                normalized.append('\n');
+            } else {
+                normalized.append(c);
+            }
+        }
+        return normalized.toString();
     }
 
     /**
@@ -437,6 +610,8 @@ public final class Parser {
         return new BlockStatement(body, location);
     }
 
+    // Expression parsing with precedence
+
     private Statement parseBreakStatement() {
         SourceLocation location = getLocation();
         expect(TokenType.BREAK);
@@ -666,8 +841,6 @@ public final class Parser {
         return parseMethodOrField(key, isStatic, isPrivate, computed, location);
     }
 
-    // Expression parsing with precedence
-
     /**
      * Parse a class expression (class used as an expression).
      * Syntax: class [Name] [extends Super] { body }
@@ -842,20 +1015,20 @@ public final class Parser {
     private Expression parseExpression() {
         SourceLocation location = getLocation();
         List<Expression> expressions = new ArrayList<>();
-        
+
         expressions.add(parseAssignmentExpression());
-        
+
         // Check for comma operator
         while (match(TokenType.COMMA)) {
             advance(); // consume comma
             expressions.add(parseAssignmentExpression());
         }
-        
+
         // If only one expression, return it directly (no sequence)
         if (expressions.size() == 1) {
             return expressions.get(0);
         }
-        
+
         // Multiple expressions - return a SequenceExpression
         return new SequenceExpression(expressions, location);
     }
@@ -1283,6 +1456,8 @@ public final class Parser {
         return new ObjectExpression(properties, location);
     }
 
+    // Utility methods
+
     private ObjectPattern parseObjectPattern() {
         SourceLocation location = getLocation();
         expect(TokenType.LBRACE);
@@ -1553,8 +1728,6 @@ public final class Parser {
         };
     }
 
-    // Utility methods
-
     private Expression parsePropertyName() {
         SourceLocation location = getLocation();
         return switch (currentToken.type()) {
@@ -1767,6 +1940,19 @@ public final class Parser {
         return new SwitchStatement(discriminant, cases, location);
     }
 
+    private Expression parseTemplateExpression(String expressionSource) {
+        if (expressionSource.isBlank()) {
+            throw new JSSyntaxErrorException("Empty template expression");
+        }
+
+        Parser expressionParser = new Parser(new Lexer(expressionSource));
+        Expression expression = expressionParser.parseExpression();
+        if (expressionParser.currentToken.type() != TokenType.EOF) {
+            throw new JSSyntaxErrorException("Invalid template expression");
+        }
+        return expression;
+    }
+
     private TemplateLiteral parseTemplateLiteral(boolean tagged) {
         SourceLocation location = getLocation();
         String templateStr = currentToken.value();
@@ -1946,184 +2132,6 @@ public final class Parser {
         return nextToken;
     }
 
-    private int findTemplateExpressionEnd(String templateStr, int expressionStart) {
-        int braceDepth = 1;
-        int pos = expressionStart;
-        boolean regexAllowed = true;
-
-        while (pos < templateStr.length()) {
-            char c = templateStr.charAt(pos);
-
-            if (Character.isWhitespace(c)) {
-                pos++;
-                continue;
-            }
-
-            if (c == '\'' || c == '"') {
-                pos = skipQuotedString(templateStr, pos, c);
-                regexAllowed = false;
-                continue;
-            }
-
-            if (c == '`') {
-                pos = skipNestedTemplateLiteral(templateStr, pos);
-                regexAllowed = false;
-                continue;
-            }
-
-            if (c == '/') {
-                if (pos + 1 < templateStr.length()) {
-                    char next = templateStr.charAt(pos + 1);
-                    if (next == '/') {
-                        pos = skipLineComment(templateStr, pos + 2);
-                        regexAllowed = true;
-                        continue;
-                    }
-                    if (next == '*') {
-                        pos = skipBlockComment(templateStr, pos + 2);
-                        regexAllowed = true;
-                        continue;
-                    }
-                }
-
-                if (regexAllowed) {
-                    pos = skipRegexLiteral(templateStr, pos);
-                    regexAllowed = false;
-                    continue;
-                }
-
-                pos++;
-                if (pos < templateStr.length() && templateStr.charAt(pos) == '=') {
-                    pos++;
-                }
-                regexAllowed = true;
-                continue;
-            }
-
-            if (c == '{') {
-                braceDepth++;
-                pos++;
-                regexAllowed = true;
-                continue;
-            }
-
-            if (c == '}') {
-                braceDepth--;
-                if (braceDepth == 0) {
-                    return pos;
-                }
-                pos++;
-                regexAllowed = false;
-                continue;
-            }
-
-            if (c == '(' || c == '[' || c == ',' || c == ';' || c == ':') {
-                pos++;
-                regexAllowed = true;
-                continue;
-            }
-
-            if (c == ')' || c == ']') {
-                pos++;
-                regexAllowed = false;
-                continue;
-            }
-
-            if (c == '.') {
-                if (pos + 2 < templateStr.length()
-                        && templateStr.charAt(pos + 1) == '.'
-                        && templateStr.charAt(pos + 2) == '.') {
-                    pos += 3;
-                    regexAllowed = true;
-                } else if (pos + 1 < templateStr.length() && Character.isDigit(templateStr.charAt(pos + 1))) {
-                    pos = skipNumberLiteral(templateStr, pos);
-                    regexAllowed = false;
-                } else {
-                    pos++;
-                    regexAllowed = false;
-                }
-                continue;
-            }
-
-            if (isIdentifierStartChar(c)) {
-                int start = pos++;
-                while (pos < templateStr.length() && isIdentifierPartChar(templateStr.charAt(pos))) {
-                    pos++;
-                }
-                String identifier = templateStr.substring(start, pos);
-                regexAllowed = switch (identifier) {
-                    case "return", "throw", "case", "delete", "void", "typeof",
-                         "instanceof", "in", "of", "new", "do", "else", "yield", "await" -> true;
-                    default -> false;
-                };
-                continue;
-            }
-
-            if (Character.isDigit(c)) {
-                pos = skipNumberLiteral(templateStr, pos);
-                regexAllowed = false;
-                continue;
-            }
-
-            if ("+-*%&|^!~<>=?".indexOf(c) >= 0) {
-                pos++;
-                if (pos < templateStr.length()) {
-                    char next = templateStr.charAt(pos);
-                    if (next == '=' || (next == c && "&|+-<>?".indexOf(c) >= 0)) {
-                        pos++;
-                    } else if (c == '=' && next == '>') {
-                        pos++;
-                    }
-                }
-                if (c == '>' && pos < templateStr.length() && templateStr.charAt(pos) == '>') {
-                    pos++;
-                    if (pos < templateStr.length() && templateStr.charAt(pos) == '>') {
-                        pos++;
-                    }
-                    if (pos < templateStr.length() && templateStr.charAt(pos) == '=') {
-                        pos++;
-                    }
-                }
-                regexAllowed = true;
-                continue;
-            }
-
-            pos++;
-            regexAllowed = false;
-        }
-
-        throw new JSSyntaxErrorException("Unterminated template expression");
-    }
-
-    private String normalizeTemplateLineTerminators(String str) {
-        StringBuilder normalized = new StringBuilder(str.length());
-        for (int i = 0; i < str.length(); i++) {
-            char c = str.charAt(i);
-            if (c == '\r') {
-                if (i + 1 < str.length() && str.charAt(i + 1) == '\n') {
-                    i++;
-                }
-                normalized.append('\n');
-            } else {
-                normalized.append(c);
-            }
-        }
-        return normalized.toString();
-    }
-
-    private Expression parseTemplateExpression(String expressionSource) {
-        if (expressionSource.isBlank()) {
-            throw new JSSyntaxErrorException("Empty template expression");
-        }
-
-        Parser expressionParser = new Parser(new Lexer(expressionSource));
-        Expression expression = expressionParser.parseExpression();
-        if (expressionParser.currentToken.type() != TokenType.EOF) {
-            throw new JSSyntaxErrorException("Invalid template expression");
-        }
-        return expression;
-    }
-
     private String processTemplateEscapeSequences(String str, boolean tagged) {
         StringBuilder result = new StringBuilder(str.length());
         int i = 0;
@@ -2273,14 +2281,6 @@ public final class Parser {
             }
         }
         return result.toString();
-    }
-
-    private boolean isIdentifierPartChar(char c) {
-        return Character.isLetterOrDigit(c) || c == '_' || c == '$';
-    }
-
-    private boolean isIdentifierStartChar(char c) {
-        return Character.isLetter(c) || c == '_' || c == '$';
     }
 
     private int skipBlockComment(String source, int pos) {

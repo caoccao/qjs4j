@@ -25,6 +25,157 @@ import org.junit.jupiter.api.Test;
 public class ClassCompilerTest extends BaseJavetTest {
 
     @Test
+    public void testClassComputedInstanceFieldDefaultInitializer() {
+        assertBooleanWithJavet("""
+                let i = 0;
+                class C {
+                    [++i];
+                }
+                const c = new C();
+                i === 1 && c[1] === undefined""");
+    }
+
+    @Test
+    public void testClassComputedInstanceFieldKeyEvaluatedOnceAcrossInstances() {
+        assertBooleanWithJavet("""
+                let i = 0;
+                class C {
+                    [++i] = 7;
+                }
+                const c1 = new C();
+                const c2 = new C();
+                i === 1 && c1[1] === 7 && c2[1] === 7""");
+    }
+
+    @Test
+    public void testClassComputedInstanceFieldToPropertyKeyEvaluatedOnce() {
+        assertBooleanWithJavet("""
+                let count = 0;
+                const keyObj = {
+                    toString() {
+                        count++;
+                        return 'k';
+                    }
+                };
+                class C {
+                    [keyObj] = 1;
+                }
+                new C();
+                new C();
+                count === 1""");
+    }
+
+    @Test
+    public void testClassComputedStaticFieldAndStaticBlockOrdering() {
+        assertBooleanWithJavet("""
+                const log = [];
+                class C {
+                    static {
+                        log.push('block1');
+                    }
+                    static [(log.push('key'), 'x')] = 1;
+                    static {
+                        log.push('block2');
+                    }
+                }
+                C.x === 1 && log.join(',') === 'key,block1,block2'""");
+    }
+
+    @Test
+    public void testClassComputedStaticFieldUsesClassAsThis() {
+        assertIntegerWithJavet("""
+                class C {
+                    static base = 41;
+                    static ['result'] = this.base + 1;
+                }
+                C.result""");
+    }
+
+    @Test
+    public void testClassDeclarationStaticMethodCanAccessPrivateField() {
+        assertIntegerWithJavet("""
+                class Counter {
+                    #count = 7;
+                    static read(instance) {
+                        return instance.#count;
+                    }
+                }
+                Counter.read(new Counter())""");
+    }
+
+    @Test
+    public void testClassExpressionAnonymousStaticMethodInvocation() {
+        assertIntegerWithJavet("""
+                (class {
+                    static valuePlusTwo() {
+                        return 42;
+                    }
+                }).valuePlusTwo()""");
+    }
+
+    @Test
+    public void testClassExpressionComputedFields() {
+        assertBooleanWithJavet("""
+                let i = 0;
+                const C = class {
+                    [++i] = 10;
+                    static ['tag'] = 42;
+                };
+                const c1 = new C();
+                const c2 = new C();
+                i === 1 && c1[1] === 10 && c2[1] === 10 && C.tag === 42""");
+    }
+
+    @Test
+    public void testClassExpressionStaticMethod() {
+        assertIntegerWithJavet("""
+                const MathUtils = class {
+                    static add(a, b) {
+                        return a + b;
+                    }
+                };
+                MathUtils.add(5, 3)""");
+    }
+
+    @Test
+    public void testClassExpressionStaticMethodCanAccessPrivateField() {
+        assertIntegerWithJavet("""
+                const Counter = class {
+                    #count = 9;
+                    static read(instance) {
+                        return instance.#count;
+                    }
+                };
+                Counter.read(new Counter())""");
+    }
+
+    @Test
+    public void testClassExpressionStaticMethodThisBinding() {
+        assertBooleanWithJavet("""
+                const A = class {
+                    static isSelf() {
+                        return this === A;
+                    }
+                };
+                A.isSelf()""");
+    }
+
+    @Test
+    public void testClassExpressionStaticVsInstanceMethodNamespace() {
+        assertBooleanWithJavet("""
+                const Calculator = class {
+                    method() {
+                        return 1;
+                    }
+                    static method() {
+                        return 2;
+                    }
+                };
+                const c = new Calculator();
+                c.method() === 1 && Calculator.method() === 2 && c.method !== Calculator.method""");
+    }
+
+    @Test
     public void testClassToString() {
         assertStringWithJavet(
                 """
@@ -193,76 +344,5 @@ public class ClassCompilerTest extends BaseJavetTest {
                     }
                 }
                 MathUtils.add(5, 3)""");
-    }
-
-    @Test
-    public void testClassDeclarationStaticMethodCanAccessPrivateField() {
-        assertIntegerWithJavet("""
-                class Counter {
-                    #count = 7;
-                    static read(instance) {
-                        return instance.#count;
-                    }
-                }
-                Counter.read(new Counter())""");
-    }
-
-    @Test
-    public void testClassExpressionStaticMethod() {
-        assertIntegerWithJavet("""
-                const MathUtils = class {
-                    static add(a, b) {
-                        return a + b;
-                    }
-                };
-                MathUtils.add(5, 3)""");
-    }
-
-    @Test
-    public void testClassExpressionStaticMethodCanAccessPrivateField() {
-        assertIntegerWithJavet("""
-                const Counter = class {
-                    #count = 9;
-                    static read(instance) {
-                        return instance.#count;
-                    }
-                };
-                Counter.read(new Counter())""");
-    }
-
-    @Test
-    public void testClassExpressionStaticMethodThisBinding() {
-        assertBooleanWithJavet("""
-                const A = class {
-                    static isSelf() {
-                        return this === A;
-                    }
-                };
-                A.isSelf()""");
-    }
-
-    @Test
-    public void testClassExpressionAnonymousStaticMethodInvocation() {
-        assertIntegerWithJavet("""
-                (class {
-                    static valuePlusTwo() {
-                        return 42;
-                    }
-                }).valuePlusTwo()""");
-    }
-
-    @Test
-    public void testClassExpressionStaticVsInstanceMethodNamespace() {
-        assertBooleanWithJavet("""
-                const Calculator = class {
-                    method() {
-                        return 1;
-                    }
-                    static method() {
-                        return 2;
-                    }
-                };
-                const c = new Calculator();
-                c.method() === 1 && Calculator.method() === 2 && c.method !== Calculator.method""");
     }
 }

@@ -116,24 +116,26 @@ Added the following opcodes matching QuickJS specification:
 
 **Completed**:
 
-1. **Compile Class Declarations** (`compileClassDeclaration` - lines 388-548):
+1. **Compile Class Declarations** (`compileClassDeclaration`):
    - ✅ Compile superclass expression or emit undefined
    - ✅ Separate class elements by type (methods, fields, static blocks, constructor)
    - ✅ Create JSSymbol instances for private fields (once per class, shared across instances)
    - ✅ Compile constructor function or create default constructor with field initialization
    - ✅ Emit `DEFINE_CLASS` opcode with class name
    - ✅ Compile and emit instance methods with `DEFINE_METHOD`
-   - ✅ Compile static blocks and call them with class constructor as 'this'
+   - ✅ Compile static fields and static blocks as initializer functions called with class constructor as `this`
+   - ✅ Execute static fields and static blocks in source order
    - ✅ Handle class name storage in local or global scope
    - ✅ Static methods (class declarations and class expressions)
 
-2. **Field Compilation** (`compileFieldInitialization` - lines 1342-1409):
+2. **Field Compilation** (`compileFieldInitialization`):
    - ✅ Emits field initialization code in constructor before constructor body
-   - ✅ **Public fields**: Pushes `this`, compiles initializer, emits `DEFINE_FIELD`
+   - ✅ **Public fields**: Pushes `this`, compiles key + initializer, emits `DEFINE_PROP`
    - ✅ **Private fields**: Pushes `this`, compiles initializer, pushes symbol, emits `DEFINE_PRIVATE_FIELD`
    - ✅ Handles fields with and without initializers
    - ✅ Private symbols passed as Map<String, JSSymbol> to methods
-   - ⏳ Computed field names skipped for now
+   - ✅ Computed field names are evaluated once (with `ToPropertyKey`) at class definition time
+   - ✅ Computed field names are reused for each instance/static initialization (no repeated key side effects)
 
 3. **Private Field Access** (lines 146-268, 1254-1282):
    - ✅ `compileMemberExpression`: Handles `obj.#field` with GET_PRIVATE_FIELD
