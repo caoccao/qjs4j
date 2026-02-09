@@ -125,7 +125,7 @@ Added the following opcodes matching QuickJS specification:
    - ✅ Compile and emit instance methods with `DEFINE_METHOD`
    - ✅ Compile static blocks and call them with class constructor as 'this'
    - ✅ Handle class name storage in local or global scope
-   - ⏳ Static methods (throws exception - not yet implemented)
+   - ✅ Static methods (class declarations and class expressions)
 
 2. **Field Compilation** (`compileFieldInitialization` - lines 1342-1409):
    - ✅ Emits field initialization code in constructor before constructor body
@@ -417,6 +417,6 @@ Following QuickJS implementation:
   - Multiple static blocks execute in order
   - Access to class constructor as 'this'
   - Can initialize static fields
-⏳ **Next Step**: Implement static methods
+⏳ **Next Step**: Implement static private fields and private methods
 
 ## Remaining Work ⏳

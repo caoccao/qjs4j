@@ -2,7 +2,7 @@
 
 This document tracks remaining features, known bugs, and planned enhancements for qjs4j.
 
-**Last Updated**: 2026-02-04
+**Last Updated**: 2026-02-09
 
 ## Not Yet Implemented
 
@@ -30,11 +30,6 @@ This document tracks remaining features, known bugs, and planned enhancements fo
 - **Reference**: [FEATURES.md](FEATURES.md#not-yet-implemented-)
 
 ### Medium Priority - Class Features
-
-#### Static Methods in Classes
-- **Status**: Partially implemented (throws exception currently)
-- **Location**: BytecodeCompiler.java
-- **Reference**: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)
 
 #### Static Private Fields
 - **Description**: `static #field` for class-level private fields
@@ -215,9 +210,8 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 3. Add closure variable opcodes (GET/PUT/SET_VAR_REF)
 
 ### Phase 3: Language Features
-1. Static methods in classes (currently throws)
-2. Tagged template literals
-3. Private methods and static private fields
+1. Tagged template literals
+2. Private methods and static private fields
 
 ### Phase 4: Advanced Features
 1. Intl namespace (large undertaking)

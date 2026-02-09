@@ -194,4 +194,75 @@ public class ClassCompilerTest extends BaseJavetTest {
                 }
                 MathUtils.add(5, 3)""");
     }
+
+    @Test
+    public void testClassDeclarationStaticMethodCanAccessPrivateField() {
+        assertIntegerWithJavet("""
+                class Counter {
+                    #count = 7;
+                    static read(instance) {
+                        return instance.#count;
+                    }
+                }
+                Counter.read(new Counter())""");
+    }
+
+    @Test
+    public void testClassExpressionStaticMethod() {
+        assertIntegerWithJavet("""
+                const MathUtils = class {
+                    static add(a, b) {
+                        return a + b;
+                    }
+                };
+                MathUtils.add(5, 3)""");
+    }
+
+    @Test
+    public void testClassExpressionStaticMethodCanAccessPrivateField() {
+        assertIntegerWithJavet("""
+                const Counter = class {
+                    #count = 9;
+                    static read(instance) {
+                        return instance.#count;
+                    }
+                };
+                Counter.read(new Counter())""");
+    }
+
+    @Test
+    public void testClassExpressionStaticMethodThisBinding() {
+        assertBooleanWithJavet("""
+                const A = class {
+                    static isSelf() {
+                        return this === A;
+                    }
+                };
+                A.isSelf()""");
+    }
+
+    @Test
+    public void testClassExpressionAnonymousStaticMethodInvocation() {
+        assertIntegerWithJavet("""
+                (class {
+                    static valuePlusTwo() {
+                        return 42;
+                    }
+                }).valuePlusTwo()""");
+    }
+
+    @Test
+    public void testClassExpressionStaticVsInstanceMethodNamespace() {
+        assertBooleanWithJavet("""
+                const Calculator = class {
+                    method() {
+                        return 1;
+                    }
+                    static method() {
+                        return 2;
+                    }
+                };
+                const c = new Calculator();
+                c.method() === 1 && Calculator.method() === 2 && c.method !== Calculator.method""");
+    }
 }

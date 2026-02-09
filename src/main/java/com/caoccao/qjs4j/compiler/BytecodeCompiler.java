@@ -751,8 +751,8 @@ public final class BytecodeCompiler {
                 emitter.emitOpcode(Opcode.SWAP);
                 // Stack: proto constructor
 
-                // Compile method (no field initialization for regular methods)
-                JSBytecodeFunction methodFunc = compileMethodAsFunction(method, getMethodName(method), false, List.of(), Map.of(), false);
+                // Compile method. Static methods share the same private name scope.
+                JSBytecodeFunction methodFunc = compileMethodAsFunction(method, getMethodName(method), false, List.of(), privateSymbols, false);
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
                 // Stack: proto constructor method
 
@@ -930,7 +930,21 @@ public final class BytecodeCompiler {
 
         for (ClassDeclaration.MethodDefinition method : methods) {
             if (method.isStatic()) {
-                throw new CompilerException("Static methods not yet implemented");
+                // For static methods, constructor is the target object
+                emitter.emitOpcode(Opcode.SWAP);
+                // Stack: proto constructor
+
+                JSBytecodeFunction methodFunc = compileMethodAsFunction(method, getMethodName(method), false, List.of(), privateSymbols, false);
+                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
+                // Stack: proto constructor method
+
+                String methodName = getMethodName(method);
+                emitter.emitOpcodeAtom(Opcode.DEFINE_METHOD, methodName);
+                // Stack: proto constructor
+
+                // Restore canonical order for next iteration
+                emitter.emitOpcode(Opcode.SWAP);
+                // Stack: constructor proto
             } else {
                 JSBytecodeFunction methodFunc = compileMethodAsFunction(method, getMethodName(method), false, List.of(), privateSymbols, false);
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
