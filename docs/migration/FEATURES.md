@@ -436,6 +436,7 @@ This document provides a comprehensive list of all JavaScript features implement
   - ✅ Runtime: PropertyKey.fromSymbol() for symbol-based storage, all opcodes implemented in VM
   - ✅ Static private fields: `static #field` initialization and access
   - ✅ Private methods: `#method()` and `static #method()` with private symbol-based access
+  - ✅ PRIVATE_IN operator: `#field in obj` for private brand / field presence checks
   - ✅ Tests: Private field tests passing for instance + static scenarios
 
 - **Static class blocks**: static { }

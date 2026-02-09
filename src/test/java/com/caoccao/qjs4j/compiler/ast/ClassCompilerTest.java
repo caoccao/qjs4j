@@ -215,6 +215,12 @@ public class ClassCompilerTest extends BaseJavetTest {
     }
 
     @Test
+    public void testClassWithDuplicatePrivateMethodThrows() {
+        assertThatThrownBy(() -> resetContext().eval("class C { #m() {} #m() {} }"))
+                .isInstanceOf(JSException.class);
+    }
+
+    @Test
     public void testClassWithFieldsAndConstructor() {
         assertIntegerWithJavet("""
                 class Point {
@@ -306,6 +312,147 @@ public class ClassCompilerTest extends BaseJavetTest {
     }
 
     @Test
+    public void testClassWithPrivateInOperatorCrossClassIsolation() {
+        assertBooleanWithJavet("""
+                class A {
+                    #x = 1;
+                    has(obj) {
+                        return #x in obj;
+                    }
+                }
+                class B {
+                    #x = 2;
+                }
+                const a = new A();
+                const b = new B();
+                a.has(a) && !a.has(b)""");
+    }
+
+    @Test
+    public void testClassWithPrivateInOperatorForInstanceField() {
+        assertBooleanWithJavet("""
+                class C {
+                    #x = 1;
+                    has(obj) {
+                        return #x in obj;
+                    }
+                }
+                const c = new C();
+                c.has(c) && !c.has({})""");
+    }
+
+    @Test
+    public void testClassWithPrivateInOperatorForPrivateMethod() {
+        assertBooleanWithJavet("""
+                class C {
+                    #m() {
+                        return 1;
+                    }
+                    has(obj) {
+                        return #m in obj;
+                    }
+                }
+                const c = new C();
+                c.has(c) && !c.has({})""");
+    }
+
+    @Test
+    public void testClassWithPrivateInOperatorForStaticPrivateField() {
+        assertBooleanWithJavet("""
+                class C {
+                    static #x = 1;
+                    static has(obj) {
+                        return #x in obj;
+                    }
+                }
+                C.has(C) && !C.has({})""");
+    }
+
+    @Test
+    public void testClassWithPrivateInOperatorInvalidRightOperandThrows() {
+        assertThatThrownBy(() -> resetContext().eval("""
+                class C {
+                    #x = 1;
+                    has(value) {
+                        return #x in value;
+                    }
+                }
+                new C().has(1)"""))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("invalid 'in' operand");
+    }
+
+    @Test
+    public void testClassWithPrivateInOperatorUndefinedPrivateFieldThrows() {
+        assertThatThrownBy(() -> resetContext().eval("""
+                class C {
+                    #x = 1;
+                    has(obj) {
+                        return #y in obj;
+                    }
+                }"""))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("undefined private field '#y'");
+    }
+
+    @Test
+    public void testClassWithPrivateMethod() {
+        assertIntegerWithJavet("""
+                class Calculator {
+                    #double(value) {
+                        return value * 2;
+                    }
+                    run(value) {
+                        return this.#double(value);
+                    }
+                }
+                new Calculator().run(21)""");
+    }
+
+    @Test
+    public void testClassWithPrivateMethodAccessibleDuringFieldInitialization() {
+        assertIntegerWithJavet("""
+                class C {
+                    value = this.#getValue();
+                    #getValue() {
+                        return 9;
+                    }
+                }
+                new C().value""");
+    }
+
+    @Test
+    public void testClassWithPrivateMethodNotExposedAsPublicProperty() {
+        assertBooleanWithJavet("""
+                class C {
+                    #hidden() {
+                        return 1;
+                    }
+                }
+                const c = new C();
+                c.hidden === undefined""");
+    }
+
+    @Test
+    public void testClassWithPrivateMethodReference() {
+        assertIntegerWithJavet("""
+                class C {
+                    constructor() {
+                        this.x = 5;
+                    }
+                    #read() {
+                        return this.x;
+                    }
+                    getReader() {
+                        return this.#read;
+                    }
+                }
+                const c = new C();
+                const fn = c.getReader();
+                fn.call(c)""");
+    }
+
+    @Test
     public void testClassWithPublicField() {
         assertIntegerWithJavet("""
                 class Counter {
@@ -379,6 +526,21 @@ public class ClassCompilerTest extends BaseJavetTest {
     }
 
     @Test
+    public void testClassWithStaticPrivateFieldInitializedByStaticBlock() {
+        assertIntegerWithJavet("""
+                class C {
+                    static #value = 10;
+                    static {
+                        this.#value = this.#value + 5;
+                    }
+                    static getValue() {
+                        return this.#value;
+                    }
+                }
+                C.getValue()""");
+    }
+
+    @Test
     public void testClassWithStaticPrivateFieldInitializerAndMutation() {
         assertIntegerWithJavet("""
                 class Counter {
@@ -395,21 +557,6 @@ public class ClassCompilerTest extends BaseJavetTest {
     }
 
     @Test
-    public void testClassWithStaticPrivateFieldInitializedByStaticBlock() {
-        assertIntegerWithJavet("""
-                class C {
-                    static #value = 10;
-                    static {
-                        this.#value = this.#value + 5;
-                    }
-                    static getValue() {
-                        return this.#value;
-                    }
-                }
-                C.getValue()""");
-    }
-
-    @Test
     public void testClassWithStaticPrivateFieldWithoutInitializer() {
         assertBooleanWithJavet("""
                 class C {
@@ -419,69 +566,6 @@ public class ClassCompilerTest extends BaseJavetTest {
                     }
                 }
                 C.getValue() === undefined""");
-    }
-
-    @Test
-    public void testClassWithDuplicatePrivateMethodThrows() {
-        assertThatThrownBy(() -> resetContext().eval("class C { #m() {} #m() {} }"))
-                .isInstanceOf(JSException.class);
-    }
-
-    @Test
-    public void testClassWithPrivateMethod() {
-        assertIntegerWithJavet("""
-                class Calculator {
-                    #double(value) {
-                        return value * 2;
-                    }
-                    run(value) {
-                        return this.#double(value);
-                    }
-                }
-                new Calculator().run(21)""");
-    }
-
-    @Test
-    public void testClassWithPrivateMethodAccessibleDuringFieldInitialization() {
-        assertIntegerWithJavet("""
-                class C {
-                    value = this.#getValue();
-                    #getValue() {
-                        return 9;
-                    }
-                }
-                new C().value""");
-    }
-
-    @Test
-    public void testClassWithPrivateMethodNotExposedAsPublicProperty() {
-        assertBooleanWithJavet("""
-                class C {
-                    #hidden() {
-                        return 1;
-                    }
-                }
-                const c = new C();
-                c.hidden === undefined""");
-    }
-
-    @Test
-    public void testClassWithPrivateMethodReference() {
-        assertIntegerWithJavet("""
-                class C {
-                    constructor() {
-                        this.x = 5;
-                    }
-                    #read() {
-                        return this.x;
-                    }
-                    getReader() {
-                        return this.#read;
-                    }
-                }
-                const c = new C();
-                const fn = c.getReader();
-                fn.call(c)""");
     }
 
     @Test
@@ -496,5 +580,12 @@ public class ClassCompilerTest extends BaseJavetTest {
                     }
                 }
                 C.run(41)""");
+    }
+
+    @Test
+    public void testPrivateInOperatorOutsideClassThrows() {
+        assertThatThrownBy(() -> resetContext().eval("#x in ({})"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("undefined private field '#x'");
     }
 }

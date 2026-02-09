@@ -230,11 +230,11 @@ if (is_static && s->token.val == '{') {
    - Brand checking to ensure field access is only on correct instances
 
 2. **VM Opcode Handlers**:
-   - Implement `handleGetPrivateField()`: Look up private symbol, get value from obj
-   - Implement `handlePutPrivateField()`: Look up private symbol, set value on obj
-   - Implement `handleDefinePrivateField()`: Create property with private symbol
-   - Implement `handleDefineField()`: Create public field (regular property)
-   - Implement `handlePrivateIn()`: Check if object has private field
+   - ✅ `handleGetPrivateField()` implemented: Look up private symbol, get value from obj
+   - ✅ `handlePutPrivateField()` implemented: Look up private symbol, set value on obj
+   - ✅ `handleDefinePrivateField()` implemented: Create property with private symbol
+   - ✅ `handleDefineField()` implemented: Create public field (regular property)
+   - ✅ `handlePrivateIn()` implemented: Check if object has private field
    - Implement `handleCheckBrand()`: Verify object has correct brand for class
    - Implement `handleAddBrand()`: Add brand to object instance
 
@@ -427,6 +427,6 @@ Following QuickJS implementation:
   - Instance private method definition and invocation: `#method()`
   - Static private method definition and invocation: `static #method()`
   - Private methods are stored by private symbols and not exposed as public properties
-⏳ **Next Step**: Implement `#field in obj` (PRIVATE_IN operator)
+✅ **PRIVATE_IN Operator**: Implemented and tested (`#field in obj`)
 
 ## Remaining Work ⏳

@@ -116,6 +116,26 @@ public class ClassParserTest {
     }
 
     @Test
+    public void testClassWithPrivateInOperator() {
+        String source = "class Counter { #count = 0; has(obj) { return #count in obj; } }";
+        Parser parser = new Parser(new Lexer(source));
+        Program program = parser.parse();
+
+        ClassDeclaration classDecl = (ClassDeclaration) program.body().get(0);
+        assertThat(classDecl.body()).hasSize(2);
+
+        ClassDeclaration.MethodDefinition method = (ClassDeclaration.MethodDefinition) classDecl.body().get(1);
+        ReturnStatement returnStatement = (ReturnStatement) method.value().body().body().get(0);
+        BinaryExpression binaryExpression = (BinaryExpression) returnStatement.argument();
+
+        assertThat(binaryExpression.operator()).isEqualTo(BinaryExpression.BinaryOperator.IN);
+        assertThat(binaryExpression.left()).isInstanceOf(PrivateIdentifier.class);
+        assertThat(((PrivateIdentifier) binaryExpression.left()).name()).isEqualTo("count");
+        assertThat(binaryExpression.right()).isInstanceOf(Identifier.class);
+        assertThat(((Identifier) binaryExpression.right()).name()).isEqualTo("obj");
+    }
+
+    @Test
     public void testClassWithPrivateMethods() {
         String source = "class Counter { #inc() { return 1; } static #version() { return 2; } }";
         Parser parser = new Parser(new Lexer(source));

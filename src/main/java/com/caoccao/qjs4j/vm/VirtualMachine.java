@@ -564,6 +564,10 @@ public final class VirtualMachine {
                         handleIn();
                         pc += op.getSize();
                     }
+                    case PRIVATE_IN -> {
+                        handlePrivateIn();
+                        pc += op.getSize();
+                    }
 
                     // ==================== Logical Operations ====================
                     case LOGICAL_NOT -> {
@@ -1850,11 +1854,12 @@ public final class VirtualMachine {
     private void handleIn() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        boolean result = false;
-        if (right instanceof JSObject jsObj) {
-            PropertyKey key = PropertyKey.fromValue(context, left);
-            result = jsObj.has(key);
+        if (!(right instanceof JSObject jsObj)) {
+            throw new JSVirtualMachineException(context.throwTypeError("invalid 'in' operand"));
         }
+
+        PropertyKey key = PropertyKey.fromValue(context, left);
+        boolean result = jsObj.has(key);
         valueStack.push(JSBoolean.valueOf(result));
     }
 
@@ -2034,6 +2039,22 @@ public final class VirtualMachine {
         double newValue = oldValue + 1;
         valueStack.push(new JSNumber(oldValue));
         valueStack.push(new JSNumber(newValue));
+    }
+
+    private void handlePrivateIn() {
+        JSValue privateField = valueStack.pop();
+        JSValue object = valueStack.pop();
+
+        if (!(object instanceof JSObject jsObj)) {
+            throw new JSVirtualMachineException(context.throwTypeError("invalid 'in' operand"));
+        }
+
+        boolean result = false;
+        if (privateField instanceof JSSymbol symbol) {
+            result = jsObj.has(PropertyKey.fromSymbol(symbol));
+        }
+
+        valueStack.push(JSBoolean.valueOf(result));
     }
 
     private void handleSar() {

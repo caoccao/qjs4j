@@ -409,6 +409,12 @@ public final class BytecodeCompiler {
     // ==================== Statement Compilation ====================
 
     private void compileBinaryExpression(BinaryExpression binExpr) {
+        if (binExpr.operator() == BinaryExpression.BinaryOperator.IN &&
+                binExpr.left() instanceof PrivateIdentifier privateIdentifier) {
+            compilePrivateInExpression(privateIdentifier, binExpr.right());
+            return;
+        }
+
         // Compile operands
         compileExpression(binExpr.left());
         compileExpression(binExpr.right());
@@ -1167,6 +1173,8 @@ public final class BytecodeCompiler {
             compileLiteral(literal);
         } else if (expr instanceof Identifier id) {
             compileIdentifier(id);
+        } else if (expr instanceof PrivateIdentifier privateIdentifier) {
+            throw new CompilerException("undefined private field '#" + privateIdentifier.name() + "'");
         } else if (expr instanceof BinaryExpression binExpr) {
             compileBinaryExpression(binExpr);
         } else if (expr instanceof UnaryExpression unaryExpr) {
@@ -1288,65 +1296,6 @@ public final class BytecodeCompiler {
             // Drop 'this' from stack
             emitter.emitOpcode(Opcode.DROP);
         }
-    }
-
-    private LinkedHashMap<String, JSBytecodeFunction> compilePrivateMethodFunctions(
-            List<ClassDeclaration.MethodDefinition> privateMethods,
-            Map<String, JSSymbol> privateSymbols,
-            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
-        LinkedHashMap<String, JSBytecodeFunction> privateMethodFunctions = new LinkedHashMap<>();
-        for (ClassDeclaration.MethodDefinition method : privateMethods) {
-            String methodName = getMethodName(method);
-            JSBytecodeFunction methodFunc = compileMethodAsFunction(
-                    method,
-                    methodName,
-                    false,
-                    List.of(),
-                    privateSymbols,
-                    computedFieldSymbols,
-                    Map.of(),
-                    false
-            );
-            privateMethodFunctions.put(methodName, methodFunc);
-        }
-        return privateMethodFunctions;
-    }
-
-    private void compilePrivateMethodInitialization(
-            Map<String, JSBytecodeFunction> privateMethodFunctions,
-            Map<String, JSSymbol> privateSymbols) {
-        for (Map.Entry<String, JSBytecodeFunction> entry : privateMethodFunctions.entrySet()) {
-            JSSymbol symbol = privateSymbols.get(entry.getKey());
-            if (symbol == null) {
-                throw new CompilerException("Private method symbol not found: #" + entry.getKey());
-            }
-            emitter.emitOpcode(Opcode.PUSH_THIS);
-            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.getValue());
-            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-            emitter.emitOpcode(Opcode.SWAP);
-            emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
-            emitter.emitOpcode(Opcode.DROP);
-        }
-    }
-
-    private Map<String, JSSymbol> createPrivateSymbols(List<ClassDeclaration.ClassElement> classElements) {
-        LinkedHashMap<String, String> privateNameKinds = new LinkedHashMap<>();
-        for (ClassDeclaration.ClassElement element : classElements) {
-            if (element instanceof ClassDeclaration.PropertyDefinition field) {
-                if (field.isPrivate() && field.key() instanceof PrivateIdentifier privateId) {
-                    registerPrivateName(privateNameKinds, privateId.name(), "field");
-                }
-            } else if (element instanceof ClassDeclaration.MethodDefinition method) {
-                if (method.isPrivate() && method.key() instanceof PrivateIdentifier privateId) {
-                    registerPrivateName(privateNameKinds, privateId.name(), method.kind());
-                }
-            }
-        }
-        LinkedHashMap<String, JSSymbol> privateSymbols = new LinkedHashMap<>();
-        for (String privateName : privateNameKinds.keySet()) {
-            privateSymbols.put(privateName, new JSSymbol(privateName));
-        }
-        return privateSymbols;
     }
 
     private void compileForInStatement(ForInStatement forInStmt) {
@@ -2392,6 +2341,57 @@ public final class BytecodeCompiler {
         }
     }
 
+    private void compilePrivateInExpression(PrivateIdentifier privateIdentifier, Expression right) {
+        compileExpression(right);
+
+        JSSymbol symbol = privateSymbols != null ? privateSymbols.get(privateIdentifier.name()) : null;
+        if (symbol == null) {
+            throw new CompilerException("undefined private field '#" + privateIdentifier.name() + "'");
+        }
+
+        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+        emitter.emitOpcode(Opcode.PRIVATE_IN);
+    }
+
+    private LinkedHashMap<String, JSBytecodeFunction> compilePrivateMethodFunctions(
+            List<ClassDeclaration.MethodDefinition> privateMethods,
+            Map<String, JSSymbol> privateSymbols,
+            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
+        LinkedHashMap<String, JSBytecodeFunction> privateMethodFunctions = new LinkedHashMap<>();
+        for (ClassDeclaration.MethodDefinition method : privateMethods) {
+            String methodName = getMethodName(method);
+            JSBytecodeFunction methodFunc = compileMethodAsFunction(
+                    method,
+                    methodName,
+                    false,
+                    List.of(),
+                    privateSymbols,
+                    computedFieldSymbols,
+                    Map.of(),
+                    false
+            );
+            privateMethodFunctions.put(methodName, methodFunc);
+        }
+        return privateMethodFunctions;
+    }
+
+    private void compilePrivateMethodInitialization(
+            Map<String, JSBytecodeFunction> privateMethodFunctions,
+            Map<String, JSSymbol> privateSymbols) {
+        for (Map.Entry<String, JSBytecodeFunction> entry : privateMethodFunctions.entrySet()) {
+            JSSymbol symbol = privateSymbols.get(entry.getKey());
+            if (symbol == null) {
+                throw new CompilerException("Private method symbol not found: #" + entry.getKey());
+            }
+            emitter.emitOpcode(Opcode.PUSH_THIS);
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.getValue());
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+            emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
+            emitter.emitOpcode(Opcode.DROP);
+        }
+    }
+
     private void compileProgram(Program program) {
         inGlobalScope = true;
         strictMode = program.strict();  // Set strict mode from program directive
@@ -2459,8 +2459,6 @@ public final class BytecodeCompiler {
         compileStatement(stmt, false);
     }
 
-    // ==================== Expression Compilation ====================
-
     private void compileStatement(Statement stmt, boolean isLastInProgram) {
         if (stmt instanceof ExpressionStatement exprStmt) {
             compileExpression(exprStmt.expression());
@@ -2500,6 +2498,8 @@ public final class BytecodeCompiler {
             compileClassDeclaration(classDecl);
         }
     }
+
+    // ==================== Expression Compilation ====================
 
     /**
      * Compile a static block as a function.
@@ -3248,6 +3248,26 @@ public final class BytecodeCompiler {
         );
     }
 
+    private Map<String, JSSymbol> createPrivateSymbols(List<ClassDeclaration.ClassElement> classElements) {
+        LinkedHashMap<String, String> privateNameKinds = new LinkedHashMap<>();
+        for (ClassDeclaration.ClassElement element : classElements) {
+            if (element instanceof ClassDeclaration.PropertyDefinition field) {
+                if (field.isPrivate() && field.key() instanceof PrivateIdentifier privateId) {
+                    registerPrivateName(privateNameKinds, privateId.name(), "field");
+                }
+            } else if (element instanceof ClassDeclaration.MethodDefinition method) {
+                if (method.isPrivate() && method.key() instanceof PrivateIdentifier privateId) {
+                    registerPrivateName(privateNameKinds, privateId.name(), method.kind());
+                }
+            }
+        }
+        LinkedHashMap<String, JSSymbol> privateSymbols = new LinkedHashMap<>();
+        for (String privateName : privateNameKinds.keySet()) {
+            privateSymbols.put(privateName, new JSSymbol(privateName));
+        }
+        return privateSymbols;
+    }
+
     private Scope currentScope() {
         if (scopes.isEmpty()) {
             throw new CompilerException("No scope available");
@@ -3385,6 +3405,31 @@ public final class BytecodeCompiler {
         }
     }
 
+    /**
+     * Check if a block statement has a "use strict" directive as its first statement.
+     * Following ECMAScript specification section 10.2.1 (Directive Prologues).
+     */
+    private boolean hasUseStrictDirective(BlockStatement block) {
+        if (block == null || block.body().isEmpty()) {
+            return false;
+        }
+
+        // Check the first statement
+        Statement firstStmt = block.body().get(0);
+        if (!(firstStmt instanceof ExpressionStatement exprStmt)) {
+            return false;
+        }
+
+        // Check if it's a string literal expression
+        if (!(exprStmt.expression() instanceof Literal literal)) {
+            return false;
+        }
+
+        // Check if the literal value is "use strict"
+        Object value = literal.value();
+        return "use strict".equals(value);
+    }
+
     private void installPrivateStaticMethods(
             Map<String, JSBytecodeFunction> privateStaticMethodFunctions,
             Map<String, JSSymbol> privateSymbols) {
@@ -3420,31 +3465,6 @@ public final class BytecodeCompiler {
             return;
         }
         throw new CompilerException("private class field is already defined");
-    }
-
-    /**
-     * Check if a block statement has a "use strict" directive as its first statement.
-     * Following ECMAScript specification section 10.2.1 (Directive Prologues).
-     */
-    private boolean hasUseStrictDirective(BlockStatement block) {
-        if (block == null || block.body().isEmpty()) {
-            return false;
-        }
-
-        // Check the first statement
-        Statement firstStmt = block.body().get(0);
-        if (!(firstStmt instanceof ExpressionStatement exprStmt)) {
-            return false;
-        }
-
-        // Check if it's a string literal expression
-        if (!(exprStmt.expression() instanceof Literal literal)) {
-            return false;
-        }
-
-        // Check if the literal value is "use strict"
-        Object value = literal.value();
-        return "use strict".equals(value);
     }
 
     /**

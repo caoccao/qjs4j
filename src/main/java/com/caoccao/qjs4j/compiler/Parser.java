@@ -74,14 +74,11 @@ public final class Parser {
         // Otherwise, automatic semicolon insertion
     }
 
-    private Token expect(TokenType type) {
-        if (!match(type)) {
-            throw new RuntimeException("Expected " + type + " but got " + currentToken.type() +
-                    " at line " + currentToken.line() + ", column " + currentToken.column());
+    private void enterFunctionContext(boolean asyncFunction) {
+        functionNesting++;
+        if (asyncFunction) {
+            asyncFunctionNesting++;
         }
-        Token token = currentToken;
-        advance();
-        return token;
     }
 
     private void exitFunctionContext(boolean asyncFunction) {
@@ -92,6 +89,16 @@ public final class Parser {
     }
 
     // Statement parsing
+
+    private Token expect(TokenType type) {
+        if (!match(type)) {
+            throw new RuntimeException("Expected " + type + " but got " + currentToken.type() +
+                    " at line " + currentToken.line() + ", column " + currentToken.column());
+        }
+        Token token = currentToken;
+        advance();
+        return token;
+    }
 
     private int findTemplateExpressionEnd(String templateStr, int expressionStart) {
         int braceDepth = 1;
@@ -273,25 +280,6 @@ public final class Parser {
                 type == TokenType.LOGICAL_OR_ASSIGN || type == TokenType.NULLISH_ASSIGN;
     }
 
-    private boolean isIdentifierPartChar(char c) {
-        return Character.isLetterOrDigit(c) || c == '_' || c == '$';
-    }
-
-    private boolean isIdentifierStartChar(char c) {
-        return Character.isLetter(c) || c == '_' || c == '$';
-    }
-
-    private boolean match(TokenType type) {
-        return currentToken.type() == type;
-    }
-
-    private void enterFunctionContext(boolean asyncFunction) {
-        functionNesting++;
-        if (asyncFunction) {
-            asyncFunctionNesting++;
-        }
-    }
-
     private boolean isAwaitExpressionAllowed() {
         return asyncFunctionNesting > 0 || (moduleMode && functionNesting == 0);
     }
@@ -309,6 +297,14 @@ public final class Parser {
         };
     }
 
+    private boolean isIdentifierPartChar(char c) {
+        return Character.isLetterOrDigit(c) || c == '_' || c == '$';
+    }
+
+    private boolean isIdentifierStartChar(char c) {
+        return Character.isLetter(c) || c == '_' || c == '$';
+    }
+
     private boolean isValidContinuationAfterAwaitIdentifier() {
         if (nextToken.line() > currentToken.line()) {
             return true;
@@ -319,6 +315,10 @@ public final class Parser {
         return nextToken.type() == TokenType.LPAREN
                 || nextToken.type() == TokenType.LBRACKET
                 || nextToken.type() == TokenType.TEMPLATE;
+    }
+
+    private boolean match(TokenType type) {
+        return currentToken.type() == type;
     }
 
     private String normalizeTemplateLineTerminators(String str) {
@@ -1692,6 +1692,12 @@ public final class Parser {
             }
             case IDENTIFIER -> parseIdentifier();
             case AWAIT -> parseIdentifier();
+            case PRIVATE_NAME -> {
+                String name = currentToken.value();
+                String fieldName = name.substring(1);
+                advance();
+                yield new PrivateIdentifier(fieldName, location);
+            }
             case THIS -> {
                 advance();
                 yield new Identifier("this", location);

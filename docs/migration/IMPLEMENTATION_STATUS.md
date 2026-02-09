@@ -43,7 +43,7 @@ Private instance fields (`#field`) are fully implemented and all tests pass.
   - `GET_PRIVATE_FIELD(131)` - Read private field
   - `PUT_PRIVATE_FIELD(132)` - Write private field  
   - `DEFINE_PRIVATE_FIELD(133)` - Initialize private field
-  - `PRIVATE_IN(135)` - Check if object has private field (defined, not yet used)
+  - `PRIVATE_IN(135)` - Check if object has private field (`#field in obj`)
 - **Compiler**:
   - ✅ Symbol creation: One JSSymbol per private field per class (BytecodeCompiler.java:442-445)
   - ✅ Field initialization: Works in constructors via DEFINE_PRIVATE_FIELD
@@ -147,9 +147,7 @@ Result: 13/13 tests passing (100% pass rate)
 
 Potential extensions to build on this implementation:
 
-1. **PRIVATE_IN operator**: Add compiler support for `#field in obj` syntax to check if an object has a specific private field
-
-2. **Private methods**: Support for `#method()` private method declarations
+1. **Private methods**: Support for `#method()` private method declarations
 
 ## QuickJS Alignment
 
