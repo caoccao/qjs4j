@@ -19,7 +19,9 @@ package com.caoccao.qjs4j.regexp;
 import com.caoccao.qjs4j.utils.DynamicBuffer;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Compiles regex patterns to bytecode.
@@ -32,6 +34,7 @@ public final class RegExpCompiler {
 
     private int captureCount;
     private List<String> groupNames;
+    private Map<String, Integer> namedCaptureIndices;
 
     /**
      * Compile a regex pattern to bytecode.
@@ -49,6 +52,11 @@ public final class RegExpCompiler {
         int flagBits = RegExpBytecode.parseFlags(flags);
         captureCount = 1; // Capture group 0 (the entire match)
         groupNames = new ArrayList<>();
+        groupNames.add(null); // Group 0 has no name
+        namedCaptureIndices = scanNamedCaptureGroups(pattern);
+        if (!namedCaptureIndices.isEmpty()) {
+            flagBits |= RegExpBytecode.FLAG_NAMED_GROUPS;
+        }
 
         DynamicBuffer buffer = new DynamicBuffer(256);
         CompileContext context = new CompileContext(pattern, flagBits, buffer);
@@ -58,11 +66,19 @@ public final class RegExpCompiler {
             // End with MATCH opcode
             buffer.appendU8(RegExpOpcode.MATCH.getCode());
 
+            String[] compiledGroupNames = null;
+            if (!namedCaptureIndices.isEmpty()) {
+                compiledGroupNames = new String[captureCount];
+                for (int i = 0; i < captureCount && i < groupNames.size(); i++) {
+                    compiledGroupNames[i] = groupNames.get(i);
+                }
+            }
+
             return new RegExpBytecode(
                     buffer.toByteArray(),
                     flagBits,
                     captureCount,
-                    groupNames.isEmpty() ? null : groupNames.toArray(new String[0])
+                    compiledGroupNames
             );
         } catch (Exception e) {
             throw new RegExpSyntaxException("Failed to compile pattern: " + e.getMessage(), e);
@@ -362,6 +378,28 @@ public final class RegExpCompiler {
                         RegExpOpcode.NOT_WORD_BOUNDARY_I.getCode() :
                         RegExpOpcode.NOT_WORD_BOUNDARY.getCode());
             }
+            case 'k' -> {
+                if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '<') {
+                    throw new RegExpSyntaxException("expecting group name");
+                }
+                context.pos++; // Skip '<'
+
+                GroupNameParseResult groupNameParseResult = parseGroupName(context.codePoints, context.pos);
+                if (groupNameParseResult == null) {
+                    throw new RegExpSyntaxException("invalid group name");
+                }
+                context.pos = groupNameParseResult.nextPos();
+
+                Integer groupNum = namedCaptureIndices.get(groupNameParseResult.name());
+                if (groupNum == null) {
+                    throw new RegExpSyntaxException("group name not defined");
+                }
+
+                context.buffer.appendU8(context.isIgnoreCase() ?
+                        RegExpOpcode.BACK_REFERENCE_I.getCode() :
+                        RegExpOpcode.BACK_REFERENCE.getCode());
+                context.buffer.appendU8(groupNum);
+            }
             case '1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
                 // Back reference \1, \2, etc.
                 int groupNum = ch - '0';
@@ -461,6 +499,7 @@ public final class RegExpCompiler {
 
         // Check for special group syntax
         boolean isCapturing = true;
+        String captureName = null;
         if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '?') {
             context.pos++;
             if (context.pos >= context.codePoints.length) {
@@ -478,6 +517,18 @@ public final class RegExpCompiler {
                 // Negative lookahead (?!...)
                 compileLookahead(context, true);
                 return;
+            } else if (groupType == '<') {
+                if (context.pos < context.codePoints.length &&
+                        (context.codePoints[context.pos] == '=' || context.codePoints[context.pos] == '!')) {
+                    throw new RegExpSyntaxException("Unknown group type: (?<" + (char) context.codePoints[context.pos]);
+                }
+
+                GroupNameParseResult groupNameParseResult = parseGroupName(context.codePoints, context.pos);
+                if (groupNameParseResult == null) {
+                    throw new RegExpSyntaxException("invalid group name");
+                }
+                context.pos = groupNameParseResult.nextPos();
+                captureName = groupNameParseResult.name();
             } else {
                 throw new RegExpSyntaxException("Unknown group type: (?" + (char) groupType);
             }
@@ -486,6 +537,10 @@ public final class RegExpCompiler {
         int groupIndex = -1;
         if (isCapturing) {
             groupIndex = captureCount++;
+            ensureGroupNameSize(groupIndex + 1);
+            if (captureName != null) {
+                groupNames.set(groupIndex, captureName);
+            }
             // Save start
             context.buffer.appendU8(RegExpOpcode.SAVE_START.getCode());
             context.buffer.appendU8(groupIndex);
@@ -682,6 +737,12 @@ public final class RegExpCompiler {
         }
     }
 
+    private void ensureGroupNameSize(int size) {
+        while (groupNames.size() < size) {
+            groupNames.add(null);
+        }
+    }
+
     private int hexValue(int ch) {
         if (ch >= '0' && ch <= '9') {
             return ch - '0';
@@ -691,6 +752,15 @@ public final class RegExpCompiler {
             return ch - 'A' + 10;
         }
         return -1;
+    }
+
+    private boolean isJsIdentifierPart(int codePoint) {
+        return codePoint == '$' || codePoint == '_' || codePoint == 0x200C || codePoint == 0x200D ||
+                Character.isUnicodeIdentifierPart(codePoint);
+    }
+
+    private boolean isJsIdentifierStart(int codePoint) {
+        return codePoint == '$' || codePoint == '_' || Character.isUnicodeIdentifierStart(codePoint);
     }
 
     private int parseClassEscape(CompileContext context, List<Integer> ranges) {
@@ -753,6 +823,43 @@ public final class RegExpCompiler {
         };
     }
 
+    private GroupNameParseResult parseGroupName(int[] codePoints, int startPos) {
+        StringBuilder name = new StringBuilder();
+        int pos = startPos;
+
+        while (pos < codePoints.length) {
+            int codePoint = codePoints[pos];
+            if (codePoint == '>') {
+                if (name.isEmpty()) {
+                    return null;
+                }
+                return new GroupNameParseResult(name.toString(), pos + 1);
+            }
+
+            if (codePoint == '\\') {
+                EscapedCodePoint escapedCodePoint = parseUnicodeEscapeInGroupName(codePoints, pos);
+                if (escapedCodePoint == null) {
+                    return null;
+                }
+                codePoint = escapedCodePoint.codePoint();
+                pos = escapedCodePoint.nextPos();
+            } else {
+                pos++;
+            }
+
+            if (name.isEmpty()) {
+                if (!isJsIdentifierStart(codePoint)) {
+                    return null;
+                }
+            } else if (!isJsIdentifierPart(codePoint)) {
+                return null;
+            }
+            name.appendCodePoint(codePoint);
+        }
+
+        return null;
+    }
+
     private int[] parseQuantifierBounds(CompileContext context) {
         int min = 0, max;
 
@@ -795,6 +902,111 @@ public final class RegExpCompiler {
         return new int[]{min, max};
     }
 
+    private EscapedCodePoint parseUnicodeEscapeInGroupName(int[] codePoints, int startPos) {
+        if (startPos + 1 >= codePoints.length || codePoints[startPos] != '\\' || codePoints[startPos + 1] != 'u') {
+            return null;
+        }
+        int pos = startPos + 2;
+        if (pos < codePoints.length && codePoints[pos] == '{') {
+            pos++;
+            int value = 0;
+            int digits = 0;
+            while (pos < codePoints.length && codePoints[pos] != '}') {
+                int hex = hexValue(codePoints[pos]);
+                if (hex < 0) {
+                    return null;
+                }
+                value = (value << 4) | hex;
+                digits++;
+                if (digits > 6) {
+                    return null;
+                }
+                pos++;
+            }
+            if (digits == 0 || pos >= codePoints.length || codePoints[pos] != '}' || value > 0x10FFFF) {
+                return null;
+            }
+            return new EscapedCodePoint(value, pos + 1);
+        }
+
+        if (pos + 3 >= codePoints.length) {
+            return null;
+        }
+        int value = 0;
+        for (int i = 0; i < 4; i++) {
+            int hex = hexValue(codePoints[pos + i]);
+            if (hex < 0) {
+                return null;
+            }
+            value = (value << 4) | hex;
+        }
+        return new EscapedCodePoint(value, pos + 4);
+    }
+
+    private Map<String, Integer> scanNamedCaptureGroups(String pattern) {
+        int[] codePoints = pattern.codePoints().toArray();
+        Map<String, Integer> captureIndices = new HashMap<>();
+        boolean inCharacterClass = false;
+        int captureIndex = 1;
+
+        for (int i = 0; i < codePoints.length; i++) {
+            int codePoint = codePoints[i];
+
+            if (codePoint == '\\') {
+                if (i + 1 < codePoints.length) {
+                    i++;
+                }
+                continue;
+            }
+            if (inCharacterClass) {
+                if (codePoint == ']') {
+                    inCharacterClass = false;
+                }
+                continue;
+            }
+            if (codePoint == '[') {
+                inCharacterClass = true;
+                continue;
+            }
+            if (codePoint != '(') {
+                continue;
+            }
+
+            if (i + 1 < codePoints.length && codePoints[i + 1] == '?') {
+                if (i + 2 >= codePoints.length) {
+                    continue;
+                }
+                int groupType = codePoints[i + 2];
+                if (groupType == ':'
+                        || groupType == '='
+                        || groupType == '!'
+                        || groupType == '>') {
+                    continue;
+                }
+                if (groupType == '<') {
+                    if (i + 3 < codePoints.length &&
+                            (codePoints[i + 3] == '=' || codePoints[i + 3] == '!')) {
+                        continue;
+                    }
+                    GroupNameParseResult groupNameParseResult = parseGroupName(codePoints, i + 3);
+                    if (groupNameParseResult == null) {
+                        throw new RegExpSyntaxException("invalid group name");
+                    }
+                    if (captureIndices.containsKey(groupNameParseResult.name())) {
+                        throw new RegExpSyntaxException("duplicate group name");
+                    }
+                    captureIndices.put(groupNameParseResult.name(), captureIndex++);
+                    i = groupNameParseResult.nextPos() - 1;
+                    continue;
+                }
+                continue;
+            }
+
+            captureIndex++;
+        }
+        return captureIndices;
+    }
+
     private static class CompileContext {
         final DynamicBuffer buffer;
         final int[] codePoints;
@@ -825,6 +1037,12 @@ public final class RegExpCompiler {
         boolean isUnicode() {
             return (flags & RegExpBytecode.FLAG_UNICODE) != 0;
         }
+    }
+
+    private record EscapedCodePoint(int codePoint, int nextPos) {
+    }
+
+    private record GroupNameParseResult(String name, int nextPos) {
     }
 
     /**

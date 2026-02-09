@@ -184,6 +184,7 @@ This document provides a comprehensive list of all JavaScript features implement
 - **Methods**: exec, test
 - **String integration**: match, matchAll, search, replace, split
 - **Flags**: g (global), i (ignoreCase), m (multiline), s (dotAll), u (unicode), y (sticky)
+- **Named capture groups**: `(?<name>...)`, `\\k<name>`, and `match.groups`
 
 ### Math
 - **Constants**: E, PI, LN2, LN10, LOG2E, LOG10E, SQRT1_2, SQRT2
@@ -469,7 +470,6 @@ This document provides a comprehensive list of all JavaScript features implement
 
 ### Miscellaneous
 - **Regular expression features**:
-  - Named capture groups: (?<name>...)
   - Unicode property escapes: \p{...}
   - Lookbehind assertions: (?<=...), (?<!...)
 - **Binary & Octal numeric separators**: 0b1010_1010, 0o755

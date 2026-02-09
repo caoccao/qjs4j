@@ -16,12 +16,14 @@
 
 package com.caoccao.qjs4j.regexp;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-public class RegExpEngineTest extends BaseTest {
+public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testCaseInsensitiveMatching() {
         RegExpCompiler compiler = new RegExpCompiler();
@@ -195,6 +197,74 @@ public class RegExpEngineTest extends BaseTest {
         assertThat(result.getCapture(1)).isEqualTo("a");
         assertThat(result.getCapture(2)).isEqualTo("b");
         assertThat(result.getCapture(3)).isEqualTo("c");
+    }
+
+    @Test
+    public void testNamedCaptureGroupsBackReference() {
+        assertBooleanWithJavet("""
+                /(?<x>a)\\k<x>/.test('aa') && !/(?<x>a)\\k<x>/.test('ab')""");
+    }
+
+    @Test
+    public void testNamedCaptureGroupsDuplicateNameThrows() {
+        assertThatThrownBy(() -> resetContext().eval("new RegExp('(?<x>a)(?<x>b)')"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("duplicate group name");
+    }
+
+    @Test
+    public void testNamedCaptureGroupsExecGroups() {
+        assertBooleanWithJavet("""
+                const m = /(?<year>\\d+)-(?<month>\\d+)/.exec('2024-01');
+                m[0] === '2024-01'
+                    && m[1] === '2024'
+                    && m[2] === '01'
+                    && m.groups.year === '2024'
+                    && m.groups.month === '01'
+                    && Object.getPrototypeOf(m.groups) === null""");
+    }
+
+    @Test
+    public void testNamedCaptureGroupsForwardBackReference() {
+        assertBooleanWithJavet("/\\k<x>(?<x>a)/.test('aa')");
+    }
+
+    @Test
+    public void testNamedCaptureGroupsMatchAllGroups() {
+        assertBooleanWithJavet("""
+                const values = [];
+                for (const m of 'a1 a2'.matchAll(/a(?<digit>\\d)/g)) {
+                    values.push(m.groups.digit);
+                }
+                values.join(',') === '1,2'""");
+    }
+
+    @Test
+    public void testNamedCaptureGroupsNotDefinedThrows() {
+        assertThatThrownBy(() -> resetContext().eval("new RegExp('\\\\k<missing>(?<x>a)')"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("group name not defined");
+    }
+
+    @Test
+    public void testNamedCaptureGroupsOptionalUndefined() {
+        assertBooleanWithJavet("""
+                const m = /(?<x>a)?b/.exec('b');
+                m.groups.x === undefined""");
+    }
+
+    @Test
+    public void testNamedCaptureGroupsReplaceAndReplaceAll() {
+        assertBooleanWithJavet("""
+                'ab'.replace(/(?<x>a)/, '$<x>-') === 'a-b'
+                    && 'a1 a2'.replaceAll(/a(?<digit>\\d)/g, '[$<digit>]') === '[1] [2]'""");
+    }
+
+    @Test
+    public void testNamedCaptureGroupsWithoutNamesHaveUndefinedGroups() {
+        assertBooleanWithJavet("""
+                const m = /(a)/.exec('a');
+                m.groups === undefined""");
     }
 
     @Test

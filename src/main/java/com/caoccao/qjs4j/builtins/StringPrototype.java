@@ -34,6 +34,32 @@ public final class StringPrototype {
         return createHTML(context, thisArg, args, "a", "name");
     }
 
+    private static String applyRegExpReplacementPattern(String replacementTemplate, String[] captures, String[] groupNames) {
+        String replacement = replacementTemplate;
+        if (captures != null) {
+            for (int i = captures.length - 1; i >= 0; i--) {
+                if (captures[i] != null) {
+                    replacement = replacement.replace("$" + i, captures[i]);
+                }
+            }
+            if (captures.length > 0 && captures[0] != null) {
+                replacement = replacement.replace("$&", captures[0]);
+            }
+        }
+        if (captures != null && groupNames != null) {
+            int maxLength = Math.min(captures.length, groupNames.length);
+            for (int i = 1; i < maxLength; i++) {
+                String groupName = groupNames[i];
+                if (groupName != null) {
+                    replacement = replacement.replace(
+                            "$<" + groupName + ">",
+                            captures[i] != null ? captures[i] : "");
+                }
+            }
+        }
+        return replacement;
+    }
+
     /**
      * String.prototype.at(index)
      * ES2022 22.1.3.1
@@ -183,6 +209,28 @@ public final class StringPrototype {
         result.append('>').append(str.value()).append("</").append(tag).append('>');
 
         return new JSString(result.toString());
+    }
+
+    private static JSValue createNamedGroupsValue(String[] captures, String[] groupNames) {
+        if (groupNames == null || captures == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSObject groups = new JSObject();
+        groups.setPrototype(null);
+
+        int maxLength = Math.min(captures.length, groupNames.length);
+        for (int i = 1; i < maxLength; i++) {
+            String groupName = groupNames[i];
+            if (groupName != null && !groups.hasOwnProperty(groupName)) {
+                if (captures[i] != null) {
+                    groups.set(groupName, new JSString(captures[i]));
+                } else {
+                    groups.set(groupName, JSUndefined.INSTANCE);
+                }
+            }
+        }
+        return groups;
     }
 
     /**
@@ -530,6 +578,7 @@ public final class StringPrototype {
 
             // Add 'input' property
             matchArray.set("input", new JSString(s));
+            matchArray.set("groups", createNamedGroupsValue(captures, regexp.getBytecode().groupNames()));
 
             matches.push(matchArray);
         }
@@ -698,21 +747,11 @@ public final class StringPrototype {
                 int matchEnd = indices[0][1];
 
                 // Build result with replacement
-                String replacement = replaceStr;
-
-                // Handle special replacement patterns like $1, $2, etc.
                 String[] captures = result.captures();
-                if (captures != null) {
-                    for (int i = captures.length - 1; i >= 0; i--) {
-                        if (captures[i] != null) {
-                            replacement = replacement.replace("$" + i, captures[i]);
-                        }
-                    }
-                    // Replace $& with the full match
-                    if (captures.length > 0 && captures[0] != null) {
-                        replacement = replacement.replace("$&", captures[0]);
-                    }
-                }
+                String replacement = applyRegExpReplacementPattern(
+                        replaceStr,
+                        captures,
+                        regexp.getBytecode().groupNames());
 
                 String resultStr = s.substring(0, matchStart) + replacement + s.substring(matchEnd);
                 return new JSString(resultStr);
@@ -786,19 +825,11 @@ public final class StringPrototype {
                 result.append(s, lastIndex, matchStart);
 
                 // Build replacement with special patterns
-                String replacement = replaceStr;
                 String[] captures = matchResult.captures();
-                if (captures != null) {
-                    for (int i = captures.length - 1; i >= 0; i--) {
-                        if (captures[i] != null) {
-                            replacement = replacement.replace("$" + i, captures[i]);
-                        }
-                    }
-                    // Replace $& with the full match
-                    if (captures.length > 0 && captures[0] != null) {
-                        replacement = replacement.replace("$&", captures[0]);
-                    }
-                }
+                String replacement = applyRegExpReplacementPattern(
+                        replaceStr,
+                        captures,
+                        regexp.getBytecode().groupNames());
 
                 // Append replacement
                 result.append(replacement);

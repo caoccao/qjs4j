@@ -25,6 +25,28 @@ import com.caoccao.qjs4j.regexp.RegExpEngine;
  */
 public final class RegExpPrototype {
 
+    private static JSValue createNamedGroupsValue(String[] captures, String[] groupNames) {
+        if (groupNames == null || captures == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSObject groups = new JSObject();
+        groups.setPrototype(null);
+
+        int maxLength = Math.min(captures.length, groupNames.length);
+        for (int i = 1; i < maxLength; i++) {
+            String groupName = groupNames[i];
+            if (groupName != null && !groups.hasOwnProperty(groupName)) {
+                if (captures[i] != null) {
+                    groups.set(groupName, new JSString(captures[i]));
+                } else {
+                    groups.set(groupName, JSUndefined.INSTANCE);
+                }
+            }
+        }
+        return groups;
+    }
+
     /**
      * RegExp.prototype.exec(str)
      * ES2020 21.2.5.2.1
@@ -64,6 +86,7 @@ public final class RegExpPrototype {
                 array.set("index", new JSNumber(indices[0][0]));
             }
             array.set("input", new JSString(str));
+            array.set("groups", createNamedGroupsValue(captures, regexp.getBytecode().groupNames()));
 
             // Update lastIndex for global/sticky regexes
             if (regexp.isGlobal() || regexp.isSticky()) {
