@@ -1426,6 +1426,31 @@ public final class Parser {
             advance();
             Expression callee = parseMemberExpression();
 
+            // Parse member access after the callee so
+            // `new Intl.DateTimeFormat()` binds as `new (Intl.DateTimeFormat)()`
+            // instead of `(new Intl).DateTimeFormat()`.
+            while (true) {
+                if (match(TokenType.DOT)) {
+                    advance();
+                    SourceLocation memberLocation = getLocation();
+                    if (!match(TokenType.IDENTIFIER)) {
+                        throw new RuntimeException("Expected property name after '.' at line " +
+                                currentToken.line() + ", column " + currentToken.column());
+                    }
+                    Expression property = new Identifier(currentToken.value(), memberLocation);
+                    advance();
+                    callee = new MemberExpression(callee, property, false, memberLocation);
+                } else if (match(TokenType.LBRACKET)) {
+                    advance();
+                    SourceLocation memberLocation = getLocation();
+                    Expression property = parseExpression();
+                    expect(TokenType.RBRACKET);
+                    callee = new MemberExpression(callee, property, true, memberLocation);
+                } else {
+                    break;
+                }
+            }
+
             List<Expression> args = new ArrayList<>();
             if (match(TokenType.LPAREN)) {
                 advance();

@@ -626,9 +626,8 @@ public class Test262Config {
         
         // Define unsupported features
         config.unsupportedFeatures = Set.of(
-            "Intl",
-            "Intl.DateTimeFormat",
-            "Intl.NumberFormat",
+            "Intl.Segmenter",
+            "Intl.DisplayNames",
             "top-level-await",
             "import.meta",
             "hashbang",
@@ -734,7 +733,8 @@ Skip tests that require unsupported features:
 
 ```java
 unsupportedFeatures = [
-    "Intl",                    // Internationalization API not implemented
+    "Intl.Segmenter",          // Not implemented yet
+    "Intl.DisplayNames",       // Not implemented yet
     "top-level-await",         // Not implemented yet
     "import.meta",             // Not implemented
     "hashbang",                // Shebang support not needed
@@ -751,8 +751,8 @@ Focus on specific test directories:
 // Run only language tests
 includePatterns = ["test/language/**/*.js"]
 
-// Skip Intl tests
-excludePatterns = ["test/intl/**/*.js"]
+// Skip only unsupported Intl sub-features
+excludePatterns = ["test/intl402/Segmenter/**/*.js", "test/intl402/DisplayNames/**/*.js"]
 ```
 
 ### Progressive Approach
@@ -804,7 +804,7 @@ Track over time:
 
 ### Failure Categories
 
-1. **Expected failures**: Missing features (Intl, etc.) → Skip
+1. **Expected failures**: Missing features (Segmenter/DisplayNames, etc.) → Skip
 2. **Known bugs**: Track in issues → Fix over time
 3. **Runner bugs**: Issues with test execution → Fix immediately
 4. **Test issues**: Upstream test262 bugs → Report upstream

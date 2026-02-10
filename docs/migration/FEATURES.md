@@ -182,6 +182,16 @@ This document provides a comprehensive list of all JavaScript features implement
 - **Get methods**: getFullYear, getMonth, getDate, getHours, getMinutes, getSeconds, getMilliseconds
 - **Set methods**: setFullYear, setMonth, setDate, setHours, setMinutes, setSeconds, setMilliseconds
 
+### Internationalization (Intl)
+- **Namespace**: `Intl` global object with `getCanonicalLocales()`
+- **Intl.DateTimeFormat**: constructor, `format()`, `resolvedOptions()`, `supportedLocalesOf()`
+- **Intl.NumberFormat**: constructor, `format()`, `resolvedOptions()`, `supportedLocalesOf()`
+- **Intl.Collator**: constructor, `compare()`, `resolvedOptions()`, `supportedLocalesOf()`
+- **Intl.PluralRules**: constructor, `select()`, `resolvedOptions()`, `supportedLocalesOf()`
+- **Intl.RelativeTimeFormat**: constructor, `format()`, `resolvedOptions()`, `supportedLocalesOf()`
+- **Intl.ListFormat**: constructor, `format()`, `resolvedOptions()`, `supportedLocalesOf()`
+- **Intl.Locale**: constructor (`new`), `toString()`, `baseName`, `language`, `script`, `region`
+
 ### RegExp
 - **Construction**: /pattern/flags, new RegExp(pattern, flags)
 - **Methods**: exec, test
@@ -467,16 +477,6 @@ This document provides a comprehensive list of all JavaScript features implement
 
 ## Not Yet Implemented ⏳
 
-### Built-in Objects
-- **Internationalization (Intl)**:
-  - Intl.DateTimeFormat
-  - Intl.NumberFormat
-  - Intl.Collator
-  - Intl.PluralRules
-  - Intl.RelativeTimeFormat
-  - Intl.ListFormat
-  - Intl.Locale
-
 ### Miscellaneous
 
 ## Summary Statistics
@@ -484,7 +484,7 @@ This document provides a comprehensive list of all JavaScript features implement
 - **ES2015 (ES6) features**: 100% complete (all core features including for-of loops)
 - **ES2016-ES2024 features**: 90%+ complete
 - **Core language**: 100% complete
-- **Built-in objects**: 90%+ complete
+- **Built-in objects**: 95%+ complete
 - **Async infrastructure**: 100% complete (async/await, for-await-of, promises, microtasks)
 - **Iteration protocols**: 100% complete (sync and async)
 - **Module system**: 100% complete

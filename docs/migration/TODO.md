@@ -6,20 +6,7 @@ This document tracks remaining features, known bugs, and planned enhancements fo
 
 ## Not Yet Implemented
 
-### Medium Priority - Built-in Objects
-
-#### Internationalization (Intl)
-- **Status**: Not implemented
-- **Scope**: Large undertaking - requires multiple constructors and prototypes
-- **Objects needed**:
-  - Intl.DateTimeFormat
-  - Intl.NumberFormat
-  - Intl.Collator
-  - Intl.PluralRules
-  - Intl.RelativeTimeFormat
-  - Intl.ListFormat
-  - Intl.Locale
-- **Reference**: [FEATURES.md](FEATURES.md#not-yet-implemented-)
+No pending medium-priority built-in object gaps are currently tracked.
 
 ---
 
@@ -67,7 +54,7 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 ## Implementation Recommendations
 
 ### Phase 4: Advanced Features
-1. Intl namespace (large undertaking)
+1. Advanced Intl APIs (Segmenter, DisplayNames, full option coverage)
 - AsyncDisposableStack and explicit resource management are implemented (including `using` / `await using` scope disposal semantics).
 
 ### Phase 5: Optimizations

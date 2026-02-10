@@ -671,7 +671,7 @@ All symbols available as Symbol.* properties and via getWellKnownSymbol() helper
 - Proper promise chaining and error propagation in async contexts
 
 ### Phase 27: Remaining ES2020+ Features  
-- Internationalization (Intl object)
+- Advanced Intl APIs (Segmenter, DisplayNames, extended option coverage)
 - Additional ECMAScript features as needed
 
 ## Build Status

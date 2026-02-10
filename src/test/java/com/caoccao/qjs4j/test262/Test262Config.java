@@ -54,14 +54,6 @@ public class Test262Config {
 
         // Define unsupported features
         config.unsupportedFeatures = new HashSet<>();
-        config.unsupportedFeatures.add("Intl");
-        config.unsupportedFeatures.add("Intl.DateTimeFormat");
-        config.unsupportedFeatures.add("Intl.NumberFormat");
-        config.unsupportedFeatures.add("Intl.Collator");
-        config.unsupportedFeatures.add("Intl.PluralRules");
-        config.unsupportedFeatures.add("Intl.RelativeTimeFormat");
-        config.unsupportedFeatures.add("Intl.ListFormat");
-        config.unsupportedFeatures.add("Intl.Locale");
         config.unsupportedFeatures.add("Intl.Segmenter");
         config.unsupportedFeatures.add("Intl.DisplayNames");
         config.unsupportedFeatures.add("top-level-await");
