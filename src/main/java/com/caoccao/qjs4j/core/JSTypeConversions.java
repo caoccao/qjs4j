@@ -411,34 +411,56 @@ public final class JSTypeConversions {
                 return primitiveValue;
             }
 
-            // Implement OrdinaryToPrimitive algorithm
-            // Try valueOf() and toString() methods in order based on hint
-            String[] methodNames;
-            if (hint == PreferredType.STRING) {
-                methodNames = new String[]{"toString", "valueOf"};
-            } else {
-                // DEFAULT and NUMBER both prefer number conversion
-                methodNames = new String[]{"valueOf", "toString"};
+            JSValue toPrimitiveMethod = obj.get(PropertyKey.fromSymbol(JSSymbol.TO_PRIMITIVE), context);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
 
+            // QuickJS compatibility: treat null like undefined for @@toPrimitive presence check.
+            if (!(toPrimitiveMethod instanceof JSUndefined) && !(toPrimitiveMethod instanceof JSNull)) {
+                if (!(toPrimitiveMethod instanceof JSFunction toPrimitiveFunction)) {
+                    context.throwTypeError("toPrimitive");
+                    return JSUndefined.INSTANCE;
+                }
+
+                String hintString = switch (hint) {
+                    case STRING -> "string";
+                    case NUMBER -> "number";
+                    case DEFAULT -> "default";
+                };
+                JSValue result = toPrimitiveFunction.call(context, obj, new JSValue[]{new JSString(hintString)});
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                if (isPrimitive(result)) {
+                    return result;
+                }
+                context.throwTypeError("toPrimitive");
+                return JSUndefined.INSTANCE;
+            }
+
+            // OrdinaryToPrimitive: DEFAULT behaves like NUMBER.
+            String[] methodNames = hint == PreferredType.STRING
+                    ? new String[]{"toString", "valueOf"}
+                    : new String[]{"valueOf", "toString"};
+
             for (String methodName : methodNames) {
-                JSValue method = obj.get(methodName);
+                JSValue method = obj.get(PropertyKey.fromString(methodName), context);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
                 if (method instanceof JSFunction func) {
-                    try {
-                        JSValue result = func.call(context, obj, new JSValue[0]);
-                        if (isPrimitive(result)) {
-                            return result;
-                        }
-                    } catch (Exception e) {
-                        // Continue to next method
+                    JSValue result = func.call(context, obj, new JSValue[0]);
+                    if (context.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    if (isPrimitive(result)) {
+                        return result;
                     }
                 }
             }
-
-            // If no JavaScript method returned a primitive, fall back to Java toString()
-            // This handles built-in objects like JSBytecodeFunction that don't have
-            // JavaScript toString methods but do have Java toString() implementations
-            return new JSString(input.toString());
+            context.throwTypeError("toPrimitive");
+            return JSUndefined.INSTANCE;
         }
 
         return input;

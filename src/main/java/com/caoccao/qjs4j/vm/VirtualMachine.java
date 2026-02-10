@@ -2328,18 +2328,47 @@ public final class VirtualMachine {
                     valueStack.push(result);
                 }
             } else if (function instanceof JSBytecodeFunction bytecodeFunc) {
-                // Call through the function's call method to handle async wrapping
-                JSValue result = bytecodeFunc.call(context, receiver, args);
-                valueStack.push(result);
+                try {
+                    // Call through the function's call method to handle async wrapping
+                    JSValue result = bytecodeFunc.call(context, receiver, args);
+                    if (context.hasPendingException()) {
+                        pendingException = context.getPendingException();
+                        valueStack.push(JSUndefined.INSTANCE);
+                    } else {
+                        valueStack.push(result);
+                    }
+                } catch (JSVirtualMachineException e) {
+                    if (e.getJsError() != null) {
+                        pendingException = e.getJsError();
+                    } else if (context.hasPendingException()) {
+                        pendingException = context.getPendingException();
+                    } else {
+                        pendingException = context.throwError("Error",
+                                e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                    }
+                    valueStack.push(JSUndefined.INSTANCE);
+                }
             } else if (function instanceof JSBoundFunction boundFunc) {
                 // Call bound function - the receiver is ignored for bound functions
-                JSValue result = boundFunc.call(context, receiver, args);
-                // Check for pending exception after bound function call
-                if (context.hasPendingException()) {
-                    pendingException = context.getPendingException();
+                try {
+                    JSValue result = boundFunc.call(context, receiver, args);
+                    // Check for pending exception after bound function call
+                    if (context.hasPendingException()) {
+                        pendingException = context.getPendingException();
+                        valueStack.push(JSUndefined.INSTANCE);
+                    } else {
+                        valueStack.push(result);
+                    }
+                } catch (JSVirtualMachineException e) {
+                    if (e.getJsError() != null) {
+                        pendingException = e.getJsError();
+                    } else if (context.hasPendingException()) {
+                        pendingException = context.getPendingException();
+                    } else {
+                        pendingException = context.throwError("Error",
+                                e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                    }
                     valueStack.push(JSUndefined.INSTANCE);
-                } else {
-                    valueStack.push(result);
                 }
             } else {
                 valueStack.push(JSUndefined.INSTANCE);
