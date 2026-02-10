@@ -173,6 +173,75 @@ public class ExplicitResourceManagementJavetTest extends BaseJavetTest {
     }
 
     @Test
+    public void testAwaitUsingDeclarationDisposesOnReturn() {
+        assertStringWithJavet("""
+                (async () => {
+                    const log = [];
+                    async function f() {
+                        await using r = {
+                            [Symbol.asyncDispose]() {
+                                log.push("a");
+                            }
+                        };
+                        log.push("b");
+                        return 2;
+                    }
+                    const value = await f();
+                    return JSON.stringify(log) + "|" + String(value);
+                })();""");
+    }
+
+    @Test
+    public void testAwaitUsingDeclarationFallsBackToSymbolDispose() {
+        assertStringWithJavet("""
+                (async () => {
+                    const log = [];
+                    {
+                        await using r = {
+                            [Symbol.dispose]() {
+                                log.push("s");
+                            }
+                        };
+                        log.push("b");
+                    }
+                    return JSON.stringify(log);
+                })();""");
+    }
+
+    @Test
+    public void testUsingDeclarationDisposesOnBlockExitAndReturn() {
+        assertStringWithJavet(
+                """
+                        (() => {
+                            const log = [];
+                            {
+                                using r = {
+                                    [Symbol.dispose]() {
+                                        log.push("d");
+                                    }
+                                };
+                                log.push("b");
+                            }
+                            return JSON.stringify(log);
+                        })();""",
+                """
+                        (() => {
+                            const log = [];
+                            function f() {
+                                using r = {
+                                    [Symbol.dispose]() {
+                                        log.push("d");
+                                    }
+                                };
+                                log.push("b");
+                                return 7;
+                            }
+                            const value = f();
+                            return JSON.stringify(log) + "|" + String(value);
+                        })();""");
+    }
+
+    @Test
     public void testWellKnownSymbols() {
         assertStringWithJavet("""
                 String(

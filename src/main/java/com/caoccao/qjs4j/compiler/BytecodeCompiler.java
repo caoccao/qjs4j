@@ -39,6 +39,7 @@ public final class BytecodeCompiler {
     private boolean isInAsyncFunction;  // Track if we're currently compiling an async function
     private int maxLocalCount;
     private Map<String, JSSymbol> privateSymbols;  // Private field symbols for current class
+    private int scopeDepth;  // Current lexical scope depth (1+ when inside a scope)
     private String sourceCode;  // Original source code for extracting function sources
     private boolean strictMode;  // Track strict mode context (inherited from parent or set by "use strict")
 
@@ -67,6 +68,7 @@ public final class BytecodeCompiler {
         this.maxLocalCount = 0;
         this.nonDeletableGlobalBindings = new HashSet<>();
         this.sourceCode = null;
+        this.scopeDepth = 0;
         this.privateSymbols = Map.of();  // Empty by default
         this.strictMode = inheritedStrictMode;
     }
@@ -247,12 +249,20 @@ public final class BytecodeCompiler {
             List<Statement> bodyStatements = block.body();
             if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
                 functionCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
+                int returnValueIndex = functionCompiler.currentScope().declareLocal("$arrow_return_" + functionCompiler.emitter.currentOffset());
+                functionCompiler.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+                functionCompiler.emitCurrentScopeUsingDisposal();
+                functionCompiler.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
                 // Emit RETURN_ASYNC for async functions, RETURN for sync functions
                 functionCompiler.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
             }
         } else if (arrowExpr.body() instanceof Expression expr) {
             // Expression body - implicitly returns the expression value
             functionCompiler.compileExpression(expr);
+            int returnValueIndex = functionCompiler.currentScope().declareLocal("$arrow_return_" + functionCompiler.emitter.currentOffset());
+            functionCompiler.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+            functionCompiler.emitCurrentScopeUsingDisposal();
+            functionCompiler.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
             // Emit RETURN_ASYNC for async functions, RETURN for sync functions
             functionCompiler.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
@@ -497,6 +507,7 @@ public final class BytecodeCompiler {
         for (Statement stmt : block.body()) {
             compileStatement(stmt);
         }
+        emitCurrentScopeUsingDisposal();
         exitScope();
     }
 
@@ -504,8 +515,10 @@ public final class BytecodeCompiler {
         if (loopStack.isEmpty()) {
             throw new CompilerException("Break statement outside of loop");
         }
+        LoopContext loopContext = loopStack.peek();
+        emitUsingDisposalsForScopeDepthGreaterThan(loopContext.breakTargetScopeDepth);
         int jumpPos = emitter.emitJump(Opcode.GOTO);
-        loopStack.peek().breakPositions.add(jumpPos);
+        loopContext.breakPositions.add(jumpPos);
     }
 
     private void compileCallExpression(CallExpression callExpr) {
@@ -1205,8 +1218,10 @@ public final class BytecodeCompiler {
         if (loopStack.isEmpty()) {
             throw new CompilerException("Continue statement outside of loop");
         }
+        LoopContext loopContext = loopStack.peek();
+        emitUsingDisposalsForScopeDepthGreaterThan(loopContext.continueTargetScopeDepth);
         int jumpPos = emitter.emitJump(Opcode.GOTO);
-        loopStack.peek().continuePositions.add(jumpPos);
+        loopContext.continuePositions.add(jumpPos);
     }
 
     private void compileExpression(Expression expr) {
@@ -1365,7 +1380,7 @@ public final class BytecodeCompiler {
 
         // Start of loop
         int loopStart = emitter.currentOffset();
-        LoopContext loop = new LoopContext(loopStart);
+        LoopContext loop = new LoopContext(loopStart, scopeDepth - 1, scopeDepth);
         loopStack.push(loop);
 
         // Emit FOR_IN_NEXT to get next key
@@ -1419,6 +1434,7 @@ public final class BytecodeCompiler {
         emitter.emitOpcode(Opcode.FOR_IN_END);
 
         loopStack.pop();
+        emitCurrentScopeUsingDisposal();
         exitScope();
     }
 
@@ -1452,7 +1468,7 @@ public final class BytecodeCompiler {
 
         // Start of loop
         int loopStart = emitter.currentOffset();
-        LoopContext loop = new LoopContext(loopStart);
+        LoopContext loop = new LoopContext(loopStart, scopeDepth - 1, scopeDepth);
         loop.hasIterator = true;
         loopStack.push(loop);
 
@@ -1548,6 +1564,7 @@ public final class BytecodeCompiler {
         // Restore inGlobalScope flag
         inGlobalScope = savedInGlobalScope;
 
+        emitCurrentScopeUsingDisposal();
         exitScope();
     }
 
@@ -1571,7 +1588,7 @@ public final class BytecodeCompiler {
         }
 
         int loopStart = emitter.currentOffset();
-        LoopContext loop = new LoopContext(loopStart);
+        LoopContext loop = new LoopContext(loopStart, scopeDepth - 1, scopeDepth);
         loopStack.push(loop);
 
         int jumpToEnd = -1;
@@ -1616,6 +1633,7 @@ public final class BytecodeCompiler {
         }
 
         loopStack.pop();
+        emitCurrentScopeUsingDisposal();
         exitScope();
     }
 
@@ -1673,6 +1691,10 @@ public final class BytecodeCompiler {
         List<Statement> bodyStatements = funcDecl.body().body();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             functionCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
+            int returnValueIndex = functionCompiler.currentScope().declareLocal("$function_return_" + functionCompiler.emitter.currentOffset());
+            functionCompiler.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+            functionCompiler.emitCurrentScopeUsingDisposal();
+            functionCompiler.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
             // Emit RETURN_ASYNC for async functions, RETURN for sync functions
             functionCompiler.emitter.emitOpcode(funcDecl.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
@@ -1808,6 +1830,10 @@ public final class BytecodeCompiler {
         List<Statement> bodyStatements = funcExpr.body().body();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             functionCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
+            int returnValueIndex = functionCompiler.currentScope().declareLocal("$function_return_" + functionCompiler.emitter.currentOffset());
+            functionCompiler.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+            functionCompiler.emitCurrentScopeUsingDisposal();
+            functionCompiler.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
             functionCompiler.emitter.emitOpcode(Opcode.RETURN);
         }
 
@@ -2210,6 +2236,10 @@ public final class BytecodeCompiler {
         List<Statement> bodyStatements = funcExpr.body().body();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             methodCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
+            int returnValueIndex = methodCompiler.currentScope().declareLocal("$method_return_" + methodCompiler.emitter.currentOffset());
+            methodCompiler.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+            methodCompiler.emitCurrentScopeUsingDisposal();
+            methodCompiler.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
             methodCompiler.emitter.emitOpcode(funcExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
@@ -2497,6 +2527,11 @@ public final class BytecodeCompiler {
             emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
+        int programResultLocalIndex = currentScope().declareLocal("$program_result_" + emitter.currentOffset());
+        emitter.emitOpcodeU16(Opcode.PUT_LOCAL, programResultLocalIndex);
+        emitCurrentScopeUsingDisposal();
+        emitter.emitOpcodeU16(Opcode.GET_LOCAL, programResultLocalIndex);
+
         // Return the value on top of stack
         emitter.emitOpcode(Opcode.RETURN);
 
@@ -2510,12 +2545,17 @@ public final class BytecodeCompiler {
         } else {
             emitter.emitOpcode(Opcode.UNDEFINED);
         }
+
+        int returnValueIndex = currentScope().declareLocal("$return_value_" + emitter.currentOffset());
+        emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+
+        emitUsingDisposalsForScopeDepthGreaterThan(0);
+
         if (hasActiveIteratorLoops()) {
-            int returnValueIndex = currentScope().declareLocal("$return_value_" + emitter.currentOffset());
-            emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
             emitAbruptCompletionIteratorClose();
-            emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
         }
+
+        emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
         // Emit RETURN_ASYNC for async functions, RETURN for sync functions
         emitter.emitOpcode(isInAsyncFunction ? Opcode.RETURN_ASYNC : Opcode.RETURN);
     }
@@ -2604,6 +2644,10 @@ public final class BytecodeCompiler {
 
         // Static blocks always return undefined
         blockCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
+        int returnValueIndex = blockCompiler.currentScope().declareLocal("$static_block_return_" + blockCompiler.emitter.currentOffset());
+        blockCompiler.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+        blockCompiler.emitCurrentScopeUsingDisposal();
+        blockCompiler.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
         blockCompiler.emitter.emitOpcode(Opcode.RETURN);
 
         int localCount = blockCompiler.currentScope().getLocalCount();
@@ -2740,7 +2784,7 @@ public final class BytecodeCompiler {
         int jumpToDefault = emitter.emitJump(Opcode.GOTO);
 
         // Compile case bodies
-        LoopContext loop = new LoopContext(emitter.currentOffset());
+        LoopContext loop = new LoopContext(emitter.currentOffset(), scopeDepth, scopeDepth);
         loopStack.push(loop);
 
         for (int i = 0; i < switchStmt.cases().size(); i++) {
@@ -2894,12 +2938,15 @@ public final class BytecodeCompiler {
 
     private void compileThrowStatement(ThrowStatement throwStmt) {
         compileExpression(throwStmt.argument());
+        int throwValueIndex = currentScope().declareLocal("$throw_value_" + emitter.currentOffset());
+        emitter.emitOpcodeU16(Opcode.PUT_LOCAL, throwValueIndex);
+
+        emitUsingDisposalsForScopeDepthGreaterThan(0);
+
         if (hasActiveIteratorLoops()) {
-            int throwValueIndex = currentScope().declareLocal("$throw_value_" + emitter.currentOffset());
-            emitter.emitOpcodeU16(Opcode.PUT_LOCAL, throwValueIndex);
             emitAbruptCompletionIteratorClose();
-            emitter.emitOpcodeU16(Opcode.GET_LOCAL, throwValueIndex);
         }
+        emitter.emitOpcodeU16(Opcode.GET_LOCAL, throwValueIndex);
         emitter.emitOpcode(Opcode.THROW);
     }
 
@@ -2931,6 +2978,7 @@ public final class BytecodeCompiler {
         if (body.isEmpty()) {
             emitter.emitOpcode(Opcode.UNDEFINED);
         }
+        emitCurrentScopeUsingDisposal();
         exitScope();
     }
 
@@ -2991,6 +3039,7 @@ public final class BytecodeCompiler {
                 }
 
                 inGlobalScope = savedGlobalScope;
+                emitCurrentScopeUsingDisposal();
                 exitScope();
             } else {
                 // No parameter, compile catch body without binding
@@ -3197,17 +3246,30 @@ public final class BytecodeCompiler {
     }
 
     private void compileVariableDeclaration(VariableDeclaration varDecl) {
+        boolean isUsingDeclaration = "using".equals(varDecl.kind()) || "await using".equals(varDecl.kind());
+        boolean isAwaitUsingDeclaration = "await using".equals(varDecl.kind());
         for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
             if (inGlobalScope) {
                 collectPatternBindingNames(declarator.id(), nonDeletableGlobalBindings);
             }
+            if (isUsingDeclaration) {
+                if (declarator.init() == null) {
+                    throw new CompilerException(varDecl.kind() + " declaration requires an initializer");
+                }
+
+                compileExpression(declarator.init());
+                int usingStackLocalIndex = ensureUsingStackLocal(isAwaitUsingDeclaration);
+                emitMethodCallWithSingleArgOnLocalObject(usingStackLocalIndex, "use");
+                compilePatternAssignment(declarator.id());
+                continue;
+            }
+
             // Compile initializer or push undefined
             if (declarator.init() != null) {
                 compileExpression(declarator.init());
             } else {
                 emitter.emitOpcode(Opcode.UNDEFINED);
             }
-
             // Assign to pattern (handles Identifier, ObjectPattern, ArrayPattern)
             compilePatternAssignment(declarator.id());
         }
@@ -3215,7 +3277,7 @@ public final class BytecodeCompiler {
 
     private void compileWhileStatement(WhileStatement whileStmt) {
         int loopStart = emitter.currentOffset();
-        LoopContext loop = new LoopContext(loopStart);
+        LoopContext loop = new LoopContext(loopStart, scopeDepth, scopeDepth);
         loopStack.push(loop);
 
         // Compile test condition
@@ -3448,6 +3510,30 @@ public final class BytecodeCompiler {
         }
     }
 
+    private void emitCurrentScopeUsingDisposal() {
+        emitScopeUsingDisposal(currentScope());
+    }
+
+    private void emitMethodCallOnLocalObject(int localIndex, String methodName, int argCount) {
+        emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+        emitter.emitOpcode(Opcode.DUP);
+        emitter.emitOpcodeAtom(Opcode.GET_FIELD, methodName);
+        emitter.emitOpcode(Opcode.SWAP);
+        emitter.emitOpcodeU16(Opcode.CALL, argCount);
+    }
+
+    private void emitMethodCallWithSingleArgOnLocalObject(int localIndex, String methodName) {
+        int argLocalIndex = currentScope().declareLocal("$using_arg_" + emitter.currentOffset());
+        emitter.emitOpcodeU16(Opcode.PUT_LOCAL, argLocalIndex);
+
+        emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+        emitter.emitOpcode(Opcode.DUP);
+        emitter.emitOpcodeAtom(Opcode.GET_FIELD, methodName);
+        emitter.emitOpcode(Opcode.SWAP);
+        emitter.emitOpcodeU16(Opcode.GET_LOCAL, argLocalIndex);
+        emitter.emitOpcodeU16(Opcode.CALL, 1);
+    }
+
     private void emitNonComputedPublicFieldKey(Expression key) {
         if (key instanceof Identifier id) {
             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
@@ -3473,9 +3559,56 @@ public final class BytecodeCompiler {
         throw new CompilerException("Invalid non-computed field key");
     }
 
+    private void emitScopeUsingDisposal(Scope scope) {
+        Integer usingStackLocalIndex = scope.getUsingStackLocalIndex();
+        if (usingStackLocalIndex == null) {
+            return;
+        }
+
+        if (scope.isUsingStackAsync()) {
+            emitMethodCallOnLocalObject(usingStackLocalIndex, "disposeAsync", 0);
+            emitter.emitOpcode(Opcode.AWAIT);
+            emitter.emitOpcode(Opcode.DROP);
+        } else {
+            emitMethodCallOnLocalObject(usingStackLocalIndex, "dispose", 0);
+            emitter.emitOpcode(Opcode.DROP);
+        }
+    }
+
+    private void emitUsingDisposalsForScopeDepthGreaterThan(int targetScopeDepth) {
+        for (Scope scope : scopes) {
+            if (scope.getScopeDepth() > targetScopeDepth) {
+                emitScopeUsingDisposal(scope);
+            }
+        }
+    }
+
+    private int ensureUsingStackLocal(boolean asyncUsingDeclaration) {
+        Scope scope = currentScope();
+        Integer existingLocalIndex = scope.getUsingStackLocalIndex();
+        if (existingLocalIndex != null) {
+            if (asyncUsingDeclaration && !scope.isUsingStackAsync()) {
+                throw new CompilerException("Cannot mix await using with sync using stack in the same scope");
+            }
+            return existingLocalIndex;
+        }
+
+        boolean useAsyncStack = asyncUsingDeclaration || isInAsyncFunction;
+        String constructorName = useAsyncStack ? JSAsyncDisposableStack.NAME : JSDisposableStack.NAME;
+        int stackLocalIndex = scope.declareLocal("$using_stack_" + scope.getScopeDepth() + "_" + emitter.currentOffset());
+
+        emitter.emitOpcodeAtom(Opcode.GET_VAR, constructorName);
+        emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 0);
+        emitter.emitOpcodeU16(Opcode.PUT_LOCAL, stackLocalIndex);
+
+        scope.setUsingStackLocal(stackLocalIndex, useAsyncStack);
+        return stackLocalIndex;
+    }
+
     private void enterScope() {
+        scopeDepth++;
         int baseIndex = scopes.isEmpty() ? 0 : currentScope().getLocalCount();
-        scopes.push(new Scope(baseIndex));
+        scopes.push(new Scope(baseIndex, scopeDepth));
     }
 
     private void exitScope() {
@@ -3494,6 +3627,7 @@ public final class BytecodeCompiler {
                 parentScope.setLocalCount(localCount);
             }
         }
+        scopeDepth--;
     }
 
     /**
@@ -3751,12 +3885,16 @@ public final class BytecodeCompiler {
      */
     private static class LoopContext {
         final List<Integer> breakPositions = new ArrayList<>();
+        final int breakTargetScopeDepth;
         final List<Integer> continuePositions = new ArrayList<>();
+        final int continueTargetScopeDepth;
         final int startOffset;
         boolean hasIterator;
 
-        LoopContext(int startOffset) {
+        LoopContext(int startOffset, int breakTargetScopeDepth, int continueTargetScopeDepth) {
             this.startOffset = startOffset;
+            this.breakTargetScopeDepth = breakTargetScopeDepth;
+            this.continueTargetScopeDepth = continueTargetScopeDepth;
         }
     }
 
@@ -3765,14 +3903,20 @@ public final class BytecodeCompiler {
      */
     private static class Scope {
         private final Map<String, Integer> locals = new HashMap<>();
+        private final int scopeDepth;
         private int nextLocalIndex;
+        private boolean usingStackAsync;
+        private Integer usingStackLocalIndex;
 
         Scope() {
-            this.nextLocalIndex = 0;
+            this(0, 0);
         }
 
-        Scope(int baseIndex) {
+        Scope(int baseIndex, int scopeDepth) {
             this.nextLocalIndex = baseIndex;
+            this.scopeDepth = scopeDepth;
+            this.usingStackAsync = false;
+            this.usingStackLocalIndex = null;
         }
 
         int declareLocal(String name) {
@@ -3792,8 +3936,25 @@ public final class BytecodeCompiler {
             return nextLocalIndex;
         }
 
+        int getScopeDepth() {
+            return scopeDepth;
+        }
+
+        Integer getUsingStackLocalIndex() {
+            return usingStackLocalIndex;
+        }
+
+        boolean isUsingStackAsync() {
+            return usingStackAsync;
+        }
+
         void setLocalCount(int count) {
             this.nextLocalIndex = count;
+        }
+
+        void setUsingStackLocal(int usingStackLocalIndex, boolean usingStackAsync) {
+            this.usingStackLocalIndex = usingStackLocalIndex;
+            this.usingStackAsync = usingStackAsync;
         }
     }
 }

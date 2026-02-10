@@ -66,12 +66,9 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 
 ## Implementation Recommendations
 
-### Phase 3: Language Features
-- Completed on 2026-02-10 (tagged template literals and private methods).
-
 ### Phase 4: Advanced Features
 1. Intl namespace (large undertaking)
-2. AsyncDisposableStack and explicit resource management
+- AsyncDisposableStack and explicit resource management are implemented (including `using` / `await using` scope disposal semantics).
 
 ### Phase 5: Optimizations
 1. Performance profiling and optimization
