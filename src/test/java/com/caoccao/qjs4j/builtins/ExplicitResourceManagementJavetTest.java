@@ -62,33 +62,6 @@ public class ExplicitResourceManagementJavetTest extends BaseJavetTest {
     }
 
     @Test
-    public void testDisposableStackUsePreservesThis() {
-        assertStringWithJavet("""
-                globalThis.__log = [];
-                globalThis.__stack = new DisposableStack();
-                __stack.use({
-                    value: "ok",
-                    [Symbol.dispose]() {
-                        __log.push(this.value);
-                    },
-                });
-                __stack.dispose();
-                String(JSON.stringify(__log) === "[\\"ok\\"]");""");
-    }
-
-    @Test
-    public void testDisposableStackTopLevelCallback() {
-        assertStringWithJavet("""
-                globalThis.__log = [];
-                globalThis.__stack = new DisposableStack();
-                __stack.defer(() => {
-                    __log.push("x");
-                });
-                __stack.dispose();
-                String(JSON.stringify(__log) === "[\\"x\\"]");""");
-    }
-
-    @Test
     public void testDisposableStackMove() {
         assertStringWithJavet("""
                 (() => {
@@ -112,6 +85,33 @@ public class ExplicitResourceManagementJavetTest extends BaseJavetTest {
                         && globalThis.__counter === 1
                     );
                 })();""");
+    }
+
+    @Test
+    public void testDisposableStackTopLevelCallback() {
+        assertStringWithJavet("""
+                globalThis.__log = [];
+                globalThis.__stack = new DisposableStack();
+                __stack.defer(() => {
+                    __log.push("x");
+                });
+                __stack.dispose();
+                String(JSON.stringify(__log) === "[\\"x\\"]");""");
+    }
+
+    @Test
+    public void testDisposableStackUsePreservesThis() {
+        assertStringWithJavet("""
+                globalThis.__log = [];
+                globalThis.__stack = new DisposableStack();
+                __stack.use({
+                    value: "ok",
+                    [Symbol.dispose]() {
+                        __log.push(this.value);
+                    },
+                });
+                __stack.dispose();
+                String(JSON.stringify(__log) === "[\\"ok\\"]");""");
     }
 
     @Test
@@ -139,23 +139,6 @@ public class ExplicitResourceManagementJavetTest extends BaseJavetTest {
     }
 
     @Test
-    public void testTypeErrorPropagationFromDisposer() {
-        assertStringWithJavet("""
-                (() => {
-                    const stack = new DisposableStack();
-                    stack.defer(() => {
-                        globalThis.__missing();
-                    });
-                    try {
-                        stack.dispose();
-                        return "false";
-                    } catch (e) {
-                        return String(e instanceof TypeError);
-                    }
-                })();""");
-    }
-
-    @Test
     public void testTypeErrorPropagationFromAsyncDisposer() {
         assertStringWithJavet("""
                 (async () => {
@@ -165,6 +148,23 @@ public class ExplicitResourceManagementJavetTest extends BaseJavetTest {
                     });
                     try {
                         await stack.disposeAsync();
+                        return "false";
+                    } catch (e) {
+                        return String(e instanceof TypeError);
+                    }
+                })();""");
+    }
+
+    @Test
+    public void testTypeErrorPropagationFromDisposer() {
+        assertStringWithJavet("""
+                (() => {
+                    const stack = new DisposableStack();
+                    stack.defer(() => {
+                        globalThis.__missing();
+                    });
+                    try {
+                        stack.dispose();
                         return "false";
                     } catch (e) {
                         return String(e instanceof TypeError);

@@ -104,6 +104,13 @@ public class PromiseConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testPromiseAllWithNativeIterables() {
+        assertStringWithJavet("""
+                var s = new Set([Promise.resolve(1), Promise.resolve(2), Promise.resolve(3)]);
+                Promise.all(s).then(arr => JSON.stringify(arr))""");
+    }
+
+    @Test
     void testPromiseConstructorBehavior() {
         assertBooleanWithJavet("""
                 let value = null;

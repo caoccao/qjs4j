@@ -17,9 +17,31 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 public class SetConstructorTest extends BaseJavetTest {
+
+    @Test
+    void testSetConstructorIterableEdgeCases() {
+        assertBooleanWithJavet("""
+                var set = new Set(new Set([0, 1, 2]));
+                set.size === 3 && set.has(0) && set.has(1) && set.has(2)""");
+
+        assertBooleanWithJavet("""
+                var set = new Set('aba');
+                set.size === 2 && set.has('a') && set.has('b')""");
+
+        assertThatThrownBy(() -> context.eval("new Set({})"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
+        assertThatThrownBy(() -> context.eval("new Set(1)"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
+
+    }
 
     @Test
     void testTypeof() {

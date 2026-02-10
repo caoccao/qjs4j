@@ -18,9 +18,11 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for Map constructor static methods.
@@ -88,6 +90,24 @@ public class MapConstructorTest extends BaseJavetTest {
 
         // Empty Map
         assertIntegerWithJavet("new Map().size");
+    }
+
+    @Test
+    void testMapConstructorIterableEdgeCases() {
+        assertBooleanWithJavet("""
+                var map = new Map(new Map([['a', 1], ['b', 2]]));
+                map.size === 2 && map.get('a') === 1 && map.get('b') === 2""");
+
+        assertThatThrownBy(() -> context.eval("new Map({})"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
+        assertThatThrownBy(() -> context.eval("new Map(1)"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
+        assertThatThrownBy(() -> context.eval("new Map('ab')"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
+
     }
 
     @Test

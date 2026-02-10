@@ -59,33 +59,33 @@ public final class JSWeakMap extends JSObject {
                     }
                     weakMapObj.weakMapSet((JSObject) key, value);
                 }
-            } else if (iterableArg instanceof JSObject) {
-                // Try to get iterator
+            } else {
+                // Follow the generic iterator protocol for all iterable inputs.
                 JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
-                if (iterator instanceof JSIterator iter) {
-                    // Iterate and populate
-                    while (true) {
-                        JSObject nextResult = iter.next();
-                        if (nextResult == null) {
-                            break;
-                        }
-                        JSValue done = nextResult.get("done");
-                        if (done == JSBoolean.TRUE) {
-                            break;
-                        }
-                        JSValue entry = nextResult.get("value");
-                        if (!(entry instanceof JSObject entryObj)) {
-                            return context.throwTypeError("Iterator value must be an object");
-                        }
-                        // Get key and value from entry [key, value]
-                        JSValue key = entryObj.get(0);
-                        JSValue value = entryObj.get(1);
-                        // WeakMap requires object keys
-                        if (!(key instanceof JSObject)) {
-                            return context.throwTypeError("WeakMap key must be an object");
-                        }
-                        weakMapObj.weakMapSet((JSObject) key, value);
+                if (iterator == null) {
+                    return context.throwTypeError("Object is not iterable");
+                }
+                while (true) {
+                    JSObject nextResult = JSIteratorHelper.iteratorNext(iterator, context);
+                    if (nextResult == null) {
+                        return context.throwTypeError("Iterator result must be an object");
                     }
+                    JSValue done = nextResult.get("done");
+                    if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
+                        break;
+                    }
+                    JSValue entry = nextResult.get("value");
+                    if (!(entry instanceof JSObject entryObj)) {
+                        return context.throwTypeError("Iterator value must be an object");
+                    }
+                    // Get key and value from entry [key, value]
+                    JSValue key = entryObj.get(0);
+                    JSValue value = entryObj.get(1);
+                    // WeakMap requires object keys
+                    if (!(key instanceof JSObject)) {
+                        return context.throwTypeError("WeakMap key must be an object");
+                    }
+                    weakMapObj.weakMapSet((JSObject) key, value);
                 }
             }
         }

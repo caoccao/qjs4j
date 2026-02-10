@@ -40,34 +40,7 @@ This document tracks remaining features, known bugs, and planned enhancements fo
 
 ---
 
-## Known Bugs
-
-### JavaScript-Java Bridge Issues
-
-#### 1. JavaScript Native Iterables Not Accessible from Java
-- **Description**: JSIteratorHelper cannot properly detect or work with JavaScript native objects (Set, Map, custom iterables with Symbol.iterator) because these objects exist in the JavaScript runtime and don't properly bridge to the Java layer
-- **Impact**: Tests using `new Set()`, `new Map()`, or custom iterables in JavaScript eval() fail with "TypeError: Object is not iterable"
-- **Workaround**: Use Java-created iterables (JSIterator, JSGenerator) instead
-- **Reference**: [TESTING_NOTES.md](TESTING_NOTES.md#issues-encountered)
-
-#### 2. JavaScript Evaluation Type Conversion
-- **Description**: When evaluating JavaScript code that returns strings (e.g., `JSON.stringify(obj)`), the `result.toJavaObject()` method returns "[object Object]" instead of the actual string value
-- **Impact**: Tests expecting string results fail
-- **Affected**: `JSON.stringify()`, property descriptor checks, revoked proxy behavior
-- **Reference**: [TESTING_NOTES.md](TESTING_NOTES.md#2-javascript-evaluation-type-conversion-issues)
-
-#### 3. Proxy.revocable Tests Failing
-- **Description**: Accessing revoked proxies doesn't throw expected TypeError; type conversions fail when checking proxy values
-- **Status**: Tests disabled (ProxyConstructorTest.java.disabled)
-- **Reference**: [TESTING_NOTES.md](TESTING_NOTES.md#3-proxyrevocable-tests-not-working)
-
----
-
 ## Test Coverage Gaps
-
-### Disabled Test Files
-- `ProxyConstructorTest.java.disabled` - Proxy.revocable tests
-- `ReflectObjectTest.java.disabled` - Reflect object method tests
 
 ### Tests Needing Implementation
 From [TEST262.md](TEST262.md):
@@ -92,11 +65,6 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 ---
 
 ## Implementation Recommendations
-
-### Phase 1: Bug Fixes (High Value)
-1. Fix JavaScript-Java bridge for native iterables
-2. Fix JSValue.toJavaObject() string conversion
-3. Fix Proxy.revocable behavior
 
 ### Phase 2: Core Opcodes (Essential)
 1. Expand iterator opcode coverage for advanced iterator control flow

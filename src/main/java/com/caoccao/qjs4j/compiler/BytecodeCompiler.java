@@ -31,12 +31,12 @@ import java.util.*;
 public final class BytecodeCompiler {
     private final BytecodeEmitter emitter;
     private final Deque<LoopContext> loopStack;
+    private final Set<String> nonDeletableGlobalBindings;
     private final Deque<Scope> scopes;
     private boolean inGlobalScope;
     private boolean isInArrowFunction;  // Track if we're currently compiling an arrow function
     private boolean isInAsyncFunction;  // Track if we're currently compiling an async function
     private int maxLocalCount;
-    private final Set<String> nonDeletableGlobalBindings;
     private Map<String, JSSymbol> privateSymbols;  // Private field symbols for current class
     private String sourceCode;  // Original source code for extracting function sources
     private boolean strictMode;  // Track strict mode context (inherited from parent or set by "use strict")
@@ -63,6 +63,24 @@ public final class BytecodeCompiler {
         this.sourceCode = null;
         this.privateSymbols = Map.of();  // Empty by default
         this.strictMode = inheritedStrictMode;
+    }
+
+    private void collectPatternBindingNames(Pattern pattern, Set<String> names) {
+        if (pattern instanceof Identifier id) {
+            names.add(id.name());
+        } else if (pattern instanceof ArrayPattern arrPattern) {
+            for (Pattern element : arrPattern.elements()) {
+                if (element != null) {
+                    collectPatternBindingNames(element, names);
+                }
+            }
+        } else if (pattern instanceof ObjectPattern objPattern) {
+            for (ObjectPattern.Property prop : objPattern.properties()) {
+                collectPatternBindingNames(prop.value(), names);
+            }
+        } else if (pattern instanceof RestElement restElement) {
+            collectPatternBindingNames(restElement.argument(), names);
+        }
     }
 
     /**
@@ -169,6 +187,8 @@ public final class BytecodeCompiler {
         }
     }
 
+    // ==================== Program Compilation ====================
+
     private void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
@@ -265,8 +285,6 @@ public final class BytecodeCompiler {
         // Emit FCLOSURE opcode with function in constant pool
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
     }
-
-    // ==================== Program Compilation ====================
 
     private void compileAssignmentExpression(AssignmentExpression assignExpr) {
         Expression left = assignExpr.left();
@@ -399,6 +417,8 @@ public final class BytecodeCompiler {
         }
     }
 
+    // ==================== Statement Compilation ====================
+
     private void compileAwaitExpression(AwaitExpression awaitExpr) {
         // Compile the argument expression
         compileExpression(awaitExpr.argument());
@@ -408,8 +428,6 @@ public final class BytecodeCompiler {
         // and pause execution until the promise resolves
         emitter.emitOpcode(Opcode.AWAIT);
     }
-
-    // ==================== Statement Compilation ====================
 
     private void compileBinaryExpression(BinaryExpression binExpr) {
         if (binExpr.operator() == BinaryExpression.BinaryOperator.IN &&
@@ -2445,24 +2463,6 @@ public final class BytecodeCompiler {
         inGlobalScope = false;
     }
 
-    private void registerGlobalProgramBindings(List<Statement> body) {
-        for (Statement stmt : body) {
-            if (stmt instanceof VariableDeclaration varDecl) {
-                for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
-                    collectPatternBindingNames(declarator.id(), nonDeletableGlobalBindings);
-                }
-            } else if (stmt instanceof FunctionDeclaration funcDecl) {
-                if (funcDecl.id() != null) {
-                    nonDeletableGlobalBindings.add(funcDecl.id().name());
-                }
-            } else if (stmt instanceof ClassDeclaration classDecl) {
-                if (classDecl.id() != null) {
-                    nonDeletableGlobalBindings.add(classDecl.id().name());
-                }
-            }
-        }
-    }
-
     private void compileReturnStatement(ReturnStatement retStmt) {
         if (retStmt.argument() != null) {
             compileExpression(retStmt.argument());
@@ -3327,24 +3327,6 @@ public final class BytecodeCompiler {
         return scopes.peek();
     }
 
-    private void collectPatternBindingNames(Pattern pattern, Set<String> names) {
-        if (pattern instanceof Identifier id) {
-            names.add(id.name());
-        } else if (pattern instanceof ArrayPattern arrPattern) {
-            for (Pattern element : arrPattern.elements()) {
-                if (element != null) {
-                    collectPatternBindingNames(element, names);
-                }
-            }
-        } else if (pattern instanceof ObjectPattern objPattern) {
-            for (ObjectPattern.Property prop : objPattern.properties()) {
-                collectPatternBindingNames(prop.value(), names);
-            }
-        } else if (pattern instanceof RestElement restElement) {
-            collectPatternBindingNames(restElement.argument(), names);
-        }
-    }
-
     /**
      * Declare all variables in a pattern (used for for-of loops with destructuring).
      * This recursively declares variables for Identifier, ArrayPattern, and ObjectPattern.
@@ -3402,12 +3384,12 @@ public final class BytecodeCompiler {
         throw new CompilerException("Invalid non-computed field key");
     }
 
-    // ==================== Scope Management ====================
-
     private void enterScope() {
         int baseIndex = scopes.isEmpty() ? 0 : currentScope().getLocalCount();
         scopes.push(new Scope(baseIndex));
     }
+
+    // ==================== Scope Management ====================
 
     private void exitScope() {
         Scope exitingScope = scopes.pop();
@@ -3518,6 +3500,24 @@ public final class BytecodeCompiler {
             emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD); // proto constructor constructor
             emitter.emitOpcode(Opcode.DROP); // proto constructor
             emitter.emitOpcode(Opcode.SWAP); // constructor proto
+        }
+    }
+
+    private void registerGlobalProgramBindings(List<Statement> body) {
+        for (Statement stmt : body) {
+            if (stmt instanceof VariableDeclaration varDecl) {
+                for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
+                    collectPatternBindingNames(declarator.id(), nonDeletableGlobalBindings);
+                }
+            } else if (stmt instanceof FunctionDeclaration funcDecl) {
+                if (funcDecl.id() != null) {
+                    nonDeletableGlobalBindings.add(funcDecl.id().name());
+                }
+            } else if (stmt instanceof ClassDeclaration classDecl) {
+                if (classDecl.id() != null) {
+                    nonDeletableGlobalBindings.add(classDecl.id().name());
+                }
+            }
         }
     }
 

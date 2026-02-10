@@ -56,27 +56,27 @@ public final class JSWeakSet extends JSObject {
                     }
                     weakSetObj.weakSetAdd((JSObject) value);
                 }
-            } else if (iterableArg instanceof JSObject) {
-                // Try to get iterator
+            } else {
+                // Follow the generic iterator protocol for all iterable inputs.
                 JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
-                if (iterator instanceof JSIterator iter) {
-                    // Iterate and populate
-                    while (true) {
-                        JSObject nextResult = iter.next();
-                        if (nextResult == null) {
-                            break;
-                        }
-                        JSValue done = nextResult.get("done");
-                        if (done == JSBoolean.TRUE) {
-                            break;
-                        }
-                        JSValue value = nextResult.get("value");
-                        // WeakSet requires object values
-                        if (!(value instanceof JSObject)) {
-                            return context.throwTypeError("WeakSet value must be an object");
-                        }
-                        weakSetObj.weakSetAdd((JSObject) value);
+                if (iterator == null) {
+                    return context.throwTypeError("Object is not iterable");
+                }
+                while (true) {
+                    JSObject nextResult = JSIteratorHelper.iteratorNext(iterator, context);
+                    if (nextResult == null) {
+                        return context.throwTypeError("Iterator result must be an object");
                     }
+                    JSValue done = nextResult.get("done");
+                    if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
+                        break;
+                    }
+                    JSValue value = nextResult.get("value");
+                    // WeakSet requires object values
+                    if (!(value instanceof JSObject)) {
+                        return context.throwTypeError("WeakSet value must be an object");
+                    }
+                    weakSetObj.weakSetAdd((JSObject) value);
                 }
             }
         }

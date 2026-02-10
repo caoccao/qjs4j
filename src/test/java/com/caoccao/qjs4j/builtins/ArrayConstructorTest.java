@@ -107,11 +107,6 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertPendingException(context);
     }
 
-    // Note: Tests for JavaScript native iterables (Set, Map, custom iterables) are not included
-    // because the current JSIteratorHelper implementation doesn't properly bridge with
-    // JavaScript native objects. The iterable support works with Java-created iterables
-    // (JSIterator, JSGenerator) but not with JavaScript's built-in Set/Map or custom iterables.
-
     @Test
     public void testFromAsync() {
         // Normal case: from async iterator (array)
@@ -208,6 +203,21 @@ public class ArrayConstructorTest extends BaseJavetTest {
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
+    }
+
+    @Test
+    public void testFromAsyncWithNativeIterables() {
+        assertStringWithJavet("""
+                async function test() {
+                  return JSON.stringify(await Array.fromAsync(new Set([1, 2, 3])));
+                }
+                test()""");
+    }
+
+    @Test
+    public void testFromWithNativeIterables() {
+        assertStringWithJavet("JSON.stringify(Array.from(new Set([1, 2, 2, 3])))");
+        assertStringWithJavet("JSON.stringify(Array.from(new Map([['a', 1], ['b', 2]])))");
     }
 
     @Test

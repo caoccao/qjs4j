@@ -1688,4 +1688,3 @@ public class ProxyConstructorTest extends BaseJavetTest {
                 "Proxy()");
     }
 }
-

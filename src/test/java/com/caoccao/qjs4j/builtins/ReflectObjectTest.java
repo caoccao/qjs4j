@@ -82,4 +82,16 @@ public class ReflectObjectTest extends BaseJavetTest {
     public void testReflectSet() {
         assertIntegerWithJavet("var obj = {}; Reflect.set(obj, 'x', 42); obj.x");
     }
+
+    @Test
+    public void testToJavaObjectStringConversion() {
+        JSValue result = context.eval("var s = 'hello'; s");
+        assertThat(result.toJavaObject()).isEqualTo("hello");
+
+        result = context.eval("String(123)");
+        assertThat(result.toJavaObject()).isEqualTo("123");
+
+        result = context.eval("JSON.stringify({a: 1, b: 'x'})");
+        assertThat(result.toJavaObject()).isEqualTo("{\"a\":1,\"b\":\"x\"}");
+    }
 }

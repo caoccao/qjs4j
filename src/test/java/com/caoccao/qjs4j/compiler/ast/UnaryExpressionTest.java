@@ -61,6 +61,16 @@ public class UnaryExpressionTest extends BaseJavetTest {
     }
 
     @Test
+    public void testDeleteIdentifierBehavior() {
+        assertBooleanWithJavetWithoutStrict("var x = 1; delete x;");
+        assertBooleanWithJavetWithoutStrict("x = 1; delete x;");
+        assertBooleanWithJavetWithoutStrict("delete missingGlobal;");
+        assertBooleanWithJavetWithoutStrict("function f() { var y = 1; return delete y; } f();");
+        assertBooleanWithJavetWithoutStrict("function f() { let z = 1; return delete z; } f();");
+        assertBooleanWithJavetWithoutStrict("function f(a) { return delete arguments; } f(1);");
+    }
+
+    @Test
     public void testObjectPropertyPostfixIncrement() {
         assertIntegerWithJavet(
                 """
@@ -97,16 +107,6 @@ public class UnaryExpressionTest extends BaseJavetTest {
                         let arr = [10, 20, 30];
                         arr[0]--;
                         arr[0];""");
-    }
-
-    @Test
-    public void testDeleteIdentifierBehavior() {
-        assertBooleanWithJavetWithoutStrict("var x = 1; delete x;");
-        assertBooleanWithJavetWithoutStrict("x = 1; delete x;");
-        assertBooleanWithJavetWithoutStrict("delete missingGlobal;");
-        assertBooleanWithJavetWithoutStrict("function f() { var y = 1; return delete y; } f();");
-        assertBooleanWithJavetWithoutStrict("function f() { let z = 1; return delete z; } f();");
-        assertBooleanWithJavetWithoutStrict("function f(a) { return delete arguments; } f(1);");
     }
 
     @Test

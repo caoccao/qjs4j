@@ -17,7 +17,10 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class WeakSetConstructorTest extends BaseJavetTest {
 
@@ -32,6 +35,23 @@ public class WeakSetConstructorTest extends BaseJavetTest {
         assertStringWithJavet("new WeakSet().toString()");
 
         assertErrorWithJavet("WeakSet()");
+    }
+
+    @Test
+    void testWeakSetConstructorIterableEdgeCases() {
+        assertBooleanWithJavet("""
+                var v1 = {};
+                var v2 = {};
+                var source = new Set([v1, v2]);
+                var ws = new WeakSet(source);
+                ws.has(v1) && ws.has(v2)""");
+
+        assertThatThrownBy(() -> context.eval("new WeakSet({})"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
+        assertThatThrownBy(() -> context.eval("new WeakSet([1])"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
     }
 
 }

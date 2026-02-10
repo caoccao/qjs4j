@@ -61,40 +61,6 @@ public final class VirtualMachine {
         this.pendingException = null;
     }
 
-    private JSValue getArgumentValue(int index) {
-        JSValue[] arguments = currentFrame.getArguments();
-        if (index >= 0 && index < arguments.length) {
-            JSValue value = arguments[index];
-            return value != null ? value : JSUndefined.INSTANCE;
-        }
-        return JSUndefined.INSTANCE;
-    }
-
-    private JSValue getLocalValue(int index) {
-        JSValue[] locals = currentFrame.getLocals();
-        if (index >= 0 && index < locals.length) {
-            JSValue value = locals[index];
-            return value != null ? value : JSUndefined.INSTANCE;
-        }
-        return JSUndefined.INSTANCE;
-    }
-
-    private void setArgumentValue(int index, JSValue value) {
-        JSValue[] arguments = currentFrame.getArguments();
-        if (index >= 0 && index < arguments.length) {
-            arguments[index] = value;
-        }
-        // Keep local mirror in sync for argument slots copied into locals.
-        setLocalValue(index, value);
-    }
-
-    private void setLocalValue(int index, JSValue value) {
-        JSValue[] locals = currentFrame.getLocals();
-        if (index >= 0 && index < locals.length) {
-            locals[index] = value;
-        }
-    }
-
     private void copyDataProperties(JSValue targetValue, JSValue sourceValue, JSValue excludeListValue) {
         if (!(targetValue instanceof JSObject targetObject)) {
             throw new JSVirtualMachineException(context.throwTypeError("copy target must be an object"));
@@ -323,7 +289,7 @@ public final class VirtualMachine {
                         pc += op.getSize();
                     }
                     case PUSH_BIGINT_I32 -> {
-                        valueStack.push(new JSBigInt((long) bytecode.readI32(pc + 1)));
+                        valueStack.push(new JSBigInt(bytecode.readI32(pc + 1)));
                         pc += op.getSize();
                     }
                     case PUSH_MINUS1, PUSH_0, PUSH_1, PUSH_2, PUSH_3, PUSH_4, PUSH_5, PUSH_6, PUSH_7 -> {
@@ -2152,6 +2118,15 @@ public final class VirtualMachine {
         }
     }
 
+    private JSValue getArgumentValue(int index) {
+        JSValue[] arguments = currentFrame.getArguments();
+        if (index >= 0 && index < arguments.length) {
+            JSValue value = arguments[index];
+            return value != null ? value : JSUndefined.INSTANCE;
+        }
+        return JSUndefined.INSTANCE;
+    }
+
     private JSString getComputedNameString(JSValue keyValue) {
         if (keyValue instanceof JSSymbol symbol) {
             String description = symbol.getDescription();
@@ -2164,6 +2139,15 @@ public final class VirtualMachine {
             return new JSString(description == null || description.isEmpty() ? "[]" : "[" + description + "]");
         }
         return new JSString(key.toPropertyString());
+    }
+
+    private JSValue getLocalValue(int index) {
+        JSValue[] locals = currentFrame.getLocals();
+        if (index >= 0 && index < locals.length) {
+            JSValue value = locals[index];
+            return value != null ? value : JSUndefined.INSTANCE;
+        }
+        return JSUndefined.INSTANCE;
     }
 
     private void handleAdd() {
@@ -3250,6 +3234,22 @@ public final class VirtualMachine {
 
         // Fall back to Java toString
         return exceptionObj.toString();
+    }
+
+    private void setArgumentValue(int index, JSValue value) {
+        JSValue[] arguments = currentFrame.getArguments();
+        if (index >= 0 && index < arguments.length) {
+            arguments[index] = value;
+        }
+        // Keep local mirror in sync for argument slots copied into locals.
+        setLocalValue(index, value);
+    }
+
+    private void setLocalValue(int index, JSValue value) {
+        JSValue[] locals = currentFrame.getLocals();
+        if (index >= 0 && index < locals.length) {
+            locals[index] = value;
+        }
     }
 
     private void setObjectName(JSValue objectValue, JSString nameValue) {

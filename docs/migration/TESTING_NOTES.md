@@ -2,96 +2,48 @@
 
 ## Summary
 
-Tests were added for the newly implemented features from migration Phases 34-38:
-- Phase 34-35: Object extensibility methods (defineProperty, preventExtensions, etc.)
+Tests were added for migration phases 34-38 and later regression fixes:
+- Phase 34-35: Object extensibility methods
 - Phase 36: Proxy.revocable and Reflect methods
-- Phase 37: Promise methods iterable support
-- Phase 38: Array.from/fromAsync iterable support
+- Phase 37: Promise iterable handling
+- Phase 38: Array.from()/Array.fromAsync() iterable handling
+- Phase 1 bug-fix follow-up: constructor iterable bridge + Java string conversion parity
 
-## Test Files Created/Modified
+## Current Status
 
-### Modified Files
-1. **ObjectConstructorTest.java** - Added tests for:
-   - Object.isExtensible()
-   - Object.is() (SameValue algorithm)
-   - Object.getOwnPropertyDescriptors()
-   - Object.defineProperty() and Object.defineProperties()
+- `ProxyConstructorTest.java` is enabled.
+- `ReflectObjectTest.java` is enabled.
+- Native iterables are covered by constructor and Promise/Array tests.
+- `JSValue.toJavaObject()` string conversion is covered by direct regression tests.
 
-2. **PromiseConstructorTest.java** - Created with basic test:
-   - testPromiseAllWithArray() - Verifies Promise.all works with arrays
+## Resolved Issues
 
-3. **ArrayConstructorTest.java** - Noted that JavaScript native iterable tests are not supported
+### 1. JavaScript Native Iterables from Java Evaluation
+**Previous issue:** constructor paths only accepted internal iterator types and skipped generic iterator objects.
 
-### Disabled Test Files
-1. **ProxyConstructorTest.java.disabled** - Tests for Proxy.revocable
-2. **ReflectObjectTest.java.disabled** - Tests for Reflect object methods
+**Resolution:** Set/Map/WeakMap/WeakSet constructors now:
+- require iterability for non-null constructor input,
+- use the generic iterator protocol,
+- reject invalid iterator results,
+- keep entry/value validation behavior aligned with QuickJS expectations.
 
-## Issues Encountered
+### 2. JavaScript Evaluation String Conversion
+**Previous issue:** string results from eval() were reported as object-like values in some test flows.
 
-### 1. JavaScript Native Iterables Not Accessible from Java
-**Problem:** JSIteratorHelper cannot properly detect or work with JavaScript native objects (Set, Map, custom iterables with Symbol.iterator) because these objects exist in the JavaScript runtime and don't properly bridge to the Java layer.
+**Resolution:** regression coverage now directly asserts:
+- primitive string eval conversion,
+- `String(...)` conversion,
+- `JSON.stringify(...)` conversion via `toJavaObject()`.
 
-**Impact:** Tests using `new Set()`, `new Map()`, or custom iterables in JavaScript eval() fail with "TypeError: Object is not iterable".
+### 3. Proxy.revocable Regression Coverage
+**Previous issue:** revocation behavior previously required disabled tests.
 
-**Solution:** Removed tests that rely on JavaScript native iterables. Added notes explaining that iterable support works with Java-created iterables (JSIterator, JSGenerator) but not with JavaScript's built-in collections.
-
-### 2. JavaScript Evaluation Type Conversion Issues
-**Problem:** When evaluating JavaScript code that returns strings (e.g., `JSON.stringify(obj)`), the `result.toJavaObject()` method returns "[object Object]" instead of the actual string value.
-
-**Impact:** Tests expecting string results fail with assertion errors like:
-```
-expected: <{"a":1}> but was: <[object Object]>
-```
-
-**Affected Methods:**
-- Tests using `JSON.stringify()` to serialize objects
-- Tests checking property descriptor details
-- Tests verifying revoked proxy behavior
-
-**Attempted Solutions:**
-- Tried `.asString().orElse(null).value()` - resulted in null values
-- Tried `(String) result.toJavaObject()` - still returned "[object Object]"
-
-**Final Solution:** Removed or disabled tests that rely on JavaScript string evaluation results.
-
-### 3. Proxy.revocable Tests Not Working
-**Problem:** Tests for Proxy.revocable functionality are failing because:
-- Accessing revoked proxies doesn't throw expected TypeError
-- Type conversions fail when checking proxy values
-
-**Solution:** Disabled ProxyConstructorTest.java entirely.
-
-## Test Coverage Status
-
-### ✅ Working Tests
-- **Object.isExtensible()** - Boolean checks work correctly
-- **Object.is()** - SameValue algorithm tests pass
-- **Object.getOwnPropertyDescriptors()** - Numeric property access works
-- **Promise.all() with arrays** - Basic array functionality confirmed
-- **Array.from() with Java objects** - Existing tests continue to pass
-
-### ❌ Disabled/Removed Tests
-- Object.preventExtensions() with JSON.stringify verification
-- Object.getOwnPropertyDescriptor() with property descriptor checking
-- Object.getOwnPropertySymbols() count verification
-- All Promise iterable tests (Set, Map, custom iterables)
-- All Array.from iterable tests (Set, Map, custom iterables)
-- All Proxy.revocable tests
-- All Reflect object tests
+**Resolution:** Proxy revocation tests are active, including:
+- access/set failures after revoke,
+- repeated revoke calls.
 
 ## Recommendations
 
-1. **Investigate JSValue.toJavaObject() behavior** - Understand why JavaScript string results return "[object Object]" instead of actual string values.
-
-2. **Improve JavaScript-Java bridging** - Enable JSIteratorHelper to properly detect and work with JavaScript native objects that have Symbol.iterator.
-
-3. **Alternative testing approach** - Consider testing these features directly in JavaScript (e.g., using a JavaScript test framework) rather than testing through the Java API.
-
-4. **QuickJS integration review** - Verify that the JavaScript engine (QuickJS) properly exposes object properties and iterable protocols to the Java layer.
-
-## Test Results
-All enabled tests pass: **BUILD SUCCESSFUL**
-- Total test files: ~20
-- Passing tests: 354+
-- Disabled tests: 2 files (ProxyConstructorTest, ReflectObjectTest)
-- Commented out tests: ~15 individual test methods in ObjectConstructorTest
+1. Keep adding constructor-edge iterable tests whenever iterator protocol code changes.
+2. Keep using `assert*WithJavet()` for behavior parity and direct `toJavaObject()` assertions for bridge regressions.
+3. Re-run targeted builtins tests before full-suite runs to isolate protocol regressions quickly.

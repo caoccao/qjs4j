@@ -295,54 +295,6 @@ public class MediumPriorityOpcodeTest extends BaseTest {
     }
 
     @Test
-    public void testRemainingMediumOpcodes() {
-        BytecodeEmitter pushBigIntI32Emitter = new BytecodeEmitter();
-        pushBigIntI32Emitter.emitOpcode(Opcode.PUSH_BIGINT_I32);
-        pushBigIntI32Emitter.emitI32(Integer.MIN_VALUE);
-        pushBigIntI32Emitter.emitOpcode(Opcode.RETURN);
-
-        JSValue minBigIntResult = execute(pushBigIntI32Emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
-        assertThat(minBigIntResult).isInstanceOf(JSBigInt.class);
-        assertThat(((JSBigInt) minBigIntResult).value().intValueExact()).isEqualTo(Integer.MIN_VALUE);
-
-        BytecodeEmitter pushBigIntI32MaxEmitter = new BytecodeEmitter();
-        pushBigIntI32MaxEmitter.emitOpcode(Opcode.PUSH_BIGINT_I32);
-        pushBigIntI32MaxEmitter.emitI32(Integer.MAX_VALUE);
-        pushBigIntI32MaxEmitter.emitOpcode(Opcode.RETURN);
-
-        JSValue maxBigIntResult = execute(pushBigIntI32MaxEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
-        assertThat(maxBigIntResult).isInstanceOf(JSBigInt.class);
-        assertThat(((JSBigInt) maxBigIntResult).value().intValueExact()).isEqualTo(Integer.MAX_VALUE);
-
-        context.getGlobalObject().set("tmpDeleteVar", new JSNumber(1));
-        BytecodeEmitter deleteVarEmitter = new BytecodeEmitter();
-        deleteVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "tmpDeleteVar");
-        deleteVarEmitter.emitOpcode(Opcode.RETURN);
-
-        JSValue deletedResult = executeWithStrict(false, deleteVarEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
-        assertThat(deletedResult).isEqualTo(JSBoolean.TRUE);
-        assertThat(context.getGlobalObject().get("tmpDeleteVar")).isSameAs(JSUndefined.INSTANCE);
-
-        BytecodeEmitter deleteMissingVarEmitter = new BytecodeEmitter();
-        deleteMissingVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "missingDeleteVar");
-        deleteMissingVarEmitter.emitOpcode(Opcode.RETURN);
-
-        JSValue deleteMissingResult = executeWithStrict(false, deleteMissingVarEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
-        assertThat(deleteMissingResult).isEqualTo(JSBoolean.TRUE);
-
-        context.getGlobalObject().defineProperty(
-                PropertyKey.fromString("lockedDeleteVar"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(2), true, true, false));
-        BytecodeEmitter deleteLockedVarEmitter = new BytecodeEmitter();
-        deleteLockedVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "lockedDeleteVar");
-        deleteLockedVarEmitter.emitOpcode(Opcode.RETURN);
-
-        JSValue deleteLockedResult = executeWithStrict(false, deleteLockedVarEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
-        assertThat(deleteLockedResult).isEqualTo(JSBoolean.FALSE);
-        assertThat(context.getGlobalObject().get("lockedDeleteVar")).isInstanceOf(JSNumber.class);
-    }
-
-    @Test
     public void testRefValueOpcodes() {
         JSObject obj = context.createJSObject();
         obj.set("x", new JSNumber(1));
@@ -402,6 +354,54 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         assertThatThrownBy(() -> execute(strictMissingPutEmitter, 0, new JSValue[0], JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("missing is not defined");
+    }
+
+    @Test
+    public void testRemainingMediumOpcodes() {
+        BytecodeEmitter pushBigIntI32Emitter = new BytecodeEmitter();
+        pushBigIntI32Emitter.emitOpcode(Opcode.PUSH_BIGINT_I32);
+        pushBigIntI32Emitter.emitI32(Integer.MIN_VALUE);
+        pushBigIntI32Emitter.emitOpcode(Opcode.RETURN);
+
+        JSValue minBigIntResult = execute(pushBigIntI32Emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        assertThat(minBigIntResult).isInstanceOf(JSBigInt.class);
+        assertThat(((JSBigInt) minBigIntResult).value().intValueExact()).isEqualTo(Integer.MIN_VALUE);
+
+        BytecodeEmitter pushBigIntI32MaxEmitter = new BytecodeEmitter();
+        pushBigIntI32MaxEmitter.emitOpcode(Opcode.PUSH_BIGINT_I32);
+        pushBigIntI32MaxEmitter.emitI32(Integer.MAX_VALUE);
+        pushBigIntI32MaxEmitter.emitOpcode(Opcode.RETURN);
+
+        JSValue maxBigIntResult = execute(pushBigIntI32MaxEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        assertThat(maxBigIntResult).isInstanceOf(JSBigInt.class);
+        assertThat(((JSBigInt) maxBigIntResult).value().intValueExact()).isEqualTo(Integer.MAX_VALUE);
+
+        context.getGlobalObject().set("tmpDeleteVar", new JSNumber(1));
+        BytecodeEmitter deleteVarEmitter = new BytecodeEmitter();
+        deleteVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "tmpDeleteVar");
+        deleteVarEmitter.emitOpcode(Opcode.RETURN);
+
+        JSValue deletedResult = executeWithStrict(false, deleteVarEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        assertThat(deletedResult).isEqualTo(JSBoolean.TRUE);
+        assertThat(context.getGlobalObject().get("tmpDeleteVar")).isSameAs(JSUndefined.INSTANCE);
+
+        BytecodeEmitter deleteMissingVarEmitter = new BytecodeEmitter();
+        deleteMissingVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "missingDeleteVar");
+        deleteMissingVarEmitter.emitOpcode(Opcode.RETURN);
+
+        JSValue deleteMissingResult = executeWithStrict(false, deleteMissingVarEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        assertThat(deleteMissingResult).isEqualTo(JSBoolean.TRUE);
+
+        context.getGlobalObject().defineProperty(
+                PropertyKey.fromString("lockedDeleteVar"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(2), true, true, false));
+        BytecodeEmitter deleteLockedVarEmitter = new BytecodeEmitter();
+        deleteLockedVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "lockedDeleteVar");
+        deleteLockedVarEmitter.emitOpcode(Opcode.RETURN);
+
+        JSValue deleteLockedResult = executeWithStrict(false, deleteLockedVarEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        assertThat(deleteLockedResult).isEqualTo(JSBoolean.FALSE);
+        assertThat(context.getGlobalObject().get("lockedDeleteVar")).isInstanceOf(JSNumber.class);
     }
 
     @Test

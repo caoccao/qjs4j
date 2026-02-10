@@ -17,7 +17,10 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class WeakMapConstructorTest extends BaseJavetTest {
 
@@ -32,6 +35,23 @@ public class WeakMapConstructorTest extends BaseJavetTest {
         assertStringWithJavet("new WeakMap().toString()");
 
         assertErrorWithJavet("WeakMap()");
+    }
+
+    @Test
+    void testWeakMapConstructorIterableEdgeCases() {
+        assertBooleanWithJavet("""
+                var k1 = {};
+                var k2 = {};
+                var source = new Map([[k1, 1], [k2, 2]]);
+                var wm = new WeakMap(source);
+                wm.get(k1) === 1 && wm.get(k2) === 2""");
+
+        assertThatThrownBy(() -> context.eval("new WeakMap({})"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
+        assertThatThrownBy(() -> context.eval("new WeakMap([[1, 'a']])"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
     }
 
 }
