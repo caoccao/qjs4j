@@ -25,33 +25,10 @@ This document tracks remaining features, known bugs, and planned enhancements fo
 
 ## Opcodes Not Yet Implemented
 
-**Summary**: 144/262 opcodes fully implemented (55%), 118 defined but need VM handlers
+**Summary**: High-priority opcode migration is completed. Remaining work is medium / low priority opcode coverage and optimizations.
 
 ### High Priority Opcodes (Core Functionality)
-
-| Opcode | qjs4j # | Description |
-|--------|---------|-------------|
-| DUP1 | 139 | Stack: a b → a a b |
-| INIT_CTOR | 140 | Initialize constructor |
-| GET_VAR_UNDEF | 141 | Get var, return undefined if not exists |
-| PUT_VAR_INIT | 142 | Initialize global lexical variable |
-| SET_PROTO | 76 | Set prototype |
-| SET_HOME_OBJECT | 77 | Set home object for super |
-| GET_LOC | 85 | Get local variable |
-| PUT_LOC | 86 | Set local variable |
-| SET_LOC | 87 | Set local, keep value |
-| GET_VAR_REF | 91 | Get var ref (closure) |
-| PUT_VAR_REF | 92 | Set var ref |
-| SET_VAR_REF | 93 | Set var ref, keep value |
-| CLOSE_LOC | 103 | Close over local (create closure) |
-| TO_STRING | 112 | Convert to string |
-| ITERATOR_CHECK_OBJECT | 129 | Check iterator result |
-| ITERATOR_GET_VALUE_DONE | 130 | Extract value and done |
-| ITERATOR_CLOSE | 131 | Close iterator |
-| ITERATOR_NEXT | 132 | Call iterator.next() |
-| ITERATOR_CALL | 133 | Call iterator method |
-| LNOT | 149 | Logical NOT (!) |
-| POW | 158 | Exponentiation (**) |
+- Completed on 2026-02-10.
 
 ### Medium Priority Opcodes (Enhanced Functionality)
 
@@ -141,9 +118,9 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 3. Fix Proxy.revocable behavior
 
 ### Phase 2: Core Opcodes (Essential)
-1. Implement HIGH priority opcodes (see above)
-2. Focus on iterator operations for better for-of support
-3. Add closure variable opcodes (GET/PUT/SET_VAR_REF)
+1. Implement MEDIUM priority opcodes (see above)
+2. Expand iterator opcode coverage for advanced iterator control flow
+3. Improve closure and var-ref fidelity for full QuickJS parity
 
 ### Phase 3: Language Features
 1. Tagged template literals

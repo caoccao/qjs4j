@@ -428,7 +428,7 @@ public final class VirtualMachine {
                         handleMod();
                         pc += op.getSize();
                     }
-                    case EXP -> {
+                    case EXP, POW -> {
                         handleExp();
                         pc += op.getSize();
                     }
@@ -570,7 +570,7 @@ public final class VirtualMachine {
                     }
 
                     // ==================== Logical Operations ====================
-                    case LOGICAL_NOT -> {
+                    case LOGICAL_NOT, LNOT -> {
                         handleLogicalNot();
                         pc += op.getSize();
                     }
@@ -588,6 +588,11 @@ public final class VirtualMachine {
                     }
 
                     // ==================== Variable Access ====================
+                    case GET_VAR_UNDEF -> {
+                        int getVarRefIndex = bytecode.readU16(pc + 1);
+                        valueStack.push(currentFrame.getVarRef(getVarRefIndex));
+                        pc += op.getSize();
+                    }
                     case GET_VAR -> {
                         int getVarAtom = bytecode.readU32(pc + 1);
                         String getVarName = bytecode.getAtoms()[getVarAtom];
@@ -598,6 +603,12 @@ public final class VirtualMachine {
                             propertyAccessChain.append(getVarName);
                         }
                         valueStack.push(varValue);
+                        pc += op.getSize();
+                    }
+                    case PUT_VAR_INIT -> {
+                        int putVarRefIndex = bytecode.readU16(pc + 1);
+                        JSValue putValue = valueStack.pop();
+                        currentFrame.setVarRef(putVarRefIndex, putValue);
                         pc += op.getSize();
                     }
                     case PUT_VAR -> {
@@ -614,21 +625,42 @@ public final class VirtualMachine {
                         context.getGlobalObject().set(PropertyKey.fromString(setVarName), setValue);
                         pc += op.getSize();
                     }
-                    case GET_LOCAL -> {
+                    case GET_LOCAL, GET_LOC -> {
                         int getLocalIndex = bytecode.readU16(pc + 1);
                         JSValue localValue = currentFrame.getLocals()[getLocalIndex];
                         valueStack.push(localValue);
                         pc += op.getSize();
                     }
-                    case PUT_LOCAL -> {
+                    case PUT_LOCAL, PUT_LOC -> {
                         int putLocalIndex = bytecode.readU16(pc + 1);
                         JSValue value = valueStack.pop();
                         currentFrame.getLocals()[putLocalIndex] = value;
                         pc += op.getSize();
                     }
-                    case SET_LOCAL -> {
+                    case SET_LOCAL, SET_LOC -> {
                         int setLocalIndex = bytecode.readU16(pc + 1);
                         currentFrame.getLocals()[setLocalIndex] = valueStack.peek(0);
+                        pc += op.getSize();
+                    }
+                    case GET_VAR_REF -> {
+                        int getVarRefIndex = bytecode.readU16(pc + 1);
+                        valueStack.push(currentFrame.getVarRef(getVarRefIndex));
+                        pc += op.getSize();
+                    }
+                    case PUT_VAR_REF -> {
+                        int putVarRefIndex = bytecode.readU16(pc + 1);
+                        JSValue value = valueStack.pop();
+                        currentFrame.setVarRef(putVarRefIndex, value);
+                        pc += op.getSize();
+                    }
+                    case SET_VAR_REF -> {
+                        int setVarRefIndex = bytecode.readU16(pc + 1);
+                        currentFrame.setVarRef(setVarRefIndex, valueStack.peek(0));
+                        pc += op.getSize();
+                    }
+                    case CLOSE_LOC -> {
+                        int closeLocalIndex = bytecode.readU16(pc + 1);
+                        currentFrame.closeLocal(closeLocalIndex);
                         pc += op.getSize();
                     }
 
@@ -815,6 +847,10 @@ public final class VirtualMachine {
                     }
 
                     // ==================== Function Calls ====================
+                    case INIT_CTOR -> {
+                        handleInitCtor();
+                        pc += op.getSize();
+                    }
                     case CALL -> {
                         int argCount = bytecode.readU16(pc + 1);
                         handleCall(argCount);
@@ -989,6 +1025,26 @@ public final class VirtualMachine {
                         }
                         pc += op.getSize();
                     }
+                    case SET_PROTO -> {
+                        JSValue protoValue = valueStack.pop();
+                        JSValue objectValue = valueStack.peek(0);
+                        if (objectValue instanceof JSObject object) {
+                            if (protoValue instanceof JSObject prototypeObject) {
+                                object.setPrototype(prototypeObject);
+                            } else if (protoValue.isNull()) {
+                                object.setPrototype(null);
+                            }
+                        }
+                        pc += op.getSize();
+                    }
+                    case SET_HOME_OBJECT -> {
+                        JSValue homeObjectValue = valueStack.peek(1);
+                        JSValue methodValue = valueStack.peek(0);
+                        if (methodValue instanceof JSObject methodObject && homeObjectValue instanceof JSObject homeObject) {
+                            methodObject.set(PropertyKey.fromString("[[HomeObject]]"), homeObject);
+                        }
+                        pc += op.getSize();
+                    }
                     case DEFINE_CLASS -> {
                         // Stack: superClass constructor
                         // Reads: atom (class name)
@@ -1122,6 +1178,13 @@ public final class VirtualMachine {
                     }
 
                     // ==================== Type Operations ====================
+                    case TO_STRING -> {
+                        JSValue value = valueStack.peek(0);
+                        if (!(value instanceof JSString)) {
+                            valueStack.set(0, JSTypeConversions.toString(context, value));
+                        }
+                        pc += op.getSize();
+                    }
                     case TYPEOF -> {
                         handleTypeof();
                         pc += op.getSize();
@@ -1136,6 +1199,85 @@ public final class VirtualMachine {
                     }
 
                     // ==================== Async Operations ====================
+                    case ITERATOR_CHECK_OBJECT -> {
+                        JSValue iteratorResult = valueStack.peek(0);
+                        if (!(iteratorResult instanceof JSObject)) {
+                            throw new JSVirtualMachineException(context.throwTypeError("iterator must return an object"));
+                        }
+                        pc += op.getSize();
+                    }
+                    case ITERATOR_GET_VALUE_DONE -> {
+                        JSValue iteratorResult = valueStack.peek(0);
+                        if (!(iteratorResult instanceof JSObject iteratorResultObject)) {
+                            throw new JSVirtualMachineException(context.throwTypeError("iterator must return an object"));
+                        }
+
+                        JSValue doneValue = iteratorResultObject.get(PropertyKey.fromString("done"));
+                        JSValue value = iteratorResultObject.get(PropertyKey.fromString("value"));
+                        if (value == null) {
+                            value = JSUndefined.INSTANCE;
+                        }
+                        boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
+
+                        valueStack.set(0, value);
+                        valueStack.set(1, new JSNumber(0));
+                        valueStack.push(JSBoolean.valueOf(done));
+                        pc += op.getSize();
+                    }
+                    case ITERATOR_CLOSE -> {
+                        valueStack.pop(); // catch_offset
+                        valueStack.pop(); // next method
+                        JSValue iteratorValue = valueStack.pop();
+                        if (iteratorValue instanceof JSObject iteratorObject && !iteratorValue.isUndefined()) {
+                            JSValue returnMethodValue = iteratorObject.get(PropertyKey.fromString("return"));
+                            if (returnMethodValue instanceof JSFunction returnMethod) {
+                                returnMethod.call(context, iteratorObject, new JSValue[0]);
+                                if (context.hasPendingException()) {
+                                    pendingException = context.getPendingException();
+                                    context.clearPendingException();
+                                }
+                            } else if (!(returnMethodValue.isUndefined() || returnMethodValue.isNull())) {
+                                throw new JSVirtualMachineException(context.throwTypeError("iterator return is not a function"));
+                            }
+                        }
+                        pc += op.getSize();
+                    }
+                    case ITERATOR_NEXT -> {
+                        JSValue argumentValue = valueStack.peek(0);
+                        JSValue catchOffset = valueStack.peek(1);
+                        JSValue nextMethodValue = valueStack.peek(2);
+                        JSValue iteratorValue = valueStack.peek(3);
+                        if (!(nextMethodValue instanceof JSFunction nextMethod)) {
+                            throw new JSVirtualMachineException(context.throwTypeError("iterator next is not a function"));
+                        }
+                        JSValue nextResult = nextMethod.call(context, iteratorValue, new JSValue[]{argumentValue});
+                        valueStack.set(0, nextResult);
+                        valueStack.set(1, catchOffset);
+                        pc += op.getSize();
+                    }
+                    case ITERATOR_CALL -> {
+                        int flags = bytecode.readU8(pc + 1);
+                        JSValue argumentValue = valueStack.peek(0);
+                        JSValue iteratorValue = valueStack.peek(3);
+                        if (!(iteratorValue instanceof JSObject iteratorObject)) {
+                            throw new JSVirtualMachineException(context.throwTypeError("iterator call target must be an object"));
+                        }
+
+                        String methodName = (flags & 1) != 0 ? "throw" : "return";
+                        JSValue methodValue = iteratorObject.get(PropertyKey.fromString(methodName));
+                        boolean noMethod = methodValue.isUndefined() || methodValue.isNull();
+                        if (!noMethod) {
+                            if (!(methodValue instanceof JSFunction method)) {
+                                throw new JSVirtualMachineException(context.throwTypeError("iterator " + methodName + " is not a function"));
+                            }
+                            JSValue callResult = (flags & 2) != 0
+                                    ? method.call(context, iteratorObject, new JSValue[0])
+                                    : method.call(context, iteratorObject, new JSValue[]{argumentValue});
+                            valueStack.set(0, callResult);
+                        }
+                        valueStack.push(JSBoolean.valueOf(noMethod));
+                        pc += op.getSize();
+                    }
                     case AWAIT -> {
                         handleAwait();
                         pc += op.getSize();
@@ -1604,6 +1746,14 @@ public final class VirtualMachine {
         JSValue left = valueStack.pop();
         boolean result = JSTypeConversions.abstractEquals(context, left, right);
         valueStack.push(JSBoolean.valueOf(result));
+    }
+
+    private void handleInitCtor() {
+        JSValue thisArg = currentFrame.getThisArg();
+        if (!(thisArg instanceof JSObject)) {
+            throw new JSVirtualMachineException(context.throwTypeError("class constructors must be invoked with 'new'"));
+        }
+        valueStack.push(thisArg);
     }
 
     private void handleExp() {

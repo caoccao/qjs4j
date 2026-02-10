@@ -21,6 +21,9 @@ import com.caoccao.qjs4j.core.JSFunction;
 import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Represents a call frame (activation record) on the call stack.
  */
@@ -28,6 +31,7 @@ public final class StackFrame {
     private final JSValue[] arguments;  // Original arguments passed to function
     private final StackFrame caller;
     private final JSValue[] closureVars;
+    private final Map<Integer, LocalReference> closedLocals;
     private final JSFunction function;
     private final JSValue[] locals;
     private final JSValue thisArg;
@@ -59,9 +63,21 @@ public final class StackFrame {
             this.locals = args;
         }
 
-        this.closureVars = new JSValue[0];
+        if (function instanceof JSBytecodeFunction bytecodeFunc && bytecodeFunc.getClosureVars() != null) {
+            this.closureVars = bytecodeFunc.getClosureVars();
+        } else {
+            this.closureVars = new JSValue[0];
+        }
+        this.closedLocals = new HashMap<>();
         this.programCounter = 0;
         this.caller = caller;
+    }
+
+    public void closeLocal(int index) {
+        if (index < 0 || index >= locals.length) {
+            return;
+        }
+        closedLocals.put(index, new LocalReference(locals, index));
     }
 
     public JSValue[] getArguments() {
@@ -80,6 +96,18 @@ public final class StackFrame {
         return locals;
     }
 
+    public JSValue getVarRef(int index) {
+        LocalReference localReference = closedLocals.get(index);
+        if (localReference != null) {
+            return localReference.get();
+        }
+        if (index >= 0 && index < closureVars.length) {
+            JSValue value = closureVars[index];
+            return value != null ? value : JSUndefined.INSTANCE;
+        }
+        return JSUndefined.INSTANCE;
+    }
+
     public int getProgramCounter() {
         return programCounter;
     }
@@ -88,7 +116,29 @@ public final class StackFrame {
         return thisArg;
     }
 
+    public void setVarRef(int index, JSValue value) {
+        LocalReference localReference = closedLocals.get(index);
+        if (localReference != null) {
+            localReference.set(value);
+            return;
+        }
+        if (index >= 0 && index < closureVars.length) {
+            closureVars[index] = value;
+        }
+    }
+
     public void setProgramCounter(int pc) {
         this.programCounter = pc;
+    }
+
+    private record LocalReference(JSValue[] storage, int index) {
+        private JSValue get() {
+            JSValue value = storage[index];
+            return value != null ? value : JSUndefined.INSTANCE;
+        }
+
+        private void set(JSValue value) {
+            storage[index] = value;
+        }
     }
 }

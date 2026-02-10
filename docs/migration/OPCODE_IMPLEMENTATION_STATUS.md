@@ -6,10 +6,10 @@ This document tracks the implementation status of all QuickJS opcodes in qjs4j. 
 
 **Total Opcodes**: 245 (all 245 are now DEFINED in Opcode.java enum)
 **Enum Definitions**: 262 total opcodes in qjs4j Opcode.java (includes 144 original + 118 newly added)
-**Fully Implemented**: 144 (58.8%) - have VM handlers in VirtualMachine.java
-**Defined but Not Implemented**: 101 (41.2%) - added to Opcode.java, need VM implementation
+**Fully Implemented**: 164 (66.7%) - have VM handlers in VirtualMachine.java
+**Defined but Not Implemented**: 81 (33.3%) - added to Opcode.java, need VM implementation
 
-**Last Updated**: 2026-01-06
+**Last Updated**: 2026-02-10
 
 ## Important Notes
 
@@ -30,23 +30,10 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 - ⏳ **Defined**: Opcode is in Opcode.java enum but needs VM handler implementation
 - ⏳ **Missing** (legacy status): These entries will be updated to **Defined** status
 
-### Recent Updates (2026-01-06)
+### Recent Updates (2026-02-10)
 
-**All 101 missing QuickJS opcodes have been added to Opcode.java!**
-
-The following opcode ranges were added with custom qjs4j numbers:
-- **Opcodes 139-173**: Core operations (DUP1, INIT_CTOR, GET_VAR_UNDEF, etc.)
-- **Opcodes 175-191**: Utility operations (NOP, iterator operations, etc.)
-- **Opcodes 192-211**: SHORT_OPCODES part 1 (PUSH_0-7, GET_LOC8, etc.)
-- **Opcodes 216-261**: SHORT_OPCODES part 2 (local/arg/var ref shortcuts, type checks)
-
-Each newly added opcode includes a comment showing its QuickJS correspondence. For example:
-```java
-DUP1(139, 1, 2, 3),                  // a b -> a a b (QuickJS opcode 18)
-GET_VAR_UNDEF(141, 3, 0, 1),         // QuickJS opcode 55
-```
-
-**Next Steps**: Implement VM handlers in `VirtualMachine.java` for these 101 opcodes. See the Priority column below for implementation order.
+- Completed all high-priority opcode handlers in `VirtualMachine.java`.
+- Added regression tests in `src/test/java/com/caoccao/qjs4j/vm/HighPriorityOpcodeTest.java`.
 
 ## Opcode Categories
 
@@ -75,7 +62,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),         // QuickJS opcode 55
 | 15 | NIP | 1 | ✅ Implemented | - | Remove second element |
 | 16 | NIP1 | 1 | ✅ Implemented | - | Remove third element |
 | 17 | DUP | 1 | ✅ Implemented | - | Duplicate top |
-| 18 | DUP1 | 1 | ⏳ **Defined** (139) | HIGH | Duplicate second: a b -> a a b |
+| 18 | DUP1 | 1 | ✅ Implemented | - | Duplicate second: a b -> a a b |
 | 19 | DUP2 | 1 | ✅ Implemented | - | Duplicate pair |
 | 20 | DUP3 | 1 | ✅ Implemented | - | Duplicate triple |
 | 21 | INSERT2 | 1 | ✅ Implemented | - | Insert before second |
@@ -105,7 +92,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),         // QuickJS opcode 55
 | 41 | RETURN_UNDEF | 1 | ✅ Implemented | - | Return undefined |
 | 42 | CHECK_CTOR_RETURN | 1 | ✅ Implemented | - | Check constructor return |
 | 43 | CHECK_CTOR | 1 | ✅ Implemented | - | Check constructor |
-| 44 | INIT_CTOR | 1 | ⏳ **Defined** (140) | HIGH | Initialize constructor |
+| 44 | INIT_CTOR | 1 | ✅ Implemented | - | Initialize constructor |
 | 45 | CHECK_BRAND | 1 | ✅ Implemented | - | Check private brand |
 | 46 | ADD_BRAND | 1 | ✅ Implemented | - | Add private brand |
 | 47 | RETURN_ASYNC | 1 | ✅ Implemented | - | Return from async function |
@@ -120,10 +107,10 @@ GET_VAR_UNDEF(141, 3, 0, 1),         // QuickJS opcode 55
 ### Variable Operations (55-60)
 | # | Opcode | Size | Status | Priority | Notes |
 |---|--------|------|--------|----------|-------|
-| 55 | GET_VAR_UNDEF | 3 | ⏳ **Defined** (141) | HIGH | Get var, return undefined if not exists |
+| 55 | GET_VAR_UNDEF | 3 | ✅ Implemented | - | Get var, return undefined if not exists |
 | 56 | GET_VAR | 3 | ✅ Implemented | - | Get variable |
 | 57 | PUT_VAR | 3 | ✅ Implemented | - | Set variable |
-| 58 | PUT_VAR_INIT | 3 | ⏳ **Defined** (142) | HIGH | Initialize global lexical variable |
+| 58 | PUT_VAR_INIT | 3 | ✅ Implemented | - | Initialize global lexical variable |
 | 59 | GET_REF_VALUE | 1 | ⏳ **Missing** | MEDIUM | Get reference value |
 | 60 | PUT_REF_VALUE | 1 | ⏳ **Missing** | MEDIUM | Set reference value |
 
@@ -145,8 +132,8 @@ GET_VAR_UNDEF(141, 3, 0, 1),         // QuickJS opcode 55
 | 73 | DEFINE_FIELD | 5 | ✅ Implemented | - | Define field |
 | 74 | SET_NAME | 5 | ⏳ **Missing** | MEDIUM | Set function name |
 | 75 | SET_NAME_COMPUTED | 1 | ⏳ **Missing** | MEDIUM | Set computed name |
-| 76 | SET_PROTO | 1 | ⏳ **Missing** | HIGH | Set prototype |
-| 77 | SET_HOME_OBJECT | 1 | ⏳ **Missing** | HIGH | Set home object for super |
+| 76 | SET_PROTO | 1 | ✅ Implemented | - | Set prototype |
+| 77 | SET_HOME_OBJECT | 1 | ✅ Implemented | - | Set home object for super |
 | 78 | DEFINE_ARRAY_EL | 1 | ⏳ **Missing** | MEDIUM | Define array element |
 | 79 | APPEND | 1 | ⏳ **Missing** | MEDIUM | Append to array |
 | 80 | COPY_DATA_PROPERTIES | 2 | ⏳ **Missing** | MEDIUM | Copy properties (spread) |
@@ -158,15 +145,15 @@ GET_VAR_UNDEF(141, 3, 0, 1),         // QuickJS opcode 55
 ### Local Variable Operations (85-103)
 | # | Opcode | Size | Status | Priority | Notes |
 |---|--------|------|--------|----------|-------|
-| 85 | GET_LOC | 3 | ⏳ **Missing** | HIGH | Get local variable |
-| 86 | PUT_LOC | 3 | ⏳ **Missing** | HIGH | Set local variable |
-| 87 | SET_LOC | 3 | ⏳ **Missing** | HIGH | Set local, keep value |
+| 85 | GET_LOC | 3 | ✅ Implemented | - | Get local variable |
+| 86 | PUT_LOC | 3 | ✅ Implemented | - | Set local variable |
+| 87 | SET_LOC | 3 | ✅ Implemented | - | Set local, keep value |
 | 88 | GET_ARG | 3 | ✅ Implemented | - | Get argument |
 | 89 | PUT_ARG | 3 | ✅ Implemented | - | Set argument |
 | 90 | SET_ARG | 3 | ✅ Implemented | - | Set arg, keep value |
-| 91 | GET_VAR_REF | 3 | ⏳ **Missing** | HIGH | Get var ref (closure) |
-| 92 | PUT_VAR_REF | 3 | ⏳ **Missing** | HIGH | Set var ref |
-| 93 | SET_VAR_REF | 3 | ⏳ **Missing** | HIGH | Set var ref, keep value |
+| 91 | GET_VAR_REF | 3 | ✅ Implemented | - | Get var ref (closure) |
+| 92 | PUT_VAR_REF | 3 | ✅ Implemented | - | Set var ref |
+| 93 | SET_VAR_REF | 3 | ✅ Implemented | - | Set var ref, keep value |
 | 94 | SET_LOC_UNINITIALIZED | 3 | ⏳ **Missing** | MEDIUM | Mark local uninitialized |
 | 95 | GET_LOC_CHECK | 3 | ⏳ **Missing** | MEDIUM | Get local with TDZ check |
 | 96 | PUT_LOC_CHECK | 3 | ⏳ **Missing** | MEDIUM | Set local with TDZ check |
@@ -176,7 +163,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),         // QuickJS opcode 55
 | 100 | GET_VAR_REF_CHECK | 3 | ⏳ **Missing** | MEDIUM | Get var ref with check |
 | 101 | PUT_VAR_REF_CHECK | 3 | ⏳ **Missing** | MEDIUM | Set var ref with check |
 | 102 | PUT_VAR_REF_CHECK_INIT | 3 | ⏳ **Missing** | MEDIUM | Initialize var ref |
-| 103 | CLOSE_LOC | 3 | ⏳ **Missing** | HIGH | Close over local (create closure) |
+| 103 | CLOSE_LOC | 3 | ✅ Implemented | - | Close over local (create closure) |
 
 ### Control Flow (104-113)
 | # | Opcode | Size | Status | Priority | Notes |
@@ -189,7 +176,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),         // QuickJS opcode 55
 | 109 | RET | 1 | ✅ Implemented | - | Return from finally |
 | 110 | NIP_CATCH | 1 | ⏳ **Missing** | MEDIUM | catch ... a -> a |
 | 111 | TO_OBJECT | 1 | ✅ Implemented | - | Convert to object |
-| 112 | TO_STRING | 1 | ⏳ **Missing** | HIGH | Convert to string |
+| 112 | TO_STRING | 1 | ✅ Implemented | - | Convert to string |
 | 113 | TO_PROPKEY | 1 | ✅ Implemented | - | Convert to property key |
 
 ### With/Scope Operations (114-122)
@@ -214,11 +201,11 @@ GET_VAR_UNDEF(141, 3, 0, 1),         // QuickJS opcode 55
 | 126 | FOR_IN_NEXT | 1 | ✅ Implemented | - | Get next for-in property |
 | 127 | FOR_OF_NEXT | 2 | ✅ Implemented | - | Get next for-of value |
 | 128 | FOR_AWAIT_OF_NEXT | 1 | ✅ Implemented | - | Get next for-await-of value |
-| 129 | ITERATOR_CHECK_OBJECT | 1 | ⏳ **Missing** | HIGH | Check iterator result |
-| 130 | ITERATOR_GET_VALUE_DONE | 1 | ⏳ **Missing** | HIGH | Extract value and done |
-| 131 | ITERATOR_CLOSE | 1 | ⏳ **Missing** | HIGH | Close iterator |
-| 132 | ITERATOR_NEXT | 1 | ⏳ **Missing** | HIGH | Call iterator.next() |
-| 133 | ITERATOR_CALL | 2 | ⏳ **Missing** | HIGH | Call iterator method |
+| 129 | ITERATOR_CHECK_OBJECT | 1 | ✅ Implemented | - | Check iterator result |
+| 130 | ITERATOR_GET_VALUE_DONE | 1 | ✅ Implemented | - | Extract value and done |
+| 131 | ITERATOR_CLOSE | 1 | ✅ Implemented | - | Close iterator |
+| 132 | ITERATOR_NEXT | 1 | ✅ Implemented | - | Call iterator.next() |
+| 133 | ITERATOR_CALL | 2 | ✅ Implemented | - | Call iterator method |
 | 134 | INITIAL_YIELD | 1 | ✅ Implemented | - | Initial generator yield |
 | 135 | YIELD | 1 | ✅ Implemented | - | Yield value |
 | 136 | YIELD_STAR | 1 | ✅ Implemented | - | Yield* delegation |
@@ -238,7 +225,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),         // QuickJS opcode 55
 | 146 | INC_LOC | 2 | ⏳ **Missing** | LOW | Increment local |
 | 147 | ADD_LOC | 2 | ⏳ **Missing** | LOW | Add to local |
 | 148 | NOT | 1 | ✅ Implemented | - | Bitwise NOT |
-| 149 | LNOT | 1 | ⏳ **Missing** | HIGH | Logical NOT (!) |
+| 149 | LNOT | 1 | ✅ Implemented | - | Logical NOT (!) |
 | 150 | TYPEOF | 1 | ✅ Implemented | - | typeof operator |
 | 151 | DELETE | 1 | ✅ Implemented | - | Delete property |
 | 152 | DELETE_VAR | 5 | ⏳ **Missing** | MEDIUM | Delete variable |
@@ -251,7 +238,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),         // QuickJS opcode 55
 | 155 | MOD | 1 | ✅ Implemented | - | Modulo |
 | 156 | ADD | 1 | ✅ Implemented | - | Addition |
 | 157 | SUB | 1 | ✅ Implemented | - | Subtraction |
-| 158 | POW | 1 | ⏳ **Missing** | HIGH | Exponentiation (**) |
+| 158 | POW | 1 | ✅ Implemented | - | Exponentiation (**) |
 | 159 | SHL | 1 | ✅ Implemented | - | Left shift |
 | 160 | SAR | 1 | ✅ Implemented | - | Arithmetic right shift |
 | 161 | SHR | 1 | ✅ Implemented | - | Logical right shift |
@@ -372,18 +359,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),         // QuickJS opcode 55
 ## Implementation Priority
 
 ### HIGH Priority (Core Functionality)
-These opcodes are essential for core JavaScript functionality:
-
-1. **DUP1** (18) - Stack manipulation for expressions
-2. **INIT_CTOR** (44) - Constructor initialization
-3. **GET_VAR_UNDEF** (55), **PUT_VAR_INIT** (58) - Variable initialization
-4. **SET_PROTO** (76), **SET_HOME_OBJECT** (77) - Prototype and super handling
-5. **GET_LOC** (85-87), **GET_VAR_REF** (91-93) - Local variable access
-6. **CLOSE_LOC** (103) - Closure creation
-7. **TO_STRING** (112) - Type conversion
-8. **Iterator operations** (129-133) - Essential for for-of loops
-9. **LNOT** (149) - Logical NOT operator
-10. **POW** (158) - Exponentiation operator
+Completed on 2026-02-10.
 
 ### MEDIUM Priority (Enhanced Functionality)
 These opcodes provide important but non-critical features:
