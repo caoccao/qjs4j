@@ -30,8 +30,8 @@ import java.util.Map;
 public final class StackFrame {
     private final JSValue[] arguments;  // Original arguments passed to function
     private final StackFrame caller;
-    private final JSValue[] closureVars;
     private final Map<Integer, LocalReference> closedLocals;
+    private final JSValue[] closureVars;
     private final JSFunction function;
     private final JSValue[] locals;
     private final JSValue thisArg;
@@ -96,6 +96,14 @@ public final class StackFrame {
         return locals;
     }
 
+    public int getProgramCounter() {
+        return programCounter;
+    }
+
+    public JSValue getThisArg() {
+        return thisArg;
+    }
+
     public JSValue getVarRef(int index) {
         LocalReference localReference = closedLocals.get(index);
         if (localReference != null) {
@@ -108,12 +116,8 @@ public final class StackFrame {
         return JSUndefined.INSTANCE;
     }
 
-    public int getProgramCounter() {
-        return programCounter;
-    }
-
-    public JSValue getThisArg() {
-        return thisArg;
+    public void setProgramCounter(int pc) {
+        this.programCounter = pc;
     }
 
     public void setVarRef(int index, JSValue value) {
@@ -125,10 +129,6 @@ public final class StackFrame {
         if (index >= 0 && index < closureVars.length) {
             closureVars[index] = value;
         }
-    }
-
-    public void setProgramCounter(int pc) {
-        this.programCounter = pc;
     }
 
     private record LocalReference(JSValue[] storage, int index) {

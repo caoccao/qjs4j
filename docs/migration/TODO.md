@@ -25,23 +25,13 @@ This document tracks remaining features, known bugs, and planned enhancements fo
 
 ## Opcodes Not Yet Implemented
 
-**Summary**: High-priority opcode migration is completed. Remaining work is medium / low priority opcode coverage and optimizations.
+**Summary**: High and medium-priority opcode migration is completed. Remaining work is low-priority opcode coverage and optimizations.
 
 ### High Priority Opcodes (Core Functionality)
 - Completed on 2026-02-10.
 
 ### Medium Priority Opcodes (Enhanced Functionality)
-
-- GET_REF_VALUE, PUT_REF_VALUE (59-60) - Reference operations
-- GET_ARRAY_EL2 (68) - Array access variant
-- SET_NAME, SET_NAME_COMPUTED (74-75) - Function naming
-- DEFINE_ARRAY_EL, APPEND (78-79) - Array construction
-- COPY_DATA_PROPERTIES (80) - Object spread
-- DEFINE_METHOD_COMPUTED, DEFINE_CLASS_COMPUTED (82, 84) - Computed names
-- Local TDZ check operations (94-102)
-- Reference operations (119-122)
-- GET_LENGTH (232) - Array length optimization
-- NIP_CATCH (110) - Exception handling
+- Completed on 2026-02-10.
 
 ### Low Priority Opcodes (Optimizations)
 

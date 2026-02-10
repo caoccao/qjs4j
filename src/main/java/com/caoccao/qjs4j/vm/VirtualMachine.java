@@ -23,13 +23,16 @@ import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The JavaScript virtual machine bytecode interpreter.
  * Executes compiled bytecode using a stack-based architecture.
  */
 public final class VirtualMachine {
+    private static final JSObject UNINITIALIZED_MARKER = new JSObject();
     private final JSContext context;
     private final StringBuilder propertyAccessChain;  // Track last property access for better error messages
     private final CallStack valueStack;
@@ -56,6 +59,79 @@ public final class VirtualMachine {
      */
     public void clearPendingException() {
         this.pendingException = null;
+    }
+
+    private void copyDataProperties(JSValue targetValue, JSValue sourceValue, JSValue excludeListValue) {
+        if (!(targetValue instanceof JSObject targetObject)) {
+            throw new JSVirtualMachineException(context.throwTypeError("copy target must be an object"));
+        }
+        if (sourceValue == null || sourceValue.isUndefined() || sourceValue.isNull()) {
+            return;
+        }
+
+        JSObject sourceObject = toObject(sourceValue);
+        if (sourceObject == null) {
+            return;
+        }
+
+        Set<PropertyKey> excludedKeys = new HashSet<>();
+        if (excludeListValue instanceof JSArray excludeArray) {
+            for (int i = 0; i < excludeArray.getLength(); i++) {
+                excludedKeys.add(PropertyKey.fromValue(context, excludeArray.get(i)));
+            }
+        } else if (excludeListValue instanceof JSObject excludeObject) {
+            for (PropertyKey key : excludeObject.ownPropertyKeys()) {
+                JSValue excludedValue = excludeObject.get(key, context);
+                excludedKeys.add(PropertyKey.fromValue(context, excludedValue));
+            }
+        } else if (excludeListValue != null && !excludeListValue.isUndefined() && !excludeListValue.isNull()) {
+            excludedKeys.add(PropertyKey.fromValue(context, excludeListValue));
+        }
+
+        for (PropertyKey key : sourceObject.ownPropertyKeys()) {
+            PropertyDescriptor descriptor = sourceObject.getOwnPropertyDescriptor(key);
+            if (descriptor == null || !descriptor.isEnumerable() || excludedKeys.contains(key)) {
+                continue;
+            }
+            JSValue propertyValue = sourceObject.get(key, context);
+            if (context.hasPendingException()) {
+                pendingException = context.getPendingException();
+                context.clearPendingException();
+                return;
+            }
+            targetObject.set(key, propertyValue, context);
+            if (context.hasPendingException()) {
+                pendingException = context.getPendingException();
+                context.clearPendingException();
+                return;
+            }
+        }
+    }
+
+    private JSObject createReferenceObject(Opcode makeRefOpcode, int refIndex, String atomName) {
+        StackFrame capturedFrame = currentFrame;
+        JSObject referenceObject = new JSObject();
+        PropertyKey key = PropertyKey.fromString(atomName);
+
+        JSNativeFunction getter = new JSNativeFunction(
+                "get " + atomName,
+                0,
+                (ctx, thisArg, args) -> readReferenceValue(capturedFrame, makeRefOpcode, refIndex),
+                false);
+        JSNativeFunction setter = new JSNativeFunction(
+                "set " + atomName,
+                1,
+                (ctx, thisArg, args) -> {
+                    JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                    writeReferenceValue(capturedFrame, makeRefOpcode, refIndex, value);
+                    return JSUndefined.INSTANCE;
+                },
+                false);
+
+        referenceObject.defineProperty(
+                key,
+                PropertyDescriptor.accessorDescriptor(getter, setter, true, true));
+        return referenceObject;
     }
 
     /**
@@ -593,6 +669,32 @@ public final class VirtualMachine {
                         valueStack.push(currentFrame.getVarRef(getVarRefIndex));
                         pc += op.getSize();
                     }
+                    case GET_REF_VALUE -> {
+                        JSValue propertyValue = valueStack.peek(0);
+                        JSValue objectValue = valueStack.peek(1);
+                        PropertyKey key = PropertyKey.fromValue(context, propertyValue);
+
+                        if (objectValue.isUndefined()) {
+                            throw referenceErrorNotDefined(key);
+                        }
+
+                        JSObject targetObject = toObject(objectValue);
+                        if (targetObject == null) {
+                            throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
+                        }
+
+                        JSValue value;
+                        if (!targetObject.has(key)) {
+                            if (context.isStrictMode()) {
+                                throw referenceErrorNotDefined(key);
+                            }
+                            value = JSUndefined.INSTANCE;
+                        } else {
+                            value = targetObject.get(key, context);
+                        }
+                        valueStack.push(value);
+                        pc += op.getSize();
+                    }
                     case GET_VAR -> {
                         int getVarAtom = bytecode.readU32(pc + 1);
                         String getVarName = bytecode.getAtoms()[getVarAtom];
@@ -609,6 +711,35 @@ public final class VirtualMachine {
                         int putVarRefIndex = bytecode.readU16(pc + 1);
                         JSValue putValue = valueStack.pop();
                         currentFrame.setVarRef(putVarRefIndex, putValue);
+                        pc += op.getSize();
+                    }
+                    case PUT_REF_VALUE -> {
+                        JSValue setValue = valueStack.pop();
+                        JSValue propertyValue = valueStack.pop();
+                        JSValue objectValue = valueStack.pop();
+                        PropertyKey key = PropertyKey.fromValue(context, propertyValue);
+
+                        if (objectValue.isUndefined()) {
+                            if (context.isStrictMode()) {
+                                throw referenceErrorNotDefined(key);
+                            }
+                            objectValue = context.getGlobalObject();
+                        }
+
+                        JSObject targetObject = toObject(objectValue);
+                        if (targetObject == null) {
+                            throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
+                        }
+
+                        if (!targetObject.has(key) && context.isStrictMode()) {
+                            throw referenceErrorNotDefined(key);
+                        }
+
+                        targetObject.set(key, setValue, context);
+                        if (context.hasPendingException()) {
+                            pendingException = context.getPendingException();
+                            context.clearPendingException();
+                        }
                         pc += op.getSize();
                     }
                     case PUT_VAR -> {
@@ -663,6 +794,86 @@ public final class VirtualMachine {
                         currentFrame.closeLocal(closeLocalIndex);
                         pc += op.getSize();
                     }
+                    case SET_LOC_UNINITIALIZED -> {
+                        int index = bytecode.readU16(pc + 1);
+                        currentFrame.getLocals()[index] = UNINITIALIZED_MARKER;
+                        pc += op.getSize();
+                    }
+                    case GET_LOC_CHECK, GET_LOC_CHECKTHIS -> {
+                        int index = bytecode.readU16(pc + 1);
+                        JSValue localValue = currentFrame.getLocals()[index];
+                        if (isUninitialized(localValue)) {
+                            throw new JSVirtualMachineException(context.throwReferenceError("variable is uninitialized"));
+                        }
+                        valueStack.push(localValue);
+                        pc += op.getSize();
+                    }
+                    case PUT_LOC_CHECK -> {
+                        int index = bytecode.readU16(pc + 1);
+                        if (isUninitialized(currentFrame.getLocals()[index])) {
+                            throw new JSVirtualMachineException(context.throwReferenceError("variable is uninitialized"));
+                        }
+                        currentFrame.getLocals()[index] = valueStack.pop();
+                        pc += op.getSize();
+                    }
+                    case SET_LOC_CHECK -> {
+                        int index = bytecode.readU16(pc + 1);
+                        if (isUninitialized(currentFrame.getLocals()[index])) {
+                            throw new JSVirtualMachineException(context.throwReferenceError("variable is uninitialized"));
+                        }
+                        currentFrame.getLocals()[index] = valueStack.peek(0);
+                        pc += op.getSize();
+                    }
+                    case PUT_LOC_CHECK_INIT -> {
+                        int index = bytecode.readU16(pc + 1);
+                        if (!isUninitialized(currentFrame.getLocals()[index])) {
+                            throw new JSVirtualMachineException(context.throwReferenceError("'this' can be initialized only once"));
+                        }
+                        currentFrame.getLocals()[index] = valueStack.pop();
+                        pc += op.getSize();
+                    }
+                    case GET_VAR_REF_CHECK -> {
+                        int index = bytecode.readU16(pc + 1);
+                        JSValue value = currentFrame.getVarRef(index);
+                        if (isUninitialized(value)) {
+                            throw new JSVirtualMachineException(context.throwReferenceError("variable is uninitialized"));
+                        }
+                        valueStack.push(value);
+                        pc += op.getSize();
+                    }
+                    case PUT_VAR_REF_CHECK -> {
+                        int index = bytecode.readU16(pc + 1);
+                        if (isUninitialized(currentFrame.getVarRef(index))) {
+                            throw new JSVirtualMachineException(context.throwReferenceError("variable is uninitialized"));
+                        }
+                        currentFrame.setVarRef(index, valueStack.pop());
+                        pc += op.getSize();
+                    }
+                    case PUT_VAR_REF_CHECK_INIT -> {
+                        int index = bytecode.readU16(pc + 1);
+                        if (!isUninitialized(currentFrame.getVarRef(index))) {
+                            throw new JSVirtualMachineException(context.throwReferenceError("variable is already initialized"));
+                        }
+                        currentFrame.setVarRef(index, valueStack.pop());
+                        pc += op.getSize();
+                    }
+                    case MAKE_LOC_REF, MAKE_ARG_REF, MAKE_VAR_REF_REF -> {
+                        int atomIndex = bytecode.readU32(pc + 1);
+                        int refIndex = bytecode.readU16(pc + 5);
+                        String atomName = bytecode.getAtoms()[atomIndex];
+
+                        JSObject referenceObject = createReferenceObject(op, refIndex, atomName);
+                        valueStack.push(referenceObject);
+                        valueStack.push(new JSString(atomName));
+                        pc += op.getSize();
+                    }
+                    case MAKE_VAR_REF -> {
+                        int atomIndex = bytecode.readU32(pc + 1);
+                        String atomName = bytecode.getAtoms()[atomIndex];
+                        valueStack.push(context.getGlobalObject());
+                        valueStack.push(new JSString(atomName));
+                        pc += op.getSize();
+                    }
 
                     // ==================== Property Access ====================
                     case GET_FIELD -> {
@@ -691,6 +902,23 @@ public final class VirtualMachine {
                             }
                         } else {
                             resetPropertyAccessTracking();
+                            valueStack.push(JSUndefined.INSTANCE);
+                        }
+                        pc += op.getSize();
+                    }
+                    case GET_LENGTH -> {
+                        JSValue objectValue = valueStack.pop();
+                        JSObject targetObject = toObject(objectValue);
+                        if (targetObject != null) {
+                            JSValue result = targetObject.get(PropertyKey.fromString("length"), context);
+                            if (context.hasPendingException()) {
+                                pendingException = context.getPendingException();
+                                context.clearPendingException();
+                                valueStack.push(JSUndefined.INSTANCE);
+                            } else {
+                                valueStack.push(result);
+                            }
+                        } else {
                             valueStack.push(JSUndefined.INSTANCE);
                         }
                         pc += op.getSize();
@@ -748,6 +976,26 @@ public final class VirtualMachine {
                             }
                         } else {
                             resetPropertyAccessTracking();
+                            valueStack.push(JSUndefined.INSTANCE);
+                        }
+                        pc += op.getSize();
+                    }
+                    case GET_ARRAY_EL2 -> {
+                        JSValue index = valueStack.pop();
+                        JSValue arrayObj = valueStack.peek(0);
+
+                        JSObject targetObj = toObject(arrayObj);
+                        if (targetObj != null) {
+                            PropertyKey key = PropertyKey.fromValue(context, index);
+                            JSValue result = targetObj.get(key, context);
+                            if (context.hasPendingException()) {
+                                pendingException = context.getPendingException();
+                                context.clearPendingException();
+                                valueStack.push(JSUndefined.INSTANCE);
+                            } else {
+                                valueStack.push(result);
+                            }
+                        } else {
                             valueStack.push(JSUndefined.INSTANCE);
                         }
                         pc += op.getSize();
@@ -1025,6 +1273,17 @@ public final class VirtualMachine {
                         }
                         pc += op.getSize();
                     }
+                    case SET_NAME -> {
+                        int nameAtom = bytecode.readU32(pc + 1);
+                        String name = bytecode.getAtoms()[nameAtom];
+                        setObjectName(valueStack.peek(0), new JSString(name));
+                        pc += op.getSize();
+                    }
+                    case SET_NAME_COMPUTED -> {
+                        JSValue nameValue = valueStack.peek(1);
+                        setObjectName(valueStack.peek(0), getComputedNameString(nameValue));
+                        pc += op.getSize();
+                    }
                     case SET_PROTO -> {
                         JSValue protoValue = valueStack.pop();
                         JSValue objectValue = valueStack.peek(0);
@@ -1043,6 +1302,14 @@ public final class VirtualMachine {
                         if (methodValue instanceof JSObject methodObject && homeObjectValue instanceof JSObject homeObject) {
                             methodObject.set(PropertyKey.fromString("[[HomeObject]]"), homeObject);
                         }
+                        pc += op.getSize();
+                    }
+                    case COPY_DATA_PROPERTIES -> {
+                        int mask = bytecode.readU8(pc + 1);
+                        JSValue targetValue = valueStack.peek(mask & 3);
+                        JSValue sourceValue = valueStack.peek((mask >> 2) & 7);
+                        JSValue excludeListValue = valueStack.peek((mask >> 5) & 7);
+                        copyDataProperties(targetValue, sourceValue, excludeListValue);
                         pc += op.getSize();
                     }
                     case DEFINE_CLASS -> {
@@ -1075,8 +1342,45 @@ public final class VirtualMachine {
 
                         // Set prototype.constructor = constructor
                         prototype.set(PropertyKey.fromString("constructor"), constructor);
+                        setObjectName(constructor, new JSString(className));
 
                         // Push prototype and constructor onto stack
+                        valueStack.push(prototype);
+                        valueStack.push(constructor);
+                        pc += op.getSize();
+                    }
+                    case DEFINE_CLASS_COMPUTED -> {
+                        int classNameAtom = bytecode.readU32(pc + 1);
+                        int classFlags = bytecode.readU8(pc + 5);
+                        String className = bytecode.getAtoms()[classNameAtom];
+                        JSValue constructor = valueStack.pop();
+                        JSValue superClass = valueStack.pop();
+                        JSValue computedClassNameValue = valueStack.peek(0);
+
+                        if (!(constructor instanceof JSFunction constructorFunc)) {
+                            throw new JSVirtualMachineException("DEFINE_CLASS_COMPUTED: constructor must be a function");
+                        }
+
+                        JSObject prototype = context.createJSObject();
+                        boolean hasHeritage = (classFlags & 1) != 0;
+
+                        if (hasHeritage && superClass != JSUndefined.INSTANCE && superClass != JSNull.INSTANCE) {
+                            if (superClass instanceof JSFunction superFunc) {
+                                context.transferPrototype(prototype, superFunc);
+                                context.transferPrototype(constructorFunc, superFunc);
+                            } else {
+                                throw new JSVirtualMachineException(context.throwTypeError("parent class must be constructor"));
+                            }
+                        }
+
+                        constructorFunc.set(PropertyKey.fromString("prototype"), prototype);
+                        prototype.set(PropertyKey.fromString("constructor"), constructor);
+                        JSString computedClassName = getComputedNameString(computedClassNameValue);
+                        if (computedClassName.value().isEmpty()) {
+                            computedClassName = new JSString(className);
+                        }
+                        setObjectName(constructor, computedClassName);
+
                         valueStack.push(prototype);
                         valueStack.push(constructor);
                         pc += op.getSize();
@@ -1095,6 +1399,61 @@ public final class VirtualMachine {
                         }
 
                         valueStack.push(obj);  // Push obj back
+                        pc += op.getSize();
+                    }
+                    case DEFINE_METHOD_COMPUTED -> {
+                        int methodFlags = bytecode.readU8(pc + 1);
+                        boolean enumerable = (methodFlags & 4) != 0;
+                        int methodKind = methodFlags & 3;
+
+                        JSValue methodValue = valueStack.pop();
+                        JSValue propertyValue = valueStack.pop();
+                        JSValue objectValue = valueStack.peek(0);
+
+                        if (objectValue instanceof JSObject jsObj) {
+                            PropertyKey key = PropertyKey.fromValue(context, propertyValue);
+                            JSString computedName = getComputedNameString(propertyValue);
+                            if (methodValue instanceof JSObject methodObject) {
+                                methodObject.set(PropertyKey.fromString("[[HomeObject]]"), jsObj);
+                                String namePrefix = switch (methodKind) {
+                                    case 1 -> "get ";
+                                    case 2 -> "set ";
+                                    default -> "";
+                                };
+                                setObjectName(methodObject, new JSString(namePrefix + computedName.value()));
+                            }
+
+                            switch (methodKind) {
+                                case 0 -> jsObj.defineProperty(
+                                        key,
+                                        PropertyDescriptor.dataDescriptor(methodValue, true, enumerable, true));
+                                case 1 -> {
+                                    JSFunction getter = methodValue instanceof JSFunction jsFunction ? jsFunction : null;
+                                    JSFunction setter = null;
+                                    PropertyDescriptor descriptor = jsObj.getOwnPropertyDescriptor(key);
+                                    if (descriptor != null && descriptor.hasSetter()) {
+                                        setter = descriptor.getSetter();
+                                    }
+                                    jsObj.defineProperty(
+                                            key,
+                                            PropertyDescriptor.accessorDescriptor(getter, setter, enumerable, true));
+                                }
+                                case 2 -> {
+                                    JSFunction setter = methodValue instanceof JSFunction jsFunction ? jsFunction : null;
+                                    JSFunction getter = null;
+                                    PropertyDescriptor descriptor = jsObj.getOwnPropertyDescriptor(key);
+                                    if (descriptor != null && descriptor.hasGetter()) {
+                                        getter = descriptor.getGetter();
+                                    }
+                                    jsObj.defineProperty(
+                                            key,
+                                            PropertyDescriptor.accessorDescriptor(getter, setter, enumerable, true));
+                                }
+                                default ->
+                                        throw new JSVirtualMachineException("DEFINE_METHOD_COMPUTED: unsupported method flags " + methodFlags);
+                            }
+                        }
+
                         pc += op.getSize();
                     }
                     case DEFINE_FIELD -> {
@@ -1174,6 +1533,22 @@ public final class VirtualMachine {
                         int catchOffset = bytecode.readI32(pc + 1);
                         int catchHandlerPC = pc + op.getSize() + catchOffset;
                         valueStack.pushStackValue(new JSCatchOffset(catchHandlerPC));
+                        pc += op.getSize();
+                    }
+                    case NIP_CATCH -> {
+                        JSValue returnValue = valueStack.pop();
+                        boolean foundCatchMarker = false;
+                        while (valueStack.getStackTop() > savedStackTop) {
+                            JSStackValue stackValue = valueStack.popStackValue();
+                            if (stackValue instanceof JSCatchOffset) {
+                                foundCatchMarker = true;
+                                break;
+                            }
+                        }
+                        if (!foundCatchMarker) {
+                            throw new JSVirtualMachineException(context.throwError("nip_catch"));
+                        }
+                        valueStack.push(returnValue);
                         pc += op.getSize();
                     }
 
@@ -1415,6 +1790,20 @@ public final class VirtualMachine {
             state.setCompleted(true);
             return result;
         }
+    }
+
+    private JSString getComputedNameString(JSValue keyValue) {
+        if (keyValue instanceof JSSymbol symbol) {
+            String description = symbol.getDescription();
+            return new JSString(description == null || description.isEmpty() ? "[]" : "[" + description + "]");
+        }
+        PropertyKey key = PropertyKey.fromValue(context, keyValue);
+        if (key.isSymbol()) {
+            JSSymbol symbol = key.asSymbol();
+            String description = symbol != null ? symbol.getDescription() : null;
+            return new JSString(description == null || description.isEmpty() ? "[]" : "[" + description + "]");
+        }
+        return new JSString(key.toPropertyString());
     }
 
     private void handleAdd() {
@@ -1748,14 +2137,6 @@ public final class VirtualMachine {
         valueStack.push(JSBoolean.valueOf(result));
     }
 
-    private void handleInitCtor() {
-        JSValue thisArg = currentFrame.getThisArg();
-        if (!(thisArg instanceof JSObject)) {
-            throw new JSVirtualMachineException(context.throwTypeError("class constructors must be invoked with 'new'"));
-        }
-        valueStack.push(thisArg);
-    }
-
     private void handleExp() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -2018,6 +2399,14 @@ public final class VirtualMachine {
         JSValue operand = valueStack.pop();
         double result = JSTypeConversions.toNumber(context, operand).value() + 1;
         valueStack.push(new JSNumber(result));
+    }
+
+    private void handleInitCtor() {
+        JSValue thisArg = currentFrame.getThisArg();
+        if (!(thisArg instanceof JSObject)) {
+            throw new JSVirtualMachineException(context.throwTypeError("class constructors must be invoked with 'new'"));
+        }
+        valueStack.push(thisArg);
     }
 
     private void handleInitialYield() {
@@ -2292,6 +2681,10 @@ public final class VirtualMachine {
         valueStack.push(value);
     }
 
+    private boolean isUninitialized(JSValue value) {
+        return value == UNINITIALIZED_MARKER;
+    }
+
     /**
      * Invoke proxy apply trap when calling a proxy as a function.
      * Based on QuickJS js_proxy_call (quickjs.c:50338).
@@ -2435,6 +2828,24 @@ public final class VirtualMachine {
         return result;
     }
 
+    private JSValue readReferenceValue(StackFrame frame, Opcode makeRefOpcode, int refIndex) {
+        return switch (makeRefOpcode) {
+            case MAKE_LOC_REF -> (refIndex >= 0 && refIndex < frame.getLocals().length)
+                    ? frame.getLocals()[refIndex]
+                    : JSUndefined.INSTANCE;
+            case MAKE_ARG_REF -> (refIndex >= 0 && refIndex < frame.getArguments().length)
+                    ? frame.getArguments()[refIndex]
+                    : JSUndefined.INSTANCE;
+            case MAKE_VAR_REF_REF -> frame.getVarRef(refIndex);
+            default -> JSUndefined.INSTANCE;
+        };
+    }
+
+    private JSVirtualMachineException referenceErrorNotDefined(PropertyKey key) {
+        String name = key != null ? key.toPropertyString() : "variable";
+        return new JSVirtualMachineException(context.throwReferenceError(name + " is not defined"));
+    }
+
     private void resetPropertyAccessTracking() {
         this.propertyAccessChain.setLength(0);
         this.propertyAccessLock = false;
@@ -2479,6 +2890,15 @@ public final class VirtualMachine {
 
         // Fall back to Java toString
         return exceptionObj.toString();
+    }
+
+    private void setObjectName(JSValue objectValue, JSString nameValue) {
+        if (!(objectValue instanceof JSObject object)) {
+            return;
+        }
+        object.defineProperty(
+                PropertyKey.fromString("name"),
+                PropertyDescriptor.dataDescriptor(nameValue, false, false, true));
     }
 
     /**
@@ -2593,5 +3013,23 @@ public final class VirtualMachine {
         }
         String keyString = key.asString();
         return new JSString(keyString != null ? keyString : key.toPropertyString());
+    }
+
+    private void writeReferenceValue(StackFrame frame, Opcode makeRefOpcode, int refIndex, JSValue value) {
+        switch (makeRefOpcode) {
+            case MAKE_LOC_REF -> {
+                if (refIndex >= 0 && refIndex < frame.getLocals().length) {
+                    frame.getLocals()[refIndex] = value;
+                }
+            }
+            case MAKE_ARG_REF -> {
+                if (refIndex >= 0 && refIndex < frame.getArguments().length) {
+                    frame.getArguments()[refIndex] = value;
+                }
+            }
+            case MAKE_VAR_REF_REF -> frame.setVarRef(refIndex, value);
+            default -> {
+            }
+        }
     }
 }

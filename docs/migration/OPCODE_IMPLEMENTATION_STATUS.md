@@ -6,8 +6,8 @@ This document tracks the implementation status of all QuickJS opcodes in qjs4j. 
 
 **Total Opcodes**: 245 (all 245 are now DEFINED in Opcode.java enum)
 **Enum Definitions**: 262 total opcodes in qjs4j Opcode.java (includes 144 original + 118 newly added)
-**Fully Implemented**: 164 (66.7%) - have VM handlers in VirtualMachine.java
-**Defined but Not Implemented**: 81 (33.3%) - added to Opcode.java, need VM implementation
+**Fully Implemented**: 189 (77.1%) - have VM handlers in VirtualMachine.java
+**Defined but Not Implemented**: 56 (22.9%) - added to Opcode.java, need VM implementation
 
 **Last Updated**: 2026-02-10
 
@@ -34,6 +34,8 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 
 - Completed all high-priority opcode handlers in `VirtualMachine.java`.
 - Added regression tests in `src/test/java/com/caoccao/qjs4j/vm/HighPriorityOpcodeTest.java`.
+- Completed medium-priority opcode handlers in `VirtualMachine.java`.
+- Added regression tests in `src/test/java/com/caoccao/qjs4j/vm/MediumPriorityOpcodeTest.java`.
 
 ## Opcode Categories
 
@@ -111,8 +113,8 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 | 56 | GET_VAR | 3 | ✅ Implemented | - | Get variable |
 | 57 | PUT_VAR | 3 | ✅ Implemented | - | Set variable |
 | 58 | PUT_VAR_INIT | 3 | ✅ Implemented | - | Initialize global lexical variable |
-| 59 | GET_REF_VALUE | 1 | ⏳ **Missing** | MEDIUM | Get reference value |
-| 60 | PUT_REF_VALUE | 1 | ⏳ **Missing** | MEDIUM | Set reference value |
+| 59 | GET_REF_VALUE | 1 | ✅ Implemented | MEDIUM | Get reference value |
+| 60 | PUT_REF_VALUE | 1 | ✅ Implemented | MEDIUM | Set reference value |
 
 ### Property Operations (61-84)
 | # | Opcode | Size | Status | Priority | Notes |
@@ -124,23 +126,23 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 | 65 | PUT_PRIVATE_FIELD | 1 | ✅ Implemented | - | Set private field |
 | 66 | DEFINE_PRIVATE_FIELD | 1 | ✅ Implemented | - | Define private field |
 | 67 | GET_ARRAY_EL | 1 | ✅ Implemented | - | Get array element |
-| 68 | GET_ARRAY_EL2 | 1 | ⏳ **Missing** | MEDIUM | Get element, keep obj |
+| 68 | GET_ARRAY_EL2 | 1 | ✅ Implemented | MEDIUM | Get element, keep obj |
 | 69 | GET_ARRAY_EL3 | 1 | ⏳ **Missing** | LOW | Get element, keep obj and prop |
 | 70 | PUT_ARRAY_EL | 1 | ✅ Implemented | - | Set array element |
 | 71 | GET_SUPER_VALUE | 1 | ✅ Implemented | - | Get super property |
 | 72 | PUT_SUPER_VALUE | 1 | ✅ Implemented | - | Set super property |
 | 73 | DEFINE_FIELD | 5 | ✅ Implemented | - | Define field |
-| 74 | SET_NAME | 5 | ⏳ **Missing** | MEDIUM | Set function name |
-| 75 | SET_NAME_COMPUTED | 1 | ⏳ **Missing** | MEDIUM | Set computed name |
+| 74 | SET_NAME | 5 | ✅ Implemented | MEDIUM | Set function name |
+| 75 | SET_NAME_COMPUTED | 1 | ✅ Implemented | MEDIUM | Set computed name |
 | 76 | SET_PROTO | 1 | ✅ Implemented | - | Set prototype |
 | 77 | SET_HOME_OBJECT | 1 | ✅ Implemented | - | Set home object for super |
-| 78 | DEFINE_ARRAY_EL | 1 | ⏳ **Missing** | MEDIUM | Define array element |
-| 79 | APPEND | 1 | ⏳ **Missing** | MEDIUM | Append to array |
-| 80 | COPY_DATA_PROPERTIES | 2 | ⏳ **Missing** | MEDIUM | Copy properties (spread) |
+| 78 | DEFINE_ARRAY_EL | 1 | ✅ Implemented | MEDIUM | Define array element |
+| 79 | APPEND | 1 | ✅ Implemented | MEDIUM | Append to array |
+| 80 | COPY_DATA_PROPERTIES | 2 | ✅ Implemented | MEDIUM | Copy properties (spread) |
 | 81 | DEFINE_METHOD | 6 | ✅ Implemented | - | Define method |
-| 82 | DEFINE_METHOD_COMPUTED | 2 | ⏳ **Missing** | MEDIUM | Define computed method |
+| 82 | DEFINE_METHOD_COMPUTED | 2 | ✅ Implemented | MEDIUM | Define computed method |
 | 83 | DEFINE_CLASS | 6 | ✅ Implemented | - | Define class |
-| 84 | DEFINE_CLASS_COMPUTED | 6 | ⏳ **Missing** | MEDIUM | Define class with computed name |
+| 84 | DEFINE_CLASS_COMPUTED | 6 | ✅ Implemented | MEDIUM | Define class with computed name |
 
 ### Local Variable Operations (85-103)
 | # | Opcode | Size | Status | Priority | Notes |
@@ -154,15 +156,15 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 | 91 | GET_VAR_REF | 3 | ✅ Implemented | - | Get var ref (closure) |
 | 92 | PUT_VAR_REF | 3 | ✅ Implemented | - | Set var ref |
 | 93 | SET_VAR_REF | 3 | ✅ Implemented | - | Set var ref, keep value |
-| 94 | SET_LOC_UNINITIALIZED | 3 | ⏳ **Missing** | MEDIUM | Mark local uninitialized |
-| 95 | GET_LOC_CHECK | 3 | ⏳ **Missing** | MEDIUM | Get local with TDZ check |
-| 96 | PUT_LOC_CHECK | 3 | ⏳ **Missing** | MEDIUM | Set local with TDZ check |
-| 97 | SET_LOC_CHECK | 3 | ⏳ **Missing** | MEDIUM | Set local with TDZ check |
-| 98 | PUT_LOC_CHECK_INIT | 3 | ⏳ **Missing** | MEDIUM | Initialize local |
-| 99 | GET_LOC_CHECKTHIS | 3 | ⏳ **Missing** | MEDIUM | Get 'this' with check |
-| 100 | GET_VAR_REF_CHECK | 3 | ⏳ **Missing** | MEDIUM | Get var ref with check |
-| 101 | PUT_VAR_REF_CHECK | 3 | ⏳ **Missing** | MEDIUM | Set var ref with check |
-| 102 | PUT_VAR_REF_CHECK_INIT | 3 | ⏳ **Missing** | MEDIUM | Initialize var ref |
+| 94 | SET_LOC_UNINITIALIZED | 3 | ✅ Implemented | MEDIUM | Mark local uninitialized |
+| 95 | GET_LOC_CHECK | 3 | ✅ Implemented | MEDIUM | Get local with TDZ check |
+| 96 | PUT_LOC_CHECK | 3 | ✅ Implemented | MEDIUM | Set local with TDZ check |
+| 97 | SET_LOC_CHECK | 3 | ✅ Implemented | MEDIUM | Set local with TDZ check |
+| 98 | PUT_LOC_CHECK_INIT | 3 | ✅ Implemented | MEDIUM | Initialize local |
+| 99 | GET_LOC_CHECKTHIS | 3 | ✅ Implemented | MEDIUM | Get 'this' with check |
+| 100 | GET_VAR_REF_CHECK | 3 | ✅ Implemented | MEDIUM | Get var ref with check |
+| 101 | PUT_VAR_REF_CHECK | 3 | ✅ Implemented | MEDIUM | Set var ref with check |
+| 102 | PUT_VAR_REF_CHECK_INIT | 3 | ✅ Implemented | MEDIUM | Initialize var ref |
 | 103 | CLOSE_LOC | 3 | ✅ Implemented | - | Close over local (create closure) |
 
 ### Control Flow (104-113)
@@ -174,7 +176,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 | 107 | CATCH | 5 | ✅ Implemented | - | Catch exception |
 | 108 | GOSUB | 5 | ✅ Implemented | - | Execute finally block |
 | 109 | RET | 1 | ✅ Implemented | - | Return from finally |
-| 110 | NIP_CATCH | 1 | ⏳ **Missing** | MEDIUM | catch ... a -> a |
+| 110 | NIP_CATCH | 1 | ✅ Implemented | MEDIUM | catch ... a -> a |
 | 111 | TO_OBJECT | 1 | ✅ Implemented | - | Convert to object |
 | 112 | TO_STRING | 1 | ✅ Implemented | - | Convert to string |
 | 113 | TO_PROPKEY | 1 | ✅ Implemented | - | Convert to property key |
@@ -187,10 +189,10 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 | 116 | WITH_DELETE_VAR | 10 | ✅ Implemented | - | Delete var in with scope |
 | 117 | WITH_MAKE_REF | 10 | ✅ Implemented | - | Make ref in with scope |
 | 118 | WITH_GET_REF | 10 | ✅ Implemented | - | Get ref in with scope |
-| 119 | MAKE_LOC_REF | 7 | ⏳ **Missing** | MEDIUM | Make local reference |
-| 120 | MAKE_ARG_REF | 7 | ⏳ **Missing** | MEDIUM | Make argument reference |
-| 121 | MAKE_VAR_REF_REF | 7 | ⏳ **Missing** | MEDIUM | Make var ref reference |
-| 122 | MAKE_VAR_REF | 5 | ⏳ **Missing** | MEDIUM | Make variable reference |
+| 119 | MAKE_LOC_REF | 7 | ✅ Implemented | MEDIUM | Make local reference |
+| 120 | MAKE_ARG_REF | 7 | ✅ Implemented | MEDIUM | Make argument reference |
+| 121 | MAKE_VAR_REF_REF | 7 | ✅ Implemented | MEDIUM | Make var ref reference |
+| 122 | MAKE_VAR_REF | 5 | ✅ Implemented | MEDIUM | Make variable reference |
 
 ### Iteration Operations (123-138)
 | # | Opcode | Size | Status | Priority | Notes |
@@ -342,7 +344,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 #### Short Misc Operations (232-244)
 | # | Opcode | Size | Status | Priority | Notes |
 |---|--------|------|--------|----------|-------|
-| 232 | GET_LENGTH | 1 | ⏳ **Missing** | MEDIUM | Get array length |
+| 232 | GET_LENGTH | 1 | ✅ Implemented | MEDIUM | Get array length |
 | 233 | IF_FALSE8 | 2 | ⏳ **Missing** | LOW | Conditional jump (8-bit) |
 | 234 | IF_TRUE8 | 2 | ⏳ **Missing** | LOW | Conditional jump (8-bit) |
 | 235 | GOTO8 | 2 | ⏳ **Missing** | LOW | Jump (8-bit offset) |
