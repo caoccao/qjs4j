@@ -23,6 +23,16 @@ import java.io.IOException;
 
 public class ForStatementTest extends BaseJavetTest {
     @Test
+    public void testForLetClosurePerIterationBinding() {
+        assertStringWithJavet("""
+                var funcs = [];
+                for (let i = 0; i < 3; i++) {
+                  funcs.push(() => i);
+                }
+                funcs.map(f => f()).join(',')""");
+    }
+
+    @Test
     public void testPrimeNumber() throws IOException {
         String code = loadCode("performance/prime-number.js") + " JSON.stringify(primeNumbers);";
         assertStringWithJavet(code);
@@ -43,15 +53,5 @@ public class ForStatementTest extends BaseJavetTest {
                           sum += i;
                         }
                         sum;""");
-    }
-
-    @Test
-    public void testForLetClosurePerIterationBinding() {
-        assertStringWithJavet("""
-                var funcs = [];
-                for (let i = 0; i < 3; i++) {
-                  funcs.push(() => i);
-                }
-                funcs.map(f => f()).join(',')""");
     }
 }

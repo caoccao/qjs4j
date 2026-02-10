@@ -22,10 +22,7 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * The JavaScript virtual machine bytecode interpreter.
@@ -34,6 +31,7 @@ import java.util.Set;
 public final class VirtualMachine {
     private static final JSObject UNINITIALIZED_MARKER = new JSObject();
     private final JSContext context;
+    private final Set<JSObject> initializedConstantObjects;
     private final StringBuilder propertyAccessChain;  // Track last property access for better error messages
     private final CallStack valueStack;
     private StackFrame currentFrame;
@@ -45,6 +43,7 @@ public final class VirtualMachine {
     public VirtualMachine(JSContext context) {
         this.valueStack = new CallStack();
         this.context = context;
+        this.initializedConstantObjects = Collections.newSetFromMap(new IdentityHashMap<>());
         this.currentFrame = null;
         this.pendingException = null;
         this.propertyAccessChain = new StringBuilder();
@@ -203,6 +202,30 @@ public final class VirtualMachine {
         }
     }
 
+    private void ensureConstantObjectPrototype(JSObject object) {
+        if (!initializedConstantObjects.add(object)) {
+            return;
+        }
+
+        if (object instanceof JSArray) {
+            context.transferPrototype(object, JSArray.NAME);
+        } else if (object instanceof JSRegExp) {
+            context.transferPrototype(object, JSRegExp.NAME);
+        }
+
+        // Template objects may contain nested constant objects (e.g. template.raw array).
+        for (PropertyKey key : object.getOwnPropertyKeys()) {
+            PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
+            if (descriptor == null || !descriptor.hasValue()) {
+                continue;
+            }
+            JSValue value = descriptor.getValue();
+            if (value instanceof JSObject nestedObject) {
+                ensureConstantObjectPrototype(nestedObject);
+            }
+        }
+    }
+
     /**
      * Execute a bytecode function.
      */
@@ -325,11 +348,8 @@ public final class VirtualMachine {
                         // Initialize prototype chain for functions
                         if (constValue instanceof JSFunction func) {
                             func.initializePrototypeChain(context);
-                        }
-
-                        // Set prototype for RegExp objects created from literals
-                        if (constValue instanceof JSRegExp regexp) {
-                            context.transferPrototype(regexp, JSRegExp.NAME);
+                        } else if (constValue instanceof JSObject jsObject) {
+                            ensureConstantObjectPrototype(jsObject);
                         }
 
                         valueStack.push(constValue);
@@ -340,9 +360,8 @@ public final class VirtualMachine {
                         JSValue constValue = bytecode.getConstants()[constIndex];
                         if (constValue instanceof JSFunction func) {
                             func.initializePrototypeChain(context);
-                        }
-                        if (constValue instanceof JSRegExp regexp) {
-                            context.transferPrototype(regexp, JSRegExp.NAME);
+                        } else if (constValue instanceof JSObject jsObject) {
+                            ensureConstantObjectPrototype(jsObject);
                         }
                         valueStack.push(constValue);
                         pc += op.getSize();

@@ -341,8 +341,8 @@ public final class BytecodeCompiler {
                     }
                 } else {
                     if (memberExpr.property() instanceof Identifier propId) {
-                    emitter.emitOpcode(Opcode.DUP);  // Duplicate object
-                    emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                        emitter.emitOpcode(Opcode.DUP);  // Duplicate object
+                        emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
                     }
                 }
             }
@@ -2027,8 +2027,8 @@ public final class BytecodeCompiler {
                 emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else {
                 if (memberExpr.property() instanceof Identifier propId) {
-                emitter.emitOpcode(Opcode.DUP);  // Duplicate object
-                emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                    emitter.emitOpcode(Opcode.DUP);  // Duplicate object
+                    emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
                 }
             }
         }
@@ -2796,8 +2796,6 @@ public final class BytecodeCompiler {
         // 2. The values of the substitutions as additional arguments
 
         TemplateLiteral template = taggedTemplate.quasi();
-        List<String> cookedQuasis = template.quasis();
-        List<String> rawQuasis = template.rawQuasis();
         List<Expression> expressions = template.expressions();
 
         // Check if this is a method call (tag is a member expression)
@@ -2835,42 +2833,10 @@ public final class BytecodeCompiler {
 
         // Stack is now: function, receiver
 
-        // Create the template array (with cooked strings)
-        emitter.emitOpcode(Opcode.ARRAY_NEW);
-        for (String quasi : cookedQuasis) {
-            if (quasi == null) {
-                emitter.emitOpcode(Opcode.UNDEFINED);
-            } else {
-                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
-            }
-            emitter.emitOpcode(Opcode.PUSH_ARRAY);
-        }
-        // Stack: function, receiver, template_array
-
-        // Duplicate template_array because we'll need it after setting the raw property
-        emitter.emitOpcode(Opcode.DUP);
-        // Stack: function, receiver, template_array, template_array
-
-        // Create the raw array
-        emitter.emitOpcode(Opcode.ARRAY_NEW);
-        for (String quasi : rawQuasis) {
-            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
-            emitter.emitOpcode(Opcode.PUSH_ARRAY);
-        }
-        // Stack: function, receiver, template_array, template_array, raw_array
-
-        // Set the raw property: template_array.raw = raw_array
-        // PUT_FIELD expects: value (raw_array) on stack, object (template_array) on stack top-1
-        // We have: template_array at top-2, raw_array at top
-        // SWAP them: function, receiver, template_array, raw_array, template_array
-        emitter.emitOpcode(Opcode.SWAP);
-        // Now PUT_FIELD: pops template_array (object), peeks raw_array (value)
-        emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "raw");
-        // Stack: function, receiver, template_array, raw_array (raw_array left as result)
-
-        // Drop the raw_array
-        emitter.emitOpcode(Opcode.DROP);
-        // Stack: function, receiver, template_array
+        // QuickJS behavior: each call site uses a stable, frozen template object.
+        // Build it once in the constant pool and pass it as the first argument.
+        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, createTaggedTemplateObject(template));
+        // Stack: function, receiver, template_object
 
         // Add substitution expressions as additional arguments
         for (Expression expr : expressions) {
@@ -3379,46 +3345,43 @@ public final class BytecodeCompiler {
         return privateSymbols;
     }
 
-    private void emitAbruptCompletionIteratorClose() {
-        for (LoopContext loopContext : loopStack) {
-            if (loopContext.hasIterator) {
-                emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
-            }
-        }
-    }
+    private JSArray createTaggedTemplateObject(TemplateLiteral template) {
+        List<String> cookedQuasis = template.quasis();
+        List<String> rawQuasis = template.rawQuasis();
+        int segmentCount = rawQuasis.size();
 
-    private boolean hasActiveIteratorLoops() {
-        for (LoopContext loopContext : loopStack) {
-            if (loopContext.hasIterator) {
-                return true;
-            }
-        }
-        return false;
-    }
+        JSArray templateObject = new JSArray();
+        JSArray rawArray = new JSArray();
 
-    private void emitCaptureBindingLoad(CaptureSource captureSource) {
-        if (captureSource.type == CaptureSourceType.LOCAL) {
-            emitter.emitOpcodeU16(Opcode.GET_LOCAL, captureSource.index);
-        } else {
-            emitter.emitOpcodeU16(Opcode.GET_VAR_REF, captureSource.index);
-        }
-    }
+        for (int i = 0; i < segmentCount; i++) {
+            JSString rawValue = new JSString(rawQuasis.get(i));
+            rawArray.set(i, rawValue);
+            rawArray.defineProperty(
+                    PropertyKey.fromIndex(i),
+                    PropertyDescriptor.dataDescriptor(rawValue, false, true, false));
 
-    private void emitCapturedValues(BytecodeCompiler nestedCompiler) {
-        if (nestedCompiler.captureResolver.getCapturedBindingCount() == 0) {
-            return;
+            String cookedQuasi = cookedQuasis.get(i);
+            JSValue cookedValue = cookedQuasi == null ? JSUndefined.INSTANCE : new JSString(cookedQuasi);
+            templateObject.set(i, cookedValue);
+            templateObject.defineProperty(
+                    PropertyKey.fromIndex(i),
+                    PropertyDescriptor.dataDescriptor(cookedValue, false, true, false));
         }
-        for (CaptureBinding binding : nestedCompiler.captureResolver.getCapturedBindings()) {
-            emitCaptureBindingLoad(binding.source);
-        }
-    }
 
-    private Integer findCapturedBindingIndex(String name) {
-        return captureResolver.findCapturedBindingIndex(name);
-    }
+        // QuickJS/spec attributes for template objects.
+        rawArray.defineProperty(
+                PropertyKey.fromString("length"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(segmentCount), false, false, false));
+        templateObject.defineProperty(
+                PropertyKey.fromString("length"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(segmentCount), false, false, false));
+        templateObject.defineProperty(
+                PropertyKey.fromString("raw"),
+                PropertyDescriptor.dataDescriptor(rawArray, false, false, false));
 
-    private Integer resolveCapturedBindingIndex(String name) {
-        return captureResolver.resolveCapturedBindingIndex(name);
+        rawArray.freeze();
+        templateObject.freeze();
+        return templateObject;
     }
 
     private Scope currentScope() {
@@ -3460,6 +3423,31 @@ public final class BytecodeCompiler {
         }
     }
 
+    private void emitAbruptCompletionIteratorClose() {
+        for (LoopContext loopContext : loopStack) {
+            if (loopContext.hasIterator) {
+                emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
+            }
+        }
+    }
+
+    private void emitCaptureBindingLoad(CaptureSource captureSource) {
+        if (captureSource.type == CaptureSourceType.LOCAL) {
+            emitter.emitOpcodeU16(Opcode.GET_LOCAL, captureSource.index);
+        } else {
+            emitter.emitOpcodeU16(Opcode.GET_VAR_REF, captureSource.index);
+        }
+    }
+
+    private void emitCapturedValues(BytecodeCompiler nestedCompiler) {
+        if (nestedCompiler.captureResolver.getCapturedBindingCount() == 0) {
+            return;
+        }
+        for (CaptureBinding binding : nestedCompiler.captureResolver.getCapturedBindings()) {
+            emitCaptureBindingLoad(binding.source);
+        }
+    }
+
     private void emitNonComputedPublicFieldKey(Expression key) {
         if (key instanceof Identifier id) {
             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
@@ -3489,8 +3477,6 @@ public final class BytecodeCompiler {
         int baseIndex = scopes.isEmpty() ? 0 : currentScope().getLocalCount();
         scopes.push(new Scope(baseIndex));
     }
-
-    // ==================== Scope Management ====================
 
     private void exitScope() {
         Scope exitingScope = scopes.pop();
@@ -3529,6 +3515,12 @@ public final class BytecodeCompiler {
         return sourceCode.substring(startOffset, endOffset);
     }
 
+    private Integer findCapturedBindingIndex(String name) {
+        return captureResolver.findCapturedBindingIndex(name);
+    }
+
+    // ==================== Scope Management ====================
+
     private Integer findLocalInScopes(String name) {
         // Search from innermost scope (most recently pushed) to outermost
         for (Scope scope : scopes) {
@@ -3556,6 +3548,15 @@ public final class BytecodeCompiler {
             // Computed property name - for now use a placeholder
             return "[computed]";
         }
+    }
+
+    private boolean hasActiveIteratorLoops() {
+        for (LoopContext loopContext : loopStack) {
+            if (loopContext.hasIterator) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -3638,6 +3639,10 @@ public final class BytecodeCompiler {
         throw new CompilerException("private class field is already defined");
     }
 
+    private Integer resolveCapturedBindingIndex(String name) {
+        return captureResolver.resolveCapturedBindingIndex(name);
+    }
+
     /**
      * Set the original source code (used for extracting function source in toString()).
      */
@@ -3645,18 +3650,17 @@ public final class BytecodeCompiler {
         this.sourceCode = sourceCode;
     }
 
-    /**
-     * Compiler exception for compilation errors.
-     */
-    public static class CompilerException extends RuntimeException {
-        public CompilerException(String message) {
-            super(message);
-        }
+    private enum CaptureSourceType {
+        LOCAL,
+        VAR_REF
     }
 
     @FunctionalInterface
     private interface LocalLookup {
         Integer findLocal(String name);
+    }
+
+    private record CaptureBinding(int slot, CaptureSource source) {
     }
 
     private static class CaptureResolver {
@@ -3675,12 +3679,12 @@ public final class BytecodeCompiler {
             return binding != null ? binding.slot : null;
         }
 
-        Collection<CaptureBinding> getCapturedBindings() {
-            return capturedBindings.values();
-        }
-
         int getCapturedBindingCount() {
             return capturedBindings.size();
+        }
+
+        Collection<CaptureBinding> getCapturedBindings() {
+            return capturedBindings.values();
         }
 
         private int registerCapturedBinding(String name, CaptureSource source) {
@@ -3691,18 +3695,6 @@ public final class BytecodeCompiler {
             int slot = capturedBindings.size();
             capturedBindings.put(name, new CaptureBinding(slot, source));
             return slot;
-        }
-
-        Integer resolveCapturedBindingIndex(String name) {
-            Integer capturedIndex = findCapturedBindingIndex(name);
-            if (capturedIndex != null || parentResolver == null) {
-                return capturedIndex;
-            }
-            CaptureSource captureSource = parentResolver.resolveCaptureSourceForChild(name);
-            if (captureSource == null) {
-                return null;
-            }
-            return registerCapturedBinding(name, captureSource);
         }
 
         private CaptureSource resolveCaptureSourceForChild(String name) {
@@ -3728,17 +3720,30 @@ public final class BytecodeCompiler {
             int capturedSlot = registerCapturedBinding(name, parentSource);
             return new CaptureSource(CaptureSourceType.VAR_REF, capturedSlot);
         }
-    }
 
-    private record CaptureBinding(int slot, CaptureSource source) {
+        Integer resolveCapturedBindingIndex(String name) {
+            Integer capturedIndex = findCapturedBindingIndex(name);
+            if (capturedIndex != null || parentResolver == null) {
+                return capturedIndex;
+            }
+            CaptureSource captureSource = parentResolver.resolveCaptureSourceForChild(name);
+            if (captureSource == null) {
+                return null;
+            }
+            return registerCapturedBinding(name, captureSource);
+        }
     }
 
     private record CaptureSource(CaptureSourceType type, int index) {
     }
 
-    private enum CaptureSourceType {
-        LOCAL,
-        VAR_REF
+    /**
+     * Compiler exception for compilation errors.
+     */
+    public static class CompilerException extends RuntimeException {
+        public CompilerException(String message) {
+            super(message);
+        }
     }
 
     /**
@@ -3747,8 +3752,8 @@ public final class BytecodeCompiler {
     private static class LoopContext {
         final List<Integer> breakPositions = new ArrayList<>();
         final List<Integer> continuePositions = new ArrayList<>();
-        boolean hasIterator;
         final int startOffset;
+        boolean hasIterator;
 
         LoopContext(int startOffset) {
             this.startOffset = startOffset;

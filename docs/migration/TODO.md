@@ -66,12 +66,8 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 
 ## Implementation Recommendations
 
-### Phase 2: Core Opcodes (Essential)
-- Completed on 2026-02-10.
-
 ### Phase 3: Language Features
-1. Tagged template literals
-2. Private methods
+- Completed on 2026-02-10 (tagged template literals and private methods).
 
 ### Phase 4: Advanced Features
 1. Intl namespace (large undertaking)

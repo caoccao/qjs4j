@@ -292,20 +292,6 @@ public final class JSBytecodeFunction extends JSFunction {
         return context.getVirtualMachine().execute(this, thisArg, args);
     }
 
-    /**
-     * Get the bytecode for this function.
-     */
-    public Bytecode getBytecode() {
-        return bytecode;
-    }
-
-    /**
-     * Get the closure variables (captured from outer scopes).
-     */
-    public JSValue[] getClosureVars() {
-        return closureVars;
-    }
-
     public JSBytecodeFunction copyWithClosureVars(JSValue[] capturedClosureVars) {
         JSBytecodeFunction copiedFunction = new JSBytecodeFunction(
                 bytecode,
@@ -321,6 +307,20 @@ public final class JSBytecodeFunction extends JSFunction {
                 sourceCode
         );
         return copiedFunction;
+    }
+
+    /**
+     * Get the bytecode for this function.
+     */
+    public Bytecode getBytecode() {
+        return bytecode;
+    }
+
+    /**
+     * Get the closure variables (captured from outer scopes).
+     */
+    public JSValue[] getClosureVars() {
+        return closureVars;
     }
 
     /**

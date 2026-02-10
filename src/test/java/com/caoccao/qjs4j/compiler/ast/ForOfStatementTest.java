@@ -13,75 +13,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class ForOfStatementTest extends BaseJavetTest {
     @Test
-    void testForOfLetClosurePerIterationBinding() {
-        assertStringWithJavet("""
-                var funcs = [];
-                for (let x of [0, 1, 2]) {
-                  funcs.push(() => x);
-                }
-                funcs.map(f => f()).join(',')""");
-    }
-
-    @Test
-    void testIteratorCloseOnBreak() {
-        assertBooleanWithJavet("""
-                var closed = false;
-                function* g() {
-                  try {
-                    yield 1;
-                    yield 2;
-                  } finally {
-                    closed = true;
-                  }
-                }
-                for (const x of g()) {
-                  break;
-                }
-                closed""");
-    }
-
-    @Test
-    void testIteratorCloseOnReturn() {
-        assertBooleanWithJavet("""
-                var closed = false;
-                function* g() {
-                  try {
-                    yield 1;
-                    yield 2;
-                  } finally {
-                    closed = true;
-                  }
-                }
-                (function () {
-                  for (const x of g()) {
-                    return;
-                  }
-                })();
-                closed""");
-    }
-
-    @Test
-    void testIteratorCloseOnThrow() {
-        assertBooleanWithJavet("""
-                var closed = false;
-                function* g() {
-                  try {
-                    yield 1;
-                    yield 2;
-                  } finally {
-                    closed = true;
-                  }
-                }
-                try {
-                  for (const x of g()) {
-                    throw new Error('x');
-                  }
-                } catch (e) {
-                }
-                closed""");
-    }
-
-    @Test
     void testArrayForOf() {
         // Compare with array
         assertStringWithJavet(
@@ -147,6 +78,16 @@ public class ForOfStatementTest extends BaseJavetTest {
     }
 
     @Test
+    void testForOfLetClosurePerIterationBinding() {
+        assertStringWithJavet("""
+                var funcs = [];
+                for (let x of [0, 1, 2]) {
+                  funcs.push(() => x);
+                }
+                funcs.map(f => f()).join(',')""");
+    }
+
+    @Test
     void testForOfSimpleArray() {
         try (JSContext context = new JSContext(new JSRuntime())) {
             String code = """
@@ -158,6 +99,65 @@ public class ForOfStatementTest extends BaseJavetTest {
             System.out.println("Result: " + result);
             assertThat(result).isEqualTo("abc");
         }
+    }
+
+    @Test
+    void testIteratorCloseOnBreak() {
+        assertBooleanWithJavet("""
+                var closed = false;
+                function* g() {
+                  try {
+                    yield 1;
+                    yield 2;
+                  } finally {
+                    closed = true;
+                  }
+                }
+                for (const x of g()) {
+                  break;
+                }
+                closed""");
+    }
+
+    @Test
+    void testIteratorCloseOnReturn() {
+        assertBooleanWithJavet("""
+                var closed = false;
+                function* g() {
+                  try {
+                    yield 1;
+                    yield 2;
+                  } finally {
+                    closed = true;
+                  }
+                }
+                (function () {
+                  for (const x of g()) {
+                    return;
+                  }
+                })();
+                closed""");
+    }
+
+    @Test
+    void testIteratorCloseOnThrow() {
+        assertBooleanWithJavet("""
+                var closed = false;
+                function* g() {
+                  try {
+                    yield 1;
+                    yield 2;
+                  } finally {
+                    closed = true;
+                  }
+                }
+                try {
+                  for (const x of g()) {
+                    throw new Error('x');
+                  }
+                } catch (e) {
+                }
+                closed""");
     }
 
     @Test

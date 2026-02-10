@@ -65,6 +65,81 @@ public class TemplateLiteralEnhancementTest extends BaseJavetTest {
     }
 
     @Test
+    public void testTaggedTemplateCallSiteCaching() {
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                            delete globalThis.__templateFirst;
+                            function tag(parts) {
+                                if (globalThis.__templateFirst === undefined) {
+                                    globalThis.__templateFirst = parts;
+                                    return true;
+                                }
+                                return globalThis.__templateFirst === parts;
+                            }
+                            function invoke() {
+                                return tag`x`;
+                            }
+                            const result = invoke() && invoke();
+                            delete globalThis.__templateFirst;
+                            return result;
+                        })()""",
+                """
+                        (() => {
+                            delete globalThis.__templateFirst;
+                            delete globalThis.__templateSecond;
+                            function tag(parts) {
+                                if (globalThis.__templateFirst === undefined) {
+                                    globalThis.__templateFirst = parts;
+                                } else {
+                                    globalThis.__templateSecond = parts;
+                                }
+                            }
+                            tag`x`;
+                            tag`x`;
+                            const result = globalThis.__templateFirst !== globalThis.__templateSecond;
+                            delete globalThis.__templateFirst;
+                            delete globalThis.__templateSecond;
+                            return result;
+                        })()""");
+    }
+
+    @Test
+    public void testTaggedTemplateDescriptorAndFrozenSemantics() {
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                            function tag(parts) {
+                                const rawDesc = Object.getOwnPropertyDescriptor(parts, "raw");
+                                const partDesc = Object.getOwnPropertyDescriptor(parts, 0);
+                                const rawPartDesc = Object.getOwnPropertyDescriptor(parts.raw, 0);
+                                const lengthDesc = Object.getOwnPropertyDescriptor(parts, "length");
+                                const rawLengthDesc = Object.getOwnPropertyDescriptor(parts.raw, "length");
+                                return Object.isFrozen(parts)
+                                    && Object.isFrozen(parts.raw)
+                                    && !Object.isExtensible(parts)
+                                    && !Object.isExtensible(parts.raw)
+                                    && rawDesc.enumerable === false
+                                    && rawDesc.writable === false
+                                    && rawDesc.configurable === false
+                                    && partDesc.enumerable === true
+                                    && partDesc.writable === false
+                                    && partDesc.configurable === false
+                                    && rawPartDesc.enumerable === true
+                                    && rawPartDesc.writable === false
+                                    && rawPartDesc.configurable === false
+                                    && lengthDesc.enumerable === false
+                                    && lengthDesc.writable === false
+                                    && lengthDesc.configurable === false
+                                    && rawLengthDesc.enumerable === false
+                                    && rawLengthDesc.writable === false
+                                    && rawLengthDesc.configurable === false;
+                            }
+                            return tag`a${1}b`;
+                        })()""");
+    }
+
+    @Test
     public void testTaggedTemplateMethodReceiver() {
         assertStringWithJavet(
                 """
@@ -73,6 +148,47 @@ public class TemplateLiteralEnhancementTest extends BaseJavetTest {
                             tag(parts) { return this.prefix + parts[0]; }
                         };
                         obj.tag`y`;""");
+    }
+
+    @Test
+    public void testTaggedTemplateObjectIsReadOnlyInStrictMode() {
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                            "use strict";
+                            function tag(parts) {
+                                let threwPart = false;
+                                let threwRaw = false;
+                                try {
+                                    parts[0] = "mutated";
+                                } catch (e) {
+                                    threwPart = e instanceof TypeError;
+                                }
+                                try {
+                                    parts.raw = [];
+                                } catch (e) {
+                                    threwRaw = e instanceof TypeError;
+                                }
+                                return threwPart
+                                    && threwRaw
+                                    && parts[0] === "a"
+                                    && parts.raw[0] === "a";
+                            }
+                            return tag`a`;
+                        })()""");
+    }
+
+    @Test
+    public void testTaggedTemplateRawUsesArrayPrototypeMethods() {
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                            function tag(parts) {
+                                return parts.map(segment => segment).join("|") === "a|b"
+                                    && parts.raw.map(segment => segment).join("|") === "a|b";
+                            }
+                            return tag`a${1}b`;
+                        })()""");
     }
 
     @Test

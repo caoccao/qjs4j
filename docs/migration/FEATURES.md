@@ -118,8 +118,8 @@ This document provides a comprehensive list of all JavaScript features implement
 ### Template Literals (ES2015)
 - **String interpolation**: `Hello ${name}`
 - **Multi-line strings**: Backtick strings with newlines
-- **Tagged templates**: tag`template ${expr}` - **Not yet implemented**
-- **Raw strings**: String.raw - **Not yet implemented**
+- **Tagged templates**: tag`template ${expr}` with per-call-site cached frozen template objects
+- **Raw strings**: String.raw
 
 ### Destructuring (ES2015)
 - **Array destructuring**: const [a, b] = arr

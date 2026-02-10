@@ -143,11 +143,9 @@ ClassCompilerTest:
 Result: 13/13 tests passing (100% pass rate)
 ```
 
-## Future Enhancements
+## Status Notes
 
-Potential extensions to build on this implementation:
-
-1. **Private methods**: Support for `#method()` private method declarations
+- Private methods (`#method()` and `static #method()`) are now implemented and covered by class compiler tests.
 
 ## QuickJS Alignment
 
