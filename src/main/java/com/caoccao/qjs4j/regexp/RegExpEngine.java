@@ -31,6 +31,16 @@ public final class RegExpEngine {
         this.bytecode = bytecode;
     }
 
+    private byte[] createAssertionBytecode(byte[] bytecode, int startPc, int len) {
+        if (len <= 0) {
+            return new byte[]{(byte) RegExpOpcode.MATCH.getCode()};
+        }
+        byte[] assertionBytecode = new byte[len];
+        System.arraycopy(bytecode, startPc, assertionBytecode, 0, len);
+        assertionBytecode[len - 1] = (byte) RegExpOpcode.MATCH.getCode();
+        return assertionBytecode;
+    }
+
     /**
      * Execute the regex against the input string starting at the given index.
      *
@@ -206,25 +216,9 @@ public final class RegExpEngine {
                 case LOOKAHEAD -> {
                     // Positive lookahead: execute sub-pattern without consuming input
                     int len = readU32(bc, pc + 1);
-                    int savedPos = executionContext.pos;
-                    // Create a new execution context for the lookahead
-                    ExecutionContext lookaheadContext = new ExecutionContext(
-                            executionContext.input,
-                            executionContext.bytecode,
-                            executionContext.captureCount,
-                            executionContext.ignoreCase,
-                            executionContext.multiline,
-                            executionContext.dotAll,
-                            executionContext.unicode
-                    );
-                    lookaheadContext.pos = savedPos;
-                    // Copy capture state
-                    System.arraycopy(executionContext.captureStarts, 0, lookaheadContext.captureStarts, 0, executionContext.captureCount);
-                    System.arraycopy(executionContext.captureEnds, 0, lookaheadContext.captureEnds, 0, executionContext.captureCount);
-
-                    boolean matched = executeLookahead(lookaheadContext, pc + 5);
-                    // Don't restore position - lookahead doesn't consume
-                    if (!matched) {
+                    byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
+                    ExecutionContext assertionContext = executeLookaheadAssertion(executionContext, assertionBytecode);
+                    if (assertionContext == null) {
                         if (!backtrackStack.isEmpty()) {
                             BacktrackPoint bp = backtrackStack.pop();
                             pc = bp.pc;
@@ -233,31 +227,16 @@ public final class RegExpEngine {
                         }
                         return false;
                     }
+                    executionContext.copyCapturesFrom(assertionContext);
                     pc += 5 + len;
                 }
 
                 case NEGATIVE_LOOKAHEAD -> {
                     // Negative lookahead: execute sub-pattern, succeed if it fails
                     int len = readU32(bc, pc + 1);
-                    int savedPos = executionContext.pos;
-                    // Create a new execution context for the lookahead
-                    ExecutionContext lookaheadContext = new ExecutionContext(
-                            executionContext.input,
-                            executionContext.bytecode,
-                            executionContext.captureCount,
-                            executionContext.ignoreCase,
-                            executionContext.multiline,
-                            executionContext.dotAll,
-                            executionContext.unicode
-                    );
-                    lookaheadContext.pos = savedPos;
-                    // Copy capture state
-                    System.arraycopy(executionContext.captureStarts, 0, lookaheadContext.captureStarts, 0, executionContext.captureCount);
-                    System.arraycopy(executionContext.captureEnds, 0, lookaheadContext.captureEnds, 0, executionContext.captureCount);
-
-                    boolean matched = executeLookahead(lookaheadContext, pc + 5);
-                    // Don't restore position - lookahead doesn't consume
-                    if (matched) {
+                    byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
+                    ExecutionContext assertionContext = executeLookaheadAssertion(executionContext, assertionBytecode);
+                    if (assertionContext != null) {
                         // Negative lookahead fails if pattern matches
                         if (!backtrackStack.isEmpty()) {
                             BacktrackPoint bp = backtrackStack.pop();
@@ -270,8 +249,43 @@ public final class RegExpEngine {
                     pc += 5 + len;
                 }
 
-                case LOOKAHEAD_MATCH, NEGATIVE_LOOKAHEAD_MATCH -> {
-                    // End of lookahead - return success
+                case LOOKBEHIND -> {
+                    // Positive lookbehind: match sub-pattern ending at current position
+                    int len = readU32(bc, pc + 1);
+                    byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
+                    ExecutionContext assertionContext = executeLookbehindAssertion(executionContext, assertionBytecode);
+                    if (assertionContext == null) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    executionContext.copyCapturesFrom(assertionContext);
+                    pc += 5 + len;
+                }
+
+                case NEGATIVE_LOOKBEHIND -> {
+                    // Negative lookbehind: succeed only when sub-pattern does not end at current position
+                    int len = readU32(bc, pc + 1);
+                    byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
+                    ExecutionContext assertionContext = executeLookbehindAssertion(executionContext, assertionBytecode);
+                    if (assertionContext != null) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 5 + len;
+                }
+
+                case LOOKAHEAD_MATCH, NEGATIVE_LOOKAHEAD_MATCH, LOOKBEHIND_MATCH, NEGATIVE_LOOKBEHIND_MATCH -> {
+                    // End of assertion sub-pattern
                     return true;
                 }
 
@@ -468,58 +482,40 @@ public final class RegExpEngine {
         }
     }
 
-    /**
-     * Execute lookahead pattern starting at the given PC.
-     * Similar to execute() but starts at a specific PC location.
-     */
-    private boolean executeLookahead(ExecutionContext executionContext, int startPc) {
-        Stack<BacktrackPoint> backtrackStack = new Stack<>();
-        byte[] bc = executionContext.bytecode;
-        int pc = startPc;
+    private ExecutionContext executeLookaheadAssertion(ExecutionContext outerContext, byte[] assertionBytecode) {
+        return executeStandalone(outerContext, outerContext.input, assertionBytecode, outerContext.pos);
+    }
 
-        while (true) {
-            if (pc >= bc.length) {
-                if (!backtrackStack.isEmpty()) {
-                    BacktrackPoint bp = backtrackStack.pop();
-                    pc = bp.pc;
-                    executionContext.restoreState(bp);
-                    continue;
-                }
-                return false;
-            }
-
-            int opcode = bc[pc] & 0xFF;
-            RegExpOpcode op = RegExpOpcode.fromCode(opcode);
-
-            switch (op) {
-                case LOOKAHEAD_MATCH, NEGATIVE_LOOKAHEAD_MATCH -> {
-                    // End of lookahead - return success
-                    return true;
-                }
-                // For all other opcodes, we can reuse the main execute logic
-                // But to avoid code duplication, we'll just execute the minimal set
-                default -> {
-                    // For now, create a temporary full execution from this point
-                    // This is a simplified implementation
-                    executionContext.reset(executionContext.pos);
-                    byte[] tempBytecode = new byte[bc.length - startPc + 1];
-                    System.arraycopy(bc, startPc, tempBytecode, 0, bc.length - startPc);
-                    tempBytecode[tempBytecode.length - 1] = (byte) RegExpOpcode.MATCH.getCode();
-
-                    ExecutionContext tempContext = new ExecutionContext(
-                            executionContext.input,
-                            tempBytecode,
-                            executionContext.captureCount,
-                            executionContext.ignoreCase,
-                            executionContext.multiline,
-                            executionContext.dotAll,
-                            executionContext.unicode
-                    );
-                    tempContext.pos = executionContext.pos;
-                    return execute(tempContext);
-                }
+    private ExecutionContext executeLookbehindAssertion(ExecutionContext outerContext, byte[] assertionBytecode) {
+        int endPos = outerContext.pos;
+        String prefixInput = outerContext.input.substring(0, outerContext.toCharIndex(endPos));
+        for (int startPos = 0; startPos <= endPos; startPos++) {
+            ExecutionContext assertionContext = executeStandalone(outerContext, prefixInput, assertionBytecode, startPos);
+            if (assertionContext != null && assertionContext.pos == endPos) {
+                return assertionContext;
             }
         }
+        return null;
+    }
+
+    private ExecutionContext executeStandalone(
+            ExecutionContext outerContext,
+            String input,
+            byte[] bytecode,
+            int startPos) {
+        ExecutionContext tempContext = new ExecutionContext(
+                input,
+                bytecode,
+                outerContext.captureCount,
+                outerContext.ignoreCase,
+                outerContext.multiline,
+                outerContext.dotAll,
+                outerContext.unicode
+        );
+        tempContext.pos = startPos;
+        System.arraycopy(outerContext.captureStarts, 0, tempContext.captureStarts, 0, outerContext.captureCount);
+        System.arraycopy(outerContext.captureEnds, 0, tempContext.captureEnds, 0, outerContext.captureCount);
+        return execute(tempContext) ? tempContext : null;
     }
 
     /**
@@ -592,6 +588,11 @@ public final class RegExpEngine {
             this.captureEnds = new int[captureCount];
             Arrays.fill(captureStarts, -1);
             Arrays.fill(captureEnds, -1);
+        }
+
+        void copyCapturesFrom(ExecutionContext other) {
+            System.arraycopy(other.captureStarts, 0, captureStarts, 0, captureCount);
+            System.arraycopy(other.captureEnds, 0, captureEnds, 0, captureCount);
         }
 
         BacktrackPoint createBacktrackPoint(int pc) {
@@ -926,6 +927,15 @@ public final class RegExpEngine {
             if (captureIndex < captureCount) {
                 captureStarts[captureIndex] = pos;
             }
+        }
+
+        int toCharIndex(int codePointIndex) {
+            int bounded = Math.max(0, Math.min(codePointIndex, codePoints.length));
+            int charIndex = 0;
+            for (int i = 0; i < bounded; i++) {
+                charIndex += Character.charCount(codePoints[i]);
+            }
+            return charIndex;
         }
     }
 

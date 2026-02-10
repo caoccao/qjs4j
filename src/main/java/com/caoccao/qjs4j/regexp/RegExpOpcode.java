@@ -67,7 +67,11 @@ public enum RegExpOpcode {
     NEGATIVE_LOOKAHEAD(41, 5),              // negative lookahead
     SET_CHAR_POS(42, 2),                    // store character position to register
     CHECK_ADVANCE(43, 2),                   // check that register != character position
-    PREV(44, 1);                            // go to previous character
+    PREV(44, 1),                            // go to previous character
+    LOOKBEHIND_MATCH(45, 1),                // successful lookbehind match
+    NEGATIVE_LOOKBEHIND_MATCH(46, 1),       // successful negative lookbehind
+    LOOKBEHIND(47, 5),                      // positive lookbehind
+    NEGATIVE_LOOKBEHIND(48, 5);             // negative lookbehind
 
     private final int code;
     private final int length;

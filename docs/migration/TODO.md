@@ -21,13 +21,6 @@ This document tracks remaining features, known bugs, and planned enhancements fo
   - Intl.Locale
 - **Reference**: [FEATURES.md](FEATURES.md#not-yet-implemented-)
 
-### Medium Priority - RegExp Features
-
-#### Lookbehind Assertions
-- **Description**: `(?<=...)` positive and `(?<!...)` negative lookbehind
-- **Status**: Not implemented
-- **Reference**: [FEATURES.md](FEATURES.md#miscellaneous)
-
 ### Low Priority - Syntax Sugar
 
 #### Numeric Separators

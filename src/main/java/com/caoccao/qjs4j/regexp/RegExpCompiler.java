@@ -138,11 +138,13 @@ public final class RegExpCompiler {
         if (context.pos >= context.codePoints.length) {
             return;
         }
+        context.lastAtomCanRepeat = true;
 
         int ch = context.codePoints[context.pos];
 
         switch (ch) {
             case '^' -> {
+                context.lastAtomCanRepeat = false;
                 context.buffer.appendU8(context.isMultiline() ?
                         RegExpOpcode.LINE_START_M.getCode() :
                         RegExpOpcode.LINE_START.getCode());
@@ -150,6 +152,7 @@ public final class RegExpCompiler {
             }
 
             case '$' -> {
+                context.lastAtomCanRepeat = false;
                 context.buffer.appendU8(context.isMultiline() ?
                         RegExpOpcode.LINE_END_M.getCode() :
                         RegExpOpcode.LINE_END.getCode());
@@ -189,10 +192,12 @@ public final class RegExpCompiler {
             }
 
             case ')' -> {
+                context.lastAtomCanRepeat = false;
                 // Don't consume - let parent handle it
             }
 
             case '|' -> {
+                context.lastAtomCanRepeat = false;
                 // Don't consume - let parent handle it
             }
 
@@ -562,15 +567,21 @@ public final class RegExpCompiler {
             } else if (groupType == '=') {
                 // Positive lookahead (?=...)
                 compileLookahead(context, false);
+                context.lastAtomCanRepeat = true;
                 return;
             } else if (groupType == '!') {
                 // Negative lookahead (?!...)
                 compileLookahead(context, true);
+                context.lastAtomCanRepeat = true;
                 return;
             } else if (groupType == '<') {
                 if (context.pos < context.codePoints.length &&
                         (context.codePoints[context.pos] == '=' || context.codePoints[context.pos] == '!')) {
-                    throw new RegExpSyntaxException("Unknown group type: (?<" + (char) context.codePoints[context.pos]);
+                    boolean isNegative = context.codePoints[context.pos] == '!';
+                    context.pos++;
+                    compileLookbehind(context, isNegative);
+                    context.lastAtomCanRepeat = false;
+                    return;
                 }
 
                 GroupNameParseResult groupNameParseResult = parseGroupName(context.codePoints, context.pos);
@@ -609,6 +620,7 @@ public final class RegExpCompiler {
             throw new RegExpSyntaxException("Unclosed group");
         }
         context.pos++; // Skip ')'
+        context.lastAtomCanRepeat = true;
     }
 
     private void compileLiteralChar(CompileContext context, int ch) {
@@ -649,6 +661,30 @@ public final class RegExpCompiler {
 
         if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != ')') {
             throw new RegExpSyntaxException("Unclosed lookahead");
+        }
+        context.pos++; // Skip ')'
+    }
+
+    private void compileLookbehind(CompileContext context, boolean isNegative) {
+        // (?<=...) positive lookbehind or (?<!...) negative lookbehind
+        int lookbehindStart = context.buffer.size();
+
+        context.buffer.appendU8(isNegative ?
+                RegExpOpcode.NEGATIVE_LOOKBEHIND.getCode() :
+                RegExpOpcode.LOOKBEHIND.getCode());
+        context.buffer.appendU32(0); // Placeholder for length
+
+        compileDisjunction(context);
+
+        context.buffer.appendU8(isNegative ?
+                RegExpOpcode.NEGATIVE_LOOKBEHIND_MATCH.getCode() :
+                RegExpOpcode.LOOKBEHIND_MATCH.getCode());
+
+        int lookbehindLen = context.buffer.size() - (lookbehindStart + 5);
+        context.buffer.setU32(lookbehindStart + 1, lookbehindLen);
+
+        if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != ')') {
+            throw new RegExpSyntaxException("Unclosed lookbehind");
         }
         context.pos++; // Skip ')'
     }
@@ -780,6 +816,11 @@ public final class RegExpCompiler {
         // Check for quantifier
         if (context.pos < context.codePoints.length) {
             int ch = context.codePoints[context.pos];
+
+            if (!context.lastAtomCanRepeat && (ch == '*' || ch == '+' || ch == '?' ||
+                    (ch == '{' && startsWithValidQuantifier(context)))) {
+                throw new RegExpSyntaxException("Nothing to repeat at position " + context.pos);
+            }
 
             if (ch == '*' || ch == '+' || ch == '?' || (ch == '{' && startsWithValidQuantifier(context))) {
                 compileQuantifier(context, atomStart, captureCountBeforeAtom);
@@ -1409,6 +1450,7 @@ public final class RegExpCompiler {
         final int[] codePoints;
         final int flags;
         final String pattern;
+        boolean lastAtomCanRepeat;
         int pos;
 
         CompileContext(String pattern, int flags, DynamicBuffer buffer) {
@@ -1416,6 +1458,7 @@ public final class RegExpCompiler {
             this.codePoints = pattern.codePoints().toArray();
             this.flags = flags;
             this.buffer = buffer;
+            this.lastAtomCanRepeat = false;
             this.pos = 0;
         }
 

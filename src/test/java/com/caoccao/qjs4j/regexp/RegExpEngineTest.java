@@ -20,8 +20,7 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 
 public class RegExpEngineTest extends BaseJavetTest {
     private boolean matches(String pattern, String flags, String input) {
@@ -169,6 +168,55 @@ public class RegExpEngineTest extends BaseJavetTest {
 
         result = engine.exec("abcx", 0);
         assertThat(result).isNull(); // Should not match at end
+    }
+
+    @Test
+    public void testLookbehindAssertionsBasic() {
+        assertThat(matches("(?<=a)b", "", "ab")).isTrue();
+        assertThat(matches("(?<=a)b", "", "cb")).isFalse();
+        assertThat(matches("(?<!a)b", "", "cb")).isTrue();
+        assertThat(matches("(?<!a)b", "", "ab")).isFalse();
+        assertThat(matches("(?<!a)b", "", "b")).isTrue();
+    }
+
+    @Test
+    public void testLookbehindAssertionsCaptures() {
+        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpBytecode bytecode = compiler.compile("(?<=(a))b", "");
+        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine.MatchResult result = engine.exec("ab", 0);
+        assertThat(result).isNotNull();
+        assertThat(result.matched()).isTrue();
+        assertThat(result.getMatch()).isEqualTo("b");
+        assertThat(result.getCapture(1)).isEqualTo("a");
+
+        assertThat(matches("(?<=(a))\\1", "", "aa")).isTrue();
+    }
+
+    @Test
+    public void testLookbehindAssertionsSyntaxAndQuantifierRules() {
+        RegExpCompiler compiler = new RegExpCompiler();
+        assertThatThrownBy(() -> compiler.compile("(?<=a", ""))
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+                .hasMessageContaining("Unclosed lookbehind");
+        assertThatThrownBy(() -> compiler.compile("(?<!a", ""))
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+                .hasMessageContaining("Unclosed lookbehind");
+        assertThatThrownBy(() -> compiler.compile("(?<=a)+b", ""))
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+                .hasMessageContaining("Nothing to repeat");
+
+        // QuickJS allows quantified lookahead in non-unicode mode (Annex B).
+        assertThatCode(() -> compiler.compile("(?=a)+b", ""))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    public void testLookbehindAssertionsVariableLength() {
+        assertThat(matches("(?<=a*)b", "", "aaab")).isTrue();
+        assertThat(matches("(?<=a{2,3})b", "", "aaab")).isTrue();
+        assertThat(matches("(?<=a{2,3})b", "", "ab")).isFalse();
+        assertThat(matches("(?<=a)b+", "", "abbb")).isTrue();
     }
 
     @Test
