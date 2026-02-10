@@ -23,17 +23,15 @@ This document tracks remaining features, known bugs, and planned enhancements fo
 
 ---
 
-## Opcodes Not Yet Implemented
+## Opcode Migration Status
 
-**Summary**: High, medium, and low-priority opcode migration is mostly complete. Remaining opcode gaps:
-- `DELETE_VAR` (QuickJS opcode 152)
-- `PUSH_BIGINT_I32` (QuickJS opcode 177)
+**Summary**: High, medium, and low-priority opcode migration is complete.
 
 ### High Priority Opcodes (Core Functionality)
 - Completed on 2026-02-10.
 
 ### Medium Priority Opcodes (Enhanced Functionality)
-- Completed on 2026-02-10 except for `DELETE_VAR` and `PUSH_BIGINT_I32`.
+- Completed on 2026-02-10.
 
 ### Low Priority Opcodes (Optimizations)
 - Completed on 2026-02-10 (includes SHORT_OPCODES 179-244, `DEC_LOC`/`INC_LOC`/`ADD_LOC`, `NOP`, and `GET_ARRAY_EL3`).
@@ -101,9 +99,8 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 3. Fix Proxy.revocable behavior
 
 ### Phase 2: Core Opcodes (Essential)
-1. Implement remaining medium-priority opcodes (`DELETE_VAR`, `PUSH_BIGINT_I32`)
-2. Expand iterator opcode coverage for advanced iterator control flow
-3. Improve closure and var-ref fidelity for full QuickJS parity
+1. Expand iterator opcode coverage for advanced iterator control flow
+2. Improve closure and var-ref fidelity for full QuickJS parity
 
 ### Phase 3: Language Features
 1. Tagged template literals

@@ -322,6 +322,10 @@ public final class VirtualMachine {
                         valueStack.push(new JSNumber(bytecode.readI32(pc + 1)));
                         pc += op.getSize();
                     }
+                    case PUSH_BIGINT_I32 -> {
+                        valueStack.push(new JSBigInt((long) bytecode.readI32(pc + 1)));
+                        pc += op.getSize();
+                    }
                     case PUSH_MINUS1, PUSH_0, PUSH_1, PUSH_2, PUSH_3, PUSH_4, PUSH_5, PUSH_6, PUSH_7 -> {
                         int value = switch (op) {
                             case PUSH_MINUS1 -> -1;
@@ -881,6 +885,13 @@ public final class VirtualMachine {
                         String setVarName = bytecode.getAtoms()[setVarAtom];
                         JSValue setValue = valueStack.peek(0);
                         context.getGlobalObject().set(PropertyKey.fromString(setVarName), setValue);
+                        pc += op.getSize();
+                    }
+                    case DELETE_VAR -> {
+                        int deleteVarAtom = bytecode.readU32(pc + 1);
+                        String deleteVarName = bytecode.getAtoms()[deleteVarAtom];
+                        boolean deleted = context.getGlobalObject().delete(PropertyKey.fromString(deleteVarName), context);
+                        valueStack.push(JSBoolean.valueOf(deleted));
                         pc += op.getSize();
                     }
                     case GET_LOCAL, GET_LOC -> {

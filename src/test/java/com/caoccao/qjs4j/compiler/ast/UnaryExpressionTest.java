@@ -20,6 +20,19 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
 public class UnaryExpressionTest extends BaseJavetTest {
+    private void assertBooleanWithJavetWithoutStrict(String code) {
+        assertWithJavet(
+                () -> {
+                    v8Runtime.resetContext();
+                    try (var v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
+                        return (Boolean) v8Runtime.toObject(v8Value);
+                    }
+                },
+                () -> {
+                    var jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
+                    return (Boolean) jsValue.toJavaObject();
+                });
+    }
 
     @Test
     public void testArrayElementPostfixIncrement() {
@@ -84,6 +97,16 @@ public class UnaryExpressionTest extends BaseJavetTest {
                         let arr = [10, 20, 30];
                         arr[0]--;
                         arr[0];""");
+    }
+
+    @Test
+    public void testDeleteIdentifierBehavior() {
+        assertBooleanWithJavetWithoutStrict("var x = 1; delete x;");
+        assertBooleanWithJavetWithoutStrict("x = 1; delete x;");
+        assertBooleanWithJavetWithoutStrict("delete missingGlobal;");
+        assertBooleanWithJavetWithoutStrict("function f() { var y = 1; return delete y; } f();");
+        assertBooleanWithJavetWithoutStrict("function f() { let z = 1; return delete z; } f();");
+        assertBooleanWithJavetWithoutStrict("function f(a) { return delete arguments; } f(1);");
     }
 
     @Test

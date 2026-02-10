@@ -6,8 +6,8 @@ This document tracks the implementation status of all QuickJS opcodes in qjs4j. 
 
 **Total Opcodes**: 245 (all 245 are now DEFINED in Opcode.java enum)
 **Enum Definitions**: 262 total opcodes in qjs4j Opcode.java (includes 144 original + 118 newly added)
-**Fully Implemented**: 243 (99.2%) - have VM handlers in VirtualMachine.java
-**Defined but Not Implemented**: 2 (0.8%) - added to Opcode.java, need VM implementation
+**Fully Implemented**: 245 (100.0%) - have VM handlers in VirtualMachine.java
+**Defined but Not Implemented**: 0 (0.0%) - added to Opcode.java, need VM implementation
 
 **Last Updated**: 2026-02-10
 
@@ -28,7 +28,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 
 - ✅ **Implemented**: Opcode is defined in Opcode.java AND has a handler in VirtualMachine.java
 - ⏳ **Defined**: Opcode is in Opcode.java enum but needs VM handler implementation
-- ⏳ **Missing** (legacy status): These entries will be updated to **Defined** status
+- ⏳ **Missing** (legacy status): no remaining missing entries
 
 ### Recent Updates (2026-02-10)
 
@@ -38,6 +38,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 - Added regression tests in `src/test/java/com/caoccao/qjs4j/vm/MediumPriorityOpcodeTest.java`.
 - Completed low-priority opcode handlers, including SHORT_OPCODES (179-244).
 - Added regression tests in `src/test/java/com/caoccao/qjs4j/vm/LowPriorityOpcodeTest.java`.
+- Completed remaining medium-priority opcode handlers: `DELETE_VAR` and `PUSH_BIGINT_I32`.
 
 ## Opcode Categories
 
@@ -232,7 +233,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 | 149 | LNOT | 1 | ✅ Implemented | - | Logical NOT (!) |
 | 150 | TYPEOF | 1 | ✅ Implemented | - | typeof operator |
 | 151 | DELETE | 1 | ✅ Implemented | - | Delete property |
-| 152 | DELETE_VAR | 5 | ⏳ **Missing** | MEDIUM | Delete variable |
+| 152 | DELETE_VAR | 5 | ✅ Implemented | MEDIUM | Delete variable |
 
 ### Binary Operations (153-174)
 | # | Opcode | Size | Status | Priority | Notes |
@@ -265,7 +266,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 |---|--------|------|--------|----------|-------|
 | 175 | IS_UNDEFINED_OR_NULL | 1 | ✅ Implemented | - | Check null/undefined |
 | 176 | PRIVATE_IN | 1 | ✅ Implemented | - | Check private field |
-| 177 | PUSH_BIGINT_I32 | 5 | ⏳ **Missing** | MEDIUM | Push BigInt from i32 |
+| 177 | PUSH_BIGINT_I32 | 5 | ✅ Implemented | MEDIUM | Push BigInt from i32 |
 | 178 | NOP | 1 | ✅ Implemented | LOW | No operation |
 
 ### SHORT_OPCODES (Optimizations 179-244)

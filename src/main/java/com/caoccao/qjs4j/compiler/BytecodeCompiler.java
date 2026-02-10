@@ -36,6 +36,7 @@ public final class BytecodeCompiler {
     private boolean isInArrowFunction;  // Track if we're currently compiling an arrow function
     private boolean isInAsyncFunction;  // Track if we're currently compiling an async function
     private int maxLocalCount;
+    private final Set<String> nonDeletableGlobalBindings;
     private Map<String, JSSymbol> privateSymbols;  // Private field symbols for current class
     private String sourceCode;  // Original source code for extracting function sources
     private boolean strictMode;  // Track strict mode context (inherited from parent or set by "use strict")
@@ -58,6 +59,7 @@ public final class BytecodeCompiler {
         this.isInAsyncFunction = false;
         this.isInArrowFunction = false;
         this.maxLocalCount = 0;
+        this.nonDeletableGlobalBindings = new HashSet<>();
         this.sourceCode = null;
         this.privateSymbols = Map.of();  // Empty by default
         this.strictMode = inheritedStrictMode;
@@ -171,6 +173,7 @@ public final class BytecodeCompiler {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
         BytecodeCompiler functionCompiler = new BytecodeCompiler(this.strictMode);
+        functionCompiler.nonDeletableGlobalBindings.addAll(this.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
         functionCompiler.enterScope();
@@ -890,6 +893,7 @@ public final class BytecodeCompiler {
                     emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
                 }
             } else {
+                nonDeletableGlobalBindings.add(varName);
                 emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
             }
         } else {
@@ -1580,6 +1584,7 @@ public final class BytecodeCompiler {
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
         BytecodeCompiler functionCompiler = new BytecodeCompiler(this.strictMode);
+        functionCompiler.nonDeletableGlobalBindings.addAll(this.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
         functionCompiler.enterScope();
@@ -1699,6 +1704,7 @@ public final class BytecodeCompiler {
         } else {
             // Declare the function as a global variable or in the current scope
             if (inGlobalScope) {
+                nonDeletableGlobalBindings.add(functionName);
                 emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
             } else {
                 // Declare it as a local
@@ -1712,6 +1718,7 @@ public final class BytecodeCompiler {
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
         BytecodeCompiler functionCompiler = new BytecodeCompiler(this.strictMode);
+        functionCompiler.nonDeletableGlobalBindings.addAll(this.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
         functionCompiler.enterScope();
@@ -1872,8 +1879,15 @@ public final class BytecodeCompiler {
         } else if (value instanceof Boolean bool) {
             emitter.emitOpcode(bool ? Opcode.PUSH_TRUE : Opcode.PUSH_FALSE);
         } else if (value instanceof BigInteger bigInt) {
-            // Check BigInteger before Number since BigInteger extends Number
-            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSBigInt(bigInt));
+            // Check BigInteger before Number since BigInteger extends Number.
+            // Match QuickJS: emit PUSH_BIGINT_I32 when the literal fits in signed i32.
+            if (bigInt.compareTo(BigInteger.valueOf(Integer.MIN_VALUE)) >= 0
+                    && bigInt.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) <= 0) {
+                emitter.emitOpcode(Opcode.PUSH_BIGINT_I32);
+                emitter.emitI32(bigInt.intValue());
+            } else {
+                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSBigInt(bigInt));
+            }
         } else if (value instanceof Number num) {
             // Try to emit as i32 if it's an integer in range
             if (num instanceof Integer || num instanceof Long) {
@@ -2099,6 +2113,7 @@ public final class BytecodeCompiler {
             Map<String, JSBytecodeFunction> privateInstanceMethodFunctions,
             boolean isConstructor) {
         BytecodeCompiler methodCompiler = new BytecodeCompiler();
+        methodCompiler.nonDeletableGlobalBindings.addAll(this.nonDeletableGlobalBindings);
         methodCompiler.privateSymbols = privateSymbols;  // Make private symbols available in method
 
         FunctionExpression funcExpr = method.value();
@@ -2396,6 +2411,7 @@ public final class BytecodeCompiler {
         inGlobalScope = true;
         strictMode = program.strict();  // Set strict mode from program directive
         enterScope();
+        registerGlobalProgramBindings(program.body());
 
         List<Statement> body = program.body();
         int lastIndex = body.size() - 1;
@@ -2427,6 +2443,24 @@ public final class BytecodeCompiler {
 
         exitScope();
         inGlobalScope = false;
+    }
+
+    private void registerGlobalProgramBindings(List<Statement> body) {
+        for (Statement stmt : body) {
+            if (stmt instanceof VariableDeclaration varDecl) {
+                for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
+                    collectPatternBindingNames(declarator.id(), nonDeletableGlobalBindings);
+                }
+            } else if (stmt instanceof FunctionDeclaration funcDecl) {
+                if (funcDecl.id() != null) {
+                    nonDeletableGlobalBindings.add(funcDecl.id().name());
+                }
+            } else if (stmt instanceof ClassDeclaration classDecl) {
+                if (classDecl.id() != null) {
+                    nonDeletableGlobalBindings.add(classDecl.id().name());
+                }
+            }
+        }
     }
 
     private void compileReturnStatement(ReturnStatement retStmt) {
@@ -2510,6 +2544,7 @@ public final class BytecodeCompiler {
             String className,
             Map<String, JSSymbol> privateSymbols) {
         BytecodeCompiler blockCompiler = new BytecodeCompiler();
+        blockCompiler.nonDeletableGlobalBindings.addAll(this.nonDeletableGlobalBindings);
         blockCompiler.privateSymbols = privateSymbols;
 
         blockCompiler.enterScope();
@@ -2554,6 +2589,7 @@ public final class BytecodeCompiler {
             Map<String, JSSymbol> privateSymbols,
             String className) {
         BytecodeCompiler initializerCompiler = new BytecodeCompiler();
+        initializerCompiler.nonDeletableGlobalBindings.addAll(this.nonDeletableGlobalBindings);
         initializerCompiler.privateSymbols = privateSymbols;
 
         initializerCompiler.enterScope();
@@ -2971,8 +3007,20 @@ public final class BytecodeCompiler {
                 }
 
                 emitter.emitOpcode(Opcode.DELETE);
+            } else if (operand instanceof Identifier id) {
+                // Match QuickJS scope_delete_var lowering:
+                // - local/arg/closure/implicit arguments bindings => false
+                // - unresolved/global binding => DELETE_VAR runtime check
+                boolean isLocalBinding = findLocalInScopes(id.name()) != null
+                        || (JSArguments.NAME.equals(id.name()) && !inGlobalScope)
+                        || nonDeletableGlobalBindings.contains(id.name());
+                if (isLocalBinding) {
+                    emitter.emitOpcode(Opcode.PUSH_FALSE);
+                } else {
+                    emitter.emitOpcodeAtom(Opcode.DELETE_VAR, id.name());
+                }
             } else {
-                // delete identifier or delete literal - always returns true
+                // delete literal / non-reference expression => true
                 emitter.emitOpcode(Opcode.PUSH_TRUE);
             }
             return;
@@ -3125,6 +3173,9 @@ public final class BytecodeCompiler {
 
     private void compileVariableDeclaration(VariableDeclaration varDecl) {
         for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
+            if (inGlobalScope) {
+                collectPatternBindingNames(declarator.id(), nonDeletableGlobalBindings);
+            }
             // Compile initializer or push undefined
             if (declarator.init() != null) {
                 compileExpression(declarator.init());
@@ -3205,6 +3256,7 @@ public final class BytecodeCompiler {
             IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
             Map<String, JSBytecodeFunction> privateInstanceMethodFunctions) {
         BytecodeCompiler constructorCompiler = new BytecodeCompiler();
+        constructorCompiler.nonDeletableGlobalBindings.addAll(this.nonDeletableGlobalBindings);
         constructorCompiler.privateSymbols = privateSymbols;  // Make private symbols available
 
         constructorCompiler.enterScope();
@@ -3273,6 +3325,24 @@ public final class BytecodeCompiler {
             throw new CompilerException("No scope available");
         }
         return scopes.peek();
+    }
+
+    private void collectPatternBindingNames(Pattern pattern, Set<String> names) {
+        if (pattern instanceof Identifier id) {
+            names.add(id.name());
+        } else if (pattern instanceof ArrayPattern arrPattern) {
+            for (Pattern element : arrPattern.elements()) {
+                if (element != null) {
+                    collectPatternBindingNames(element, names);
+                }
+            }
+        } else if (pattern instanceof ObjectPattern objPattern) {
+            for (ObjectPattern.Property prop : objPattern.properties()) {
+                collectPatternBindingNames(prop.value(), names);
+            }
+        } else if (pattern instanceof RestElement restElement) {
+            collectPatternBindingNames(restElement.argument(), names);
+        }
     }
 
     /**
