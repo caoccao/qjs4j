@@ -223,8 +223,7 @@ public final class DatePrototype {
             return context.throwTypeError("Date.prototype.toString called on non-Date");
         }
         ZonedDateTime zdt = date.getLocalZonedDateTime();
-        // V8 format: "Wed Jan 01 2025 01:00:00 GMT+0100 (CET)"
-        return new JSString(zdt.format(JSDate.TO_STRING_FORMATTER));
+        return new JSString(JSDate.formatToString(context, zdt));
     }
 
     /**

@@ -21,6 +21,7 @@ import com.caoccao.javet.interfaces.IJavetSupplier;
 import com.caoccao.javet.interop.V8Host;
 import com.caoccao.javet.interop.V8Runtime;
 import com.caoccao.javet.interop.options.V8RuntimeOptions;
+import com.caoccao.javet.utils.JavetOSUtils;
 import com.caoccao.javet.values.V8Value;
 import com.caoccao.javet.values.primitive.*;
 import com.caoccao.javet.values.reference.V8ValueBooleanObject;
@@ -31,6 +32,7 @@ import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
+import java.io.File;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.function.Supplier;
@@ -44,6 +46,15 @@ public class BaseJavetTest extends BaseTest {
     protected boolean debugMode;
     protected boolean moduleMode;
     protected V8Runtime v8Runtime;
+
+    static {
+        File icuDataFile = new File(JavetOSUtils.WORKING_DIRECTORY)
+                .toPath()
+                .resolve("icu/icudtl.dat")
+                .normalize()
+                .toFile();
+        V8RuntimeOptions.V8_FLAGS.setIcuDataFile(icuDataFile.getAbsolutePath());
+    }
 
     protected void assertBigIntegerObjectWithJavet(String... codeArray) {
         for (String code : getNormalizedCodeStrings(codeArray)) {
@@ -382,7 +393,7 @@ public class BaseJavetTest extends BaseTest {
         debugMode = false;
         moduleMode = false;
         V8RuntimeOptions.V8_FLAGS.setJsFloat16Array(true).setUseStrict(false);
-        v8Runtime = V8Host.getV8Instance().createV8Runtime();
+        v8Runtime = V8Host.getV8I18nInstance().createV8Runtime();
     }
 
     @AfterEach

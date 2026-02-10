@@ -127,7 +127,7 @@ dependencies {
     testAnnotationProcessor(Config.Projects.JMH_GENERATOR_ANNPROCESS)
 
     testImplementation(Config.Projects.JAVET)
-    testImplementation("com.caoccao.javet:javet-v8-$osType-$archType:${Config.Versions.JAVET}")
+    testImplementation("com.caoccao.javet:javet-v8-$osType-$archType-i18n:${Config.Versions.JAVET}")
 }
 
 tasks.test {

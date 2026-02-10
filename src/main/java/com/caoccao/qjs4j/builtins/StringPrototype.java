@@ -20,6 +20,9 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.regexp.RegExpEngine;
 import com.caoccao.qjs4j.unicode.UnicodeNormalization;
 
+import java.text.Collator;
+import java.util.Locale;
+
 /**
  * Implementation of JavaScript String.prototype methods.
  * Based on ES2020 String.prototype specification.
@@ -416,9 +419,6 @@ public final class StringPrototype {
      * String.prototype.localeCompare(that [, locales [, options]])
      * ES2020 21.1.3.11
      * Compares two strings in the current locale.
-     * <p>
-     * Note: This is a simplified implementation that uses Java's String.compareTo()
-     * and doesn't support locale-specific collation or options.
      */
     public static JSValue localeCompare(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = JSTypeConversions.toString(context, thisArg);
@@ -431,9 +431,24 @@ public final class StringPrototype {
         JSString thatStr = JSTypeConversions.toString(context, args[0]);
         String that = thatStr.value();
 
-        // Simple implementation using Java's compareTo
-        // A full implementation would need to support locales and collation options
-        int result = thisStr.compareTo(that);
+        Locale locale = Locale.getDefault();
+        if (args.length > 1 && !args[1].isNullOrUndefined()) {
+            String localeTag = null;
+            if (args[1] instanceof JSArray localeArray && localeArray.getLength() > 0) {
+                localeTag = JSTypeConversions.toString(context, localeArray.get(0)).value();
+            } else {
+                localeTag = JSTypeConversions.toString(context, args[1]).value();
+            }
+            if (localeTag != null && !localeTag.isEmpty()) {
+                Locale candidateLocale = Locale.forLanguageTag(localeTag);
+                if (!candidateLocale.getLanguage().isEmpty()) {
+                    locale = candidateLocale;
+                }
+            }
+        }
+
+        Collator collator = Collator.getInstance(locale);
+        int result = Integer.signum(collator.compare(thisStr, that));
         return new JSNumber(result);
     }
 

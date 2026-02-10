@@ -89,7 +89,7 @@ public final class DateConstructor {
         // V8 format matches Date.prototype.toString()
         JSDate date = new JSDate(System.currentTimeMillis());
         ZonedDateTime zdt = date.getLocalZonedDateTime();
-        return new JSString(zdt.format(JSDate.TO_STRING_FORMATTER));
+        return new JSString(JSDate.formatToString(context, zdt));
     }
 
     /**

@@ -320,6 +320,7 @@ public final class GlobalObject {
         initializeFinalizationRegistryConstructor(context, global);
         initializeMathObject(context, global);
         initializeJSONObject(context, global);
+        initializeIntlObject(context, global);
         initializeReflectObject(context, global);
         initializeProxyConstructor(context, global);
         initializePromiseConstructor(context, global);
@@ -892,6 +893,13 @@ public final class GlobalObject {
         json.set("stringify", new JSNativeFunction("stringify", 1, JSONObject::stringify));
 
         global.set("JSON", json);
+    }
+
+    /**
+     * Initialize Intl object.
+     */
+    private static void initializeIntlObject(JSContext context, JSObject global) {
+        global.set("Intl", context.createJSObject());
     }
 
     /**
