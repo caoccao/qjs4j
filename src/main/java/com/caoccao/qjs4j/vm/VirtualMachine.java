@@ -61,6 +61,40 @@ public final class VirtualMachine {
         this.pendingException = null;
     }
 
+    private JSValue getArgumentValue(int index) {
+        JSValue[] arguments = currentFrame.getArguments();
+        if (index >= 0 && index < arguments.length) {
+            JSValue value = arguments[index];
+            return value != null ? value : JSUndefined.INSTANCE;
+        }
+        return JSUndefined.INSTANCE;
+    }
+
+    private JSValue getLocalValue(int index) {
+        JSValue[] locals = currentFrame.getLocals();
+        if (index >= 0 && index < locals.length) {
+            JSValue value = locals[index];
+            return value != null ? value : JSUndefined.INSTANCE;
+        }
+        return JSUndefined.INSTANCE;
+    }
+
+    private void setArgumentValue(int index, JSValue value) {
+        JSValue[] arguments = currentFrame.getArguments();
+        if (index >= 0 && index < arguments.length) {
+            arguments[index] = value;
+        }
+        // Keep local mirror in sync for argument slots copied into locals.
+        setLocalValue(index, value);
+    }
+
+    private void setLocalValue(int index, JSValue value) {
+        JSValue[] locals = currentFrame.getLocals();
+        if (index >= 0 && index < locals.length) {
+            locals[index] = value;
+        }
+    }
+
     private void copyDataProperties(JSValue targetValue, JSValue sourceValue, JSValue excludeListValue) {
         if (!(targetValue instanceof JSObject targetObject)) {
             throw new JSVirtualMachineException(context.throwTypeError("copy target must be an object"));
@@ -269,12 +303,49 @@ public final class VirtualMachine {
 
                 int opcode = bytecode.readOpcode(pc);
                 Opcode op = Opcode.fromInt(opcode);
+                if (op == Opcode.INVALID && pc + 1 < bytecode.getLength()) {
+                    // Extended opcode encoding: 0x00 prefix + low-byte payload for enum codes >= 256.
+                    int extendedOpcode = 0x100 + bytecode.readU8(pc + 1);
+                    Opcode extendedOp = Opcode.fromInt(extendedOpcode);
+                    if (extendedOp != Opcode.INVALID) {
+                        op = extendedOp;
+                        // Rebase PC to the second opcode byte so existing `pc + 1` operand reads
+                        // and `pc += op.getSize()` increments continue to work unchanged.
+                        pc += 1;
+                    }
+                }
 
                 switch (op) {
                     // ==================== Constants and Literals ====================
                     case INVALID -> throw new JSVirtualMachineException("Invalid opcode at PC " + pc);
                     case PUSH_I32 -> {
                         valueStack.push(new JSNumber(bytecode.readI32(pc + 1)));
+                        pc += op.getSize();
+                    }
+                    case PUSH_MINUS1, PUSH_0, PUSH_1, PUSH_2, PUSH_3, PUSH_4, PUSH_5, PUSH_6, PUSH_7 -> {
+                        int value = switch (op) {
+                            case PUSH_MINUS1 -> -1;
+                            case PUSH_0 -> 0;
+                            case PUSH_1 -> 1;
+                            case PUSH_2 -> 2;
+                            case PUSH_3 -> 3;
+                            case PUSH_4 -> 4;
+                            case PUSH_5 -> 5;
+                            case PUSH_6 -> 6;
+                            case PUSH_7 -> 7;
+                            default -> throw new IllegalStateException("Unexpected short push opcode: " + op);
+                        };
+                        valueStack.push(new JSNumber(value));
+                        pc += op.getSize();
+                    }
+                    case PUSH_I8 -> {
+                        int value = (byte) bytecode.readU8(pc + 1);
+                        valueStack.push(new JSNumber(value));
+                        pc += op.getSize();
+                    }
+                    case PUSH_I16 -> {
+                        int value = (short) bytecode.readU16(pc + 1);
+                        valueStack.push(new JSNumber(value));
                         pc += op.getSize();
                     }
                     case PUSH_CONST -> {
@@ -291,6 +362,18 @@ public final class VirtualMachine {
                             context.transferPrototype(regexp, JSRegExp.NAME);
                         }
 
+                        valueStack.push(constValue);
+                        pc += op.getSize();
+                    }
+                    case PUSH_CONST8 -> {
+                        int constIndex = bytecode.readU8(pc + 1);
+                        JSValue constValue = bytecode.getConstants()[constIndex];
+                        if (constValue instanceof JSFunction func) {
+                            func.initializePrototypeChain(context);
+                        }
+                        if (constValue instanceof JSRegExp regexp) {
+                            context.transferPrototype(regexp, JSRegExp.NAME);
+                        }
                         valueStack.push(constValue);
                         pc += op.getSize();
                     }
@@ -318,6 +401,19 @@ public final class VirtualMachine {
                         }
                         // The function is already a JSBytecodeFunction, just push it
                         valueStack.push(funcValue);
+                        pc += op.getSize();
+                    }
+                    case FCLOSURE8 -> {
+                        int funcIndex = bytecode.readU8(pc + 1);
+                        JSValue funcValue = bytecode.getConstants()[funcIndex];
+                        if (funcValue instanceof JSFunction func) {
+                            func.initializePrototypeChain(context);
+                        }
+                        valueStack.push(funcValue);
+                        pc += op.getSize();
+                    }
+                    case PUSH_EMPTY_STRING -> {
+                        valueStack.push(new JSString(""));
                         pc += op.getSize();
                     }
                     case UNDEFINED -> {
@@ -522,6 +618,37 @@ public final class VirtualMachine {
                     }
                     case DEC -> {
                         handleDec();
+                        pc += op.getSize();
+                    }
+                    case INC_LOC -> {
+                        int localIndex = bytecode.readU8(pc + 1);
+                        JSValue localValue = getLocalValue(localIndex);
+                        double result = JSTypeConversions.toNumber(context, localValue).value() + 1;
+                        setLocalValue(localIndex, new JSNumber(result));
+                        pc += op.getSize();
+                    }
+                    case DEC_LOC -> {
+                        int localIndex = bytecode.readU8(pc + 1);
+                        JSValue localValue = getLocalValue(localIndex);
+                        double result = JSTypeConversions.toNumber(context, localValue).value() - 1;
+                        setLocalValue(localIndex, new JSNumber(result));
+                        pc += op.getSize();
+                    }
+                    case ADD_LOC -> {
+                        int localIndex = bytecode.readU8(pc + 1);
+                        JSValue right = valueStack.pop();
+                        JSValue left = getLocalValue(localIndex);
+                        JSValue result;
+                        if (left instanceof JSString || right instanceof JSString) {
+                            String leftStr = JSTypeConversions.toString(context, left).value();
+                            String rightStr = JSTypeConversions.toString(context, right).value();
+                            result = new JSString(leftStr + rightStr);
+                        } else {
+                            double leftNum = JSTypeConversions.toNumber(context, left).value();
+                            double rightNum = JSTypeConversions.toNumber(context, right).value();
+                            result = new JSNumber(leftNum + rightNum);
+                        }
+                        setLocalValue(localIndex, result);
                         pc += op.getSize();
                     }
                     case POST_INC -> {
@@ -758,23 +885,133 @@ public final class VirtualMachine {
                     }
                     case GET_LOCAL, GET_LOC -> {
                         int getLocalIndex = bytecode.readU16(pc + 1);
-                        JSValue localValue = currentFrame.getLocals()[getLocalIndex];
-                        valueStack.push(localValue);
+                        valueStack.push(getLocalValue(getLocalIndex));
+                        pc += op.getSize();
+                    }
+                    case GET_LOC8 -> {
+                        int getLocalIndex = bytecode.readU8(pc + 1);
+                        valueStack.push(getLocalValue(getLocalIndex));
+                        pc += op.getSize();
+                    }
+                    case GET_LOC0, GET_LOC1, GET_LOC2, GET_LOC3 -> {
+                        int getLocalIndex = switch (op) {
+                            case GET_LOC0 -> 0;
+                            case GET_LOC1 -> 1;
+                            case GET_LOC2 -> 2;
+                            case GET_LOC3 -> 3;
+                            default -> throw new IllegalStateException("Unexpected short get local opcode: " + op);
+                        };
+                        valueStack.push(getLocalValue(getLocalIndex));
                         pc += op.getSize();
                     }
                     case PUT_LOCAL, PUT_LOC -> {
                         int putLocalIndex = bytecode.readU16(pc + 1);
                         JSValue value = valueStack.pop();
-                        currentFrame.getLocals()[putLocalIndex] = value;
+                        setLocalValue(putLocalIndex, value);
+                        pc += op.getSize();
+                    }
+                    case PUT_LOC8 -> {
+                        int putLocalIndex = bytecode.readU8(pc + 1);
+                        JSValue value = valueStack.pop();
+                        setLocalValue(putLocalIndex, value);
+                        pc += op.getSize();
+                    }
+                    case PUT_LOC0, PUT_LOC1, PUT_LOC2, PUT_LOC3 -> {
+                        int putLocalIndex = switch (op) {
+                            case PUT_LOC0 -> 0;
+                            case PUT_LOC1 -> 1;
+                            case PUT_LOC2 -> 2;
+                            case PUT_LOC3 -> 3;
+                            default -> throw new IllegalStateException("Unexpected short put local opcode: " + op);
+                        };
+                        JSValue value = valueStack.pop();
+                        setLocalValue(putLocalIndex, value);
                         pc += op.getSize();
                     }
                     case SET_LOCAL, SET_LOC -> {
                         int setLocalIndex = bytecode.readU16(pc + 1);
-                        currentFrame.getLocals()[setLocalIndex] = valueStack.peek(0);
+                        setLocalValue(setLocalIndex, valueStack.peek(0));
+                        pc += op.getSize();
+                    }
+                    case SET_LOC8 -> {
+                        int setLocalIndex = bytecode.readU8(pc + 1);
+                        setLocalValue(setLocalIndex, valueStack.peek(0));
+                        pc += op.getSize();
+                    }
+                    case SET_LOC0, SET_LOC1, SET_LOC2, SET_LOC3 -> {
+                        int setLocalIndex = switch (op) {
+                            case SET_LOC0 -> 0;
+                            case SET_LOC1 -> 1;
+                            case SET_LOC2 -> 2;
+                            case SET_LOC3 -> 3;
+                            default -> throw new IllegalStateException("Unexpected short set local opcode: " + op);
+                        };
+                        setLocalValue(setLocalIndex, valueStack.peek(0));
+                        pc += op.getSize();
+                    }
+                    case GET_ARG -> {
+                        int argIndex = bytecode.readU16(pc + 1);
+                        valueStack.push(getArgumentValue(argIndex));
+                        pc += op.getSize();
+                    }
+                    case GET_ARG0, GET_ARG1, GET_ARG2, GET_ARG3 -> {
+                        int argIndex = switch (op) {
+                            case GET_ARG0 -> 0;
+                            case GET_ARG1 -> 1;
+                            case GET_ARG2 -> 2;
+                            case GET_ARG3 -> 3;
+                            default -> throw new IllegalStateException("Unexpected short get arg opcode: " + op);
+                        };
+                        valueStack.push(getArgumentValue(argIndex));
+                        pc += op.getSize();
+                    }
+                    case PUT_ARG -> {
+                        int argIndex = bytecode.readU16(pc + 1);
+                        JSValue value = valueStack.pop();
+                        setArgumentValue(argIndex, value);
+                        pc += op.getSize();
+                    }
+                    case PUT_ARG0, PUT_ARG1, PUT_ARG2, PUT_ARG3 -> {
+                        int argIndex = switch (op) {
+                            case PUT_ARG0 -> 0;
+                            case PUT_ARG1 -> 1;
+                            case PUT_ARG2 -> 2;
+                            case PUT_ARG3 -> 3;
+                            default -> throw new IllegalStateException("Unexpected short put arg opcode: " + op);
+                        };
+                        JSValue value = valueStack.pop();
+                        setArgumentValue(argIndex, value);
+                        pc += op.getSize();
+                    }
+                    case SET_ARG -> {
+                        int argIndex = bytecode.readU16(pc + 1);
+                        setArgumentValue(argIndex, valueStack.peek(0));
+                        pc += op.getSize();
+                    }
+                    case SET_ARG0, SET_ARG1, SET_ARG2, SET_ARG3 -> {
+                        int argIndex = switch (op) {
+                            case SET_ARG0 -> 0;
+                            case SET_ARG1 -> 1;
+                            case SET_ARG2 -> 2;
+                            case SET_ARG3 -> 3;
+                            default -> throw new IllegalStateException("Unexpected short set arg opcode: " + op);
+                        };
+                        setArgumentValue(argIndex, valueStack.peek(0));
                         pc += op.getSize();
                     }
                     case GET_VAR_REF -> {
                         int getVarRefIndex = bytecode.readU16(pc + 1);
+                        valueStack.push(currentFrame.getVarRef(getVarRefIndex));
+                        pc += op.getSize();
+                    }
+                    case GET_VAR_REF0, GET_VAR_REF1, GET_VAR_REF2, GET_VAR_REF3 -> {
+                        int getVarRefIndex = switch (op) {
+                            case GET_VAR_REF0 -> 0;
+                            case GET_VAR_REF1 -> 1;
+                            case GET_VAR_REF2 -> 2;
+                            case GET_VAR_REF3 -> 3;
+                            default -> throw new IllegalStateException("Unexpected short get var ref opcode: " + op);
+                        };
                         valueStack.push(currentFrame.getVarRef(getVarRefIndex));
                         pc += op.getSize();
                     }
@@ -784,8 +1021,31 @@ public final class VirtualMachine {
                         currentFrame.setVarRef(putVarRefIndex, value);
                         pc += op.getSize();
                     }
+                    case PUT_VAR_REF0, PUT_VAR_REF1, PUT_VAR_REF2, PUT_VAR_REF3 -> {
+                        int putVarRefIndex = switch (op) {
+                            case PUT_VAR_REF0 -> 0;
+                            case PUT_VAR_REF1 -> 1;
+                            case PUT_VAR_REF2 -> 2;
+                            case PUT_VAR_REF3 -> 3;
+                            default -> throw new IllegalStateException("Unexpected short put var ref opcode: " + op);
+                        };
+                        JSValue value = valueStack.pop();
+                        currentFrame.setVarRef(putVarRefIndex, value);
+                        pc += op.getSize();
+                    }
                     case SET_VAR_REF -> {
                         int setVarRefIndex = bytecode.readU16(pc + 1);
+                        currentFrame.setVarRef(setVarRefIndex, valueStack.peek(0));
+                        pc += op.getSize();
+                    }
+                    case SET_VAR_REF0, SET_VAR_REF1, SET_VAR_REF2, SET_VAR_REF3 -> {
+                        int setVarRefIndex = switch (op) {
+                            case SET_VAR_REF0 -> 0;
+                            case SET_VAR_REF1 -> 1;
+                            case SET_VAR_REF2 -> 2;
+                            case SET_VAR_REF3 -> 3;
+                            default -> throw new IllegalStateException("Unexpected short set var ref opcode: " + op);
+                        };
                         currentFrame.setVarRef(setVarRefIndex, valueStack.peek(0));
                         pc += op.getSize();
                     }
@@ -1000,6 +1260,35 @@ public final class VirtualMachine {
                         }
                         pc += op.getSize();
                     }
+                    case GET_ARRAY_EL3 -> {
+                        JSValue index = valueStack.peek(0);
+                        JSValue arrayObj = valueStack.peek(1);
+
+                        if (!(index instanceof JSNumber || index instanceof JSString || index instanceof JSSymbol)) {
+                            if (arrayObj.isUndefined() || arrayObj.isNull()) {
+                                throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
+                            }
+                            JSValue convertedIndex = toPropertyKeyValue(index);
+                            valueStack.set(0, convertedIndex);
+                            index = convertedIndex;
+                        }
+
+                        JSObject targetObj = toObject(arrayObj);
+                        if (targetObj == null) {
+                            throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
+                        }
+
+                        PropertyKey key = PropertyKey.fromValue(context, index);
+                        JSValue result = targetObj.get(key, context);
+                        if (context.hasPendingException()) {
+                            pendingException = context.getPendingException();
+                            context.clearPendingException();
+                            valueStack.push(JSUndefined.INSTANCE);
+                        } else {
+                            valueStack.push(result);
+                        }
+                        pc += op.getSize();
+                    }
                     case PUT_ARRAY_EL -> {
                         // Stack layout: [value, object, property] (property on top)
                         JSValue putElIndex = valueStack.pop();   // Pop property
@@ -1052,8 +1341,36 @@ public final class VirtualMachine {
                             pc += op.getSize();
                         }
                     }
+                    case IF_TRUE8 -> {
+                        JSValue condition = valueStack.pop();
+                        boolean isTruthy = JSTypeConversions.toBoolean(condition) == JSBoolean.TRUE;
+                        int offset = (byte) bytecode.readU8(pc + 1);
+                        if (isTruthy) {
+                            pc += op.getSize() + offset;
+                        } else {
+                            pc += op.getSize();
+                        }
+                    }
+                    case IF_FALSE8 -> {
+                        JSValue condition = valueStack.pop();
+                        boolean isFalsy = JSTypeConversions.toBoolean(condition) == JSBoolean.FALSE;
+                        int offset = (byte) bytecode.readU8(pc + 1);
+                        if (isFalsy) {
+                            pc += op.getSize() + offset;
+                        } else {
+                            pc += op.getSize();
+                        }
+                    }
                     case GOTO -> {
                         int gotoOffset = bytecode.readI32(pc + 1);
+                        pc += op.getSize() + gotoOffset;
+                    }
+                    case GOTO8 -> {
+                        int gotoOffset = (byte) bytecode.readU8(pc + 1);
+                        pc += op.getSize() + gotoOffset;
+                    }
+                    case GOTO16 -> {
+                        int gotoOffset = (short) bytecode.readU16(pc + 1);
                         pc += op.getSize() + gotoOffset;
                     }
                     case RETURN -> {
@@ -1101,6 +1418,17 @@ public final class VirtualMachine {
                     }
                     case CALL -> {
                         int argCount = bytecode.readU16(pc + 1);
+                        handleCall(argCount);
+                        pc += op.getSize();
+                    }
+                    case CALL0, CALL1, CALL2, CALL3 -> {
+                        int argCount = switch (op) {
+                            case CALL0 -> 0;
+                            case CALL1 -> 1;
+                            case CALL2 -> 2;
+                            case CALL3 -> 3;
+                            default -> throw new IllegalStateException("Unexpected short call opcode: " + op);
+                        };
                         handleCall(argCount);
                         pc += op.getSize();
                     }
@@ -1572,6 +1900,26 @@ public final class VirtualMachine {
                         handleIsUndefinedOrNull();
                         pc += op.getSize();
                     }
+                    case IS_UNDEFINED -> {
+                        JSValue value = valueStack.peek(0);
+                        valueStack.set(0, JSBoolean.valueOf(value.isUndefined()));
+                        pc += op.getSize();
+                    }
+                    case IS_NULL -> {
+                        JSValue value = valueStack.peek(0);
+                        valueStack.set(0, JSBoolean.valueOf(value.isNull()));
+                        pc += op.getSize();
+                    }
+                    case TYPEOF_IS_UNDEFINED -> {
+                        JSValue value = valueStack.peek(0);
+                        valueStack.set(0, JSBoolean.valueOf("undefined".equals(JSTypeChecking.typeof(value))));
+                        pc += op.getSize();
+                    }
+                    case TYPEOF_IS_FUNCTION -> {
+                        JSValue value = valueStack.peek(0);
+                        valueStack.set(0, JSBoolean.valueOf("function".equals(JSTypeChecking.typeof(value))));
+                        pc += op.getSize();
+                    }
 
                     // ==================== Async Operations ====================
                     case ITERATOR_CHECK_OBJECT -> {
@@ -1730,6 +2078,7 @@ public final class VirtualMachine {
                         handleAsyncYieldStar();
                         pc += op.getSize();
                     }
+                    case NOP -> pc += op.getSize();
 
                     // ==================== Other Operations ====================
                     default -> throw new JSVirtualMachineException("Unimplemented opcode: " + op + " at PC " + pc);

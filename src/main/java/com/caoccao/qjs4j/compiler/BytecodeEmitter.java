@@ -117,7 +117,17 @@ public final class BytecodeEmitter {
      * Emit a single opcode.
      */
     public void emitOpcode(Opcode op) {
-        code.write(op.getCode());
+        int opcode = op.getCode();
+        if (opcode <= 0xFF) {
+            code.write(opcode);
+        } else {
+            // Extended opcode encoding:
+            // - prefix 0x00 (INVALID opcode slot)
+            // - second byte stores opcode - 256
+            // The VM decoder maps this pair back to the original Opcode enum entry.
+            code.write(0);
+            code.write(opcode - 0x100);
+        }
     }
 
     /**

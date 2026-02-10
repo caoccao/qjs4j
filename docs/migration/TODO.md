@@ -25,25 +25,18 @@ This document tracks remaining features, known bugs, and planned enhancements fo
 
 ## Opcodes Not Yet Implemented
 
-**Summary**: High and medium-priority opcode migration is completed. Remaining work is low-priority opcode coverage and optimizations.
+**Summary**: High, medium, and low-priority opcode migration is mostly complete. Remaining opcode gaps:
+- `DELETE_VAR` (QuickJS opcode 152)
+- `PUSH_BIGINT_I32` (QuickJS opcode 177)
 
 ### High Priority Opcodes (Core Functionality)
 - Completed on 2026-02-10.
 
 ### Medium Priority Opcodes (Enhanced Functionality)
-- Completed on 2026-02-10.
+- Completed on 2026-02-10 except for `DELETE_VAR` and `PUSH_BIGINT_I32`.
 
 ### Low Priority Opcodes (Optimizations)
-
-All SHORT_OPCODES (179-244) for performance optimization:
-- PUSH_0 through PUSH_7
-- PUSH_I8, PUSH_I16, PUSH_CONST8
-- GET_LOC0-3, PUT_LOC0-3, SET_LOC0-3
-- GET_ARG0-3, PUT_ARG0-3, SET_ARG0-3
-- GET_VAR_REF0-3, PUT_VAR_REF0-3, SET_VAR_REF0-3
-- IF_FALSE8, IF_TRUE8, GOTO8, GOTO16
-- CALL0-3
-- IS_UNDEFINED, IS_NULL, TYPEOF_IS_UNDEFINED, TYPEOF_IS_FUNCTION
+- Completed on 2026-02-10 (includes SHORT_OPCODES 179-244, `DEC_LOC`/`INC_LOC`/`ADD_LOC`, `NOP`, and `GET_ARRAY_EL3`).
 
 **Reference**: [OPCODE_IMPLEMENTATION_STATUS.md](OPCODE_IMPLEMENTATION_STATUS.md)
 
@@ -108,7 +101,7 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 3. Fix Proxy.revocable behavior
 
 ### Phase 2: Core Opcodes (Essential)
-1. Implement MEDIUM priority opcodes (see above)
+1. Implement remaining medium-priority opcodes (`DELETE_VAR`, `PUSH_BIGINT_I32`)
 2. Expand iterator opcode coverage for advanced iterator control flow
 3. Improve closure and var-ref fidelity for full QuickJS parity
 
@@ -121,9 +114,8 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 2. AsyncDisposableStack and explicit resource management
 
 ### Phase 5: Optimizations
-1. SHORT_OPCODES implementation
-2. Performance profiling and optimization
-3. Test262 conformance improvements
+1. Performance profiling and optimization
+2. Test262 conformance improvements
 
 ---
 

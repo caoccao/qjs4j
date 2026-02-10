@@ -6,8 +6,8 @@ This document tracks the implementation status of all QuickJS opcodes in qjs4j. 
 
 **Total Opcodes**: 245 (all 245 are now DEFINED in Opcode.java enum)
 **Enum Definitions**: 262 total opcodes in qjs4j Opcode.java (includes 144 original + 118 newly added)
-**Fully Implemented**: 189 (77.1%) - have VM handlers in VirtualMachine.java
-**Defined but Not Implemented**: 56 (22.9%) - added to Opcode.java, need VM implementation
+**Fully Implemented**: 243 (99.2%) - have VM handlers in VirtualMachine.java
+**Defined but Not Implemented**: 2 (0.8%) - added to Opcode.java, need VM implementation
 
 **Last Updated**: 2026-02-10
 
@@ -36,6 +36,8 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 - Added regression tests in `src/test/java/com/caoccao/qjs4j/vm/HighPriorityOpcodeTest.java`.
 - Completed medium-priority opcode handlers in `VirtualMachine.java`.
 - Added regression tests in `src/test/java/com/caoccao/qjs4j/vm/MediumPriorityOpcodeTest.java`.
+- Completed low-priority opcode handlers, including SHORT_OPCODES (179-244).
+- Added regression tests in `src/test/java/com/caoccao/qjs4j/vm/LowPriorityOpcodeTest.java`.
 
 ## Opcode Categories
 
@@ -127,7 +129,7 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 | 66 | DEFINE_PRIVATE_FIELD | 1 | ✅ Implemented | - | Define private field |
 | 67 | GET_ARRAY_EL | 1 | ✅ Implemented | - | Get array element |
 | 68 | GET_ARRAY_EL2 | 1 | ✅ Implemented | MEDIUM | Get element, keep obj |
-| 69 | GET_ARRAY_EL3 | 1 | ⏳ **Missing** | LOW | Get element, keep obj and prop |
+| 69 | GET_ARRAY_EL3 | 1 | ✅ Implemented | LOW | Get element, keep obj and prop |
 | 70 | PUT_ARRAY_EL | 1 | ✅ Implemented | - | Set array element |
 | 71 | GET_SUPER_VALUE | 1 | ✅ Implemented | - | Get super property |
 | 72 | PUT_SUPER_VALUE | 1 | ✅ Implemented | - | Set super property |
@@ -223,9 +225,9 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 | 142 | INC | 1 | ✅ Implemented | - | Increment |
 | 143 | POST_DEC | 1 | ✅ Implemented | - | Post-decrement |
 | 144 | POST_INC | 1 | ✅ Implemented | - | Post-increment |
-| 145 | DEC_LOC | 2 | ⏳ **Missing** | LOW | Decrement local |
-| 146 | INC_LOC | 2 | ⏳ **Missing** | LOW | Increment local |
-| 147 | ADD_LOC | 2 | ⏳ **Missing** | LOW | Add to local |
+| 145 | DEC_LOC | 2 | ✅ Implemented | LOW | Decrement local |
+| 146 | INC_LOC | 2 | ✅ Implemented | LOW | Increment local |
+| 147 | ADD_LOC | 2 | ✅ Implemented | LOW | Add to local |
 | 148 | NOT | 1 | ✅ Implemented | - | Bitwise NOT |
 | 149 | LNOT | 1 | ✅ Implemented | - | Logical NOT (!) |
 | 150 | TYPEOF | 1 | ✅ Implemented | - | typeof operator |
@@ -264,99 +266,99 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 | 175 | IS_UNDEFINED_OR_NULL | 1 | ✅ Implemented | - | Check null/undefined |
 | 176 | PRIVATE_IN | 1 | ✅ Implemented | - | Check private field |
 | 177 | PUSH_BIGINT_I32 | 5 | ⏳ **Missing** | MEDIUM | Push BigInt from i32 |
-| 178 | NOP | 1 | ⏳ **Missing** | LOW | No operation |
+| 178 | NOP | 1 | ✅ Implemented | LOW | No operation |
 
 ### SHORT_OPCODES (Optimizations 179-244)
 
 #### Short Push Operations (179-189)
 | # | Opcode | Size | Status | Priority | Notes |
 |---|--------|------|--------|----------|-------|
-| 179 | PUSH_MINUS1 | 1 | ⏳ **Missing** | LOW | Push -1 |
-| 180 | PUSH_0 | 1 | ⏳ **Missing** | LOW | Push 0 |
-| 181 | PUSH_1 | 1 | ⏳ **Missing** | LOW | Push 1 |
-| 182 | PUSH_2 | 1 | ⏳ **Missing** | LOW | Push 2 |
-| 183 | PUSH_3 | 1 | ⏳ **Missing** | LOW | Push 3 |
-| 184 | PUSH_4 | 1 | ⏳ **Missing** | LOW | Push 4 |
-| 185 | PUSH_5 | 1 | ⏳ **Missing** | LOW | Push 5 |
-| 186 | PUSH_6 | 1 | ⏳ **Missing** | LOW | Push 6 |
-| 187 | PUSH_7 | 1 | ⏳ **Missing** | LOW | Push 7 |
-| 188 | PUSH_I8 | 2 | ⏳ **Missing** | LOW | Push 8-bit integer |
-| 189 | PUSH_I16 | 3 | ⏳ **Missing** | LOW | Push 16-bit integer |
+| 179 | PUSH_MINUS1 | 1 | ✅ Implemented | LOW | Push -1 |
+| 180 | PUSH_0 | 1 | ✅ Implemented | LOW | Push 0 |
+| 181 | PUSH_1 | 1 | ✅ Implemented | LOW | Push 1 |
+| 182 | PUSH_2 | 1 | ✅ Implemented | LOW | Push 2 |
+| 183 | PUSH_3 | 1 | ✅ Implemented | LOW | Push 3 |
+| 184 | PUSH_4 | 1 | ✅ Implemented | LOW | Push 4 |
+| 185 | PUSH_5 | 1 | ✅ Implemented | LOW | Push 5 |
+| 186 | PUSH_6 | 1 | ✅ Implemented | LOW | Push 6 |
+| 187 | PUSH_7 | 1 | ✅ Implemented | LOW | Push 7 |
+| 188 | PUSH_I8 | 2 | ✅ Implemented | LOW | Push 8-bit integer |
+| 189 | PUSH_I16 | 3 | ✅ Implemented | LOW | Push 16-bit integer |
 
-#### Short Constant Operations (190-193)
+#### Short Constant Operations (190-192)
 | # | Opcode | Size | Status | Priority | Notes |
 |---|--------|------|--------|----------|-------|
-| 190 | PUSH_CONST8 | 2 | ⏳ **Missing** | LOW | Push const (8-bit index) |
-| 191 | FCLOSURE8 | 2 | ⏳ **Missing** | LOW | Create closure (8-bit index) |
-| 192 | PUSH_EMPTY_STRING | 1 | ⏳ **Missing** | LOW | Push "" |
+| 190 | PUSH_CONST8 | 2 | ✅ Implemented | LOW | Push const (8-bit index) |
+| 191 | FCLOSURE8 | 2 | ✅ Implemented | LOW | Create closure (8-bit index) |
+| 192 | PUSH_EMPTY_STRING | 1 | ✅ Implemented | LOW | Push "" |
 
-#### Short Local Operations (193-205)
+#### Short Local Operations (193-207)
 | # | Opcode | Size | Status | Priority | Notes |
 |---|--------|------|--------|----------|-------|
-| 193 | GET_LOC8 | 2 | ⏳ **Missing** | MEDIUM | Get local (8-bit index) |
-| 194 | PUT_LOC8 | 2 | ⏳ **Missing** | MEDIUM | Set local (8-bit index) |
-| 195 | SET_LOC8 | 2 | ⏳ **Missing** | MEDIUM | Set local, keep value (8-bit) |
-| 196 | GET_LOC0 | 1 | ⏳ **Missing** | MEDIUM | Get local 0 |
-| 197 | GET_LOC1 | 1 | ⏳ **Missing** | MEDIUM | Get local 1 |
-| 198 | GET_LOC2 | 1 | ⏳ **Missing** | MEDIUM | Get local 2 |
-| 199 | GET_LOC3 | 1 | ⏳ **Missing** | MEDIUM | Get local 3 |
-| 200 | PUT_LOC0 | 1 | ⏳ **Missing** | MEDIUM | Set local 0 |
-| 201 | PUT_LOC1 | 1 | ⏳ **Missing** | MEDIUM | Set local 1 |
-| 202 | PUT_LOC2 | 1 | ⏳ **Missing** | MEDIUM | Set local 2 |
-| 203 | PUT_LOC3 | 1 | ⏳ **Missing** | MEDIUM | Set local 3 |
-| 204 | SET_LOC0 | 1 | ⏳ **Missing** | MEDIUM | Set local 0, keep value |
-| 205 | SET_LOC1 | 1 | ⏳ **Missing** | MEDIUM | Set local 1, keep value |
-| 206 | SET_LOC2 | 1 | ⏳ **Missing** | MEDIUM | Set local 2, keep value |
-| 207 | SET_LOC3 | 1 | ⏳ **Missing** | MEDIUM | Set local 3, keep value |
+| 193 | GET_LOC8 | 2 | ✅ Implemented | MEDIUM | Get local (8-bit index) |
+| 194 | PUT_LOC8 | 2 | ✅ Implemented | MEDIUM | Set local (8-bit index) |
+| 195 | SET_LOC8 | 2 | ✅ Implemented | MEDIUM | Set local, keep value (8-bit) |
+| 196 | GET_LOC0 | 1 | ✅ Implemented | MEDIUM | Get local 0 |
+| 197 | GET_LOC1 | 1 | ✅ Implemented | MEDIUM | Get local 1 |
+| 198 | GET_LOC2 | 1 | ✅ Implemented | MEDIUM | Get local 2 |
+| 199 | GET_LOC3 | 1 | ✅ Implemented | MEDIUM | Get local 3 |
+| 200 | PUT_LOC0 | 1 | ✅ Implemented | MEDIUM | Set local 0 |
+| 201 | PUT_LOC1 | 1 | ✅ Implemented | MEDIUM | Set local 1 |
+| 202 | PUT_LOC2 | 1 | ✅ Implemented | MEDIUM | Set local 2 |
+| 203 | PUT_LOC3 | 1 | ✅ Implemented | MEDIUM | Set local 3 |
+| 204 | SET_LOC0 | 1 | ✅ Implemented | MEDIUM | Set local 0, keep value |
+| 205 | SET_LOC1 | 1 | ✅ Implemented | MEDIUM | Set local 1, keep value |
+| 206 | SET_LOC2 | 1 | ✅ Implemented | MEDIUM | Set local 2, keep value |
+| 207 | SET_LOC3 | 1 | ✅ Implemented | MEDIUM | Set local 3, keep value |
 
 #### Short Argument Operations (208-219)
 | # | Opcode | Size | Status | Priority | Notes |
 |---|--------|------|--------|----------|-------|
-| 208 | GET_ARG0 | 1 | ⏳ **Missing** | LOW | Get argument 0 |
-| 209 | GET_ARG1 | 1 | ⏳ **Missing** | LOW | Get argument 1 |
-| 210 | GET_ARG2 | 1 | ⏳ **Missing** | LOW | Get argument 2 |
-| 211 | GET_ARG3 | 1 | ⏳ **Missing** | LOW | Get argument 3 |
-| 212 | PUT_ARG0 | 1 | ⏳ **Missing** | LOW | Set argument 0 |
-| 213 | PUT_ARG1 | 1 | ⏳ **Missing** | LOW | Set argument 1 |
-| 214 | PUT_ARG2 | 1 | ⏳ **Missing** | LOW | Set argument 2 |
-| 215 | PUT_ARG3 | 1 | ⏳ **Missing** | LOW | Set argument 3 |
-| 216 | SET_ARG0 | 1 | ⏳ **Missing** | LOW | Set arg 0, keep value |
-| 217 | SET_ARG1 | 1 | ⏳ **Missing** | LOW | Set arg 1, keep value |
-| 218 | SET_ARG2 | 1 | ⏳ **Missing** | LOW | Set arg 2, keep value |
-| 219 | SET_ARG3 | 1 | ⏳ **Missing** | LOW | Set arg 3, keep value |
+| 208 | GET_ARG0 | 1 | ✅ Implemented | LOW | Get argument 0 |
+| 209 | GET_ARG1 | 1 | ✅ Implemented | LOW | Get argument 1 |
+| 210 | GET_ARG2 | 1 | ✅ Implemented | LOW | Get argument 2 |
+| 211 | GET_ARG3 | 1 | ✅ Implemented | LOW | Get argument 3 |
+| 212 | PUT_ARG0 | 1 | ✅ Implemented | LOW | Set argument 0 |
+| 213 | PUT_ARG1 | 1 | ✅ Implemented | LOW | Set argument 1 |
+| 214 | PUT_ARG2 | 1 | ✅ Implemented | LOW | Set argument 2 |
+| 215 | PUT_ARG3 | 1 | ✅ Implemented | LOW | Set argument 3 |
+| 216 | SET_ARG0 | 1 | ✅ Implemented | LOW | Set arg 0, keep value |
+| 217 | SET_ARG1 | 1 | ✅ Implemented | LOW | Set arg 1, keep value |
+| 218 | SET_ARG2 | 1 | ✅ Implemented | LOW | Set arg 2, keep value |
+| 219 | SET_ARG3 | 1 | ✅ Implemented | LOW | Set arg 3, keep value |
 
 #### Short Var Ref Operations (220-231)
 | # | Opcode | Size | Status | Priority | Notes |
 |---|--------|------|--------|----------|-------|
-| 220 | GET_VAR_REF0 | 1 | ⏳ **Missing** | LOW | Get var ref 0 |
-| 221 | GET_VAR_REF1 | 1 | ⏳ **Missing** | LOW | Get var ref 1 |
-| 222 | GET_VAR_REF2 | 1 | ⏳ **Missing** | LOW | Get var ref 2 |
-| 223 | GET_VAR_REF3 | 1 | ⏳ **Missing** | LOW | Get var ref 3 |
-| 224 | PUT_VAR_REF0 | 1 | ⏳ **Missing** | LOW | Set var ref 0 |
-| 225 | PUT_VAR_REF1 | 1 | ⏳ **Missing** | LOW | Set var ref 1 |
-| 226 | PUT_VAR_REF2 | 1 | ⏳ **Missing** | LOW | Set var ref 2 |
-| 227 | PUT_VAR_REF3 | 1 | ⏳ **Missing** | LOW | Set var ref 3 |
-| 228 | SET_VAR_REF0 | 1 | ⏳ **Missing** | LOW | Set var ref 0, keep value |
-| 229 | SET_VAR_REF1 | 1 | ⏳ **Missing** | LOW | Set var ref 1, keep value |
-| 230 | SET_VAR_REF2 | 1 | ⏳ **Missing** | LOW | Set var ref 2, keep value |
-| 231 | SET_VAR_REF3 | 1 | ⏳ **Missing** | LOW | Set var ref 3, keep value |
+| 220 | GET_VAR_REF0 | 1 | ✅ Implemented | LOW | Get var ref 0 |
+| 221 | GET_VAR_REF1 | 1 | ✅ Implemented | LOW | Get var ref 1 |
+| 222 | GET_VAR_REF2 | 1 | ✅ Implemented | LOW | Get var ref 2 |
+| 223 | GET_VAR_REF3 | 1 | ✅ Implemented | LOW | Get var ref 3 |
+| 224 | PUT_VAR_REF0 | 1 | ✅ Implemented | LOW | Set var ref 0 |
+| 225 | PUT_VAR_REF1 | 1 | ✅ Implemented | LOW | Set var ref 1 |
+| 226 | PUT_VAR_REF2 | 1 | ✅ Implemented | LOW | Set var ref 2 |
+| 227 | PUT_VAR_REF3 | 1 | ✅ Implemented | LOW | Set var ref 3 |
+| 228 | SET_VAR_REF0 | 1 | ✅ Implemented | LOW | Set var ref 0, keep value |
+| 229 | SET_VAR_REF1 | 1 | ✅ Implemented | LOW | Set var ref 1, keep value |
+| 230 | SET_VAR_REF2 | 1 | ✅ Implemented | LOW | Set var ref 2, keep value |
+| 231 | SET_VAR_REF3 | 1 | ✅ Implemented | LOW | Set var ref 3, keep value |
 
 #### Short Misc Operations (232-244)
 | # | Opcode | Size | Status | Priority | Notes |
 |---|--------|------|--------|----------|-------|
 | 232 | GET_LENGTH | 1 | ✅ Implemented | MEDIUM | Get array length |
-| 233 | IF_FALSE8 | 2 | ⏳ **Missing** | LOW | Conditional jump (8-bit) |
-| 234 | IF_TRUE8 | 2 | ⏳ **Missing** | LOW | Conditional jump (8-bit) |
-| 235 | GOTO8 | 2 | ⏳ **Missing** | LOW | Jump (8-bit offset) |
-| 236 | GOTO16 | 3 | ⏳ **Missing** | LOW | Jump (16-bit offset) |
-| 237 | CALL0 | 1 | ⏳ **Missing** | LOW | Call with 0 args |
-| 238 | CALL1 | 1 | ⏳ **Missing** | LOW | Call with 1 arg |
-| 239 | CALL2 | 1 | ⏳ **Missing** | LOW | Call with 2 args |
-| 240 | CALL3 | 1 | ⏳ **Missing** | LOW | Call with 3 args |
-| 241 | IS_UNDEFINED | 1 | ⏳ **Missing** | LOW | Check if undefined |
-| 242 | IS_NULL | 1 | ⏳ **Missing** | LOW | Check if null |
-| 243 | TYPEOF_IS_UNDEFINED | 1 | ⏳ **Missing** | LOW | typeof === 'undefined' |
-| 244 | TYPEOF_IS_FUNCTION | 1 | ⏳ **Missing** | LOW | typeof === 'function' |
+| 233 | IF_FALSE8 | 2 | ✅ Implemented | LOW | Conditional jump (8-bit) |
+| 234 | IF_TRUE8 | 2 | ✅ Implemented | LOW | Conditional jump (8-bit) |
+| 235 | GOTO8 | 2 | ✅ Implemented | LOW | Jump (8-bit offset) |
+| 236 | GOTO16 | 3 | ✅ Implemented | LOW | Jump (16-bit offset) |
+| 237 | CALL0 | 1 | ✅ Implemented | LOW | Call with 0 args |
+| 238 | CALL1 | 1 | ✅ Implemented | LOW | Call with 1 arg |
+| 239 | CALL2 | 1 | ✅ Implemented | LOW | Call with 2 args |
+| 240 | CALL3 | 1 | ✅ Implemented | LOW | Call with 3 args |
+| 241 | IS_UNDEFINED | 1 | ✅ Implemented | LOW | Check if undefined |
+| 242 | IS_NULL | 1 | ✅ Implemented | LOW | Check if null |
+| 243 | TYPEOF_IS_UNDEFINED | 1 | ✅ Implemented | LOW | typeof === 'undefined' |
+| 244 | TYPEOF_IS_FUNCTION | 1 | ✅ Implemented | LOW | typeof === 'function' |
 
 ## Implementation Priority
 
@@ -377,11 +379,7 @@ These opcodes provide important but non-critical features:
 9. **GET_LENGTH** (232) - Array length optimization
 
 ### LOW Priority (Optimizations)
-These are performance optimizations that can be implemented later:
-
-1. **SHORT_OPCODES** (179-244) - All short opcode variants
-2. **DEC_LOC**, **INC_LOC**, **ADD_LOC** (145-147) - Local optimizations
-3. **Short local/arg/varref operations** (193-231) - Fast path for common cases
+Completed on 2026-02-10.
 
 ## Temporary Opcodes (Compiler-Only)
 
@@ -411,9 +409,8 @@ These opcodes are used during compilation and removed before final bytecode:
    - Estimated: 30-40 opcodes
 
 3. **Phase 3: Optimizations** (LOW priority)
-   - Add SHORT_OPCODES for performance
-   - Implement fast paths for common operations
-   - Estimated: 60+ opcodes
+   - Completed: SHORT_OPCODES and low-priority fast paths are implemented
+   - Focus now on performance measurement and tuning
 
 4. **Phase 4: Compiler Temporary Opcodes**
    - Enhance compiler to use temporary opcodes
