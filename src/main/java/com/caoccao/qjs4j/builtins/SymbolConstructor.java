@@ -43,6 +43,20 @@ public final class SymbolConstructor {
     }
 
     /**
+     * Symbol.asyncDispose
+     */
+    public static JSValue getAsyncDispose(JSContext context, JSValue thisArg, JSValue[] args) {
+        return JSSymbol.ASYNC_DISPOSE;
+    }
+
+    /**
+     * Symbol.dispose
+     */
+    public static JSValue getDispose(JSContext context, JSValue thisArg, JSValue[] args) {
+        return JSSymbol.DISPOSE;
+    }
+
+    /**
      * Symbol.hasInstance
      * ES2020 19.4.2.3
      */

@@ -41,6 +41,8 @@ public final class JSSymbol implements JSValue {
     public static final JSSymbol SPLIT = new JSSymbol("Symbol.split", WELL_KNOWN_ID_START + 10);
     public static final JSSymbol SPECIES = new JSSymbol("Symbol.species", WELL_KNOWN_ID_START + 11);
     public static final JSSymbol UNSCOPABLES = new JSSymbol("Symbol.unscopables", WELL_KNOWN_ID_START + 12);
+    public static final JSSymbol DISPOSE = new JSSymbol("Symbol.dispose", WELL_KNOWN_ID_START + 13);
+    public static final JSSymbol ASYNC_DISPOSE = new JSSymbol("Symbol.asyncDispose", WELL_KNOWN_ID_START + 14);
     private static final AtomicInteger nextId = new AtomicInteger(0);
     private final String description;
     private final int id;
@@ -76,6 +78,8 @@ public final class JSSymbol implements JSValue {
             case "split" -> SPLIT;
             case "species" -> SPECIES;
             case "unscopables" -> UNSCOPABLES;
+            case "dispose" -> DISPOSE;
+            case "asyncDispose" -> ASYNC_DISPOSE;
             default -> null;
         };
     }

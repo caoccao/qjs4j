@@ -288,6 +288,11 @@ public final class Parser {
         return !moduleMode && asyncFunctionNesting == 0;
     }
 
+    private boolean isAwaitUsingDeclarationStart() {
+        return match(TokenType.AWAIT)
+                && isUsingIdentifierToken(nextToken);
+    }
+
     private boolean isExpressionStartToken(TokenType tokenType) {
         return switch (tokenType) {
             case ASYNC, AWAIT, BIGINT, CLASS, FALSE, FUNCTION, IDENTIFIER,
@@ -303,6 +308,23 @@ public final class Parser {
 
     private boolean isIdentifierStartChar(char c) {
         return Character.isLetter(c) || c == '_' || c == '$';
+    }
+
+    private boolean isPatternStartToken(TokenType tokenType) {
+        return tokenType == TokenType.IDENTIFIER
+                || tokenType == TokenType.LBRACE
+                || tokenType == TokenType.LBRACKET
+                || tokenType == TokenType.AWAIT;
+    }
+
+    private boolean isUsingDeclarationStart() {
+        return currentToken.type() == TokenType.IDENTIFIER
+                && "using".equals(currentToken.value())
+                && isPatternStartToken(nextToken.type());
+    }
+
+    private boolean isUsingIdentifierToken(Token token) {
+        return token.type() == TokenType.IDENTIFIER && "using".equals(token.value());
     }
 
     private boolean isValidContinuationAfterAwaitIdentifier() {
@@ -647,6 +669,8 @@ public final class Parser {
         return left;
     }
 
+    // Expression parsing with precedence
+
     private BlockStatement parseBlockStatement() {
         SourceLocation location = getLocation();
         expect(TokenType.LBRACE);
@@ -662,8 +686,6 @@ public final class Parser {
         expect(TokenType.RBRACE);
         return new BlockStatement(body, location);
     }
-
-    // Expression parsing with precedence
 
     private Statement parseBreakStatement() {
         SourceLocation location = getLocation();
@@ -1116,8 +1138,15 @@ public final class Parser {
         Statement parsedDecl = null;
 
         // Try to parse as variable declaration
-        if (match(TokenType.VAR) || match(TokenType.LET) || match(TokenType.CONST)) {
-            parsedDecl = parseVariableDeclaration();
+        if (match(TokenType.VAR) || match(TokenType.LET) || match(TokenType.CONST)
+                || isUsingDeclarationStart() || isAwaitUsingDeclarationStart()) {
+            if (isAwaitUsingDeclarationStart()) {
+                parsedDecl = parseUsingDeclaration(true);
+            } else if (isUsingDeclarationStart()) {
+                parsedDecl = parseUsingDeclaration(false);
+            } else {
+                parsedDecl = parseVariableDeclaration();
+            }
             // Check if next token is 'of' or 'in'
             if (match(TokenType.OF)) {
                 isForOf = true;
@@ -1166,8 +1195,15 @@ public final class Parser {
         if (parsedDecl != null) {
             init = parsedDecl;
         } else if (!match(TokenType.SEMICOLON)) {
-            if (match(TokenType.VAR) || match(TokenType.LET) || match(TokenType.CONST)) {
-                init = parseVariableDeclaration();
+            if (match(TokenType.VAR) || match(TokenType.LET) || match(TokenType.CONST)
+                    || isUsingDeclarationStart() || isAwaitUsingDeclarationStart()) {
+                if (isAwaitUsingDeclarationStart()) {
+                    init = parseUsingDeclaration(true);
+                } else if (isUsingDeclarationStart()) {
+                    init = parseUsingDeclaration(false);
+                } else {
+                    init = parseVariableDeclaration();
+                }
             } else {
                 init = parseExpressionStatement();
             }
@@ -1478,6 +1514,8 @@ public final class Parser {
         return left;
     }
 
+    // Utility methods
+
     private Expression parseObjectExpression() {
         SourceLocation location = getLocation();
         expect(TokenType.LBRACE);
@@ -1553,8 +1591,6 @@ public final class Parser {
         expect(TokenType.RBRACE);
         return new ObjectExpression(properties, location);
     }
-
-    // Utility methods
 
     private ObjectPattern parseObjectPattern() {
         SourceLocation location = getLocation();
@@ -1940,6 +1976,12 @@ public final class Parser {
     }
 
     private Statement parseStatement() {
+        if (isAwaitUsingDeclarationStart()) {
+            return parseUsingDeclaration(true);
+        }
+        if (isUsingDeclarationStart()) {
+            return parseUsingDeclaration(false);
+        }
         return switch (currentToken.type()) {
             case IF -> parseIfStatement();
             case WHILE -> parseWhileStatement();
@@ -2212,11 +2254,37 @@ public final class Parser {
         return parsePostfixExpression();
     }
 
+    private Statement parseUsingDeclaration(boolean isAwaitUsing) {
+        SourceLocation location = getLocation();
+        String kind;
+        if (isAwaitUsing) {
+            if (!isAwaitExpressionAllowed()) {
+                throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+            }
+            expect(TokenType.AWAIT);
+            if (!isUsingIdentifierToken(currentToken)) {
+                throw new RuntimeException("Expected using declaration after await");
+            }
+            advance();
+            kind = "await using";
+        } else {
+            if (!isUsingIdentifierToken(currentToken)) {
+                throw new RuntimeException("Expected using declaration");
+            }
+            advance();
+            kind = "using";
+        }
+        return parseVariableDeclarationBody(kind, location);
+    }
+
     private Statement parseVariableDeclaration() {
         SourceLocation location = getLocation();
         String kind = currentToken.value(); // "var", "let", or "const"
         advance();
+        return parseVariableDeclarationBody(kind, location);
+    }
 
+    private Statement parseVariableDeclarationBody(String kind, SourceLocation location) {
         List<VariableDeclaration.VariableDeclarator> declarations = new ArrayList<>();
 
         do {

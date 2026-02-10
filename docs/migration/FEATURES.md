@@ -59,7 +59,7 @@ This document provides a comprehensive list of all JavaScript features implement
 ## ES2015+ Features ✅
 
 ### Symbol (ES2015)
-- **Well-known symbols** (all 13):
+- **Well-known symbols** (all 15):
   - Symbol.iterator - Default iterator
   - Symbol.asyncIterator - Async iterator (ES2018)
   - Symbol.toStringTag - Object.prototype.toString customization
@@ -73,6 +73,8 @@ This document provides a comprehensive list of all JavaScript features implement
   - Symbol.split - String.prototype.split behavior
   - Symbol.species - Constructor for derived objects
   - Symbol.unscopables - With statement exclusions
+  - Symbol.dispose - Explicit resource cleanup hook (ES2024)
+  - Symbol.asyncDispose - Async explicit resource cleanup hook (ES2024)
 - **Symbol registry**: Symbol.for(), Symbol.keyFor()
 - **Symbol.prototype**: toString(), valueOf(), description
 
@@ -426,6 +428,10 @@ This document provides a comprehensive list of all JavaScript features implement
 - **Object.groupBy**: Group array elements into object
 - **Map.groupBy**: Group array elements into Map
 - **ArrayBuffer.prototype.detach**: Transfer ownership
+- **Explicit Resource Management**:
+  - `DisposableStack` and `AsyncDisposableStack`
+  - `Symbol.dispose` and `Symbol.asyncDispose`
+  - `using` and `await using` declaration syntax
 
 ## Partially Implemented 🚧
 

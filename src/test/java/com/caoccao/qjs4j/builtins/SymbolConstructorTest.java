@@ -58,6 +58,20 @@ public class SymbolConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testGetAsyncDispose() {
+        JSValue result = SymbolConstructor.getAsyncDispose(context, JSUndefined.INSTANCE, new JSValue[]{});
+        JSSymbol symbol = result.asSymbol().orElseThrow();
+        assertThat(symbol).isEqualTo(JSSymbol.ASYNC_DISPOSE);
+    }
+
+    @Test
+    public void testGetDispose() {
+        JSValue result = SymbolConstructor.getDispose(context, JSUndefined.INSTANCE, new JSValue[]{});
+        JSSymbol symbol = result.asSymbol().orElseThrow();
+        assertThat(symbol).isEqualTo(JSSymbol.DISPOSE);
+    }
+
+    @Test
     public void testGetHasInstance() {
         JSValue result = SymbolConstructor.getHasInstance(context, JSUndefined.INSTANCE, new JSValue[]{});
         JSSymbol symbol = result.asSymbol().orElseThrow();

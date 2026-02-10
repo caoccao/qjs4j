@@ -2,7 +2,7 @@
 
 This document tracks remaining features, known bugs, and planned enhancements for qjs4j.
 
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-02-10
 
 ## Not Yet Implemented
 
@@ -20,19 +20,6 @@ This document tracks remaining features, known bugs, and planned enhancements fo
   - Intl.ListFormat
   - Intl.Locale
 - **Reference**: [FEATURES.md](FEATURES.md#not-yet-implemented-)
-
-### Planned Features (ES2024+)
-
-#### Explicit Resource Management
-- **Status**: Planned - see [ASYNC_DISPOSABLE_STACK_PLAN.md](ASYNC_DISPOSABLE_STACK_PLAN.md)
-- **Components needed**:
-  - `Symbol.dispose` - Sync disposal symbol
-  - `Symbol.asyncDispose` - Async disposal symbol
-  - `DisposableStack` - Sync resource management
-  - `AsyncDisposableStack` - Async resource management
-  - `using` declaration syntax
-  - `using await` declaration syntax
-- **Estimated effort**: 14-21 hours
 
 ---
 

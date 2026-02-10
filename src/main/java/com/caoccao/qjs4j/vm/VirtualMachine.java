@@ -1330,18 +1330,15 @@ public final class VirtualMachine {
         if (promise.getState() == JSPromise.PromiseState.FULFILLED) {
             valueStack.push(promise.getResult());
         } else if (promise.getState() == JSPromise.PromiseState.REJECTED) {
-            // Check if there's a promise rejection callback
+            // Rejected await operand throws into the current async control flow.
+            // Let VM catch handling propagate it to surrounding try/catch.
+            JSValue result = promise.getResult();
             JSPromiseRejectCallback callback = context.getPromiseRejectCallback();
             if (callback != null) {
-                // Callback handles the rejection, set pending exception so catch clause can handle it
-                JSValue result = promise.getResult();
                 callback.callback(PromiseRejectEvent.PromiseRejectWithNoHandler, promise, result);
-                pendingException = result;
-                context.setPendingException(result);
-            } else {
-                // No callback set, follow current design: throw VM exception
-                throw new JSVirtualMachineException("Unhandled promise rejection: " + promise.getResult());
             }
+            pendingException = result;
+            context.setPendingException(result);
         } else {
             // Promise is still pending - this shouldn't happen
             throw new JSVirtualMachineException("Promise did not settle after processing microtasks");
@@ -1361,6 +1358,10 @@ public final class VirtualMachine {
 
         // Pop callee (method)
         JSValue callee = valueStack.pop();
+
+        // SWAP locks property tracking while evaluating method-call arguments.
+        // Unlock before invoking the callee so nested calls can build their own chains.
+        propertyAccessLock = false;
 
         // Handle proxy apply trap (QuickJS: js_proxy_call)
         if (callee instanceof JSProxy proxy) {

@@ -323,6 +323,8 @@ public final class GlobalObject {
         initializeReflectObject(context, global);
         initializeProxyConstructor(context, global);
         initializePromiseConstructor(context, global);
+        initializeDisposableStackConstructor(context, global);
+        initializeAsyncDisposableStackConstructor(context, global);
         initializeGeneratorPrototype(context, global);
         initializeIteratorConstructor(context, global);
 
@@ -464,6 +466,40 @@ public final class GlobalObject {
                 PropertyDescriptor.accessorDescriptor(arraySpeciesGetter, null, false, true));
 
         global.set("Array", arrayConstructor);
+    }
+
+    /**
+     * Initialize AsyncDisposableStack constructor and prototype.
+     */
+    private static void initializeAsyncDisposableStackConstructor(JSContext context, JSObject global) {
+        JSObject asyncDisposableStackPrototype = context.createJSObject();
+        asyncDisposableStackPrototype.set("adopt", new JSNativeFunction("adopt", 2, AsyncDisposableStackPrototype::adopt));
+        asyncDisposableStackPrototype.set("defer", new JSNativeFunction("defer", 1, AsyncDisposableStackPrototype::defer));
+        JSNativeFunction disposeAsyncFunction = new JSNativeFunction("disposeAsync", 0, AsyncDisposableStackPrototype::disposeAsync);
+        asyncDisposableStackPrototype.set("disposeAsync", disposeAsyncFunction);
+        asyncDisposableStackPrototype.set("move", new JSNativeFunction("move", 0, AsyncDisposableStackPrototype::move));
+        asyncDisposableStackPrototype.set("use", new JSNativeFunction("use", 1, AsyncDisposableStackPrototype::use));
+        asyncDisposableStackPrototype.set(PropertyKey.fromSymbol(JSSymbol.ASYNC_DISPOSE), disposeAsyncFunction);
+
+        JSNativeFunction disposedGetter = new JSNativeFunction("get disposed", 0, AsyncDisposableStackPrototype::getDisposed);
+        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("disposed"),
+                PropertyDescriptor.accessorDescriptor(disposedGetter, null, false, true));
+
+        JSNativeFunction toStringTagGetter = new JSNativeFunction("get [Symbol.toStringTag]", 0, (childContext, thisObj, args) -> {
+            if (!(thisObj instanceof JSAsyncDisposableStack)) {
+                return childContext.throwTypeError("get AsyncDisposableStack.prototype[Symbol.toStringTag] called on non-AsyncDisposableStack");
+            }
+            return new JSString(JSAsyncDisposableStack.NAME);
+        });
+        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                PropertyDescriptor.accessorDescriptor(toStringTagGetter, null, false, true));
+
+        JSNativeFunction asyncDisposableStackConstructor = new JSNativeFunction(
+                JSAsyncDisposableStack.NAME, 0, AsyncDisposableStackConstructor::call, true, true);
+        asyncDisposableStackConstructor.set("prototype", asyncDisposableStackPrototype);
+        asyncDisposableStackPrototype.set("constructor", asyncDisposableStackConstructor);
+
+        global.set(JSAsyncDisposableStack.NAME, asyncDisposableStackConstructor);
     }
 
     /**
@@ -653,6 +689,40 @@ public final class GlobalObject {
         dateConstructor.set("UTC", new JSNativeFunction("UTC", 7, DateConstructor::UTC));
 
         global.set("Date", dateConstructor);
+    }
+
+    /**
+     * Initialize DisposableStack constructor and prototype.
+     */
+    private static void initializeDisposableStackConstructor(JSContext context, JSObject global) {
+        JSObject disposableStackPrototype = context.createJSObject();
+        disposableStackPrototype.set("adopt", new JSNativeFunction("adopt", 2, DisposableStackPrototype::adopt));
+        disposableStackPrototype.set("defer", new JSNativeFunction("defer", 1, DisposableStackPrototype::defer));
+        JSNativeFunction disposeFunction = new JSNativeFunction("dispose", 0, DisposableStackPrototype::dispose);
+        disposableStackPrototype.set("dispose", disposeFunction);
+        disposableStackPrototype.set("move", new JSNativeFunction("move", 0, DisposableStackPrototype::move));
+        disposableStackPrototype.set("use", new JSNativeFunction("use", 1, DisposableStackPrototype::use));
+        disposableStackPrototype.set(PropertyKey.fromSymbol(JSSymbol.DISPOSE), disposeFunction);
+
+        JSNativeFunction disposedGetter = new JSNativeFunction("get disposed", 0, DisposableStackPrototype::getDisposed);
+        disposableStackPrototype.defineProperty(PropertyKey.fromString("disposed"),
+                PropertyDescriptor.accessorDescriptor(disposedGetter, null, false, true));
+
+        JSNativeFunction toStringTagGetter = new JSNativeFunction("get [Symbol.toStringTag]", 0, (childContext, thisObj, args) -> {
+            if (!(thisObj instanceof JSDisposableStack)) {
+                return childContext.throwTypeError("get DisposableStack.prototype[Symbol.toStringTag] called on non-DisposableStack");
+            }
+            return new JSString(JSDisposableStack.NAME);
+        });
+        disposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                PropertyDescriptor.accessorDescriptor(toStringTagGetter, null, false, true));
+
+        JSNativeFunction disposableStackConstructor = new JSNativeFunction(
+                JSDisposableStack.NAME, 0, DisposableStackConstructor::call, true, true);
+        disposableStackConstructor.set("prototype", disposableStackPrototype);
+        disposableStackPrototype.set("constructor", disposableStackConstructor);
+
+        global.set(JSDisposableStack.NAME, disposableStackConstructor);
     }
 
     /**
@@ -1300,6 +1370,8 @@ public final class GlobalObject {
         symbolConstructor.set("split", JSSymbol.SPLIT);
         symbolConstructor.set("species", JSSymbol.SPECIES);
         symbolConstructor.set("unscopables", JSSymbol.UNSCOPABLES);
+        symbolConstructor.set("dispose", JSSymbol.DISPOSE);
+        symbolConstructor.set("asyncDispose", JSSymbol.ASYNC_DISPOSE);
 
         global.set("Symbol", symbolConstructor);
     }
