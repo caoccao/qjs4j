@@ -44,4 +44,14 @@ public class ForStatementTest extends BaseJavetTest {
                         }
                         sum;""");
     }
+
+    @Test
+    public void testForLetClosurePerIterationBinding() {
+        assertStringWithJavet("""
+                var funcs = [];
+                for (let i = 0; i < 3; i++) {
+                  funcs.push(() => i);
+                }
+                funcs.map(f => f()).join(',')""");
+    }
 }

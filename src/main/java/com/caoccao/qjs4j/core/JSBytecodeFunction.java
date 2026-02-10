@@ -216,8 +216,12 @@ public final class JSBytecodeFunction extends JSFunction {
             generatorObj.set("return", new JSNativeFunction("return", 1, (ctx, thisValue, arguments) -> {
                 JSValue value = arguments.length > 0 ? arguments[0] : JSUndefined.INSTANCE;
 
-                // Mark generator as completed
-                generatorState.setCompleted(true);
+                // Resume execution until completion so finally blocks run.
+                if (!generatorState.isCompleted()) {
+                    while (!generatorState.isCompleted()) {
+                        ctx.getVirtualMachine().executeGenerator(generatorState, ctx);
+                    }
+                }
 
                 // Return the value with done: true
                 JSObject result = context.createJSObject();
@@ -300,6 +304,23 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public JSValue[] getClosureVars() {
         return closureVars;
+    }
+
+    public JSBytecodeFunction copyWithClosureVars(JSValue[] capturedClosureVars) {
+        JSBytecodeFunction copiedFunction = new JSBytecodeFunction(
+                bytecode,
+                name,
+                length,
+                capturedClosureVars,
+                prototype,
+                isConstructor,
+                isAsync,
+                isGenerator,
+                isArrow,
+                strict,
+                sourceCode
+        );
+        return copiedFunction;
     }
 
     /**

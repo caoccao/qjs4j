@@ -367,7 +367,13 @@ GET_VAR_UNDEF(141, 3, 0, 1),  // QuickJS opcode 55
 Completed on 2026-02-10.
 
 ### MEDIUM Priority (Enhanced Functionality)
-These opcodes provide important but non-critical features:
+Completed on 2026-02-10.
+
+Parity follow-up coverage completed:
+- `for...of` iterator close on abrupt completion (`break`/`return`/`throw`)
+- Loop closure capture parity for `for` / `for...of` lexical bindings
+
+Implemented medium-priority opcodes:
 
 1. **GET_REF_VALUE**, **PUT_REF_VALUE** (59-60) - Reference operations
 2. **GET_ARRAY_EL2** (68) - Array access variants

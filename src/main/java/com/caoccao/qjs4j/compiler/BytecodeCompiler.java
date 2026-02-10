@@ -29,6 +29,7 @@ import java.util.*;
  * Implements visitor pattern for traversing AST nodes and emitting appropriate bytecode.
  */
 public final class BytecodeCompiler {
+    private final CaptureResolver captureResolver;
     private final BytecodeEmitter emitter;
     private final Deque<LoopContext> loopStack;
     private final Set<String> nonDeletableGlobalBindings;
@@ -42,7 +43,7 @@ public final class BytecodeCompiler {
     private boolean strictMode;  // Track strict mode context (inherited from parent or set by "use strict")
 
     public BytecodeCompiler() {
-        this(false);  // Default to non-strict mode
+        this(false, null);  // Default to non-strict mode
     }
 
     /**
@@ -52,9 +53,14 @@ public final class BytecodeCompiler {
      * @param inheritedStrictMode Strict mode inherited from parent function
      */
     public BytecodeCompiler(boolean inheritedStrictMode) {
+        this(inheritedStrictMode, null);
+    }
+
+    private BytecodeCompiler(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver) {
         this.emitter = new BytecodeEmitter();
         this.scopes = new ArrayDeque<>();
         this.loopStack = new ArrayDeque<>();
+        this.captureResolver = new CaptureResolver(parentCaptureResolver, this::findLocalInScopes);
         this.inGlobalScope = false;
         this.isInAsyncFunction = false;
         this.isInArrowFunction = false;
@@ -192,7 +198,7 @@ public final class BytecodeCompiler {
     private void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(this.strictMode);
+        BytecodeCompiler functionCompiler = new BytecodeCompiler(this.strictMode, this.captureResolver);
         functionCompiler.nonDeletableGlobalBindings.addAll(this.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
@@ -269,7 +275,7 @@ public final class BytecodeCompiler {
                 functionBytecode,
                 functionName,
                 arrowExpr.params().size(),
-                new JSValue[0],  // closure vars - for now empty
+                new JSValue[functionCompiler.captureResolver.getCapturedBindingCount()],
                 null,            // prototype - arrow functions don't have prototype
                 false,           // isConstructor - arrow functions cannot be constructors
                 arrowExpr.isAsync(),
@@ -282,6 +288,7 @@ public final class BytecodeCompiler {
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
 
+        emitCapturedValues(functionCompiler);
         // Emit FCLOSURE opcode with function in constant pool
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
     }
@@ -307,7 +314,12 @@ public final class BytecodeCompiler {
                 if (localIndex != null) {
                     emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
                 } else {
-                    emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
+                    Integer capturedIndex = resolveCapturedBindingIndex(name);
+                    if (capturedIndex != null) {
+                        emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
+                    } else {
+                        emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
+                    }
                 }
             } else if (left instanceof MemberExpression memberExpr) {
                 // For obj.prop += value, we need DUP2 pattern or similar
@@ -327,9 +339,11 @@ public final class BytecodeCompiler {
                     } else {
                         emitter.emitOpcode(Opcode.UNDEFINED);
                     }
-                } else if (memberExpr.property() instanceof Identifier propId) {
+                } else {
+                    if (memberExpr.property() instanceof Identifier propId) {
                     emitter.emitOpcode(Opcode.DUP);  // Duplicate object
                     emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                    }
                 }
             }
 
@@ -365,7 +379,12 @@ public final class BytecodeCompiler {
             if (localIndex != null) {
                 emitter.emitOpcodeU16(Opcode.SET_LOCAL, localIndex);
             } else {
-                emitter.emitOpcodeAtom(Opcode.SET_VAR, name);
+                Integer capturedIndex = resolveCapturedBindingIndex(name);
+                if (capturedIndex != null) {
+                    emitter.emitOpcodeU16(Opcode.SET_VAR_REF, capturedIndex);
+                } else {
+                    emitter.emitOpcodeAtom(Opcode.SET_VAR, name);
+                }
             }
         } else if (left instanceof MemberExpression memberExpr) {
             // obj[prop] = value or obj.prop = value or obj.#field = value
@@ -1434,6 +1453,7 @@ public final class BytecodeCompiler {
         // Start of loop
         int loopStart = emitter.currentOffset();
         LoopContext loop = new LoopContext(loopStart);
+        loop.hasIterator = true;
         loopStack.push(loop);
 
         // Emit FOR_OF_NEXT (sync) or FOR_AWAIT_OF_NEXT (async) to get next value
@@ -1509,8 +1529,9 @@ public final class BytecodeCompiler {
             emitter.emitOpcode(Opcode.DROP);  // value
         }
 
-        // Break target - break statements jump here (after dropping value)
+        // Break target - break statements jump here and close the iterator record.
         int breakTarget = emitter.currentOffset();
+        emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
 
         // Patch break statements to jump after the value drop
         for (int breakPos : loop.breakPositions) {
@@ -1521,12 +1542,6 @@ public final class BytecodeCompiler {
         for (int continuePos : loop.continuePositions) {
             emitter.patchJump(continuePos, loopStart);
         }
-
-        // Clean up iterator from stack
-        // Pop iter, next, catch_offset
-        emitter.emitOpcode(Opcode.DROP);  // catch_offset
-        emitter.emitOpcode(Opcode.DROP);  // next
-        emitter.emitOpcode(Opcode.DROP);  // iter
 
         loopStack.pop();
 
@@ -1542,7 +1557,13 @@ public final class BytecodeCompiler {
         // Compile init
         if (forStmt.init() != null) {
             if (forStmt.init() instanceof VariableDeclaration varDecl) {
+                boolean savedInGlobalScope = inGlobalScope;
+                if (inGlobalScope && !"var".equals(varDecl.kind())) {
+                    // Top-level lexical loop bindings should stay lexical, not become global object properties.
+                    inGlobalScope = false;
+                }
                 compileVariableDeclaration(varDecl);
+                inGlobalScope = savedInGlobalScope;
             } else if (forStmt.init() instanceof Expression expr) {
                 compileExpression(expr);
                 emitter.emitOpcode(Opcode.DROP);
@@ -1601,7 +1622,7 @@ public final class BytecodeCompiler {
     private void compileFunctionDeclaration(FunctionDeclaration funcDecl) {
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(this.strictMode);
+        BytecodeCompiler functionCompiler = new BytecodeCompiler(this.strictMode, this.captureResolver);
         functionCompiler.nonDeletableGlobalBindings.addAll(this.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
@@ -1702,7 +1723,7 @@ public final class BytecodeCompiler {
                 functionBytecode,
                 functionName,
                 funcDecl.params().size(),
-                new JSValue[0],  // closure vars - for now empty
+                new JSValue[functionCompiler.captureResolver.getCapturedBindingCount()],
                 null,            // prototype - will be set by VM
                 true,            // isConstructor - regular functions can be constructors
                 funcDecl.isAsync(),
@@ -1712,6 +1733,7 @@ public final class BytecodeCompiler {
                 functionSource   // source code for toString()
         );
 
+        emitCapturedValues(functionCompiler);
         // Emit FCLOSURE opcode with function in constant pool
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
 
@@ -1735,7 +1757,7 @@ public final class BytecodeCompiler {
     private void compileFunctionExpression(FunctionExpression funcExpr) {
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(this.strictMode);
+        BytecodeCompiler functionCompiler = new BytecodeCompiler(this.strictMode, this.captureResolver);
         functionCompiler.nonDeletableGlobalBindings.addAll(this.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
@@ -1810,7 +1832,7 @@ public final class BytecodeCompiler {
                 functionBytecode,
                 functionName,
                 funcExpr.params().size(),
-                new JSValue[0],  // closure vars - for now empty
+                new JSValue[functionCompiler.captureResolver.getCapturedBindingCount()],
                 null,            // prototype - will be set by VM
                 true,            // isConstructor - regular functions can be constructors
                 funcExpr.isAsync(),
@@ -1823,6 +1845,7 @@ public final class BytecodeCompiler {
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
 
+        emitCapturedValues(functionCompiler);
         // Emit FCLOSURE opcode with function in constant pool
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
     }
@@ -1855,6 +1878,12 @@ public final class BytecodeCompiler {
 
         if (localIndex != null) {
             emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+            return;
+        }
+
+        Integer capturedIndex = resolveCapturedBindingIndex(name);
+        if (capturedIndex != null) {
+            emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
         } else {
             // Not found in local scopes, use global variable
             emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
@@ -1983,7 +2012,12 @@ public final class BytecodeCompiler {
             if (localIndex != null) {
                 emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
             } else {
-                emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
+                Integer capturedIndex = resolveCapturedBindingIndex(name);
+                if (capturedIndex != null) {
+                    emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
+                } else {
+                    emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
+                }
             }
         } else if (left instanceof MemberExpression memberExpr) {
             compileExpression(memberExpr.object());
@@ -1991,9 +2025,11 @@ public final class BytecodeCompiler {
                 compileExpression(memberExpr.property());
                 emitter.emitOpcode(Opcode.DUP2);  // Duplicate obj and prop
                 emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-            } else if (memberExpr.property() instanceof Identifier propId) {
+            } else {
+                if (memberExpr.property() instanceof Identifier propId) {
                 emitter.emitOpcode(Opcode.DUP);  // Duplicate object
                 emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                }
             }
         }
 
@@ -2057,7 +2093,12 @@ public final class BytecodeCompiler {
             if (localIndex != null) {
                 emitter.emitOpcodeU16(Opcode.SET_LOCAL, localIndex);
             } else {
-                emitter.emitOpcodeAtom(Opcode.SET_VAR, name);
+                Integer capturedIndex = resolveCapturedBindingIndex(name);
+                if (capturedIndex != null) {
+                    emitter.emitOpcodeU16(Opcode.SET_VAR_REF, capturedIndex);
+                } else {
+                    emitter.emitOpcodeAtom(Opcode.SET_VAR, name);
+                }
             }
         } else if (left instanceof MemberExpression memberExpr) {
             if (memberExpr.computed()) {
@@ -2468,6 +2509,12 @@ public final class BytecodeCompiler {
             compileExpression(retStmt.argument());
         } else {
             emitter.emitOpcode(Opcode.UNDEFINED);
+        }
+        if (hasActiveIteratorLoops()) {
+            int returnValueIndex = currentScope().declareLocal("$return_value_" + emitter.currentOffset());
+            emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+            emitAbruptCompletionIteratorClose();
+            emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
         }
         // Emit RETURN_ASYNC for async functions, RETURN for sync functions
         emitter.emitOpcode(isInAsyncFunction ? Opcode.RETURN_ASYNC : Opcode.RETURN);
@@ -2881,6 +2928,12 @@ public final class BytecodeCompiler {
 
     private void compileThrowStatement(ThrowStatement throwStmt) {
         compileExpression(throwStmt.argument());
+        if (hasActiveIteratorLoops()) {
+            int throwValueIndex = currentScope().declareLocal("$throw_value_" + emitter.currentOffset());
+            emitter.emitOpcodeU16(Opcode.PUT_LOCAL, throwValueIndex);
+            emitAbruptCompletionIteratorClose();
+            emitter.emitOpcodeU16(Opcode.GET_LOCAL, throwValueIndex);
+        }
         emitter.emitOpcode(Opcode.THROW);
     }
 
@@ -3012,6 +3065,7 @@ public final class BytecodeCompiler {
                 // - local/arg/closure/implicit arguments bindings => false
                 // - unresolved/global binding => DELETE_VAR runtime check
                 boolean isLocalBinding = findLocalInScopes(id.name()) != null
+                        || resolveCapturedBindingIndex(id.name()) != null
                         || (JSArguments.NAME.equals(id.name()) && !inGlobalScope)
                         || nonDeletableGlobalBindings.contains(id.name());
                 if (isLocalBinding) {
@@ -3041,11 +3095,16 @@ public final class BytecodeCompiler {
                 compileExpression(operand);
                 emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
                         : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
-                Integer localIndex = currentScope().getLocal(id.name());
+                Integer localIndex = findLocalInScopes(id.name());
                 if (localIndex != null) {
                     emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOCAL : Opcode.PUT_LOCAL, localIndex);
                 } else {
-                    emitter.emitOpcodeAtom(isPrefix ? Opcode.SET_VAR : Opcode.PUT_VAR, id.name());
+                    Integer capturedIndex = resolveCapturedBindingIndex(id.name());
+                    if (capturedIndex != null) {
+                        emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF, capturedIndex);
+                    } else {
+                        emitter.emitOpcodeAtom(isPrefix ? Opcode.SET_VAR : Opcode.PUT_VAR, id.name());
+                    }
                 }
             } else if (operand instanceof MemberExpression memberExpr) {
                 if (memberExpr.computed()) {
@@ -3320,6 +3379,48 @@ public final class BytecodeCompiler {
         return privateSymbols;
     }
 
+    private void emitAbruptCompletionIteratorClose() {
+        for (LoopContext loopContext : loopStack) {
+            if (loopContext.hasIterator) {
+                emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
+            }
+        }
+    }
+
+    private boolean hasActiveIteratorLoops() {
+        for (LoopContext loopContext : loopStack) {
+            if (loopContext.hasIterator) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void emitCaptureBindingLoad(CaptureSource captureSource) {
+        if (captureSource.type == CaptureSourceType.LOCAL) {
+            emitter.emitOpcodeU16(Opcode.GET_LOCAL, captureSource.index);
+        } else {
+            emitter.emitOpcodeU16(Opcode.GET_VAR_REF, captureSource.index);
+        }
+    }
+
+    private void emitCapturedValues(BytecodeCompiler nestedCompiler) {
+        if (nestedCompiler.captureResolver.getCapturedBindingCount() == 0) {
+            return;
+        }
+        for (CaptureBinding binding : nestedCompiler.captureResolver.getCapturedBindings()) {
+            emitCaptureBindingLoad(binding.source);
+        }
+    }
+
+    private Integer findCapturedBindingIndex(String name) {
+        return captureResolver.findCapturedBindingIndex(name);
+    }
+
+    private Integer resolveCapturedBindingIndex(String name) {
+        return captureResolver.resolveCapturedBindingIndex(name);
+    }
+
     private Scope currentScope() {
         if (scopes.isEmpty()) {
             throw new CompilerException("No scope available");
@@ -3553,12 +3654,100 @@ public final class BytecodeCompiler {
         }
     }
 
+    @FunctionalInterface
+    private interface LocalLookup {
+        Integer findLocal(String name);
+    }
+
+    private static class CaptureResolver {
+        private final LinkedHashMap<String, CaptureBinding> capturedBindings;
+        private final LocalLookup localLookup;
+        private final CaptureResolver parentResolver;
+
+        CaptureResolver(CaptureResolver parentResolver, LocalLookup localLookup) {
+            this.parentResolver = parentResolver;
+            this.localLookup = localLookup;
+            this.capturedBindings = new LinkedHashMap<>();
+        }
+
+        Integer findCapturedBindingIndex(String name) {
+            CaptureBinding binding = capturedBindings.get(name);
+            return binding != null ? binding.slot : null;
+        }
+
+        Collection<CaptureBinding> getCapturedBindings() {
+            return capturedBindings.values();
+        }
+
+        int getCapturedBindingCount() {
+            return capturedBindings.size();
+        }
+
+        private int registerCapturedBinding(String name, CaptureSource source) {
+            CaptureBinding existing = capturedBindings.get(name);
+            if (existing != null) {
+                return existing.slot;
+            }
+            int slot = capturedBindings.size();
+            capturedBindings.put(name, new CaptureBinding(slot, source));
+            return slot;
+        }
+
+        Integer resolveCapturedBindingIndex(String name) {
+            Integer capturedIndex = findCapturedBindingIndex(name);
+            if (capturedIndex != null || parentResolver == null) {
+                return capturedIndex;
+            }
+            CaptureSource captureSource = parentResolver.resolveCaptureSourceForChild(name);
+            if (captureSource == null) {
+                return null;
+            }
+            return registerCapturedBinding(name, captureSource);
+        }
+
+        private CaptureSource resolveCaptureSourceForChild(String name) {
+            Integer localIndex = localLookup.findLocal(name);
+            if (localIndex != null) {
+                return new CaptureSource(CaptureSourceType.LOCAL, localIndex);
+            }
+
+            Integer capturedIndex = findCapturedBindingIndex(name);
+            if (capturedIndex != null) {
+                return new CaptureSource(CaptureSourceType.VAR_REF, capturedIndex);
+            }
+
+            if (parentResolver == null) {
+                return null;
+            }
+
+            CaptureSource parentSource = parentResolver.resolveCaptureSourceForChild(name);
+            if (parentSource == null) {
+                return null;
+            }
+
+            int capturedSlot = registerCapturedBinding(name, parentSource);
+            return new CaptureSource(CaptureSourceType.VAR_REF, capturedSlot);
+        }
+    }
+
+    private record CaptureBinding(int slot, CaptureSource source) {
+    }
+
+    private record CaptureSource(CaptureSourceType type, int index) {
+    }
+
+    private enum CaptureSourceType {
+        LOCAL,
+        VAR_REF
+    }
+
     /**
      * Tracks loop context for break/continue statements.
      */
     private static class LoopContext {
         final List<Integer> breakPositions = new ArrayList<>();
         final List<Integer> continuePositions = new ArrayList<>();
+        boolean hasIterator;
         final int startOffset;
 
         LoopContext(int startOffset) {

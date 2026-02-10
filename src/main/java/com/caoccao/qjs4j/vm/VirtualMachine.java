@@ -365,21 +365,42 @@ public final class VirtualMachine {
                         // Load function from constant pool and create closure
                         int funcIndex = bytecode.readU32(pc + 1);
                         JSValue funcValue = bytecode.getConstants()[funcIndex];
-                        // Initialize the function's prototype chain to inherit from Function.prototype
-                        if (funcValue instanceof JSFunction func) {
-                            func.initializePrototypeChain(context);
+                        if (funcValue instanceof JSBytecodeFunction templateFunction) {
+                            int closureCount = templateFunction.getClosureVars().length;
+                            JSValue[] capturedClosureVars = new JSValue[closureCount];
+                            for (int i = closureCount - 1; i >= 0; i--) {
+                                capturedClosureVars[i] = valueStack.pop();
+                            }
+                            JSBytecodeFunction closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
+                            closureFunction.initializePrototypeChain(context);
+                            valueStack.push(closureFunction);
+                        } else {
+                            // Initialize the function's prototype chain to inherit from Function.prototype
+                            if (funcValue instanceof JSFunction func) {
+                                func.initializePrototypeChain(context);
+                            }
+                            valueStack.push(funcValue);
                         }
-                        // The function is already a JSBytecodeFunction, just push it
-                        valueStack.push(funcValue);
                         pc += op.getSize();
                     }
                     case FCLOSURE8 -> {
                         int funcIndex = bytecode.readU8(pc + 1);
                         JSValue funcValue = bytecode.getConstants()[funcIndex];
-                        if (funcValue instanceof JSFunction func) {
-                            func.initializePrototypeChain(context);
+                        if (funcValue instanceof JSBytecodeFunction templateFunction) {
+                            int closureCount = templateFunction.getClosureVars().length;
+                            JSValue[] capturedClosureVars = new JSValue[closureCount];
+                            for (int i = closureCount - 1; i >= 0; i--) {
+                                capturedClosureVars[i] = valueStack.pop();
+                            }
+                            JSBytecodeFunction closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
+                            closureFunction.initializePrototypeChain(context);
+                            valueStack.push(closureFunction);
+                        } else {
+                            if (funcValue instanceof JSFunction func) {
+                                func.initializePrototypeChain(context);
+                            }
+                            valueStack.push(funcValue);
                         }
-                        valueStack.push(funcValue);
                         pc += op.getSize();
                     }
                     case PUSH_EMPTY_STRING -> {

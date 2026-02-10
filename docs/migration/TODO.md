@@ -67,8 +67,7 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 ## Implementation Recommendations
 
 ### Phase 2: Core Opcodes (Essential)
-1. Expand iterator opcode coverage for advanced iterator control flow
-2. Improve closure and var-ref fidelity for full QuickJS parity
+- Completed on 2026-02-10.
 
 ### Phase 3: Language Features
 1. Tagged template literals
