@@ -23,11 +23,6 @@ This document tracks remaining features, known bugs, and planned enhancements fo
 
 ### Medium Priority - RegExp Features
 
-#### Unicode Property Escapes
-- **Description**: `\p{...}` syntax in regular expressions
-- **Status**: Not implemented
-- **Reference**: [FEATURES.md](FEATURES.md#miscellaneous)
-
 #### Lookbehind Assertions
 - **Description**: `(?<=...)` positive and `(?<!...)` negative lookbehind
 - **Status**: Not implemented

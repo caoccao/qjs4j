@@ -16,12 +16,15 @@
 
 package com.caoccao.qjs4j.regexp;
 
+import com.caoccao.qjs4j.unicode.UnicodeData;
 import com.caoccao.qjs4j.utils.DynamicBuffer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntPredicate;
 
 /**
  * Compiles regex patterns to bytecode.
@@ -32,9 +35,40 @@ import java.util.Map;
  */
 public final class RegExpCompiler {
 
+    private static final Map<String, int[]> BINARY_PROPERTY_RANGES_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, int[]> GENERAL_CATEGORY_RANGES_CACHE = new ConcurrentHashMap<>();
+    private static final int MAX_UNICODE_CODE_POINT = 0x10FFFF;
+    private static final Map<String, int[]> SCRIPT_RANGES_CACHE = new ConcurrentHashMap<>();
     private int captureCount;
     private List<String> groupNames;
     private Map<String, Integer> namedCaptureIndices;
+
+    private void appendRanges(List<Integer> ranges, int[] propertyRanges) {
+        for (int propertyRange : propertyRanges) {
+            ranges.add(propertyRange);
+        }
+    }
+
+    private int[] buildRanges(IntPredicate predicate) {
+        List<Integer> ranges = new ArrayList<>();
+        int rangeStart = -1;
+        for (int codePoint = 0; codePoint <= MAX_UNICODE_CODE_POINT; codePoint++) {
+            if (predicate.test(codePoint)) {
+                if (rangeStart < 0) {
+                    rangeStart = codePoint;
+                }
+            } else if (rangeStart >= 0) {
+                ranges.add(rangeStart);
+                ranges.add(codePoint - 1);
+                rangeStart = -1;
+            }
+        }
+        if (rangeStart >= 0) {
+            ranges.add(rangeStart);
+            ranges.add(MAX_UNICODE_CODE_POINT);
+        }
+        return toIntArray(ranges);
+    }
 
     /**
      * Compile a regex pattern to bytecode.
@@ -142,8 +176,16 @@ public final class RegExpCompiler {
                 compileGroup(context);
             }
 
-            case '*', '+', '?', '{' -> {
+            case '*', '+', '?' -> {
                 throw new RegExpSyntaxException("Nothing to repeat at position " + context.pos);
+            }
+
+            case '{' -> {
+                if (startsWithValidQuantifier(context)) {
+                    throw new RegExpSyntaxException("Nothing to repeat at position " + context.pos);
+                }
+                compileLiteralChar(context, ch);
+                context.pos++;
             }
 
             case ')' -> {
@@ -399,6 +441,14 @@ public final class RegExpCompiler {
                         RegExpOpcode.BACK_REFERENCE_I.getCode() :
                         RegExpOpcode.BACK_REFERENCE.getCode());
                 context.buffer.appendU8(groupNum);
+            }
+            case 'p', 'P' -> {
+                if (!context.isUnicodeMode()) {
+                    compileLiteralChar(context, ch);
+                    break;
+                }
+                int[] propertyRanges = parseUnicodePropertyEscape(context);
+                emitRanges(context, propertyRanges, ch == 'P');
             }
             case '1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
                 // Back reference \1, \2, etc.
@@ -731,9 +781,25 @@ public final class RegExpCompiler {
         if (context.pos < context.codePoints.length) {
             int ch = context.codePoints[context.pos];
 
-            if (ch == '*' || ch == '+' || ch == '?' || ch == '{') {
+            if (ch == '*' || ch == '+' || ch == '?' || (ch == '{' && startsWithValidQuantifier(context))) {
                 compileQuantifier(context, atomStart, captureCountBeforeAtom);
             }
+        }
+    }
+
+    private void emitRanges(CompileContext context, int[] ranges, boolean inverted) {
+        context.buffer.appendU8(inverted
+                ? (context.isIgnoreCase() ? RegExpOpcode.NOT_RANGE_I.getCode() : RegExpOpcode.NOT_RANGE.getCode())
+                : (context.isIgnoreCase() ? RegExpOpcode.RANGE_I.getCode() : RegExpOpcode.RANGE.getCode()));
+
+        int numRanges = ranges.length / 2;
+        int dataSize = 2 + (numRanges * 8);
+        context.buffer.appendU16(dataSize);
+        context.buffer.appendU16(numRanges);
+
+        for (int i = 0; i < ranges.length; i += 2) {
+            context.buffer.appendU32(ranges[i]);
+            context.buffer.appendU32(ranges[i + 1]);
         }
     }
 
@@ -741,6 +807,123 @@ public final class RegExpCompiler {
         while (groupNames.size() < size) {
             groupNames.add(null);
         }
+    }
+
+    private IntPredicate getBinaryPropertyPredicate(String propertyName) {
+        return switch (propertyName) {
+            case "Alphabetic" -> Character::isAlphabetic;
+            case "Any" -> codePoint -> true;
+            case "ASCII" -> codePoint -> codePoint <= 0x7F;
+            case "Assigned" -> codePoint -> Character.getType(codePoint) != Character.UNASSIGNED;
+            case "ID_Continue" -> UnicodeData::isIdentifierPart;
+            case "ID_Start" -> UnicodeData::isIdentifierStart;
+            case "Join_Control" -> codePoint -> codePoint == 0x200C || codePoint == 0x200D;
+            case "Lowercase" -> Character::isLowerCase;
+            case "Math" -> codePoint -> Character.getType(codePoint) == Character.MATH_SYMBOL;
+            case "Uppercase" -> Character::isUpperCase;
+            case "White_Space" -> this::isRegExpWhiteSpace;
+            default -> null;
+        };
+    }
+
+    private IntPredicate getGeneralCategoryPredicate(String categoryName) {
+        return switch (categoryName) {
+            case "C", "Other" -> codePoint -> {
+                int type = Character.getType(codePoint);
+                return type == Character.UNASSIGNED ||
+                        type == Character.CONTROL ||
+                        type == Character.FORMAT ||
+                        type == Character.PRIVATE_USE ||
+                        type == Character.SURROGATE;
+            };
+            case "Cc", "Control" -> codePoint -> Character.getType(codePoint) == Character.CONTROL;
+            case "Cf", "Format" -> codePoint -> Character.getType(codePoint) == Character.FORMAT;
+            case "Cn", "Unassigned" -> codePoint -> Character.getType(codePoint) == Character.UNASSIGNED;
+            case "Co", "Private_Use" -> codePoint -> Character.getType(codePoint) == Character.PRIVATE_USE;
+            case "Cs", "Surrogate" -> codePoint -> Character.getType(codePoint) == Character.SURROGATE;
+            case "L", "Letter" -> codePoint -> {
+                int type = Character.getType(codePoint);
+                return type == Character.UPPERCASE_LETTER ||
+                        type == Character.LOWERCASE_LETTER ||
+                        type == Character.TITLECASE_LETTER ||
+                        type == Character.MODIFIER_LETTER ||
+                        type == Character.OTHER_LETTER;
+            };
+            case "LC", "Cased_Letter" -> codePoint -> {
+                int type = Character.getType(codePoint);
+                return type == Character.UPPERCASE_LETTER ||
+                        type == Character.LOWERCASE_LETTER ||
+                        type == Character.TITLECASE_LETTER;
+            };
+            case "Ll", "Lowercase_Letter" -> codePoint -> Character.getType(codePoint) == Character.LOWERCASE_LETTER;
+            case "Lm", "Modifier_Letter" -> codePoint -> Character.getType(codePoint) == Character.MODIFIER_LETTER;
+            case "Lo", "Other_Letter" -> codePoint -> Character.getType(codePoint) == Character.OTHER_LETTER;
+            case "Lt", "Titlecase_Letter" -> codePoint -> Character.getType(codePoint) == Character.TITLECASE_LETTER;
+            case "Lu", "Uppercase_Letter" -> codePoint -> Character.getType(codePoint) == Character.UPPERCASE_LETTER;
+            case "M", "Mark" -> codePoint -> {
+                int type = Character.getType(codePoint);
+                return type == Character.NON_SPACING_MARK ||
+                        type == Character.ENCLOSING_MARK ||
+                        type == Character.COMBINING_SPACING_MARK;
+            };
+            case "Mc", "Combining_Spacing_Mark", "Spacing_Mark" ->
+                    codePoint -> Character.getType(codePoint) == Character.COMBINING_SPACING_MARK;
+            case "Me", "Enclosing_Mark" -> codePoint -> Character.getType(codePoint) == Character.ENCLOSING_MARK;
+            case "Mn", "Nonspacing_Mark" -> codePoint -> Character.getType(codePoint) == Character.NON_SPACING_MARK;
+            case "N", "Number" -> codePoint -> {
+                int type = Character.getType(codePoint);
+                return type == Character.DECIMAL_DIGIT_NUMBER ||
+                        type == Character.LETTER_NUMBER ||
+                        type == Character.OTHER_NUMBER;
+            };
+            case "Nd", "Decimal_Number" -> codePoint -> Character.getType(codePoint) == Character.DECIMAL_DIGIT_NUMBER;
+            case "Nl", "Letter_Number" -> codePoint -> Character.getType(codePoint) == Character.LETTER_NUMBER;
+            case "No", "Other_Number" -> codePoint -> Character.getType(codePoint) == Character.OTHER_NUMBER;
+            case "P", "Punctuation" -> codePoint -> {
+                int type = Character.getType(codePoint);
+                return type == Character.CONNECTOR_PUNCTUATION ||
+                        type == Character.DASH_PUNCTUATION ||
+                        type == Character.START_PUNCTUATION ||
+                        type == Character.END_PUNCTUATION ||
+                        type == Character.INITIAL_QUOTE_PUNCTUATION ||
+                        type == Character.FINAL_QUOTE_PUNCTUATION ||
+                        type == Character.OTHER_PUNCTUATION;
+            };
+            case "Pc", "Connector_Punctuation" ->
+                    codePoint -> Character.getType(codePoint) == Character.CONNECTOR_PUNCTUATION;
+            case "Pd", "Dash_Punctuation" -> codePoint -> Character.getType(codePoint) == Character.DASH_PUNCTUATION;
+            case "Pe", "Close_Punctuation", "End_Punctuation" ->
+                    codePoint -> Character.getType(codePoint) == Character.END_PUNCTUATION;
+            case "Pf", "Final_Punctuation", "Final_Quote_Punctuation" ->
+                    codePoint -> Character.getType(codePoint) == Character.FINAL_QUOTE_PUNCTUATION;
+            case "Pi", "Initial_Punctuation", "Initial_Quote_Punctuation" ->
+                    codePoint -> Character.getType(codePoint) == Character.INITIAL_QUOTE_PUNCTUATION;
+            case "Po", "Other_Punctuation" -> codePoint -> Character.getType(codePoint) == Character.OTHER_PUNCTUATION;
+            case "Ps", "Open_Punctuation", "Start_Punctuation" ->
+                    codePoint -> Character.getType(codePoint) == Character.START_PUNCTUATION;
+            case "S", "Symbol" -> codePoint -> {
+                int type = Character.getType(codePoint);
+                return type == Character.MATH_SYMBOL ||
+                        type == Character.CURRENCY_SYMBOL ||
+                        type == Character.MODIFIER_SYMBOL ||
+                        type == Character.OTHER_SYMBOL;
+            };
+            case "Sc", "Currency_Symbol" -> codePoint -> Character.getType(codePoint) == Character.CURRENCY_SYMBOL;
+            case "Sk", "Modifier_Symbol" -> codePoint -> Character.getType(codePoint) == Character.MODIFIER_SYMBOL;
+            case "Sm", "Math_Symbol" -> codePoint -> Character.getType(codePoint) == Character.MATH_SYMBOL;
+            case "So", "Other_Symbol" -> codePoint -> Character.getType(codePoint) == Character.OTHER_SYMBOL;
+            case "Z", "Separator" -> codePoint -> {
+                int type = Character.getType(codePoint);
+                return type == Character.SPACE_SEPARATOR ||
+                        type == Character.LINE_SEPARATOR ||
+                        type == Character.PARAGRAPH_SEPARATOR;
+            };
+            case "Zl", "Line_Separator" -> codePoint -> Character.getType(codePoint) == Character.LINE_SEPARATOR;
+            case "Zp", "Paragraph_Separator" ->
+                    codePoint -> Character.getType(codePoint) == Character.PARAGRAPH_SEPARATOR;
+            case "Zs", "Space_Separator" -> codePoint -> Character.getType(codePoint) == Character.SPACE_SEPARATOR;
+            default -> null;
+        };
     }
 
     private int hexValue(int ch) {
@@ -754,6 +937,58 @@ public final class RegExpCompiler {
         return -1;
     }
 
+    private int[] invertRanges(int[] ranges) {
+        if (ranges.length == 0) {
+            return new int[]{0, MAX_UNICODE_CODE_POINT};
+        }
+        List<Integer> inverted = new ArrayList<>();
+        int start = 0;
+        for (int i = 0; i < ranges.length; i += 2) {
+            int rangeStart = ranges[i];
+            int rangeEnd = ranges[i + 1];
+            if (start < rangeStart) {
+                inverted.add(start);
+                inverted.add(rangeStart - 1);
+            }
+            if (rangeEnd == MAX_UNICODE_CODE_POINT) {
+                start = MAX_UNICODE_CODE_POINT + 1;
+                break;
+            }
+            start = rangeEnd + 1;
+        }
+        if (start <= MAX_UNICODE_CODE_POINT) {
+            inverted.add(start);
+            inverted.add(MAX_UNICODE_CODE_POINT);
+        }
+        return toIntArray(inverted);
+    }
+
+    private boolean isCanonicalScriptName(String scriptName) {
+        if (scriptName == null || scriptName.isEmpty()) {
+            return false;
+        }
+        boolean expectingUppercase = true;
+        for (int i = 0; i < scriptName.length(); i++) {
+            char ch = scriptName.charAt(i);
+            if (ch == '_') {
+                if (expectingUppercase) {
+                    return false;
+                }
+                expectingUppercase = true;
+                continue;
+            }
+            if (expectingUppercase) {
+                if (!(ch >= 'A' && ch <= 'Z')) {
+                    return false;
+                }
+                expectingUppercase = false;
+            } else if (!((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9'))) {
+                return false;
+            }
+        }
+        return !expectingUppercase;
+    }
+
     private boolean isJsIdentifierPart(int codePoint) {
         return codePoint == '$' || codePoint == '_' || codePoint == 0x200C || codePoint == 0x200D ||
                 Character.isUnicodeIdentifierPart(codePoint);
@@ -761,6 +996,19 @@ public final class RegExpCompiler {
 
     private boolean isJsIdentifierStart(int codePoint) {
         return codePoint == '$' || codePoint == '_' || Character.isUnicodeIdentifierStart(codePoint);
+    }
+
+    private boolean isRegExpWhiteSpace(int codePoint) {
+        return codePoint == ' ' || codePoint == '\t' || codePoint == '\n' || codePoint == '\r' || codePoint == '\f' ||
+                codePoint == 0x0B || codePoint == 0x00A0 || codePoint == 0xFEFF || codePoint == 0x2028 || codePoint == 0x2029 ||
+                Character.getType(codePoint) == Character.SPACE_SEPARATOR;
+    }
+
+    private boolean isUnicodePropertyChar(int ch) {
+        return (ch >= '0' && ch <= '9') ||
+                (ch >= 'A' && ch <= 'Z') ||
+                (ch >= 'a' && ch <= 'z') ||
+                ch == '_';
     }
 
     private int parseClassEscape(CompileContext context, List<Integer> ranges) {
@@ -818,6 +1066,17 @@ public final class RegExpCompiler {
             case 'S' -> {
                 // \S - non-whitespace (complex to represent)
                 throw new RegExpSyntaxException("\\S not supported in character class");
+            }
+            case 'p', 'P' -> {
+                if (!context.isUnicodeMode()) {
+                    yield ch;
+                }
+                int[] propertyRanges = parseUnicodePropertyEscape(context);
+                if (ch == 'P') {
+                    propertyRanges = invertRanges(propertyRanges);
+                }
+                appendRanges(ranges, propertyRanges);
+                yield -1;
             }
             default -> ch; // Literal escaped character
         };
@@ -943,6 +1202,116 @@ public final class RegExpCompiler {
         return new EscapedCodePoint(value, pos + 4);
     }
 
+    private int[] parseUnicodePropertyEscape(CompileContext context) {
+        if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '{') {
+            throw new RegExpSyntaxException("expecting '{' after \\p");
+        }
+        context.pos++; // Skip '{'
+
+        int propertyNameStart = context.pos;
+        while (context.pos < context.codePoints.length && isUnicodePropertyChar(context.codePoints[context.pos])) {
+            context.pos++;
+        }
+        String propertyName = new String(context.codePoints, propertyNameStart, context.pos - propertyNameStart);
+        String propertyValue = null;
+
+        if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '=') {
+            context.pos++; // Skip '='
+            int propertyValueStart = context.pos;
+            while (context.pos < context.codePoints.length && isUnicodePropertyChar(context.codePoints[context.pos])) {
+                context.pos++;
+            }
+            propertyValue = new String(context.codePoints, propertyValueStart, context.pos - propertyValueStart);
+        }
+
+        if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '}') {
+            throw new RegExpSyntaxException("expecting '}'");
+        }
+        context.pos++; // Skip '}'
+
+        return resolveUnicodePropertyRanges(propertyName, propertyValue);
+    }
+
+    private int[] resolveBinaryPropertyRanges(String propertyName) {
+        int[] cachedRanges = BINARY_PROPERTY_RANGES_CACHE.get(propertyName);
+        if (cachedRanges != null) {
+            return cachedRanges;
+        }
+        IntPredicate predicate = getBinaryPropertyPredicate(propertyName);
+        if (predicate == null) {
+            return null;
+        }
+        int[] ranges = buildRanges(predicate);
+        BINARY_PROPERTY_RANGES_CACHE.put(propertyName, ranges);
+        return ranges;
+    }
+
+    private int[] resolveGeneralCategoryRanges(String categoryName) {
+        int[] cachedRanges = GENERAL_CATEGORY_RANGES_CACHE.get(categoryName);
+        if (cachedRanges != null) {
+            return cachedRanges;
+        }
+        IntPredicate predicate = getGeneralCategoryPredicate(categoryName);
+        if (predicate == null) {
+            return null;
+        }
+        int[] ranges = buildRanges(predicate);
+        GENERAL_CATEGORY_RANGES_CACHE.put(categoryName, ranges);
+        return ranges;
+    }
+
+    private int[] resolveScriptRanges(String scriptName) {
+        int[] cachedRanges = SCRIPT_RANGES_CACHE.get(scriptName);
+        if (cachedRanges != null) {
+            return cachedRanges;
+        }
+        if (!isCanonicalScriptName(scriptName)) {
+            return null;
+        }
+
+        Character.UnicodeScript script;
+        try {
+            script = Character.UnicodeScript.forName(scriptName);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+
+        int[] ranges = buildRanges(codePoint -> Character.UnicodeScript.of(codePoint) == script);
+        SCRIPT_RANGES_CACHE.put(scriptName, ranges);
+        return ranges;
+    }
+
+    private int[] resolveUnicodePropertyRanges(String propertyName, String propertyValue) {
+        if (propertyValue != null) {
+            if ("General_Category".equals(propertyName) || "gc".equals(propertyName)) {
+                int[] ranges = resolveGeneralCategoryRanges(propertyValue);
+                if (ranges == null) {
+                    throw new RegExpSyntaxException("unknown unicode general category");
+                }
+                return ranges;
+            }
+            if ("Script".equals(propertyName) || "sc".equals(propertyName) ||
+                    "Script_Extensions".equals(propertyName) || "scx".equals(propertyName)) {
+                int[] ranges = resolveScriptRanges(propertyValue);
+                if (ranges == null) {
+                    throw new RegExpSyntaxException("unknown unicode script");
+                }
+                return ranges;
+            }
+            throw new RegExpSyntaxException("unknown unicode property name");
+        }
+
+        int[] ranges = resolveGeneralCategoryRanges(propertyName);
+        if (ranges != null) {
+            return ranges;
+        }
+        ranges = resolveBinaryPropertyRanges(propertyName);
+        if (ranges != null) {
+            return ranges;
+        }
+        throw new RegExpSyntaxException("unknown unicode property name");
+    }
+
     private Map<String, Integer> scanNamedCaptureGroups(String pattern) {
         int[] codePoints = pattern.codePoints().toArray();
         Map<String, Integer> captureIndices = new HashMap<>();
@@ -1007,6 +1376,34 @@ public final class RegExpCompiler {
         return captureIndices;
     }
 
+    private boolean startsWithValidQuantifier(CompileContext context) {
+        if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '{') {
+            return false;
+        }
+        int pos = context.pos + 1;
+        if (pos >= context.codePoints.length || context.codePoints[pos] < '0' || context.codePoints[pos] > '9') {
+            return false;
+        }
+        while (pos < context.codePoints.length && context.codePoints[pos] >= '0' && context.codePoints[pos] <= '9') {
+            pos++;
+        }
+        if (pos < context.codePoints.length && context.codePoints[pos] == ',') {
+            pos++;
+            while (pos < context.codePoints.length && context.codePoints[pos] >= '0' && context.codePoints[pos] <= '9') {
+                pos++;
+            }
+        }
+        return pos < context.codePoints.length && context.codePoints[pos] == '}';
+    }
+
+    private int[] toIntArray(List<Integer> values) {
+        int[] result = new int[values.size()];
+        for (int i = 0; i < values.size(); i++) {
+            result[i] = values.get(i);
+        }
+        return result;
+    }
+
     private static class CompileContext {
         final DynamicBuffer buffer;
         final int[] codePoints;
@@ -1036,6 +1433,10 @@ public final class RegExpCompiler {
 
         boolean isUnicode() {
             return (flags & RegExpBytecode.FLAG_UNICODE) != 0;
+        }
+
+        boolean isUnicodeMode() {
+            return (flags & (RegExpBytecode.FLAG_UNICODE | RegExpBytecode.FLAG_UNICODE_SETS)) != 0;
         }
     }
 

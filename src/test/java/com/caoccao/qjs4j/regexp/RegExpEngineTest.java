@@ -24,6 +24,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class RegExpEngineTest extends BaseJavetTest {
+    private boolean matches(String pattern, String flags, String input) {
+        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpBytecode bytecode = compiler.compile(pattern, flags);
+        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine.MatchResult result = engine.exec(input, 0);
+        return result != null && result.matched();
+    }
+
     @Test
     public void testCaseInsensitiveMatching() {
         RegExpCompiler compiler = new RegExpCompiler();
@@ -303,5 +311,78 @@ public class RegExpEngineTest extends BaseJavetTest {
         assertThat(result.matched()).isTrue();
         assertThat(result.getMatch()).isEqualTo("😀🌟🚀");
         assertThat(engine.test("😀🌟🚀")).isTrue();
+    }
+
+    @Test
+    public void testUnicodePropertyEscapesBasics() {
+        assertThat(matches("\\p{L}", "u", "A")).isTrue();
+        assertThat(matches("\\p{L}", "u", "π")).isTrue();
+        assertThat(matches("\\p{L}", "u", "1")).isFalse();
+        assertThat(matches("\\P{L}", "u", "1")).isTrue();
+        assertThat(matches("\\P{L}", "u", "π")).isFalse();
+        assertThat(matches("\\p{Any}", "u", "😀")).isTrue();
+        assertThat(matches("\\p{Assigned}", "u", "A")).isTrue();
+    }
+
+    @Test
+    public void testUnicodePropertyEscapesInCharacterClass() {
+        assertThat(matches("^[\\p{L}\\p{Nd}]+$", "u", "Aπ9")).isTrue();
+        assertThat(matches("^[\\P{L}]+$", "u", "123_")).isTrue();
+        assertThat(matches("^[\\P{L}]+$", "u", "123A")).isFalse();
+    }
+
+    @Test
+    public void testUnicodePropertyEscapesPropertyForms() {
+        assertThat(matches("\\p{gc=Lu}", "u", "A")).isTrue();
+        assertThat(matches("\\p{gc=Lu}", "u", "a")).isFalse();
+        assertThat(matches("\\p{General_Category=Uppercase_Letter}", "u", "A")).isTrue();
+        assertThat(matches("\\p{Script=Greek}", "u", "Ω")).isTrue();
+        assertThat(matches("\\p{Script=Greek}", "u", "A")).isFalse();
+        assertThat(matches("\\p{sc=Grek}", "u", "β")).isTrue();
+        assertThat(matches("\\p{Script_Extensions=Greek}", "u", "π")).isTrue();
+        assertThat(matches("\\p{ASCII}", "u", "A")).isTrue();
+        assertThat(matches("\\p{ASCII}", "u", "π")).isFalse();
+        assertThat(matches("\\p{White_Space}", "u", "\u00A0")).isTrue();
+        assertThat(matches("\\p{ID_Start}", "u", "A")).isTrue();
+        assertThat(matches("\\p{ID_Start}", "u", "1")).isFalse();
+        assertThat(matches("\\p{ID_Continue}", "u", "1")).isTrue();
+    }
+
+    @Test
+    public void testUnicodePropertyEscapesRequireUnicodeMode() {
+        assertThat(matches("\\p{L}", "", "p{L}")).isTrue();
+        assertThat(matches("\\p{L}", "", "A")).isFalse();
+        assertThat(matches("[\\p{L}]", "", "{")).isTrue();
+        assertThat(matches("\\P{L}", "", "P{L}")).isTrue();
+    }
+
+    @Test
+    public void testUnicodePropertyEscapesSyntaxErrors() {
+        RegExpCompiler compiler = new RegExpCompiler();
+
+        assertThatThrownBy(() -> compiler.compile("\\p", "u"))
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+                .hasMessageContaining("expecting '{' after \\p");
+        assertThatThrownBy(() -> compiler.compile("\\P", "u"))
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+                .hasMessageContaining("expecting '{' after \\p");
+        assertThatThrownBy(() -> compiler.compile("\\p{L", "u"))
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+                .hasMessageContaining("expecting '}'");
+        assertThatThrownBy(() -> compiler.compile("\\p{Greek}", "u"))
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+                .hasMessageContaining("unknown unicode property name");
+        assertThatThrownBy(() -> compiler.compile("\\p{sc=greek}", "u"))
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+                .hasMessageContaining("unknown unicode script");
+        assertThatThrownBy(() -> compiler.compile("\\p{gc=lu}", "u"))
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+                .hasMessageContaining("unknown unicode general category");
+        assertThatThrownBy(() -> compiler.compile("\\p{white_space}", "u"))
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+                .hasMessageContaining("unknown unicode property name");
+        assertThatThrownBy(() -> compiler.compile("\\p{SC=Greek}", "u"))
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+                .hasMessageContaining("unknown unicode property name");
     }
 }
