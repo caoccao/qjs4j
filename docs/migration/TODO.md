@@ -21,14 +21,6 @@ This document tracks remaining features, known bugs, and planned enhancements fo
   - Intl.Locale
 - **Reference**: [FEATURES.md](FEATURES.md#not-yet-implemented-)
 
-### Low Priority - Syntax Sugar
-
-#### Numeric Separators
-- **Description**: `1_000_000`, `0b1010_1010`, `0o755`
-- **Status**: Not implemented
-- **Scope**: Lexer changes only
-- **Reference**: [FEATURES.md](FEATURES.md#miscellaneous)
-
 ### Planned Features (ES2024+)
 
 #### Explicit Resource Management

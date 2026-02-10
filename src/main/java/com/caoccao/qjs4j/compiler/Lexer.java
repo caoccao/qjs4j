@@ -134,15 +134,28 @@ public final class Lexer {
         };
     }
 
+    private Token finalizeNumberOrBigIntToken(int startPos, int startLine, int startColumn) {
+        if (!isAtEnd() && peek() == 'n') {
+            advance(); // consume 'n'
+            if (!isAtEnd() && (isIdentifierStart(peek()) || Character.isDigit(peek()))) {
+                throw new JSSyntaxErrorException("Invalid or unexpected token");
+            }
+            String value = source.substring(startPos, position - 1); // exclude 'n' from value
+            return new Token(TokenType.BIGINT, value, startLine, startColumn, startPos);
+        }
+        String value = source.substring(startPos, position);
+        return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
+    }
+
     private boolean isAtEnd() {
         return position >= source.length();
     }
 
-    private boolean isHexDigit(char c) {
-        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-    }
-
     // Core scanning logic
+
+    private boolean isDigitForRadix(char c, int radix) {
+        return Character.digit(c, radix) >= 0;
+    }
 
     private boolean isIdentifierPart(char c) {
         return Character.isLetterOrDigit(c) || c == '_' || c == '$' ||
@@ -203,52 +216,54 @@ public final class Lexer {
         lastTokenType = null;
     }
 
-    private Token scanBinaryNumber(int startPos, int startLine, int startColumn) {
-        int digitStart = position;
-        while (!isAtEnd() && (peek() == '0' || peek() == '1')) {
-            advance();
-        }
-        // Validate at least one binary digit was scanned
-        if (position == digitStart) {
-            throw new JSSyntaxErrorException("Invalid or unexpected token");
-        }
-        // Validate no invalid digits, decimal point, or exponent follow
-        if (!isAtEnd() && (Character.isDigit(peek()) || peek() == '.' || peek() == 'e' || peek() == 'E')) {
-            throw new JSSyntaxErrorException("Invalid or unexpected token");
-        }
-        // Check for BigInt literal suffix 'n'
-        if (!isAtEnd() && peek() == 'n') {
-            advance(); // consume 'n'
-            String value = source.substring(startPos, position - 1); // exclude 'n' from value
-            return new Token(TokenType.BIGINT, value, startLine, startColumn, startPos);
-        }
-        String value = source.substring(startPos, position);
-        return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
-    }
-
     // Character utilities
 
-    private Token scanHexNumber(int startPos, int startLine, int startColumn) {
-        int digitStart = position;
-        while (!isAtEnd() && isHexDigit(peek())) {
+    private Token scanBinaryNumber(int startPos, int startLine, int startColumn) {
+        scanDigitsWithNumericSeparators(2, false, false);
+        validateNoRadixLiteralContinuation(2);
+        return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
+    }
+
+    private void scanDigitsWithNumericSeparators(int radix, boolean firstDigitAlreadyConsumed, boolean firstDigitIsZero) {
+        if (!firstDigitAlreadyConsumed) {
+            if (isAtEnd() || !isDigitForRadix(peek(), radix)) {
+                throw new JSSyntaxErrorException("Invalid or unexpected token");
+            }
             advance();
         }
-        // Validate at least one hex digit was scanned
-        if (position == digitStart) {
+
+        int digitCount = 1;
+        boolean lastWasSeparator = false;
+
+        while (!isAtEnd()) {
+            char c = peek();
+            if (isDigitForRadix(c, radix)) {
+                advance();
+                digitCount++;
+                lastWasSeparator = false;
+            } else if (c == '_') {
+                if (lastWasSeparator ||
+                        (radix == 10 && firstDigitIsZero && digitCount == 1) ||
+                        position + 1 >= source.length() ||
+                        !isDigitForRadix(source.charAt(position + 1), radix)) {
+                    throw new JSSyntaxErrorException("Invalid or unexpected token");
+                }
+                advance();
+                lastWasSeparator = true;
+            } else {
+                break;
+            }
+        }
+
+        if (lastWasSeparator) {
             throw new JSSyntaxErrorException("Invalid or unexpected token");
         }
-        // Validate no invalid characters or decimal point follow (e.g., 'g' in '0xFFg' or '.' in '0xFF.')
-        if (!isAtEnd() && ((Character.isLetterOrDigit(peek()) && peek() != 'n') || peek() == '.')) {
-            throw new JSSyntaxErrorException("Invalid or unexpected token");
-        }
-        // Check for BigInt literal suffix 'n'
-        if (!isAtEnd() && peek() == 'n') {
-            advance(); // consume 'n'
-            String value = source.substring(startPos, position - 1); // exclude 'n' from value
-            return new Token(TokenType.BIGINT, value, startLine, startColumn, startPos);
-        }
-        String value = source.substring(startPos, position);
-        return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
+    }
+
+    private Token scanHexNumber(int startPos, int startLine, int startColumn) {
+        scanDigitsWithNumericSeparators(16, false, false);
+        validateNoRadixLiteralContinuation(16);
+        return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
     }
 
     private Token scanIdentifier(int startPos, int startLine, int startColumn) {
@@ -283,18 +298,18 @@ public final class Lexer {
         // Scan decimal number
         boolean hasDecimalPoint = false;
         boolean hasExponent = false;
+        scanDigitsWithNumericSeparators(10, true, source.charAt(startPos) == '0');
 
-        while (!isAtEnd() && Character.isDigit(peek())) {
-            advance();
-        }
-
-        // Check for decimal point
-        if (!isAtEnd() && peek() == '.' && position + 1 < source.length() &&
-                Character.isDigit(source.charAt(position + 1))) {
+        // Check for decimal point. Match QuickJS behavior: for decimal literals that already
+        // have an integer part, '.' is part of the numeric token even without following digits.
+        if (!isAtEnd() && peek() == '.') {
             hasDecimalPoint = true;
             advance(); // consume '.'
-            while (!isAtEnd() && Character.isDigit(peek())) {
-                advance();
+            if (!isAtEnd() && peek() == '_') {
+                throw new JSSyntaxErrorException("Invalid or unexpected token");
+            }
+            if (!isAtEnd() && Character.isDigit(peek())) {
+                scanDigitsWithNumericSeparators(10, false, false);
             }
         }
 
@@ -305,14 +320,10 @@ public final class Lexer {
             if (!isAtEnd() && (peek() == '+' || peek() == '-')) {
                 advance(); // consume sign
             }
-            int exponentStart = position;
-            while (!isAtEnd() && Character.isDigit(peek())) {
-                advance();
-            }
-            // Validate at least one digit in exponent
-            if (position == exponentStart) {
+            if (isAtEnd() || !Character.isDigit(peek())) {
                 throw new JSSyntaxErrorException("Invalid or unexpected token");
             }
+            scanDigitsWithNumericSeparators(10, false, false);
         }
 
         // Check for invalid identifier characters after number (e.g., '1abc')
@@ -327,6 +338,9 @@ public final class Lexer {
                 throw new JSSyntaxErrorException("Invalid or unexpected token");
             }
             advance(); // consume 'n'
+            if (!isAtEnd() && (isIdentifierStart(peek()) || Character.isDigit(peek()))) {
+                throw new JSSyntaxErrorException("Invalid or unexpected token");
+            }
             String value = source.substring(startPos, position - 1); // exclude 'n' from value
             return new Token(TokenType.BIGINT, value, startLine, startColumn, startPos);
         }
@@ -336,26 +350,9 @@ public final class Lexer {
     }
 
     private Token scanOctalNumber(int startPos, int startLine, int startColumn) {
-        int digitStart = position;
-        while (!isAtEnd() && peek() >= '0' && peek() <= '7') {
-            advance();
-        }
-        // Validate at least one octal digit was scanned
-        if (position == digitStart) {
-            throw new JSSyntaxErrorException("Invalid or unexpected token");
-        }
-        // Validate no invalid digits, decimal point, or exponent follow (e.g., '8' or '9' in '0o78', or '.' in '0o7.' or 'e' in '0o7e1')
-        if (!isAtEnd() && (Character.isDigit(peek()) || peek() == '.' || peek() == 'e' || peek() == 'E')) {
-            throw new JSSyntaxErrorException("Invalid or unexpected token");
-        }
-        // Check for BigInt literal suffix 'n'
-        if (!isAtEnd() && peek() == 'n') {
-            advance(); // consume 'n'
-            String value = source.substring(startPos, position - 1); // exclude 'n' from value
-            return new Token(TokenType.BIGINT, value, startLine, startColumn, startPos);
-        }
-        String value = source.substring(startPos, position);
-        return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
+        scanDigitsWithNumericSeparators(8, false, false);
+        validateNoRadixLiteralContinuation(8);
+        return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
     }
 
     private Token scanOperatorOrPunctuation(char c, int startPos, int startLine, int startColumn) {
@@ -1057,6 +1054,20 @@ public final class Lexer {
             }
 
             break;
+        }
+    }
+
+    private void validateNoRadixLiteralContinuation(int radix) {
+        if (isAtEnd()) {
+            return;
+        }
+
+        char next = peek();
+        if (next == '.' || next == 'e' || next == 'E' || next == '_' || Character.isDigit(next)) {
+            throw new JSSyntaxErrorException("Invalid or unexpected token");
+        }
+        if (isIdentifierStart(next) && next != 'n') {
+            throw new JSSyntaxErrorException("Invalid or unexpected token");
         }
     }
 }

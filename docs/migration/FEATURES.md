@@ -164,6 +164,7 @@ This document provides a comprehensive list of all JavaScript features implement
 
 ### Number
 - **Parsing**: parseInt, parseFloat
+- **Numeric separators in literals**: `1_000_000`, `0b1010_1010`, `0o755`, `0xAB_CD`, `123_456n`
 - **Testing**: isNaN, isFinite, isInteger, isSafeInteger
 - **Formatting**: toFixed, toPrecision, toExponential, toString
 - **Constants**: MAX_VALUE, MIN_VALUE, EPSILON, MAX_SAFE_INTEGER, MIN_SAFE_INTEGER
@@ -471,9 +472,6 @@ This document provides a comprehensive list of all JavaScript features implement
   - Intl.Locale
 
 ### Miscellaneous
-- **Regular expression features**:
-- **Binary & Octal numeric separators**: 0b1010_1010, 0o755
-- **Numeric separators**: 1_000_000
 
 ## Summary Statistics
 

@@ -18,17 +18,25 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for Number.prototype methods.
  */
 public class NumberPrototypeTest extends BaseJavetTest {
+    private void assertInvalidNumericLiteral(String source) {
+        assertThatThrownBy(() -> resetContext().eval(source))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("SyntaxError");
+    }
+
     @Test
     public void testEquals() {
         assertBooleanWithJavet(
@@ -182,6 +190,47 @@ public class NumberPrototypeTest extends BaseJavetTest {
         // Edge case: no arguments
         result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, new JSValue[]{});
         assertThat(result).isEqualTo(JSBoolean.FALSE);
+    }
+
+    @Test
+    public void testNumericSeparatorsInvalidLiterals() {
+        assertInvalidNumericLiteral("0_1");
+        assertInvalidNumericLiteral("1__0");
+        assertInvalidNumericLiteral("1_");
+        assertInvalidNumericLiteral("0x_FF");
+        assertInvalidNumericLiteral("0xFF_");
+        assertInvalidNumericLiteral("0b_10");
+        assertInvalidNumericLiteral("0b10_");
+        assertInvalidNumericLiteral("0o_77");
+        assertInvalidNumericLiteral("0o77_");
+        assertInvalidNumericLiteral("1_.0");
+        assertInvalidNumericLiteral("1._0");
+        assertInvalidNumericLiteral("1e_1");
+        assertInvalidNumericLiteral("1e+_1");
+        assertInvalidNumericLiteral("1e1_");
+        assertInvalidNumericLiteral("1_n");
+        assertInvalidNumericLiteral("0b_1n");
+        assertInvalidNumericLiteral("0b1_n");
+    }
+
+    @Test
+    public void testNumericSeparatorsValidLiterals() {
+        assertBooleanWithJavet("""
+                1_000_000 === 1000000
+                    && 0b1010_1010 === 170
+                    && 0o7_5_5 === 493
+                    && 0xAB_CD === 43981
+                    && 12.34_56 === 12.3456
+                    && 1_2.3_4 === 12.34
+                    && 1.2e3_4 === 1.2e34
+                    && 1_2e3_4 === 1.2e35
+                    && 1e+1_0 === 1e10
+                    && 1e-1_0 === 1e-10
+                    && 123_456n === 123456n
+                    && 1_0n === 10n
+                    && 0b1010_1010n === 170n
+                    && 0o7_7n === 63n
+                    && 0xA_Bn === 171n""");
     }
 
     @Test

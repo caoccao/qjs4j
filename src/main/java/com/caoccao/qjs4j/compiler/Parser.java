@@ -1620,25 +1620,26 @@ public final class Parser {
             case NUMBER -> {
                 String value = currentToken.value();
                 advance();
+                String normalizedValue = value.replace("_", "");
                 Object numValue;
-                if (value.startsWith("0x") || value.startsWith("0X")) {
+                if (normalizedValue.startsWith("0x") || normalizedValue.startsWith("0X")) {
                     // Parse hex number - store as long or int
-                    long longVal = Long.parseLong(value.substring(2), 16);
+                    long longVal = Long.parseLong(normalizedValue.substring(2), 16);
                     numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
                             ? (int) longVal : (double) longVal;
-                } else if (value.startsWith("0b") || value.startsWith("0B")) {
+                } else if (normalizedValue.startsWith("0b") || normalizedValue.startsWith("0B")) {
                     // Parse binary number - store as long or int
-                    long longVal = Long.parseLong(value.substring(2), 2);
+                    long longVal = Long.parseLong(normalizedValue.substring(2), 2);
                     numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
                             ? (int) longVal : (double) longVal;
-                } else if (value.startsWith("0o") || value.startsWith("0O")) {
+                } else if (normalizedValue.startsWith("0o") || normalizedValue.startsWith("0O")) {
                     // Parse octal number - store as long or int
-                    long longVal = Long.parseLong(value.substring(2), 8);
+                    long longVal = Long.parseLong(normalizedValue.substring(2), 8);
                     numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
                             ? (int) longVal : (double) longVal;
                 } else {
                     // Parse decimal number - use double
-                    double doubleVal = Double.parseDouble(value);
+                    double doubleVal = Double.parseDouble(normalizedValue);
                     // Check if it's a whole number that fits in an int
                     if (doubleVal == Math.floor(doubleVal) && !Double.isInfinite(doubleVal) &&
                             doubleVal >= Integer.MIN_VALUE && doubleVal <= Integer.MAX_VALUE) {
@@ -1652,16 +1653,17 @@ public final class Parser {
             case BIGINT -> {
                 String value = currentToken.value();
                 advance();
+                String normalizedValue = value.replace("_", "");
                 // Parse BigInt literal - handle different radixes
                 java.math.BigInteger bigIntValue;
-                if (value.startsWith("0x") || value.startsWith("0X")) {
-                    bigIntValue = new BigInteger(value.substring(2), 16);
-                } else if (value.startsWith("0b") || value.startsWith("0B")) {
-                    bigIntValue = new BigInteger(value.substring(2), 2);
-                } else if (value.startsWith("0o") || value.startsWith("0O")) {
-                    bigIntValue = new BigInteger(value.substring(2), 8);
+                if (normalizedValue.startsWith("0x") || normalizedValue.startsWith("0X")) {
+                    bigIntValue = new BigInteger(normalizedValue.substring(2), 16);
+                } else if (normalizedValue.startsWith("0b") || normalizedValue.startsWith("0B")) {
+                    bigIntValue = new BigInteger(normalizedValue.substring(2), 2);
+                } else if (normalizedValue.startsWith("0o") || normalizedValue.startsWith("0O")) {
+                    bigIntValue = new BigInteger(normalizedValue.substring(2), 8);
                 } else {
-                    bigIntValue = new BigInteger(value);
+                    bigIntValue = new BigInteger(normalizedValue);
                 }
                 yield new Literal(bigIntValue, location);
             }
