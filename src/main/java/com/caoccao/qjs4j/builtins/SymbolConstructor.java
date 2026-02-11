@@ -18,16 +18,11 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * Implementation of Symbol constructor and static methods.
  * Based on ES2020 Symbol specification.
  */
 public final class SymbolConstructor {
-    private static final Map<String, JSSymbol> symbolRegistry = new HashMap<>();
-
     /**
      * Symbol(description)
      * ES2020 19.4.1
@@ -102,25 +97,16 @@ public final class SymbolConstructor {
      * Returns the key for a Symbol from the global symbol registry.
      */
     public static JSValue keyFor(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Symbol.keyFor requires a Symbol");
-        }
-
-        JSValue arg = args[0];
+        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (!(arg instanceof JSSymbol symbol)) {
             return context.throwTypeError("Symbol.keyFor requires a Symbol");
         }
 
-        // Search the registry for this symbol
-        synchronized (symbolRegistry) {
-            for (Map.Entry<String, JSSymbol> entry : symbolRegistry.entrySet()) {
-                if (entry.getValue() == symbol) {
-                    return new JSString(entry.getKey());
-                }
-            }
+        String key = context.getRuntime().getGlobalSymbolKey(symbol);
+        if (key != null) {
+            return new JSString(key);
         }
 
-        // Symbol not in registry
         return JSUndefined.INSTANCE;
     }
 
@@ -130,14 +116,8 @@ public final class SymbolConstructor {
      * Returns a Symbol from the global symbol registry.
      */
     public static JSValue symbolFor(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Symbol.for requires a key");
-        }
-
-        String key = JSTypeConversions.toString(context, args[0]).value();
-
-        synchronized (symbolRegistry) {
-            return symbolRegistry.computeIfAbsent(key, k -> new JSSymbol(k));
-        }
+        JSValue keyValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        String key = JSTypeConversions.toString(context, keyValue).value();
+        return context.getRuntime().getOrCreateGlobalSymbol(key);
     }
 }

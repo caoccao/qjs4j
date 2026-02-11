@@ -140,4 +140,14 @@ public class SymbolObjectTest extends BaseJavetTest {
         // Test wrapping well-known symbols with Object() - verify the type
         assertStringWithJavet("typeof Object(Symbol.iterator);");
     }
+
+    @Test
+    public void testSymbolRegistryArgumentCoercion() {
+        assertStringWithJavet(
+                "Symbol.keyFor(Symbol.for());",
+                "Symbol.keyFor(Symbol.for(undefined));");
+        assertBooleanWithJavet(
+                "Symbol.for() === Symbol.for(undefined);",
+                "Symbol.for() === Symbol.for('undefined');");
+    }
 }

@@ -162,9 +162,36 @@ public class SymbolConstructorTest extends BaseJavetTest {
         JSSymbol symbol4 = result.asSymbol().orElseThrow();
         assertThat(symbol4.getDescription()).isEqualTo("123");
 
-        // Edge case: no arguments
+        // Edge case: no arguments coerces undefined to "undefined" key
         result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, new JSValue[]{});
-        assertTypeError(result);
-        assertPendingException(context);
+        JSSymbol symbol5 = result.asSymbol().orElseThrow();
+        assertThat(symbol5.getDescription()).isEqualTo("undefined");
+
+        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, new JSValue[]{JSUndefined.INSTANCE});
+        JSSymbol symbol6 = result.asSymbol().orElseThrow();
+        assertThat(symbol6).isEqualTo(symbol5);
+    }
+
+    @Test
+    public void testSymbolRegistryIsRuntimeScoped() {
+        try (JSRuntime runtime1 = new JSRuntime(); JSContext context1 = runtime1.createContext();
+             JSRuntime runtime2 = new JSRuntime(); JSContext context2 = runtime2.createContext()) {
+            JSSymbol symbol1 = SymbolConstructor.symbolFor(context1, JSUndefined.INSTANCE, new JSValue[]{new JSString("sameKey")})
+                    .asSymbol().orElseThrow();
+            JSSymbol symbol2 = SymbolConstructor.symbolFor(context2, JSUndefined.INSTANCE, new JSValue[]{new JSString("sameKey")})
+                    .asSymbol().orElseThrow();
+
+            assertThat(symbol1).isNotEqualTo(symbol2);
+
+            JSValue key1 = SymbolConstructor.keyFor(context1, JSUndefined.INSTANCE, new JSValue[]{symbol1});
+            JSValue key2 = SymbolConstructor.keyFor(context2, JSUndefined.INSTANCE, new JSValue[]{symbol2});
+            JSValue crossKey1 = SymbolConstructor.keyFor(context1, JSUndefined.INSTANCE, new JSValue[]{symbol2});
+            JSValue crossKey2 = SymbolConstructor.keyFor(context2, JSUndefined.INSTANCE, new JSValue[]{symbol1});
+
+            assertThat(key1).isInstanceOfSatisfying(JSString.class, jsString -> assertThat(jsString.value()).isEqualTo("sameKey"));
+            assertThat(key2).isInstanceOfSatisfying(JSString.class, jsString -> assertThat(jsString.value()).isEqualTo("sameKey"));
+            assertThat(crossKey1).isEqualTo(JSUndefined.INSTANCE);
+            assertThat(crossKey2).isEqualTo(JSUndefined.INSTANCE);
+        }
     }
 }
