@@ -43,6 +43,19 @@ public class DatePrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testDateConstructorYearNormalizationWithJavet() {
+        assertIntegerWithJavet("new Date(99, 0, 1).getFullYear();");
+        assertIntegerWithJavet("new Date(Date.UTC(99, 0, 1)).getUTCFullYear();");
+    }
+
+    @Test
+    public void testDateDescriptorsWithJavet() {
+        assertStringWithJavet("var d = Object.getOwnPropertyDescriptor(Date.prototype, 'getYear'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);");
+        assertStringWithJavet("var d = Object.getOwnPropertyDescriptor(Date.prototype, 'setYear'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);");
+        assertStringWithJavet("var d = Object.getOwnPropertyDescriptor(Date.prototype, 'toGMTString'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);");
+    }
+
+    @Test
     public void testDateFunctionReturnsV8Format() {
         // Date() function (without new) should also return V8 format
         JSValue result = context.eval("Date()");
@@ -325,6 +338,20 @@ public class DatePrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testGetYearWithJavet() {
+        assertIntegerWithJavet("new Date(946684800000).getYear();");
+        assertTypeError(DatePrototype.getYear(context, JSUndefined.INSTANCE, new JSValue[]{}));
+        assertPendingException(context);
+    }
+
+    @Test
+    public void testSetYearWithJavet() {
+        assertIntegerWithJavet("var d = new Date(0); d.setYear(5); d.getFullYear();");
+        assertDoubleWithJavet("var d = new Date(0); d.setYear(NaN);");
+        assertDoubleWithJavet("var d = new Date(NaN); d.setYear(2020);");
+    }
+
+    @Test
     public void testToISOString() {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(1704067200000L);
@@ -359,6 +386,19 @@ public class DatePrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testToJSONInvalidDateWithJavet() {
+        assertStringWithJavet("String(new Date(NaN).toJSON());");
+    }
+
+    @Test
+    public void testToPrimitiveAndAliasWithJavet() {
+        assertBooleanWithJavet("Date.prototype.toGMTString === Date.prototype.toUTCString;");
+        assertStringWithJavet("typeof Date.prototype[Symbol.toPrimitive];");
+        assertStringWithJavet("new Date(0) + '';");
+        assertIntegerWithJavet("+new Date(0);");
+    }
+
+    @Test
     public void testToString() {
         JSDate date = new JSDate(1735689600000L);
 
@@ -377,6 +417,15 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         assertStringWithJavet(
                 "new Date(1735689600000).toString();");
+    }
+
+    @Test
+    public void testUTCGettersSettersWithJavet() {
+        assertIntegerWithJavet("new Date(1704067200123).getUTCMinutes();");
+        assertIntegerWithJavet("new Date(1704067200123).getUTCSeconds();");
+        assertIntegerWithJavet("new Date(1704067200123).getUTCMilliseconds();");
+        assertIntegerWithJavet("var d = new Date(0); d.setUTCSeconds(61, 250);");
+        assertDoubleWithJavet("var d = new Date(NaN); d.setUTCFullYear(2000);");
     }
 
     @Test

@@ -432,16 +432,14 @@ public class DateConstructorTest extends BaseJavetTest {
             assertThat(nanValue).isNaN();
         });
 
-        // Edge case: invalid date (should return NaN)
+        // Edge case: overflow fields should normalize instead of returning NaN.
         result = DateConstructor.UTC(context, JSUndefined.INSTANCE, new JSValue[]{
                 new JSNumber(2025),
-                new JSNumber(12), // Invalid month
-                new JSNumber(32)  // Invalid day
+                new JSNumber(12),
+                new JSNumber(32)
         });
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
-            double invalidValue = jsNum.value();
-            assertThat(invalidValue).isNaN();
-        });
+        assertThat(result).isInstanceOf(JSNumber.class);
+        assertDoubleWithJavet("Date.UTC(2025, 12, 32);");
     }
 
     @Test

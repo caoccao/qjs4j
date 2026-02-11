@@ -176,11 +176,11 @@ This document provides a comprehensive list of all JavaScript features implement
 - **Constructor**: Boolean() type conversion
 
 ### Date
-- **Constructor**: new Date() with current time
-- **Parsing**: Date.parse()
-- **Instance methods**: getTime, setTime, toISOString, toJSON
-- **Get methods**: getFullYear, getMonth, getDate, getHours, getMinutes, getSeconds, getMilliseconds
-- **Set methods**: setFullYear, setMonth, setDate, setHours, setMinutes, setSeconds, setMilliseconds
+- **Constructor**: `Date()` function behavior and `new Date(...)` argument handling aligned with QuickJS semantics
+- **Static methods**: `Date.now()`, `Date.parse()`, `Date.UTC()`
+- **String methods**: `toString()`, `toUTCString()`, `toGMTString()`, `toISOString()`, `toDateString()`, `toTimeString()`, `toLocaleString()`, `toLocaleDateString()`, `toLocaleTimeString()`
+- **Get methods**: full local and UTC getter set (`getYear`, `getFullYear`, `getMonth`, `getDate`, `getDay`, `getHours`, `getMinutes`, `getSeconds`, `getMilliseconds`, `getTimezoneOffset` and UTC counterparts)
+- **Set methods**: full local and UTC setter set (`setTime`, `setYear`, `setFullYear`, `setMonth`, `setDate`, `setHours`, `setMinutes`, `setSeconds`, `setMilliseconds` and UTC counterparts)
 
 ### Internationalization (Intl)
 - **Namespace**: `Intl` global object with `getCanonicalLocales()`

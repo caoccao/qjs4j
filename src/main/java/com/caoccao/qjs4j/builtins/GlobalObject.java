@@ -38,43 +38,31 @@ import java.util.stream.Stream;
  * - URI handling functions (encodeURI, decodeURI, encodeURIComponent, decodeURIComponent)
  */
 public final class GlobalObject {
+    private static void addBuiltinMethod(JSObject object, String name, JSNativeFunction function) {
+        object.defineProperty(
+                PropertyKey.fromString(name),
+                PropertyDescriptor.dataDescriptor(function, true, false, true));
+    }
 
-    private static void addLegacyRegExpAccessor(JSNativeFunction regexpConstructor, String name, String alias) {
-        addLegacyRegExpAccessor(regexpConstructor, name, alias, false);
+    private static void addGlobalBinding(JSObject global, String name, JSValue value) {
+        global.defineProperty(PropertyKey.fromString(name),
+                PropertyDescriptor.dataDescriptor(value, true, false, true));
+    }
+
+    private static void addGetter(JSObject object, String name, JSNativeFunction.NativeCallback callback) {
+        object.defineProperty(PropertyKey.fromString(name),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get " + name, 0, callback), null, false, true));
+    }
+
+    private static void addGetter(JSObject object, JSSymbol symbol, JSNativeFunction.NativeCallback callback) {
+        object.defineProperty(PropertyKey.fromSymbol(symbol),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get [" + symbol + "]", 0, callback), null, false, true));
     }
 
     private static void addLegacyRegExpAccessor(JSNativeFunction regexpConstructor, String name, String alias, boolean hasSetter) {
-        JSNativeFunction getter = new JSNativeFunction("get " + name, 0, (ctx, thisArg, args) -> {
-            if (thisArg != regexpConstructor) {
-                return ctx.throwTypeError("Generic static accessor property access is not supported");
-            }
-            return new JSString("");
-        }, false);
-        JSNativeFunction setter = hasSetter ? new JSNativeFunction("set " + name, 1, (ctx, thisArg, args) -> {
-            if (thisArg != regexpConstructor) {
-                return ctx.throwTypeError("Generic static accessor property access is not supported");
-            }
-            return JSUndefined.INSTANCE;
-        }, false) : null;
-        regexpConstructor.defineProperty(
-                PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
+        defineSingleLegacyAccessor(regexpConstructor, name, hasSetter);
         if (alias != null) {
-            JSNativeFunction aliasGetter = new JSNativeFunction("get " + alias, 0, (ctx, thisArg, args) -> {
-                if (thisArg != regexpConstructor) {
-                    return ctx.throwTypeError("Generic static accessor property access is not supported");
-                }
-                return new JSString("");
-            }, false);
-            JSNativeFunction aliasSetter = hasSetter ? new JSNativeFunction("set " + alias, 1, (ctx, thisArg, args) -> {
-                if (thisArg != regexpConstructor) {
-                    return ctx.throwTypeError("Generic static accessor property access is not supported");
-                }
-                return JSUndefined.INSTANCE;
-            }, false) : null;
-            regexpConstructor.defineProperty(
-                    PropertyKey.fromString(alias),
-                    PropertyDescriptor.accessorDescriptor(aliasGetter, aliasSetter, false, true));
+            defineSingleLegacyAccessor(regexpConstructor, alias, hasSetter);
         }
     }
 
@@ -153,6 +141,24 @@ public final class GlobalObject {
         } catch (Exception e) {
             return context.throwURIError("URI malformed");
         }
+    }
+
+    private static void defineSingleLegacyAccessor(JSNativeFunction regexpConstructor, String name, boolean hasSetter) {
+        JSNativeFunction getter = new JSNativeFunction("get " + name, 0, (ctx, thisArg, args) -> {
+            if (thisArg != regexpConstructor) {
+                return ctx.throwTypeError("Generic static accessor property access is not supported");
+            }
+            return new JSString("");
+        }, false);
+        JSNativeFunction setter = hasSetter ? new JSNativeFunction("set " + name, 1, (ctx, thisArg, args) -> {
+            if (thisArg != regexpConstructor) {
+                return ctx.throwTypeError("Generic static accessor property access is not supported");
+            }
+            return JSUndefined.INSTANCE;
+        }, false) : null;
+        regexpConstructor.defineProperty(
+                PropertyKey.fromString(name),
+                PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
     }
 
     /**
@@ -313,31 +319,38 @@ public final class GlobalObject {
      * Initialize the global object with all built-in global properties and functions.
      */
     public static void initialize(JSContext context, JSObject global) {
-        // Global value properties
-        global.set("undefined", JSUndefined.INSTANCE);
-        global.set("NaN", new JSNumber(Double.NaN));
-        global.set("Infinity", new JSNumber(Double.POSITIVE_INFINITY));
+        // Global value properties (non-writable, non-enumerable, non-configurable)
+        global.defineProperty(PropertyKey.fromString("undefined"),
+                PropertyDescriptor.dataDescriptor(JSUndefined.INSTANCE, false, false, false));
+        global.defineProperty(PropertyKey.fromString("NaN"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(Double.NaN), false, false, false));
+        global.defineProperty(PropertyKey.fromString("Infinity"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(Double.POSITIVE_INFINITY), false, false, false));
 
         // Global function properties
-        global.set("parseInt", new JSNativeFunction("parseInt", 2, GlobalObject::parseInt, false));
-        global.set("parseFloat", new JSNativeFunction("parseFloat", 1, GlobalObject::parseFloat, false));
-        global.set("isNaN", new JSNativeFunction("isNaN", 1, GlobalObject::isNaN, false));
-        global.set("isFinite", new JSNativeFunction("isFinite", 1, GlobalObject::isFinite, false));
-        global.set("eval", new JSNativeFunction("eval", 1, GlobalObject::eval, false));
+        addGlobalBinding(global, "parseInt", new JSNativeFunction("parseInt", 2, GlobalObject::parseInt, false));
+        addGlobalBinding(global, "parseFloat", new JSNativeFunction("parseFloat", 1, GlobalObject::parseFloat, false));
+        addGlobalBinding(global, "isNaN", new JSNativeFunction("isNaN", 1, GlobalObject::isNaN, false));
+        addGlobalBinding(global, "isFinite", new JSNativeFunction("isFinite", 1, GlobalObject::isFinite, false));
+        addGlobalBinding(global, "eval", new JSNativeFunction("eval", 1, GlobalObject::eval, false));
 
         // URI handling functions
-        global.set("encodeURI", new JSNativeFunction("encodeURI", 1, GlobalObject::encodeURI, false));
-        global.set("decodeURI", new JSNativeFunction("decodeURI", 1, GlobalObject::decodeURI, false));
-        global.set("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, GlobalObject::encodeURIComponent, false));
-        global.set("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, GlobalObject::decodeURIComponent, false));
-        global.set("escape", new JSNativeFunction("escape", 1, GlobalObject::escape, false));
-        global.set("unescape", new JSNativeFunction("unescape", 1, GlobalObject::unescape, false));
+        addGlobalBinding(global, "encodeURI", new JSNativeFunction("encodeURI", 1, GlobalObject::encodeURI, false));
+        addGlobalBinding(global, "decodeURI", new JSNativeFunction("decodeURI", 1, GlobalObject::decodeURI, false));
+        addGlobalBinding(global, "encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, GlobalObject::encodeURIComponent, false));
+        addGlobalBinding(global, "decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, GlobalObject::decodeURIComponent, false));
+        addGlobalBinding(global, "escape", new JSNativeFunction("escape", 1, GlobalObject::escape, false));
+        addGlobalBinding(global, "unescape", new JSNativeFunction("unescape", 1, GlobalObject::unescape, false));
 
         // Console object for debugging
         initializeConsoleObject(context, global);
 
         // Global this reference
-        global.set("globalThis", global);
+        addGlobalBinding(global, "globalThis", global);
+
+        // Object.prototype.toString.call(globalThis) -> [object global]
+        global.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                PropertyDescriptor.dataDescriptor(new JSString("global"), false, false, true));
 
         // Built-in constructors and their prototypes
         initializeObjectConstructor(context, global);
@@ -378,9 +391,6 @@ public final class GlobalObject {
         // Error constructors
         initializeErrorConstructors(context, global);
 
-        // Align global binding attributes with QuickJS semantics.
-        normalizeGlobalDescriptors(global);
-
         // Initialize function prototype chains after all built-ins are set up
         initializeFunctionPrototypeChains(context, global, new HashSet<>());
     }
@@ -397,26 +407,11 @@ public final class GlobalObject {
         arrayBufferPrototype.set("transferToFixedLength", new JSNativeFunction("transferToFixedLength", 0, ArrayBufferPrototype::transferToFixedLength));
 
         // Define getter properties
-        JSNativeFunction byteLengthGetter = new JSNativeFunction("get byteLength", 0, ArrayBufferPrototype::getByteLength);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("byteLength"),
-                PropertyDescriptor.accessorDescriptor(byteLengthGetter, null, false, true));
-
-        JSNativeFunction detachedGetter = new JSNativeFunction("get detached", 0, ArrayBufferPrototype::getDetached);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("detached"),
-                PropertyDescriptor.accessorDescriptor(detachedGetter, null, false, true));
-
-        JSNativeFunction maxByteLengthGetter = new JSNativeFunction("get maxByteLength", 0, ArrayBufferPrototype::getMaxByteLength);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("maxByteLength"),
-                PropertyDescriptor.accessorDescriptor(maxByteLengthGetter, null, false, true));
-
-        JSNativeFunction resizableGetter = new JSNativeFunction("get resizable", 0, ArrayBufferPrototype::getResizable);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("resizable"),
-                PropertyDescriptor.accessorDescriptor(resizableGetter, null, false, true));
-
-        // Symbol.toStringTag
-        JSNativeFunction toStringTagGetter = new JSNativeFunction("get [Symbol.toStringTag]", 0, ArrayBufferPrototype::getToStringTag);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                PropertyDescriptor.accessorDescriptor(toStringTagGetter, null, false, true));
+        addGetter(arrayBufferPrototype, "byteLength", ArrayBufferPrototype::getByteLength);
+        addGetter(arrayBufferPrototype, "detached", ArrayBufferPrototype::getDetached);
+        addGetter(arrayBufferPrototype, "maxByteLength", ArrayBufferPrototype::getMaxByteLength);
+        addGetter(arrayBufferPrototype, "resizable", ArrayBufferPrototype::getResizable);
+        addGetter(arrayBufferPrototype, JSSymbol.TO_STRING_TAG, ArrayBufferPrototype::getToStringTag);
 
         // Create ArrayBuffer constructor as a function
         JSNativeFunction arrayBufferConstructor = new JSNativeFunction("ArrayBuffer", 1, ArrayBufferConstructor::call);
@@ -428,11 +423,9 @@ public final class GlobalObject {
         arrayBufferConstructor.set("isView", new JSNativeFunction("isView", 1, ArrayBufferConstructor::isView));
 
         // Symbol.species getter
-        JSNativeFunction speciesGetter = new JSNativeFunction("get [Symbol.species]", 0, ArrayBufferConstructor::getSpecies);
-        arrayBufferConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES),
-                PropertyDescriptor.accessorDescriptor(speciesGetter, null, false, true));
+        addGetter(arrayBufferConstructor, JSSymbol.SPECIES, ArrayBufferConstructor::getSpecies);
 
-        global.set("ArrayBuffer", arrayBufferConstructor);
+        addGlobalBinding(global, "ArrayBuffer", arrayBufferConstructor);
     }
 
     /**
@@ -487,9 +480,7 @@ public final class GlobalObject {
 
         // Array.prototype[Symbol.*]
         arrayPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction);
-        JSNativeFunction unscopablesGetter = new JSNativeFunction("get [Symbol.unscopables]", 0, ArrayPrototype::getSymbolUnscopables);
-        arrayPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.UNSCOPABLES),
-                PropertyDescriptor.accessorDescriptor(unscopablesGetter, null, false, true));
+        addGetter(arrayPrototype, JSSymbol.UNSCOPABLES, ArrayPrototype::getSymbolUnscopables);
 
         // Create Array constructor as a function
         JSNativeFunction arrayConstructor = new JSNativeFunction("Array", 1, ArrayConstructor::call);
@@ -504,11 +495,9 @@ public final class GlobalObject {
         arrayConstructor.set("of", new JSNativeFunction("of", 0, ArrayConstructor::of));
 
         // Symbol.species getter
-        JSNativeFunction arraySpeciesGetter = new JSNativeFunction("get [Symbol.species]", 0, ArrayConstructor::getSpecies);
-        arrayConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES),
-                PropertyDescriptor.accessorDescriptor(arraySpeciesGetter, null, false, true));
+        addGetter(arrayConstructor, JSSymbol.SPECIES, ArrayConstructor::getSpecies);
 
-        global.set("Array", arrayConstructor);
+        addGlobalBinding(global, "Array", arrayConstructor);
     }
 
     /**
@@ -524,25 +513,20 @@ public final class GlobalObject {
         asyncDisposableStackPrototype.set("use", new JSNativeFunction("use", 1, AsyncDisposableStackPrototype::use));
         asyncDisposableStackPrototype.set(PropertyKey.fromSymbol(JSSymbol.ASYNC_DISPOSE), disposeAsyncFunction);
 
-        JSNativeFunction disposedGetter = new JSNativeFunction("get disposed", 0, AsyncDisposableStackPrototype::getDisposed);
-        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("disposed"),
-                PropertyDescriptor.accessorDescriptor(disposedGetter, null, false, true));
-
-        JSNativeFunction toStringTagGetter = new JSNativeFunction("get [Symbol.toStringTag]", 0, (childContext, thisObj, args) -> {
+        addGetter(asyncDisposableStackPrototype, "disposed", AsyncDisposableStackPrototype::getDisposed);
+        addGetter(asyncDisposableStackPrototype, JSSymbol.TO_STRING_TAG, (childContext, thisObj, args) -> {
             if (!(thisObj instanceof JSAsyncDisposableStack)) {
                 return childContext.throwTypeError("get AsyncDisposableStack.prototype[Symbol.toStringTag] called on non-AsyncDisposableStack");
             }
             return new JSString(JSAsyncDisposableStack.NAME);
         });
-        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                PropertyDescriptor.accessorDescriptor(toStringTagGetter, null, false, true));
 
         JSNativeFunction asyncDisposableStackConstructor = new JSNativeFunction(
                 JSAsyncDisposableStack.NAME, 0, AsyncDisposableStackConstructor::call, true, true);
         asyncDisposableStackConstructor.set("prototype", asyncDisposableStackPrototype);
         asyncDisposableStackPrototype.set("constructor", asyncDisposableStackConstructor);
 
-        global.set(JSAsyncDisposableStack.NAME, asyncDisposableStackConstructor);
+        addGlobalBinding(global, JSAsyncDisposableStack.NAME, asyncDisposableStackConstructor);
     }
 
     /**
@@ -586,7 +570,7 @@ public final class GlobalObject {
         atomics.set("wait", new JSNativeFunction("wait", 4, AtomicsObject::wait));
         atomics.set("waitAsync", new JSNativeFunction("waitAsync", 4, AtomicsObject::waitAsync));
 
-        global.set("Atomics", atomics);
+        addGlobalBinding(global, "Atomics", atomics);
     }
 
     /**
@@ -609,7 +593,7 @@ public final class GlobalObject {
         bigIntConstructor.set("asIntN", new JSNativeFunction("asIntN", 2, BigIntConstructor::asIntN));
         bigIntConstructor.set("asUintN", new JSNativeFunction("asUintN", 2, BigIntConstructor::asUintN));
 
-        global.set("BigInt", bigIntConstructor);
+        addGlobalBinding(global, "BigInt", bigIntConstructor);
     }
 
     /**
@@ -627,7 +611,7 @@ public final class GlobalObject {
         booleanConstructor.setConstructorType(JSConstructorType.BOOLEAN_OBJECT); // Mark as Boolean constructor
         booleanPrototype.set("constructor", booleanConstructor);
 
-        global.set("Boolean", booleanConstructor);
+        addGlobalBinding(global, "Boolean", booleanConstructor);
     }
 
     /**
@@ -640,7 +624,7 @@ public final class GlobalObject {
         console.set("warn", new JSNativeFunction("warn", 0, GlobalObject::consoleWarn));
         console.set("error", new JSNativeFunction("error", 0, GlobalObject::consoleError));
 
-        global.set("console", console);
+        addGlobalBinding(global, "console", console);
     }
 
     /**
@@ -651,17 +635,9 @@ public final class GlobalObject {
         JSObject dataViewPrototype = context.createJSObject();
 
         // Define getter properties
-        JSNativeFunction bufferGetter = new JSNativeFunction("get buffer", 0, DataViewPrototype::getBuffer);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("buffer"),
-                PropertyDescriptor.accessorDescriptor(bufferGetter, null, false, true));
-
-        JSNativeFunction byteLengthGetter = new JSNativeFunction("get byteLength", 0, DataViewPrototype::getByteLength);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("byteLength"),
-                PropertyDescriptor.accessorDescriptor(byteLengthGetter, null, false, true));
-
-        JSNativeFunction byteOffsetGetter = new JSNativeFunction("get byteOffset", 0, DataViewPrototype::getByteOffset);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("byteOffset"),
-                PropertyDescriptor.accessorDescriptor(byteOffsetGetter, null, false, true));
+        addGetter(dataViewPrototype, "buffer", DataViewPrototype::getBuffer);
+        addGetter(dataViewPrototype, "byteLength", DataViewPrototype::getByteLength);
+        addGetter(dataViewPrototype, "byteOffset", DataViewPrototype::getByteOffset);
 
         // Int8/Uint8 methods
         dataViewPrototype.set("getInt8", new JSNativeFunction("getInt8", 1, DataViewPrototype::getInt8));
@@ -691,47 +667,81 @@ public final class GlobalObject {
         dataViewConstructor.setConstructorType(JSConstructorType.DATA_VIEW);
         dataViewPrototype.set("constructor", dataViewConstructor);
 
-        global.set("DataView", dataViewConstructor);
+        addGlobalBinding(global, "DataView", dataViewConstructor);
     }
 
     /**
      * Initialize Date constructor and prototype.
      */
     private static void initializeDateConstructor(JSContext context, JSObject global) {
-        // Create Date.prototype
         JSObject datePrototype = context.createJSObject();
-        datePrototype.set("getTime", new JSNativeFunction("getTime", 0, DatePrototype::getTime));
-        datePrototype.set("getFullYear", new JSNativeFunction("getFullYear", 0, DatePrototype::getFullYear));
-        datePrototype.set("getMonth", new JSNativeFunction("getMonth", 0, DatePrototype::getMonth));
-        datePrototype.set("getDate", new JSNativeFunction("getDate", 0, DatePrototype::getDate));
-        datePrototype.set("getDay", new JSNativeFunction("getDay", 0, DatePrototype::getDay));
-        datePrototype.set("getHours", new JSNativeFunction("getHours", 0, DatePrototype::getHours));
-        datePrototype.set("getMinutes", new JSNativeFunction("getMinutes", 0, DatePrototype::getMinutes));
-        datePrototype.set("getSeconds", new JSNativeFunction("getSeconds", 0, DatePrototype::getSeconds));
-        datePrototype.set("getMilliseconds", new JSNativeFunction("getMilliseconds", 0, DatePrototype::getMilliseconds));
-        datePrototype.set("getUTCFullYear", new JSNativeFunction("getUTCFullYear", 0, DatePrototype::getUTCFullYear));
-        datePrototype.set("getUTCMonth", new JSNativeFunction("getUTCMonth", 0, DatePrototype::getUTCMonth));
-        datePrototype.set("getUTCDate", new JSNativeFunction("getUTCDate", 0, DatePrototype::getUTCDate));
-        datePrototype.set("getUTCHours", new JSNativeFunction("getUTCHours", 0, DatePrototype::getUTCHours));
-        datePrototype.set("toISOString", new JSNativeFunction("toISOString", 0, DatePrototype::toISOString));
-        datePrototype.set("toJSON", new JSNativeFunction("toJSON", 0, DatePrototype::toJSON));
-        datePrototype.set("toString", new JSNativeFunction("toString", 0, DatePrototype::toStringMethod));
-        datePrototype.set("valueOf", new JSNativeFunction("valueOf", 0, DatePrototype::valueOf));
+        JSNativeFunction toUTCString = new JSNativeFunction("toUTCString", 0, DatePrototype::toUTCString);
+        JSNativeFunction toPrimitive = new JSNativeFunction("[Symbol.toPrimitive]", 1, DatePrototype::symbolToPrimitive);
 
-        // Create Date constructor as a JSNativeFunction
-        // When called without 'new', DateConstructor.call returns a string
-        // When called with 'new', VM calls JSDate.create via constructorType
+        addBuiltinMethod(datePrototype, "valueOf", new JSNativeFunction("valueOf", 0, DatePrototype::valueOf));
+        addBuiltinMethod(datePrototype, "toString", new JSNativeFunction("toString", 0, DatePrototype::toStringMethod));
+        addBuiltinMethod(datePrototype, "toUTCString", toUTCString);
+        addBuiltinMethod(datePrototype, "toGMTString", toUTCString);
+        addBuiltinMethod(datePrototype, "toISOString", new JSNativeFunction("toISOString", 0, DatePrototype::toISOString));
+        addBuiltinMethod(datePrototype, "toDateString", new JSNativeFunction("toDateString", 0, DatePrototype::toDateString));
+        addBuiltinMethod(datePrototype, "toTimeString", new JSNativeFunction("toTimeString", 0, DatePrototype::toTimeString));
+        addBuiltinMethod(datePrototype, "toLocaleString", new JSNativeFunction("toLocaleString", 0, DatePrototype::toLocaleString));
+        addBuiltinMethod(datePrototype, "toLocaleDateString", new JSNativeFunction("toLocaleDateString", 0, DatePrototype::toLocaleDateString));
+        addBuiltinMethod(datePrototype, "toLocaleTimeString", new JSNativeFunction("toLocaleTimeString", 0, DatePrototype::toLocaleTimeString));
+        addBuiltinMethod(datePrototype, "getTimezoneOffset", new JSNativeFunction("getTimezoneOffset", 0, DatePrototype::getTimezoneOffset));
+        addBuiltinMethod(datePrototype, "getTime", new JSNativeFunction("getTime", 0, DatePrototype::getTime));
+        addBuiltinMethod(datePrototype, "getYear", new JSNativeFunction("getYear", 0, DatePrototype::getYear));
+        addBuiltinMethod(datePrototype, "getFullYear", new JSNativeFunction("getFullYear", 0, DatePrototype::getFullYear));
+        addBuiltinMethod(datePrototype, "getUTCFullYear", new JSNativeFunction("getUTCFullYear", 0, DatePrototype::getUTCFullYear));
+        addBuiltinMethod(datePrototype, "getMonth", new JSNativeFunction("getMonth", 0, DatePrototype::getMonth));
+        addBuiltinMethod(datePrototype, "getUTCMonth", new JSNativeFunction("getUTCMonth", 0, DatePrototype::getUTCMonth));
+        addBuiltinMethod(datePrototype, "getDate", new JSNativeFunction("getDate", 0, DatePrototype::getDate));
+        addBuiltinMethod(datePrototype, "getUTCDate", new JSNativeFunction("getUTCDate", 0, DatePrototype::getUTCDate));
+        addBuiltinMethod(datePrototype, "getHours", new JSNativeFunction("getHours", 0, DatePrototype::getHours));
+        addBuiltinMethod(datePrototype, "getUTCHours", new JSNativeFunction("getUTCHours", 0, DatePrototype::getUTCHours));
+        addBuiltinMethod(datePrototype, "getMinutes", new JSNativeFunction("getMinutes", 0, DatePrototype::getMinutes));
+        addBuiltinMethod(datePrototype, "getUTCMinutes", new JSNativeFunction("getUTCMinutes", 0, DatePrototype::getUTCMinutes));
+        addBuiltinMethod(datePrototype, "getSeconds", new JSNativeFunction("getSeconds", 0, DatePrototype::getSeconds));
+        addBuiltinMethod(datePrototype, "getUTCSeconds", new JSNativeFunction("getUTCSeconds", 0, DatePrototype::getUTCSeconds));
+        addBuiltinMethod(datePrototype, "getMilliseconds", new JSNativeFunction("getMilliseconds", 0, DatePrototype::getMilliseconds));
+        addBuiltinMethod(datePrototype, "getUTCMilliseconds", new JSNativeFunction("getUTCMilliseconds", 0, DatePrototype::getUTCMilliseconds));
+        addBuiltinMethod(datePrototype, "getDay", new JSNativeFunction("getDay", 0, DatePrototype::getDay));
+        addBuiltinMethod(datePrototype, "getUTCDay", new JSNativeFunction("getUTCDay", 0, DatePrototype::getUTCDay));
+        addBuiltinMethod(datePrototype, "setTime", new JSNativeFunction("setTime", 1, DatePrototype::setTime));
+        addBuiltinMethod(datePrototype, "setMilliseconds", new JSNativeFunction("setMilliseconds", 1, DatePrototype::setMilliseconds));
+        addBuiltinMethod(datePrototype, "setUTCMilliseconds", new JSNativeFunction("setUTCMilliseconds", 1, DatePrototype::setUTCMilliseconds));
+        addBuiltinMethod(datePrototype, "setSeconds", new JSNativeFunction("setSeconds", 2, DatePrototype::setSeconds));
+        addBuiltinMethod(datePrototype, "setUTCSeconds", new JSNativeFunction("setUTCSeconds", 2, DatePrototype::setUTCSeconds));
+        addBuiltinMethod(datePrototype, "setMinutes", new JSNativeFunction("setMinutes", 3, DatePrototype::setMinutes));
+        addBuiltinMethod(datePrototype, "setUTCMinutes", new JSNativeFunction("setUTCMinutes", 3, DatePrototype::setUTCMinutes));
+        addBuiltinMethod(datePrototype, "setHours", new JSNativeFunction("setHours", 4, DatePrototype::setHours));
+        addBuiltinMethod(datePrototype, "setUTCHours", new JSNativeFunction("setUTCHours", 4, DatePrototype::setUTCHours));
+        addBuiltinMethod(datePrototype, "setDate", new JSNativeFunction("setDate", 1, DatePrototype::setDate));
+        addBuiltinMethod(datePrototype, "setUTCDate", new JSNativeFunction("setUTCDate", 1, DatePrototype::setUTCDate));
+        addBuiltinMethod(datePrototype, "setMonth", new JSNativeFunction("setMonth", 2, DatePrototype::setMonth));
+        addBuiltinMethod(datePrototype, "setUTCMonth", new JSNativeFunction("setUTCMonth", 2, DatePrototype::setUTCMonth));
+        addBuiltinMethod(datePrototype, "setYear", new JSNativeFunction("setYear", 1, DatePrototype::setYear));
+        addBuiltinMethod(datePrototype, "setFullYear", new JSNativeFunction("setFullYear", 3, DatePrototype::setFullYear));
+        addBuiltinMethod(datePrototype, "setUTCFullYear", new JSNativeFunction("setUTCFullYear", 3, DatePrototype::setUTCFullYear));
+        addBuiltinMethod(datePrototype, "toJSON", new JSNativeFunction("toJSON", 1, DatePrototype::toJSON));
+        datePrototype.defineProperty(
+                PropertyKey.fromSymbol(JSSymbol.TO_PRIMITIVE),
+                PropertyDescriptor.dataDescriptor(toPrimitive, true, false, true));
+
         JSNativeFunction dateConstructor = new JSNativeFunction("Date", 7, DateConstructor::call);
-        dateConstructor.set("prototype", datePrototype);
-        dateConstructor.setConstructorType(JSConstructorType.DATE); // Mark as Date constructor
-        datePrototype.set("constructor", dateConstructor);
+        dateConstructor.defineProperty(
+                PropertyKey.fromString("prototype"),
+                PropertyDescriptor.dataDescriptor(datePrototype, false, false, false));
+        dateConstructor.setConstructorType(JSConstructorType.DATE);
+        datePrototype.defineProperty(
+                PropertyKey.fromString("constructor"),
+                PropertyDescriptor.dataDescriptor(dateConstructor, true, false, true));
 
-        // Date static methods
-        dateConstructor.set("now", new JSNativeFunction("now", 0, DateConstructor::now));
-        dateConstructor.set("parse", new JSNativeFunction("parse", 1, DateConstructor::parse));
-        dateConstructor.set("UTC", new JSNativeFunction("UTC", 7, DateConstructor::UTC));
+        addBuiltinMethod(dateConstructor, "now", new JSNativeFunction("now", 0, DateConstructor::now));
+        addBuiltinMethod(dateConstructor, "parse", new JSNativeFunction("parse", 1, DateConstructor::parse));
+        addBuiltinMethod(dateConstructor, "UTC", new JSNativeFunction("UTC", 7, DateConstructor::UTC));
 
-        global.set("Date", dateConstructor);
+        addGlobalBinding(global, "Date", dateConstructor);
     }
 
     /**
@@ -747,32 +757,27 @@ public final class GlobalObject {
         disposableStackPrototype.set("use", new JSNativeFunction("use", 1, DisposableStackPrototype::use));
         disposableStackPrototype.set(PropertyKey.fromSymbol(JSSymbol.DISPOSE), disposeFunction);
 
-        JSNativeFunction disposedGetter = new JSNativeFunction("get disposed", 0, DisposableStackPrototype::getDisposed);
-        disposableStackPrototype.defineProperty(PropertyKey.fromString("disposed"),
-                PropertyDescriptor.accessorDescriptor(disposedGetter, null, false, true));
-
-        JSNativeFunction toStringTagGetter = new JSNativeFunction("get [Symbol.toStringTag]", 0, (childContext, thisObj, args) -> {
+        addGetter(disposableStackPrototype, "disposed", DisposableStackPrototype::getDisposed);
+        addGetter(disposableStackPrototype, JSSymbol.TO_STRING_TAG, (childContext, thisObj, args) -> {
             if (!(thisObj instanceof JSDisposableStack)) {
                 return childContext.throwTypeError("get DisposableStack.prototype[Symbol.toStringTag] called on non-DisposableStack");
             }
             return new JSString(JSDisposableStack.NAME);
         });
-        disposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                PropertyDescriptor.accessorDescriptor(toStringTagGetter, null, false, true));
 
         JSNativeFunction disposableStackConstructor = new JSNativeFunction(
                 JSDisposableStack.NAME, 0, DisposableStackConstructor::call, true, true);
         disposableStackConstructor.set("prototype", disposableStackPrototype);
         disposableStackPrototype.set("constructor", disposableStackConstructor);
 
-        global.set(JSDisposableStack.NAME, disposableStackConstructor);
+        addGlobalBinding(global, JSDisposableStack.NAME, disposableStackConstructor);
     }
 
     /**
      * Initialize Error constructors.
      */
     private static void initializeErrorConstructors(JSContext context, JSObject global) {
-        Stream.of(JSErrorType.values()).forEach(type -> global.set(type.name(), type.create(context)));
+        Stream.of(JSErrorType.values()).forEach(type -> addGlobalBinding(global, type.name(), type.create(context)));
     }
 
     /**
@@ -791,7 +796,7 @@ public final class GlobalObject {
         finalizationRegistryConstructor.setConstructorType(JSConstructorType.FINALIZATION_REGISTRY);
         finalizationRegistryPrototype.set("constructor", finalizationRegistryConstructor);
 
-        global.set("FinalizationRegistry", finalizationRegistryConstructor);
+        addGlobalBinding(global, "FinalizationRegistry", finalizationRegistryConstructor);
     }
 
     /**
@@ -837,7 +842,7 @@ public final class GlobalObject {
         functionConstructor.set("prototype", functionPrototype);
         functionPrototype.set("constructor", functionConstructor);
 
-        global.set(JSFunction.NAME, functionConstructor);
+        addGlobalBinding(global, JSFunction.NAME, functionConstructor);
     }
 
     /**
@@ -972,34 +977,10 @@ public final class GlobalObject {
 
         JSObject localePrototype = context.createJSObject();
         localePrototype.set("toString", new JSNativeFunction("toString", 0, IntlObject::localeToString));
-        localePrototype.defineProperty(
-                PropertyKey.fromString("baseName"),
-                PropertyDescriptor.accessorDescriptor(
-                        new JSNativeFunction("get baseName", 0, IntlObject::localeGetBaseName),
-                        null,
-                        false,
-                        true));
-        localePrototype.defineProperty(
-                PropertyKey.fromString("language"),
-                PropertyDescriptor.accessorDescriptor(
-                        new JSNativeFunction("get language", 0, IntlObject::localeGetLanguage),
-                        null,
-                        false,
-                        true));
-        localePrototype.defineProperty(
-                PropertyKey.fromString("script"),
-                PropertyDescriptor.accessorDescriptor(
-                        new JSNativeFunction("get script", 0, IntlObject::localeGetScript),
-                        null,
-                        false,
-                        true));
-        localePrototype.defineProperty(
-                PropertyKey.fromString("region"),
-                PropertyDescriptor.accessorDescriptor(
-                        new JSNativeFunction("get region", 0, IntlObject::localeGetRegion),
-                        null,
-                        false,
-                        true));
+        addGetter(localePrototype, "baseName", IntlObject::localeGetBaseName);
+        addGetter(localePrototype, "language", IntlObject::localeGetLanguage);
+        addGetter(localePrototype, "script", IntlObject::localeGetScript);
+        addGetter(localePrototype, "region", IntlObject::localeGetRegion);
         JSNativeFunction localeConstructor = new JSNativeFunction(
                 "Locale",
                 1,
@@ -1010,7 +991,7 @@ public final class GlobalObject {
         localePrototype.set("constructor", localeConstructor);
         intlObject.set("Locale", localeConstructor);
 
-        global.set("Intl", intlObject);
+        addGlobalBinding(global, "Intl", intlObject);
     }
 
     /**
@@ -1051,7 +1032,7 @@ public final class GlobalObject {
         iteratorPrototype.set("constructor", iteratorConstructor);
 
         // Add Iterator to global object
-        global.set("Iterator", iteratorConstructor);
+        addGlobalBinding(global, "Iterator", iteratorConstructor);
     }
 
     /**
@@ -1062,7 +1043,7 @@ public final class GlobalObject {
         json.set("parse", new JSNativeFunction("parse", 1, JSONObject::parse));
         json.set("stringify", new JSNativeFunction("stringify", 1, JSONObject::stringify));
 
-        global.set("JSON", json);
+        addGlobalBinding(global, "JSON", json);
     }
 
     /**
@@ -1086,9 +1067,7 @@ public final class GlobalObject {
         mapPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), entriesFunction);
 
         // Map.prototype.size getter
-        JSNativeFunction mapSizeGetter = new JSNativeFunction("get size", 0, MapPrototype::getSize);
-        mapPrototype.defineProperty(PropertyKey.fromString("size"),
-                PropertyDescriptor.accessorDescriptor(mapSizeGetter, null, false, true));
+        addGetter(mapPrototype, "size", MapPrototype::getSize);
 
         // Create Map constructor as JSNativeFunction
         JSNativeFunction mapConstructor = new JSNativeFunction("Map", 0, MapConstructor::call, true, true);
@@ -1099,7 +1078,7 @@ public final class GlobalObject {
         // Map static methods
         mapConstructor.set("groupBy", new JSNativeFunction("groupBy", 2, MapConstructor::groupBy));
 
-        global.set("Map", mapConstructor);
+        addGlobalBinding(global, "Map", mapConstructor);
     }
 
     /**
@@ -1155,7 +1134,7 @@ public final class GlobalObject {
         math.set("tanh", new JSNativeFunction("tanh", 1, MathObject::tanh));
         math.set("trunc", new JSNativeFunction("trunc", 1, MathObject::trunc));
 
-        global.set("Math", math);
+        addGlobalBinding(global, "Math", math);
     }
 
     /**
@@ -1241,7 +1220,7 @@ public final class GlobalObject {
                 PropertyKey.fromString("POSITIVE_INFINITY"),
                 PropertyDescriptor.dataDescriptor(new JSNumber(Double.POSITIVE_INFINITY), false, false, false));
 
-        global.set("Number", numberConstructor);
+        addGlobalBinding(global, "Number", numberConstructor);
     }
 
     // Global function implementations
@@ -1302,7 +1281,7 @@ public final class GlobalObject {
         objectConstructor.set("hasOwn", new JSNativeFunction("hasOwn", 2, ObjectConstructor::hasOwn));
         objectConstructor.set("groupBy", new JSNativeFunction("groupBy", 2, ObjectConstructor::groupBy));
 
-        global.set("Object", objectConstructor);
+        addGlobalBinding(global, "Object", objectConstructor);
     }
 
     /**
@@ -1330,7 +1309,7 @@ public final class GlobalObject {
         promiseConstructor.set("any", new JSNativeFunction("any", 1, PromiseConstructor::any));
         promiseConstructor.set("withResolvers", new JSNativeFunction("withResolvers", 0, PromiseConstructor::withResolvers));
 
-        global.set("Promise", promiseConstructor);
+        addGlobalBinding(global, "Promise", promiseConstructor);
     }
 
     /**
@@ -1346,7 +1325,7 @@ public final class GlobalObject {
         // Add static methods
         proxyConstructor.set("revocable", new JSNativeFunction("revocable", 2, ProxyConstructor::revocable));
 
-        global.set("Proxy", proxyConstructor);
+        addGlobalBinding(global, "Proxy", proxyConstructor);
     }
 
     /**
@@ -1366,7 +1345,7 @@ public final class GlobalObject {
         reflect.set("isExtensible", new JSNativeFunction("isExtensible", 1, ReflectObject::isExtensible));
         reflect.set("preventExtensions", new JSNativeFunction("preventExtensions", 1, ReflectObject::preventExtensions));
 
-        global.set("Reflect", reflect);
+        addGlobalBinding(global, "Reflect", reflect);
     }
 
     /**
@@ -1384,36 +1363,16 @@ public final class GlobalObject {
         regexpPrototype.set(PropertyKey.fromSymbol(JSSymbol.SPLIT), new JSNativeFunction("[Symbol.split]", 2, RegExpPrototype::symbolSplit));
 
         // Accessor properties
-        regexpPrototype.defineProperty(
-                PropertyKey.fromString("flags"),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get flags", 0, RegExpPrototype::getFlags), null, false, true));
-        regexpPrototype.defineProperty(
-                PropertyKey.fromString("source"),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get source", 0, RegExpPrototype::getSource), null, false, true));
-        regexpPrototype.defineProperty(
-                PropertyKey.fromString("global"),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get global", 0, RegExpPrototype::getGlobal), null, false, true));
-        regexpPrototype.defineProperty(
-                PropertyKey.fromString("ignoreCase"),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get ignoreCase", 0, RegExpPrototype::getIgnoreCase), null, false, true));
-        regexpPrototype.defineProperty(
-                PropertyKey.fromString("multiline"),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get multiline", 0, RegExpPrototype::getMultiline), null, false, true));
-        regexpPrototype.defineProperty(
-                PropertyKey.fromString("dotAll"),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get dotAll", 0, RegExpPrototype::getDotAll), null, false, true));
-        regexpPrototype.defineProperty(
-                PropertyKey.fromString("unicode"),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get unicode", 0, RegExpPrototype::getUnicode), null, false, true));
-        regexpPrototype.defineProperty(
-                PropertyKey.fromString("sticky"),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get sticky", 0, RegExpPrototype::getSticky), null, false, true));
-        regexpPrototype.defineProperty(
-                PropertyKey.fromString("hasIndices"),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get hasIndices", 0, RegExpPrototype::getHasIndices), null, false, true));
-        regexpPrototype.defineProperty(
-                PropertyKey.fromString("unicodeSets"),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get unicodeSets", 0, RegExpPrototype::getUnicodeSets), null, false, true));
+        addGetter(regexpPrototype, "flags", RegExpPrototype::getFlags);
+        addGetter(regexpPrototype, "source", RegExpPrototype::getSource);
+        addGetter(regexpPrototype, "global", RegExpPrototype::getGlobal);
+        addGetter(regexpPrototype, "ignoreCase", RegExpPrototype::getIgnoreCase);
+        addGetter(regexpPrototype, "multiline", RegExpPrototype::getMultiline);
+        addGetter(regexpPrototype, "dotAll", RegExpPrototype::getDotAll);
+        addGetter(regexpPrototype, "unicode", RegExpPrototype::getUnicode);
+        addGetter(regexpPrototype, "sticky", RegExpPrototype::getSticky);
+        addGetter(regexpPrototype, "hasIndices", RegExpPrototype::getHasIndices);
+        addGetter(regexpPrototype, "unicodeSets", RegExpPrototype::getUnicodeSets);
         regexpPrototype.defineProperty(
                 PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
                 PropertyDescriptor.dataDescriptor(new JSString("RegExp"), false, false, true));
@@ -1426,17 +1385,17 @@ public final class GlobalObject {
 
         // AnnexB legacy RegExp static accessor properties.
         // Each getter validates SameValue(C, thisValue) per GetLegacyRegExpStaticProperty.
-        addLegacyRegExpAccessor(regexpConstructor, "rightContext", "$'");
-        addLegacyRegExpAccessor(regexpConstructor, "leftContext", "$`");
-        addLegacyRegExpAccessor(regexpConstructor, "lastMatch", "$&");
-        addLegacyRegExpAccessor(regexpConstructor, "lastParen", "$+");
+        addLegacyRegExpAccessor(regexpConstructor, "rightContext", "$'", false);
+        addLegacyRegExpAccessor(regexpConstructor, "leftContext", "$`", false);
+        addLegacyRegExpAccessor(regexpConstructor, "lastMatch", "$&", false);
+        addLegacyRegExpAccessor(regexpConstructor, "lastParen", "$+", false);
         addLegacyRegExpAccessor(regexpConstructor, "input", "$_", true);
         // $1..$9
         for (int i = 1; i <= 9; i++) {
-            addLegacyRegExpAccessor(regexpConstructor, "$" + i, null);
+            addLegacyRegExpAccessor(regexpConstructor, "$" + i, null, false);
         }
 
-        global.set("RegExp", regexpConstructor);
+        addGlobalBinding(global, "RegExp", regexpConstructor);
     }
 
     /**
@@ -1461,9 +1420,7 @@ public final class GlobalObject {
         setPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction);
 
         // Set.prototype.size getter
-        JSNativeFunction setSizeGetter = new JSNativeFunction("get size", 0, SetPrototype::getSize);
-        setPrototype.defineProperty(PropertyKey.fromString("size"),
-                PropertyDescriptor.accessorDescriptor(setSizeGetter, null, false, true));
+        addGetter(setPrototype, "size", SetPrototype::getSize);
 
         // Create Set constructor as a function
         JSNativeFunction setConstructor = new JSNativeFunction("Set", 0, SetConstructor::call, true, true);
@@ -1471,7 +1428,7 @@ public final class GlobalObject {
         setConstructor.setConstructorType(JSConstructorType.SET);
         setPrototype.set("constructor", setConstructor);
 
-        global.set("Set", setConstructor);
+        addGlobalBinding(global, "Set", setConstructor);
     }
 
     /**
@@ -1482,20 +1439,9 @@ public final class GlobalObject {
         JSObject sharedArrayBufferPrototype = context.createJSObject();
         sharedArrayBufferPrototype.set("slice", new JSNativeFunction("slice", 2, SharedArrayBufferPrototype::slice));
 
-        // Define byteLength as a proper getter property
-        JSNativeFunction byteLengthGetter = new JSNativeFunction("get byteLength", 0, SharedArrayBufferPrototype::getByteLength);
-        PropertyDescriptor byteLengthDesc = PropertyDescriptor.accessorDescriptor(
-                byteLengthGetter,  // getter
-                null,              // no setter
-                false,             // not enumerable
-                true               // configurable
-        );
-        sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("byteLength"), byteLengthDesc);
-
-        // Symbol.toStringTag
-        JSNativeFunction toStringTagGetter = new JSNativeFunction("get [Symbol.toStringTag]", 0, SharedArrayBufferPrototype::getToStringTag);
-        sharedArrayBufferPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                PropertyDescriptor.accessorDescriptor(toStringTagGetter, null, false, true));
+        // Define getter properties
+        addGetter(sharedArrayBufferPrototype, "byteLength", SharedArrayBufferPrototype::getByteLength);
+        addGetter(sharedArrayBufferPrototype, JSSymbol.TO_STRING_TAG, SharedArrayBufferPrototype::getToStringTag);
 
         // Create SharedArrayBuffer constructor as a function
         JSNativeFunction sharedArrayBufferConstructor = new JSNativeFunction(
@@ -1509,7 +1455,7 @@ public final class GlobalObject {
         sharedArrayBufferConstructor.setConstructorType(JSConstructorType.SHARED_ARRAY_BUFFER);
         sharedArrayBufferPrototype.set("constructor", sharedArrayBufferConstructor);
 
-        global.set("SharedArrayBuffer", sharedArrayBufferConstructor);
+        addGlobalBinding(global, "SharedArrayBuffer", sharedArrayBufferConstructor);
     }
 
     /**
@@ -1591,7 +1537,7 @@ public final class GlobalObject {
         stringConstructor.set("fromCodePoint", new JSNativeFunction("fromCodePoint", 1, StringConstructor::fromCodePoint));
         stringConstructor.set("raw", new JSNativeFunction("raw", 1, StringConstructor::raw));
 
-        global.set("String", stringConstructor);
+        addGlobalBinding(global, "String", stringConstructor);
     }
 
     /**
@@ -1611,10 +1557,7 @@ public final class GlobalObject {
         symbolPrototype.set("valueOf", symbolValueOf);
 
         // Symbol.prototype.description is a getter
-        JSNativeFunction descriptionGetter = new JSNativeFunction("get description", 0, SymbolPrototype::getDescription);
-        descriptionGetter.initializePrototypeChain(context);
-        symbolPrototype.defineProperty(PropertyKey.fromString("description"),
-                PropertyDescriptor.accessorDescriptor(descriptionGetter, null, false, true));
+        addGetter(symbolPrototype, "description", SymbolPrototype::getDescription);
 
         JSNativeFunction symbolToPrimitive = new JSNativeFunction("[Symbol.toPrimitive]", 1, SymbolPrototype::toPrimitive);
         symbolToPrimitive.initializePrototypeChain(context);
@@ -1651,144 +1594,40 @@ public final class GlobalObject {
         symbolConstructor.set("dispose", JSSymbol.DISPOSE);
         symbolConstructor.set("asyncDispose", JSSymbol.ASYNC_DISPOSE);
 
-        global.set("Symbol", symbolConstructor);
+        addGlobalBinding(global, "Symbol", symbolConstructor);
     }
 
     /**
      * Initialize all TypedArray constructors.
      */
     private static void initializeTypedArrayConstructors(JSContext context, JSObject global) {
-        // Int8Array
-        JSObject int8ArrayPrototype = context.createJSObject();
-        int8ArrayPrototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-        JSNativeFunction int8ArrayConstructor = new JSNativeFunction("Int8Array", 3, Int8ArrayConstructor::call, true, true);
-        int8ArrayConstructor.set("prototype", int8ArrayPrototype);
-        int8ArrayPrototype.set("constructor", int8ArrayConstructor);
-        int8ArrayConstructor.setConstructorType(JSConstructorType.TYPED_ARRAY_INT8);
-        int8ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSInt8Array.BYTES_PER_ELEMENT));
-        int8ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSInt8Array.BYTES_PER_ELEMENT));
-        global.set("Int8Array", int8ArrayConstructor);
-
-        // Uint8Array
-        JSObject uint8ArrayPrototype = context.createJSObject();
-        uint8ArrayPrototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-        JSNativeFunction uint8ArrayConstructor = new JSNativeFunction("Uint8Array", 3, Uint8ArrayConstructor::call, true, true);
-        uint8ArrayConstructor.set("prototype", uint8ArrayPrototype);
-        uint8ArrayPrototype.set("constructor", uint8ArrayConstructor);
-        uint8ArrayConstructor.setConstructorType(JSConstructorType.TYPED_ARRAY_UINT8);
-        uint8ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSUint8Array.BYTES_PER_ELEMENT));
-        uint8ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSUint8Array.BYTES_PER_ELEMENT));
-        global.set("Uint8Array", uint8ArrayConstructor);
-
-        // Uint8ClampedArray
-        JSObject uint8ClampedArrayPrototype = context.createJSObject();
-        uint8ClampedArrayPrototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-        JSNativeFunction uint8ClampedArrayConstructor = new JSNativeFunction("Uint8ClampedArray", 3, Uint8ClampedArrayConstructor::call, true, true);
-        uint8ClampedArrayConstructor.set("prototype", uint8ClampedArrayPrototype);
-        uint8ClampedArrayPrototype.set("constructor", uint8ClampedArrayConstructor);
-        uint8ClampedArrayConstructor.setConstructorType(JSConstructorType.TYPED_ARRAY_UINT8_CLAMPED);
-        uint8ClampedArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSUint8ClampedArray.BYTES_PER_ELEMENT));
-        uint8ClampedArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSUint8ClampedArray.BYTES_PER_ELEMENT));
-        global.set("Uint8ClampedArray", uint8ClampedArrayConstructor);
-
-        // Int16Array
-        JSObject int16ArrayPrototype = context.createJSObject();
-        int16ArrayPrototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-        JSNativeFunction int16ArrayConstructor = new JSNativeFunction("Int16Array", 3, Int16ArrayConstructor::call, true, true);
-        int16ArrayConstructor.set("prototype", int16ArrayPrototype);
-        int16ArrayPrototype.set("constructor", int16ArrayConstructor);
-        int16ArrayConstructor.setConstructorType(JSConstructorType.TYPED_ARRAY_INT16);
-        int16ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSInt16Array.BYTES_PER_ELEMENT));
-        int16ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSInt16Array.BYTES_PER_ELEMENT));
-        global.set("Int16Array", int16ArrayConstructor);
-
-        // Uint16Array
-        JSObject uint16ArrayPrototype = context.createJSObject();
-        uint16ArrayPrototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-        JSNativeFunction uint16ArrayConstructor = new JSNativeFunction("Uint16Array", 3, Uint16ArrayConstructor::call, true, true);
-        uint16ArrayConstructor.set("prototype", uint16ArrayPrototype);
-        uint16ArrayPrototype.set("constructor", uint16ArrayConstructor);
-        uint16ArrayConstructor.setConstructorType(JSConstructorType.TYPED_ARRAY_UINT16);
-        uint16ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSUint16Array.BYTES_PER_ELEMENT));
-        uint16ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSUint16Array.BYTES_PER_ELEMENT));
-        global.set("Uint16Array", uint16ArrayConstructor);
-
-        // Int32Array
-        JSObject int32ArrayPrototype = context.createJSObject();
-        int32ArrayPrototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-        JSNativeFunction int32ArrayConstructor = new JSNativeFunction("Int32Array", 3, Int32ArrayConstructor::call, true, true);
-        int32ArrayConstructor.set("prototype", int32ArrayPrototype);
-        int32ArrayPrototype.set("constructor", int32ArrayConstructor);
-        int32ArrayConstructor.setConstructorType(JSConstructorType.TYPED_ARRAY_INT32);
-        int32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSInt32Array.BYTES_PER_ELEMENT));
-        int32ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSInt32Array.BYTES_PER_ELEMENT));
-        global.set("Int32Array", int32ArrayConstructor);
-
-        // Uint32Array
-        JSObject uint32ArrayPrototype = context.createJSObject();
-        uint32ArrayPrototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-        JSNativeFunction uint32ArrayConstructor = new JSNativeFunction("Uint32Array", 3, Uint32ArrayConstructor::call, true, true);
-        uint32ArrayConstructor.set("prototype", uint32ArrayPrototype);
-        uint32ArrayPrototype.set("constructor", uint32ArrayConstructor);
-        uint32ArrayConstructor.setConstructorType(JSConstructorType.TYPED_ARRAY_UINT32);
-        uint32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSUint32Array.BYTES_PER_ELEMENT));
-        uint32ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSUint32Array.BYTES_PER_ELEMENT));
-        global.set("Uint32Array", uint32ArrayConstructor);
-
-        // Float16Array
-        JSObject float16ArrayPrototype = context.createJSObject();
-        float16ArrayPrototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-        JSNativeFunction float16ArrayConstructor = new JSNativeFunction("Float16Array", 3, Float16ArrayConstructor::call, true, true);
-        float16ArrayConstructor.set("prototype", float16ArrayPrototype);
-        float16ArrayPrototype.set("constructor", float16ArrayConstructor);
-        float16ArrayConstructor.setConstructorType(JSConstructorType.TYPED_ARRAY_FLOAT16);
-        float16ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSFloat16Array.BYTES_PER_ELEMENT));
-        float16ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSFloat16Array.BYTES_PER_ELEMENT));
-        global.set("Float16Array", float16ArrayConstructor);
-
-        // Float32Array
-        JSObject float32ArrayPrototype = context.createJSObject();
-        float32ArrayPrototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-        JSNativeFunction float32ArrayConstructor = new JSNativeFunction("Float32Array", 3, Float32ArrayConstructor::call, true, true);
-        float32ArrayConstructor.set("prototype", float32ArrayPrototype);
-        float32ArrayPrototype.set("constructor", float32ArrayConstructor);
-        float32ArrayConstructor.setConstructorType(JSConstructorType.TYPED_ARRAY_FLOAT32);
-        float32ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSFloat32Array.BYTES_PER_ELEMENT));
-        float32ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSFloat32Array.BYTES_PER_ELEMENT));
-        global.set("Float32Array", float32ArrayConstructor);
-
-        // Float64Array
-        JSObject float64ArrayPrototype = context.createJSObject();
-        float64ArrayPrototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-        JSNativeFunction float64ArrayConstructor = new JSNativeFunction("Float64Array", 3, Float64ArrayConstructor::call, true, true);
-        float64ArrayConstructor.set("prototype", float64ArrayPrototype);
-        float64ArrayPrototype.set("constructor", float64ArrayConstructor);
-        float64ArrayConstructor.setConstructorType(JSConstructorType.TYPED_ARRAY_FLOAT64);
-        float64ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSFloat64Array.BYTES_PER_ELEMENT));
-        float64ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSFloat64Array.BYTES_PER_ELEMENT));
-        global.set("Float64Array", float64ArrayConstructor);
-
-        // BigInt64Array
-        JSObject bigInt64ArrayPrototype = context.createJSObject();
-        bigInt64ArrayPrototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-        JSNativeFunction bigInt64ArrayConstructor = new JSNativeFunction("BigInt64Array", 3, BigInt64ArrayConstructor::call, true, true);
-        bigInt64ArrayConstructor.set("prototype", bigInt64ArrayPrototype);
-        bigInt64ArrayPrototype.set("constructor", bigInt64ArrayConstructor);
-        bigInt64ArrayConstructor.setConstructorType(JSConstructorType.TYPED_ARRAY_BIGINT64);
-        bigInt64ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSBigInt64Array.BYTES_PER_ELEMENT));
-        bigInt64ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSBigInt64Array.BYTES_PER_ELEMENT));
-        global.set("BigInt64Array", bigInt64ArrayConstructor);
-
-        // BigUint64Array
-        JSObject bigUint64ArrayPrototype = context.createJSObject();
-        bigUint64ArrayPrototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-        JSNativeFunction bigUint64ArrayConstructor = new JSNativeFunction("BigUint64Array", 3, BigUint64ArrayConstructor::call, true, true);
-        bigUint64ArrayConstructor.set("prototype", bigUint64ArrayPrototype);
-        bigUint64ArrayPrototype.set("constructor", bigUint64ArrayConstructor);
-        bigUint64ArrayConstructor.setConstructorType(JSConstructorType.TYPED_ARRAY_BIGUINT64);
-        bigUint64ArrayConstructor.set("BYTES_PER_ELEMENT", new JSNumber(JSBigUint64Array.BYTES_PER_ELEMENT));
-        bigUint64ArrayPrototype.set("BYTES_PER_ELEMENT", new JSNumber(JSBigUint64Array.BYTES_PER_ELEMENT));
-        global.set("BigUint64Array", bigUint64ArrayConstructor);
+        record TypedArrayDef(String name, JSNativeFunction.NativeCallback callback, JSConstructorType type,
+                             int bytesPerElement) {
+        }
+        for (TypedArrayDef def : List.of(
+                new TypedArrayDef("Int8Array", Int8ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_INT8, JSInt8Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef("Uint8Array", Uint8ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_UINT8, JSUint8Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef("Uint8ClampedArray", Uint8ClampedArrayConstructor::call, JSConstructorType.TYPED_ARRAY_UINT8_CLAMPED, JSUint8ClampedArray.BYTES_PER_ELEMENT),
+                new TypedArrayDef("Int16Array", Int16ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_INT16, JSInt16Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef("Uint16Array", Uint16ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_UINT16, JSUint16Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef("Int32Array", Int32ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_INT32, JSInt32Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef("Uint32Array", Uint32ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_UINT32, JSUint32Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef("Float16Array", Float16ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_FLOAT16, JSFloat16Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef("Float32Array", Float32ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_FLOAT32, JSFloat32Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef("Float64Array", Float64ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_FLOAT64, JSFloat64Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef("BigInt64Array", BigInt64ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_BIGINT64, JSBigInt64Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef("BigUint64Array", BigUint64ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_BIGUINT64, JSBigUint64Array.BYTES_PER_ELEMENT)
+        )) {
+            JSObject prototype = context.createJSObject();
+            prototype.set("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
+            JSNativeFunction constructor = new JSNativeFunction(def.name, 3, def.callback, true, true);
+            constructor.set("prototype", prototype);
+            prototype.set("constructor", constructor);
+            constructor.setConstructorType(def.type);
+            constructor.set("BYTES_PER_ELEMENT", new JSNumber(def.bytesPerElement));
+            prototype.set("BYTES_PER_ELEMENT", new JSNumber(def.bytesPerElement));
+            addGlobalBinding(global, def.name, constructor);
+        }
     }
 
     /**
@@ -1803,9 +1642,7 @@ public final class GlobalObject {
         weakMapPrototype.set("delete", new JSNativeFunction("delete", 1, WeakMapPrototype::delete));
 
         // Symbol.toStringTag
-        JSNativeFunction toStringTagGetter = new JSNativeFunction("get [Symbol.toStringTag]", 0, WeakMapPrototype::getToStringTag);
-        weakMapPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                PropertyDescriptor.accessorDescriptor(toStringTagGetter, null, false, true));
+        addGetter(weakMapPrototype, JSSymbol.TO_STRING_TAG, WeakMapPrototype::getToStringTag);
 
         // Create WeakMap constructor as a function
         JSNativeFunction weakMapConstructor = new JSNativeFunction(
@@ -1819,7 +1656,7 @@ public final class GlobalObject {
         weakMapConstructor.setConstructorType(JSConstructorType.WEAK_MAP);
         weakMapPrototype.set("constructor", weakMapConstructor);
 
-        global.set("WeakMap", weakMapConstructor);
+        addGlobalBinding(global, "WeakMap", weakMapConstructor);
     }
 
     /**
@@ -1831,9 +1668,7 @@ public final class GlobalObject {
         // deref() method is added in JSWeakRef constructor
 
         // Symbol.toStringTag
-        JSNativeFunction toStringTagGetter = new JSNativeFunction("get [Symbol.toStringTag]", 0, WeakRefPrototype::getToStringTag);
-        weakRefPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                PropertyDescriptor.accessorDescriptor(toStringTagGetter, null, false, true));
+        addGetter(weakRefPrototype, JSSymbol.TO_STRING_TAG, WeakRefPrototype::getToStringTag);
 
         // Create WeakRef constructor as a function
         JSNativeFunction weakRefConstructor = new JSNativeFunction(
@@ -1847,7 +1682,7 @@ public final class GlobalObject {
         weakRefConstructor.setConstructorType(JSConstructorType.WEAK_REF);
         weakRefPrototype.set("constructor", weakRefConstructor);
 
-        global.set("WeakRef", weakRefConstructor);
+        addGlobalBinding(global, "WeakRef", weakRefConstructor);
     }
 
     /**
@@ -1861,9 +1696,7 @@ public final class GlobalObject {
         weakSetPrototype.set("delete", new JSNativeFunction("delete", 1, WeakSetPrototype::delete));
 
         // Symbol.toStringTag
-        JSNativeFunction toStringTagGetter = new JSNativeFunction("get [Symbol.toStringTag]", 0, WeakSetPrototype::getToStringTag);
-        weakSetPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                PropertyDescriptor.accessorDescriptor(toStringTagGetter, null, false, true));
+        addGetter(weakSetPrototype, JSSymbol.TO_STRING_TAG, WeakSetPrototype::getToStringTag);
 
         // Create WeakSet constructor as a function
         JSNativeFunction weakSetConstructor = new JSNativeFunction(
@@ -1877,7 +1710,7 @@ public final class GlobalObject {
         weakSetConstructor.setConstructorType(JSConstructorType.WEAK_SET);
         weakSetPrototype.set("constructor", weakSetConstructor);
 
-        global.set("WeakSet", weakSetConstructor);
+        addGlobalBinding(global, "WeakSet", weakSetConstructor);
     }
 
     /**
@@ -1926,54 +1759,6 @@ public final class GlobalObject {
                 (c >= '0' && c <= '9') ||
                 c == '@' || c == '*' || c == '_' ||
                 c == '+' || c == '-' || c == '.' || c == '/';
-    }
-
-    private static void normalizeGlobalDescriptors(JSObject global) {
-        // ECMAScript global value properties
-        global.defineProperty(
-                PropertyKey.fromString("Infinity"),
-                PropertyDescriptor.dataDescriptor(global.get("Infinity"), false, false, false));
-        global.defineProperty(
-                PropertyKey.fromString("NaN"),
-                PropertyDescriptor.dataDescriptor(global.get("NaN"), false, false, false));
-        global.defineProperty(
-                PropertyKey.fromString("undefined"),
-                PropertyDescriptor.dataDescriptor(JSUndefined.INSTANCE, false, false, false));
-
-        // globalThis should be writable/configurable but not enumerable.
-        global.defineProperty(
-                PropertyKey.fromString("globalThis"),
-                PropertyDescriptor.dataDescriptor(global, true, false, true));
-
-        // Object.prototype.toString.call(globalThis) -> [object global]
-        global.defineProperty(
-                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                PropertyDescriptor.dataDescriptor(new JSString("global"), false, false, true));
-
-        // All intrinsic global bindings are non-enumerable in QuickJS.
-        String[] nonEnumerableGlobals = {
-                "parseInt", "parseFloat", "isNaN", "isFinite", "eval",
-                "decodeURI", "decodeURIComponent", "encodeURI", "encodeURIComponent",
-                "escape", "unescape",
-                "Object", "Function", "Array", "String", "Number", "Boolean", "BigInt", "Symbol",
-                "Date", "RegExp", "Error", "EvalError", "RangeError", "ReferenceError",
-                "SyntaxError", "TypeError", "URIError", "AggregateError",
-                "Math", "JSON", "Reflect", "Proxy", "Promise", "Atomics",
-                "Map", "Set", "WeakMap", "WeakSet", "WeakRef", "FinalizationRegistry",
-                "ArrayBuffer", "SharedArrayBuffer", "DataView",
-                "Int8Array", "Uint8Array", "Uint8ClampedArray", "Int16Array", "Uint16Array",
-                "Int32Array", "Uint32Array", "Float16Array", "Float32Array", "Float64Array",
-                "BigInt64Array", "BigUint64Array",
-                "DisposableStack", "AsyncDisposableStack", "Iterator",
-                "Intl", "console"
-        };
-        for (String key : nonEnumerableGlobals) {
-            if (global.hasOwnProperty(key)) {
-                global.defineProperty(
-                        PropertyKey.fromString(key),
-                        PropertyDescriptor.dataDescriptor(global.get(key), true, false, true));
-            }
-        }
     }
 
     /**

@@ -275,7 +275,7 @@ public final class JSContext implements AutoCloseable {
      * @param timeValue The time value in milliseconds
      * @return A new JSDate instance with prototype set
      */
-    public JSDate createJSDate(long timeValue) {
+    public JSDate createJSDate(double timeValue) {
         JSDate jsDate = new JSDate(timeValue);
         transferPrototype(jsDate, "Date");
         return jsDate;
