@@ -280,17 +280,17 @@ public final class GlobalObject {
         global.set("Infinity", new JSNumber(Double.POSITIVE_INFINITY));
 
         // Global function properties
-        global.set("parseInt", new JSNativeFunction("parseInt", 2, GlobalObject::parseInt));
-        global.set("parseFloat", new JSNativeFunction("parseFloat", 1, GlobalObject::parseFloat));
-        global.set("isNaN", new JSNativeFunction("isNaN", 1, GlobalObject::isNaN));
-        global.set("isFinite", new JSNativeFunction("isFinite", 1, GlobalObject::isFinite));
-        global.set("eval", new JSNativeFunction("eval", 1, GlobalObject::eval));
+        global.set("parseInt", new JSNativeFunction("parseInt", 2, GlobalObject::parseInt, false));
+        global.set("parseFloat", new JSNativeFunction("parseFloat", 1, GlobalObject::parseFloat, false));
+        global.set("isNaN", new JSNativeFunction("isNaN", 1, GlobalObject::isNaN, false));
+        global.set("isFinite", new JSNativeFunction("isFinite", 1, GlobalObject::isFinite, false));
+        global.set("eval", new JSNativeFunction("eval", 1, GlobalObject::eval, false));
 
         // URI handling functions
-        global.set("encodeURI", new JSNativeFunction("encodeURI", 1, GlobalObject::encodeURI));
-        global.set("decodeURI", new JSNativeFunction("decodeURI", 1, GlobalObject::decodeURI));
-        global.set("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, GlobalObject::encodeURIComponent));
-        global.set("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, GlobalObject::decodeURIComponent));
+        global.set("encodeURI", new JSNativeFunction("encodeURI", 1, GlobalObject::encodeURI, false));
+        global.set("decodeURI", new JSNativeFunction("decodeURI", 1, GlobalObject::decodeURI, false));
+        global.set("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, GlobalObject::encodeURIComponent, false));
+        global.set("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, GlobalObject::decodeURIComponent, false));
         global.set("escape", new JSNativeFunction("escape", 1, GlobalObject::escape, false));
         global.set("unescape", new JSNativeFunction("unescape", 1, GlobalObject::unescape, false));
 
@@ -338,6 +338,9 @@ public final class GlobalObject {
 
         // Error constructors
         initializeErrorConstructors(context, global);
+
+        // Align global binding attributes with QuickJS semantics.
+        normalizeGlobalDescriptors(global);
 
         // Initialize function prototype chains after all built-ins are set up
         initializeFunctionPrototypeChains(context, global, new HashSet<>());
@@ -844,58 +847,6 @@ public final class GlobalObject {
     }
 
     /**
-     * Initialize Iterator constructor and prototype.
-     * Based on ECMAScript 2024 Iterator specification.
-     */
-    private static void initializeIteratorConstructor(JSContext context, JSObject global) {
-        // Create Iterator.prototype with helper methods
-        JSObject iteratorPrototype = context.createJSObject();
-
-        // Iterator.prototype methods (ES2024)
-        // Note: These are placeholders. Full implementation requires iterator helper support.
-        iteratorPrototype.set("drop", new JSNativeFunction("drop", 1, IteratorPrototype::drop));
-        iteratorPrototype.set("filter", new JSNativeFunction("filter", 1, IteratorPrototype::filter));
-        iteratorPrototype.set("flatMap", new JSNativeFunction("flatMap", 1, IteratorPrototype::flatMap));
-        iteratorPrototype.set("map", new JSNativeFunction("map", 1, IteratorPrototype::map));
-        iteratorPrototype.set("take", new JSNativeFunction("take", 1, IteratorPrototype::take));
-        iteratorPrototype.set("every", new JSNativeFunction("every", 1, IteratorPrototype::every));
-        iteratorPrototype.set("find", new JSNativeFunction("find", 1, IteratorPrototype::find));
-        iteratorPrototype.set("forEach", new JSNativeFunction("forEach", 1, IteratorPrototype::forEach));
-        iteratorPrototype.set("some", new JSNativeFunction("some", 1, IteratorPrototype::some));
-        iteratorPrototype.set("reduce", new JSNativeFunction("reduce", 1, IteratorPrototype::reduce));
-        iteratorPrototype.set("toArray", new JSNativeFunction("toArray", 0, IteratorPrototype::toArray));
-
-        // Iterator.prototype[Symbol.iterator] returns this
-        iteratorPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
-                new JSNativeFunction("[Symbol.iterator]", 0, (childContext, thisArg, args) -> thisArg));
-
-        // Create Iterator constructor as JSNativeFunction
-        // Iterator is an abstract class - it requires 'new' but throws when constructed directly
-        JSNativeFunction iteratorConstructor = new JSNativeFunction("Iterator", 0, IteratorConstructor::call, true, true);
-        iteratorConstructor.set("prototype", iteratorPrototype);
-
-        // Iterator static methods (ES2024)
-        iteratorConstructor.set("from", new JSNativeFunction("from", 1, IteratorPrototype::from));
-
-        // Set Iterator.prototype.constructor
-        iteratorPrototype.set("constructor", iteratorConstructor);
-
-        // Add Iterator to global object
-        global.set("Iterator", iteratorConstructor);
-    }
-
-    /**
-     * Initialize JSON object.
-     */
-    private static void initializeJSONObject(JSContext context, JSObject global) {
-        JSObject json = context.createJSObject();
-        json.set("parse", new JSNativeFunction("parse", 1, JSONObject::parse));
-        json.set("stringify", new JSNativeFunction("stringify", 1, JSONObject::stringify));
-
-        global.set("JSON", json);
-    }
-
-    /**
      * Initialize Intl object.
      */
     private static void initializeIntlObject(JSContext context, JSObject global) {
@@ -1021,6 +972,58 @@ public final class GlobalObject {
         intlObject.set("Locale", localeConstructor);
 
         global.set("Intl", intlObject);
+    }
+
+    /**
+     * Initialize Iterator constructor and prototype.
+     * Based on ECMAScript 2024 Iterator specification.
+     */
+    private static void initializeIteratorConstructor(JSContext context, JSObject global) {
+        // Create Iterator.prototype with helper methods
+        JSObject iteratorPrototype = context.createJSObject();
+
+        // Iterator.prototype methods (ES2024)
+        // Note: These are placeholders. Full implementation requires iterator helper support.
+        iteratorPrototype.set("drop", new JSNativeFunction("drop", 1, IteratorPrototype::drop));
+        iteratorPrototype.set("filter", new JSNativeFunction("filter", 1, IteratorPrototype::filter));
+        iteratorPrototype.set("flatMap", new JSNativeFunction("flatMap", 1, IteratorPrototype::flatMap));
+        iteratorPrototype.set("map", new JSNativeFunction("map", 1, IteratorPrototype::map));
+        iteratorPrototype.set("take", new JSNativeFunction("take", 1, IteratorPrototype::take));
+        iteratorPrototype.set("every", new JSNativeFunction("every", 1, IteratorPrototype::every));
+        iteratorPrototype.set("find", new JSNativeFunction("find", 1, IteratorPrototype::find));
+        iteratorPrototype.set("forEach", new JSNativeFunction("forEach", 1, IteratorPrototype::forEach));
+        iteratorPrototype.set("some", new JSNativeFunction("some", 1, IteratorPrototype::some));
+        iteratorPrototype.set("reduce", new JSNativeFunction("reduce", 1, IteratorPrototype::reduce));
+        iteratorPrototype.set("toArray", new JSNativeFunction("toArray", 0, IteratorPrototype::toArray));
+
+        // Iterator.prototype[Symbol.iterator] returns this
+        iteratorPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
+                new JSNativeFunction("[Symbol.iterator]", 0, (childContext, thisArg, args) -> thisArg));
+
+        // Create Iterator constructor as JSNativeFunction
+        // Iterator is an abstract class - it requires 'new' but throws when constructed directly
+        JSNativeFunction iteratorConstructor = new JSNativeFunction("Iterator", 0, IteratorConstructor::call, true, true);
+        iteratorConstructor.set("prototype", iteratorPrototype);
+
+        // Iterator static methods (ES2024)
+        iteratorConstructor.set("from", new JSNativeFunction("from", 1, IteratorPrototype::from));
+
+        // Set Iterator.prototype.constructor
+        iteratorPrototype.set("constructor", iteratorConstructor);
+
+        // Add Iterator to global object
+        global.set("Iterator", iteratorConstructor);
+    }
+
+    /**
+     * Initialize JSON object.
+     */
+    private static void initializeJSONObject(JSContext context, JSObject global) {
+        JSObject json = context.createJSObject();
+        json.set("parse", new JSNativeFunction("parse", 1, JSONObject::parse));
+        json.set("stringify", new JSNativeFunction("stringify", 1, JSONObject::stringify));
+
+        global.set("JSON", json);
     }
 
     /**
@@ -1202,8 +1205,6 @@ public final class GlobalObject {
         global.set("Number", numberConstructor);
     }
 
-    // Global function implementations
-
     /**
      * Initialize Object constructor and static methods.
      */
@@ -1262,6 +1263,8 @@ public final class GlobalObject {
 
         global.set("Object", objectConstructor);
     }
+
+    // Global function implementations
 
     /**
      * Initialize Promise constructor and prototype methods.
@@ -1795,6 +1798,12 @@ public final class GlobalObject {
      */
     public static JSValue isFinite(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (value.isSymbol() || value.isSymbolObject()) {
+            return context.throwTypeError("cannot convert symbol to number");
+        }
+        if (value.isBigInt() || value.isBigIntObject()) {
+            return context.throwTypeError("cannot convert bigint to number");
+        }
         double num = JSTypeConversions.toNumber(context, value).value();
         return JSBoolean.valueOf(!Double.isNaN(num) && !Double.isInfinite(num));
     }
@@ -1807,6 +1816,12 @@ public final class GlobalObject {
      */
     public static JSValue isNaN(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (value.isSymbol() || value.isSymbolObject()) {
+            return context.throwTypeError("cannot convert symbol to number");
+        }
+        if (value.isBigInt() || value.isBigIntObject()) {
+            return context.throwTypeError("cannot convert bigint to number");
+        }
         double num = JSTypeConversions.toNumber(context, value).value();
         return JSBoolean.valueOf(Double.isNaN(num));
     }
@@ -1821,6 +1836,54 @@ public final class GlobalObject {
                 (c >= '0' && c <= '9') ||
                 c == '@' || c == '*' || c == '_' ||
                 c == '+' || c == '-' || c == '.' || c == '/';
+    }
+
+    private static void normalizeGlobalDescriptors(JSObject global) {
+        // ECMAScript global value properties
+        global.defineProperty(
+                PropertyKey.fromString("Infinity"),
+                PropertyDescriptor.dataDescriptor(global.get("Infinity"), false, false, false));
+        global.defineProperty(
+                PropertyKey.fromString("NaN"),
+                PropertyDescriptor.dataDescriptor(global.get("NaN"), false, false, false));
+        global.defineProperty(
+                PropertyKey.fromString("undefined"),
+                PropertyDescriptor.dataDescriptor(JSUndefined.INSTANCE, false, false, false));
+
+        // globalThis should be writable/configurable but not enumerable.
+        global.defineProperty(
+                PropertyKey.fromString("globalThis"),
+                PropertyDescriptor.dataDescriptor(global, true, false, true));
+
+        // Object.prototype.toString.call(globalThis) -> [object global]
+        global.defineProperty(
+                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                PropertyDescriptor.dataDescriptor(new JSString("global"), false, false, true));
+
+        // All intrinsic global bindings are non-enumerable in QuickJS.
+        String[] nonEnumerableGlobals = {
+                "parseInt", "parseFloat", "isNaN", "isFinite", "eval",
+                "decodeURI", "decodeURIComponent", "encodeURI", "encodeURIComponent",
+                "escape", "unescape",
+                "Object", "Function", "Array", "String", "Number", "Boolean", "BigInt", "Symbol",
+                "Date", "RegExp", "Error", "EvalError", "RangeError", "ReferenceError",
+                "SyntaxError", "TypeError", "URIError", "AggregateError",
+                "Math", "JSON", "Reflect", "Proxy", "Promise", "Atomics",
+                "Map", "Set", "WeakMap", "WeakSet", "WeakRef", "FinalizationRegistry",
+                "ArrayBuffer", "SharedArrayBuffer", "DataView",
+                "Int8Array", "Uint8Array", "Uint8ClampedArray", "Int16Array", "Uint16Array",
+                "Int32Array", "Uint32Array", "Float16Array", "Float32Array", "Float64Array",
+                "BigInt64Array", "BigUint64Array",
+                "DisposableStack", "AsyncDisposableStack", "Iterator",
+                "Intl", "console"
+        };
+        for (String key : nonEnumerableGlobals) {
+            if (global.hasOwnProperty(key)) {
+                global.defineProperty(
+                        PropertyKey.fromString(key),
+                        PropertyDescriptor.dataDescriptor(global.get(key), true, false, true));
+            }
+        }
     }
 
     /**

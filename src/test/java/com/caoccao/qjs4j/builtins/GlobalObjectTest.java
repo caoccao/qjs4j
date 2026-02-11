@@ -1,13 +1,16 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests for global object functions.
  */
 public class GlobalObjectTest extends BaseJavetTest {
-
     @Test
     public void testEscape() {
         assertStringWithJavet(
@@ -61,6 +64,48 @@ public class GlobalObjectTest extends BaseJavetTest {
                 "unescape(escape('Hello 世界!'))",
                 "unescape(escape('!@#$%^&*()'))",
                 "unescape(escape(''))");
+    }
+
+    @Test
+    public void testGlobalDescriptorsAndTagWithQuickJSSemantics() {
+        assertBooleanWithJavet(
+                "Object.getOwnPropertyDescriptor(globalThis, 'parseInt').writable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'parseInt').enumerable === false",
+                "Object.getOwnPropertyDescriptor(globalThis, 'parseInt').configurable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'Object').enumerable === false",
+                "Object.getOwnPropertyDescriptor(globalThis, 'Infinity').writable === false",
+                "Object.getOwnPropertyDescriptor(globalThis, 'Infinity').enumerable === false",
+                "Object.getOwnPropertyDescriptor(globalThis, 'Infinity').configurable === false",
+                "Object.getOwnPropertyDescriptor(globalThis, 'NaN').writable === false",
+                "Object.getOwnPropertyDescriptor(globalThis, 'undefined').writable === false",
+                "Object.getOwnPropertyDescriptor(globalThis, 'globalThis').writable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'globalThis').enumerable === false",
+                "Object.getOwnPropertyDescriptor(globalThis, 'globalThis').configurable === true");
+        assertThat(context.eval("globalThis[Symbol.toStringTag]").toJavaObject()).isEqualTo("global");
+        assertThat(context.eval("Object.prototype.toString.call(globalThis)").toJavaObject()).isEqualTo("[object global]");
+    }
+
+    @Test
+    public void testGlobalFunctionErrorsWithQuickJSSemantics() {
+        String[] codeArray = {
+                "new parseInt()",
+                "new isNaN()",
+                "new decodeURI()",
+                "isNaN(Symbol())",
+                "isFinite(Symbol())",
+                "isNaN(1n)",
+                "isFinite(1n)",
+                "isNaN(Object(Symbol()))",
+                "isFinite(Object(Symbol()))",
+                "isNaN(Object(1n))",
+                "isFinite(Object(1n))"
+        };
+        for (String code : codeArray) {
+            assertThatThrownBy(() -> context.eval(code))
+                    .as(code)
+                    .isInstanceOf(JSException.class)
+                    .hasMessageContaining("TypeError");
+        }
     }
 
     @Test
