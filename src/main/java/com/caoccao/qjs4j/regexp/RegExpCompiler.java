@@ -19,10 +19,7 @@ package com.caoccao.qjs4j.regexp;
 import com.caoccao.qjs4j.unicode.UnicodeData;
 import com.caoccao.qjs4j.utils.DynamicBuffer;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntPredicate;
 
@@ -40,9 +37,9 @@ public final class RegExpCompiler {
     private static final int MAX_UNICODE_CODE_POINT = 0x10FFFF;
     private static final Map<String, int[]> SCRIPT_RANGES_CACHE = new ConcurrentHashMap<>();
     private int captureCount;
-    private int totalCaptureCount;
     private List<String> groupNames;
     private Map<String, Integer> namedCaptureIndices;
+    private int totalCaptureCount;
 
     private void appendRanges(List<Integer> ranges, int[] propertyRanges) {
         for (int propertyRange : propertyRanges) {
@@ -1399,6 +1396,15 @@ public final class RegExpCompiler {
         boolean inCharacterClass = false;
         int captureIndex = 1;
 
+        // Track disjunction nesting for ES2025 duplicate named groups.
+        // Duplicate names are allowed in different alternatives of the same disjunction.
+        // currentAltStack: names seen in the current alternative at each nesting level
+        // allAltStack: names from all completed alternatives at each nesting level
+        Deque<Set<String>> currentAltStack = new ArrayDeque<>();
+        Deque<Set<String>> allAltStack = new ArrayDeque<>();
+        currentAltStack.push(new HashSet<>());
+        allAltStack.push(new HashSet<>());
+
         for (int i = 0; i < codePoints.length; i++) {
             int codePoint = codePoints[i];
 
@@ -1418,12 +1424,28 @@ public final class RegExpCompiler {
                 inCharacterClass = true;
                 continue;
             }
+            if (codePoint == '|') {
+                allAltStack.peek().addAll(currentAltStack.peek());
+                currentAltStack.peek().clear();
+                continue;
+            }
+            if (codePoint == ')') {
+                if (currentAltStack.size() > 1) {
+                    Set<String> poppedCurrent = currentAltStack.pop();
+                    Set<String> poppedAll = allAltStack.pop();
+                    poppedAll.addAll(poppedCurrent);
+                    currentAltStack.peek().addAll(poppedAll);
+                }
+                continue;
+            }
             if (codePoint != '(') {
                 continue;
             }
 
             if (i + 1 < codePoints.length && codePoints[i + 1] == '?') {
                 if (i + 2 >= codePoints.length) {
+                    currentAltStack.push(new HashSet<>());
+                    allAltStack.push(new HashSet<>());
                     continue;
                 }
                 int groupType = codePoints[i + 2];
@@ -1431,28 +1453,43 @@ public final class RegExpCompiler {
                         || groupType == '='
                         || groupType == '!'
                         || groupType == '>') {
+                    currentAltStack.push(new HashSet<>());
+                    allAltStack.push(new HashSet<>());
                     continue;
                 }
                 if (groupType == '<') {
                     if (i + 3 < codePoints.length &&
                             (codePoints[i + 3] == '=' || codePoints[i + 3] == '!')) {
+                        currentAltStack.push(new HashSet<>());
+                        allAltStack.push(new HashSet<>());
                         continue;
                     }
                     GroupNameParseResult groupNameParseResult = parseGroupName(codePoints, i + 3);
                     if (groupNameParseResult == null) {
                         throw new RegExpSyntaxException("invalid group name");
                     }
-                    if (captureIndices.containsKey(groupNameParseResult.name())) {
+                    String name = groupNameParseResult.name();
+                    if (currentAltStack.peek().contains(name)) {
                         throw new RegExpSyntaxException("duplicate group name");
                     }
-                    captureIndices.put(groupNameParseResult.name(), captureIndex++);
+                    currentAltStack.peek().add(name);
+                    if (!captureIndices.containsKey(name)) {
+                        captureIndices.put(name, captureIndex);
+                    }
+                    captureIndex++;
                     i = groupNameParseResult.nextPos() - 1;
+                    currentAltStack.push(new HashSet<>());
+                    allAltStack.push(new HashSet<>());
                     continue;
                 }
+                currentAltStack.push(new HashSet<>());
+                allAltStack.push(new HashSet<>());
                 continue;
             }
 
             captureIndex++;
+            currentAltStack.push(new HashSet<>());
+            allAltStack.push(new HashSet<>());
         }
         totalCaptureCount = captureIndex;
         return captureIndices;
