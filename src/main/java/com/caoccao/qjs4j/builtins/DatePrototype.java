@@ -344,7 +344,11 @@ public final class DatePrototype {
 
         int n = Math.min(args.length, endField - firstField);
         for (int i = 0; i < n; i++) {
-            double value = JSTypeConversions.toNumber(context, args[i]).value();
+            JSNumber number = toNumberOrThrow(context, args[i]);
+            if (number == null) {
+                return context.getPendingException();
+            }
+            double value = number.value();
             if (!Double.isFinite(value)) {
                 result = 0;
             }
@@ -393,7 +397,11 @@ public final class DatePrototype {
             return context.getPendingException();
         }
         JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        double value = JSTypeConversions.toNumber(context, arg).value();
+        JSNumber number = toNumberOrThrow(context, arg);
+        if (number == null) {
+            return context.getPendingException();
+        }
+        double value = number.value();
         double clipped = JSDate.timeClip(value);
         date.setTimeValue(clipped);
         return new JSNumber(clipped);
@@ -433,7 +441,11 @@ public final class DatePrototype {
             return context.getPendingException();
         }
         JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        double year = +JSTypeConversions.toNumber(context, arg).value();
+        JSNumber number = toNumberOrThrow(context, arg);
+        if (number == null) {
+            return context.getPendingException();
+        }
+        double year = +number.value();
         if (Double.isFinite(year)) {
             year = JSDate.trunc(year);
             if (year >= 0 && year < 100) {
@@ -533,5 +545,21 @@ public final class DatePrototype {
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
         return getTime(context, thisArg, args);
+    }
+
+    private static JSNumber toNumberOrThrow(JSContext context, JSValue value) {
+        if (value.isSymbol() || value.isSymbolObject()) {
+            context.throwTypeError("cannot convert symbol to number");
+            return null;
+        }
+        if (value.isBigInt() || value.isBigIntObject()) {
+            context.throwTypeError("cannot convert bigint to number");
+            return null;
+        }
+        JSNumber number = JSTypeConversions.toNumber(context, value);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        return number;
     }
 }

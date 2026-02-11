@@ -82,7 +82,7 @@ public final class JSClassBuilder {
      * @return This builder
      */
     public JSClassBuilder constructor(JSNativeFunction.NativeCallback constructor) {
-        this.constructor = new JSNativeFunction("constructor", 0, constructor);
+        this.constructor = new JSNativeFunction("constructor", 0, constructor, true);
         return this;
     }
 
@@ -94,7 +94,7 @@ public final class JSClassBuilder {
      * @return This builder
      */
     public JSClassBuilder constructor(int length, JSNativeFunction.NativeCallback constructor) {
-        this.constructor = new JSNativeFunction("constructor", length, constructor);
+        this.constructor = new JSNativeFunction("constructor", length, constructor, true);
         return this;
     }
 

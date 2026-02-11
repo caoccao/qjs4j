@@ -109,6 +109,53 @@ public class GlobalObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testGlobalFunctionsAreNotConstructors() {
+        assertBooleanWithJavet("""
+                (() => {
+                  const isConstructor = (fn) => {
+                    if (typeof fn !== 'function') {
+                      return false;
+                    }
+                    try {
+                      Reflect.construct(function () {}, [], fn);
+                      return true;
+                    } catch {
+                      return false;
+                    }
+                  };
+                
+                  const functionPrototypeArguments = Object.getOwnPropertyDescriptor(Function.prototype, 'arguments');
+                  const functionPrototypeCaller = Object.getOwnPropertyDescriptor(Function.prototype, 'caller');
+                
+                  const nonConstructors = [
+                    parseInt,
+                    parseFloat,
+                    isNaN,
+                    isFinite,
+                    eval,
+                    encodeURI,
+                    decodeURI,
+                    encodeURIComponent,
+                    decodeURIComponent,
+                    escape,
+                    unescape,
+                    Function.prototype,
+                    Function.prototype.call,
+                    Function.prototype.apply,
+                    Function.prototype.bind,
+                    Function.prototype.toString,
+                    functionPrototypeArguments.get,
+                    functionPrototypeArguments.set,
+                    functionPrototypeCaller.get,
+                    functionPrototypeCaller.set
+                  ];
+                
+                  return nonConstructors.every((fn) => !isConstructor(fn));
+                })();
+                """);
+    }
+
+    @Test
     public void testUnescape() {
         assertStringWithJavet(
                 // Test basic %XX sequences

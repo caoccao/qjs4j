@@ -80,7 +80,8 @@ public final class JSReferenceError extends JSError {
 
                     // Return undefined to use the thisObj created by the VM
                     return JSUndefined.INSTANCE;
-                });
+                },
+                true);
         errorConstructor.set("prototype", errorPrototype);
 
         // Don't set constructor type - let the JSNativeFunction lambda handle construction

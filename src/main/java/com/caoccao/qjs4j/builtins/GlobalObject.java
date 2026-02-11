@@ -279,19 +279,19 @@ public final class GlobalObject {
         global.definePropertyReadonlyNonConfigurable("Infinity", new JSNumber(Double.POSITIVE_INFINITY));
 
         // Global function properties
-        global.definePropertyWritableConfigurable("parseInt", new JSNativeFunction("parseInt", 2, GlobalObject::parseInt, false));
-        global.definePropertyWritableConfigurable("parseFloat", new JSNativeFunction("parseFloat", 1, GlobalObject::parseFloat, false));
-        global.definePropertyWritableConfigurable("isNaN", new JSNativeFunction("isNaN", 1, GlobalObject::isNaN, false));
-        global.definePropertyWritableConfigurable("isFinite", new JSNativeFunction("isFinite", 1, GlobalObject::isFinite, false));
-        global.definePropertyWritableConfigurable("eval", new JSNativeFunction("eval", 1, GlobalObject::eval, false));
+        global.definePropertyWritableConfigurable("parseInt", new JSNativeFunction("parseInt", 2, GlobalObject::parseInt));
+        global.definePropertyWritableConfigurable("parseFloat", new JSNativeFunction("parseFloat", 1, GlobalObject::parseFloat));
+        global.definePropertyWritableConfigurable("isNaN", new JSNativeFunction("isNaN", 1, GlobalObject::isNaN));
+        global.definePropertyWritableConfigurable("isFinite", new JSNativeFunction("isFinite", 1, GlobalObject::isFinite));
+        global.definePropertyWritableConfigurable("eval", new JSNativeFunction("eval", 1, GlobalObject::eval));
 
         // URI handling functions
-        global.definePropertyWritableConfigurable("encodeURI", new JSNativeFunction("encodeURI", 1, GlobalObject::encodeURI, false));
-        global.definePropertyWritableConfigurable("decodeURI", new JSNativeFunction("decodeURI", 1, GlobalObject::decodeURI, false));
-        global.definePropertyWritableConfigurable("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, GlobalObject::encodeURIComponent, false));
-        global.definePropertyWritableConfigurable("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, GlobalObject::decodeURIComponent, false));
-        global.definePropertyWritableConfigurable("escape", new JSNativeFunction("escape", 1, GlobalObject::escape, false));
-        global.definePropertyWritableConfigurable("unescape", new JSNativeFunction("unescape", 1, GlobalObject::unescape, false));
+        global.definePropertyWritableConfigurable("encodeURI", new JSNativeFunction("encodeURI", 1, GlobalObject::encodeURI));
+        global.definePropertyWritableConfigurable("decodeURI", new JSNativeFunction("decodeURI", 1, GlobalObject::decodeURI));
+        global.definePropertyWritableConfigurable("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, GlobalObject::encodeURIComponent));
+        global.definePropertyWritableConfigurable("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, GlobalObject::decodeURIComponent));
+        global.definePropertyWritableConfigurable("escape", new JSNativeFunction("escape", 1, GlobalObject::escape));
+        global.definePropertyWritableConfigurable("unescape", new JSNativeFunction("unescape", 1, GlobalObject::unescape));
 
         // Console object for debugging
         initializeConsoleObject(context, global);
@@ -364,7 +364,7 @@ public final class GlobalObject {
         arrayBufferPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, ArrayBufferPrototype::getToStringTag);
 
         // Create ArrayBuffer constructor as a function
-        JSNativeFunction arrayBufferConstructor = new JSNativeFunction("ArrayBuffer", 1, ArrayBufferConstructor::call);
+        JSNativeFunction arrayBufferConstructor = new JSNativeFunction("ArrayBuffer", 1, ArrayBufferConstructor::call, true);
         arrayBufferConstructor.set("prototype", arrayBufferPrototype);
         arrayBufferConstructor.setConstructorType(JSConstructorType.ARRAY_BUFFER);
         arrayBufferPrototype.set("constructor", arrayBufferConstructor);
@@ -432,7 +432,7 @@ public final class GlobalObject {
         arrayPrototype.defineGetterConfigurable(JSSymbol.UNSCOPABLES, ArrayPrototype::getSymbolUnscopables);
 
         // Create Array constructor as a function
-        JSNativeFunction arrayConstructor = new JSNativeFunction("Array", 1, ArrayConstructor::call);
+        JSNativeFunction arrayConstructor = new JSNativeFunction("Array", 1, ArrayConstructor::call, true);
         arrayConstructor.set("prototype", arrayPrototype);
         arrayConstructor.setConstructorType(JSConstructorType.ARRAY);
         arrayPrototype.set("constructor", arrayConstructor);
@@ -490,7 +490,7 @@ public final class GlobalObject {
         // Create AsyncFunction constructor
         // AsyncFunction is not normally exposed but we need it for the prototype chain
         JSNativeFunction asyncFunctionConstructor = new JSNativeFunction("AsyncFunction", 1,
-                (ctx, thisObj, args) -> ctx.throwTypeError("AsyncFunction is not a constructor"));
+                (ctx, thisObj, args) -> ctx.throwTypeError("AsyncFunction is not a constructor"), true);
         asyncFunctionConstructor.set("prototype", asyncFunctionPrototype);
         asyncFunctionPrototype.set("constructor", asyncFunctionConstructor);
 
@@ -555,7 +555,7 @@ public final class GlobalObject {
         booleanPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, BooleanPrototype::valueOf));
 
         // Create Boolean constructor
-        JSNativeFunction booleanConstructor = new JSNativeFunction("Boolean", 1, BooleanConstructor::call);
+        JSNativeFunction booleanConstructor = new JSNativeFunction("Boolean", 1, BooleanConstructor::call, true);
         booleanConstructor.set("prototype", booleanPrototype);
         booleanConstructor.setConstructorType(JSConstructorType.BOOLEAN_OBJECT); // Mark as Boolean constructor
         booleanPrototype.set("constructor", booleanConstructor);
@@ -675,7 +675,7 @@ public final class GlobalObject {
         datePrototype.definePropertyWritableConfigurable("toJSON", new JSNativeFunction("toJSON", 1, DatePrototype::toJSON));
         datePrototype.definePropertyWritableConfigurable(JSSymbol.TO_PRIMITIVE, toPrimitive);
 
-        JSNativeFunction dateConstructor = new JSNativeFunction("Date", 7, DateConstructor::call);
+        JSNativeFunction dateConstructor = new JSNativeFunction("Date", 7, DateConstructor::call, true);
         dateConstructor.definePropertyReadonlyNonConfigurable("prototype", datePrototype);
         dateConstructor.setConstructorType(JSConstructorType.DATE);
         datePrototype.definePropertyWritableConfigurable("constructor", dateConstructor);
@@ -777,7 +777,7 @@ public final class GlobalObject {
         functionPrototype.definePropertyConfigurable("name", new JSString(""));
 
         // Function constructor should be a function, not a plain object
-        JSNativeFunction functionConstructor = new JSNativeFunction(JSFunction.NAME, 1, FunctionConstructor::call);
+        JSNativeFunction functionConstructor = new JSNativeFunction(JSFunction.NAME, 1, FunctionConstructor::call, true);
         functionConstructor.set("prototype", functionPrototype);
         functionPrototype.set("constructor", functionConstructor);
 
@@ -842,7 +842,8 @@ public final class GlobalObject {
         JSNativeFunction dateTimeFormatConstructor = new JSNativeFunction(
                 "DateTimeFormat",
                 0,
-                (childContext, thisArg, args) -> IntlObject.createDateTimeFormat(childContext, dateTimeFormatPrototype, args));
+                (childContext, thisArg, args) -> IntlObject.createDateTimeFormat(childContext, dateTimeFormatPrototype, args),
+                true);
         dateTimeFormatConstructor.set("prototype", dateTimeFormatPrototype);
         dateTimeFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, IntlObject::supportedLocalesOf));
         dateTimeFormatPrototype.set("constructor", dateTimeFormatConstructor);
@@ -854,7 +855,8 @@ public final class GlobalObject {
         JSNativeFunction numberFormatConstructor = new JSNativeFunction(
                 "NumberFormat",
                 0,
-                (childContext, thisArg, args) -> IntlObject.createNumberFormat(childContext, numberFormatPrototype, args));
+                (childContext, thisArg, args) -> IntlObject.createNumberFormat(childContext, numberFormatPrototype, args),
+                true);
         numberFormatConstructor.set("prototype", numberFormatPrototype);
         numberFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, IntlObject::supportedLocalesOf));
         numberFormatPrototype.set("constructor", numberFormatConstructor);
@@ -866,7 +868,8 @@ public final class GlobalObject {
         JSNativeFunction collatorConstructor = new JSNativeFunction(
                 "Collator",
                 0,
-                (childContext, thisArg, args) -> IntlObject.createCollator(childContext, collatorPrototype, args));
+                (childContext, thisArg, args) -> IntlObject.createCollator(childContext, collatorPrototype, args),
+                true);
         collatorConstructor.set("prototype", collatorPrototype);
         collatorConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, IntlObject::supportedLocalesOf));
         collatorPrototype.set("constructor", collatorConstructor);
@@ -1090,7 +1093,7 @@ public final class GlobalObject {
         numberPrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, NumberPrototype::valueOf));
 
         // Create Number constructor
-        JSNativeFunction numberConstructor = new JSNativeFunction("Number", 1, NumberConstructor::call);
+        JSNativeFunction numberConstructor = new JSNativeFunction("Number", 1, NumberConstructor::call, true);
         numberConstructor.definePropertyReadonlyNonConfigurable("prototype", numberPrototype);
         numberConstructor.setConstructorType(JSConstructorType.NUMBER_OBJECT); // Mark as Number constructor
         numberPrototype.definePropertyWritableConfigurable("constructor", numberConstructor);
@@ -1147,7 +1150,7 @@ public final class GlobalObject {
         objectPrototype.defineProperty(PropertyKey.fromString("__proto__"), protoDesc);
 
         // Create Object constructor
-        JSNativeFunction objectConstructor = new JSNativeFunction("Object", 1, ObjectConstructor::call);
+        JSNativeFunction objectConstructor = new JSNativeFunction("Object", 1, ObjectConstructor::call, true);
         objectConstructor.set("prototype", objectPrototype);
         objectPrototype.set("constructor", objectConstructor);
 
@@ -1269,7 +1272,7 @@ public final class GlobalObject {
         regexpPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("RegExp"));
 
         // Create RegExp constructor as a function
-        JSNativeFunction regexpConstructor = new JSNativeFunction("RegExp", 2, RegExpConstructor::call);
+        JSNativeFunction regexpConstructor = new JSNativeFunction("RegExp", 2, RegExpConstructor::call, true);
         regexpConstructor.set("prototype", regexpPrototype);
         regexpConstructor.setConstructorType(JSConstructorType.REGEXP);
         regexpPrototype.set("constructor", regexpConstructor);
@@ -1422,7 +1425,7 @@ public final class GlobalObject {
         stringPrototype.definePropertyReadonlyNonConfigurable("length", new JSNumber(0));
 
         // Create String constructor
-        JSNativeFunction stringConstructor = new JSNativeFunction("String", 1, StringConstructor::call);
+        JSNativeFunction stringConstructor = new JSNativeFunction("String", 1, StringConstructor::call, true);
         stringConstructor.set("prototype", stringPrototype);
         stringConstructor.setConstructorType(JSConstructorType.STRING_OBJECT); // Mark as String constructor
         stringPrototype.set("constructor", stringConstructor);

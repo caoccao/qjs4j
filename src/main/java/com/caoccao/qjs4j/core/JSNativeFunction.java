@@ -27,7 +27,7 @@ public final class JSNativeFunction extends JSFunction {
     private final boolean requiresNew;
 
     public JSNativeFunction(String name, int length, NativeCallback callback) {
-        this(name, length, callback, true, false);
+        this(name, length, callback, false, false);
     }
 
     public JSNativeFunction(String name, int length, NativeCallback callback, boolean isConstructor) {
