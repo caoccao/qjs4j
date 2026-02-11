@@ -597,7 +597,29 @@ public non-sealed class JSObject implements JSValue {
             return;
         }
 
-        // Property doesn't exist, add it (only if extensible)
+        // Property doesn't exist on own object - walk prototype chain for setters
+        Set<JSObject> visited = new HashSet<>();
+        visited.add(this);
+        JSObject proto = prototype;
+        while (proto != null && !visited.contains(proto)) {
+            visited.add(proto);
+            int protoOffset = proto.shape.getPropertyOffset(key);
+            if (protoOffset >= 0) {
+                PropertyDescriptor protoDesc = proto.shape.getDescriptorAt(protoOffset);
+                if (protoDesc != null && protoDesc.hasSetter()) {
+                    JSFunction setter = protoDesc.getSetter();
+                    if (setter != null && context != null) {
+                        setter.call(context, receiver, new JSValue[]{value});
+                    }
+                    return;
+                }
+                // Found a data property in prototype - don't use its setter, create own property
+                break;
+            }
+            proto = proto.prototype;
+        }
+
+        // Property doesn't exist in chain or is a data property, add it (only if extensible)
         if (extensible) {
             defineProperty(key, PropertyDescriptor.defaultData(value));
         } else {
