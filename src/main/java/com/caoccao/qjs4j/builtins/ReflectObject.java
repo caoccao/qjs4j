@@ -222,8 +222,12 @@ public final class ReflectObject {
 
         PropertyKey key = PropertyKey.fromValue(context, args[1]);
         JSValue value = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
+        JSObject receiver = args.length > 3 && args[3] instanceof JSObject r ? r : target;
 
-        target.set(key, value);
+        target.set(key, value, context, receiver);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
         return JSBoolean.TRUE;
     }
 

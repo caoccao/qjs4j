@@ -556,6 +556,14 @@ public non-sealed class JSObject implements JSValue {
      * Set a property value by property key with context for setter functions.
      */
     public void set(PropertyKey key, JSValue value, JSContext context) {
+        set(key, value, context, this);
+    }
+
+    /**
+     * Set a property value with an explicit receiver for setter invocation.
+     * Used by Reflect.set to pass a different receiver than the target.
+     */
+    public void set(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
         // Check if property already exists
         int offset = shape.getPropertyOffset(key);
         if (offset >= 0) {
@@ -566,8 +574,8 @@ public non-sealed class JSObject implements JSValue {
             if (desc.hasSetter()) {
                 JSFunction setter = desc.getSetter();
                 if (setter != null && context != null) {
-                    // Call the setter with 'this' as the object and value as argument
-                    setter.call(context, this, new JSValue[]{value});
+                    // Call the setter with the receiver as 'this'
+                    setter.call(context, receiver, new JSValue[]{value});
                     // If setter threw an exception, it remains pending in context
                     // The VM will check for it after property access
                 }

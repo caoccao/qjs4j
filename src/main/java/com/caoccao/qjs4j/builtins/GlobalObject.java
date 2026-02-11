@@ -40,15 +40,25 @@ import java.util.stream.Stream;
 public final class GlobalObject {
 
     private static void addLegacyRegExpAccessor(JSNativeFunction regexpConstructor, String name, String alias) {
+        addLegacyRegExpAccessor(regexpConstructor, name, alias, false);
+    }
+
+    private static void addLegacyRegExpAccessor(JSNativeFunction regexpConstructor, String name, String alias, boolean hasSetter) {
         JSNativeFunction getter = new JSNativeFunction("get " + name, 0, (ctx, thisArg, args) -> {
             if (thisArg != regexpConstructor) {
                 return ctx.throwTypeError("Generic static accessor property access is not supported");
             }
             return new JSString("");
         }, false);
+        JSNativeFunction setter = hasSetter ? new JSNativeFunction("set " + name, 1, (ctx, thisArg, args) -> {
+            if (thisArg != regexpConstructor) {
+                return ctx.throwTypeError("Generic static accessor property access is not supported");
+            }
+            return JSUndefined.INSTANCE;
+        }, false) : null;
         regexpConstructor.defineProperty(
                 PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(getter, null, false, true));
+                PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
         if (alias != null) {
             JSNativeFunction aliasGetter = new JSNativeFunction("get " + alias, 0, (ctx, thisArg, args) -> {
                 if (thisArg != regexpConstructor) {
@@ -56,9 +66,15 @@ public final class GlobalObject {
                 }
                 return new JSString("");
             }, false);
+            JSNativeFunction aliasSetter = hasSetter ? new JSNativeFunction("set " + alias, 1, (ctx, thisArg, args) -> {
+                if (thisArg != regexpConstructor) {
+                    return ctx.throwTypeError("Generic static accessor property access is not supported");
+                }
+                return JSUndefined.INSTANCE;
+            }, false) : null;
             regexpConstructor.defineProperty(
                     PropertyKey.fromString(alias),
-                    PropertyDescriptor.accessorDescriptor(aliasGetter, null, false, true));
+                    PropertyDescriptor.accessorDescriptor(aliasGetter, aliasSetter, false, true));
         }
     }
 
@@ -1414,7 +1430,7 @@ public final class GlobalObject {
         addLegacyRegExpAccessor(regexpConstructor, "leftContext", "$`");
         addLegacyRegExpAccessor(regexpConstructor, "lastMatch", "$&");
         addLegacyRegExpAccessor(regexpConstructor, "lastParen", "$+");
-        addLegacyRegExpAccessor(regexpConstructor, "input", "$_");
+        addLegacyRegExpAccessor(regexpConstructor, "input", "$_", true);
         // $1..$9
         for (int i = 1; i <= 9; i++) {
             addLegacyRegExpAccessor(regexpConstructor, "$" + i, null);
