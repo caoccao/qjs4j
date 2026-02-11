@@ -40,6 +40,7 @@ public final class RegExpCompiler {
     private static final int MAX_UNICODE_CODE_POINT = 0x10FFFF;
     private static final Map<String, int[]> SCRIPT_RANGES_CACHE = new ConcurrentHashMap<>();
     private int captureCount;
+    private int totalCaptureCount;
     private List<String> groupNames;
     private Map<String, Integer> namedCaptureIndices;
 
@@ -463,7 +464,9 @@ public final class RegExpCompiler {
             }
             case '1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
                 // Back reference \1, \2, etc.
+                // Use totalCaptureCount (pre-scanned) to support forward references
                 int groupNum = ch - '0';
+                int savedPos = context.pos;
                 // Check for multi-digit group numbers
                 while (context.pos < context.codePoints.length) {
                     int nextCh = context.codePoints[context.pos];
@@ -475,14 +478,42 @@ public final class RegExpCompiler {
                     }
                 }
 
-                if (groupNum >= captureCount) {
-                    // Invalid back reference - treat as literal
-                    compileLiteralChar(context, ch);
-                } else {
+                if (groupNum < totalCaptureCount) {
+                    // Valid backreference (including forward references)
                     context.buffer.appendU8(context.isIgnoreCase() ?
                             RegExpOpcode.BACK_REFERENCE_I.getCode() :
                             RegExpOpcode.BACK_REFERENCE.getCode());
                     context.buffer.appendU8(groupNum);
+                } else if (!context.isUnicodeMode()) {
+                    // AnnexB: In non-unicode mode, invalid backreferences are
+                    // treated as octal escapes (\1-\7) or identity escapes (\8-\9)
+                    context.pos = savedPos; // Rewind consumed digits
+                    int digit = ch - '0';
+                    if (digit <= 7) {
+                        // Octal escape: \1-\7 → U+0001-U+0007
+                        // Also handle multi-digit octal: \12, \377, etc.
+                        int octalValue = digit;
+                        while (context.pos < context.codePoints.length) {
+                            int nextCh = context.codePoints[context.pos];
+                            if (nextCh >= '0' && nextCh <= '7') {
+                                int newValue = octalValue * 8 + (nextCh - '0');
+                                if (newValue > 0377) {
+                                    break;
+                                }
+                                octalValue = newValue;
+                                context.pos++;
+                            } else {
+                                break;
+                            }
+                        }
+                        compileLiteralChar(context, octalValue);
+                    } else {
+                        // \8, \9 → identity escape (literal digit)
+                        compileLiteralChar(context, ch);
+                    }
+                } else {
+                    // Unicode mode: invalid backreference is a syntax error
+                    throw new RegExpSyntaxException("Invalid backreference \\" + groupNum);
                 }
             }
             case 'x' -> {
@@ -1420,6 +1451,7 @@ public final class RegExpCompiler {
 
             captureIndex++;
         }
+        totalCaptureCount = captureIndex;
         return captureIndices;
     }
 
