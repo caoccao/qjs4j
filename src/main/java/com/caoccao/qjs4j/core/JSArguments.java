@@ -61,13 +61,7 @@ public final class JSArguments extends JSObject {
         this.isStrict = isStrict;
 
         // Set length property (writable, non-enumerable, configurable per ES spec)
-        PropertyDescriptor lengthDesc = PropertyDescriptor.dataDescriptor(
-                new JSNumber(argumentValues.length),
-                true,   // writable
-                false,  // enumerable
-                true    // configurable
-        );
-        defineProperty(PropertyKey.fromString("length"), lengthDesc);
+        definePropertyWritableConfigurable("length", new JSNumber(argumentValues.length));
 
         // Set indexed properties for each argument
         for (int i = 0; i < argumentValues.length; i++) {
@@ -106,13 +100,7 @@ public final class JSArguments extends JSObject {
         } else {
             // In non-strict mode, callee is a data property referencing the function
             if (callee != null) {
-                PropertyDescriptor calleeDesc = PropertyDescriptor.dataDescriptor(
-                        callee,
-                        true,   // writable
-                        false,  // non-enumerable
-                        true    // configurable
-                );
-                defineProperty(PropertyKey.fromString("callee"), calleeDesc);
+                definePropertyWritableConfigurable("callee", callee);
             }
 
             // Note: arguments.caller is NOT defined (returns undefined when accessed)
@@ -133,13 +121,7 @@ public final class JSArguments extends JSObject {
                         if (arrayProto instanceof JSObject arrayProtoObj) {
                             JSValue arrayIterator = arrayProtoObj.get(PropertyKey.fromSymbol(sym));
                             if (arrayIterator != null && !(arrayIterator instanceof JSUndefined)) {
-                                PropertyDescriptor iterDesc = PropertyDescriptor.dataDescriptor(
-                                        arrayIterator,
-                                        true,   // writable
-                                        false,  // non-enumerable
-                                        true    // configurable
-                                );
-                                defineProperty(PropertyKey.fromSymbol(sym), iterDesc);
+                                definePropertyWritableConfigurable(sym, arrayIterator);
                             }
                         }
                     }

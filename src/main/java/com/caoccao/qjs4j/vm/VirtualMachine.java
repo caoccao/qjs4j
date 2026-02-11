@@ -3329,9 +3329,7 @@ public final class VirtualMachine {
         if (!(objectValue instanceof JSObject object)) {
             return;
         }
-        object.defineProperty(
-                PropertyKey.fromString("name"),
-                PropertyDescriptor.dataDescriptor(nameValue, false, false, true));
+        object.definePropertyConfigurable("name", nameValue);
     }
 
     /**
@@ -3364,8 +3362,7 @@ public final class VirtualMachine {
                     wrapper.setPrimitiveValue(str);
                     // Add length property as own property (shadows prototype's length)
                     // This is a data property with the actual string length
-                    wrapper.defineProperty(PropertyKey.fromString("length"),
-                            PropertyDescriptor.dataDescriptor(new JSNumber(str.value().length()), false, false, false));
+                    wrapper.definePropertyReadonlyNonConfigurable("length", new JSNumber(str.value().length()));
                     return wrapper;
                 }
             }

@@ -93,6 +93,60 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
+     * Define a non-enumerable, configurable getter accessor property.
+     */
+    public void defineGetterConfigurable(String name, JSNativeFunction.NativeCallback callback) {
+        defineProperty(PropertyKey.fromString(name),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get " + name, 0, callback), null, false, true));
+    }
+
+    /**
+     * Define a non-enumerable, configurable getter accessor property with a symbol key.
+     */
+    public void defineGetterConfigurable(JSSymbol symbol, JSNativeFunction.NativeCallback callback) {
+        defineProperty(PropertyKey.fromSymbol(symbol),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get [" + symbol + "]", 0, callback), null, false, true));
+    }
+
+    public void defineGetterConfigurable(String name) {
+        JSObject thisObject = this;
+        JSNativeFunction getter = new JSNativeFunction("get " + name, 0, (ctx, thisArg, args) -> {
+            if (thisArg != thisObject) {
+                return ctx.throwTypeError("Generic static accessor property access is not supported");
+            }
+            return new JSString("");
+        }, false);
+        defineProperty(
+                PropertyKey.fromString(name),
+                PropertyDescriptor.accessorDescriptor(getter, null, false, true));
+    }
+
+    public void defineGetterSetterConfigurable(String name) {
+        JSObject thisObject = this;
+        JSNativeFunction getter = new JSNativeFunction("get " + name, 0, (ctx, thisArg, args) -> {
+            if (thisArg != thisObject) {
+                return ctx.throwTypeError("Generic static accessor property access is not supported");
+            }
+            return new JSString("");
+        }, false);
+        JSNativeFunction setter = new JSNativeFunction("set " + name, 1, (ctx, thisArg, args) -> {
+            if (thisArg != thisObject) {
+                return ctx.throwTypeError("Generic static accessor property access is not supported");
+            }
+            return JSUndefined.INSTANCE;
+        }, false);
+        defineProperty(
+                PropertyKey.fromString(name),
+                PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
+    }
+
+    public void defineGetterSetterConfigurable(String name, JSNativeFunction getter, JSNativeFunction setter) {
+        defineProperty(
+                PropertyKey.fromString(name),
+                PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
+    }
+
+    /**
      * Define a new property with a descriptor.
      */
     public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
@@ -122,6 +176,42 @@ public non-sealed class JSObject implements JSValue {
         }
 
         this.propertyValues = newValues;
+    }
+
+    public void definePropertyConfigurable(JSSymbol jsSymbol, JSValue value) {
+        defineProperty(PropertyKey.fromSymbol(jsSymbol),
+                PropertyDescriptor.dataDescriptor(value, false, false, true));
+    }
+
+    public void definePropertyConfigurable(String name, JSValue value) {
+        defineProperty(PropertyKey.fromString(name),
+                PropertyDescriptor.dataDescriptor(value, false, false, true));
+    }
+
+    public void definePropertyReadonlyNonConfigurable(JSSymbol jsSymbol, JSValue value) {
+        defineProperty(PropertyKey.fromSymbol(jsSymbol),
+                PropertyDescriptor.dataDescriptor(value, false, false, false));
+    }
+
+    public void definePropertyReadonlyNonConfigurable(String name, JSValue value) {
+        defineProperty(PropertyKey.fromString(name),
+                PropertyDescriptor.dataDescriptor(value, false, false, false));
+    }
+
+    /**
+     * Define a writable, non-enumerable, configurable data property.
+     */
+    public void definePropertyWritableConfigurable(JSSymbol jsSymbol, JSValue value) {
+        defineProperty(PropertyKey.fromSymbol(jsSymbol),
+                PropertyDescriptor.dataDescriptor(value, true, false, true));
+    }
+
+    /**
+     * Define a writable, non-enumerable, configurable data property.
+     */
+    public void definePropertyWritableConfigurable(String name, JSValue value) {
+        defineProperty(PropertyKey.fromString(name),
+                PropertyDescriptor.dataDescriptor(value, true, false, true));
     }
 
     /**

@@ -3431,15 +3431,9 @@ public final class BytecodeCompiler {
         }
 
         // QuickJS/spec attributes for template objects.
-        rawArray.defineProperty(
-                PropertyKey.fromString("length"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(segmentCount), false, false, false));
-        templateObject.defineProperty(
-                PropertyKey.fromString("length"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(segmentCount), false, false, false));
-        templateObject.defineProperty(
-                PropertyKey.fromString("raw"),
-                PropertyDescriptor.dataDescriptor(rawArray, false, false, false));
+        rawArray.definePropertyReadonlyNonConfigurable("length", new JSNumber(segmentCount));
+        templateObject.definePropertyReadonlyNonConfigurable("length", new JSNumber(segmentCount));
+        templateObject.definePropertyReadonlyNonConfigurable("raw", rawArray);
 
         rawArray.freeze();
         templateObject.freeze();

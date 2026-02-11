@@ -38,34 +38,6 @@ import java.util.stream.Stream;
  * - URI handling functions (encodeURI, decodeURI, encodeURIComponent, decodeURIComponent)
  */
 public final class GlobalObject {
-    private static void addBuiltinMethod(JSObject object, String name, JSNativeFunction function) {
-        object.defineProperty(
-                PropertyKey.fromString(name),
-                PropertyDescriptor.dataDescriptor(function, true, false, true));
-    }
-
-    private static void addGlobalBinding(JSObject global, String name, JSValue value) {
-        global.defineProperty(PropertyKey.fromString(name),
-                PropertyDescriptor.dataDescriptor(value, true, false, true));
-    }
-
-    private static void addGetter(JSObject object, String name, JSNativeFunction.NativeCallback callback) {
-        object.defineProperty(PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get " + name, 0, callback), null, false, true));
-    }
-
-    private static void addGetter(JSObject object, JSSymbol symbol, JSNativeFunction.NativeCallback callback) {
-        object.defineProperty(PropertyKey.fromSymbol(symbol),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get [" + symbol + "]", 0, callback), null, false, true));
-    }
-
-    private static void addLegacyRegExpAccessor(JSNativeFunction regexpConstructor, String name, String alias, boolean hasSetter) {
-        defineSingleLegacyAccessor(regexpConstructor, name, hasSetter);
-        if (alias != null) {
-            defineSingleLegacyAccessor(regexpConstructor, alias, hasSetter);
-        }
-    }
-
     /**
      * console.error(...args)
      * Print error to standard error.
@@ -141,24 +113,6 @@ public final class GlobalObject {
         } catch (Exception e) {
             return context.throwURIError("URI malformed");
         }
-    }
-
-    private static void defineSingleLegacyAccessor(JSNativeFunction regexpConstructor, String name, boolean hasSetter) {
-        JSNativeFunction getter = new JSNativeFunction("get " + name, 0, (ctx, thisArg, args) -> {
-            if (thisArg != regexpConstructor) {
-                return ctx.throwTypeError("Generic static accessor property access is not supported");
-            }
-            return new JSString("");
-        }, false);
-        JSNativeFunction setter = hasSetter ? new JSNativeFunction("set " + name, 1, (ctx, thisArg, args) -> {
-            if (thisArg != regexpConstructor) {
-                return ctx.throwTypeError("Generic static accessor property access is not supported");
-            }
-            return JSUndefined.INSTANCE;
-        }, false) : null;
-        regexpConstructor.defineProperty(
-                PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
     }
 
     /**
@@ -320,37 +274,33 @@ public final class GlobalObject {
      */
     public static void initialize(JSContext context, JSObject global) {
         // Global value properties (non-writable, non-enumerable, non-configurable)
-        global.defineProperty(PropertyKey.fromString("undefined"),
-                PropertyDescriptor.dataDescriptor(JSUndefined.INSTANCE, false, false, false));
-        global.defineProperty(PropertyKey.fromString("NaN"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(Double.NaN), false, false, false));
-        global.defineProperty(PropertyKey.fromString("Infinity"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(Double.POSITIVE_INFINITY), false, false, false));
+        global.definePropertyReadonlyNonConfigurable("undefined", JSUndefined.INSTANCE);
+        global.definePropertyReadonlyNonConfigurable("NaN", new JSNumber(Double.NaN));
+        global.definePropertyReadonlyNonConfigurable("Infinity", new JSNumber(Double.POSITIVE_INFINITY));
 
         // Global function properties
-        addGlobalBinding(global, "parseInt", new JSNativeFunction("parseInt", 2, GlobalObject::parseInt, false));
-        addGlobalBinding(global, "parseFloat", new JSNativeFunction("parseFloat", 1, GlobalObject::parseFloat, false));
-        addGlobalBinding(global, "isNaN", new JSNativeFunction("isNaN", 1, GlobalObject::isNaN, false));
-        addGlobalBinding(global, "isFinite", new JSNativeFunction("isFinite", 1, GlobalObject::isFinite, false));
-        addGlobalBinding(global, "eval", new JSNativeFunction("eval", 1, GlobalObject::eval, false));
+        global.definePropertyWritableConfigurable("parseInt", new JSNativeFunction("parseInt", 2, GlobalObject::parseInt, false));
+        global.definePropertyWritableConfigurable("parseFloat", new JSNativeFunction("parseFloat", 1, GlobalObject::parseFloat, false));
+        global.definePropertyWritableConfigurable("isNaN", new JSNativeFunction("isNaN", 1, GlobalObject::isNaN, false));
+        global.definePropertyWritableConfigurable("isFinite", new JSNativeFunction("isFinite", 1, GlobalObject::isFinite, false));
+        global.definePropertyWritableConfigurable("eval", new JSNativeFunction("eval", 1, GlobalObject::eval, false));
 
         // URI handling functions
-        addGlobalBinding(global, "encodeURI", new JSNativeFunction("encodeURI", 1, GlobalObject::encodeURI, false));
-        addGlobalBinding(global, "decodeURI", new JSNativeFunction("decodeURI", 1, GlobalObject::decodeURI, false));
-        addGlobalBinding(global, "encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, GlobalObject::encodeURIComponent, false));
-        addGlobalBinding(global, "decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, GlobalObject::decodeURIComponent, false));
-        addGlobalBinding(global, "escape", new JSNativeFunction("escape", 1, GlobalObject::escape, false));
-        addGlobalBinding(global, "unescape", new JSNativeFunction("unescape", 1, GlobalObject::unescape, false));
+        global.definePropertyWritableConfigurable("encodeURI", new JSNativeFunction("encodeURI", 1, GlobalObject::encodeURI, false));
+        global.definePropertyWritableConfigurable("decodeURI", new JSNativeFunction("decodeURI", 1, GlobalObject::decodeURI, false));
+        global.definePropertyWritableConfigurable("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, GlobalObject::encodeURIComponent, false));
+        global.definePropertyWritableConfigurable("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, GlobalObject::decodeURIComponent, false));
+        global.definePropertyWritableConfigurable("escape", new JSNativeFunction("escape", 1, GlobalObject::escape, false));
+        global.definePropertyWritableConfigurable("unescape", new JSNativeFunction("unescape", 1, GlobalObject::unescape, false));
 
         // Console object for debugging
         initializeConsoleObject(context, global);
 
         // Global this reference
-        addGlobalBinding(global, "globalThis", global);
+        global.definePropertyWritableConfigurable("globalThis", global);
 
         // Object.prototype.toString.call(globalThis) -> [object global]
-        global.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                PropertyDescriptor.dataDescriptor(new JSString("global"), false, false, true));
+        global.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("global"));
 
         // Built-in constructors and their prototypes
         initializeObjectConstructor(context, global);
@@ -407,11 +357,11 @@ public final class GlobalObject {
         arrayBufferPrototype.set("transferToFixedLength", new JSNativeFunction("transferToFixedLength", 0, ArrayBufferPrototype::transferToFixedLength));
 
         // Define getter properties
-        addGetter(arrayBufferPrototype, "byteLength", ArrayBufferPrototype::getByteLength);
-        addGetter(arrayBufferPrototype, "detached", ArrayBufferPrototype::getDetached);
-        addGetter(arrayBufferPrototype, "maxByteLength", ArrayBufferPrototype::getMaxByteLength);
-        addGetter(arrayBufferPrototype, "resizable", ArrayBufferPrototype::getResizable);
-        addGetter(arrayBufferPrototype, JSSymbol.TO_STRING_TAG, ArrayBufferPrototype::getToStringTag);
+        arrayBufferPrototype.defineGetterConfigurable("byteLength", ArrayBufferPrototype::getByteLength);
+        arrayBufferPrototype.defineGetterConfigurable("detached", ArrayBufferPrototype::getDetached);
+        arrayBufferPrototype.defineGetterConfigurable("maxByteLength", ArrayBufferPrototype::getMaxByteLength);
+        arrayBufferPrototype.defineGetterConfigurable("resizable", ArrayBufferPrototype::getResizable);
+        arrayBufferPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, ArrayBufferPrototype::getToStringTag);
 
         // Create ArrayBuffer constructor as a function
         JSNativeFunction arrayBufferConstructor = new JSNativeFunction("ArrayBuffer", 1, ArrayBufferConstructor::call);
@@ -423,9 +373,9 @@ public final class GlobalObject {
         arrayBufferConstructor.set("isView", new JSNativeFunction("isView", 1, ArrayBufferConstructor::isView));
 
         // Symbol.species getter
-        addGetter(arrayBufferConstructor, JSSymbol.SPECIES, ArrayBufferConstructor::getSpecies);
+        arrayBufferConstructor.defineGetterConfigurable(JSSymbol.SPECIES, ArrayBufferConstructor::getSpecies);
 
-        addGlobalBinding(global, "ArrayBuffer", arrayBufferConstructor);
+        global.definePropertyWritableConfigurable("ArrayBuffer", arrayBufferConstructor);
     }
 
     /**
@@ -475,12 +425,11 @@ public final class GlobalObject {
         arrayPrototype.set("with", new JSNativeFunction("with", 2, ArrayPrototype::with));
 
         // Array.prototype.length is a data property with value 0 (not writable, not enumerable, not configurable)
-        arrayPrototype.defineProperty(PropertyKey.fromString("length"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(0), false, false, false));
+        arrayPrototype.definePropertyReadonlyNonConfigurable("length", new JSNumber(0));
 
         // Array.prototype[Symbol.*]
         arrayPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction);
-        addGetter(arrayPrototype, JSSymbol.UNSCOPABLES, ArrayPrototype::getSymbolUnscopables);
+        arrayPrototype.defineGetterConfigurable(JSSymbol.UNSCOPABLES, ArrayPrototype::getSymbolUnscopables);
 
         // Create Array constructor as a function
         JSNativeFunction arrayConstructor = new JSNativeFunction("Array", 1, ArrayConstructor::call);
@@ -495,9 +444,9 @@ public final class GlobalObject {
         arrayConstructor.set("of", new JSNativeFunction("of", 0, ArrayConstructor::of));
 
         // Symbol.species getter
-        addGetter(arrayConstructor, JSSymbol.SPECIES, ArrayConstructor::getSpecies);
+        arrayConstructor.defineGetterConfigurable(JSSymbol.SPECIES, ArrayConstructor::getSpecies);
 
-        addGlobalBinding(global, "Array", arrayConstructor);
+        global.definePropertyWritableConfigurable("Array", arrayConstructor);
     }
 
     /**
@@ -513,8 +462,8 @@ public final class GlobalObject {
         asyncDisposableStackPrototype.set("use", new JSNativeFunction("use", 1, AsyncDisposableStackPrototype::use));
         asyncDisposableStackPrototype.set(PropertyKey.fromSymbol(JSSymbol.ASYNC_DISPOSE), disposeAsyncFunction);
 
-        addGetter(asyncDisposableStackPrototype, "disposed", AsyncDisposableStackPrototype::getDisposed);
-        addGetter(asyncDisposableStackPrototype, JSSymbol.TO_STRING_TAG, (childContext, thisObj, args) -> {
+        asyncDisposableStackPrototype.defineGetterConfigurable("disposed", AsyncDisposableStackPrototype::getDisposed);
+        asyncDisposableStackPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, (childContext, thisObj, args) -> {
             if (!(thisObj instanceof JSAsyncDisposableStack)) {
                 return childContext.throwTypeError("get AsyncDisposableStack.prototype[Symbol.toStringTag] called on non-AsyncDisposableStack");
             }
@@ -526,7 +475,7 @@ public final class GlobalObject {
         asyncDisposableStackConstructor.set("prototype", asyncDisposableStackPrototype);
         asyncDisposableStackPrototype.set("constructor", asyncDisposableStackConstructor);
 
-        addGlobalBinding(global, JSAsyncDisposableStack.NAME, asyncDisposableStackConstructor);
+        global.definePropertyWritableConfigurable(JSAsyncDisposableStack.NAME, asyncDisposableStackConstructor);
     }
 
     /**
@@ -570,7 +519,7 @@ public final class GlobalObject {
         atomics.set("wait", new JSNativeFunction("wait", 4, AtomicsObject::wait));
         atomics.set("waitAsync", new JSNativeFunction("waitAsync", 4, AtomicsObject::waitAsync));
 
-        addGlobalBinding(global, "Atomics", atomics);
+        global.definePropertyWritableConfigurable("Atomics", atomics);
     }
 
     /**
@@ -593,7 +542,7 @@ public final class GlobalObject {
         bigIntConstructor.set("asIntN", new JSNativeFunction("asIntN", 2, BigIntConstructor::asIntN));
         bigIntConstructor.set("asUintN", new JSNativeFunction("asUintN", 2, BigIntConstructor::asUintN));
 
-        addGlobalBinding(global, "BigInt", bigIntConstructor);
+        global.definePropertyWritableConfigurable("BigInt", bigIntConstructor);
     }
 
     /**
@@ -611,7 +560,7 @@ public final class GlobalObject {
         booleanConstructor.setConstructorType(JSConstructorType.BOOLEAN_OBJECT); // Mark as Boolean constructor
         booleanPrototype.set("constructor", booleanConstructor);
 
-        addGlobalBinding(global, "Boolean", booleanConstructor);
+        global.definePropertyWritableConfigurable("Boolean", booleanConstructor);
     }
 
     /**
@@ -624,7 +573,7 @@ public final class GlobalObject {
         console.set("warn", new JSNativeFunction("warn", 0, GlobalObject::consoleWarn));
         console.set("error", new JSNativeFunction("error", 0, GlobalObject::consoleError));
 
-        addGlobalBinding(global, "console", console);
+        global.definePropertyWritableConfigurable("console", console);
     }
 
     /**
@@ -635,9 +584,9 @@ public final class GlobalObject {
         JSObject dataViewPrototype = context.createJSObject();
 
         // Define getter properties
-        addGetter(dataViewPrototype, "buffer", DataViewPrototype::getBuffer);
-        addGetter(dataViewPrototype, "byteLength", DataViewPrototype::getByteLength);
-        addGetter(dataViewPrototype, "byteOffset", DataViewPrototype::getByteOffset);
+        dataViewPrototype.defineGetterConfigurable("buffer", DataViewPrototype::getBuffer);
+        dataViewPrototype.defineGetterConfigurable("byteLength", DataViewPrototype::getByteLength);
+        dataViewPrototype.defineGetterConfigurable("byteOffset", DataViewPrototype::getByteOffset);
 
         // Int8/Uint8 methods
         dataViewPrototype.set("getInt8", new JSNativeFunction("getInt8", 1, DataViewPrototype::getInt8));
@@ -667,7 +616,7 @@ public final class GlobalObject {
         dataViewConstructor.setConstructorType(JSConstructorType.DATA_VIEW);
         dataViewPrototype.set("constructor", dataViewConstructor);
 
-        addGlobalBinding(global, "DataView", dataViewConstructor);
+        global.definePropertyWritableConfigurable("DataView", dataViewConstructor);
     }
 
     /**
@@ -678,70 +627,64 @@ public final class GlobalObject {
         JSNativeFunction toUTCString = new JSNativeFunction("toUTCString", 0, DatePrototype::toUTCString);
         JSNativeFunction toPrimitive = new JSNativeFunction("[Symbol.toPrimitive]", 1, DatePrototype::symbolToPrimitive);
 
-        addBuiltinMethod(datePrototype, "valueOf", new JSNativeFunction("valueOf", 0, DatePrototype::valueOf));
-        addBuiltinMethod(datePrototype, "toString", new JSNativeFunction("toString", 0, DatePrototype::toStringMethod));
-        addBuiltinMethod(datePrototype, "toUTCString", toUTCString);
-        addBuiltinMethod(datePrototype, "toGMTString", toUTCString);
-        addBuiltinMethod(datePrototype, "toISOString", new JSNativeFunction("toISOString", 0, DatePrototype::toISOString));
-        addBuiltinMethod(datePrototype, "toDateString", new JSNativeFunction("toDateString", 0, DatePrototype::toDateString));
-        addBuiltinMethod(datePrototype, "toTimeString", new JSNativeFunction("toTimeString", 0, DatePrototype::toTimeString));
-        addBuiltinMethod(datePrototype, "toLocaleString", new JSNativeFunction("toLocaleString", 0, DatePrototype::toLocaleString));
-        addBuiltinMethod(datePrototype, "toLocaleDateString", new JSNativeFunction("toLocaleDateString", 0, DatePrototype::toLocaleDateString));
-        addBuiltinMethod(datePrototype, "toLocaleTimeString", new JSNativeFunction("toLocaleTimeString", 0, DatePrototype::toLocaleTimeString));
-        addBuiltinMethod(datePrototype, "getTimezoneOffset", new JSNativeFunction("getTimezoneOffset", 0, DatePrototype::getTimezoneOffset));
-        addBuiltinMethod(datePrototype, "getTime", new JSNativeFunction("getTime", 0, DatePrototype::getTime));
-        addBuiltinMethod(datePrototype, "getYear", new JSNativeFunction("getYear", 0, DatePrototype::getYear));
-        addBuiltinMethod(datePrototype, "getFullYear", new JSNativeFunction("getFullYear", 0, DatePrototype::getFullYear));
-        addBuiltinMethod(datePrototype, "getUTCFullYear", new JSNativeFunction("getUTCFullYear", 0, DatePrototype::getUTCFullYear));
-        addBuiltinMethod(datePrototype, "getMonth", new JSNativeFunction("getMonth", 0, DatePrototype::getMonth));
-        addBuiltinMethod(datePrototype, "getUTCMonth", new JSNativeFunction("getUTCMonth", 0, DatePrototype::getUTCMonth));
-        addBuiltinMethod(datePrototype, "getDate", new JSNativeFunction("getDate", 0, DatePrototype::getDate));
-        addBuiltinMethod(datePrototype, "getUTCDate", new JSNativeFunction("getUTCDate", 0, DatePrototype::getUTCDate));
-        addBuiltinMethod(datePrototype, "getHours", new JSNativeFunction("getHours", 0, DatePrototype::getHours));
-        addBuiltinMethod(datePrototype, "getUTCHours", new JSNativeFunction("getUTCHours", 0, DatePrototype::getUTCHours));
-        addBuiltinMethod(datePrototype, "getMinutes", new JSNativeFunction("getMinutes", 0, DatePrototype::getMinutes));
-        addBuiltinMethod(datePrototype, "getUTCMinutes", new JSNativeFunction("getUTCMinutes", 0, DatePrototype::getUTCMinutes));
-        addBuiltinMethod(datePrototype, "getSeconds", new JSNativeFunction("getSeconds", 0, DatePrototype::getSeconds));
-        addBuiltinMethod(datePrototype, "getUTCSeconds", new JSNativeFunction("getUTCSeconds", 0, DatePrototype::getUTCSeconds));
-        addBuiltinMethod(datePrototype, "getMilliseconds", new JSNativeFunction("getMilliseconds", 0, DatePrototype::getMilliseconds));
-        addBuiltinMethod(datePrototype, "getUTCMilliseconds", new JSNativeFunction("getUTCMilliseconds", 0, DatePrototype::getUTCMilliseconds));
-        addBuiltinMethod(datePrototype, "getDay", new JSNativeFunction("getDay", 0, DatePrototype::getDay));
-        addBuiltinMethod(datePrototype, "getUTCDay", new JSNativeFunction("getUTCDay", 0, DatePrototype::getUTCDay));
-        addBuiltinMethod(datePrototype, "setTime", new JSNativeFunction("setTime", 1, DatePrototype::setTime));
-        addBuiltinMethod(datePrototype, "setMilliseconds", new JSNativeFunction("setMilliseconds", 1, DatePrototype::setMilliseconds));
-        addBuiltinMethod(datePrototype, "setUTCMilliseconds", new JSNativeFunction("setUTCMilliseconds", 1, DatePrototype::setUTCMilliseconds));
-        addBuiltinMethod(datePrototype, "setSeconds", new JSNativeFunction("setSeconds", 2, DatePrototype::setSeconds));
-        addBuiltinMethod(datePrototype, "setUTCSeconds", new JSNativeFunction("setUTCSeconds", 2, DatePrototype::setUTCSeconds));
-        addBuiltinMethod(datePrototype, "setMinutes", new JSNativeFunction("setMinutes", 3, DatePrototype::setMinutes));
-        addBuiltinMethod(datePrototype, "setUTCMinutes", new JSNativeFunction("setUTCMinutes", 3, DatePrototype::setUTCMinutes));
-        addBuiltinMethod(datePrototype, "setHours", new JSNativeFunction("setHours", 4, DatePrototype::setHours));
-        addBuiltinMethod(datePrototype, "setUTCHours", new JSNativeFunction("setUTCHours", 4, DatePrototype::setUTCHours));
-        addBuiltinMethod(datePrototype, "setDate", new JSNativeFunction("setDate", 1, DatePrototype::setDate));
-        addBuiltinMethod(datePrototype, "setUTCDate", new JSNativeFunction("setUTCDate", 1, DatePrototype::setUTCDate));
-        addBuiltinMethod(datePrototype, "setMonth", new JSNativeFunction("setMonth", 2, DatePrototype::setMonth));
-        addBuiltinMethod(datePrototype, "setUTCMonth", new JSNativeFunction("setUTCMonth", 2, DatePrototype::setUTCMonth));
-        addBuiltinMethod(datePrototype, "setYear", new JSNativeFunction("setYear", 1, DatePrototype::setYear));
-        addBuiltinMethod(datePrototype, "setFullYear", new JSNativeFunction("setFullYear", 3, DatePrototype::setFullYear));
-        addBuiltinMethod(datePrototype, "setUTCFullYear", new JSNativeFunction("setUTCFullYear", 3, DatePrototype::setUTCFullYear));
-        addBuiltinMethod(datePrototype, "toJSON", new JSNativeFunction("toJSON", 1, DatePrototype::toJSON));
-        datePrototype.defineProperty(
-                PropertyKey.fromSymbol(JSSymbol.TO_PRIMITIVE),
-                PropertyDescriptor.dataDescriptor(toPrimitive, true, false, true));
+        datePrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, DatePrototype::valueOf));
+        datePrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, DatePrototype::toStringMethod));
+        datePrototype.definePropertyWritableConfigurable("toUTCString", toUTCString);
+        datePrototype.definePropertyWritableConfigurable("toGMTString", toUTCString);
+        datePrototype.definePropertyWritableConfigurable("toISOString", new JSNativeFunction("toISOString", 0, DatePrototype::toISOString));
+        datePrototype.definePropertyWritableConfigurable("toDateString", new JSNativeFunction("toDateString", 0, DatePrototype::toDateString));
+        datePrototype.definePropertyWritableConfigurable("toTimeString", new JSNativeFunction("toTimeString", 0, DatePrototype::toTimeString));
+        datePrototype.definePropertyWritableConfigurable("toLocaleString", new JSNativeFunction("toLocaleString", 0, DatePrototype::toLocaleString));
+        datePrototype.definePropertyWritableConfigurable("toLocaleDateString", new JSNativeFunction("toLocaleDateString", 0, DatePrototype::toLocaleDateString));
+        datePrototype.definePropertyWritableConfigurable("toLocaleTimeString", new JSNativeFunction("toLocaleTimeString", 0, DatePrototype::toLocaleTimeString));
+        datePrototype.definePropertyWritableConfigurable("getTimezoneOffset", new JSNativeFunction("getTimezoneOffset", 0, DatePrototype::getTimezoneOffset));
+        datePrototype.definePropertyWritableConfigurable("getTime", new JSNativeFunction("getTime", 0, DatePrototype::getTime));
+        datePrototype.definePropertyWritableConfigurable("getYear", new JSNativeFunction("getYear", 0, DatePrototype::getYear));
+        datePrototype.definePropertyWritableConfigurable("getFullYear", new JSNativeFunction("getFullYear", 0, DatePrototype::getFullYear));
+        datePrototype.definePropertyWritableConfigurable("getUTCFullYear", new JSNativeFunction("getUTCFullYear", 0, DatePrototype::getUTCFullYear));
+        datePrototype.definePropertyWritableConfigurable("getMonth", new JSNativeFunction("getMonth", 0, DatePrototype::getMonth));
+        datePrototype.definePropertyWritableConfigurable("getUTCMonth", new JSNativeFunction("getUTCMonth", 0, DatePrototype::getUTCMonth));
+        datePrototype.definePropertyWritableConfigurable("getDate", new JSNativeFunction("getDate", 0, DatePrototype::getDate));
+        datePrototype.definePropertyWritableConfigurable("getUTCDate", new JSNativeFunction("getUTCDate", 0, DatePrototype::getUTCDate));
+        datePrototype.definePropertyWritableConfigurable("getHours", new JSNativeFunction("getHours", 0, DatePrototype::getHours));
+        datePrototype.definePropertyWritableConfigurable("getUTCHours", new JSNativeFunction("getUTCHours", 0, DatePrototype::getUTCHours));
+        datePrototype.definePropertyWritableConfigurable("getMinutes", new JSNativeFunction("getMinutes", 0, DatePrototype::getMinutes));
+        datePrototype.definePropertyWritableConfigurable("getUTCMinutes", new JSNativeFunction("getUTCMinutes", 0, DatePrototype::getUTCMinutes));
+        datePrototype.definePropertyWritableConfigurable("getSeconds", new JSNativeFunction("getSeconds", 0, DatePrototype::getSeconds));
+        datePrototype.definePropertyWritableConfigurable("getUTCSeconds", new JSNativeFunction("getUTCSeconds", 0, DatePrototype::getUTCSeconds));
+        datePrototype.definePropertyWritableConfigurable("getMilliseconds", new JSNativeFunction("getMilliseconds", 0, DatePrototype::getMilliseconds));
+        datePrototype.definePropertyWritableConfigurable("getUTCMilliseconds", new JSNativeFunction("getUTCMilliseconds", 0, DatePrototype::getUTCMilliseconds));
+        datePrototype.definePropertyWritableConfigurable("getDay", new JSNativeFunction("getDay", 0, DatePrototype::getDay));
+        datePrototype.definePropertyWritableConfigurable("getUTCDay", new JSNativeFunction("getUTCDay", 0, DatePrototype::getUTCDay));
+        datePrototype.definePropertyWritableConfigurable("setTime", new JSNativeFunction("setTime", 1, DatePrototype::setTime));
+        datePrototype.definePropertyWritableConfigurable("setMilliseconds", new JSNativeFunction("setMilliseconds", 1, DatePrototype::setMilliseconds));
+        datePrototype.definePropertyWritableConfigurable("setUTCMilliseconds", new JSNativeFunction("setUTCMilliseconds", 1, DatePrototype::setUTCMilliseconds));
+        datePrototype.definePropertyWritableConfigurable("setSeconds", new JSNativeFunction("setSeconds", 2, DatePrototype::setSeconds));
+        datePrototype.definePropertyWritableConfigurable("setUTCSeconds", new JSNativeFunction("setUTCSeconds", 2, DatePrototype::setUTCSeconds));
+        datePrototype.definePropertyWritableConfigurable("setMinutes", new JSNativeFunction("setMinutes", 3, DatePrototype::setMinutes));
+        datePrototype.definePropertyWritableConfigurable("setUTCMinutes", new JSNativeFunction("setUTCMinutes", 3, DatePrototype::setUTCMinutes));
+        datePrototype.definePropertyWritableConfigurable("setHours", new JSNativeFunction("setHours", 4, DatePrototype::setHours));
+        datePrototype.definePropertyWritableConfigurable("setUTCHours", new JSNativeFunction("setUTCHours", 4, DatePrototype::setUTCHours));
+        datePrototype.definePropertyWritableConfigurable("setDate", new JSNativeFunction("setDate", 1, DatePrototype::setDate));
+        datePrototype.definePropertyWritableConfigurable("setUTCDate", new JSNativeFunction("setUTCDate", 1, DatePrototype::setUTCDate));
+        datePrototype.definePropertyWritableConfigurable("setMonth", new JSNativeFunction("setMonth", 2, DatePrototype::setMonth));
+        datePrototype.definePropertyWritableConfigurable("setUTCMonth", new JSNativeFunction("setUTCMonth", 2, DatePrototype::setUTCMonth));
+        datePrototype.definePropertyWritableConfigurable("setYear", new JSNativeFunction("setYear", 1, DatePrototype::setYear));
+        datePrototype.definePropertyWritableConfigurable("setFullYear", new JSNativeFunction("setFullYear", 3, DatePrototype::setFullYear));
+        datePrototype.definePropertyWritableConfigurable("setUTCFullYear", new JSNativeFunction("setUTCFullYear", 3, DatePrototype::setUTCFullYear));
+        datePrototype.definePropertyWritableConfigurable("toJSON", new JSNativeFunction("toJSON", 1, DatePrototype::toJSON));
+        datePrototype.definePropertyWritableConfigurable(JSSymbol.TO_PRIMITIVE, toPrimitive);
 
         JSNativeFunction dateConstructor = new JSNativeFunction("Date", 7, DateConstructor::call);
-        dateConstructor.defineProperty(
-                PropertyKey.fromString("prototype"),
-                PropertyDescriptor.dataDescriptor(datePrototype, false, false, false));
+        dateConstructor.definePropertyReadonlyNonConfigurable("prototype", datePrototype);
         dateConstructor.setConstructorType(JSConstructorType.DATE);
-        datePrototype.defineProperty(
-                PropertyKey.fromString("constructor"),
-                PropertyDescriptor.dataDescriptor(dateConstructor, true, false, true));
+        datePrototype.definePropertyWritableConfigurable("constructor", dateConstructor);
 
-        addBuiltinMethod(dateConstructor, "now", new JSNativeFunction("now", 0, DateConstructor::now));
-        addBuiltinMethod(dateConstructor, "parse", new JSNativeFunction("parse", 1, DateConstructor::parse));
-        addBuiltinMethod(dateConstructor, "UTC", new JSNativeFunction("UTC", 7, DateConstructor::UTC));
+        dateConstructor.definePropertyWritableConfigurable("now", new JSNativeFunction("now", 0, DateConstructor::now));
+        dateConstructor.definePropertyWritableConfigurable("parse", new JSNativeFunction("parse", 1, DateConstructor::parse));
+        dateConstructor.definePropertyWritableConfigurable("UTC", new JSNativeFunction("UTC", 7, DateConstructor::UTC));
 
-        addGlobalBinding(global, "Date", dateConstructor);
+        global.definePropertyWritableConfigurable("Date", dateConstructor);
     }
 
     /**
@@ -757,8 +700,8 @@ public final class GlobalObject {
         disposableStackPrototype.set("use", new JSNativeFunction("use", 1, DisposableStackPrototype::use));
         disposableStackPrototype.set(PropertyKey.fromSymbol(JSSymbol.DISPOSE), disposeFunction);
 
-        addGetter(disposableStackPrototype, "disposed", DisposableStackPrototype::getDisposed);
-        addGetter(disposableStackPrototype, JSSymbol.TO_STRING_TAG, (childContext, thisObj, args) -> {
+        disposableStackPrototype.defineGetterConfigurable("disposed", DisposableStackPrototype::getDisposed);
+        disposableStackPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, (childContext, thisObj, args) -> {
             if (!(thisObj instanceof JSDisposableStack)) {
                 return childContext.throwTypeError("get DisposableStack.prototype[Symbol.toStringTag] called on non-DisposableStack");
             }
@@ -770,14 +713,14 @@ public final class GlobalObject {
         disposableStackConstructor.set("prototype", disposableStackPrototype);
         disposableStackPrototype.set("constructor", disposableStackConstructor);
 
-        addGlobalBinding(global, JSDisposableStack.NAME, disposableStackConstructor);
+        global.definePropertyWritableConfigurable(JSDisposableStack.NAME, disposableStackConstructor);
     }
 
     /**
      * Initialize Error constructors.
      */
     private static void initializeErrorConstructors(JSContext context, JSObject global) {
-        Stream.of(JSErrorType.values()).forEach(type -> addGlobalBinding(global, type.name(), type.create(context)));
+        Stream.of(JSErrorType.values()).forEach(type -> global.definePropertyWritableConfigurable(type.name(), type.create(context)));
     }
 
     /**
@@ -796,7 +739,7 @@ public final class GlobalObject {
         finalizationRegistryConstructor.setConstructorType(JSConstructorType.FINALIZATION_REGISTRY);
         finalizationRegistryPrototype.set("constructor", finalizationRegistryConstructor);
 
-        addGlobalBinding(global, "FinalizationRegistry", finalizationRegistryConstructor);
+        global.definePropertyWritableConfigurable("FinalizationRegistry", finalizationRegistryConstructor);
     }
 
     /**
@@ -826,23 +769,19 @@ public final class GlobalObject {
                         childContext.throwTypeError(
                                 "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"));
 
-        functionPrototype.defineProperty(PropertyKey.fromString("arguments"),
-                PropertyDescriptor.accessorDescriptor(throwTypeError, throwTypeError, false, true));
-        functionPrototype.defineProperty(PropertyKey.fromString("caller"),
-                PropertyDescriptor.accessorDescriptor(throwTypeError, throwTypeError, false, true));
+        functionPrototype.defineGetterSetterConfigurable("arguments", throwTypeError, throwTypeError);
+        functionPrototype.defineGetterSetterConfigurable("caller", throwTypeError, throwTypeError);
 
         // Add 'length' and 'name' data properties
-        functionPrototype.defineProperty(PropertyKey.fromString("length"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(0), false, false, true));
-        functionPrototype.defineProperty(PropertyKey.fromString("name"),
-                PropertyDescriptor.dataDescriptor(new JSString(""), false, false, true));
+        functionPrototype.definePropertyConfigurable("length", new JSNumber(0));
+        functionPrototype.definePropertyConfigurable("name", new JSString(""));
 
         // Function constructor should be a function, not a plain object
         JSNativeFunction functionConstructor = new JSNativeFunction(JSFunction.NAME, 1, FunctionConstructor::call);
         functionConstructor.set("prototype", functionPrototype);
         functionPrototype.set("constructor", functionConstructor);
 
-        addGlobalBinding(global, JSFunction.NAME, functionConstructor);
+        global.definePropertyWritableConfigurable(JSFunction.NAME, functionConstructor);
     }
 
     /**
@@ -977,10 +916,10 @@ public final class GlobalObject {
 
         JSObject localePrototype = context.createJSObject();
         localePrototype.set("toString", new JSNativeFunction("toString", 0, IntlObject::localeToString));
-        addGetter(localePrototype, "baseName", IntlObject::localeGetBaseName);
-        addGetter(localePrototype, "language", IntlObject::localeGetLanguage);
-        addGetter(localePrototype, "script", IntlObject::localeGetScript);
-        addGetter(localePrototype, "region", IntlObject::localeGetRegion);
+        localePrototype.defineGetterConfigurable("baseName", IntlObject::localeGetBaseName);
+        localePrototype.defineGetterConfigurable("language", IntlObject::localeGetLanguage);
+        localePrototype.defineGetterConfigurable("script", IntlObject::localeGetScript);
+        localePrototype.defineGetterConfigurable("region", IntlObject::localeGetRegion);
         JSNativeFunction localeConstructor = new JSNativeFunction(
                 "Locale",
                 1,
@@ -991,7 +930,7 @@ public final class GlobalObject {
         localePrototype.set("constructor", localeConstructor);
         intlObject.set("Locale", localeConstructor);
 
-        addGlobalBinding(global, "Intl", intlObject);
+        global.definePropertyWritableConfigurable("Intl", intlObject);
     }
 
     /**
@@ -1032,7 +971,7 @@ public final class GlobalObject {
         iteratorPrototype.set("constructor", iteratorConstructor);
 
         // Add Iterator to global object
-        addGlobalBinding(global, "Iterator", iteratorConstructor);
+        global.definePropertyWritableConfigurable("Iterator", iteratorConstructor);
     }
 
     /**
@@ -1043,7 +982,7 @@ public final class GlobalObject {
         json.set("parse", new JSNativeFunction("parse", 1, JSONObject::parse));
         json.set("stringify", new JSNativeFunction("stringify", 1, JSONObject::stringify));
 
-        addGlobalBinding(global, "JSON", json);
+        global.definePropertyWritableConfigurable("JSON", json);
     }
 
     /**
@@ -1067,7 +1006,7 @@ public final class GlobalObject {
         mapPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), entriesFunction);
 
         // Map.prototype.size getter
-        addGetter(mapPrototype, "size", MapPrototype::getSize);
+        mapPrototype.defineGetterConfigurable("size", MapPrototype::getSize);
 
         // Create Map constructor as JSNativeFunction
         JSNativeFunction mapConstructor = new JSNativeFunction("Map", 0, MapConstructor::call, true, true);
@@ -1078,7 +1017,7 @@ public final class GlobalObject {
         // Map static methods
         mapConstructor.set("groupBy", new JSNativeFunction("groupBy", 2, MapConstructor::groupBy));
 
-        addGlobalBinding(global, "Map", mapConstructor);
+        global.definePropertyWritableConfigurable("Map", mapConstructor);
     }
 
     /**
@@ -1134,7 +1073,7 @@ public final class GlobalObject {
         math.set("tanh", new JSNativeFunction("tanh", 1, MathObject::tanh));
         math.set("trunc", new JSNativeFunction("trunc", 1, MathObject::trunc));
 
-        addGlobalBinding(global, "Math", math);
+        global.definePropertyWritableConfigurable("Math", math);
     }
 
     /**
@@ -1143,84 +1082,40 @@ public final class GlobalObject {
     private static void initializeNumberConstructor(JSContext context, JSObject global) {
         // Create Number.prototype
         JSObject numberPrototype = context.createJSObject();
-        numberPrototype.defineProperty(
-                PropertyKey.fromString("toFixed"),
-                PropertyDescriptor.dataDescriptor(new JSNativeFunction("toFixed", 1, NumberPrototype::toFixed), true, false, true));
-        numberPrototype.defineProperty(
-                PropertyKey.fromString("toExponential"),
-                PropertyDescriptor.dataDescriptor(new JSNativeFunction("toExponential", 1, NumberPrototype::toExponential), true, false, true));
-        numberPrototype.defineProperty(
-                PropertyKey.fromString("toPrecision"),
-                PropertyDescriptor.dataDescriptor(new JSNativeFunction("toPrecision", 1, NumberPrototype::toPrecision), true, false, true));
-        numberPrototype.defineProperty(
-                PropertyKey.fromString("toString"),
-                PropertyDescriptor.dataDescriptor(new JSNativeFunction("toString", 1, NumberPrototype::toString), true, false, true));
-        numberPrototype.defineProperty(
-                PropertyKey.fromString("toLocaleString"),
-                PropertyDescriptor.dataDescriptor(new JSNativeFunction("toLocaleString", 0, NumberPrototype::toLocaleString), true, false, true));
-        numberPrototype.defineProperty(
-                PropertyKey.fromString("valueOf"),
-                PropertyDescriptor.dataDescriptor(new JSNativeFunction("valueOf", 0, NumberPrototype::valueOf), true, false, true));
+        numberPrototype.definePropertyWritableConfigurable("toFixed", new JSNativeFunction("toFixed", 1, NumberPrototype::toFixed));
+        numberPrototype.definePropertyWritableConfigurable("toExponential", new JSNativeFunction("toExponential", 1, NumberPrototype::toExponential));
+        numberPrototype.definePropertyWritableConfigurable("toPrecision", new JSNativeFunction("toPrecision", 1, NumberPrototype::toPrecision));
+        numberPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 1, NumberPrototype::toString));
+        numberPrototype.definePropertyWritableConfigurable("toLocaleString", new JSNativeFunction("toLocaleString", 0, NumberPrototype::toLocaleString));
+        numberPrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, NumberPrototype::valueOf));
 
         // Create Number constructor
         JSNativeFunction numberConstructor = new JSNativeFunction("Number", 1, NumberConstructor::call);
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("prototype"),
-                PropertyDescriptor.dataDescriptor(numberPrototype, false, false, false));
+        numberConstructor.definePropertyReadonlyNonConfigurable("prototype", numberPrototype);
         numberConstructor.setConstructorType(JSConstructorType.NUMBER_OBJECT); // Mark as Number constructor
-        numberPrototype.defineProperty(
-                PropertyKey.fromString("constructor"),
-                PropertyDescriptor.dataDescriptor(numberConstructor, true, false, true));
+        numberPrototype.definePropertyWritableConfigurable("constructor", numberConstructor);
 
         // Number static methods
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("isNaN"),
-                PropertyDescriptor.dataDescriptor(new JSNativeFunction("isNaN", 1, NumberPrototype::isNaN), true, false, true));
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("isFinite"),
-                PropertyDescriptor.dataDescriptor(new JSNativeFunction("isFinite", 1, NumberPrototype::isFinite), true, false, true));
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("isInteger"),
-                PropertyDescriptor.dataDescriptor(new JSNativeFunction("isInteger", 1, NumberPrototype::isInteger), true, false, true));
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("isSafeInteger"),
-                PropertyDescriptor.dataDescriptor(new JSNativeFunction("isSafeInteger", 1, NumberPrototype::isSafeInteger), true, false, true));
+        numberConstructor.definePropertyWritableConfigurable("isNaN", new JSNativeFunction("isNaN", 1, NumberPrototype::isNaN));
+        numberConstructor.definePropertyWritableConfigurable("isFinite", new JSNativeFunction("isFinite", 1, NumberPrototype::isFinite));
+        numberConstructor.definePropertyWritableConfigurable("isInteger", new JSNativeFunction("isInteger", 1, NumberPrototype::isInteger));
+        numberConstructor.definePropertyWritableConfigurable("isSafeInteger", new JSNativeFunction("isSafeInteger", 1, NumberPrototype::isSafeInteger));
 
         // QuickJS compatibility: Number.parseInt/parseFloat are aliases of global parseInt/parseFloat.
         JSValue globalParseInt = global.get("parseInt");
         JSValue globalParseFloat = global.get("parseFloat");
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("parseInt"),
-                PropertyDescriptor.dataDescriptor(globalParseInt, true, false, true));
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("parseFloat"),
-                PropertyDescriptor.dataDescriptor(globalParseFloat, true, false, true));
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("EPSILON"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(Math.ulp(1.0)), false, false, false));
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("MAX_SAFE_INTEGER"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(9007199254740991d), false, false, false));
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("MAX_VALUE"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(Double.MAX_VALUE), false, false, false));
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("MIN_SAFE_INTEGER"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(-9007199254740991d), false, false, false));
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("MIN_VALUE"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(Double.MIN_VALUE), false, false, false));
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("NaN"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(Double.NaN), false, false, false));
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("NEGATIVE_INFINITY"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(Double.NEGATIVE_INFINITY), false, false, false));
-        numberConstructor.defineProperty(
-                PropertyKey.fromString("POSITIVE_INFINITY"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(Double.POSITIVE_INFINITY), false, false, false));
+        numberConstructor.definePropertyWritableConfigurable("parseInt", globalParseInt);
+        numberConstructor.definePropertyWritableConfigurable("parseFloat", globalParseFloat);
+        numberConstructor.definePropertyReadonlyNonConfigurable("EPSILON", new JSNumber(Math.ulp(1.0)));
+        numberConstructor.definePropertyReadonlyNonConfigurable("MAX_SAFE_INTEGER", new JSNumber(9007199254740991d));
+        numberConstructor.definePropertyReadonlyNonConfigurable("MAX_VALUE", new JSNumber(Double.MAX_VALUE));
+        numberConstructor.definePropertyReadonlyNonConfigurable("MIN_SAFE_INTEGER", new JSNumber(-9007199254740991d));
+        numberConstructor.definePropertyReadonlyNonConfigurable("MIN_VALUE", new JSNumber(Double.MIN_VALUE));
+        numberConstructor.definePropertyReadonlyNonConfigurable("NaN", new JSNumber(Double.NaN));
+        numberConstructor.definePropertyReadonlyNonConfigurable("NEGATIVE_INFINITY", new JSNumber(Double.NEGATIVE_INFINITY));
+        numberConstructor.definePropertyReadonlyNonConfigurable("POSITIVE_INFINITY", new JSNumber(Double.POSITIVE_INFINITY));
 
-        addGlobalBinding(global, "Number", numberConstructor);
+        global.definePropertyWritableConfigurable("Number", numberConstructor);
     }
 
     // Global function implementations
@@ -1281,7 +1176,7 @@ public final class GlobalObject {
         objectConstructor.set("hasOwn", new JSNativeFunction("hasOwn", 2, ObjectConstructor::hasOwn));
         objectConstructor.set("groupBy", new JSNativeFunction("groupBy", 2, ObjectConstructor::groupBy));
 
-        addGlobalBinding(global, "Object", objectConstructor);
+        global.definePropertyWritableConfigurable("Object", objectConstructor);
     }
 
     /**
@@ -1309,7 +1204,7 @@ public final class GlobalObject {
         promiseConstructor.set("any", new JSNativeFunction("any", 1, PromiseConstructor::any));
         promiseConstructor.set("withResolvers", new JSNativeFunction("withResolvers", 0, PromiseConstructor::withResolvers));
 
-        addGlobalBinding(global, "Promise", promiseConstructor);
+        global.definePropertyWritableConfigurable("Promise", promiseConstructor);
     }
 
     /**
@@ -1325,7 +1220,7 @@ public final class GlobalObject {
         // Add static methods
         proxyConstructor.set("revocable", new JSNativeFunction("revocable", 2, ProxyConstructor::revocable));
 
-        addGlobalBinding(global, "Proxy", proxyConstructor);
+        global.definePropertyWritableConfigurable("Proxy", proxyConstructor);
     }
 
     /**
@@ -1345,7 +1240,7 @@ public final class GlobalObject {
         reflect.set("isExtensible", new JSNativeFunction("isExtensible", 1, ReflectObject::isExtensible));
         reflect.set("preventExtensions", new JSNativeFunction("preventExtensions", 1, ReflectObject::preventExtensions));
 
-        addGlobalBinding(global, "Reflect", reflect);
+        global.definePropertyWritableConfigurable("Reflect", reflect);
     }
 
     /**
@@ -1356,26 +1251,22 @@ public final class GlobalObject {
         JSObject regexpPrototype = context.createJSObject();
         regexpPrototype.set("test", new JSNativeFunction("test", 1, RegExpPrototype::test));
         regexpPrototype.set("exec", new JSNativeFunction("exec", 1, RegExpPrototype::exec));
-        regexpPrototype.defineProperty(
-                PropertyKey.fromString("compile"),
-                PropertyDescriptor.dataDescriptor(new JSNativeFunction("compile", 2, RegExpPrototype::compile), true, false, true));
+        regexpPrototype.definePropertyWritableConfigurable("compile", new JSNativeFunction("compile", 2, RegExpPrototype::compile));
         regexpPrototype.set("toString", new JSNativeFunction("toString", 0, RegExpPrototype::toStringMethod));
         regexpPrototype.set(PropertyKey.fromSymbol(JSSymbol.SPLIT), new JSNativeFunction("[Symbol.split]", 2, RegExpPrototype::symbolSplit));
 
         // Accessor properties
-        addGetter(regexpPrototype, "flags", RegExpPrototype::getFlags);
-        addGetter(regexpPrototype, "source", RegExpPrototype::getSource);
-        addGetter(regexpPrototype, "global", RegExpPrototype::getGlobal);
-        addGetter(regexpPrototype, "ignoreCase", RegExpPrototype::getIgnoreCase);
-        addGetter(regexpPrototype, "multiline", RegExpPrototype::getMultiline);
-        addGetter(regexpPrototype, "dotAll", RegExpPrototype::getDotAll);
-        addGetter(regexpPrototype, "unicode", RegExpPrototype::getUnicode);
-        addGetter(regexpPrototype, "sticky", RegExpPrototype::getSticky);
-        addGetter(regexpPrototype, "hasIndices", RegExpPrototype::getHasIndices);
-        addGetter(regexpPrototype, "unicodeSets", RegExpPrototype::getUnicodeSets);
-        regexpPrototype.defineProperty(
-                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                PropertyDescriptor.dataDescriptor(new JSString("RegExp"), false, false, true));
+        regexpPrototype.defineGetterConfigurable("flags", RegExpPrototype::getFlags);
+        regexpPrototype.defineGetterConfigurable("source", RegExpPrototype::getSource);
+        regexpPrototype.defineGetterConfigurable("global", RegExpPrototype::getGlobal);
+        regexpPrototype.defineGetterConfigurable("ignoreCase", RegExpPrototype::getIgnoreCase);
+        regexpPrototype.defineGetterConfigurable("multiline", RegExpPrototype::getMultiline);
+        regexpPrototype.defineGetterConfigurable("dotAll", RegExpPrototype::getDotAll);
+        regexpPrototype.defineGetterConfigurable("unicode", RegExpPrototype::getUnicode);
+        regexpPrototype.defineGetterConfigurable("sticky", RegExpPrototype::getSticky);
+        regexpPrototype.defineGetterConfigurable("hasIndices", RegExpPrototype::getHasIndices);
+        regexpPrototype.defineGetterConfigurable("unicodeSets", RegExpPrototype::getUnicodeSets);
+        regexpPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("RegExp"));
 
         // Create RegExp constructor as a function
         JSNativeFunction regexpConstructor = new JSNativeFunction("RegExp", 2, RegExpConstructor::call);
@@ -1385,17 +1276,22 @@ public final class GlobalObject {
 
         // AnnexB legacy RegExp static accessor properties.
         // Each getter validates SameValue(C, thisValue) per GetLegacyRegExpStaticProperty.
-        addLegacyRegExpAccessor(regexpConstructor, "rightContext", "$'", false);
-        addLegacyRegExpAccessor(regexpConstructor, "leftContext", "$`", false);
-        addLegacyRegExpAccessor(regexpConstructor, "lastMatch", "$&", false);
-        addLegacyRegExpAccessor(regexpConstructor, "lastParen", "$+", false);
-        addLegacyRegExpAccessor(regexpConstructor, "input", "$_", true);
+        regexpConstructor.defineGetterConfigurable("rightContext");
+        regexpConstructor.defineGetterConfigurable("$'");
+        regexpConstructor.defineGetterConfigurable("leftContext");
+        regexpConstructor.defineGetterConfigurable("$`");
+        regexpConstructor.defineGetterConfigurable("lastMatch");
+        regexpConstructor.defineGetterConfigurable("$&");
+        regexpConstructor.defineGetterConfigurable("lastParen");
+        regexpConstructor.defineGetterConfigurable("$+");
+        regexpConstructor.defineGetterSetterConfigurable("input");
+        regexpConstructor.defineGetterSetterConfigurable("$_");
         // $1..$9
         for (int i = 1; i <= 9; i++) {
-            addLegacyRegExpAccessor(regexpConstructor, "$" + i, null, false);
+            regexpConstructor.defineGetterConfigurable("$" + i);
         }
 
-        addGlobalBinding(global, "RegExp", regexpConstructor);
+        global.definePropertyWritableConfigurable("RegExp", regexpConstructor);
     }
 
     /**
@@ -1420,7 +1316,7 @@ public final class GlobalObject {
         setPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction);
 
         // Set.prototype.size getter
-        addGetter(setPrototype, "size", SetPrototype::getSize);
+        setPrototype.defineGetterConfigurable("size", SetPrototype::getSize);
 
         // Create Set constructor as a function
         JSNativeFunction setConstructor = new JSNativeFunction("Set", 0, SetConstructor::call, true, true);
@@ -1428,7 +1324,7 @@ public final class GlobalObject {
         setConstructor.setConstructorType(JSConstructorType.SET);
         setPrototype.set("constructor", setConstructor);
 
-        addGlobalBinding(global, "Set", setConstructor);
+        global.definePropertyWritableConfigurable("Set", setConstructor);
     }
 
     /**
@@ -1440,8 +1336,8 @@ public final class GlobalObject {
         sharedArrayBufferPrototype.set("slice", new JSNativeFunction("slice", 2, SharedArrayBufferPrototype::slice));
 
         // Define getter properties
-        addGetter(sharedArrayBufferPrototype, "byteLength", SharedArrayBufferPrototype::getByteLength);
-        addGetter(sharedArrayBufferPrototype, JSSymbol.TO_STRING_TAG, SharedArrayBufferPrototype::getToStringTag);
+        sharedArrayBufferPrototype.defineGetterConfigurable("byteLength", SharedArrayBufferPrototype::getByteLength);
+        sharedArrayBufferPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, SharedArrayBufferPrototype::getToStringTag);
 
         // Create SharedArrayBuffer constructor as a function
         JSNativeFunction sharedArrayBufferConstructor = new JSNativeFunction(
@@ -1455,7 +1351,7 @@ public final class GlobalObject {
         sharedArrayBufferConstructor.setConstructorType(JSConstructorType.SHARED_ARRAY_BUFFER);
         sharedArrayBufferPrototype.set("constructor", sharedArrayBufferConstructor);
 
-        addGlobalBinding(global, "SharedArrayBuffer", sharedArrayBufferConstructor);
+        global.definePropertyWritableConfigurable("SharedArrayBuffer", sharedArrayBufferConstructor);
     }
 
     /**
@@ -1523,8 +1419,7 @@ public final class GlobalObject {
         stringPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), new JSNativeFunction("[Symbol.iterator]", 0, IteratorPrototype::stringIterator));
 
         // String.prototype.length is a data property with value 0 (not writable, not enumerable, not configurable)
-        stringPrototype.defineProperty(PropertyKey.fromString("length"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(0), false, false, false));
+        stringPrototype.definePropertyReadonlyNonConfigurable("length", new JSNumber(0));
 
         // Create String constructor
         JSNativeFunction stringConstructor = new JSNativeFunction("String", 1, StringConstructor::call);
@@ -1537,7 +1432,7 @@ public final class GlobalObject {
         stringConstructor.set("fromCodePoint", new JSNativeFunction("fromCodePoint", 1, StringConstructor::fromCodePoint));
         stringConstructor.set("raw", new JSNativeFunction("raw", 1, StringConstructor::raw));
 
-        addGlobalBinding(global, "String", stringConstructor);
+        global.definePropertyWritableConfigurable("String", stringConstructor);
     }
 
     /**
@@ -1557,7 +1452,7 @@ public final class GlobalObject {
         symbolPrototype.set("valueOf", symbolValueOf);
 
         // Symbol.prototype.description is a getter
-        addGetter(symbolPrototype, "description", SymbolPrototype::getDescription);
+        symbolPrototype.defineGetterConfigurable("description", SymbolPrototype::getDescription);
 
         JSNativeFunction symbolToPrimitive = new JSNativeFunction("[Symbol.toPrimitive]", 1, SymbolPrototype::toPrimitive);
         symbolToPrimitive.initializePrototypeChain(context);
@@ -1594,7 +1489,7 @@ public final class GlobalObject {
         symbolConstructor.set("dispose", JSSymbol.DISPOSE);
         symbolConstructor.set("asyncDispose", JSSymbol.ASYNC_DISPOSE);
 
-        addGlobalBinding(global, "Symbol", symbolConstructor);
+        global.definePropertyWritableConfigurable("Symbol", symbolConstructor);
     }
 
     /**
@@ -1626,7 +1521,7 @@ public final class GlobalObject {
             constructor.setConstructorType(def.type);
             constructor.set("BYTES_PER_ELEMENT", new JSNumber(def.bytesPerElement));
             prototype.set("BYTES_PER_ELEMENT", new JSNumber(def.bytesPerElement));
-            addGlobalBinding(global, def.name, constructor);
+            global.definePropertyWritableConfigurable(def.name, constructor);
         }
     }
 
@@ -1642,7 +1537,7 @@ public final class GlobalObject {
         weakMapPrototype.set("delete", new JSNativeFunction("delete", 1, WeakMapPrototype::delete));
 
         // Symbol.toStringTag
-        addGetter(weakMapPrototype, JSSymbol.TO_STRING_TAG, WeakMapPrototype::getToStringTag);
+        weakMapPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, WeakMapPrototype::getToStringTag);
 
         // Create WeakMap constructor as a function
         JSNativeFunction weakMapConstructor = new JSNativeFunction(
@@ -1656,7 +1551,7 @@ public final class GlobalObject {
         weakMapConstructor.setConstructorType(JSConstructorType.WEAK_MAP);
         weakMapPrototype.set("constructor", weakMapConstructor);
 
-        addGlobalBinding(global, "WeakMap", weakMapConstructor);
+        global.definePropertyWritableConfigurable("WeakMap", weakMapConstructor);
     }
 
     /**
@@ -1668,7 +1563,7 @@ public final class GlobalObject {
         // deref() method is added in JSWeakRef constructor
 
         // Symbol.toStringTag
-        addGetter(weakRefPrototype, JSSymbol.TO_STRING_TAG, WeakRefPrototype::getToStringTag);
+        weakRefPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, WeakRefPrototype::getToStringTag);
 
         // Create WeakRef constructor as a function
         JSNativeFunction weakRefConstructor = new JSNativeFunction(
@@ -1682,7 +1577,7 @@ public final class GlobalObject {
         weakRefConstructor.setConstructorType(JSConstructorType.WEAK_REF);
         weakRefPrototype.set("constructor", weakRefConstructor);
 
-        addGlobalBinding(global, "WeakRef", weakRefConstructor);
+        global.definePropertyWritableConfigurable("WeakRef", weakRefConstructor);
     }
 
     /**
@@ -1696,7 +1591,7 @@ public final class GlobalObject {
         weakSetPrototype.set("delete", new JSNativeFunction("delete", 1, WeakSetPrototype::delete));
 
         // Symbol.toStringTag
-        addGetter(weakSetPrototype, JSSymbol.TO_STRING_TAG, WeakSetPrototype::getToStringTag);
+        weakSetPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, WeakSetPrototype::getToStringTag);
 
         // Create WeakSet constructor as a function
         JSNativeFunction weakSetConstructor = new JSNativeFunction(
@@ -1710,7 +1605,7 @@ public final class GlobalObject {
         weakSetConstructor.setConstructorType(JSConstructorType.WEAK_SET);
         weakSetPrototype.set("constructor", weakSetConstructor);
 
-        addGlobalBinding(global, "WeakSet", weakSetConstructor);
+        global.definePropertyWritableConfigurable("WeakSet", weakSetConstructor);
     }
 
     /**
