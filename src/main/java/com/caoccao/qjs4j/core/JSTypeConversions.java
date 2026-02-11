@@ -74,6 +74,14 @@ public final class JSTypeConversions {
             return abstractEquals(context, x, toPrimitive(context, y, PreferredType.DEFAULT));
         }
 
+        // Annex B: IsHTMLDDA object is equivalent to null/undefined for == and !=.
+        if (x instanceof JSObject xObj && xObj.isHTMLDDA() && y.isNullOrUndefined()){
+            return true;
+        }
+        if (y instanceof JSObject yObj && yObj.isHTMLDDA() && x.isNullOrUndefined()){
+            return true;
+        }
+
         return false;
     }
 
@@ -226,6 +234,9 @@ public final class JSTypeConversions {
         }
         if (value instanceof JSSymbol) {
             return JSBoolean.TRUE; // Symbols are always truthy
+        }
+        if (value instanceof JSObject obj && obj.isHTMLDDA()) {
+            return JSBoolean.FALSE;
         }
         // Objects are truthy
         return JSBoolean.TRUE;

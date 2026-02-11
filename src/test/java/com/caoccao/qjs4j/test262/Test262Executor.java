@@ -285,6 +285,11 @@ public class Test262Executor {
                     return realm;
                 }));
 
+        JSNativeFunction isHTMLDDA = new JSNativeFunction("IsHTMLDDA", 0,
+                (ctx, thisArg, args) -> JSNull.INSTANCE);
+        isHTMLDDA.setHTMLDDA(true);
+        host262.set("IsHTMLDDA", isHTMLDDA);
+
         global.set("$262", host262);
     }
 

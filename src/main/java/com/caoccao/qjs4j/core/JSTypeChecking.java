@@ -324,10 +324,13 @@ public final class JSTypeChecking {
         if (value instanceof JSBigInt) {
             return "bigint";
         }
-        if (value instanceof JSFunction) {
-            return "function";
-        }
-        if (value instanceof JSObject) {
+        if (value instanceof JSObject obj) {
+            if (obj.isHTMLDDA()) {
+                return "undefined";
+            }
+            if (value instanceof JSFunction) {
+                return "function";
+            }
             return "object";
         }
         return "undefined";
