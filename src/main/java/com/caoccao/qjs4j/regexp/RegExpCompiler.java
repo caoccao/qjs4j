@@ -426,6 +426,12 @@ public final class RegExpCompiler {
                         RegExpOpcode.NOT_WORD_BOUNDARY.getCode());
             }
             case 'k' -> {
+                // AnnexB: In non-unicode mode with no named capture groups,
+                // \k is an identity escape matching literal 'k'
+                if (!context.isUnicodeMode() && namedCaptureIndices.isEmpty()) {
+                    compileLiteralChar(context, 'k');
+                    break;
+                }
                 if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '<') {
                     throw new RegExpSyntaxException("expecting group name");
                 }
