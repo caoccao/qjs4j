@@ -1338,7 +1338,9 @@ public final class GlobalObject {
         JSObject regexpPrototype = context.createJSObject();
         regexpPrototype.set("test", new JSNativeFunction("test", 1, RegExpPrototype::test));
         regexpPrototype.set("exec", new JSNativeFunction("exec", 1, RegExpPrototype::exec));
-        regexpPrototype.set("compile", new JSNativeFunction("compile", 2, RegExpPrototype::compile));
+        regexpPrototype.defineProperty(
+                PropertyKey.fromString("compile"),
+                PropertyDescriptor.dataDescriptor(new JSNativeFunction("compile", 2, RegExpPrototype::compile), true, false, true));
         regexpPrototype.set("toString", new JSNativeFunction("toString", 0, RegExpPrototype::toStringMethod));
         regexpPrototype.set(PropertyKey.fromSymbol(JSSymbol.SPLIT), new JSNativeFunction("[Symbol.split]", 2, RegExpPrototype::symbolSplit));
 
