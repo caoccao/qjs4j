@@ -73,7 +73,7 @@ public final class FunctionConstructor {
         if (!paramNames.isEmpty()) {
             functionSource.append(String.join(", ", paramNames));
         }
-        functionSource.append(") {\n");
+        functionSource.append("\n) {\n");
         functionSource.append(body);
         functionSource.append("\n})");
 

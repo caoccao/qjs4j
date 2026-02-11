@@ -1053,6 +1053,35 @@ public final class Lexer {
                 }
             }
 
+            // Annex B: HTML-like comment <!-- (treated as single-line comment)
+            if (c == '<' && position + 3 < source.length()
+                    && source.charAt(position + 1) == '!'
+                    && source.charAt(position + 2) == '-'
+                    && source.charAt(position + 3) == '-') {
+                advance(); // <
+                advance(); // !
+                advance(); // -
+                advance(); // -
+                while (!isAtEnd() && peek() != '\n' && peek() != '\r') {
+                    advance();
+                }
+                continue;
+            }
+
+            // Annex B: HTML-like close comment --> (treated as single-line comment
+            // when at the start of a line, possibly preceded by whitespace/comments)
+            if (c == '-' && position + 2 < source.length()
+                    && source.charAt(position + 1) == '-'
+                    && source.charAt(position + 2) == '>') {
+                advance(); // -
+                advance(); // -
+                advance(); // >
+                while (!isAtEnd() && peek() != '\n' && peek() != '\r') {
+                    advance();
+                }
+                continue;
+            }
+
             break;
         }
     }
