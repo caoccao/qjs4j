@@ -344,6 +344,35 @@ public class NumberPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testParseIntWithJavet() {
+        assertBooleanWithJavet(
+                "parseInt('-0xF') === -15",
+                "Number.parseInt('-0xF') === -15",
+                "parseInt('+0x10') === 16",
+                "Number.parseInt('+0x10') === 16",
+                "parseInt('0o10') === 0",
+                "Number.parseInt('0o10') === 0",
+                "parseInt('0b10') === 0",
+                "Number.parseInt('0b10') === 0");
+    }
+
+    @Test
+    public void testNumberPropertyDescriptorsWithJavet() {
+        assertBooleanWithJavet(
+                "Number.parseInt === parseInt",
+                "Number.parseFloat === parseFloat",
+                "Object.getOwnPropertyDescriptor(Number, 'parseInt').writable === true",
+                "Object.getOwnPropertyDescriptor(Number, 'parseInt').enumerable === false",
+                "Object.getOwnPropertyDescriptor(Number, 'parseInt').configurable === true",
+                "Object.getOwnPropertyDescriptor(Number.prototype, 'toString').writable === true",
+                "Object.getOwnPropertyDescriptor(Number.prototype, 'toString').enumerable === false",
+                "Object.getOwnPropertyDescriptor(Number.prototype, 'toString').configurable === true",
+                "Object.getOwnPropertyDescriptor(Number, 'prototype').writable === false",
+                "Object.getOwnPropertyDescriptor(Number, 'prototype').enumerable === false",
+                "Object.getOwnPropertyDescriptor(Number, 'prototype').configurable === false");
+    }
+
+    @Test
     public void testToExponential() {
         JSNumber num = new JSNumber(123.456);
 

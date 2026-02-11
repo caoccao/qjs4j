@@ -1122,26 +1122,82 @@ public final class GlobalObject {
     private static void initializeNumberConstructor(JSContext context, JSObject global) {
         // Create Number.prototype
         JSObject numberPrototype = context.createJSObject();
-        numberPrototype.set("toFixed", new JSNativeFunction("toFixed", 1, NumberPrototype::toFixed));
-        numberPrototype.set("toExponential", new JSNativeFunction("toExponential", 1, NumberPrototype::toExponential));
-        numberPrototype.set("toPrecision", new JSNativeFunction("toPrecision", 1, NumberPrototype::toPrecision));
-        numberPrototype.set("toString", new JSNativeFunction("toString", 1, NumberPrototype::toString));
-        numberPrototype.set("toLocaleString", new JSNativeFunction("toLocaleString", 0, NumberPrototype::toLocaleString));
-        numberPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, NumberPrototype::valueOf));
+        numberPrototype.defineProperty(
+                PropertyKey.fromString("toFixed"),
+                PropertyDescriptor.dataDescriptor(new JSNativeFunction("toFixed", 1, NumberPrototype::toFixed), true, false, true));
+        numberPrototype.defineProperty(
+                PropertyKey.fromString("toExponential"),
+                PropertyDescriptor.dataDescriptor(new JSNativeFunction("toExponential", 1, NumberPrototype::toExponential), true, false, true));
+        numberPrototype.defineProperty(
+                PropertyKey.fromString("toPrecision"),
+                PropertyDescriptor.dataDescriptor(new JSNativeFunction("toPrecision", 1, NumberPrototype::toPrecision), true, false, true));
+        numberPrototype.defineProperty(
+                PropertyKey.fromString("toString"),
+                PropertyDescriptor.dataDescriptor(new JSNativeFunction("toString", 1, NumberPrototype::toString), true, false, true));
+        numberPrototype.defineProperty(
+                PropertyKey.fromString("toLocaleString"),
+                PropertyDescriptor.dataDescriptor(new JSNativeFunction("toLocaleString", 0, NumberPrototype::toLocaleString), true, false, true));
+        numberPrototype.defineProperty(
+                PropertyKey.fromString("valueOf"),
+                PropertyDescriptor.dataDescriptor(new JSNativeFunction("valueOf", 0, NumberPrototype::valueOf), true, false, true));
 
         // Create Number constructor
         JSNativeFunction numberConstructor = new JSNativeFunction("Number", 1, NumberConstructor::call);
-        numberConstructor.set("prototype", numberPrototype);
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("prototype"),
+                PropertyDescriptor.dataDescriptor(numberPrototype, false, false, false));
         numberConstructor.setConstructorType(JSConstructorType.NUMBER_OBJECT); // Mark as Number constructor
-        numberPrototype.set("constructor", numberConstructor);
+        numberPrototype.defineProperty(
+                PropertyKey.fromString("constructor"),
+                PropertyDescriptor.dataDescriptor(numberConstructor, true, false, true));
 
         // Number static methods
-        numberConstructor.set("isNaN", new JSNativeFunction("isNaN", 1, NumberPrototype::isNaN));
-        numberConstructor.set("isFinite", new JSNativeFunction("isFinite", 1, NumberPrototype::isFinite));
-        numberConstructor.set("isInteger", new JSNativeFunction("isInteger", 1, NumberPrototype::isInteger));
-        numberConstructor.set("isSafeInteger", new JSNativeFunction("isSafeInteger", 1, NumberPrototype::isSafeInteger));
-        numberConstructor.set("parseFloat", new JSNativeFunction("parseFloat", 1, NumberPrototype::parseFloat));
-        numberConstructor.set("parseInt", new JSNativeFunction("parseInt", 2, NumberPrototype::parseInt));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("isNaN"),
+                PropertyDescriptor.dataDescriptor(new JSNativeFunction("isNaN", 1, NumberPrototype::isNaN), true, false, true));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("isFinite"),
+                PropertyDescriptor.dataDescriptor(new JSNativeFunction("isFinite", 1, NumberPrototype::isFinite), true, false, true));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("isInteger"),
+                PropertyDescriptor.dataDescriptor(new JSNativeFunction("isInteger", 1, NumberPrototype::isInteger), true, false, true));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("isSafeInteger"),
+                PropertyDescriptor.dataDescriptor(new JSNativeFunction("isSafeInteger", 1, NumberPrototype::isSafeInteger), true, false, true));
+
+        // QuickJS compatibility: Number.parseInt/parseFloat are aliases of global parseInt/parseFloat.
+        JSValue globalParseInt = global.get("parseInt");
+        JSValue globalParseFloat = global.get("parseFloat");
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("parseInt"),
+                PropertyDescriptor.dataDescriptor(globalParseInt, true, false, true));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("parseFloat"),
+                PropertyDescriptor.dataDescriptor(globalParseFloat, true, false, true));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("EPSILON"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(Math.ulp(1.0)), false, false, false));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("MAX_SAFE_INTEGER"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(9007199254740991d), false, false, false));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("MAX_VALUE"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(Double.MAX_VALUE), false, false, false));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("MIN_SAFE_INTEGER"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(-9007199254740991d), false, false, false));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("MIN_VALUE"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(Double.MIN_VALUE), false, false, false));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("NaN"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(Double.NaN), false, false, false));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("NEGATIVE_INFINITY"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(Double.NEGATIVE_INFINITY), false, false, false));
+        numberConstructor.defineProperty(
+                PropertyKey.fromString("POSITIVE_INFINITY"),
+                PropertyDescriptor.dataDescriptor(new JSNumber(Double.POSITIVE_INFINITY), false, false, false));
 
         global.set("Number", numberConstructor);
     }
@@ -1850,7 +1906,7 @@ public final class GlobalObject {
         String inputString = JSTypeConversions.toString(context, input).value().trim();
 
         // Get radix
-        int radix = 10;
+        int radix = 0;
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
             double radixNum = JSTypeConversions.toNumber(context, args[1]).value();
             radix = (int) radixNum;
@@ -1872,16 +1928,17 @@ public final class GlobalObject {
             index = 1;
         }
 
-        // Auto-detect radix 16 for "0x" prefix
+        // Auto-detect radix 16 for 0x/0X prefix (after optional sign).
         if (radix == 0 || radix == 16) {
             if (index + 1 < inputString.length() &&
                     inputString.charAt(index) == '0' &&
                     (inputString.charAt(index + 1) == 'x' || inputString.charAt(index + 1) == 'X')) {
                 radix = 16;
                 index += 2;
-            } else if (radix == 0) {
-                radix = 10;
             }
+        }
+        if (radix == 0) {
+            radix = 10;
         }
 
         // Validate radix
@@ -1889,8 +1946,8 @@ public final class GlobalObject {
             return new JSNumber(Double.NaN);
         }
 
-        // Parse digits
-        long result = 0;
+        // Parse digits using double accumulation to match JavaScript number range.
+        double result = 0.0;
         boolean foundDigit = false;
         while (index < inputString.length()) {
             char c = inputString.charAt(index);
