@@ -26,10 +26,10 @@ import com.caoccao.qjs4j.regexp.RegExpEngine;
  */
 public final class JSRegExp extends JSObject {
     public static final String NAME = "RegExp";
-    private final RegExpBytecode bytecode;
-    private final RegExpEngine engine;
-    private final String flags;
-    private final String pattern;
+    private RegExpBytecode bytecode;
+    private RegExpEngine engine;
+    private String flags;
+    private String pattern;
 
     /**
      * Create a RegExp with pattern and flags.
@@ -57,6 +57,30 @@ public final class JSRegExp extends JSObject {
         this.set("dotAll", JSBoolean.valueOf(this.flags.contains("s")));
         this.set("unicode", JSBoolean.valueOf(this.flags.contains("u")));
         this.set("sticky", JSBoolean.valueOf(this.flags.contains("y")));
+        this.set("lastIndex", new JSNumber(0));
+    }
+
+    /**
+     * Reinitialize this RegExp in-place (AnnexB RegExp.prototype.compile).
+     */
+    public void reinitialize(String pattern, String flags) {
+        this.pattern = pattern != null ? pattern : "";
+        String rawFlags = flags != null ? flags : "";
+
+        RegExpCompiler compiler = new RegExpCompiler();
+        this.bytecode = compiler.compile(this.pattern, rawFlags);
+        this.engine = new RegExpEngine(bytecode);
+        this.flags = this.bytecode.flagsToString();
+
+        // Update properties
+        this.set("source", new JSString(this.pattern));
+        this.set("flags", new JSString(this.flags));
+        this.set("global", JSBoolean.valueOf(rawFlags.contains("g")));
+        this.set("ignoreCase", JSBoolean.valueOf(rawFlags.contains("i")));
+        this.set("multiline", JSBoolean.valueOf(rawFlags.contains("m")));
+        this.set("dotAll", JSBoolean.valueOf(rawFlags.contains("s")));
+        this.set("unicode", JSBoolean.valueOf(rawFlags.contains("u")));
+        this.set("sticky", JSBoolean.valueOf(rawFlags.contains("y")));
         this.set("lastIndex", new JSNumber(0));
     }
 

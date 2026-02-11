@@ -48,6 +48,42 @@ public final class RegExpPrototype {
     }
 
     /**
+     * RegExp.prototype.compile(pattern, flags)
+     * AnnexB B.2.5.1
+     * Reinitializes the RegExp object in-place.
+     */
+    public static JSValue compile(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSRegExp regexp)) {
+            return context.throwTypeError("RegExp.prototype.compile called on non-RegExp");
+        }
+
+        String pattern = "";
+        String flags = "";
+        if (args.length > 0) {
+            JSValue patternArg = args[0];
+            if (patternArg instanceof JSRegExp existingRegExp) {
+                if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+                    return context.throwTypeError("Cannot supply flags when constructing one RegExp from another");
+                }
+                pattern = existingRegExp.getPattern();
+                flags = existingRegExp.getFlags();
+            } else if (!(patternArg instanceof JSUndefined)) {
+                pattern = JSTypeConversions.toString(context, patternArg).value();
+            }
+            if (args.length > 1 && !(args[1] instanceof JSUndefined) && !(args[0] instanceof JSRegExp)) {
+                flags = JSTypeConversions.toString(context, args[1]).value();
+            }
+        }
+
+        try {
+            regexp.reinitialize(pattern, flags);
+        } catch (Exception e) {
+            return context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
+        }
+        return regexp;
+    }
+
+    /**
      * RegExp.prototype.exec(str)
      * ES2020 21.2.5.2.1
      * Executes a search for a match in a string.
