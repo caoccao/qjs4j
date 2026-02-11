@@ -526,66 +526,96 @@ public final class RegExpCompiler {
                     throw new RegExpSyntaxException("Invalid backreference \\" + groupNum);
                 }
             }
+            case 'c' -> {
+                // \c ControlLetter
+                if (context.pos < context.codePoints.length) {
+                    int next = context.codePoints[context.pos];
+                    if ((next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')) {
+                        // Valid control escape: \cA-\cZ or \ca-\cz
+                        context.pos++;
+                        compileLiteralChar(context, next % 32);
+                        break;
+                    }
+                }
+                // AnnexB: In non-unicode mode, \c without valid control letter
+                // is treated as literal backslash followed by literal 'c'
+                if (context.isUnicodeMode()) {
+                    throw new RegExpSyntaxException("Invalid control escape");
+                }
+                compileLiteralChar(context, '\\');
+                compileLiteralChar(context, 'c');
+            }
             case 'x' -> {
                 // Hex escape \xHH
-                if (context.pos + 1 >= context.codePoints.length) {
-                    throw new RegExpSyntaxException("Incomplete hex escape");
-                }
-                int hex1 = hexValue(context.codePoints[context.pos]);
-                int hex2 = hexValue(context.codePoints[context.pos + 1]);
-                if (hex1 == -1 || hex2 == -1) {
+                boolean validHex = context.pos + 1 < context.codePoints.length
+                        && hexValue(context.codePoints[context.pos]) != -1
+                        && hexValue(context.codePoints[context.pos + 1]) != -1;
+                if (validHex) {
+                    int hex1 = hexValue(context.codePoints[context.pos]);
+                    int hex2 = hexValue(context.codePoints[context.pos + 1]);
+                    context.pos += 2;
+                    int value = (hex1 << 4) | hex2;
+                    compileLiteralChar(context, value);
+                } else if (!context.isUnicodeMode()) {
+                    // AnnexB: In non-unicode mode, \x without valid hex is identity escape
+                    compileLiteralChar(context, 'x');
+                } else {
                     throw new RegExpSyntaxException("Invalid hex escape");
                 }
-                context.pos += 2;
-                int value = (hex1 << 4) | hex2;
-                compileLiteralChar(context, value);
             }
             case 'u' -> {
                 // Unicode escape \\uHHHH or \\u{H...}
-                if (context.pos >= context.codePoints.length) {
-                    throw new RegExpSyntaxException("Incomplete unicode escape");
-                }
-                if (context.codePoints[context.pos] == '{') {
-                    // \\u{H...} format
-                    context.pos++; // Skip '{'
-                    int value = 0;
-                    int digitCount = 0;
-                    while (context.pos < context.codePoints.length) {
-                        int hexCh = context.codePoints[context.pos];
-                        if (hexCh == '}') {
+                if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '{') {
+                    if (context.isUnicodeMode()) {
+                        // \\u{H...} format - only valid in unicode mode
+                        context.pos++; // Skip '{'
+                        int value = 0;
+                        int digitCount = 0;
+                        while (context.pos < context.codePoints.length) {
+                            int hexCh = context.codePoints[context.pos];
+                            if (hexCh == '}') {
+                                context.pos++;
+                                break;
+                            }
+                            int hexVal = hexValue(hexCh);
+                            if (hexVal == -1) {
+                                throw new RegExpSyntaxException("Invalid unicode escape");
+                            }
+                            value = (value << 4) | hexVal;
+                            digitCount++;
                             context.pos++;
-                            break;
+                            if (digitCount > 6) {
+                                throw new RegExpSyntaxException("Unicode escape too long");
+                            }
                         }
-                        int hexVal = hexValue(hexCh);
-                        if (hexVal == -1) {
-                            throw new RegExpSyntaxException("Invalid unicode escape");
+                        if (digitCount == 0) {
+                            throw new RegExpSyntaxException("Empty unicode escape");
                         }
-                        value = (value << 4) | hexVal;
-                        digitCount++;
-                        context.pos++;
-                        if (digitCount > 6) {
-                            throw new RegExpSyntaxException("Unicode escape too long");
-                        }
+                        compileLiteralChar(context, value);
+                    } else {
+                        // Non-unicode mode: backslash-u is identity escape, '{' handled by caller
+                        compileLiteralChar(context, 'u');
                     }
-                    if (digitCount == 0) {
-                        throw new RegExpSyntaxException("Empty unicode escape");
-                    }
-                    compileLiteralChar(context, value);
                 } else {
-                    // \\uHHHH format
-                    if (context.pos + 3 >= context.codePoints.length) {
-                        throw new RegExpSyntaxException("Incomplete unicode escape");
-                    }
-                    int value = 0;
-                    for (int i = 0; i < 4; i++) {
-                        int hexVal = hexValue(context.codePoints[context.pos + i]);
-                        if (hexVal == -1) {
-                            throw new RegExpSyntaxException("Invalid unicode escape");
+                    // Check for \\uHHHH format (4 valid hex digits)
+                    boolean validUnicode = context.pos + 3 < context.codePoints.length
+                            && hexValue(context.codePoints[context.pos]) != -1
+                            && hexValue(context.codePoints[context.pos + 1]) != -1
+                            && hexValue(context.codePoints[context.pos + 2]) != -1
+                            && hexValue(context.codePoints[context.pos + 3]) != -1;
+                    if (validUnicode) {
+                        int value = 0;
+                        for (int i = 0; i < 4; i++) {
+                            value = (value << 4) | hexValue(context.codePoints[context.pos + i]);
                         }
-                        value = (value << 4) | hexVal;
+                        context.pos += 4;
+                        compileLiteralChar(context, value);
+                    } else if (!context.isUnicodeMode()) {
+                        // AnnexB: In non-unicode mode, backslash-u without valid hex is identity escape
+                        compileLiteralChar(context, 'u');
+                    } else {
+                        throw new RegExpSyntaxException("Invalid unicode escape");
                     }
-                    context.pos += 4;
-                    compileLiteralChar(context, value);
                 }
             }
             default -> {
@@ -1187,6 +1217,82 @@ public final class RegExpCompiler {
                 }
                 appendRanges(ranges, propertyRanges);
                 yield -1;
+            }
+            case 'c' -> {
+                // \c ControlLetter in character class
+                if (context.pos < context.codePoints.length) {
+                    int next = context.codePoints[context.pos];
+                    if ((next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')) {
+                        context.pos++;
+                        yield next % 32;
+                    }
+                }
+                // AnnexB: Invalid \c in char class → class contains '\' and 'c'
+                if (context.isUnicodeMode()) {
+                    throw new RegExpSyntaxException("Invalid control escape");
+                }
+                ranges.add((int) '\\');
+                ranges.add((int) '\\');
+                yield 'c';
+            }
+            case 'x' -> {
+                // \xHH in character class
+                boolean validHex = context.pos + 1 < context.codePoints.length
+                        && hexValue(context.codePoints[context.pos]) != -1
+                        && hexValue(context.codePoints[context.pos + 1]) != -1;
+                if (validHex) {
+                    int hex1 = hexValue(context.codePoints[context.pos]);
+                    int hex2 = hexValue(context.codePoints[context.pos + 1]);
+                    context.pos += 2;
+                    yield (hex1 << 4) | hex2;
+                } else if (!context.isUnicodeMode()) {
+                    yield 'x';
+                } else {
+                    throw new RegExpSyntaxException("Invalid hex escape");
+                }
+            }
+            case 'u' -> {
+                // Unicode escape (backslash-u HHHH or braced) in character class
+                if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '{' && context.isUnicodeMode()) {
+                    context.pos++;
+                    int value = 0;
+                    int digitCount = 0;
+                    while (context.pos < context.codePoints.length) {
+                        int hexCh = context.codePoints[context.pos];
+                        if (hexCh == '}') {
+                            context.pos++;
+                            break;
+                        }
+                        int hexVal = hexValue(hexCh);
+                        if (hexVal == -1) {
+                            throw new RegExpSyntaxException("Invalid unicode escape");
+                        }
+                        value = (value << 4) | hexVal;
+                        digitCount++;
+                        context.pos++;
+                    }
+                    if (digitCount == 0) {
+                        throw new RegExpSyntaxException("Empty unicode escape");
+                    }
+                    yield value;
+                }
+                boolean validUnicode = context.pos + 3 < context.codePoints.length
+                        && hexValue(context.codePoints[context.pos]) != -1
+                        && hexValue(context.codePoints[context.pos + 1]) != -1
+                        && hexValue(context.codePoints[context.pos + 2]) != -1
+                        && hexValue(context.codePoints[context.pos + 3]) != -1;
+                if (validUnicode) {
+                    int value = 0;
+                    for (int i = 0; i < 4; i++) {
+                        value = (value << 4) | hexValue(context.codePoints[context.pos + i]);
+                    }
+                    context.pos += 4;
+                    yield value;
+                } else if (!context.isUnicodeMode()) {
+                    yield 'u';
+                } else {
+                    throw new RegExpSyntaxException("Invalid unicode escape");
+                }
             }
             case '0', '1', '2', '3', '4', '5', '6', '7' -> {
                 if (context.isUnicodeMode()) {
