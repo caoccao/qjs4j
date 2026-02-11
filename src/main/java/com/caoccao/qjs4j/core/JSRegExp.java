@@ -57,13 +57,19 @@ public final class JSRegExp extends JSObject {
      * Reinitialize this RegExp in-place (AnnexB RegExp.prototype.compile).
      */
     public void reinitialize(String pattern, String flags) {
-        this.pattern = pattern != null ? pattern : "";
+        String nextPattern = pattern != null ? pattern : "";
         String rawFlags = flags != null ? flags : "";
 
         RegExpCompiler compiler = new RegExpCompiler();
-        this.bytecode = compiler.compile(this.pattern, rawFlags);
-        this.engine = new RegExpEngine(bytecode);
-        this.flags = this.bytecode.flagsToString();
+        RegExpBytecode nextBytecode = compiler.compile(nextPattern, rawFlags);
+        RegExpEngine nextEngine = new RegExpEngine(nextBytecode);
+        String nextFlags = nextBytecode.flagsToString();
+
+        // Update internal slots only after successful compilation.
+        this.pattern = nextPattern;
+        this.bytecode = nextBytecode;
+        this.engine = nextEngine;
+        this.flags = nextFlags;
 
         // Reset lastIndex after recompilation.
         this.set("lastIndex", new JSNumber(0));

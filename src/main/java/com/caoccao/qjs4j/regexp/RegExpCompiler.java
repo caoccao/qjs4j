@@ -1236,6 +1236,10 @@ public final class RegExpCompiler {
             max = min; // {n} means exactly n
         }
 
+        if (max < min) {
+            throw new RegExpSyntaxException("Invalid quantifier range {" + min + "," + max + "}");
+        }
+
         return new int[]{min, max};
     }
 
