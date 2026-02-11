@@ -999,6 +999,7 @@ public final class Lexer {
     }
 
     private void skipWhitespaceAndComments() {
+        boolean seenLineTerminator = false;
         while (!isAtEnd()) {
             char c = peek();
 
@@ -1010,6 +1011,7 @@ public final class Lexer {
                 advance(); // consume \n
                 line++;
                 column = 1;
+                seenLineTerminator = true;
                 continue;
             }
 
@@ -1046,6 +1048,7 @@ public final class Lexer {
                         if (peek() == '\n') {
                             line++;
                             column = 0;
+                            seenLineTerminator = true;
                         }
                         advance();
                     }
@@ -1069,8 +1072,9 @@ public final class Lexer {
             }
 
             // Annex B: HTML-like close comment --> (treated as single-line comment
-            // when at the start of a line, possibly preceded by whitespace/comments)
-            if (c == '-' && position + 2 < source.length()
+            // only when preceded by a line terminator per ES spec)
+            if (seenLineTerminator
+                    && c == '-' && position + 2 < source.length()
                     && source.charAt(position + 1) == '-'
                     && source.charAt(position + 2) == '>') {
                 advance(); // -
