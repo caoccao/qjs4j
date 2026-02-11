@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.compiler.ast.*;
 import com.caoccao.qjs4j.compiler.ast.BinaryExpression.BinaryOperator;
 import com.caoccao.qjs4j.compiler.ast.UnaryExpression.UnaryOperator;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
+import com.caoccao.qjs4j.regexp.RegExpLiteralValue;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -1736,7 +1737,7 @@ public final class Parser {
             case REGEX -> {
                 String value = currentToken.value();
                 advance();
-                yield new Literal(value, location);
+                yield new Literal(new RegExpLiteralValue(value), location);
             }
             case TEMPLATE -> {
                 yield parseTemplateLiteral(false);
