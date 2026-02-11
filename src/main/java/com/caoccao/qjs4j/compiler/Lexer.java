@@ -266,12 +266,35 @@ public final class Lexer {
         return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
     }
 
-    private Token scanIdentifier(int startPos, int startLine, int startColumn) {
-        while (!isAtEnd() && isIdentifierPart(peek())) {
-            advance();
+    private Token scanIdentifier(int startPos, int startLine, int startColumn, int firstCodePoint) {
+        StringBuilder valueBuilder = new StringBuilder();
+        valueBuilder.appendCodePoint(firstCodePoint);
+
+        while (!isAtEnd()) {
+            if (peek() == '\\') {
+                int currentPos = position;
+                int currentColumn = column;
+                advance(); // consume '\'
+                int codePoint = parseUnicodeEscapeSequence();
+                if (codePoint < 0) {
+                    position = currentPos;
+                    column = currentColumn;
+                    break;
+                }
+                if (!isIdentifierPartCodePoint(codePoint)) {
+                    throw new JSSyntaxErrorException("Invalid or unexpected token");
+                }
+                valueBuilder.appendCodePoint(codePoint);
+                continue;
+            }
+
+            if (!isIdentifierPart(peek())) {
+                break;
+            }
+            valueBuilder.append(advance());
         }
 
-        String value = source.substring(startPos, position);
+        String value = valueBuilder.toString();
 
         // Check if it's a keyword
         TokenType type = KEYWORDS.getOrDefault(value, TokenType.IDENTIFIER);
@@ -355,6 +378,30 @@ public final class Lexer {
         return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
     }
 
+    private Token scanNumberStartingWithDot(int startPos, int startLine, int startColumn) {
+        // At least one decimal digit is required after '.'
+        scanDigitsWithNumericSeparators(10, false, false);
+
+        // Optional exponent part
+        if (!isAtEnd() && (peek() == 'e' || peek() == 'E')) {
+            advance(); // consume e/E
+            if (!isAtEnd() && (peek() == '+' || peek() == '-')) {
+                advance();
+            }
+            if (isAtEnd() || !Character.isDigit(peek())) {
+                throw new JSSyntaxErrorException("Invalid or unexpected token");
+            }
+            scanDigitsWithNumericSeparators(10, false, false);
+        }
+
+        if (!isAtEnd() && (peek() == 'n' || isIdentifierStart(peek()))) {
+            throw new JSSyntaxErrorException("Invalid or unexpected token");
+        }
+
+        String value = source.substring(startPos, position);
+        return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
+    }
+
     private Token scanOperatorOrPunctuation(char c, int startPos, int startLine, int startColumn) {
         // Special case: check for regex literal when encountering '/'
         if (c == '/' && expectRegex()) {
@@ -362,6 +409,9 @@ public final class Lexer {
             position = startPos;
             column = startColumn;
             return scanRegex(startPos, startLine, startColumn);
+        }
+        if (c == '.' && !isAtEnd() && Character.isDigit(peek())) {
+            return scanNumberStartingWithDot(startPos, startLine, startColumn);
         }
 
         TokenType type = switch (c) {
@@ -381,7 +431,9 @@ public final class Lexer {
                     } else {
                         yield TokenType.NULLISH_COALESCING;
                     }
-                } else if (match('.')) {
+                } else if (!isAtEnd() && peek() == '.'
+                        && (position + 1 >= source.length() || !Character.isDigit(source.charAt(position + 1)))) {
+                    advance(); // consume '.'
                     yield TokenType.OPTIONAL_CHAINING;
                 }
                 yield TokenType.QUESTION;
@@ -489,7 +541,7 @@ public final class Lexer {
                     yield TokenType.GT;
                 }
             }
-            default -> TokenType.EOF;
+            default -> throw new JSSyntaxErrorException("Invalid or unexpected token");
         };
 
         String value = source.substring(startPos, position);
@@ -501,6 +553,7 @@ public final class Lexer {
 
         StringBuilder pattern = new StringBuilder();
         boolean inCharClass = false;
+        boolean terminated = false;
 
         while (!isAtEnd()) {
             char c = peek();
@@ -508,6 +561,7 @@ public final class Lexer {
             // End of regex
             if (c == '/' && !inCharClass) {
                 advance(); // consume closing /
+                terminated = true;
                 break;
             }
 
@@ -521,18 +575,23 @@ public final class Lexer {
             // Handle escape sequences
             if (c == '\\') {
                 pattern.append(advance()); // append backslash
-                if (!isAtEnd()) {
-                    pattern.append(advance()); // append escaped character
+                if (isAtEnd()) {
+                    throw new JSSyntaxErrorException("Invalid or unexpected token");
                 }
+                pattern.append(advance()); // append escaped character
                 continue;
             }
 
             // Newlines terminate regex
             if (c == '\n' || c == '\r') {
-                break;
+                throw new JSSyntaxErrorException("Invalid or unexpected token");
             }
 
             pattern.append(advance());
+        }
+
+        if (!terminated) {
+            throw new JSSyntaxErrorException("Invalid or unexpected token");
         }
 
         // Scan flags (g, i, m, s, u, y)
@@ -550,66 +609,70 @@ public final class Lexer {
         StringBuilder value = new StringBuilder();
 
         while (!isAtEnd() && peek() != quote) {
-            if (peek() == '\n') {
-                // Unterminated string
-                break;
+            if (peek() == '\n' || peek() == '\r') {
+                throw new JSSyntaxErrorException("Invalid or unexpected token");
             }
 
             if (peek() == '\\') {
                 advance(); // consume backslash
-                if (!isAtEnd()) {
-                    char escaped = advance();
-                    switch (escaped) {
-                        case 'n' -> value.append('\n');
-                        case 't' -> value.append('\t');
-                        case 'r' -> value.append('\r');
-                        case '\\' -> value.append('\\');
-                        case '\'' -> value.append('\'');
-                        case '"' -> value.append('"');
-                        case 'b' -> value.append('\b');
-                        case 'f' -> value.append('\f');
-                        case 'v' -> value.append('\u000B');
-                        case '0' -> value.append('\0');
-                        case 'x' -> {
-                            // Hex escape \xHH
-                            if (position + 1 < source.length()) {
-                                String hex = source.substring(position, position + 2);
-                                try {
-                                    value.append((char) Integer.parseInt(hex, 16));
-                                    position += 2;
-                                    column += 2;
-                                } catch (NumberFormatException e) {
-                                    value.append('x');
-                                }
-                            }
+                if (isAtEnd()) {
+                    throw new JSSyntaxErrorException("Invalid or unexpected token");
+                }
+                char escaped = advance();
+                switch (escaped) {
+                    case 'n' -> value.append('\n');
+                    case 't' -> value.append('\t');
+                    case 'r' -> value.append('\r');
+                    case '\\' -> value.append('\\');
+                    case '\'' -> value.append('\'');
+                    case '"' -> value.append('"');
+                    case 'b' -> value.append('\b');
+                    case 'f' -> value.append('\f');
+                    case 'v' -> value.append('\u000B');
+                    case '0' -> {
+                        if (!isAtEnd() && peek() >= '0' && peek() <= '7') {
+                            value.append(parseLegacyOctalEscape(escaped));
+                        } else {
+                            value.append('\0');
                         }
-                        case 'u' -> {
-                            // Unicode escape: u+HHHH or u+{...}
-                            if (!isAtEnd() && peek() == '{') {
-                                advance(); // consume '{'
-                                StringBuilder codePoint = new StringBuilder();
-                                while (!isAtEnd() && peek() != '}') {
-                                    codePoint.append(advance());
-                                }
-                                if (!isAtEnd()) advance(); // consume '}'
-                                try {
-                                    int cp = Integer.parseInt(codePoint.toString(), 16);
-                                    value.appendCodePoint(cp);
-                                } catch (NumberFormatException e) {
-                                    value.append("u{").append(codePoint).append("}");
-                                }
-                            } else if (position + 3 < source.length()) {
-                                String hex = source.substring(position, position + 4);
-                                try {
-                                    value.append((char) Integer.parseInt(hex, 16));
-                                    position += 4;
-                                    column += 4;
-                                } catch (NumberFormatException e) {
-                                    value.append('u');
-                                }
-                            }
+                    }
+                    case 'x' -> {
+                        if (position + 1 >= source.length()) {
+                            throw new JSSyntaxErrorException("Invalid or unexpected token");
                         }
-                        default -> value.append(escaped);
+                        int hi = Character.digit(source.charAt(position), 16);
+                        int lo = Character.digit(source.charAt(position + 1), 16);
+                        if (hi < 0 || lo < 0) {
+                            throw new JSSyntaxErrorException("Invalid or unexpected token");
+                        }
+                        value.append((char) ((hi << 4) + lo));
+                        position += 2;
+                        column += 2;
+                    }
+                    case 'u' -> {
+                        int codePoint = parseUnicodeEscapeSequenceAfterU();
+                        if (codePoint < 0) {
+                            throw new JSSyntaxErrorException("Invalid or unexpected token");
+                        }
+                        value.appendCodePoint(codePoint);
+                    }
+                    case '\n' -> {
+                        line++;
+                        column = 1;
+                    }
+                    case '\r' -> {
+                        if (!isAtEnd() && peek() == '\n') {
+                            advance();
+                        }
+                        line++;
+                        column = 1;
+                    }
+                    default -> {
+                        if (escaped >= '1' && escaped <= '7') {
+                            value.append(parseLegacyOctalEscape(escaped));
+                        } else {
+                            value.append(escaped);
+                        }
                     }
                 }
             } else {
@@ -617,9 +680,10 @@ public final class Lexer {
             }
         }
 
-        if (!isAtEnd() && peek() == quote) {
-            advance(); // consume closing quote
+        if (isAtEnd()) {
+            throw new JSSyntaxErrorException("Invalid or unexpected token");
         }
+        advance(); // consume closing quote
 
         return new Token(TokenType.STRING, value.toString(), startLine, startColumn, startPos);
     }
@@ -627,11 +691,13 @@ public final class Lexer {
     private Token scanTemplate(int startPos, int startLine, int startColumn) {
         // Store the complete template literal including ${...} expressions.
         StringBuilder value = new StringBuilder();
+        boolean terminated = false;
 
         while (!isAtEnd()) {
             char c = peek();
             if (c == '`') {
                 advance(); // consume closing backtick
+                terminated = true;
                 break;
             }
             if (c == '\\') {
@@ -648,6 +714,10 @@ public final class Lexer {
                 continue;
             }
             value.append(advance());
+        }
+
+        if (!terminated) {
+            throw new JSSyntaxErrorException("Invalid or unexpected token");
         }
 
         return new Token(TokenType.TEMPLATE, value.toString(), startLine, startColumn, startPos);
@@ -792,6 +862,9 @@ public final class Lexer {
 
             value.append(advance());
             regexAllowed = false;
+        }
+        if (braceDepth != 0) {
+            throw new JSSyntaxErrorException("Invalid or unexpected token");
         }
     }
 
@@ -944,7 +1017,18 @@ public final class Lexer {
 
         // Identifiers and keywords
         if (isIdentifierStart(c)) {
-            Token token = scanIdentifier(startPos, startLine, startColumn);
+            Token token = scanIdentifier(startPos, startLine, startColumn, c);
+            lastTokenType = token.type();
+            return token;
+        }
+
+        // Identifier with Unicode escape start (\\uXXXX / \\u{...})
+        if (c == '\\' && !isAtEnd() && peek() == 'u') {
+            int codePoint = parseUnicodeEscapeSequence();
+            if (codePoint < 0 || !isIdentifierStartCodePoint(codePoint)) {
+                throw new JSSyntaxErrorException("Invalid or unexpected token");
+            }
+            Token token = scanIdentifier(startPos, startLine, startColumn, codePoint);
             lastTokenType = token.type();
             return token;
         }
@@ -973,13 +1057,46 @@ public final class Lexer {
         // Private identifiers (#name)
         if (c == '#') {
             // Check if next character is an identifier start
-            if (!isAtEnd() && isIdentifierStart(peek())) {
-                // Scan the identifier part (without the #)
-                int nameStart = position;
-                while (!isAtEnd() && isIdentifierPart(peek())) {
-                    advance();
+            if (!isAtEnd() && (isIdentifierStart(peek()) || peek() == '\\')) {
+                StringBuilder name = new StringBuilder();
+
+                if (peek() == '\\') {
+                    advance(); // consume '\'
+                    int codePoint = parseUnicodeEscapeSequence();
+                    if (codePoint < 0 || !isIdentifierStartCodePoint(codePoint)) {
+                        throw new JSSyntaxErrorException("Invalid or unexpected token");
+                    }
+                    name.appendCodePoint(codePoint);
+                } else {
+                    char first = advance();
+                    if (!isIdentifierStart(first)) {
+                        throw new JSSyntaxErrorException("Invalid or unexpected token");
+                    }
+                    name.append(first);
                 }
-                String name = source.substring(nameStart, position);
+
+                while (!isAtEnd()) {
+                    if (peek() == '\\') {
+                        int currentPos = position;
+                        int currentColumn = column;
+                        advance(); // consume '\'
+                        int codePoint = parseUnicodeEscapeSequence();
+                        if (codePoint < 0) {
+                            position = currentPos;
+                            column = currentColumn;
+                            break;
+                        }
+                        if (!isIdentifierPartCodePoint(codePoint)) {
+                            throw new JSSyntaxErrorException("Invalid or unexpected token");
+                        }
+                        name.appendCodePoint(codePoint);
+                    } else if (isIdentifierPart(peek())) {
+                        name.append(advance());
+                    } else {
+                        break;
+                    }
+                }
+
                 // The value includes the # prefix
                 String value = "#" + name;
                 Token token = new Token(TokenType.PRIVATE_NAME, value, startLine, startColumn, startPos);
@@ -1039,10 +1156,12 @@ public final class Lexer {
                 if (next == '*') {
                     advance(); // consume /
                     advance(); // consume *
+                    boolean closed = false;
                     while (!isAtEnd()) {
                         if (peek() == '*' && position + 1 < source.length() && source.charAt(position + 1) == '/') {
                             advance(); // consume *
                             advance(); // consume /
+                            closed = true;
                             break;
                         }
                         if (peek() == '\n') {
@@ -1051,6 +1170,9 @@ public final class Lexer {
                             seenLineTerminator = true;
                         }
                         advance();
+                    }
+                    if (!closed) {
+                        throw new JSSyntaxErrorException("Invalid or unexpected token");
                     }
                     continue;
                 }
@@ -1102,5 +1224,78 @@ public final class Lexer {
         if (isIdentifierStart(next) && next != 'n') {
             throw new JSSyntaxErrorException("Invalid or unexpected token");
         }
+    }
+
+    private boolean isIdentifierPartCodePoint(int codePoint) {
+        if (codePoint <= Character.MAX_VALUE) {
+            return isIdentifierPart((char) codePoint);
+        }
+        return Character.isUnicodeIdentifierPart(codePoint);
+    }
+
+    private boolean isIdentifierStartCodePoint(int codePoint) {
+        if (codePoint <= Character.MAX_VALUE) {
+            return isIdentifierStart((char) codePoint);
+        }
+        return Character.isUnicodeIdentifierStart(codePoint);
+    }
+
+    private int parseUnicodeEscapeSequence() {
+        if (isAtEnd() || peek() != 'u') {
+            return -1;
+        }
+        advance(); // consume 'u'
+        return parseUnicodeEscapeSequenceAfterU();
+    }
+
+    private int parseUnicodeEscapeSequenceAfterU() {
+        if (!isAtEnd() && peek() == '{') {
+            advance(); // consume '{'
+            int codePoint = 0;
+            int digitCount = 0;
+            while (!isAtEnd() && peek() != '}') {
+                int hex = Character.digit(peek(), 16);
+                if (hex < 0) {
+                    return -1;
+                }
+                if (codePoint > 0x10FFFF / 16) {
+                    return -1;
+                }
+                codePoint = (codePoint << 4) | hex;
+                digitCount++;
+                advance();
+            }
+            if (isAtEnd() || peek() != '}' || digitCount == 0 || codePoint > 0x10FFFF) {
+                return -1;
+            }
+            advance(); // consume '}'
+            return codePoint;
+        }
+
+        if (position + 3 >= source.length()) {
+            return -1;
+        }
+        int codeUnit = 0;
+        for (int i = 0; i < 4; i++) {
+            int hex = Character.digit(source.charAt(position + i), 16);
+            if (hex < 0) {
+                return -1;
+            }
+            codeUnit = (codeUnit << 4) | hex;
+        }
+        position += 4;
+        column += 4;
+        return codeUnit;
+    }
+
+    private char parseLegacyOctalEscape(char firstDigit) {
+        int value = firstDigit - '0';
+        int maxDigits = firstDigit <= '3' ? 3 : 2;
+        int digits = 1;
+        while (digits < maxDigits && !isAtEnd() && peek() >= '0' && peek() <= '7') {
+            value = (value << 3) + (advance() - '0');
+            digits++;
+        }
+        return (char) value;
     }
 }
