@@ -1676,8 +1676,10 @@ public final class VirtualMachine {
                         // Set up prototype chain
                         if (superClass != JSUndefined.INSTANCE && superClass != JSNull.INSTANCE) {
                             if (superClass instanceof JSFunction superFunc) {
+                                // prototype.__proto__ = superFunc.prototype
                                 context.transferPrototype(prototype, superFunc);
-                                context.transferPrototype(constructorFunc, superFunc);
+                                // constructor.__proto__ = superFunc (the parent constructor itself)
+                                constructorFunc.setPrototype(superFunc);
                             }
                         }
                         // Set constructor.prototype = prototype
@@ -1711,8 +1713,10 @@ public final class VirtualMachine {
 
                         if (hasHeritage && superClass != JSUndefined.INSTANCE && superClass != JSNull.INSTANCE) {
                             if (superClass instanceof JSFunction superFunc) {
+                                // prototype.__proto__ = superFunc.prototype
                                 context.transferPrototype(prototype, superFunc);
-                                context.transferPrototype(constructorFunc, superFunc);
+                                // constructor.__proto__ = superFunc (the parent constructor itself)
+                                constructorFunc.setPrototype(superFunc);
                             } else {
                                 throw new JSVirtualMachineException(context.throwTypeError("parent class must be constructor"));
                             }
