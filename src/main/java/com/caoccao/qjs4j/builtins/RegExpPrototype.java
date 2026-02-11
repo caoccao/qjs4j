@@ -45,6 +45,11 @@ public final class RegExpPrototype {
         if (!(thisArg instanceof JSRegExp regexp)) {
             return context.throwTypeError("RegExp.prototype.compile called on non-RegExp");
         }
+        JSValue realmRegExpConstructor = context.getGlobalObject().get("RegExp");
+        JSValue receiverConstructor = regexp.get("constructor");
+        if (realmRegExpConstructor != receiverConstructor) {
+            return context.throwTypeError("RegExp.prototype.compile called on incompatible receiver");
+        }
 
         String pattern = "";
         String flags = "";

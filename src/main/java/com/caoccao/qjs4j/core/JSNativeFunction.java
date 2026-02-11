@@ -80,7 +80,13 @@ public final class JSNativeFunction extends JSFunction {
 
     @Override
     public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
-        return callback.call(context, thisArg, args);
+        JSContext callbackContext = getHomeContext() != null ? getHomeContext() : context;
+        JSValue result = callback.call(callbackContext, thisArg, args);
+        if (callbackContext != context && callbackContext.hasPendingException()) {
+            context.setPendingException(callbackContext.getPendingException());
+            callbackContext.clearPendingException();
+        }
+        return result;
     }
 
     @Override

@@ -23,6 +23,7 @@ package com.caoccao.qjs4j.core;
 public abstract sealed class JSFunction extends JSObject
         permits JSBytecodeFunction, JSNativeFunction, JSBoundFunction, JSClass {
     public static final String NAME = "Function";
+    private JSContext homeContext;
 
     /**
      * Call this function with the given context, this value, and arguments.
@@ -44,6 +45,9 @@ public abstract sealed class JSFunction extends JSObject
      * This should be called after creation when the context is available.
      */
     public void initializePrototypeChain(JSContext context) {
+        if (homeContext == null) {
+            homeContext = context;
+        }
         // For async functions, use AsyncFunction.prototype if available
         if (this instanceof JSBytecodeFunction bytecodeFunc && bytecodeFunc.isAsync()) {
             if (context.transferPrototype(this, context.getAsyncFunctionConstructor())) {
@@ -51,6 +55,10 @@ public abstract sealed class JSFunction extends JSObject
             }
         }
         context.transferPrototype(this, NAME);
+    }
+
+    protected JSContext getHomeContext() {
+        return homeContext;
     }
 
     @Override

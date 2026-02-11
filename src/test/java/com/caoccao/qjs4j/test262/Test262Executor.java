@@ -20,7 +20,9 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.test262.harness.HarnessLoader;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -55,8 +57,10 @@ public class Test262Executor {
     }
 
     public TestResult execute(Test262TestCase test) {
+        List<JSRuntime> realmRuntimes = new ArrayList<>();
         try (JSRuntime runtime = new JSRuntime();
              JSContext context = runtime.createContext()) {
+            install262Object(context, realmRuntimes);
 
             // Load harness files unless 'raw' flag is present
             if (!test.hasFlag("raw")) {
@@ -82,6 +86,10 @@ public class Test262Executor {
 
         } catch (Exception e) {
             return handleException(e, test);
+        } finally {
+            for (JSRuntime realmRuntime : realmRuntimes) {
+                realmRuntime.close();
+            }
         }
     }
 
@@ -237,6 +245,47 @@ public class Test262Executor {
             return TestResult.fail(test,
                     "Expected " + negative.getType() + " but got " + errorType);
         }
+    }
+
+    /**
+     * Install a minimal Test262 host object ($262) with createRealm()/evalScript().
+     * This is enough for cross-realm tests used by annexB RegExp compile checks.
+     */
+    private void install262Object(JSContext context, List<JSRuntime> realmRuntimes) {
+        JSObject global = context.getGlobalObject();
+        JSObject host262 = context.createJSObject();
+
+        host262.set("global", global);
+        host262.set("evalScript", new JSNativeFunction("evalScript", 1,
+                (ctx, thisArg, args) -> {
+                    String script = args.length > 0 ? JSTypeConversions.toString(ctx, args[0]).value() : "";
+                    return context.eval(script, "<test262-evalScript>", false);
+                }));
+
+        host262.set("createRealm", new JSNativeFunction("createRealm", 0,
+                (ctx, thisArg, args) -> {
+                    JSRuntime realmRuntime = new JSRuntime();
+                    realmRuntimes.add(realmRuntime);
+                    JSContext realmContext = realmRuntime.createContext();
+                    install262Object(realmContext, realmRuntimes);
+
+                    JSObject realm = ctx.createJSObject();
+                    JSObject realmGlobal = realmContext.getGlobalObject();
+                    realm.set("global", realmGlobal);
+                    realm.set("globalThis", realmGlobal);
+                    realm.set("evalScript", new JSNativeFunction("evalScript", 1,
+                            (innerCtx, innerThisArg, innerArgs) -> {
+                                String script = innerArgs.length > 0
+                                        ? JSTypeConversions.toString(innerCtx, innerArgs[0]).value()
+                                        : "";
+                                JSValue result = realmContext.eval(script, "<test262-realm-evalScript>", false);
+                                realmRuntime.runJobs();
+                                return result;
+                            }));
+                    return realm;
+                }));
+
+        global.set("$262", host262);
     }
 
     private String prepareCode(Test262TestCase test) {
