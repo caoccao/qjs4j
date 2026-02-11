@@ -322,16 +322,13 @@ public final class RegExpPrototype {
         }
 
         String s = args.length > 0 ? JSTypeConversions.toString(context, args[0]).value() : "";
-        long limit = args.length > 1 && !(args[1] instanceof JSUndefined)
-                ? JSTypeConversions.toUint32(context, args[1])
-                : 0xFFFFFFFFL;
 
         // Step 5: Get flags
         String flags = rx.getFlags();
         boolean unicodeMatching = flags.contains("u");
         String newFlags = flags.contains("y") ? flags : flags + "y";
 
-        // Step 8: Construct splitter = Construct(C, « rx, newFlags »)
+        // Step 10: Construct splitter = Construct(C, « rx, newFlags »)
         // Per spec, this calls RegExp(rx, newFlags) which calls IsRegExp(rx),
         // accessing rx[Symbol.match] and triggering any getter side effects.
         rx.get(PropertyKey.fromSymbol(JSSymbol.MATCH), context);
@@ -343,6 +340,12 @@ public final class RegExpPrototype {
         } catch (Exception e) {
             return context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
         }
+
+        // Step 13: ToUint32(limit) — must happen AFTER splitter construction (step 10)
+        // so that side-effects in valueOf don't affect the splitter's pattern.
+        long limit = args.length > 1 && !(args[1] instanceof JSUndefined)
+                ? JSTypeConversions.toUint32(context, args[1])
+                : 0xFFFFFFFFL;
 
         JSArray result = context.createJSArray();
         int lengthA = 0;
