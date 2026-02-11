@@ -523,6 +523,22 @@ public final class DatePrototype {
         return getDateString(context, thisArg, FORMAT_LOCALE, PART_TIME);
     }
 
+    private static JSNumber toNumberOrThrow(JSContext context, JSValue value) {
+        if (value.isSymbol() || value.isSymbolObject()) {
+            context.throwTypeError("cannot convert symbol to number");
+            return null;
+        }
+        if (value.isBigInt() || value.isBigIntObject()) {
+            context.throwTypeError("cannot convert bigint to number");
+            return null;
+        }
+        JSNumber number = JSTypeConversions.toNumber(context, value);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        return number;
+    }
+
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
         JSDate date = requireDate(context, thisArg, "toString");
         if (date == null) {
@@ -545,21 +561,5 @@ public final class DatePrototype {
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
         return getTime(context, thisArg, args);
-    }
-
-    private static JSNumber toNumberOrThrow(JSContext context, JSValue value) {
-        if (value.isSymbol() || value.isSymbolObject()) {
-            context.throwTypeError("cannot convert symbol to number");
-            return null;
-        }
-        if (value.isBigInt() || value.isBigIntObject()) {
-            context.throwTypeError("cannot convert bigint to number");
-            return null;
-        }
-        JSNumber number = JSTypeConversions.toNumber(context, value);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return number;
     }
 }

@@ -190,6 +190,7 @@ tasks.register<JavaExec>("test262Language") {
 tasks {
     withType<JavaCompile> {
         options.encoding = "UTF-8"
+        options.compilerArgs.add("-Xlint:deprecation")
     }
     withType<Javadoc> {
         options.encoding = "UTF-8"

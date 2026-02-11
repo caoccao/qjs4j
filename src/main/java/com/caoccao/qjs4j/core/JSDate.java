@@ -16,10 +16,11 @@
 
 package com.caoccao.qjs4j.core;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.Date;
 import java.util.Locale;
 
 /**
@@ -167,7 +168,7 @@ public final class JSDate extends JSObject {
         for (month = 0; month < 11; month++) {
             int monthDays = MONTH_DAYS[month];
             if (month == 1) {
-                monthDays += (int) (daysInYear(y) - 365);
+                monthDays += daysInYear(y) - 365;
             }
             if (days < monthDays) {
                 break;
@@ -236,9 +237,13 @@ public final class JSDate extends JSObject {
         } catch (DateTimeParseException ignored) {
         }
 
+        // Fallback to lenient SimpleDateFormat for legacy date formats
+        // This replaces the deprecated Date.parse() method
         try {
-            return Date.parse(str);
-        } catch (IllegalArgumentException ignored) {
+            SimpleDateFormat format = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy", Locale.ENGLISH);
+            format.setLenient(true);
+            return format.parse(str).getTime();
+        } catch (ParseException ignored) {
         }
 
         return Double.NaN;
