@@ -185,6 +185,19 @@ public final class RegExpCompiler {
                 if (startsWithValidQuantifier(context)) {
                     throw new RegExpSyntaxException("Nothing to repeat at position " + context.pos);
                 }
+                // In unicode mode, lone '{' is a syntax error (not AnnexB literal)
+                if (context.isUnicodeMode()) {
+                    throw new RegExpSyntaxException("Lone quantifier bracket at position " + context.pos);
+                }
+                compileLiteralChar(context, ch);
+                context.pos++;
+            }
+
+            case '}' -> {
+                // In unicode mode, lone '}' outside a quantifier is a syntax error
+                if (context.isUnicodeMode()) {
+                    throw new RegExpSyntaxException("Lone quantifier bracket at position " + context.pos);
+                }
                 compileLiteralChar(context, ch);
                 context.pos++;
             }
