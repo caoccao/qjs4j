@@ -25,59 +25,15 @@ import com.caoccao.qjs4j.regexp.RegExpEngine;
  */
 public final class RegExpPrototype {
 
-    private static JSValue createIndicesValue(int[][] indices, String[] groupNames) {
-        if (indices == null) {
-            return JSUndefined.INSTANCE;
+    private static int advanceStringIndexUnicode(String s, int index) {
+        if (index + 1 >= s.length()) {
+            return index + 1;
         }
-        JSArray indicesArray = new JSArray();
-        JSObject groupIndices = new JSObject();
-        groupIndices.setPrototype(null);
-        for (int i = 0; i < indices.length; i++) {
-            JSValue pairValue = createIndexPairValue(indices[i]);
-            indicesArray.push(pairValue);
-            if (i > 0 && groupNames != null && i < groupNames.length) {
-                String groupName = groupNames[i];
-                if (groupName != null && !groupIndices.hasOwnProperty(groupName)) {
-                    groupIndices.set(groupName, pairValue);
-                }
-            }
+        char c = s.charAt(index);
+        if (Character.isHighSurrogate(c) && Character.isLowSurrogate(s.charAt(index + 1))) {
+            return index + 2;
         }
-        if (groupNames != null) {
-            indicesArray.set("groups", groupIndices);
-        }
-        return indicesArray;
-    }
-
-    private static JSValue createIndexPairValue(int[] pair) {
-        if (pair == null || pair.length < 2 || pair[0] < 0 || pair[1] < 0) {
-            return JSUndefined.INSTANCE;
-        }
-        JSArray range = new JSArray();
-        range.push(new JSNumber(pair[0]));
-        range.push(new JSNumber(pair[1]));
-        return range;
-    }
-
-    private static JSValue createNamedGroupsValue(String[] captures, String[] groupNames) {
-        if (groupNames == null || captures == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        JSObject groups = new JSObject();
-        groups.setPrototype(null);
-
-        int maxLength = Math.min(captures.length, groupNames.length);
-        for (int i = 1; i < maxLength; i++) {
-            String groupName = groupNames[i];
-            if (groupName != null && !groups.hasOwnProperty(groupName)) {
-                if (captures[i] != null) {
-                    groups.set(groupName, new JSString(captures[i]));
-                } else {
-                    groups.set(groupName, JSUndefined.INSTANCE);
-                }
-            }
-        }
-        return groups;
+        return index + 1;
     }
 
     /**
@@ -114,6 +70,61 @@ public final class RegExpPrototype {
             return context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
         }
         return regexp;
+    }
+
+    private static JSValue createIndexPairValue(int[] pair) {
+        if (pair == null || pair.length < 2 || pair[0] < 0 || pair[1] < 0) {
+            return JSUndefined.INSTANCE;
+        }
+        JSArray range = new JSArray();
+        range.push(new JSNumber(pair[0]));
+        range.push(new JSNumber(pair[1]));
+        return range;
+    }
+
+    private static JSValue createIndicesValue(int[][] indices, String[] groupNames) {
+        if (indices == null) {
+            return JSUndefined.INSTANCE;
+        }
+        JSArray indicesArray = new JSArray();
+        JSObject groupIndices = new JSObject();
+        groupIndices.setPrototype(null);
+        for (int i = 0; i < indices.length; i++) {
+            JSValue pairValue = createIndexPairValue(indices[i]);
+            indicesArray.push(pairValue);
+            if (i > 0 && groupNames != null && i < groupNames.length) {
+                String groupName = groupNames[i];
+                if (groupName != null && !groupIndices.hasOwnProperty(groupName)) {
+                    groupIndices.set(groupName, pairValue);
+                }
+            }
+        }
+        if (groupNames != null) {
+            indicesArray.set("groups", groupIndices);
+        }
+        return indicesArray;
+    }
+
+    private static JSValue createNamedGroupsValue(String[] captures, String[] groupNames) {
+        if (groupNames == null || captures == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSObject groups = new JSObject();
+        groups.setPrototype(null);
+
+        int maxLength = Math.min(captures.length, groupNames.length);
+        for (int i = 1; i < maxLength; i++) {
+            String groupName = groupNames[i];
+            if (groupName != null && !groups.hasOwnProperty(groupName)) {
+                if (captures[i] != null) {
+                    groups.set(groupName, new JSString(captures[i]));
+                } else {
+                    groups.set(groupName, JSUndefined.INSTANCE);
+                }
+            }
+        }
+        return groups;
     }
 
     /**
@@ -178,6 +189,18 @@ public final class RegExpPrototype {
     }
 
     /**
+     * get RegExp.prototype.dotAll
+     * ES2020 21.2.5.6
+     */
+    public static JSValue getDotAll(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSRegExp regexp)) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return JSBoolean.valueOf(regexp.isDotAll());
+    }
+
+    /**
      * get RegExp.prototype.flags
      * ES2020 21.2.5.3
      */
@@ -199,18 +222,6 @@ public final class RegExpPrototype {
         }
 
         return JSBoolean.valueOf(regexp.isGlobal());
-    }
-
-    /**
-     * get RegExp.prototype.dotAll
-     * ES2020 21.2.5.6
-     */
-    public static JSValue getDotAll(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSRegExp regexp)) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSBoolean.valueOf(regexp.isDotAll());
     }
 
     /**
@@ -299,6 +310,113 @@ public final class RegExpPrototype {
         }
 
         return JSBoolean.valueOf(regexp.isUnicodeSets());
+    }
+
+    /**
+     * RegExp.prototype[@@split](string, limit)
+     * ES2024 22.2.6.14
+     */
+    public static JSValue symbolSplit(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSRegExp rx)) {
+            return context.throwTypeError("RegExp.prototype[@@split] called on non-RegExp");
+        }
+
+        String s = args.length > 0 ? JSTypeConversions.toString(context, args[0]).value() : "";
+        long limit = args.length > 1 && !(args[1] instanceof JSUndefined)
+                ? JSTypeConversions.toUint32(context, args[1])
+                : 0xFFFFFFFFL;
+
+        // Step 5: Get flags
+        String flags = rx.getFlags();
+        boolean unicodeMatching = flags.contains("u");
+        String newFlags = flags.contains("y") ? flags : flags + "y";
+
+        // Step 8: Construct splitter = Construct(C, « rx, newFlags »)
+        // Per spec, this calls RegExp(rx, newFlags) which calls IsRegExp(rx),
+        // accessing rx[Symbol.match] and triggering any getter side effects.
+        rx.get(PropertyKey.fromSymbol(JSSymbol.MATCH), context);
+        // After the getter may have mutated rx via compile(), read the pattern.
+        JSRegExp splitter;
+        try {
+            splitter = new JSRegExp(rx.getPattern(), newFlags);
+            context.transferPrototype(splitter, JSRegExp.NAME);
+        } catch (Exception e) {
+            return context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
+        }
+
+        JSArray result = context.createJSArray();
+        int lengthA = 0;
+
+        if (limit == 0) {
+            return result;
+        }
+
+        int size = s.length();
+        if (size == 0) {
+            // Step 15: If string is empty, check if splitter matches it
+            RegExpEngine.MatchResult z = splitter.getEngine().exec(s, 0);
+            if (z == null || !z.matched()) {
+                result.push(new JSString(s));
+            }
+            return result;
+        }
+
+        // Step 16-17: Main split loop
+        int p = 0; // Start of segment
+        int q = p; // Current search position
+        RegExpEngine engine = splitter.getEngine();
+
+        while (q < size) {
+            // Set splitter lastIndex and exec
+            RegExpEngine.MatchResult z = engine.exec(s, q);
+
+            if (z == null || !z.matched()) {
+                // No match: advance q
+                q = unicodeMatching ? advanceStringIndexUnicode(s, q) : q + 1;
+            } else {
+                int[][] indices = z.indices();
+                if (indices == null || indices.length == 0) {
+                    q = unicodeMatching ? advanceStringIndexUnicode(s, q) : q + 1;
+                    continue;
+                }
+                int e = Math.min(indices[0][1], size);
+
+                if (e == p) {
+                    // Zero-width match at segment start: advance
+                    q = unicodeMatching ? advanceStringIndexUnicode(s, q) : q + 1;
+                } else {
+                    // Add substring before match
+                    result.push(new JSString(s.substring(p, indices[0][0])));
+                    lengthA++;
+                    if (lengthA == limit) {
+                        return result;
+                    }
+
+                    // Add capture groups
+                    String[] captures = z.captures();
+                    if (captures != null) {
+                        for (int i = 1; i < captures.length; i++) {
+                            if (captures[i] != null) {
+                                result.push(new JSString(captures[i]));
+                            } else {
+                                result.push(JSUndefined.INSTANCE);
+                            }
+                            lengthA++;
+                            if (lengthA == limit) {
+                                return result;
+                            }
+                        }
+                    }
+
+                    p = e;
+                    q = p;
+                }
+            }
+        }
+
+        // Step 18: Add trailing segment
+        result.push(new JSString(s.substring(p)));
+        return result;
     }
 
     /**

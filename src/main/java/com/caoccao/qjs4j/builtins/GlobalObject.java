@@ -1340,6 +1340,7 @@ public final class GlobalObject {
         regexpPrototype.set("exec", new JSNativeFunction("exec", 1, RegExpPrototype::exec));
         regexpPrototype.set("compile", new JSNativeFunction("compile", 2, RegExpPrototype::compile));
         regexpPrototype.set("toString", new JSNativeFunction("toString", 0, RegExpPrototype::toStringMethod));
+        regexpPrototype.set(PropertyKey.fromSymbol(JSSymbol.SPLIT), new JSNativeFunction("[Symbol.split]", 2, RegExpPrototype::symbolSplit));
 
         // Accessor properties
         regexpPrototype.defineProperty(
