@@ -74,6 +74,15 @@ public final class RegExpPrototype {
         } catch (Exception e) {
             return context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
         }
+
+        // Spec step 12: Perform ? Set(obj, "lastIndex", 0, true).
+        // The 'true' means throw TypeError if the property is non-writable.
+        PropertyDescriptor lastIndexDesc = regexp.getOwnPropertyDescriptor(PropertyKey.fromString("lastIndex"));
+        if (lastIndexDesc != null && !lastIndexDesc.isWritable()) {
+            return context.throwTypeError("Cannot assign to read only property 'lastIndex'");
+        }
+        regexp.setLastIndex(0);
+
         return regexp;
     }
 

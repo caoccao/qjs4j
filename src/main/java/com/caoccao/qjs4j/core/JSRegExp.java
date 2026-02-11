@@ -71,8 +71,8 @@ public final class JSRegExp extends JSObject {
         this.engine = nextEngine;
         this.flags = nextFlags;
 
-        // Reset lastIndex after recompilation.
-        this.set("lastIndex", new JSNumber(0));
+        // Note: caller is responsible for setting lastIndex (spec step 12:
+        // Set(obj, "lastIndex", 0, true) which may throw TypeError if non-writable).
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
