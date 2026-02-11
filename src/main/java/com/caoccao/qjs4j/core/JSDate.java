@@ -28,20 +28,18 @@ import java.util.Locale;
  */
 public final class JSDate extends JSObject {
     public static final String NAME = "Date";
-
-    /**
-     * Date.toString() format with short timezone name.
-     * Example: "Wed Jan 01 2025 01:00:00 GMT+0100 (CET)"
-     */
-    public static final DateTimeFormatter TO_STRING_FORMATTER_SHORT =
-            DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z (z)", Locale.ENGLISH);
     /**
      * Date.toString() format with long timezone name.
      * Example: "Wed Jan 01 2025 01:00:00 GMT+0100 (Central European Standard Time)"
      */
     public static final DateTimeFormatter TO_STRING_FORMATTER_LONG =
             DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z (zzzz)", Locale.ENGLISH);
-
+    /**
+     * Date.toString() format with short timezone name.
+     * Example: "Wed Jan 01 2025 01:00:00 GMT+0100 (CET)"
+     */
+    public static final DateTimeFormatter TO_STRING_FORMATTER_SHORT =
+            DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z (z)", Locale.ENGLISH);
     private final long timeValue; // milliseconds since 1970-01-01T00:00:00.000Z
 
     /**
@@ -84,13 +82,6 @@ public final class JSDate extends JSObject {
     }
 
     /**
-     * Get ZonedDateTime representation (local timezone).
-     */
-    public ZonedDateTime getLocalZonedDateTime() {
-        return ZonedDateTime.ofInstant(Instant.ofEpochMilli(timeValue), ZoneId.systemDefault());
-    }
-
-    /**
      * Format Date.prototype.toString() output.
      * File-backed script execution uses long timezone names; eval/host calls keep short names.
      */
@@ -100,6 +91,13 @@ public final class JSDate extends JSObject {
                 ? TO_STRING_FORMATTER_LONG
                 : TO_STRING_FORMATTER_SHORT;
         return zdt.format(formatter);
+    }
+
+    /**
+     * Get ZonedDateTime representation (local timezone).
+     */
+    public ZonedDateTime getLocalZonedDateTime() {
+        return ZonedDateTime.ofInstant(Instant.ofEpochMilli(timeValue), ZoneId.systemDefault());
     }
 
     /**

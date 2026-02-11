@@ -39,6 +39,29 @@ import java.util.stream.Stream;
  */
 public final class GlobalObject {
 
+    private static void addLegacyRegExpAccessor(JSNativeFunction regexpConstructor, String name, String alias) {
+        JSNativeFunction getter = new JSNativeFunction("get " + name, 0, (ctx, thisArg, args) -> {
+            if (thisArg != regexpConstructor) {
+                return ctx.throwTypeError("Generic static accessor property access is not supported");
+            }
+            return new JSString("");
+        }, false);
+        regexpConstructor.defineProperty(
+                PropertyKey.fromString(name),
+                PropertyDescriptor.accessorDescriptor(getter, null, false, true));
+        if (alias != null) {
+            JSNativeFunction aliasGetter = new JSNativeFunction("get " + alias, 0, (ctx, thisArg, args) -> {
+                if (thisArg != regexpConstructor) {
+                    return ctx.throwTypeError("Generic static accessor property access is not supported");
+                }
+                return new JSString("");
+            }, false);
+            regexpConstructor.defineProperty(
+                    PropertyKey.fromString(alias),
+                    PropertyDescriptor.accessorDescriptor(aliasGetter, null, false, true));
+        }
+    }
+
     /**
      * console.error(...args)
      * Print error to standard error.
@@ -1205,6 +1228,8 @@ public final class GlobalObject {
         global.set("Number", numberConstructor);
     }
 
+    // Global function implementations
+
     /**
      * Initialize Object constructor and static methods.
      */
@@ -1263,8 +1288,6 @@ public final class GlobalObject {
 
         global.set("Object", objectConstructor);
     }
-
-    // Global function implementations
 
     /**
      * Initialize Promise constructor and prototype methods.
@@ -1384,6 +1407,18 @@ public final class GlobalObject {
         regexpConstructor.set("prototype", regexpPrototype);
         regexpConstructor.setConstructorType(JSConstructorType.REGEXP);
         regexpPrototype.set("constructor", regexpConstructor);
+
+        // AnnexB legacy RegExp static accessor properties.
+        // Each getter validates SameValue(C, thisValue) per GetLegacyRegExpStaticProperty.
+        addLegacyRegExpAccessor(regexpConstructor, "rightContext", "$'");
+        addLegacyRegExpAccessor(regexpConstructor, "leftContext", "$`");
+        addLegacyRegExpAccessor(regexpConstructor, "lastMatch", "$&");
+        addLegacyRegExpAccessor(regexpConstructor, "lastParen", "$+");
+        addLegacyRegExpAccessor(regexpConstructor, "input", "$_");
+        // $1..$9
+        for (int i = 1; i <= 9; i++) {
+            addLegacyRegExpAccessor(regexpConstructor, "$" + i, null);
+        }
 
         global.set("RegExp", regexpConstructor);
     }

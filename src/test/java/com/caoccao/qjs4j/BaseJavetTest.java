@@ -43,9 +43,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class BaseJavetTest extends BaseTest {
     protected static final String FILE_NAME = "test.js";
-    protected boolean debugMode;
-    protected boolean moduleMode;
-    protected V8Runtime v8Runtime;
 
     static {
         File icuDataFile = new File(JavetOSUtils.WORKING_DIRECTORY)
@@ -55,6 +52,10 @@ public class BaseJavetTest extends BaseTest {
                 .toFile();
         V8RuntimeOptions.V8_FLAGS.setIcuDataFile(icuDataFile.getAbsolutePath());
     }
+
+    protected boolean debugMode;
+    protected boolean moduleMode;
+    protected V8Runtime v8Runtime;
 
     protected void assertBigIntegerObjectWithJavet(String... codeArray) {
         for (String code : getNormalizedCodeStrings(codeArray)) {

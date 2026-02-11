@@ -122,7 +122,8 @@ public final class ReflectObject {
         }
 
         PropertyKey key = PropertyKey.fromValue(context, args[1]);
-        return target.get(key);
+        JSObject receiver = args.length > 2 && args[2] instanceof JSObject r ? r : target;
+        return target.getWithReceiver(key, context, receiver);
     }
 
     /**

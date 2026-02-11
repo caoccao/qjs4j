@@ -411,6 +411,14 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
+     * Get a property value with an explicit receiver for getter invocation.
+     * Used by Reflect.get to pass a different receiver than the target.
+     */
+    public JSValue getWithReceiver(PropertyKey key, JSContext context, JSObject receiver) {
+        return get(key, context, receiver);
+    }
+
+    /**
      * Check if object has a property (including prototype chain).
      */
     public boolean has(String propertyName) {

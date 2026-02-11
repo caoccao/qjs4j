@@ -193,6 +193,22 @@ public class NumberPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testNumberPropertyDescriptorsWithJavet() {
+        assertBooleanWithJavet(
+                "Number.parseInt === parseInt",
+                "Number.parseFloat === parseFloat",
+                "Object.getOwnPropertyDescriptor(Number, 'parseInt').writable === true",
+                "Object.getOwnPropertyDescriptor(Number, 'parseInt').enumerable === false",
+                "Object.getOwnPropertyDescriptor(Number, 'parseInt').configurable === true",
+                "Object.getOwnPropertyDescriptor(Number.prototype, 'toString').writable === true",
+                "Object.getOwnPropertyDescriptor(Number.prototype, 'toString').enumerable === false",
+                "Object.getOwnPropertyDescriptor(Number.prototype, 'toString').configurable === true",
+                "Object.getOwnPropertyDescriptor(Number, 'prototype').writable === false",
+                "Object.getOwnPropertyDescriptor(Number, 'prototype').enumerable === false",
+                "Object.getOwnPropertyDescriptor(Number, 'prototype').configurable === false");
+    }
+
+    @Test
     public void testNumericSeparatorsInvalidLiterals() {
         assertInvalidNumericLiteral("0_1");
         assertInvalidNumericLiteral("1__0");
@@ -354,22 +370,6 @@ public class NumberPrototypeTest extends BaseJavetTest {
                 "Number.parseInt('0o10') === 0",
                 "parseInt('0b10') === 0",
                 "Number.parseInt('0b10') === 0");
-    }
-
-    @Test
-    public void testNumberPropertyDescriptorsWithJavet() {
-        assertBooleanWithJavet(
-                "Number.parseInt === parseInt",
-                "Number.parseFloat === parseFloat",
-                "Object.getOwnPropertyDescriptor(Number, 'parseInt').writable === true",
-                "Object.getOwnPropertyDescriptor(Number, 'parseInt').enumerable === false",
-                "Object.getOwnPropertyDescriptor(Number, 'parseInt').configurable === true",
-                "Object.getOwnPropertyDescriptor(Number.prototype, 'toString').writable === true",
-                "Object.getOwnPropertyDescriptor(Number.prototype, 'toString').enumerable === false",
-                "Object.getOwnPropertyDescriptor(Number.prototype, 'toString').configurable === true",
-                "Object.getOwnPropertyDescriptor(Number, 'prototype').writable === false",
-                "Object.getOwnPropertyDescriptor(Number, 'prototype').enumerable === false",
-                "Object.getOwnPropertyDescriptor(Number, 'prototype').configurable === false");
     }
 
     @Test

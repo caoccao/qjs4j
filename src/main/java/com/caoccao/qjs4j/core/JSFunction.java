@@ -30,6 +30,10 @@ public abstract sealed class JSFunction extends JSObject
      */
     public abstract JSValue call(JSContext context, JSValue thisArg, JSValue[] args);
 
+    protected JSContext getHomeContext() {
+        return homeContext;
+    }
+
     /**
      * Get the number of formal parameters.
      */
@@ -55,10 +59,6 @@ public abstract sealed class JSFunction extends JSObject
             }
         }
         context.transferPrototype(this, NAME);
-    }
-
-    protected JSContext getHomeContext() {
-        return homeContext;
     }
 
     @Override

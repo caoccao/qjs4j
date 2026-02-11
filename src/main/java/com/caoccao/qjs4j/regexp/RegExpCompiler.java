@@ -1129,25 +1129,6 @@ public final class RegExpCompiler {
                 ch == '_';
     }
 
-    private int parseLegacyOctalEscape(CompileContext context, int firstDigit) {
-        int value = firstDigit;
-        if (context.pos < context.codePoints.length) {
-            int next = context.codePoints[context.pos];
-            if (next >= '0' && next <= '7') {
-                value = (value << 3) | (next - '0');
-                context.pos++;
-                if (value < 32 && context.pos < context.codePoints.length) {
-                    int third = context.codePoints[context.pos];
-                    if (third >= '0' && third <= '7') {
-                        value = (value << 3) | (third - '0');
-                        context.pos++;
-                    }
-                }
-            }
-        }
-        return value;
-    }
-
     private int parseClassEscape(CompileContext context, List<Integer> ranges) {
         int ch = context.codePoints[context.pos++];
 
@@ -1339,6 +1320,25 @@ public final class RegExpCompiler {
         }
 
         return null;
+    }
+
+    private int parseLegacyOctalEscape(CompileContext context, int firstDigit) {
+        int value = firstDigit;
+        if (context.pos < context.codePoints.length) {
+            int next = context.codePoints[context.pos];
+            if (next >= '0' && next <= '7') {
+                value = (value << 3) | (next - '0');
+                context.pos++;
+                if (value < 32 && context.pos < context.codePoints.length) {
+                    int third = context.codePoints[context.pos];
+                    if (third >= '0' && third <= '7') {
+                        value = (value << 3) | (third - '0');
+                        context.pos++;
+                    }
+                }
+            }
+        }
+        return value;
     }
 
     private int[] parseQuantifierBounds(CompileContext context) {

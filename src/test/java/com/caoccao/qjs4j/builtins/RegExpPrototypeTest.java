@@ -49,6 +49,18 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testFlagsAndPropertiesForIndicesAndUnicodeSets() {
+        assertBooleanWithJavet(
+                "/a/d.hasIndices",
+                "!/a/.hasIndices",
+                "/a/v.unicodeSets",
+                "!/a/u.unicodeSets");
+        assertStringWithJavet(
+                "new RegExp('a', 'ig').flags",
+                "Object.prototype.toString.call(/a/)");
+    }
+
+    @Test
     public void testGetFlags() {
         // Normal case: no flags
         JSRegExp regexp = new JSRegExp("test", "");
@@ -155,6 +167,26 @@ public class RegExpPrototypeTest extends BaseJavetTest {
         assertPendingException(context);
 
         assertStringWithJavet("new RegExp('').source");
+    }
+
+    @Test
+    public void testIndicesResultWithNamedGroups() {
+        assertBooleanWithJavet("Array.isArray(/(?<x>a)(b)?/d.exec('ab').indices)");
+        assertBooleanWithJavet("(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices[0][0] === 0 && m.indices[0][1] === 2; })()");
+        assertBooleanWithJavet("(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices[1][0] === 0 && m.indices[1][1] === 1; })()");
+        assertBooleanWithJavet("(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices[2][0] === 1 && m.indices[2][1] === 2; })()");
+        assertBooleanWithJavet("(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices.groups.x[0] === 0 && m.indices.groups.x[1] === 1; })()");
+        assertBooleanWithJavet("/a/.exec('a').indices === undefined");
+    }
+
+    @Test
+    public void testInvalidRegExpFlags() {
+        assertThatThrownBy(() -> resetContext().eval("new RegExp('a', 'gg')"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("SyntaxError");
+        assertThatThrownBy(() -> resetContext().eval("new RegExp('a', 'uv')"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("SyntaxError");
     }
 
     @Test
@@ -402,6 +434,17 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testRegExpCharacterClassEscapesInClasses() {
+        assertBooleanWithJavet(
+                "/^[\\D]+$/.test('abc')",
+                "!/^[\\D]+$/.test('123')",
+                "/^[\\W]+$/.test('!@#')",
+                "!/^[\\W]+$/.test('abc_123')",
+                "/^[\\S]+$/.test('abc')",
+                "!/^[\\S]+$/.test(' \\t\\n')");
+    }
+
+    @Test
     public void testTest() {
         // Create a simple regex
         JSRegExp regexp = new JSRegExp("test", "");
@@ -441,49 +484,6 @@ public class RegExpPrototypeTest extends BaseJavetTest {
         result = RegExpPrototype.test(context, new JSString("not a regexp"), new JSValue[]{});
         assertTypeError(result);
         assertPendingException(context);
-    }
-
-    @Test
-    public void testFlagsAndPropertiesForIndicesAndUnicodeSets() {
-        assertBooleanWithJavet(
-                "/a/d.hasIndices",
-                "!/a/.hasIndices",
-                "/a/v.unicodeSets",
-                "!/a/u.unicodeSets");
-        assertStringWithJavet(
-                "new RegExp('a', 'ig').flags",
-                "Object.prototype.toString.call(/a/)");
-    }
-
-    @Test
-    public void testIndicesResultWithNamedGroups() {
-        assertBooleanWithJavet("Array.isArray(/(?<x>a)(b)?/d.exec('ab').indices)");
-        assertBooleanWithJavet("(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices[0][0] === 0 && m.indices[0][1] === 2; })()");
-        assertBooleanWithJavet("(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices[1][0] === 0 && m.indices[1][1] === 1; })()");
-        assertBooleanWithJavet("(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices[2][0] === 1 && m.indices[2][1] === 2; })()");
-        assertBooleanWithJavet("(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices.groups.x[0] === 0 && m.indices.groups.x[1] === 1; })()");
-        assertBooleanWithJavet("/a/.exec('a').indices === undefined");
-    }
-
-    @Test
-    public void testInvalidRegExpFlags() {
-        assertThatThrownBy(() -> resetContext().eval("new RegExp('a', 'gg')"))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("SyntaxError");
-        assertThatThrownBy(() -> resetContext().eval("new RegExp('a', 'uv')"))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("SyntaxError");
-    }
-
-    @Test
-    public void testRegExpCharacterClassEscapesInClasses() {
-        assertBooleanWithJavet(
-                "/^[\\D]+$/.test('abc')",
-                "!/^[\\D]+$/.test('123')",
-                "/^[\\W]+$/.test('!@#')",
-                "!/^[\\W]+$/.test('abc_123')",
-                "/^[\\S]+$/.test('abc')",
-                "!/^[\\S]+$/.test(' \\t\\n')");
     }
 
     @Test

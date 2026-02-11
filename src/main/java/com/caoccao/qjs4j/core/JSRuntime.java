@@ -19,11 +19,7 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.memory.GarbageCollector;
 import com.caoccao.qjs4j.utils.AtomTable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
@@ -160,15 +156,6 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
-     * Get or create a runtime-global symbol by key.
-     */
-    public JSSymbol getOrCreateGlobalSymbol(String key) {
-        synchronized (globalSymbolRegistry) {
-            return globalSymbolRegistry.computeIfAbsent(key, JSSymbol::new);
-        }
-    }
-
-    /**
      * Get maximum memory usage.
      */
     public long getMaxMemoryUsage() {
@@ -187,6 +174,15 @@ public final class JSRuntime implements AutoCloseable {
      */
     public RuntimeOptions getOptions() {
         return options;
+    }
+
+    /**
+     * Get or create a runtime-global symbol by key.
+     */
+    public JSSymbol getOrCreateGlobalSymbol(String key) {
+        synchronized (globalSymbolRegistry) {
+            return globalSymbolRegistry.computeIfAbsent(key, JSSymbol::new);
+        }
     }
 
     /**

@@ -49,17 +49,6 @@ public final class IntlObject {
         return new ArrayList<>(canonicalLocales);
     }
 
-    private static String getOptionString(JSContext context, JSValue optionsValue, String key) {
-        if (!(optionsValue instanceof JSObject optionsObject)) {
-            return null;
-        }
-        JSValue rawValue = optionsObject.get(key);
-        if (rawValue == null || rawValue.isNullOrUndefined()) {
-            return null;
-        }
-        return JSTypeConversions.toString(context, rawValue).value();
-    }
-
     public static JSValue collatorCompare(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlCollator collator)) {
             return context.throwTypeError("Intl.Collator.prototype.compare called on incompatible receiver");
@@ -249,6 +238,17 @@ public final class IntlObject {
         }
     }
 
+    private static String getOptionString(JSContext context, JSValue optionsValue, String key) {
+        if (!(optionsValue instanceof JSObject optionsObject)) {
+            return null;
+        }
+        JSValue rawValue = optionsObject.get(key);
+        if (rawValue == null || rawValue.isNullOrUndefined()) {
+            return null;
+        }
+        return JSTypeConversions.toString(context, rawValue).value();
+    }
+
     public static JSValue listFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlListFormat listFormat)) {
             return context.throwTypeError("Intl.ListFormat.prototype.format called on incompatible receiver");
@@ -342,6 +342,20 @@ public final class IntlObject {
         return resolvedOptions;
     }
 
+    private static FormatStyle parseFormatStyle(String rawStyle) {
+        if (rawStyle == null) {
+            return null;
+        }
+        String normalizedStyle = normalizeOption(rawStyle, null, FORMAT_STYLE_VALUES);
+        return switch (normalizedStyle) {
+            case "short" -> FormatStyle.SHORT;
+            case "medium" -> FormatStyle.MEDIUM;
+            case "long" -> FormatStyle.LONG;
+            case "full" -> FormatStyle.FULL;
+            default -> throw new IllegalArgumentException("Invalid format style: " + rawStyle);
+        };
+    }
+
     private static Locale parseLocaleTag(String localeTag) {
         if (localeTag == null) {
             throw new IllegalArgumentException("Invalid language tag: null");
@@ -355,20 +369,6 @@ public final class IntlObject {
             throw new IllegalArgumentException("Invalid language tag: " + localeTag);
         }
         return locale;
-    }
-
-    private static FormatStyle parseFormatStyle(String rawStyle) {
-        if (rawStyle == null) {
-            return null;
-        }
-        String normalizedStyle = normalizeOption(rawStyle, null, FORMAT_STYLE_VALUES);
-        return switch (normalizedStyle) {
-            case "short" -> FormatStyle.SHORT;
-            case "medium" -> FormatStyle.MEDIUM;
-            case "long" -> FormatStyle.LONG;
-            case "full" -> FormatStyle.FULL;
-            default -> throw new IllegalArgumentException("Invalid format style: " + rawStyle);
-        };
     }
 
     public static JSValue pluralRulesResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {

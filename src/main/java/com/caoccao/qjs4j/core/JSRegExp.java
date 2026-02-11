@@ -53,28 +53,6 @@ public final class JSRegExp extends JSObject {
         this.set("lastIndex", new JSNumber(0));
     }
 
-    /**
-     * Reinitialize this RegExp in-place (AnnexB RegExp.prototype.compile).
-     */
-    public void reinitialize(String pattern, String flags) {
-        String nextPattern = pattern != null ? pattern : "";
-        String rawFlags = flags != null ? flags : "";
-
-        RegExpCompiler compiler = new RegExpCompiler();
-        RegExpBytecode nextBytecode = compiler.compile(nextPattern, rawFlags);
-        RegExpEngine nextEngine = new RegExpEngine(nextBytecode);
-        String nextFlags = nextBytecode.flagsToString();
-
-        // Update internal slots only after successful compilation.
-        this.pattern = nextPattern;
-        this.bytecode = nextBytecode;
-        this.engine = nextEngine;
-        this.flags = nextFlags;
-
-        // Note: caller is responsible for setting lastIndex (spec step 12:
-        // Set(obj, "lastIndex", 0, true) which may throw TypeError if non-writable).
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         String pattern = "";
         String flags = "";
@@ -143,10 +121,10 @@ public final class JSRegExp extends JSObject {
     }
 
     /**
-     * Check if global flag is set.
+     * Check if hasIndices flag is set.
      */
-    public boolean isGlobal() {
-        return bytecode != null && bytecode.isGlobal();
+    public boolean hasIndices() {
+        return bytecode != null && bytecode.hasIndices();
     }
 
     /**
@@ -157,10 +135,10 @@ public final class JSRegExp extends JSObject {
     }
 
     /**
-     * Check if hasIndices flag is set.
+     * Check if global flag is set.
      */
-    public boolean hasIndices() {
-        return bytecode != null && bytecode.hasIndices();
+    public boolean isGlobal() {
+        return bytecode != null && bytecode.isGlobal();
     }
 
     /**
@@ -196,6 +174,28 @@ public final class JSRegExp extends JSObject {
      */
     public boolean isUnicodeSets() {
         return bytecode != null && bytecode.hasUnicodeSets();
+    }
+
+    /**
+     * Reinitialize this RegExp in-place (AnnexB RegExp.prototype.compile).
+     */
+    public void reinitialize(String pattern, String flags) {
+        String nextPattern = pattern != null ? pattern : "";
+        String rawFlags = flags != null ? flags : "";
+
+        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpBytecode nextBytecode = compiler.compile(nextPattern, rawFlags);
+        RegExpEngine nextEngine = new RegExpEngine(nextBytecode);
+        String nextFlags = nextBytecode.flagsToString();
+
+        // Update internal slots only after successful compilation.
+        this.pattern = nextPattern;
+        this.bytecode = nextBytecode;
+        this.engine = nextEngine;
+        this.flags = nextFlags;
+
+        // Note: caller is responsible for setting lastIndex (spec step 12:
+        // Set(obj, "lastIndex", 0, true) which may throw TypeError if non-writable).
     }
 
     /**
