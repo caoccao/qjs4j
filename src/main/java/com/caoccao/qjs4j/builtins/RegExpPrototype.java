@@ -25,6 +25,39 @@ import com.caoccao.qjs4j.regexp.RegExpEngine;
  */
 public final class RegExpPrototype {
 
+    private static JSValue createIndicesValue(int[][] indices, String[] groupNames) {
+        if (indices == null) {
+            return JSUndefined.INSTANCE;
+        }
+        JSArray indicesArray = new JSArray();
+        JSObject groupIndices = new JSObject();
+        groupIndices.setPrototype(null);
+        for (int i = 0; i < indices.length; i++) {
+            JSValue pairValue = createIndexPairValue(indices[i]);
+            indicesArray.push(pairValue);
+            if (i > 0 && groupNames != null && i < groupNames.length) {
+                String groupName = groupNames[i];
+                if (groupName != null && !groupIndices.hasOwnProperty(groupName)) {
+                    groupIndices.set(groupName, pairValue);
+                }
+            }
+        }
+        if (groupNames != null) {
+            indicesArray.set("groups", groupIndices);
+        }
+        return indicesArray;
+    }
+
+    private static JSValue createIndexPairValue(int[] pair) {
+        if (pair == null || pair.length < 2 || pair[0] < 0 || pair[1] < 0) {
+            return JSUndefined.INSTANCE;
+        }
+        JSArray range = new JSArray();
+        range.push(new JSNumber(pair[0]));
+        range.push(new JSNumber(pair[1]));
+        return range;
+    }
+
     private static JSValue createNamedGroupsValue(String[] captures, String[] groupNames) {
         if (groupNames == null || captures == null) {
             return JSUndefined.INSTANCE;
@@ -123,6 +156,9 @@ public final class RegExpPrototype {
             }
             array.set("input", new JSString(str));
             array.set("groups", createNamedGroupsValue(captures, regexp.getBytecode().groupNames()));
+            if (regexp.hasIndices()) {
+                array.set("indices", createIndicesValue(indices, regexp.getBytecode().groupNames()));
+            }
 
             // Update lastIndex for global/sticky regexes
             if (regexp.isGlobal() || regexp.isSticky()) {
@@ -162,7 +198,31 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        return regexp.get("global");
+        return JSBoolean.valueOf(regexp.isGlobal());
+    }
+
+    /**
+     * get RegExp.prototype.dotAll
+     * ES2020 21.2.5.6
+     */
+    public static JSValue getDotAll(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSRegExp regexp)) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return JSBoolean.valueOf(regexp.isDotAll());
+    }
+
+    /**
+     * get RegExp.prototype.hasIndices
+     * ES2022
+     */
+    public static JSValue getHasIndices(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSRegExp regexp)) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return JSBoolean.valueOf(regexp.hasIndices());
     }
 
     /**
@@ -174,7 +234,7 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        return regexp.get("ignoreCase");
+        return JSBoolean.valueOf(regexp.isIgnoreCase());
     }
 
     /**
@@ -186,7 +246,7 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        return regexp.get("multiline");
+        return JSBoolean.valueOf(regexp.isMultiline());
     }
 
     /**
@@ -198,7 +258,47 @@ public final class RegExpPrototype {
             return context.throwTypeError("RegExp.prototype.source called on non-RegExp");
         }
 
-        return new JSString(regexp.getPattern());
+        String source = regexp.getPattern();
+        if (source.isEmpty()) {
+            source = "(?:)";
+        }
+        return new JSString(source);
+    }
+
+    /**
+     * get RegExp.prototype.sticky
+     * ES2020 21.2.5.12
+     */
+    public static JSValue getSticky(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSRegExp regexp)) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return JSBoolean.valueOf(regexp.isSticky());
+    }
+
+    /**
+     * get RegExp.prototype.unicode
+     * ES2020 21.2.5.15
+     */
+    public static JSValue getUnicode(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSRegExp regexp)) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return JSBoolean.valueOf(regexp.isUnicode());
+    }
+
+    /**
+     * get RegExp.prototype.unicodeSets
+     * ES2024
+     */
+    public static JSValue getUnicodeSets(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSRegExp regexp)) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return JSBoolean.valueOf(regexp.isUnicodeSets());
     }
 
     /**

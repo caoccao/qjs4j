@@ -1341,6 +1341,41 @@ public final class GlobalObject {
         regexpPrototype.set("compile", new JSNativeFunction("compile", 2, RegExpPrototype::compile));
         regexpPrototype.set("toString", new JSNativeFunction("toString", 0, RegExpPrototype::toStringMethod));
 
+        // Accessor properties
+        regexpPrototype.defineProperty(
+                PropertyKey.fromString("flags"),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get flags", 0, RegExpPrototype::getFlags), null, false, true));
+        regexpPrototype.defineProperty(
+                PropertyKey.fromString("source"),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get source", 0, RegExpPrototype::getSource), null, false, true));
+        regexpPrototype.defineProperty(
+                PropertyKey.fromString("global"),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get global", 0, RegExpPrototype::getGlobal), null, false, true));
+        regexpPrototype.defineProperty(
+                PropertyKey.fromString("ignoreCase"),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get ignoreCase", 0, RegExpPrototype::getIgnoreCase), null, false, true));
+        regexpPrototype.defineProperty(
+                PropertyKey.fromString("multiline"),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get multiline", 0, RegExpPrototype::getMultiline), null, false, true));
+        regexpPrototype.defineProperty(
+                PropertyKey.fromString("dotAll"),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get dotAll", 0, RegExpPrototype::getDotAll), null, false, true));
+        regexpPrototype.defineProperty(
+                PropertyKey.fromString("unicode"),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get unicode", 0, RegExpPrototype::getUnicode), null, false, true));
+        regexpPrototype.defineProperty(
+                PropertyKey.fromString("sticky"),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get sticky", 0, RegExpPrototype::getSticky), null, false, true));
+        regexpPrototype.defineProperty(
+                PropertyKey.fromString("hasIndices"),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get hasIndices", 0, RegExpPrototype::getHasIndices), null, false, true));
+        regexpPrototype.defineProperty(
+                PropertyKey.fromString("unicodeSets"),
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get unicodeSets", 0, RegExpPrototype::getUnicodeSets), null, false, true));
+        regexpPrototype.defineProperty(
+                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                PropertyDescriptor.dataDescriptor(new JSString("RegExp"), false, false, true));
+
         // Create RegExp constructor as a function
         JSNativeFunction regexpConstructor = new JSNativeFunction("RegExp", 2, RegExpConstructor::call);
         regexpConstructor.set("prototype", regexpPrototype);

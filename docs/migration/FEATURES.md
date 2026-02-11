@@ -196,8 +196,9 @@ This document provides a comprehensive list of all JavaScript features implement
 - **Construction**: /pattern/flags, new RegExp(pattern, flags)
 - **Methods**: exec, test
 - **String integration**: match, matchAll, search, replace, split
-- **Flags**: g (global), i (ignoreCase), m (multiline), s (dotAll), u (unicode), y (sticky)
+- **Flags**: g (global), i (ignoreCase), m (multiline), s (dotAll), u (unicode), y (sticky), d (hasIndices), v (unicodeSets)
 - **Named capture groups**: `(?<name>...)`, `\\k<name>`, and `match.groups`
+- **Match indices**: `d` flag with `match.indices` and `match.indices.groups`
 - **Unicode property escapes**: `\\p{...}`, `\\P{...}` with `u` / `v` flags, including `gc=`, `sc=`, `Script_Extensions=`
 - **Lookbehind assertions**: `(?<=...)`, `(?<!...)`
 

@@ -795,8 +795,8 @@ public final class RegExpCompiler {
             // ? quantifier: SPLIT then atom
             // Greedy: try atom first, then skip
             // Non-greedy: try skip first, then atom
-            context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_GOTO_FIRST.getCode() :
-                    RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
+            context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
+                    RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
             context.buffer.appendU32(atomSize);
             context.buffer.append(atomCode);
         } else if (min == 0 && max == Integer.MAX_VALUE) {
@@ -834,8 +834,8 @@ public final class RegExpCompiler {
             if (max != min) {
                 int remaining = max == Integer.MAX_VALUE ? 100 : (max - min); // Cap infinite to reasonable number
                 for (int i = 0; i < remaining; i++) {
-                    context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_GOTO_FIRST.getCode() :
-                            RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
+                    context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
+                            RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
                     context.buffer.appendU32(atomSize);
                     context.buffer.append(atomCode);
                 }
@@ -1105,9 +1105,12 @@ public final class RegExpCompiler {
                 yield -1;
             }
             case 'D' -> {
-                // \D - non-digits (we can't represent this in a character class easily)
-                // For now, throw an error as it's complex to handle
-                throw new RegExpSyntaxException("\\D not supported in character class");
+                // \D - non-digits
+                ranges.add(0);
+                ranges.add((int) '0' - 1);
+                ranges.add((int) '9' + 1);
+                ranges.add(MAX_UNICODE_CODE_POINT);
+                yield -1;
             }
             case 'w' -> {
                 // \w - word characters [a-zA-Z0-9_]
@@ -1122,28 +1125,28 @@ public final class RegExpCompiler {
                 yield -1;
             }
             case 'W' -> {
-                // \W - non-word characters (complex to represent)
-                throw new RegExpSyntaxException("\\W not supported in character class");
+                // \W - non-word characters (not [a-zA-Z0-9_])
+                ranges.add(0);
+                ranges.add((int) '0' - 1);   // 0 .. '/'
+                ranges.add((int) '9' + 1);
+                ranges.add((int) 'A' - 1);   // ':' .. '@'
+                ranges.add((int) 'Z' + 1);
+                ranges.add((int) '_' - 1);   // '[' .. '^'
+                ranges.add((int) '_' + 1);
+                ranges.add((int) 'a' - 1);   // '`'
+                ranges.add((int) 'z' + 1);
+                ranges.add(MAX_UNICODE_CODE_POINT);
+                yield -1;
             }
             case 's' -> {
                 // \s - whitespace characters
-                ranges.add((int) ' ');
-                ranges.add((int) ' ');
-                ranges.add((int) '\t');
-                ranges.add((int) '\t');
-                ranges.add((int) '\n');
-                ranges.add((int) '\n');
-                ranges.add((int) '\r');
-                ranges.add((int) '\r');
-                ranges.add((int) '\f');
-                ranges.add((int) '\f');
-                ranges.add(0x000B); // \v
-                ranges.add(0x000B);
+                appendRanges(ranges, resolveBinaryPropertyRanges("White_Space"));
                 yield -1;
             }
             case 'S' -> {
-                // \S - non-whitespace (complex to represent)
-                throw new RegExpSyntaxException("\\S not supported in character class");
+                // \S - non-whitespace characters
+                appendRanges(ranges, invertRanges(resolveBinaryPropertyRanges("White_Space")));
+                yield -1;
             }
             case 'p', 'P' -> {
                 if (!context.isUnicodeMode()) {

@@ -46,7 +46,7 @@ public record RegExpBytecode(byte[] instructions, int flags, int captureCount, S
         if (flagStr != null) {
             for (int i = 0; i < flagStr.length(); i++) {
                 char c = flagStr.charAt(i);
-                flags |= switch (c) {
+                int flagBit = switch (c) {
                     case 'g' -> FLAG_GLOBAL;
                     case 'i' -> FLAG_IGNORECASE;
                     case 'm' -> FLAG_MULTILINE;
@@ -55,9 +55,16 @@ public record RegExpBytecode(byte[] instructions, int flags, int captureCount, S
                     case 'y' -> FLAG_STICKY;
                     case 'd' -> FLAG_INDICES;
                     case 'v' -> FLAG_UNICODE_SETS;
-                    default -> throw new IllegalArgumentException("Invalid regex flag: " + c);
+                    default -> throw new IllegalArgumentException("Invalid regular expression flags");
                 };
+                if ((flags & flagBit) != 0) {
+                    throw new IllegalArgumentException("Invalid regular expression flags");
+                }
+                flags |= flagBit;
             }
+        }
+        if ((flags & FLAG_UNICODE) != 0 && (flags & FLAG_UNICODE_SETS) != 0) {
+            throw new IllegalArgumentException("Invalid regular expression flags");
         }
         return flags;
     }

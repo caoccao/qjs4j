@@ -37,26 +37,19 @@ public final class JSRegExp extends JSObject {
     public JSRegExp(String pattern, String flags) {
         super();
         this.pattern = pattern != null ? pattern : "";
-        this.flags = flags != null ? flags : "";
+        String rawFlags = flags != null ? flags : "";
 
         // Compile the pattern to bytecode
         try {
             RegExpCompiler compiler = new RegExpCompiler();
-            this.bytecode = compiler.compile(this.pattern, this.flags);
+            this.bytecode = compiler.compile(this.pattern, rawFlags);
             this.engine = new RegExpEngine(bytecode);
+            this.flags = this.bytecode.flagsToString();
         } catch (Exception e) {
             throw new RuntimeException("Invalid regular expression: " + e.getMessage(), e);
         }
 
-        // Set properties
-        this.set("source", new JSString(this.pattern));
-        this.set("flags", new JSString(this.flags));
-        this.set("global", JSBoolean.valueOf(this.flags.contains("g")));
-        this.set("ignoreCase", JSBoolean.valueOf(this.flags.contains("i")));
-        this.set("multiline", JSBoolean.valueOf(this.flags.contains("m")));
-        this.set("dotAll", JSBoolean.valueOf(this.flags.contains("s")));
-        this.set("unicode", JSBoolean.valueOf(this.flags.contains("u")));
-        this.set("sticky", JSBoolean.valueOf(this.flags.contains("y")));
+        // Per spec, lastIndex is an own data property.
         this.set("lastIndex", new JSNumber(0));
     }
 
@@ -72,15 +65,7 @@ public final class JSRegExp extends JSObject {
         this.engine = new RegExpEngine(bytecode);
         this.flags = this.bytecode.flagsToString();
 
-        // Update properties
-        this.set("source", new JSString(this.pattern));
-        this.set("flags", new JSString(this.flags));
-        this.set("global", JSBoolean.valueOf(rawFlags.contains("g")));
-        this.set("ignoreCase", JSBoolean.valueOf(rawFlags.contains("i")));
-        this.set("multiline", JSBoolean.valueOf(rawFlags.contains("m")));
-        this.set("dotAll", JSBoolean.valueOf(rawFlags.contains("s")));
-        this.set("unicode", JSBoolean.valueOf(rawFlags.contains("u")));
-        this.set("sticky", JSBoolean.valueOf(rawFlags.contains("y")));
+        // Reset lastIndex after recompilation.
         this.set("lastIndex", new JSNumber(0));
     }
 
@@ -155,14 +140,56 @@ public final class JSRegExp extends JSObject {
      * Check if global flag is set.
      */
     public boolean isGlobal() {
-        return flags.contains("g");
+        return bytecode != null && bytecode.isGlobal();
+    }
+
+    /**
+     * Check if dotAll flag is set.
+     */
+    public boolean isDotAll() {
+        return bytecode != null && bytecode.isDotAll();
+    }
+
+    /**
+     * Check if hasIndices flag is set.
+     */
+    public boolean hasIndices() {
+        return bytecode != null && bytecode.hasIndices();
+    }
+
+    /**
+     * Check if ignoreCase flag is set.
+     */
+    public boolean isIgnoreCase() {
+        return bytecode != null && bytecode.isIgnoreCase();
+    }
+
+    /**
+     * Check if multiline flag is set.
+     */
+    public boolean isMultiline() {
+        return bytecode != null && bytecode.isMultiline();
     }
 
     /**
      * Check if sticky flag is set.
      */
     public boolean isSticky() {
-        return flags.contains("y");
+        return bytecode != null && bytecode.isSticky();
+    }
+
+    /**
+     * Check if unicode flag is set.
+     */
+    public boolean isUnicode() {
+        return bytecode != null && bytecode.isUnicode();
+    }
+
+    /**
+     * Check if unicodeSets flag is set.
+     */
+    public boolean isUnicodeSets() {
+        return bytecode != null && bytecode.hasUnicodeSets();
     }
 
     /**

@@ -408,30 +408,17 @@ public class RegExpConstructorTest extends BaseJavetTest {
     public void testRegExpProperties() {
         JSRegExp regexp = new JSRegExp("test", "gim");
 
-        // Check properties are set
-        JSValue source = regexp.get("source");
-        assertThat(source).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("test"));
-
-        JSValue flags = regexp.get("flags");
-        assertThat(flags).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("gim"));
-
-        JSValue global = regexp.get("global");
-        assertThat(global).isEqualTo(JSBoolean.TRUE);
-
-        JSValue ignoreCase = regexp.get("ignoreCase");
-        assertThat(ignoreCase).isEqualTo(JSBoolean.TRUE);
-
-        JSValue multiline = regexp.get("multiline");
-        assertThat(multiline).isEqualTo(JSBoolean.TRUE);
-
-        JSValue dotAll = regexp.get("dotAll");
-        assertThat(dotAll).isEqualTo(JSBoolean.FALSE);
-
-        JSValue unicode = regexp.get("unicode");
-        assertThat(unicode).isEqualTo(JSBoolean.FALSE);
-
-        JSValue sticky = regexp.get("sticky");
-        assertThat(sticky).isEqualTo(JSBoolean.FALSE);
+        // JSRegExp stores flags in internal slots; prototype accessors expose them in JS.
+        assertThat(regexp.getPattern()).isEqualTo("test");
+        assertThat(regexp.getFlags()).isEqualTo("gim");
+        assertThat(regexp.isGlobal()).isTrue();
+        assertThat(regexp.isIgnoreCase()).isTrue();
+        assertThat(regexp.isMultiline()).isTrue();
+        assertThat(regexp.isDotAll()).isFalse();
+        assertThat(regexp.isUnicode()).isFalse();
+        assertThat(regexp.isSticky()).isFalse();
+        assertThat(regexp.hasIndices()).isFalse();
+        assertThat(regexp.isUnicodeSets()).isFalse();
     }
 
     @Test
