@@ -28,6 +28,7 @@ import java.util.*;
 public final class JSConsole {
     private static final int MAX_PRINT_DEPTH = 2;
     private static final int MAX_PRINT_ITEM_COUNT = 100;
+    private static final int MAX_PRINT_STRING_LENGTH = 1000;
     private final Map<String, Integer> counters = new HashMap<>();
     private final Map<String, Long> timers = new HashMap<>();
     private PrintStream err;
@@ -140,26 +141,43 @@ public final class JSConsole {
             int depth) {
         List<String> items = new ArrayList<>();
         long length = array.getLength();
-        int max = (int) Math.min(length, MAX_PRINT_ITEM_COUNT);
-        int holeCount = 0;
-
-        for (int i = 0; i < max; i++) {
-            if (array.hasElement(i)) {
-                if (holeCount > 0) {
-                    items.add(formatEmptyItems(holeCount));
-                    holeCount = 0;
+        List<Long> indexKeys = new ArrayList<>();
+        for (PropertyKey key : array.getOwnPropertyKeys()) {
+            if (isArrayIndexKey(key)) {
+                long index = key.isIndex() ? key.asIndex() : Long.parseLong(key.asString());
+                if (index >= 0 && index < length) {
+                    indexKeys.add(index);
                 }
-                items.add(formatValue(context, array.get(i), false, printStack, depth + 1));
-            } else {
-                holeCount++;
             }
         }
-        if (holeCount > 0) {
-            items.add(formatEmptyItems(holeCount));
+        indexKeys.sort(Long::compareTo);
+
+        long contiguousCount = 0;
+        while (contiguousCount < length && array.hasElement(contiguousCount)) {
+            contiguousCount++;
         }
-        if (length > max) {
-            long remaining = length - max;
-            items.add("... " + remaining + " more item" + (remaining > 1 ? "s" : ""));
+
+        boolean sparseFormat = !indexKeys.isEmpty() && indexKeys.get(indexKeys.size() - 1) >= contiguousCount;
+        if (sparseFormat) {
+            int maxIndexItems = Math.min(indexKeys.size(), MAX_PRINT_ITEM_COUNT);
+            for (int i = 0; i < maxIndexItems; i++) {
+                long index = indexKeys.get(i);
+                items.add(index + ": " + formatValue(context, array.get(index), false, printStack, depth + 1));
+            }
+            if (indexKeys.size() > maxIndexItems) {
+                items.add(formatMoreItems(indexKeys.size() - maxIndexItems));
+            }
+        } else {
+            int maxDenseItems = (int) Math.min(contiguousCount, MAX_PRINT_ITEM_COUNT);
+            for (int i = 0; i < maxDenseItems; i++) {
+                items.add(formatValue(context, array.get(i), false, printStack, depth + 1));
+            }
+            if (contiguousCount > maxDenseItems) {
+                items.add(formatMoreItems(contiguousCount - maxDenseItems));
+            }
+            if (length > contiguousCount) {
+                items.add(formatEmptyItems(length - contiguousCount));
+            }
         }
 
         for (PropertyKey key : array.getOwnPropertyKeys()) {
@@ -176,8 +194,53 @@ public final class JSConsole {
         return items.isEmpty() ? "[ ]" : "[ " + String.join(", ", items) + " ]";
     }
 
-    private String formatEmptyItems(int count) {
+    private String formatEmptyItems(long count) {
         return "<" + count + " empty item" + (count > 1 ? "s" : "") + ">";
+    }
+
+    private List<String> formatEnumerableProperties(
+            JSContext context,
+            JSObject object,
+            IdentityHashMap<JSObject, Integer> printStack,
+            int depth) {
+        List<String> entries = new ArrayList<>();
+        int enumerableCount = 0;
+        for (PropertyKey key : object.getOwnPropertyKeys()) {
+            PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
+            if (descriptor != null && !descriptor.isEnumerable()) {
+                continue;
+            }
+            enumerableCount++;
+            if (entries.size() < MAX_PRINT_ITEM_COUNT) {
+                entries.add(formatPropertyEntry(context, object, key, descriptor, printStack, depth));
+            }
+        }
+        if (enumerableCount > MAX_PRINT_ITEM_COUNT) {
+            entries.add(formatMoreItems(enumerableCount - MAX_PRINT_ITEM_COUNT));
+        }
+        return entries;
+    }
+
+    private String formatError(JSObject error) {
+        JSValue stackValue = error.get("stack");
+        JSValue nameValue = error.get("name");
+        JSValue messageValue = error.get("message");
+        String name = nameValue instanceof JSString s ? s.value() : "Error";
+        String message = messageValue instanceof JSString s ? s.value() : "";
+        StringBuilder stringBuilder = new StringBuilder();
+        if (message.isEmpty()) {
+            stringBuilder.append(name);
+        } else {
+            stringBuilder.append(name).append(": ").append(message);
+        }
+        if (stackValue instanceof JSString s) {
+            String stack = s.value();
+            if (!stack.isEmpty() && stack.charAt(stack.length() - 1) == '\n') {
+                stack = stack.substring(0, stack.length() - 1);
+            }
+            stringBuilder.append('\n').append(stack);
+        }
+        return stringBuilder.toString();
     }
 
     private String formatFunction(JSFunction function) {
@@ -186,6 +249,35 @@ public final class JSConsole {
             functionName = "(anonymous)";
         }
         return "[Function " + functionName + "]";
+    }
+
+    private String formatMap(
+            JSContext context,
+            JSMap map,
+            IdentityHashMap<JSObject, Integer> printStack,
+            int depth) {
+        int size = map.size();
+        if (depth >= MAX_PRINT_DEPTH) {
+            return "[Map]";
+        }
+        List<String> items = new ArrayList<>();
+        int count = 0;
+        for (Map.Entry<JSMap.KeyWrapper, JSValue> entry : map.entries()) {
+            if (count >= MAX_PRINT_ITEM_COUNT) {
+                items.add(formatMoreItems(size - count));
+                break;
+            }
+            String key = formatValue(context, entry.getKey().value(), false, printStack, depth + 1);
+            String value = formatValue(context, entry.getValue(), false, printStack, depth + 1);
+            items.add(key + " => " + value);
+            count++;
+        }
+        return "Map(" + size + ") " +
+                (items.isEmpty() ? "{  }" : "{ " + String.join(", ", items) + " }");
+    }
+
+    private String formatMoreItems(long count) {
+        return "... " + count + " more item" + (count > 1 ? "s" : "");
     }
 
     private String formatObject(
@@ -223,6 +315,25 @@ public final class JSConsole {
             }
             context.clearPendingException();
         }
+        if (object instanceof JSMap map) {
+            printStack.put(object, printStack.size());
+            try {
+                return formatMap(context, map, printStack, depth);
+            } finally {
+                printStack.remove(object);
+            }
+        }
+        if (object instanceof JSSet set) {
+            printStack.put(object, printStack.size());
+            try {
+                return formatSet(context, set, printStack, depth);
+            } finally {
+                printStack.remove(object);
+            }
+        }
+        if (object instanceof JSError || object.getPrototype() instanceof JSError) {
+            return formatError(object);
+        }
 
         String className = getClassName(object);
         if (depth >= MAX_PRINT_DEPTH) {
@@ -231,21 +342,7 @@ public final class JSConsole {
 
         printStack.put(object, printStack.size());
         try {
-            List<String> entries = new ArrayList<>();
-            int count = 0;
-            for (PropertyKey key : object.getOwnPropertyKeys()) {
-                PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
-                if (descriptor != null && !descriptor.isEnumerable()) {
-                    continue;
-                }
-                entries.add(formatPropertyEntry(context, object, key, descriptor, printStack, depth + 1));
-                if (++count >= MAX_PRINT_ITEM_COUNT) {
-                    break;
-                }
-            }
-            if (object.getOwnPropertyKeys().size() > MAX_PRINT_ITEM_COUNT) {
-                entries.add("... " + (object.getOwnPropertyKeys().size() - MAX_PRINT_ITEM_COUNT) + " more items");
-            }
+            List<String> entries = formatEnumerableProperties(context, object, printStack, depth + 1);
 
             String prefix = "Object".equals(className) ? "" : className + " ";
             return entries.isEmpty()
@@ -328,6 +425,29 @@ public final class JSConsole {
         return builder.toString();
     }
 
+    private String formatSet(
+            JSContext context,
+            JSSet set,
+            IdentityHashMap<JSObject, Integer> printStack,
+            int depth) {
+        int size = set.size();
+        if (depth >= MAX_PRINT_DEPTH) {
+            return "[Set]";
+        }
+        List<String> items = new ArrayList<>();
+        int count = 0;
+        for (JSMap.KeyWrapper wrapper : set.values()) {
+            if (count >= MAX_PRINT_ITEM_COUNT) {
+                items.add(formatMoreItems(size - count));
+                break;
+            }
+            items.add(formatValue(context, wrapper.value(), false, printStack, depth + 1));
+            count++;
+        }
+        return "Set(" + size + ") " +
+                (items.isEmpty() ? "{  }" : "{ " + String.join(", ", items) + " }");
+    }
+
     private String formatTypedArray(JSTypedArray typedArray) {
         String className = getClassName(typedArray);
         int length = typedArray.getLength();
@@ -342,7 +462,7 @@ public final class JSConsole {
             }
         }
         if (length > max) {
-            items.add("... " + (length - max) + " more item" + (length - max > 1 ? "s" : ""));
+            items.add(formatMoreItems(length - max));
         }
         return className + "(" + length + ") " +
                 (items.isEmpty() ? "[ ]" : "[ " + String.join(", ", items) + " ]");
@@ -543,9 +663,10 @@ public final class JSConsole {
     }
 
     private String quoteString(String value) {
-        StringBuilder stringBuilder = new StringBuilder(value.length() + 2);
+        int printLength = Math.min(value.length(), MAX_PRINT_STRING_LENGTH);
+        StringBuilder stringBuilder = new StringBuilder(printLength + 2);
         stringBuilder.append('"');
-        for (int i = 0; i < value.length(); i++) {
+        for (int i = 0; i < printLength; i++) {
             char c = value.charAt(i);
             switch (c) {
                 case '\t' -> stringBuilder.append("\\t");
@@ -565,6 +686,9 @@ public final class JSConsole {
             }
         }
         stringBuilder.append('"');
+        if (value.length() > MAX_PRINT_STRING_LENGTH) {
+            stringBuilder.append("... ").append(value.length() - MAX_PRINT_STRING_LENGTH).append(" more characters");
+        }
         return stringBuilder.toString();
     }
 
