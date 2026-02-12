@@ -275,8 +275,8 @@ This document provides a comprehensive list of all JavaScript features implement
 ### DataView (ES2015)
 - **Creation**: new DataView(buffer, byteOffset, byteLength)
 - **Properties**: buffer, byteLength, byteOffset
-- **Methods**: getInt8, getUint8, getInt16, getUint16, getInt32, getUint32, getFloat32, getFloat64
-- **Set methods**: setInt8, setUint8, setInt16, setUint16, setInt32, setUint32, setFloat32, setFloat64
+- **Methods**: getInt8, getUint8, getInt16, getUint16, getInt32, getUint32, getBigInt64, getBigUint64, getFloat16, getFloat32, getFloat64
+- **Set methods**: setInt8, setUint8, setInt16, setUint16, setInt32, setUint32, setBigInt64, setBigUint64, setFloat16, setFloat32, setFloat64
 - **Endianness**: Little-endian and big-endian support
 
 ### TypedArrays (ES2015)

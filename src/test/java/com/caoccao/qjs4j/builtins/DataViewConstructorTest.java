@@ -20,9 +20,11 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.JSArrayBuffer;
 import com.caoccao.qjs4j.core.JSDataView;
 import com.caoccao.qjs4j.core.JSNumber;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Comprehensive tests for DataView constructor functionality.
@@ -36,6 +38,32 @@ public class DataViewConstructorTest extends BaseJavetTest {
                 const buffer = new ArrayBuffer(16);
                 const dv = new DataView(buffer);
                 dv.byteLength;""");
+    }
+
+    @Test
+    public void testBigIntMethods() {
+        assertStringWithJavet("""
+                const dv = new DataView(new ArrayBuffer(8));
+                dv.setBigInt64(0, '1');
+                dv.getBigInt64(0).toString();
+                """);
+        assertStringWithJavet("""
+                const dv = new DataView(new ArrayBuffer(8));
+                dv.setBigInt64(0, true);
+                dv.getBigInt64(0).toString();
+                """);
+        assertStringWithJavet("""
+                const dv = new DataView(new ArrayBuffer(8));
+                dv.setBigUint64(0, '-1');
+                dv.getBigUint64(0).toString();
+                """);
+
+        assertThatThrownBy(() -> context.eval("""
+                const dv = new DataView(new ArrayBuffer(8));
+                dv.setBigInt64(0, 1);
+                """))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
     }
 
     @Test
@@ -216,11 +244,105 @@ public class DataViewConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testMethodDescriptorsAndLengths() {
+        assertThat(context.eval("""
+                (() => {
+                  const proto = DataView.prototype;
+                  const methods = [
+                    ['getInt8', 1], ['getUint8', 1],
+                    ['getInt16', 1], ['getUint16', 1],
+                    ['getInt32', 1], ['getUint32', 1],
+                    ['getBigInt64', 1], ['getBigUint64', 1],
+                    ['getFloat32', 1], ['getFloat64', 1],
+                    ['setInt8', 2], ['setUint8', 2],
+                    ['setInt16', 2], ['setUint16', 2],
+                    ['setInt32', 2], ['setUint32', 2],
+                    ['setBigInt64', 2], ['setBigUint64', 2],
+                    ['setFloat32', 2], ['setFloat64', 2],
+                  ];
+                  for (const method of methods) {
+                    const name = method[0];
+                    const len = method[1];
+                    const desc = Object.getOwnPropertyDescriptor(proto, name);
+                    if (!(typeof proto[name] === 'function'
+                      && proto[name].length === len
+                      && desc.writable === true
+                      && desc.enumerable === false
+                      && desc.configurable === true)) {
+                      return false;
+                    }
+                  }
+                  return true;
+                })();
+                """).toJavaObject()).isEqualTo(true);
+        assertStringWithJavet("""
+                Object.getOwnPropertyDescriptor(DataView.prototype, Symbol.toStringTag).value;
+                """);
+
+        assertThat(context.eval("""
+                (() => {
+                  const proto = DataView.prototype;
+                  const methods = [['getFloat16', 1], ['setFloat16', 2]];
+                  for (const method of methods) {
+                    const name = method[0];
+                    const len = method[1];
+                    const desc = Object.getOwnPropertyDescriptor(proto, name);
+                    if (!(typeof proto[name] === 'function'
+                      && proto[name].length === len
+                      && desc.writable === true
+                      && desc.enumerable === false
+                      && desc.configurable === true)) {
+                      return false;
+                    }
+                  }
+                  return true;
+                })();
+                """).toJavaObject()).isEqualTo(true);
+    }
+
+    @Test
     public void testNewDataViewWorks() {
         assertStringWithJavet("""
                 const buffer = new ArrayBuffer(16);
                 const dv = new DataView(buffer);
                 typeof dv;""");
+    }
+
+    @Test
+    public void testNumericMethodsAndIndexConversion() {
+        assertIntegerWithJavet("""
+                const dv = new DataView(new ArrayBuffer(8));
+                dv.setUint16(0, 0xFEDC, true);
+                dv.getUint16(0, true);
+                """);
+        assertDoubleWithJavet("""
+                const dv = new DataView(new ArrayBuffer(8));
+                dv.setUint32(0, 0xFFFFFFFF, true);
+                dv.getUint32(0, true);
+                """);
+        assertIntegerWithJavet("""
+                const dv = new DataView(new ArrayBuffer(8));
+                dv.setInt8(1.9, 7);
+                dv.getInt8(1);
+                """);
+        assertDoubleWithJavet("""
+                const dv = new DataView(new ArrayBuffer(8));
+                dv.setFloat16(0, 1.5, true);
+                dv.getFloat16(0, true);
+                """);
+
+        assertThatThrownBy(() -> context.eval("""
+                const dv = new DataView(new ArrayBuffer(8));
+                dv.getInt8(-1);
+                """))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("RangeError");
+        assertThatThrownBy(() -> context.eval("""
+                const dv = new DataView(new ArrayBuffer(8));
+                dv.getInt8(Symbol());
+                """))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
     }
 
     @Test

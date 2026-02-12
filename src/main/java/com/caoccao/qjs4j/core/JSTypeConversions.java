@@ -75,14 +75,10 @@ public final class JSTypeConversions {
         }
 
         // Annex B: IsHTMLDDA object is equivalent to null/undefined for == and !=.
-        if (x instanceof JSObject xObj && xObj.isHTMLDDA() && y.isNullOrUndefined()){
+        if (x instanceof JSObject xObj && xObj.isHTMLDDA() && y.isNullOrUndefined()) {
             return true;
         }
-        if (y instanceof JSObject yObj && yObj.isHTMLDDA() && x.isNullOrUndefined()){
-            return true;
-        }
-
-        return false;
+        return y instanceof JSObject yObj && yObj.isHTMLDDA() && x.isNullOrUndefined();
     }
 
     /**

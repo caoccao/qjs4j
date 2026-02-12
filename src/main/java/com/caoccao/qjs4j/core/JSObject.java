@@ -34,9 +34,9 @@ public non-sealed class JSObject implements JSValue {
     // ThreadLocal to track visited objects during prototype chain traversal
     private static final ThreadLocal<Set<JSObject>> visitedObjects = ThreadLocal.withInitial(HashSet::new);
     protected JSConstructorType constructorType; // Internal slot for [[Constructor]] type (not accessible from JS)
-    protected boolean htmlDDA; // Internal slot for [IsHTMLDDA] (Annex B test262 host object)
     protected boolean extensible = true;
     protected boolean frozen = false;
+    protected boolean htmlDDA; // Internal slot for [IsHTMLDDA] (Annex B test262 host object)
     protected JSValue primitiveValue; // Internal slot for [[PrimitiveValue]] (not accessible from JS)
     protected JSValue[] propertyValues;
     protected JSObject prototype;
@@ -558,17 +558,17 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Check if this object has the [IsHTMLDDA] internal slot set.
-     */
-    public boolean isHTMLDDA() {
-        return htmlDDA;
-    }
-
-    /**
      * Check if this object is frozen.
      */
     public boolean isFrozen() {
         return frozen;
+    }
+
+    /**
+     * Check if this object has the [IsHTMLDDA] internal slot set.
+     */
+    public boolean isHTMLDDA() {
+        return htmlDDA;
     }
 
     /**

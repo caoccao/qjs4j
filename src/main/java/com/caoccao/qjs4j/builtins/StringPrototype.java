@@ -63,14 +63,6 @@ public final class StringPrototype {
         return replacement;
     }
 
-    private static JSString toStringCheckObject(JSContext context, JSValue value) {
-        if (value == null || value.isNullOrUndefined()) {
-            context.throwTypeError("null or undefined are forbidden");
-            return new JSString("");
-        }
-        return JSTypeConversions.toString(context, value);
-    }
-
     /**
      * String.prototype.at(index)
      * ES2022 22.1.3.1
@@ -303,20 +295,6 @@ public final class StringPrototype {
         return -1; // String is well-formed
     }
 
-    private static int isRegExp(JSContext context, JSValue value) {
-        if (!(value instanceof JSObject obj)) {
-            return 0;
-        }
-        JSValue matcher = obj.get(PropertyKey.fromSymbol(JSSymbol.MATCH), context);
-        if (context.hasPendingException()) {
-            return -1;
-        }
-        if (!(matcher instanceof JSUndefined)) {
-            return JSTypeConversions.toBoolean(matcher).value() ? 1 : 0;
-        }
-        return value instanceof JSRegExp ? 1 : 0;
-    }
-
     /**
      * String.prototype.fixed()
      * Wraps string in <tt> element.
@@ -405,6 +383,20 @@ public final class StringPrototype {
 
         int index = s.indexOf(searchStr, (int) position);
         return new JSNumber(index);
+    }
+
+    private static int isRegExp(JSContext context, JSValue value) {
+        if (!(value instanceof JSObject obj)) {
+            return 0;
+        }
+        JSValue matcher = obj.get(PropertyKey.fromSymbol(JSSymbol.MATCH), context);
+        if (context.hasPendingException()) {
+            return -1;
+        }
+        if (!(matcher instanceof JSUndefined)) {
+            return JSTypeConversions.toBoolean(matcher).value() ? 1 : 0;
+        }
+        return value instanceof JSRegExp ? 1 : 0;
     }
 
     /**
@@ -1345,6 +1337,14 @@ public final class StringPrototype {
     public static JSValue toLowerCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
         return new JSString(str.value().toLowerCase());
+    }
+
+    private static JSString toStringCheckObject(JSContext context, JSValue value) {
+        if (value == null || value.isNullOrUndefined()) {
+            context.throwTypeError("null or undefined are forbidden");
+            return new JSString("");
+        }
+        return JSTypeConversions.toString(context, value);
     }
 
     /**

@@ -162,9 +162,23 @@ public final class Lexer {
                 UnicodeData.isIdentifierPart(c);
     }
 
+    private boolean isIdentifierPartCodePoint(int codePoint) {
+        if (codePoint <= Character.MAX_VALUE) {
+            return isIdentifierPart((char) codePoint);
+        }
+        return Character.isUnicodeIdentifierPart(codePoint);
+    }
+
     private boolean isIdentifierStart(char c) {
         return Character.isLetter(c) || c == '_' || c == '$' ||
                 UnicodeData.isIdentifierStart(c);
+    }
+
+    private boolean isIdentifierStartCodePoint(int codePoint) {
+        if (codePoint <= Character.MAX_VALUE) {
+            return isIdentifierStart((char) codePoint);
+        }
+        return Character.isUnicodeIdentifierStart(codePoint);
     }
 
     private Token makeToken(TokenType type, String value) {
@@ -188,6 +202,67 @@ public final class Lexer {
             return token;
         }
         return scanToken();
+    }
+
+    private char parseLegacyOctalEscape(char firstDigit) {
+        int value = firstDigit - '0';
+        int maxDigits = firstDigit <= '3' ? 3 : 2;
+        int digits = 1;
+        while (digits < maxDigits && !isAtEnd() && peek() >= '0' && peek() <= '7') {
+            value = (value << 3) + (advance() - '0');
+            digits++;
+        }
+        return (char) value;
+    }
+
+    // Character utilities
+
+    private int parseUnicodeEscapeSequence() {
+        if (isAtEnd() || peek() != 'u') {
+            return -1;
+        }
+        advance(); // consume 'u'
+        return parseUnicodeEscapeSequenceAfterU();
+    }
+
+    private int parseUnicodeEscapeSequenceAfterU() {
+        if (!isAtEnd() && peek() == '{') {
+            advance(); // consume '{'
+            int codePoint = 0;
+            int digitCount = 0;
+            while (!isAtEnd() && peek() != '}') {
+                int hex = Character.digit(peek(), 16);
+                if (hex < 0) {
+                    return -1;
+                }
+                if (codePoint > 0x10FFFF / 16) {
+                    return -1;
+                }
+                codePoint = (codePoint << 4) | hex;
+                digitCount++;
+                advance();
+            }
+            if (isAtEnd() || peek() != '}' || digitCount == 0 || codePoint > 0x10FFFF) {
+                return -1;
+            }
+            advance(); // consume '}'
+            return codePoint;
+        }
+
+        if (position + 3 >= source.length()) {
+            return -1;
+        }
+        int codeUnit = 0;
+        for (int i = 0; i < 4; i++) {
+            int hex = Character.digit(source.charAt(position + i), 16);
+            if (hex < 0) {
+                return -1;
+            }
+            codeUnit = (codeUnit << 4) | hex;
+        }
+        position += 4;
+        column += 4;
+        return codeUnit;
     }
 
     private char peek() {
@@ -215,8 +290,6 @@ public final class Lexer {
         lookahead = null;
         lastTokenType = null;
     }
-
-    // Character utilities
 
     private Token scanBinaryNumber(int startPos, int startLine, int startColumn) {
         scanDigitsWithNumericSeparators(2, false, false);
@@ -372,12 +445,6 @@ public final class Lexer {
         return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
     }
 
-    private Token scanOctalNumber(int startPos, int startLine, int startColumn) {
-        scanDigitsWithNumericSeparators(8, false, false);
-        validateNoRadixLiteralContinuation(8);
-        return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
-    }
-
     private Token scanNumberStartingWithDot(int startPos, int startLine, int startColumn) {
         // At least one decimal digit is required after '.'
         scanDigitsWithNumericSeparators(10, false, false);
@@ -400,6 +467,12 @@ public final class Lexer {
 
         String value = source.substring(startPos, position);
         return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
+    }
+
+    private Token scanOctalNumber(int startPos, int startLine, int startColumn) {
+        scanDigitsWithNumericSeparators(8, false, false);
+        validateNoRadixLiteralContinuation(8);
+        return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
     }
 
     private Token scanOperatorOrPunctuation(char c, int startPos, int startLine, int startColumn) {
@@ -1224,78 +1297,5 @@ public final class Lexer {
         if (isIdentifierStart(next) && next != 'n') {
             throw new JSSyntaxErrorException("Invalid or unexpected token");
         }
-    }
-
-    private boolean isIdentifierPartCodePoint(int codePoint) {
-        if (codePoint <= Character.MAX_VALUE) {
-            return isIdentifierPart((char) codePoint);
-        }
-        return Character.isUnicodeIdentifierPart(codePoint);
-    }
-
-    private boolean isIdentifierStartCodePoint(int codePoint) {
-        if (codePoint <= Character.MAX_VALUE) {
-            return isIdentifierStart((char) codePoint);
-        }
-        return Character.isUnicodeIdentifierStart(codePoint);
-    }
-
-    private int parseUnicodeEscapeSequence() {
-        if (isAtEnd() || peek() != 'u') {
-            return -1;
-        }
-        advance(); // consume 'u'
-        return parseUnicodeEscapeSequenceAfterU();
-    }
-
-    private int parseUnicodeEscapeSequenceAfterU() {
-        if (!isAtEnd() && peek() == '{') {
-            advance(); // consume '{'
-            int codePoint = 0;
-            int digitCount = 0;
-            while (!isAtEnd() && peek() != '}') {
-                int hex = Character.digit(peek(), 16);
-                if (hex < 0) {
-                    return -1;
-                }
-                if (codePoint > 0x10FFFF / 16) {
-                    return -1;
-                }
-                codePoint = (codePoint << 4) | hex;
-                digitCount++;
-                advance();
-            }
-            if (isAtEnd() || peek() != '}' || digitCount == 0 || codePoint > 0x10FFFF) {
-                return -1;
-            }
-            advance(); // consume '}'
-            return codePoint;
-        }
-
-        if (position + 3 >= source.length()) {
-            return -1;
-        }
-        int codeUnit = 0;
-        for (int i = 0; i < 4; i++) {
-            int hex = Character.digit(source.charAt(position + i), 16);
-            if (hex < 0) {
-                return -1;
-            }
-            codeUnit = (codeUnit << 4) | hex;
-        }
-        position += 4;
-        column += 4;
-        return codeUnit;
-    }
-
-    private char parseLegacyOctalEscape(char firstDigit) {
-        int value = firstDigit - '0';
-        int maxDigits = firstDigit <= '3' ? 3 : 2;
-        int digits = 1;
-        while (digits < maxDigits && !isAtEnd() && peek() >= '0' && peek() <= '7') {
-            value = (value << 3) + (advance() - '0');
-            digits++;
-        }
-        return (char) value;
     }
 }

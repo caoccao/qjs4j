@@ -587,34 +587,45 @@ public final class GlobalObject {
         dataViewPrototype.defineGetterConfigurable("buffer", DataViewPrototype::getBuffer);
         dataViewPrototype.defineGetterConfigurable("byteLength", DataViewPrototype::getByteLength);
         dataViewPrototype.defineGetterConfigurable("byteOffset", DataViewPrototype::getByteOffset);
+        dataViewPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("DataView"));
 
         // Int8/Uint8 methods
-        dataViewPrototype.set("getInt8", new JSNativeFunction("getInt8", 1, DataViewPrototype::getInt8));
-        dataViewPrototype.set("setInt8", new JSNativeFunction("setInt8", 2, DataViewPrototype::setInt8));
-        dataViewPrototype.set("getUint8", new JSNativeFunction("getUint8", 1, DataViewPrototype::getUint8));
-        dataViewPrototype.set("setUint8", new JSNativeFunction("setUint8", 2, DataViewPrototype::setUint8));
+        dataViewPrototype.definePropertyWritableConfigurable("getInt8", new JSNativeFunction("getInt8", 1, DataViewPrototype::getInt8));
+        dataViewPrototype.definePropertyWritableConfigurable("setInt8", new JSNativeFunction("setInt8", 2, DataViewPrototype::setInt8));
+        dataViewPrototype.definePropertyWritableConfigurable("getUint8", new JSNativeFunction("getUint8", 1, DataViewPrototype::getUint8));
+        dataViewPrototype.definePropertyWritableConfigurable("setUint8", new JSNativeFunction("setUint8", 2, DataViewPrototype::setUint8));
 
-        // Int16 methods
-        dataViewPrototype.set("getInt16", new JSNativeFunction("getInt16", 2, DataViewPrototype::getInt16));
-        dataViewPrototype.set("setInt16", new JSNativeFunction("setInt16", 3, DataViewPrototype::setInt16));
+        // Int16/Uint16 methods
+        dataViewPrototype.definePropertyWritableConfigurable("getInt16", new JSNativeFunction("getInt16", 1, DataViewPrototype::getInt16));
+        dataViewPrototype.definePropertyWritableConfigurable("setInt16", new JSNativeFunction("setInt16", 2, DataViewPrototype::setInt16));
+        dataViewPrototype.definePropertyWritableConfigurable("getUint16", new JSNativeFunction("getUint16", 1, DataViewPrototype::getUint16));
+        dataViewPrototype.definePropertyWritableConfigurable("setUint16", new JSNativeFunction("setUint16", 2, DataViewPrototype::setUint16));
 
-        // Int32 methods
-        dataViewPrototype.set("getInt32", new JSNativeFunction("getInt32", 2, DataViewPrototype::getInt32));
-        dataViewPrototype.set("setInt32", new JSNativeFunction("setInt32", 3, DataViewPrototype::setInt32));
+        // Int32/Uint32 methods
+        dataViewPrototype.definePropertyWritableConfigurable("getInt32", new JSNativeFunction("getInt32", 1, DataViewPrototype::getInt32));
+        dataViewPrototype.definePropertyWritableConfigurable("setInt32", new JSNativeFunction("setInt32", 2, DataViewPrototype::setInt32));
+        dataViewPrototype.definePropertyWritableConfigurable("getUint32", new JSNativeFunction("getUint32", 1, DataViewPrototype::getUint32));
+        dataViewPrototype.definePropertyWritableConfigurable("setUint32", new JSNativeFunction("setUint32", 2, DataViewPrototype::setUint32));
 
-        // Float32 methods
-        dataViewPrototype.set("getFloat32", new JSNativeFunction("getFloat32", 2, DataViewPrototype::getFloat32));
-        dataViewPrototype.set("setFloat32", new JSNativeFunction("setFloat32", 3, DataViewPrototype::setFloat32));
+        // BigInt methods
+        dataViewPrototype.definePropertyWritableConfigurable("getBigInt64", new JSNativeFunction("getBigInt64", 1, DataViewPrototype::getBigInt64));
+        dataViewPrototype.definePropertyWritableConfigurable("setBigInt64", new JSNativeFunction("setBigInt64", 2, DataViewPrototype::setBigInt64));
+        dataViewPrototype.definePropertyWritableConfigurable("getBigUint64", new JSNativeFunction("getBigUint64", 1, DataViewPrototype::getBigUint64));
+        dataViewPrototype.definePropertyWritableConfigurable("setBigUint64", new JSNativeFunction("setBigUint64", 2, DataViewPrototype::setBigUint64));
 
-        // Float64 methods
-        dataViewPrototype.set("getFloat64", new JSNativeFunction("getFloat64", 2, DataViewPrototype::getFloat64));
-        dataViewPrototype.set("setFloat64", new JSNativeFunction("setFloat64", 3, DataViewPrototype::setFloat64));
+        // Float methods
+        dataViewPrototype.definePropertyWritableConfigurable("getFloat16", new JSNativeFunction("getFloat16", 1, DataViewPrototype::getFloat16));
+        dataViewPrototype.definePropertyWritableConfigurable("setFloat16", new JSNativeFunction("setFloat16", 2, DataViewPrototype::setFloat16));
+        dataViewPrototype.definePropertyWritableConfigurable("getFloat32", new JSNativeFunction("getFloat32", 1, DataViewPrototype::getFloat32));
+        dataViewPrototype.definePropertyWritableConfigurable("setFloat32", new JSNativeFunction("setFloat32", 2, DataViewPrototype::setFloat32));
+        dataViewPrototype.definePropertyWritableConfigurable("getFloat64", new JSNativeFunction("getFloat64", 1, DataViewPrototype::getFloat64));
+        dataViewPrototype.definePropertyWritableConfigurable("setFloat64", new JSNativeFunction("setFloat64", 2, DataViewPrototype::setFloat64));
 
         // Create DataView constructor as a function that requires 'new'
         JSNativeFunction dataViewConstructor = new JSNativeFunction("DataView", 1, DataViewConstructor::call, true, true);
         dataViewConstructor.set("prototype", dataViewPrototype);
         dataViewConstructor.setConstructorType(JSConstructorType.DATA_VIEW);
-        dataViewPrototype.set("constructor", dataViewConstructor);
+        dataViewPrototype.definePropertyWritableConfigurable("constructor", dataViewConstructor);
 
         global.definePropertyWritableConfigurable("DataView", dataViewConstructor);
     }
@@ -627,52 +638,52 @@ public final class GlobalObject {
         JSNativeFunction toUTCString = new JSNativeFunction("toUTCString", 0, DatePrototype::toUTCString);
         JSNativeFunction toPrimitive = new JSNativeFunction("[Symbol.toPrimitive]", 1, DatePrototype::symbolToPrimitive);
 
-        datePrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, DatePrototype::valueOf));
-        datePrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, DatePrototype::toStringMethod));
-        datePrototype.definePropertyWritableConfigurable("toUTCString", toUTCString);
+        datePrototype.definePropertyWritableConfigurable("getDate", new JSNativeFunction("getDate", 0, DatePrototype::getDate));
+        datePrototype.definePropertyWritableConfigurable("getDay", new JSNativeFunction("getDay", 0, DatePrototype::getDay));
+        datePrototype.definePropertyWritableConfigurable("getFullYear", new JSNativeFunction("getFullYear", 0, DatePrototype::getFullYear));
+        datePrototype.definePropertyWritableConfigurable("getHours", new JSNativeFunction("getHours", 0, DatePrototype::getHours));
+        datePrototype.definePropertyWritableConfigurable("getMilliseconds", new JSNativeFunction("getMilliseconds", 0, DatePrototype::getMilliseconds));
+        datePrototype.definePropertyWritableConfigurable("getMinutes", new JSNativeFunction("getMinutes", 0, DatePrototype::getMinutes));
+        datePrototype.definePropertyWritableConfigurable("getMonth", new JSNativeFunction("getMonth", 0, DatePrototype::getMonth));
+        datePrototype.definePropertyWritableConfigurable("getSeconds", new JSNativeFunction("getSeconds", 0, DatePrototype::getSeconds));
+        datePrototype.definePropertyWritableConfigurable("getTime", new JSNativeFunction("getTime", 0, DatePrototype::getTime));
+        datePrototype.definePropertyWritableConfigurable("getTimezoneOffset", new JSNativeFunction("getTimezoneOffset", 0, DatePrototype::getTimezoneOffset));
+        datePrototype.definePropertyWritableConfigurable("getUTCDate", new JSNativeFunction("getUTCDate", 0, DatePrototype::getUTCDate));
+        datePrototype.definePropertyWritableConfigurable("getUTCDay", new JSNativeFunction("getUTCDay", 0, DatePrototype::getUTCDay));
+        datePrototype.definePropertyWritableConfigurable("getUTCFullYear", new JSNativeFunction("getUTCFullYear", 0, DatePrototype::getUTCFullYear));
+        datePrototype.definePropertyWritableConfigurable("getUTCHours", new JSNativeFunction("getUTCHours", 0, DatePrototype::getUTCHours));
+        datePrototype.definePropertyWritableConfigurable("getUTCMilliseconds", new JSNativeFunction("getUTCMilliseconds", 0, DatePrototype::getUTCMilliseconds));
+        datePrototype.definePropertyWritableConfigurable("getUTCMinutes", new JSNativeFunction("getUTCMinutes", 0, DatePrototype::getUTCMinutes));
+        datePrototype.definePropertyWritableConfigurable("getUTCMonth", new JSNativeFunction("getUTCMonth", 0, DatePrototype::getUTCMonth));
+        datePrototype.definePropertyWritableConfigurable("getUTCSeconds", new JSNativeFunction("getUTCSeconds", 0, DatePrototype::getUTCSeconds));
+        datePrototype.definePropertyWritableConfigurable("getYear", new JSNativeFunction("getYear", 0, DatePrototype::getYear));
+        datePrototype.definePropertyWritableConfigurable("setDate", new JSNativeFunction("setDate", 1, DatePrototype::setDate));
+        datePrototype.definePropertyWritableConfigurable("setFullYear", new JSNativeFunction("setFullYear", 3, DatePrototype::setFullYear));
+        datePrototype.definePropertyWritableConfigurable("setHours", new JSNativeFunction("setHours", 4, DatePrototype::setHours));
+        datePrototype.definePropertyWritableConfigurable("setMilliseconds", new JSNativeFunction("setMilliseconds", 1, DatePrototype::setMilliseconds));
+        datePrototype.definePropertyWritableConfigurable("setMinutes", new JSNativeFunction("setMinutes", 3, DatePrototype::setMinutes));
+        datePrototype.definePropertyWritableConfigurable("setMonth", new JSNativeFunction("setMonth", 2, DatePrototype::setMonth));
+        datePrototype.definePropertyWritableConfigurable("setSeconds", new JSNativeFunction("setSeconds", 2, DatePrototype::setSeconds));
+        datePrototype.definePropertyWritableConfigurable("setTime", new JSNativeFunction("setTime", 1, DatePrototype::setTime));
+        datePrototype.definePropertyWritableConfigurable("setUTCDate", new JSNativeFunction("setUTCDate", 1, DatePrototype::setUTCDate));
+        datePrototype.definePropertyWritableConfigurable("setUTCFullYear", new JSNativeFunction("setUTCFullYear", 3, DatePrototype::setUTCFullYear));
+        datePrototype.definePropertyWritableConfigurable("setUTCHours", new JSNativeFunction("setUTCHours", 4, DatePrototype::setUTCHours));
+        datePrototype.definePropertyWritableConfigurable("setUTCMilliseconds", new JSNativeFunction("setUTCMilliseconds", 1, DatePrototype::setUTCMilliseconds));
+        datePrototype.definePropertyWritableConfigurable("setUTCMinutes", new JSNativeFunction("setUTCMinutes", 3, DatePrototype::setUTCMinutes));
+        datePrototype.definePropertyWritableConfigurable("setUTCMonth", new JSNativeFunction("setUTCMonth", 2, DatePrototype::setUTCMonth));
+        datePrototype.definePropertyWritableConfigurable("setUTCSeconds", new JSNativeFunction("setUTCSeconds", 2, DatePrototype::setUTCSeconds));
+        datePrototype.definePropertyWritableConfigurable("setYear", new JSNativeFunction("setYear", 1, DatePrototype::setYear));
+        datePrototype.definePropertyWritableConfigurable("toDateString", new JSNativeFunction("toDateString", 0, DatePrototype::toDateString));
         datePrototype.definePropertyWritableConfigurable("toGMTString", toUTCString);
         datePrototype.definePropertyWritableConfigurable("toISOString", new JSNativeFunction("toISOString", 0, DatePrototype::toISOString));
-        datePrototype.definePropertyWritableConfigurable("toDateString", new JSNativeFunction("toDateString", 0, DatePrototype::toDateString));
-        datePrototype.definePropertyWritableConfigurable("toTimeString", new JSNativeFunction("toTimeString", 0, DatePrototype::toTimeString));
-        datePrototype.definePropertyWritableConfigurable("toLocaleString", new JSNativeFunction("toLocaleString", 0, DatePrototype::toLocaleString));
-        datePrototype.definePropertyWritableConfigurable("toLocaleDateString", new JSNativeFunction("toLocaleDateString", 0, DatePrototype::toLocaleDateString));
-        datePrototype.definePropertyWritableConfigurable("toLocaleTimeString", new JSNativeFunction("toLocaleTimeString", 0, DatePrototype::toLocaleTimeString));
-        datePrototype.definePropertyWritableConfigurable("getTimezoneOffset", new JSNativeFunction("getTimezoneOffset", 0, DatePrototype::getTimezoneOffset));
-        datePrototype.definePropertyWritableConfigurable("getTime", new JSNativeFunction("getTime", 0, DatePrototype::getTime));
-        datePrototype.definePropertyWritableConfigurable("getYear", new JSNativeFunction("getYear", 0, DatePrototype::getYear));
-        datePrototype.definePropertyWritableConfigurable("getFullYear", new JSNativeFunction("getFullYear", 0, DatePrototype::getFullYear));
-        datePrototype.definePropertyWritableConfigurable("getUTCFullYear", new JSNativeFunction("getUTCFullYear", 0, DatePrototype::getUTCFullYear));
-        datePrototype.definePropertyWritableConfigurable("getMonth", new JSNativeFunction("getMonth", 0, DatePrototype::getMonth));
-        datePrototype.definePropertyWritableConfigurable("getUTCMonth", new JSNativeFunction("getUTCMonth", 0, DatePrototype::getUTCMonth));
-        datePrototype.definePropertyWritableConfigurable("getDate", new JSNativeFunction("getDate", 0, DatePrototype::getDate));
-        datePrototype.definePropertyWritableConfigurable("getUTCDate", new JSNativeFunction("getUTCDate", 0, DatePrototype::getUTCDate));
-        datePrototype.definePropertyWritableConfigurable("getHours", new JSNativeFunction("getHours", 0, DatePrototype::getHours));
-        datePrototype.definePropertyWritableConfigurable("getUTCHours", new JSNativeFunction("getUTCHours", 0, DatePrototype::getUTCHours));
-        datePrototype.definePropertyWritableConfigurable("getMinutes", new JSNativeFunction("getMinutes", 0, DatePrototype::getMinutes));
-        datePrototype.definePropertyWritableConfigurable("getUTCMinutes", new JSNativeFunction("getUTCMinutes", 0, DatePrototype::getUTCMinutes));
-        datePrototype.definePropertyWritableConfigurable("getSeconds", new JSNativeFunction("getSeconds", 0, DatePrototype::getSeconds));
-        datePrototype.definePropertyWritableConfigurable("getUTCSeconds", new JSNativeFunction("getUTCSeconds", 0, DatePrototype::getUTCSeconds));
-        datePrototype.definePropertyWritableConfigurable("getMilliseconds", new JSNativeFunction("getMilliseconds", 0, DatePrototype::getMilliseconds));
-        datePrototype.definePropertyWritableConfigurable("getUTCMilliseconds", new JSNativeFunction("getUTCMilliseconds", 0, DatePrototype::getUTCMilliseconds));
-        datePrototype.definePropertyWritableConfigurable("getDay", new JSNativeFunction("getDay", 0, DatePrototype::getDay));
-        datePrototype.definePropertyWritableConfigurable("getUTCDay", new JSNativeFunction("getUTCDay", 0, DatePrototype::getUTCDay));
-        datePrototype.definePropertyWritableConfigurable("setTime", new JSNativeFunction("setTime", 1, DatePrototype::setTime));
-        datePrototype.definePropertyWritableConfigurable("setMilliseconds", new JSNativeFunction("setMilliseconds", 1, DatePrototype::setMilliseconds));
-        datePrototype.definePropertyWritableConfigurable("setUTCMilliseconds", new JSNativeFunction("setUTCMilliseconds", 1, DatePrototype::setUTCMilliseconds));
-        datePrototype.definePropertyWritableConfigurable("setSeconds", new JSNativeFunction("setSeconds", 2, DatePrototype::setSeconds));
-        datePrototype.definePropertyWritableConfigurable("setUTCSeconds", new JSNativeFunction("setUTCSeconds", 2, DatePrototype::setUTCSeconds));
-        datePrototype.definePropertyWritableConfigurable("setMinutes", new JSNativeFunction("setMinutes", 3, DatePrototype::setMinutes));
-        datePrototype.definePropertyWritableConfigurable("setUTCMinutes", new JSNativeFunction("setUTCMinutes", 3, DatePrototype::setUTCMinutes));
-        datePrototype.definePropertyWritableConfigurable("setHours", new JSNativeFunction("setHours", 4, DatePrototype::setHours));
-        datePrototype.definePropertyWritableConfigurable("setUTCHours", new JSNativeFunction("setUTCHours", 4, DatePrototype::setUTCHours));
-        datePrototype.definePropertyWritableConfigurable("setDate", new JSNativeFunction("setDate", 1, DatePrototype::setDate));
-        datePrototype.definePropertyWritableConfigurable("setUTCDate", new JSNativeFunction("setUTCDate", 1, DatePrototype::setUTCDate));
-        datePrototype.definePropertyWritableConfigurable("setMonth", new JSNativeFunction("setMonth", 2, DatePrototype::setMonth));
-        datePrototype.definePropertyWritableConfigurable("setUTCMonth", new JSNativeFunction("setUTCMonth", 2, DatePrototype::setUTCMonth));
-        datePrototype.definePropertyWritableConfigurable("setYear", new JSNativeFunction("setYear", 1, DatePrototype::setYear));
-        datePrototype.definePropertyWritableConfigurable("setFullYear", new JSNativeFunction("setFullYear", 3, DatePrototype::setFullYear));
-        datePrototype.definePropertyWritableConfigurable("setUTCFullYear", new JSNativeFunction("setUTCFullYear", 3, DatePrototype::setUTCFullYear));
         datePrototype.definePropertyWritableConfigurable("toJSON", new JSNativeFunction("toJSON", 1, DatePrototype::toJSON));
+        datePrototype.definePropertyWritableConfigurable("toLocaleDateString", new JSNativeFunction("toLocaleDateString", 0, DatePrototype::toLocaleDateString));
+        datePrototype.definePropertyWritableConfigurable("toLocaleString", new JSNativeFunction("toLocaleString", 0, DatePrototype::toLocaleString));
+        datePrototype.definePropertyWritableConfigurable("toLocaleTimeString", new JSNativeFunction("toLocaleTimeString", 0, DatePrototype::toLocaleTimeString));
+        datePrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, DatePrototype::toStringMethod));
+        datePrototype.definePropertyWritableConfigurable("toTimeString", new JSNativeFunction("toTimeString", 0, DatePrototype::toTimeString));
+        datePrototype.definePropertyWritableConfigurable("toUTCString", toUTCString);
+        datePrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, DatePrototype::valueOf));
         datePrototype.definePropertyWritableConfigurable(JSSymbol.TO_PRIMITIVE, toPrimitive);
 
         JSNativeFunction dateConstructor = new JSNativeFunction("Date", 7, DateConstructor::call, true);
@@ -680,9 +691,9 @@ public final class GlobalObject {
         dateConstructor.setConstructorType(JSConstructorType.DATE);
         datePrototype.definePropertyWritableConfigurable("constructor", dateConstructor);
 
+        dateConstructor.definePropertyWritableConfigurable("UTC", new JSNativeFunction("UTC", 7, DateConstructor::UTC));
         dateConstructor.definePropertyWritableConfigurable("now", new JSNativeFunction("now", 0, DateConstructor::now));
         dateConstructor.definePropertyWritableConfigurable("parse", new JSNativeFunction("parse", 1, DateConstructor::parse));
-        dateConstructor.definePropertyWritableConfigurable("UTC", new JSNativeFunction("UTC", 7, DateConstructor::UTC));
 
         global.definePropertyWritableConfigurable("Date", dateConstructor);
     }
@@ -692,9 +703,9 @@ public final class GlobalObject {
      */
     private static void initializeDisposableStackConstructor(JSContext context, JSObject global) {
         JSObject disposableStackPrototype = context.createJSObject();
+        JSNativeFunction disposeFunction = new JSNativeFunction("dispose", 0, DisposableStackPrototype::dispose);
         disposableStackPrototype.set("adopt", new JSNativeFunction("adopt", 2, DisposableStackPrototype::adopt));
         disposableStackPrototype.set("defer", new JSNativeFunction("defer", 1, DisposableStackPrototype::defer));
-        JSNativeFunction disposeFunction = new JSNativeFunction("dispose", 0, DisposableStackPrototype::dispose);
         disposableStackPrototype.set("dispose", disposeFunction);
         disposableStackPrototype.set("move", new JSNativeFunction("move", 0, DisposableStackPrototype::move));
         disposableStackPrototype.set("use", new JSNativeFunction("use", 1, DisposableStackPrototype::use));
