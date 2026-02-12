@@ -91,7 +91,7 @@ public final class NumberPrototype {
      * ES2020 20.1.2.12
      */
     public static JSValue parseFloat(JSContext context, JSValue thisArg, JSValue[] args) {
-        return GlobalObject.parseFloat(context, thisArg, args);
+        return context.getJSGlobalObject().parseFloat(context, thisArg, args);
     }
 
     /**
@@ -99,7 +99,7 @@ public final class NumberPrototype {
      * ES2020 20.1.2.13
      */
     public static JSValue parseInt(JSContext context, JSValue thisArg, JSValue[] args) {
-        return GlobalObject.parseInt(context, thisArg, args);
+        return context.getJSGlobalObject().parseInt(context, thisArg, args);
     }
 
     /**

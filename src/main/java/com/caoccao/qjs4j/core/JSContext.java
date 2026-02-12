@@ -16,7 +16,6 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.builtins.GlobalObject;
 import com.caoccao.qjs4j.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
@@ -47,6 +46,7 @@ public final class JSContext implements AutoCloseable {
     // Stack trace capture
     private final List<StackTraceElement> errorStackTrace;
     private final JSObject globalObject;
+    private final JSGlobalObject jsGlobalObject;
     // Microtask queue for promise resolution and async operations
     private final JSMicrotaskQueue microtaskQueue;
     private final Map<String, JSModule> moduleCache;
@@ -69,20 +69,21 @@ public final class JSContext implements AutoCloseable {
      * Create a new execution context.
      */
     public JSContext(JSRuntime runtime) {
-        this.runtime = runtime;
-        this.globalObject = new JSObject();
-        this.moduleCache = new HashMap<>();
         this.callStack = new ArrayDeque<>();
-        this.stackDepth = 0;
-        this.maxStackDepth = DEFAULT_MAX_STACK_DEPTH;
-        this.pendingException = null;
-        this.inCatchHandler = false;
-        this.strictMode = false;
-        this.currentThis = globalObject;
         this.errorStackTrace = new ArrayList<>();
+        this.globalObject = new JSObject();
+        this.inCatchHandler = false;
+        this.jsGlobalObject = new JSGlobalObject();
+        this.maxStackDepth = DEFAULT_MAX_STACK_DEPTH;
         this.microtaskQueue = new JSMicrotaskQueue(this);
+        this.moduleCache = new HashMap<>();
+        this.pendingException = null;
+        this.runtime = runtime;
+        this.stackDepth = 0;
+        this.strictMode = false;
         this.virtualMachine = new VirtualMachine(this);
 
+        this.currentThis = globalObject;
         initializeGlobalObject();
     }
 
@@ -651,6 +652,10 @@ public final class JSContext implements AutoCloseable {
         return globalObject;
     }
 
+    public JSGlobalObject getJSGlobalObject() {
+        return jsGlobalObject;
+    }
+
     /**
      * Get the microtask queue for this context.
      */
@@ -705,15 +710,10 @@ public final class JSContext implements AutoCloseable {
 
     /**
      * Initialize the global object with built-in properties.
-     * Delegates to GlobalObject to set up all global functions and properties.
+     * Delegates to JSGlobalObject to set up all global functions and properties.
      */
     private void initializeGlobalObject() {
-        GlobalObject.initialize(this, globalObject);
-
-        // In full implementation, this would also add:
-        // - Built-in constructors (Object, Array, Function, String, Number, Boolean, etc.)
-        // - Error constructors (Error, TypeError, ReferenceError, etc.)
-        // - Advanced built-ins (Promise, Symbol, Map, Set, etc.)
+        jsGlobalObject.initialize(this, globalObject);
     }
 
     // Execution state

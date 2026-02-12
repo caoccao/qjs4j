@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.builtins;
+package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.builtins.*;
 import com.caoccao.qjs4j.exceptions.JSErrorType;
 import com.caoccao.qjs4j.exceptions.JSException;
 
@@ -37,46 +37,15 @@ import java.util.stream.Stream;
  * - Global function properties (parseInt, parseFloat, isNaN, isFinite, eval)
  * - URI handling functions (encodeURI, decodeURI, encodeURIComponent, decodeURIComponent)
  */
-public final class GlobalObject {
-    /**
-     * console.error(...args)
-     * Print error to standard error.
-     */
-    public static JSValue consoleError(JSContext context, JSValue thisArg, JSValue[] args) {
-        System.err.print("[ERROR] ");
-        for (int i = 0; i < args.length; i++) {
-            if (i > 0) System.err.print(" ");
-            System.err.print(formatValue(context, args[i]));
-        }
-        System.err.println();
-        return JSUndefined.INSTANCE;
+public final class JSGlobalObject {
+    private final JSConsole console;
+
+    public JSGlobalObject() {
+        this(new JSConsole());
     }
 
-    /**
-     * console.log(...args)
-     * Print values to standard output.
-     */
-    public static JSValue consoleLog(JSContext context, JSValue thisArg, JSValue[] args) {
-        for (int i = 0; i < args.length; i++) {
-            if (i > 0) System.out.print(" ");
-            System.out.print(formatValue(context, args[i]));
-        }
-        System.out.println();
-        return JSUndefined.INSTANCE;
-    }
-
-    /**
-     * console.warn(...args)
-     * Print warning to standard error.
-     */
-    public static JSValue consoleWarn(JSContext context, JSValue thisArg, JSValue[] args) {
-        System.err.print("[WARN] ");
-        for (int i = 0; i < args.length; i++) {
-            if (i > 0) System.err.print(" ");
-            System.err.print(formatValue(context, args[i]));
-        }
-        System.err.println();
-        return JSUndefined.INSTANCE;
+    public JSGlobalObject(JSConsole console) {
+        this.console = console;
     }
 
     /**
@@ -85,7 +54,7 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-decodeuri-encodeduri">ECMAScript decodeURI</a>
      */
-    public static JSValue decodeURI(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue decodeURI(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue encodedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String encodedString = JSTypeConversions.toString(context, encodedValue).value();
 
@@ -103,7 +72,7 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-decodeuricomponent-encodeduricomponent">ECMAScript decodeURIComponent</a>
      */
-    public static JSValue decodeURIComponent(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue decodeURIComponent(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue encodedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String encodedString = JSTypeConversions.toString(context, encodedValue).value();
 
@@ -122,7 +91,7 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-encodeuri-uri">ECMAScript encodeURI</a>
      */
-    public static JSValue encodeURI(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue encodeURI(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue uriValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String uriString = JSTypeConversions.toString(context, uriValue).value();
 
@@ -156,7 +125,7 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-encodeuricomponent-uricomponent">ECMAScript encodeURIComponent</a>
      */
-    public static JSValue encodeURIComponent(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue encodeURIComponent(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue componentValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String componentString = JSTypeConversions.toString(context, componentValue).value();
 
@@ -185,7 +154,7 @@ public final class GlobalObject {
      *
      * @see <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/escape">MDN escape</a>
      */
-    public static JSValue escape(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue escape(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue stringValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String str = JSTypeConversions.toString(context, stringValue).value();
 
@@ -219,7 +188,7 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-eval-x">ECMAScript eval</a>
      */
-    public static JSValue eval(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue eval(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue x = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
         // If x is not a string, return it unchanged
@@ -238,60 +207,33 @@ public final class GlobalObject {
         }
     }
 
-    /**
-     * Format a value for console output.
-     */
-    private static String formatValue(JSContext context, JSValue value) {
-        if (value == null) {
-            return "null";
-        } else if (value.isNullOrUndefined()
-                || value.isBigInt()
-                || value.isBigIntObject()
-                || value.isBoolean()
-                || value.isBooleanObject()
-                || value.isNumber()
-                || value.isNumberObject()
-                || value.isString()
-                || value.isStringObject()
-                || value.isSymbol()) {
-            return JSTypeConversions.toString(context, value).value();
-        } else if (value instanceof JSArray arr) {
-            StringBuilder sb = new StringBuilder("[");
-            for (long i = 0; i < arr.getLength(); i++) {
-                if (i > 0) sb.append(", ");
-                sb.append(formatValue(context, arr.get(i)));
-            }
-            sb.append("]");
-            return sb.toString();
-        } else if (value instanceof JSObject) {
-            return "[object Object]";
-        }
-        return String.valueOf(value);
+    public JSConsole getConsole() {
+        return console;
     }
 
     /**
      * Initialize the global object with all built-in global properties and functions.
      */
-    public static void initialize(JSContext context, JSObject global) {
+    public void initialize(JSContext context, JSObject global) {
         // Global value properties (non-writable, non-enumerable, non-configurable)
         global.definePropertyReadonlyNonConfigurable("undefined", JSUndefined.INSTANCE);
         global.definePropertyReadonlyNonConfigurable("NaN", new JSNumber(Double.NaN));
         global.definePropertyReadonlyNonConfigurable("Infinity", new JSNumber(Double.POSITIVE_INFINITY));
 
         // Global function properties
-        global.definePropertyWritableConfigurable("parseInt", new JSNativeFunction("parseInt", 2, GlobalObject::parseInt));
-        global.definePropertyWritableConfigurable("parseFloat", new JSNativeFunction("parseFloat", 1, GlobalObject::parseFloat));
-        global.definePropertyWritableConfigurable("isNaN", new JSNativeFunction("isNaN", 1, GlobalObject::isNaN));
-        global.definePropertyWritableConfigurable("isFinite", new JSNativeFunction("isFinite", 1, GlobalObject::isFinite));
-        global.definePropertyWritableConfigurable("eval", new JSNativeFunction("eval", 1, GlobalObject::eval));
+        global.definePropertyWritableConfigurable("parseInt", new JSNativeFunction("parseInt", 2, this::parseInt));
+        global.definePropertyWritableConfigurable("parseFloat", new JSNativeFunction("parseFloat", 1, this::parseFloat));
+        global.definePropertyWritableConfigurable("isNaN", new JSNativeFunction("isNaN", 1, this::isNaN));
+        global.definePropertyWritableConfigurable("isFinite", new JSNativeFunction("isFinite", 1, this::isFinite));
+        global.definePropertyWritableConfigurable("eval", new JSNativeFunction("eval", 1, this::eval));
 
         // URI handling functions
-        global.definePropertyWritableConfigurable("encodeURI", new JSNativeFunction("encodeURI", 1, GlobalObject::encodeURI));
-        global.definePropertyWritableConfigurable("decodeURI", new JSNativeFunction("decodeURI", 1, GlobalObject::decodeURI));
-        global.definePropertyWritableConfigurable("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, GlobalObject::encodeURIComponent));
-        global.definePropertyWritableConfigurable("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, GlobalObject::decodeURIComponent));
-        global.definePropertyWritableConfigurable("escape", new JSNativeFunction("escape", 1, GlobalObject::escape));
-        global.definePropertyWritableConfigurable("unescape", new JSNativeFunction("unescape", 1, GlobalObject::unescape));
+        global.definePropertyWritableConfigurable("encodeURI", new JSNativeFunction("encodeURI", 1, this::encodeURI));
+        global.definePropertyWritableConfigurable("decodeURI", new JSNativeFunction("decodeURI", 1, this::decodeURI));
+        global.definePropertyWritableConfigurable("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, this::encodeURIComponent));
+        global.definePropertyWritableConfigurable("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, this::decodeURIComponent));
+        global.definePropertyWritableConfigurable("escape", new JSNativeFunction("escape", 1, this::escape));
+        global.definePropertyWritableConfigurable("unescape", new JSNativeFunction("unescape", 1, this::unescape));
 
         // Console object for debugging
         initializeConsoleObject(context, global);
@@ -348,7 +290,7 @@ public final class GlobalObject {
     /**
      * Initialize ArrayBuffer constructor and prototype.
      */
-    private static void initializeArrayBufferConstructor(JSContext context, JSObject global) {
+    private void initializeArrayBufferConstructor(JSContext context, JSObject global) {
         // Create ArrayBuffer.prototype
         JSObject arrayBufferPrototype = context.createJSObject();
         arrayBufferPrototype.set("slice", new JSNativeFunction("slice", 2, ArrayBufferPrototype::slice));
@@ -381,7 +323,7 @@ public final class GlobalObject {
     /**
      * Initialize Array constructor and prototype.
      */
-    private static void initializeArrayConstructor(JSContext context, JSObject global) {
+    private void initializeArrayConstructor(JSContext context, JSObject global) {
         // Create Array.prototype
         JSObject arrayPrototype = context.createJSObject();
         JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, IteratorPrototype::arrayValues);
@@ -452,7 +394,7 @@ public final class GlobalObject {
     /**
      * Initialize AsyncDisposableStack constructor and prototype.
      */
-    private static void initializeAsyncDisposableStackConstructor(JSContext context, JSObject global) {
+    private void initializeAsyncDisposableStackConstructor(JSContext context, JSObject global) {
         JSObject asyncDisposableStackPrototype = context.createJSObject();
         asyncDisposableStackPrototype.set("adopt", new JSNativeFunction("adopt", 2, AsyncDisposableStackPrototype::adopt));
         asyncDisposableStackPrototype.set("defer", new JSNativeFunction("defer", 1, AsyncDisposableStackPrototype::defer));
@@ -482,7 +424,7 @@ public final class GlobalObject {
      * Initialize AsyncFunction constructor and prototype.
      * AsyncFunction is not exposed in global scope but is available via async function constructors.
      */
-    private static void initializeAsyncFunctionConstructor(JSContext context, JSObject global) {
+    private void initializeAsyncFunctionConstructor(JSContext context, JSObject global) {
         // Create AsyncFunction.prototype that inherits from Function.prototype
         JSObject asyncFunctionPrototype = context.createJSObject();
         context.transferPrototype(asyncFunctionPrototype, JSFunction.NAME);
@@ -502,7 +444,7 @@ public final class GlobalObject {
     /**
      * Initialize Atomics object.
      */
-    private static void initializeAtomicsObject(JSContext context, JSObject global) {
+    private void initializeAtomicsObject(JSContext context, JSObject global) {
         JSObject atomics = context.createJSObject();
         atomics.set("add", new JSNativeFunction("add", 3, AtomicsObject::add));
         atomics.set("sub", new JSNativeFunction("sub", 3, AtomicsObject::sub));
@@ -525,7 +467,7 @@ public final class GlobalObject {
     /**
      * Initialize BigInt constructor and static methods.
      */
-    private static void initializeBigIntConstructor(JSContext context, JSObject global) {
+    private void initializeBigIntConstructor(JSContext context, JSObject global) {
         // Create BigInt.prototype
         JSObject bigIntPrototype = context.createJSObject();
         bigIntPrototype.set("toString", new JSNativeFunction("toString", 1, BigIntPrototype::toString));
@@ -548,7 +490,7 @@ public final class GlobalObject {
     /**
      * Initialize Boolean constructor and prototype.
      */
-    private static void initializeBooleanConstructor(JSContext context, JSObject global) {
+    private void initializeBooleanConstructor(JSContext context, JSObject global) {
         // Create Boolean.prototype
         JSObject booleanPrototype = context.createJSObject();
         booleanPrototype.set("toString", new JSNativeFunction("toString", 0, BooleanPrototype::toString));
@@ -564,22 +506,37 @@ public final class GlobalObject {
     }
 
     /**
-     * Initialize console object.
+     * Initialize console object with all console API methods.
      */
-    private static void initializeConsoleObject(JSContext context, JSObject global) {
-        JSObject console = context.createJSObject();
-        console.set("log", new JSNativeFunction("log", 0, GlobalObject::consoleLog));
-        console.set("info", new JSNativeFunction("info", 0, GlobalObject::consoleLog));
-        console.set("warn", new JSNativeFunction("warn", 0, GlobalObject::consoleWarn));
-        console.set("error", new JSNativeFunction("error", 0, GlobalObject::consoleError));
+    private void initializeConsoleObject(JSContext context, JSObject global) {
+        JSObject consoleObj = context.createJSObject();
+        consoleObj.set("log", new JSNativeFunction("log", 0, console::log));
+        consoleObj.set("info", new JSNativeFunction("info", 0, console::info));
+        consoleObj.set("debug", new JSNativeFunction("debug", 0, console::debug));
+        consoleObj.set("warn", new JSNativeFunction("warn", 0, console::warn));
+        consoleObj.set("error", new JSNativeFunction("error", 0, console::error));
+        consoleObj.set("assert", new JSNativeFunction("assert", 0, console::assert_));
+        consoleObj.set("trace", new JSNativeFunction("trace", 0, console::trace));
+        consoleObj.set("dir", new JSNativeFunction("dir", 0, console::dir));
+        consoleObj.set("dirxml", new JSNativeFunction("dirxml", 0, console::dirxml));
+        consoleObj.set("clear", new JSNativeFunction("clear", 0, console::clear));
+        consoleObj.set("count", new JSNativeFunction("count", 0, console::count));
+        consoleObj.set("countReset", new JSNativeFunction("countReset", 0, console::countReset));
+        consoleObj.set("time", new JSNativeFunction("time", 0, console::time));
+        consoleObj.set("timeLog", new JSNativeFunction("timeLog", 0, console::timeLog));
+        consoleObj.set("timeEnd", new JSNativeFunction("timeEnd", 0, console::timeEnd));
+        consoleObj.set("table", new JSNativeFunction("table", 0, console::table));
+        consoleObj.set("group", new JSNativeFunction("group", 0, console::group));
+        consoleObj.set("groupCollapsed", new JSNativeFunction("groupCollapsed", 0, console::groupCollapsed));
+        consoleObj.set("groupEnd", new JSNativeFunction("groupEnd", 0, console::groupEnd));
 
-        global.definePropertyWritableConfigurable("console", console);
+        global.definePropertyWritableConfigurable("console", consoleObj);
     }
 
     /**
      * Initialize DataView constructor and prototype.
      */
-    private static void initializeDataViewConstructor(JSContext context, JSObject global) {
+    private void initializeDataViewConstructor(JSContext context, JSObject global) {
         // Create DataView.prototype
         JSObject dataViewPrototype = context.createJSObject();
 
@@ -633,7 +590,7 @@ public final class GlobalObject {
     /**
      * Initialize Date constructor and prototype.
      */
-    private static void initializeDateConstructor(JSContext context, JSObject global) {
+    private void initializeDateConstructor(JSContext context, JSObject global) {
         JSObject datePrototype = context.createJSObject();
         JSNativeFunction toUTCString = new JSNativeFunction("toUTCString", 0, DatePrototype::toUTCString);
         JSNativeFunction toPrimitive = new JSNativeFunction("[Symbol.toPrimitive]", 1, DatePrototype::symbolToPrimitive);
@@ -701,7 +658,7 @@ public final class GlobalObject {
     /**
      * Initialize DisposableStack constructor and prototype.
      */
-    private static void initializeDisposableStackConstructor(JSContext context, JSObject global) {
+    private void initializeDisposableStackConstructor(JSContext context, JSObject global) {
         JSObject disposableStackPrototype = context.createJSObject();
         JSNativeFunction disposeFunction = new JSNativeFunction("dispose", 0, DisposableStackPrototype::dispose);
         disposableStackPrototype.set("adopt", new JSNativeFunction("adopt", 2, DisposableStackPrototype::adopt));
@@ -730,14 +687,14 @@ public final class GlobalObject {
     /**
      * Initialize Error constructors.
      */
-    private static void initializeErrorConstructors(JSContext context, JSObject global) {
+    private void initializeErrorConstructors(JSContext context, JSObject global) {
         Stream.of(JSErrorType.values()).forEach(type -> global.definePropertyWritableConfigurable(type.name(), type.create(context)));
     }
 
     /**
      * Initialize FinalizationRegistry constructor.
      */
-    private static void initializeFinalizationRegistryConstructor(JSContext context, JSObject global) {
+    private void initializeFinalizationRegistryConstructor(JSContext context, JSObject global) {
         // Create FinalizationRegistry.prototype
         JSObject finalizationRegistryPrototype = context.createJSObject();
         // register() and unregister() methods are added in JSFinalizationRegistry constructor
@@ -756,7 +713,7 @@ public final class GlobalObject {
     /**
      * Initialize Function constructor and prototype.
      */
-    private static void initializeFunctionConstructor(JSContext context, JSObject global) {
+    private void initializeFunctionConstructor(JSContext context, JSObject global) {
         // Create Function.prototype as a function (not a plain object)
         // According to ECMAScript spec, Function.prototype is itself a function
         // Use null name so toString() shows "function () {}" not "function anonymous() {}"
@@ -799,7 +756,7 @@ public final class GlobalObject {
      * Recursively initialize prototype chains for all JSFunction instances in the global object.
      * This must be called after Function.prototype is set up.
      */
-    private static void initializeFunctionPrototypeChains(JSContext context, JSObject obj, Set<JSObject> visitedObjectSet) {
+    private void initializeFunctionPrototypeChains(JSContext context, JSObject obj, Set<JSObject> visitedObjectSet) {
         // This ensures all JSFunction instances inherit from Function.prototype
         // Avoid infinite recursion by tracking visited objects
         if (visitedObjectSet.contains(obj)) {
@@ -829,7 +786,7 @@ public final class GlobalObject {
      * Note: Generator functions (function*) would require compiler support.
      * This provides the prototype for manually created generators.
      */
-    private static void initializeGeneratorPrototype(JSContext context, JSObject global) {
+    private void initializeGeneratorPrototype(JSContext context, JSObject global) {
         // Create Generator.prototype
         JSObject generatorPrototype = context.createJSObject();
         generatorPrototype.set("next", new JSNativeFunction("next", 1, GeneratorPrototype::next));
@@ -843,7 +800,7 @@ public final class GlobalObject {
     /**
      * Initialize Intl object.
      */
-    private static void initializeIntlObject(JSContext context, JSObject global) {
+    private void initializeIntlObject(JSContext context, JSObject global) {
         JSObject intlObject = context.createJSObject();
         intlObject.set("getCanonicalLocales", new JSNativeFunction("getCanonicalLocales", 1, IntlObject::getCanonicalLocales));
 
@@ -951,7 +908,7 @@ public final class GlobalObject {
      * Initialize Iterator constructor and prototype.
      * Based on ECMAScript 2024 Iterator specification.
      */
-    private static void initializeIteratorConstructor(JSContext context, JSObject global) {
+    private void initializeIteratorConstructor(JSContext context, JSObject global) {
         // Create Iterator.prototype with helper methods
         JSObject iteratorPrototype = context.createJSObject();
 
@@ -991,7 +948,7 @@ public final class GlobalObject {
     /**
      * Initialize JSON object.
      */
-    private static void initializeJSONObject(JSContext context, JSObject global) {
+    private void initializeJSONObject(JSContext context, JSObject global) {
         JSObject json = context.createJSObject();
         json.set("parse", new JSNativeFunction("parse", 1, JSONObject::parse));
         json.set("stringify", new JSNativeFunction("stringify", 1, JSONObject::stringify));
@@ -1002,7 +959,7 @@ public final class GlobalObject {
     /**
      * Initialize Map constructor and prototype methods.
      */
-    private static void initializeMapConstructor(JSContext context, JSObject global) {
+    private void initializeMapConstructor(JSContext context, JSObject global) {
         // Create Map.prototype
         JSObject mapPrototype = context.createJSObject();
         mapPrototype.set("set", new JSNativeFunction("set", 2, MapPrototype::set));
@@ -1037,7 +994,7 @@ public final class GlobalObject {
     /**
      * Initialize Math object.
      */
-    private static void initializeMathObject(JSContext context, JSObject global) {
+    private void initializeMathObject(JSContext context, JSObject global) {
         JSObject math = context.createJSObject();
 
         // Math constants
@@ -1093,7 +1050,7 @@ public final class GlobalObject {
     /**
      * Initialize Number constructor and prototype.
      */
-    private static void initializeNumberConstructor(JSContext context, JSObject global) {
+    private void initializeNumberConstructor(JSContext context, JSObject global) {
         // Create Number.prototype
         JSObject numberPrototype = context.createJSObject();
         numberPrototype.definePropertyWritableConfigurable("toFixed", new JSNativeFunction("toFixed", 1, NumberPrototype::toFixed));
@@ -1137,7 +1094,7 @@ public final class GlobalObject {
     /**
      * Initialize Object constructor and static methods.
      */
-    private static void initializeObjectConstructor(JSContext context, JSObject global) {
+    private void initializeObjectConstructor(JSContext context, JSObject global) {
         // Create Object.prototype
         JSObject objectPrototype = context.createJSObject();
         objectPrototype.set("hasOwnProperty", new JSNativeFunction("hasOwnProperty", 1, ObjectConstructor::hasOwnProperty));
@@ -1196,7 +1153,7 @@ public final class GlobalObject {
     /**
      * Initialize Promise constructor and prototype methods.
      */
-    private static void initializePromiseConstructor(JSContext context, JSObject global) {
+    private void initializePromiseConstructor(JSContext context, JSObject global) {
         // Create Promise.prototype
         JSObject promisePrototype = context.createJSObject();
         promisePrototype.set("then", new JSNativeFunction("then", 2, PromisePrototype::then));
@@ -1224,7 +1181,7 @@ public final class GlobalObject {
     /**
      * Initialize Proxy constructor.
      */
-    private static void initializeProxyConstructor(JSContext context, JSObject global) {
+    private void initializeProxyConstructor(JSContext context, JSObject global) {
         // Create Proxy constructor as JSNativeFunction
         // Proxy requires 'new' and takes 2 arguments (target, handler)
         JSNativeFunction proxyConstructor = new JSNativeFunction("Proxy", 2, ProxyConstructor::call, true, true);
@@ -1240,7 +1197,7 @@ public final class GlobalObject {
     /**
      * Initialize Reflect object.
      */
-    private static void initializeReflectObject(JSContext context, JSObject global) {
+    private void initializeReflectObject(JSContext context, JSObject global) {
         JSObject reflect = context.createJSObject();
         reflect.set("get", new JSNativeFunction("get", 2, ReflectObject::get));
         reflect.set("set", new JSNativeFunction("set", 3, ReflectObject::set));
@@ -1260,7 +1217,7 @@ public final class GlobalObject {
     /**
      * Initialize RegExp constructor and prototype.
      */
-    private static void initializeRegExpConstructor(JSContext context, JSObject global) {
+    private void initializeRegExpConstructor(JSContext context, JSObject global) {
         // Create RegExp.prototype
         JSObject regexpPrototype = context.createJSObject();
         regexpPrototype.set("test", new JSNativeFunction("test", 1, RegExpPrototype::test));
@@ -1311,7 +1268,7 @@ public final class GlobalObject {
     /**
      * Initialize Set constructor and prototype methods.
      */
-    private static void initializeSetConstructor(JSContext context, JSObject global) {
+    private void initializeSetConstructor(JSContext context, JSObject global) {
         // Create Set.prototype
         JSObject setPrototype = context.createJSObject();
         setPrototype.set("add", new JSNativeFunction("add", 1, SetPrototype::add));
@@ -1344,7 +1301,7 @@ public final class GlobalObject {
     /**
      * Initialize SharedArrayBuffer constructor and prototype.
      */
-    private static void initializeSharedArrayBufferConstructor(JSContext context, JSObject global) {
+    private void initializeSharedArrayBufferConstructor(JSContext context, JSObject global) {
         // Create SharedArrayBuffer.prototype
         JSObject sharedArrayBufferPrototype = context.createJSObject();
         sharedArrayBufferPrototype.set("slice", new JSNativeFunction("slice", 2, SharedArrayBufferPrototype::slice));
@@ -1371,7 +1328,7 @@ public final class GlobalObject {
     /**
      * Initialize String constructor and prototype.
      */
-    private static void initializeStringConstructor(JSContext context, JSObject global) {
+    private void initializeStringConstructor(JSContext context, JSObject global) {
         // Create String.prototype
         JSObject stringPrototype = context.createJSObject();
         stringPrototype.definePropertyWritableConfigurable("at", new JSNativeFunction("at", 1, StringPrototype::at));
@@ -1456,7 +1413,7 @@ public final class GlobalObject {
     /**
      * Initialize Symbol constructor and static methods.
      */
-    private static void initializeSymbolConstructor(JSContext context, JSObject global) {
+    private void initializeSymbolConstructor(JSContext context, JSObject global) {
         // Create Symbol.prototype that inherits from Object.prototype
         JSObject symbolPrototype = context.createJSObject();
         context.transferPrototype(symbolPrototype, JSObject.NAME);
@@ -1513,7 +1470,7 @@ public final class GlobalObject {
     /**
      * Initialize all TypedArray constructors.
      */
-    private static void initializeTypedArrayConstructors(JSContext context, JSObject global) {
+    private void initializeTypedArrayConstructors(JSContext context, JSObject global) {
         record TypedArrayDef(String name, JSNativeFunction.NativeCallback callback, JSConstructorType type,
                              int bytesPerElement) {
         }
@@ -1546,7 +1503,7 @@ public final class GlobalObject {
     /**
      * Initialize WeakMap constructor and prototype methods.
      */
-    private static void initializeWeakMapConstructor(JSContext context, JSObject global) {
+    private void initializeWeakMapConstructor(JSContext context, JSObject global) {
         // Create WeakMap.prototype
         JSObject weakMapPrototype = context.createJSObject();
         weakMapPrototype.set("set", new JSNativeFunction("set", 2, WeakMapPrototype::set));
@@ -1575,7 +1532,7 @@ public final class GlobalObject {
     /**
      * Initialize WeakRef constructor.
      */
-    private static void initializeWeakRefConstructor(JSContext context, JSObject global) {
+    private void initializeWeakRefConstructor(JSContext context, JSObject global) {
         // Create WeakRef.prototype
         JSObject weakRefPrototype = context.createJSObject();
         // deref() method is added in JSWeakRef constructor
@@ -1601,7 +1558,7 @@ public final class GlobalObject {
     /**
      * Initialize WeakSet constructor and prototype methods.
      */
-    private static void initializeWeakSetConstructor(JSContext context, JSObject global) {
+    private void initializeWeakSetConstructor(JSContext context, JSObject global) {
         // Create WeakSet.prototype
         JSObject weakSetPrototype = context.createJSObject();
         weakSetPrototype.set("add", new JSNativeFunction("add", 1, WeakSetPrototype::add));
@@ -1632,7 +1589,7 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-isfinite-number">ECMAScript isFinite</a>
      */
-    public static JSValue isFinite(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue isFinite(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (value.isSymbol() || value.isSymbolObject()) {
             return context.throwTypeError("cannot convert symbol to number");
@@ -1650,7 +1607,7 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-isnan-number">ECMAScript isNaN</a>
      */
-    public static JSValue isNaN(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue isNaN(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (value.isSymbol() || value.isSymbolObject()) {
             return context.throwTypeError("cannot convert symbol to number");
@@ -1666,7 +1623,7 @@ public final class GlobalObject {
      * Helper function to check if a character should not be escaped.
      * Returns true for: A-Z a-z 0-9 @ * _ + - . /
      */
-    private static boolean isUnescaped(char c) {
+    private boolean isUnescaped(char c) {
         return (c >= 'A' && c <= 'Z') ||
                 (c >= 'a' && c <= 'z') ||
                 (c >= '0' && c <= '9') ||
@@ -1680,7 +1637,7 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-parsefloat-string">ECMAScript parseFloat</a>
      */
-    public static JSValue parseFloat(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue parseFloat(JSContext context, JSValue thisArg, JSValue[] args) {
         // Get input string
         JSValue input = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String inputString = JSTypeConversions.toString(context, input).value().trim();
@@ -1751,7 +1708,7 @@ public final class GlobalObject {
      *
      * @see <a href="https://tc39.es/ecma262/#sec-parseint-string-radix">ECMAScript parseInt</a>
      */
-    public static JSValue parseInt(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue parseInt(JSContext context, JSValue thisArg, JSValue[] args) {
         // Get input string
         JSValue input = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String inputString = JSTypeConversions.toString(context, input).value().trim();
@@ -1826,7 +1783,7 @@ public final class GlobalObject {
      *
      * @see <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/unescape">MDN unescape</a>
      */
-    public static JSValue unescape(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue unescape(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue stringValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String str = JSTypeConversions.toString(context, stringValue).value();
 
