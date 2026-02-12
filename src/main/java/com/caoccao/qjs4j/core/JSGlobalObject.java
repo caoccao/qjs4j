@@ -212,22 +212,22 @@ public final class JSGlobalObject {
      */
     public void initialize(JSContext context, JSObject global) {
         // Global value properties (non-writable, non-enumerable, non-configurable)
-        global.definePropertyReadonlyNonConfigurable("undefined", JSUndefined.INSTANCE);
-        global.definePropertyReadonlyNonConfigurable("NaN", new JSNumber(Double.NaN));
         global.definePropertyReadonlyNonConfigurable("Infinity", new JSNumber(Double.POSITIVE_INFINITY));
+        global.definePropertyReadonlyNonConfigurable("NaN", new JSNumber(Double.NaN));
+        global.definePropertyReadonlyNonConfigurable("undefined", JSUndefined.INSTANCE);
 
         // Global function properties
-        global.definePropertyWritableConfigurable("parseInt", new JSNativeFunction("parseInt", 2, this::parseInt));
-        global.definePropertyWritableConfigurable("parseFloat", new JSNativeFunction("parseFloat", 1, this::parseFloat));
-        global.definePropertyWritableConfigurable("isNaN", new JSNativeFunction("isNaN", 1, this::isNaN));
-        global.definePropertyWritableConfigurable("isFinite", new JSNativeFunction("isFinite", 1, this::isFinite));
         global.definePropertyWritableConfigurable("eval", new JSNativeFunction("eval", 1, this::eval));
+        global.definePropertyWritableConfigurable("isFinite", new JSNativeFunction("isFinite", 1, this::isFinite));
+        global.definePropertyWritableConfigurable("isNaN", new JSNativeFunction("isNaN", 1, this::isNaN));
+        global.definePropertyWritableConfigurable("parseFloat", new JSNativeFunction("parseFloat", 1, this::parseFloat));
+        global.definePropertyWritableConfigurable("parseInt", new JSNativeFunction("parseInt", 2, this::parseInt));
 
         // URI handling functions
-        global.definePropertyWritableConfigurable("encodeURI", new JSNativeFunction("encodeURI", 1, this::encodeURI));
         global.definePropertyWritableConfigurable("decodeURI", new JSNativeFunction("decodeURI", 1, this::decodeURI));
-        global.definePropertyWritableConfigurable("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, this::encodeURIComponent));
         global.definePropertyWritableConfigurable("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, this::decodeURIComponent));
+        global.definePropertyWritableConfigurable("encodeURI", new JSNativeFunction("encodeURI", 1, this::encodeURI));
+        global.definePropertyWritableConfigurable("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, this::encodeURIComponent));
         global.definePropertyWritableConfigurable("escape", new JSNativeFunction("escape", 1, this::escape));
         global.definePropertyWritableConfigurable("unescape", new JSNativeFunction("unescape", 1, this::unescape));
 
@@ -1085,63 +1085,61 @@ public final class JSGlobalObject {
         global.definePropertyWritableConfigurable("Number", numberConstructor);
     }
 
-    // Global function implementations
-
     /**
      * Initialize Object constructor and static methods.
      */
     private void initializeObjectConstructor(JSContext context, JSObject global) {
         // Create Object.prototype
         JSObject objectPrototype = context.createJSObject();
-        objectPrototype.set("hasOwnProperty", new JSNativeFunction("hasOwnProperty", 1, ObjectConstructor::hasOwnProperty));
-        objectPrototype.set("toString", new JSNativeFunction("toString", 0, ObjectPrototype::toString));
-        objectPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, ObjectPrototype::valueOf));
-        objectPrototype.set("isPrototypeOf", new JSNativeFunction("isPrototypeOf", 1, ObjectPrototype::isPrototypeOf));
-        objectPrototype.set("propertyIsEnumerable", new JSNativeFunction("propertyIsEnumerable", 1, ObjectPrototype::propertyIsEnumerable));
-        objectPrototype.set("toLocaleString", new JSNativeFunction("toLocaleString", 0, ObjectPrototype::toLocaleString));
-        objectPrototype.set("__defineGetter__", new JSNativeFunction("__defineGetter__", 2, ObjectPrototype::__defineGetter__));
-        objectPrototype.set("__defineSetter__", new JSNativeFunction("__defineSetter__", 2, ObjectPrototype::__defineSetter__));
-        objectPrototype.set("__lookupGetter__", new JSNativeFunction("__lookupGetter__", 1, ObjectPrototype::__lookupGetter__));
-        objectPrototype.set("__lookupSetter__", new JSNativeFunction("__lookupSetter__", 1, ObjectPrototype::__lookupSetter__));
+        objectPrototype.definePropertyWritableConfigurable("hasOwnProperty", new JSNativeFunction("hasOwnProperty", 1, ObjectPrototype::hasOwnProperty));
+        objectPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, ObjectPrototype::toString));
+        objectPrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, ObjectPrototype::valueOf));
+        objectPrototype.definePropertyWritableConfigurable("isPrototypeOf", new JSNativeFunction("isPrototypeOf", 1, ObjectPrototype::isPrototypeOf));
+        objectPrototype.definePropertyWritableConfigurable("propertyIsEnumerable", new JSNativeFunction("propertyIsEnumerable", 1, ObjectPrototype::propertyIsEnumerable));
+        objectPrototype.definePropertyWritableConfigurable("toLocaleString", new JSNativeFunction("toLocaleString", 0, ObjectPrototype::toLocaleString));
+        objectPrototype.definePropertyWritableConfigurable("__defineGetter__", new JSNativeFunction("__defineGetter__", 2, ObjectPrototype::__defineGetter__));
+        objectPrototype.definePropertyWritableConfigurable("__defineSetter__", new JSNativeFunction("__defineSetter__", 2, ObjectPrototype::__defineSetter__));
+        objectPrototype.definePropertyWritableConfigurable("__lookupGetter__", new JSNativeFunction("__lookupGetter__", 1, ObjectPrototype::__lookupGetter__));
+        objectPrototype.definePropertyWritableConfigurable("__lookupSetter__", new JSNativeFunction("__lookupSetter__", 1, ObjectPrototype::__lookupSetter__));
 
         // Define __proto__ as an accessor property
         PropertyDescriptor protoDesc = PropertyDescriptor.accessorDescriptor(
                 new JSNativeFunction("get __proto__", 0, ObjectPrototype::__proto__Getter),
                 new JSNativeFunction("set __proto__", 1, ObjectPrototype::__proto__Setter),
-                true,
+                false,
                 true
         );
         objectPrototype.defineProperty(PropertyKey.fromString("__proto__"), protoDesc);
 
         // Create Object constructor
         JSNativeFunction objectConstructor = new JSNativeFunction("Object", 1, ObjectConstructor::call, true);
-        objectConstructor.set("prototype", objectPrototype);
-        objectPrototype.set("constructor", objectConstructor);
+        objectConstructor.definePropertyReadonlyNonConfigurable("prototype", objectPrototype);
+        objectPrototype.definePropertyWritableConfigurable("constructor", objectConstructor);
 
         // Object static methods
-        objectConstructor.set("keys", new JSNativeFunction("keys", 1, ObjectConstructor::keys));
-        objectConstructor.set("values", new JSNativeFunction("values", 1, ObjectConstructor::values));
-        objectConstructor.set("entries", new JSNativeFunction("entries", 1, ObjectConstructor::entries));
-        objectConstructor.set("fromEntries", new JSNativeFunction("fromEntries", 1, ObjectConstructor::fromEntries));
-        objectConstructor.set("assign", new JSNativeFunction("assign", 2, ObjectConstructor::assign));
-        objectConstructor.set("create", new JSNativeFunction("create", 2, ObjectConstructor::create));
-        objectConstructor.set("defineProperty", new JSNativeFunction("defineProperty", 3, ObjectPrototype::defineProperty));
-        objectConstructor.set("defineProperties", new JSNativeFunction("defineProperties", 2, ObjectConstructor::defineProperties));
-        objectConstructor.set("getOwnPropertyDescriptor", new JSNativeFunction("getOwnPropertyDescriptor", 2, ObjectConstructor::getOwnPropertyDescriptor));
-        objectConstructor.set("getOwnPropertyDescriptors", new JSNativeFunction("getOwnPropertyDescriptors", 1, ObjectConstructor::getOwnPropertyDescriptors));
-        objectConstructor.set("getOwnPropertyNames", new JSNativeFunction("getOwnPropertyNames", 1, ObjectConstructor::getOwnPropertyNames));
-        objectConstructor.set("getOwnPropertySymbols", new JSNativeFunction("getOwnPropertySymbols", 1, ObjectConstructor::getOwnPropertySymbols));
-        objectConstructor.set("getPrototypeOf", new JSNativeFunction("getPrototypeOf", 1, ObjectConstructor::getPrototypeOf));
-        objectConstructor.set("setPrototypeOf", new JSNativeFunction("setPrototypeOf", 2, ObjectConstructor::setPrototypeOf));
-        objectConstructor.set("freeze", new JSNativeFunction("freeze", 1, ObjectConstructor::freeze));
-        objectConstructor.set("seal", new JSNativeFunction("seal", 1, ObjectConstructor::seal));
-        objectConstructor.set("preventExtensions", new JSNativeFunction("preventExtensions", 1, ObjectConstructor::preventExtensions));
-        objectConstructor.set("isFrozen", new JSNativeFunction("isFrozen", 1, ObjectConstructor::isFrozen));
-        objectConstructor.set("isSealed", new JSNativeFunction("isSealed", 1, ObjectConstructor::isSealed));
-        objectConstructor.set("isExtensible", new JSNativeFunction("isExtensible", 1, ObjectConstructor::isExtensible));
-        objectConstructor.set("is", new JSNativeFunction("is", 2, ObjectConstructor::is));
-        objectConstructor.set("hasOwn", new JSNativeFunction("hasOwn", 2, ObjectConstructor::hasOwn));
-        objectConstructor.set("groupBy", new JSNativeFunction("groupBy", 2, ObjectConstructor::groupBy));
+        objectConstructor.definePropertyWritableConfigurable("keys", new JSNativeFunction("keys", 1, ObjectConstructor::keys));
+        objectConstructor.definePropertyWritableConfigurable("values", new JSNativeFunction("values", 1, ObjectConstructor::values));
+        objectConstructor.definePropertyWritableConfigurable("entries", new JSNativeFunction("entries", 1, ObjectConstructor::entries));
+        objectConstructor.definePropertyWritableConfigurable("fromEntries", new JSNativeFunction("fromEntries", 1, ObjectConstructor::fromEntries));
+        objectConstructor.definePropertyWritableConfigurable("assign", new JSNativeFunction("assign", 2, ObjectConstructor::assign));
+        objectConstructor.definePropertyWritableConfigurable("create", new JSNativeFunction("create", 2, ObjectConstructor::create));
+        objectConstructor.definePropertyWritableConfigurable("defineProperty", new JSNativeFunction("defineProperty", 3, ObjectPrototype::defineProperty));
+        objectConstructor.definePropertyWritableConfigurable("defineProperties", new JSNativeFunction("defineProperties", 2, ObjectConstructor::defineProperties));
+        objectConstructor.definePropertyWritableConfigurable("getOwnPropertyDescriptor", new JSNativeFunction("getOwnPropertyDescriptor", 2, ObjectConstructor::getOwnPropertyDescriptor));
+        objectConstructor.definePropertyWritableConfigurable("getOwnPropertyDescriptors", new JSNativeFunction("getOwnPropertyDescriptors", 1, ObjectConstructor::getOwnPropertyDescriptors));
+        objectConstructor.definePropertyWritableConfigurable("getOwnPropertyNames", new JSNativeFunction("getOwnPropertyNames", 1, ObjectConstructor::getOwnPropertyNames));
+        objectConstructor.definePropertyWritableConfigurable("getOwnPropertySymbols", new JSNativeFunction("getOwnPropertySymbols", 1, ObjectConstructor::getOwnPropertySymbols));
+        objectConstructor.definePropertyWritableConfigurable("getPrototypeOf", new JSNativeFunction("getPrototypeOf", 1, ObjectConstructor::getPrototypeOf));
+        objectConstructor.definePropertyWritableConfigurable("setPrototypeOf", new JSNativeFunction("setPrototypeOf", 2, ObjectConstructor::setPrototypeOf));
+        objectConstructor.definePropertyWritableConfigurable("freeze", new JSNativeFunction("freeze", 1, ObjectConstructor::freeze));
+        objectConstructor.definePropertyWritableConfigurable("seal", new JSNativeFunction("seal", 1, ObjectConstructor::seal));
+        objectConstructor.definePropertyWritableConfigurable("preventExtensions", new JSNativeFunction("preventExtensions", 1, ObjectConstructor::preventExtensions));
+        objectConstructor.definePropertyWritableConfigurable("isFrozen", new JSNativeFunction("isFrozen", 1, ObjectConstructor::isFrozen));
+        objectConstructor.definePropertyWritableConfigurable("isSealed", new JSNativeFunction("isSealed", 1, ObjectConstructor::isSealed));
+        objectConstructor.definePropertyWritableConfigurable("isExtensible", new JSNativeFunction("isExtensible", 1, ObjectConstructor::isExtensible));
+        objectConstructor.definePropertyWritableConfigurable("is", new JSNativeFunction("is", 2, ObjectConstructor::is));
+        objectConstructor.definePropertyWritableConfigurable("hasOwn", new JSNativeFunction("hasOwn", 2, ObjectConstructor::hasOwn));
+        objectConstructor.definePropertyWritableConfigurable("groupBy", new JSNativeFunction("groupBy", 2, ObjectConstructor::groupBy));
 
         global.definePropertyWritableConfigurable("Object", objectConstructor);
     }

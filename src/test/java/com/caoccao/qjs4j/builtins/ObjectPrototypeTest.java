@@ -468,6 +468,17 @@ public class ObjectPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testRegistrationDescriptors() {
+        assertStringWithJavet(
+                "(() => { const d = Object.getOwnPropertyDescriptor(Object.prototype, 'hasOwnProperty'); return [d.enumerable, d.writable, d.configurable, typeof d.value].join(','); })()",
+                "(() => { const d = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__'); return [d.enumerable, d.configurable, typeof d.get, typeof d.set].join(','); })()",
+                "(() => { const d = Object.getOwnPropertyDescriptor(Object, 'keys'); return [d.enumerable, d.writable, d.configurable, typeof d.value].join(','); })()",
+                "(() => { const d = Object.getOwnPropertyDescriptor(Object, 'prototype'); return [d.writable, d.enumerable, d.configurable].join(','); })()",
+                "(() => { const d = Object.getOwnPropertyDescriptor(Object.prototype, 'constructor'); return [d.writable, d.enumerable, d.configurable].join(','); })()"
+        );
+    }
+
+    @Test
     public void testSet() {
         assertStringWithJavet("""
                 const obj = {};
