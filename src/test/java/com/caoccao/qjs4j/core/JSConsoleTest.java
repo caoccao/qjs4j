@@ -146,6 +146,7 @@ public class JSConsoleTest extends BaseJavetTest {
     @Test
     public void testConsoleHasAllMethods() {
         assertThat(context.eval("typeof console.log").toJavaObject()).isEqualTo("function");
+        assertThat(context.eval("console.log.length").toJavaObject()).isEqualTo(1.0);
         assertThat(context.eval("typeof console.info").toJavaObject()).isEqualTo("function");
         assertThat(context.eval("typeof console.debug").toJavaObject()).isEqualTo("function");
         assertThat(context.eval("typeof console.warn").toJavaObject()).isEqualTo("function");
@@ -294,13 +295,13 @@ public class JSConsoleTest extends BaseJavetTest {
     @Test
     public void testFormatValueBigInt() {
         context.eval("console.log(123n)");
-        assertThat(out()).isEqualTo("123\n");
+        assertThat(out()).isEqualTo("123n\n");
     }
 
     @Test
     public void testFormatValueEmptyArray() {
         context.eval("console.log([])");
-        assertThat(out()).isEqualTo("[]\n");
+        assertThat(out()).isEqualTo("[ ]\n");
     }
 
     @Test
@@ -316,6 +317,12 @@ public class JSConsoleTest extends BaseJavetTest {
     }
 
     @Test
+    public void testFormatValueInvalidDateFallsBackToDateObject() {
+        context.eval("console.log(new Date(NaN))");
+        assertThat(out()).isEqualTo("Date {  }\n");
+    }
+
+    @Test
     public void testFormatValueNaN() {
         context.eval("console.log(NaN)");
         assertThat(out()).isEqualTo("NaN\n");
@@ -324,13 +331,49 @@ public class JSConsoleTest extends BaseJavetTest {
     @Test
     public void testFormatValueNestedArray() {
         context.eval("console.log([1, [2, 3], 4])");
-        assertThat(out()).isEqualTo("[1, [2, 3], 4]\n");
+        assertThat(out()).isEqualTo("[ 1, [ 2, 3 ], 4 ]\n");
+    }
+
+    @Test
+    public void testFormatValueNestedStringQuoted() {
+        context.eval("console.log(['x'])");
+        assertThat(out()).isEqualTo("[ \"x\" ]\n");
+    }
+
+    @Test
+    public void testFormatValueRegExp() {
+        context.eval("console.log(/a/)");
+        assertThat(out()).isEqualTo("/a/\n");
+    }
+
+    @Test
+    public void testFormatValueRegExpEscapesSlash() {
+        context.eval("console.log(/a\\/b/)");
+        assertThat(out()).isEqualTo("/a\\/b/\n");
+    }
+
+    @Test
+    public void testFormatValueSparseArrayHoles() {
+        context.eval("console.log([,])");
+        assertThat(out()).isEqualTo("[ <1 empty item> ]\n");
     }
 
     @Test
     public void testFormatValueSymbol() {
         context.eval("console.log(Symbol('test'))");
         assertThat(out()).isEqualTo("Symbol(test)\n");
+    }
+
+    @Test
+    public void testFormatValueTypedArray() {
+        context.eval("console.log(new Uint8Array([1, 2, 3]))");
+        assertThat(out()).isEqualTo("Uint8Array(3) [ 1, 2, 3 ]\n");
+    }
+
+    @Test
+    public void testFormatValueValidDateAsIsoString() {
+        context.eval("console.log(new Date('2020-01-01T00:00:00.000Z'))");
+        assertThat(out()).isEqualTo("2020-01-01T00:00:00.000Z\n");
     }
 
     @Test
@@ -428,9 +471,15 @@ public class JSConsoleTest extends BaseJavetTest {
     }
 
     @Test
+    public void testLogAnonymousFunction() {
+        context.eval("console.log(function () {})");
+        assertThat(out()).isEqualTo("[Function (anonymous)]\n");
+    }
+
+    @Test
     public void testLogArray() {
         context.eval("console.log([1, 2, 3])");
-        assertThat(out()).isEqualTo("[1, 2, 3]\n");
+        assertThat(out()).isEqualTo("[ 1, 2, 3 ]\n");
     }
 
     @Test
@@ -449,6 +498,12 @@ public class JSConsoleTest extends BaseJavetTest {
     public void testLogMultipleArgs() {
         context.eval("console.log('a', 'b', 'c')");
         assertThat(out()).isEqualTo("a b c\n");
+    }
+
+    @Test
+    public void testLogNamedFunction() {
+        context.eval("console.log(function f() {})");
+        assertThat(out()).isEqualTo("[Function f]\n");
     }
 
     @Test
@@ -472,7 +527,31 @@ public class JSConsoleTest extends BaseJavetTest {
     @Test
     public void testLogObject() {
         context.eval("console.log({})");
-        assertThat(out()).isEqualTo("[object Object]\n");
+        assertThat(out()).isEqualTo("{  }\n");
+    }
+
+    @Test
+    public void testLogObjectWithGetter() {
+        context.eval("const o = {}; Object.defineProperty(o, 'x', { get() { return 1; }, enumerable: true }); console.log(o);");
+        assertThat(out()).isEqualTo("{ x: [Getter] }\n");
+    }
+
+    @Test
+    public void testLogObjectWithNonAsciiPropertyKey() {
+        context.eval("console.log({ 'é': 1 })");
+        assertThat(out()).isEqualTo("{ \"é\": 1 }\n");
+    }
+
+    @Test
+    public void testLogObjectWithProperties() {
+        context.eval("console.log({ a: 1, b: 'x' })");
+        assertThat(out()).isEqualTo("{ a: 1, b: \"x\" }\n");
+    }
+
+    @Test
+    public void testLogObjectWithQuotedPropertyKey() {
+        context.eval("console.log({ 'a b': 1 })");
+        assertThat(out()).isEqualTo("{ \"a b\": 1 }\n");
     }
 
     @Test
@@ -503,7 +582,7 @@ public class JSConsoleTest extends BaseJavetTest {
     @Test
     public void testTable() {
         context.eval("console.table([1, 2])");
-        assertThat(out()).isEqualTo("[1, 2]\n");
+        assertThat(out()).isEqualTo("[ 1, 2 ]\n");
     }
 
     @Test

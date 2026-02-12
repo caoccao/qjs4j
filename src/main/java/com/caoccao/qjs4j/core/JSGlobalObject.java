@@ -41,11 +41,7 @@ public final class JSGlobalObject {
     private final JSConsole console;
 
     public JSGlobalObject() {
-        this(new JSConsole());
-    }
-
-    public JSGlobalObject(JSConsole console) {
-        this.console = console;
+        this.console = new JSConsole();
     }
 
     /**
@@ -510,7 +506,7 @@ public final class JSGlobalObject {
      */
     private void initializeConsoleObject(JSContext context, JSObject global) {
         JSObject consoleObj = context.createJSObject();
-        consoleObj.set("log", new JSNativeFunction("log", 0, console::log));
+        consoleObj.set("log", new JSNativeFunction("log", 1, console::log));
         consoleObj.set("info", new JSNativeFunction("info", 0, console::info));
         consoleObj.set("debug", new JSNativeFunction("debug", 0, console::debug));
         consoleObj.set("warn", new JSNativeFunction("warn", 0, console::warn));

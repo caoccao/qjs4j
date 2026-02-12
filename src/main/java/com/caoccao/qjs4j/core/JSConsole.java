@@ -16,16 +16,18 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.builtins.DatePrototype;
+
 import java.io.PrintStream;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 /**
  * Implementation of the JavaScript console API.
  * Supports configurable output streams for stdout and stderr.
  */
 public final class JSConsole {
+    private static final int MAX_PRINT_DEPTH = 2;
+    private static final int MAX_PRINT_ITEM_COUNT = 100;
     private final Map<String, Integer> counters = new HashMap<>();
     private final Map<String, Long> timers = new HashMap<>();
     private PrintStream err;
@@ -48,7 +50,7 @@ public final class JSConsole {
             err.print("Assertion failed:");
             for (int i = 1; i < args.length; i++) {
                 err.print(" ");
-                err.print(formatValue(context, args[i]));
+                err.print(formatArgument(context, args[i]));
             }
             err.println();
         }
@@ -121,42 +123,301 @@ public final class JSConsole {
         err.print(getGroupIndent());
         for (int i = 0; i < args.length; i++) {
             if (i > 0) err.print(" ");
-            err.print(formatValue(context, args[i]));
+            err.print(formatArgument(context, args[i]));
         }
         err.println();
         return JSUndefined.INSTANCE;
+    }
+
+    private String formatArgument(JSContext context, JSValue value) {
+        return formatValue(context, value, true, new IdentityHashMap<>(), 0);
+    }
+
+    private String formatArray(
+            JSContext context,
+            JSArray array,
+            IdentityHashMap<JSObject, Integer> printStack,
+            int depth) {
+        List<String> items = new ArrayList<>();
+        long length = array.getLength();
+        int max = (int) Math.min(length, MAX_PRINT_ITEM_COUNT);
+        int holeCount = 0;
+
+        for (int i = 0; i < max; i++) {
+            if (array.hasElement(i)) {
+                if (holeCount > 0) {
+                    items.add(formatEmptyItems(holeCount));
+                    holeCount = 0;
+                }
+                items.add(formatValue(context, array.get(i), false, printStack, depth + 1));
+            } else {
+                holeCount++;
+            }
+        }
+        if (holeCount > 0) {
+            items.add(formatEmptyItems(holeCount));
+        }
+        if (length > max) {
+            long remaining = length - max;
+            items.add("... " + remaining + " more item" + (remaining > 1 ? "s" : ""));
+        }
+
+        for (PropertyKey key : array.getOwnPropertyKeys()) {
+            if (key.isIndex() || "length".equals(key.asString())) {
+                continue;
+            }
+            PropertyDescriptor descriptor = array.getOwnPropertyDescriptor(key);
+            if (descriptor != null && !descriptor.isEnumerable()) {
+                continue;
+            }
+            items.add(formatPropertyEntry(context, array, key, descriptor, printStack, depth + 1));
+        }
+
+        return items.isEmpty() ? "[ ]" : "[ " + String.join(", ", items) + " ]";
+    }
+
+    private String formatEmptyItems(int count) {
+        return "<" + count + " empty item" + (count > 1 ? "s" : "") + ">";
+    }
+
+    private String formatFunction(JSFunction function) {
+        String functionName = function.getName();
+        if (functionName == null || functionName.isEmpty()) {
+            functionName = "(anonymous)";
+        }
+        return "[Function " + functionName + "]";
+    }
+
+    private String formatObject(
+            JSContext context,
+            JSObject object,
+            IdentityHashMap<JSObject, Integer> printStack,
+            int depth) {
+        Integer stackIndex = printStack.get(object);
+        if (stackIndex != null) {
+            return "[circular " + stackIndex + "]";
+        }
+
+        if (object instanceof JSArray array) {
+            printStack.put(object, printStack.size());
+            try {
+                return formatArray(context, array, printStack, depth);
+            } finally {
+                printStack.remove(object);
+            }
+        }
+
+        if (object instanceof JSFunction function) {
+            return formatFunction(function);
+        }
+        if (object instanceof JSTypedArray typedArray) {
+            return formatTypedArray(typedArray);
+        }
+        if (object instanceof JSRegExp regexp) {
+            return formatRegExp(regexp);
+        }
+        if (object instanceof JSDate) {
+            JSValue isoValue = DatePrototype.toISOString(context, object, new JSValue[0]);
+            if (!context.hasPendingException() && isoValue instanceof JSString jsString) {
+                return jsString.value();
+            }
+            context.clearPendingException();
+        }
+
+        String className = getClassName(object);
+        if (depth >= MAX_PRINT_DEPTH) {
+            return "[" + className + "]";
+        }
+
+        printStack.put(object, printStack.size());
+        try {
+            List<String> entries = new ArrayList<>();
+            int count = 0;
+            for (PropertyKey key : object.getOwnPropertyKeys()) {
+                PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
+                if (descriptor != null && !descriptor.isEnumerable()) {
+                    continue;
+                }
+                entries.add(formatPropertyEntry(context, object, key, descriptor, printStack, depth + 1));
+                if (++count >= MAX_PRINT_ITEM_COUNT) {
+                    break;
+                }
+            }
+            if (object.getOwnPropertyKeys().size() > MAX_PRINT_ITEM_COUNT) {
+                entries.add("... " + (object.getOwnPropertyKeys().size() - MAX_PRINT_ITEM_COUNT) + " more items");
+            }
+
+            String prefix = "Object".equals(className) ? "" : className + " ";
+            return entries.isEmpty()
+                    ? prefix + "{  }"
+                    : prefix + "{ " + String.join(", ", entries) + " }";
+        } finally {
+            printStack.remove(object);
+        }
+    }
+
+    private String formatPropertyEntry(
+            JSContext context,
+            JSObject object,
+            PropertyKey key,
+            PropertyDescriptor descriptor,
+            IdentityHashMap<JSObject, Integer> printStack,
+            int depth) {
+        String keyString = formatPropertyKey(key);
+        if (descriptor != null && descriptor.isAccessorDescriptor()) {
+            if (descriptor.getGetter() != null && descriptor.getSetter() != null) {
+                return keyString + ": [Getter/Setter]";
+            }
+            if (descriptor.getSetter() != null) {
+                return keyString + ": [Setter]";
+            }
+            return keyString + ": [Getter]";
+        }
+        JSValue value = descriptor != null && descriptor.hasValue()
+                ? descriptor.getValue()
+                : object.get(key);
+        return keyString + ": " + formatValue(context, value, false, printStack, depth);
+    }
+
+    private String formatPropertyKey(PropertyKey key) {
+        if (key.isIndex()) {
+            return Integer.toString(key.asIndex());
+        }
+        String propertyString = key.toPropertyString();
+        return isAsciiIdentifier(propertyString)
+                ? propertyString
+                : quoteString(propertyString);
+    }
+
+    private String formatRegExp(JSRegExp regexp) {
+        String pattern = regexp.getPattern();
+        if (pattern.isEmpty()) {
+            pattern = "(?:)";
+        }
+
+        StringBuilder builder = new StringBuilder(pattern.length() + regexp.getFlags().length() + 2);
+        builder.append('/');
+        boolean insideCharClass = false;
+        for (int i = 0; i < pattern.length(); i++) {
+            char c = pattern.charAt(i);
+            if (c == '\\') {
+                builder.append(c);
+                if (i + 1 < pattern.length()) {
+                    builder.append(pattern.charAt(i + 1));
+                    i++;
+                }
+                continue;
+            }
+            if (c == '[' && !insideCharClass) {
+                insideCharClass = true;
+            } else if (c == ']' && insideCharClass) {
+                insideCharClass = false;
+            } else if (c == '/' && !insideCharClass) {
+                builder.append("\\/");
+                continue;
+            } else if (c == '\n') {
+                builder.append("\\n");
+                continue;
+            } else if (c == '\r') {
+                builder.append("\\r");
+                continue;
+            }
+            builder.append(c);
+        }
+        builder.append('/').append(regexp.getFlags());
+        return builder.toString();
+    }
+
+    private String formatTypedArray(JSTypedArray typedArray) {
+        String className = getClassName(typedArray);
+        int length = typedArray.getLength();
+        int max = Math.min(length, MAX_PRINT_ITEM_COUNT);
+        List<String> items = new ArrayList<>(max + 1);
+        for (int i = 0; i < max; i++) {
+            double element = typedArray.getElement(i);
+            if (Double.isFinite(element) && element == Math.rint(element)) {
+                items.add(Long.toString((long) element));
+            } else {
+                items.add(new JSNumber(element).toString());
+            }
+        }
+        if (length > max) {
+            items.add("... " + (length - max) + " more item" + (length - max > 1 ? "s" : ""));
+        }
+        return className + "(" + length + ") " +
+                (items.isEmpty() ? "[ ]" : "[ " + String.join(", ", items) + " ]");
     }
 
     /**
      * Format a value for console output.
      */
     public String formatValue(JSContext context, JSValue value) {
-        if (value == null) {
+        return formatValue(context, value, false, new IdentityHashMap<>(), 0);
+    }
+
+    private String formatValue(
+            JSContext context,
+            JSValue value,
+            boolean printTopLevelStringRaw,
+            IdentityHashMap<JSObject, Integer> printStack,
+            int depth) {
+        if (value == null || value instanceof JSNull) {
             return "null";
-        } else if (value.isSymbol()) {
-            return value.toJavaObject().toString();
-        } else if (value.isNullOrUndefined()
-                || value.isBigInt()
-                || value.isBigIntObject()
-                || value.isBoolean()
-                || value.isBooleanObject()
-                || value.isNumber()
-                || value.isNumberObject()
-                || value.isString()
-                || value.isStringObject()) {
-            return JSTypeConversions.toString(context, value).value();
-        } else if (value instanceof JSArray arr) {
-            StringBuilder sb = new StringBuilder("[");
-            for (long i = 0; i < arr.getLength(); i++) {
-                if (i > 0) sb.append(", ");
-                sb.append(formatValue(context, arr.get(i)));
-            }
-            sb.append("]");
-            return sb.toString();
-        } else if (value instanceof JSObject) {
-            return "[object Object]";
+        }
+        if (value instanceof JSUndefined) {
+            return "undefined";
+        }
+        if (value instanceof JSString jsString) {
+            return printTopLevelStringRaw
+                    ? jsString.value()
+                    : quoteString(jsString.value());
+        }
+        if (value instanceof JSNumber
+                || value instanceof JSBoolean) {
+            return value.toString();
+        }
+        if (value instanceof JSBigInt bigInt) {
+            return bigInt + "n";
+        }
+        if (value instanceof JSSymbol symbol) {
+            return symbol.toJavaObject();
+        }
+        if (value instanceof JSObject object) {
+            return formatObject(context, object, printStack, depth);
         }
         return String.valueOf(value);
+    }
+
+    private String getClassName(JSObject object) {
+        if (object instanceof JSStringObject) {
+            return "String";
+        }
+        if (object instanceof JSNumberObject) {
+            return "Number";
+        }
+        if (object instanceof JSBooleanObject) {
+            return "Boolean";
+        }
+        if (object instanceof JSBigIntObject) {
+            return "BigInt";
+        }
+        if (object instanceof JSDate) {
+            return "Date";
+        }
+        if (object instanceof JSTypedArray typedArray) {
+            return typedArray.getClass().getSimpleName().replaceFirst("^JS", "");
+        }
+        if (object instanceof JSArrayBuffer) {
+            return "ArrayBuffer";
+        }
+        if (object instanceof JSSharedArrayBuffer) {
+            return "SharedArrayBuffer";
+        }
+        String simpleName = object.getClass().getSimpleName();
+        if (simpleName.startsWith("JS")) {
+            return simpleName.substring(2);
+        }
+        return "Object";
     }
 
     public PrintStream getErr() {
@@ -178,7 +439,7 @@ public final class JSConsole {
     public JSValue group(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length > 0) {
             out.print(getGroupIndent());
-            out.println(formatValue(context, args[0]));
+            out.println(formatArgument(context, args[0]));
         }
         groupDepth++;
         return JSUndefined.INSTANCE;
@@ -211,6 +472,30 @@ public final class JSConsole {
         return log(context, thisArg, args);
     }
 
+    private boolean isAsciiIdentifier(String value) {
+        if (value == null || value.isEmpty()) {
+            return false;
+        }
+        char first = value.charAt(0);
+        if (!((first >= 'a' && first <= 'z')
+                || (first >= 'A' && first <= 'Z')
+                || first == '_'
+                || first == '$')) {
+            return false;
+        }
+        for (int i = 1; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (!((c >= 'a' && c <= 'z')
+                    || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9')
+                    || c == '_'
+                    || c == '$')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /**
      * console.log(...args)
      * Print values to stdout.
@@ -219,10 +504,37 @@ public final class JSConsole {
         out.print(getGroupIndent());
         for (int i = 0; i < args.length; i++) {
             if (i > 0) out.print(" ");
-            out.print(formatValue(context, args[i]));
+            out.print(formatArgument(context, args[i]));
         }
         out.println();
+        out.flush();
         return JSUndefined.INSTANCE;
+    }
+
+    private String quoteString(String value) {
+        StringBuilder stringBuilder = new StringBuilder(value.length() + 2);
+        stringBuilder.append('"');
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '\t' -> stringBuilder.append("\\t");
+                case '\r' -> stringBuilder.append("\\r");
+                case '\n' -> stringBuilder.append("\\n");
+                case '\b' -> stringBuilder.append("\\b");
+                case '\f' -> stringBuilder.append("\\f");
+                case '\\' -> stringBuilder.append("\\\\");
+                case '"' -> stringBuilder.append("\\\"");
+                default -> {
+                    if (c < 32 || (c >= 0x7F && c <= 0x9F)) {
+                        stringBuilder.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        stringBuilder.append(c);
+                    }
+                }
+            }
+        }
+        stringBuilder.append('"');
+        return stringBuilder.toString();
     }
 
     public void setErr(PrintStream err) {
@@ -285,7 +597,7 @@ public final class JSConsole {
             out.print(label + ": " + elapsed + "ms");
             for (int i = 1; i < args.length; i++) {
                 out.print(" ");
-                out.print(formatValue(context, args[i]));
+                out.print(formatArgument(context, args[i]));
             }
             out.println();
         }
@@ -301,7 +613,7 @@ public final class JSConsole {
         err.print("Trace:");
         for (int i = 0; i < args.length; i++) {
             err.print(" ");
-            err.print(formatValue(context, args[i]));
+            err.print(formatArgument(context, args[i]));
         }
         err.println();
         return JSUndefined.INSTANCE;
@@ -315,7 +627,7 @@ public final class JSConsole {
         err.print(getGroupIndent());
         for (int i = 0; i < args.length; i++) {
             if (i > 0) err.print(" ");
-            err.print(formatValue(context, args[i]));
+            err.print(formatArgument(context, args[i]));
         }
         err.println();
         return JSUndefined.INSTANCE;

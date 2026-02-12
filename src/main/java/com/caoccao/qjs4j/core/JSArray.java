@@ -185,6 +185,21 @@ public final class JSArray extends JSObject {
     }
 
     /**
+     * Check whether an index has an own element (distinguishes holes from undefined values).
+     */
+    public boolean hasElement(long index) {
+        if (index < 0 || index >= length) {
+            return false;
+        }
+        if (index < denseArray.length && denseArray[(int) index] != null) {
+            return true;
+        }
+        return sparseProperties != null
+                && index <= Integer.MAX_VALUE
+                && sparseProperties.containsKey((int) index);
+    }
+
+    /**
      * Initialize the "length" property as a special data property.
      */
     private void initializeLengthProperty() {
