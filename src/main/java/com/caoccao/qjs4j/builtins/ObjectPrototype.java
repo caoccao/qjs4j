@@ -617,6 +617,9 @@ public final class ObjectPrototype {
             if (thisArg instanceof JSDate) {
                 return new JSString("[object Date]");
             }
+            if (thisArg instanceof JSBooleanObject) {
+                return new JSString("[object Boolean]");
+            }
 
             // Default for generic objects
             return new JSString("[object Object]");

@@ -487,16 +487,18 @@ public final class JSGlobalObject {
      * Initialize Boolean constructor and prototype.
      */
     private void initializeBooleanConstructor(JSContext context, JSObject global) {
-        // Create Boolean.prototype
-        JSObject booleanPrototype = context.createJSObject();
-        booleanPrototype.set("toString", new JSNativeFunction("toString", 0, BooleanPrototype::toString));
-        booleanPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, BooleanPrototype::valueOf));
+        // Create Boolean.prototype as a Boolean object with [[BooleanData]] = false
+        // Per QuickJS: JS_SetObjectData(ctx, ctx->class_proto[JS_CLASS_BOOLEAN], JS_NewBool(ctx, FALSE))
+        JSBooleanObject booleanPrototype = new JSBooleanObject(false);
+        context.transferPrototype(booleanPrototype, JSObject.NAME);
+        booleanPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, BooleanPrototype::toString));
+        booleanPrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, BooleanPrototype::valueOf));
 
         // Create Boolean constructor
         JSNativeFunction booleanConstructor = new JSNativeFunction("Boolean", 1, BooleanConstructor::call, true);
-        booleanConstructor.set("prototype", booleanPrototype);
-        booleanConstructor.setConstructorType(JSConstructorType.BOOLEAN_OBJECT); // Mark as Boolean constructor
-        booleanPrototype.set("constructor", booleanConstructor);
+        booleanConstructor.definePropertyReadonlyNonConfigurable("prototype", booleanPrototype);
+        booleanConstructor.setConstructorType(JSConstructorType.BOOLEAN_OBJECT);
+        booleanPrototype.definePropertyWritableConfigurable("constructor", booleanConstructor);
 
         global.definePropertyWritableConfigurable("Boolean", booleanConstructor);
     }
