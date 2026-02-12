@@ -183,10 +183,10 @@ public final class ReflectObject {
 
         JSArray result = context.createJSArray();
         for (PropertyKey key : target.ownPropertyKeys()) {
-            if (key.isString()) {
-                result.push(new JSString(key.asString()));
-            } else if (key.isSymbol()) {
+            if (key.isSymbol()) {
                 result.push(key.asSymbol());
+            } else {
+                result.push(new JSString(key.toPropertyString()));
             }
         }
         return result;
@@ -222,13 +222,20 @@ public final class ReflectObject {
 
         PropertyKey key = PropertyKey.fromValue(context, args[1]);
         JSValue value = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
-        JSObject receiver = args.length > 3 && args[3] instanceof JSObject r ? r : target;
+        JSObject receiver = target;
+        if (args.length > 3) {
+            if (args[3] instanceof JSObject r) {
+                receiver = r;
+            } else {
+                return JSBoolean.FALSE;
+            }
+        }
 
-        target.set(key, value, context, receiver);
+        boolean success = target.setWithResult(key, value, context, receiver);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        return JSBoolean.TRUE;
+        return JSBoolean.valueOf(success);
     }
 
     /**

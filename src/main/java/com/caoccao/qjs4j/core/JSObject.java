@@ -31,6 +31,7 @@ import java.util.*;
  */
 public non-sealed class JSObject implements JSValue {
     public static final String NAME = "Object";
+    private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL; // 2^32 - 2
     // ThreadLocal to track visited objects during prototype chain traversal
     private static final ThreadLocal<Set<JSObject>> visitedObjects = ThreadLocal.withInitial(HashSet::new);
     protected JSConstructorType constructorType; // Internal slot for [[Constructor]] type (not accessible from JS)
@@ -62,8 +63,6 @@ public non-sealed class JSObject implements JSValue {
         this();
         this.prototype = prototype;
     }
-
-    // Property operations
 
     /**
      * Compact properties by removing deleted properties.
@@ -146,6 +145,8 @@ public non-sealed class JSObject implements JSValue {
                 PropertyKey.fromString(name),
                 PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
     }
+
+    // Property operations
 
     /**
      * Define a new property with a descriptor.
@@ -237,9 +238,34 @@ public non-sealed class JSObject implements JSValue {
      * Following QuickJS delete_property() implementation.
      */
     public boolean delete(PropertyKey key, JSContext context) {
-        // Cannot delete from sealed or frozen objects
+        // Check sparse properties first.
+        long arrayIndex = getCanonicalArrayIndex(key);
+        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
+            int sparseIndex = (int) arrayIndex;
+            if (!sparseProperties.containsKey(sparseIndex)) {
+                // Property doesn't exist, deletion successful.
+                // Even non-extensible/sealed/frozen objects return true for absent properties.
+                return true;
+            }
+            if (sealed || frozen) {
+                if (context != null && context.isStrictMode()) {
+                    context.throwTypeError(
+                            "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(true));
+                }
+                return false;
+            }
+            sparseProperties.remove(sparseIndex);
+            return true;
+        }
+
+        // Find property in shape and check if it exists
+        PropertyKey shapeKey = getOwnShapeKey(key);
+        if (shapeKey == null) {
+            return true; // Property doesn't exist, deletion successful
+        }
+
+        // Cannot delete an existing own property from sealed or frozen objects.
         if (sealed || frozen) {
-            // In strict mode, throw TypeError when trying to delete from frozen/sealed object
             if (context != null && context.isStrictMode()) {
                 context.throwTypeError(
                         "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(true));
@@ -247,17 +273,7 @@ public non-sealed class JSObject implements JSValue {
             return false;
         }
 
-        // Check sparse properties first
-        if (key.isIndex() && sparseProperties != null) {
-            sparseProperties.remove(key.asIndex());
-            return true;
-        }
-
-        // Find property in shape and check if it exists
-        int offset = shape.getPropertyOffset(key);
-        if (offset < 0) {
-            return true; // Property doesn't exist, deletion successful
-        }
+        int offset = shape.getPropertyOffset(shapeKey);
 
         // Check if property is configurable before removing
         PropertyDescriptor desc = shape.getDescriptorAt(offset);
@@ -271,7 +287,7 @@ public non-sealed class JSObject implements JSValue {
         }
 
         // Remove from shape (checks configurability internally)
-        boolean removed = shape.removeProperty(key);
+        boolean removed = shape.removeProperty(shapeKey);
         if (!removed) {
             return false; // Not configurable or other error
         }
@@ -291,25 +307,15 @@ public non-sealed class JSObject implements JSValue {
      * Get own enumerable property keys.
      */
     public PropertyKey[] enumerableKeys() {
-        List<PropertyKey> keys = new ArrayList<>();
+        return getOrderedOwnKeys(true).toArray(new PropertyKey[0]);
+    }
 
-        PropertyKey[] allKeys = shape.getPropertyKeys();
-        PropertyDescriptor[] descriptors = shape.getDescriptors();
-
-        for (int i = 0; i < allKeys.length; i++) {
-            if (descriptors[i].isEnumerable()) {
-                keys.add(allKeys[i]);
-            }
+    private boolean failSet(PropertyKey key, JSContext context, boolean throwOnFailure) {
+        if (throwOnFailure && context != null && context.isStrictMode()) {
+            context.throwTypeError(
+                    "Cannot assign to read only property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(false));
         }
-
-        // Sparse properties are enumerable by default
-        if (sparseProperties != null) {
-            for (Integer index : sparseProperties.keySet()) {
-                keys.add(PropertyKey.fromIndex(index));
-            }
-        }
-
-        return keys.toArray(new PropertyKey[0]);
+        return false;
     }
 
     /**
@@ -370,11 +376,20 @@ public non-sealed class JSObject implements JSValue {
      * Protected to allow JSProxy to override with proper trap handling.
      */
     protected JSValue get(PropertyKey key, JSContext context, JSObject receiver) {
+        long arrayIndex = getCanonicalArrayIndex(key);
+        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
+            JSValue sparseValue = sparseProperties.get((int) arrayIndex);
+            if (sparseValue != null) {
+                return sparseValue;
+            }
+        }
+
         // Look in own properties
-        int offset = shape.getPropertyOffset(key);
+        PropertyKey shapeKey = getOwnShapeKey(key);
+        int offset = shapeKey != null ? shape.getPropertyOffset(shapeKey) : -1;
         if (offset >= 0) {
             // Check if property has a getter
-            PropertyDescriptor desc = shape.getDescriptor(key);
+            PropertyDescriptor desc = shape.getDescriptor(shapeKey);
             if (desc != null && desc.hasGetter()) {
                 JSFunction getter = desc.getGetter();
                 if (getter != null && context != null) {
@@ -423,6 +438,40 @@ public non-sealed class JSObject implements JSValue {
         return JSUndefined.INSTANCE;
     }
 
+    private long getCanonicalArrayIndex(PropertyKey key) {
+        if (key.isIndex()) {
+            return Integer.toUnsignedLong(key.asIndex());
+        }
+        if (!key.isString()) {
+            return -1;
+        }
+        return getCanonicalArrayIndex(key.asString());
+    }
+
+    private long getCanonicalArrayIndex(String key) {
+        if (key.isEmpty()) {
+            return -1;
+        }
+        if ("0".equals(key)) {
+            return 0;
+        }
+        if (key.charAt(0) == '0') {
+            return -1;
+        }
+        long value = 0;
+        for (int i = 0; i < key.length(); i++) {
+            char ch = key.charAt(i);
+            if (ch < '0' || ch > '9') {
+                return -1;
+            }
+            value = value * 10 + (ch - '0');
+            if (value > MAX_ARRAY_INDEX) {
+                return -1;
+            }
+        }
+        return value;
+    }
+
     /**
      * Get the constructor type internal slot.
      * This is for internal use only - not accessible from JavaScript.
@@ -462,31 +511,95 @@ public non-sealed class JSObject implements JSValue {
         return prefix + "#<Object>" + suffix;
     }
 
+    private List<PropertyKey> getOrderedOwnKeys(boolean enumerableOnly) {
+        List<PropertyKey> stringKeys = new ArrayList<>();
+        List<PropertyKey> symbolKeys = new ArrayList<>();
+        List<Map.Entry<Long, PropertyKey>> numericKeys = new ArrayList<>();
+        Set<Long> seenNumericIndices = new HashSet<>();
+        Set<PropertyKey> seenPropertyKeys = new HashSet<>();
+
+        PropertyKey[] shapeKeys = shape.getPropertyKeys();
+        for (PropertyKey shapeKey : shapeKeys) {
+            PropertyDescriptor descriptor = shape.getDescriptor(shapeKey);
+            if (descriptor == null) {
+                continue;
+            }
+            if (enumerableOnly && !descriptor.isEnumerable()) {
+                continue;
+            }
+            long index = getCanonicalArrayIndex(shapeKey);
+            if (index >= 0) {
+                if (seenNumericIndices.add(index)) {
+                    numericKeys.add(Map.entry(index, shapeKey));
+                }
+            } else if (shapeKey.isSymbol()) {
+                if (seenPropertyKeys.add(shapeKey)) {
+                    symbolKeys.add(shapeKey);
+                }
+            } else if (seenPropertyKeys.add(shapeKey)) {
+                stringKeys.add(shapeKey);
+            }
+        }
+
+        if (sparseProperties != null) {
+            for (Integer index : sparseProperties.keySet()) {
+                long unsignedIndex = Integer.toUnsignedLong(index);
+                if (seenNumericIndices.add(unsignedIndex)) {
+                    numericKeys.add(Map.entry(unsignedIndex, PropertyKey.fromIndex(index)));
+                }
+            }
+        }
+
+        numericKeys.sort(Comparator.comparingLong(Map.Entry::getKey));
+
+        List<PropertyKey> ordered = new ArrayList<>(numericKeys.size() + stringKeys.size() + symbolKeys.size());
+        for (Map.Entry<Long, PropertyKey> entry : numericKeys) {
+            ordered.add(entry.getValue());
+        }
+        ordered.addAll(stringKeys);
+        ordered.addAll(symbolKeys);
+        return ordered;
+    }
+
     /**
      * Get the property descriptor for a property.
      */
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
-        return shape.getDescriptor(key);
+        PropertyKey shapeKey = getOwnShapeKey(key);
+        if (shapeKey != null) {
+            return shape.getDescriptor(shapeKey);
+        }
+
+        long arrayIndex = getCanonicalArrayIndex(key);
+        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
+            JSValue sparseValue = sparseProperties.get((int) arrayIndex);
+            if (sparseValue != null) {
+                return PropertyDescriptor.defaultData(sparseValue);
+            }
+        }
+
+        return null;
     }
 
     /**
      * Get all own property keys (not including prototype chain).
      */
     public List<PropertyKey> getOwnPropertyKeys() {
-        List<PropertyKey> keys = new ArrayList<>();
+        return getOrderedOwnKeys(false);
+    }
 
-        // Add shaped properties
-        PropertyKey[] shapeKeys = shape.getPropertyKeys();
-        keys.addAll(Arrays.asList(shapeKeys));
-
-        // Add sparse properties (array indices)
-        if (sparseProperties != null) {
-            for (Integer index : sparseProperties.keySet()) {
-                keys.add(PropertyKey.fromIndex(index));
-            }
+    private PropertyKey getOwnShapeKey(PropertyKey key) {
+        if (shape.hasProperty(key)) {
+            return key;
         }
-
-        return keys;
+        long index = getCanonicalArrayIndex(key);
+        if (index < 0 || index > Integer.MAX_VALUE) {
+            return null;
+        }
+        PropertyKey alternateKey = key.isIndex()
+                ? PropertyKey.fromString(Long.toString(index))
+                : PropertyKey.fromIndex((int) index);
+        return shape.hasProperty(alternateKey) ? alternateKey : null;
     }
 
     /**
@@ -540,11 +653,12 @@ public non-sealed class JSObject implements JSValue {
      * Check if object has an own property by key.
      */
     public boolean hasOwnProperty(PropertyKey key) {
-        if (shape.hasProperty(key)) {
+        if (getOwnShapeKey(key) != null) {
             return true;
         }
-        if (key.isIndex() && sparseProperties != null) {
-            return sparseProperties.containsKey(key.asIndex());
+        long arrayIndex = getCanonicalArrayIndex(key);
+        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
+            return sparseProperties.containsKey((int) arrayIndex);
         }
         return false;
     }
@@ -582,20 +696,7 @@ public non-sealed class JSObject implements JSValue {
      * Get all own property keys.
      */
     public PropertyKey[] ownPropertyKeys() {
-        List<PropertyKey> keys = new ArrayList<>();
-
-        // Add shape properties
-        PropertyKey[] shapeKeys = shape.getPropertyKeys();
-        keys.addAll(Arrays.asList(shapeKeys));
-
-        // Add sparse properties
-        if (sparseProperties != null) {
-            for (Integer index : sparseProperties.keySet()) {
-                keys.add(PropertyKey.fromIndex(index));
-            }
-        }
-
-        return keys.toArray(new PropertyKey[0]);
+        return getOrderedOwnKeys(false).toArray(new PropertyKey[0]);
     }
 
     /**
@@ -605,8 +706,6 @@ public non-sealed class JSObject implements JSValue {
     public void preventExtensions() {
         this.extensible = false;
     }
-
-    // Prototype chain
 
     /**
      * Seal this object.
@@ -618,14 +717,14 @@ public non-sealed class JSObject implements JSValue {
         this.extensible = false; // Sealed objects are not extensible
     }
 
+    // Prototype chain
+
     /**
      * Set a property value by string name.
      */
     public void set(String propertyName, JSValue value) {
         set(PropertyKey.fromString(propertyName), value);
     }
-
-    // Object integrity levels (ES5)
 
     /**
      * Set a property value by integer index.
@@ -642,6 +741,8 @@ public non-sealed class JSObject implements JSValue {
 
         set(PropertyKey.fromIndex(index), value);
     }
+
+    // Object integrity levels (ES5)
 
     /**
      * Set a property value by property key.
@@ -662,72 +763,7 @@ public non-sealed class JSObject implements JSValue {
      * Used by Reflect.set to pass a different receiver than the target.
      */
     public void set(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
-        // Check if property already exists
-        int offset = shape.getPropertyOffset(key);
-        if (offset >= 0) {
-            // Property exists, check if it has a setter
-            PropertyDescriptor desc = shape.getDescriptorAt(offset);
-
-            // If property has a setter, call it
-            if (desc.hasSetter()) {
-                JSFunction setter = desc.getSetter();
-                if (setter != null && context != null) {
-                    // Call the setter with the receiver as 'this'
-                    setter.call(context, receiver, new JSValue[]{value});
-                    // If setter threw an exception, it remains pending in context
-                    // The VM will check for it after property access
-                }
-                // If setter is null/undefined or no context, the assignment does nothing (silently fails)
-                return;
-            }
-
-            // Regular property - check if writable
-            if (!desc.isWritable() || frozen) {
-                // In strict mode, throw TypeError
-                if (context != null && context.isStrictMode()) {
-                    context.throwTypeError(
-                            "Cannot assign to read only property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(false));
-                }
-                // In non-strict mode, silently fail
-                return;
-            }
-            propertyValues[offset] = value;
-            return;
-        }
-
-        // Property doesn't exist on own object - walk prototype chain for setters
-        Set<JSObject> visited = new HashSet<>();
-        visited.add(this);
-        JSObject proto = prototype;
-        while (proto != null && !visited.contains(proto)) {
-            visited.add(proto);
-            int protoOffset = proto.shape.getPropertyOffset(key);
-            if (protoOffset >= 0) {
-                PropertyDescriptor protoDesc = proto.shape.getDescriptorAt(protoOffset);
-                if (protoDesc != null && protoDesc.hasSetter()) {
-                    JSFunction setter = protoDesc.getSetter();
-                    if (setter != null && context != null) {
-                        setter.call(context, receiver, new JSValue[]{value});
-                    }
-                    return;
-                }
-                // Found a data property in prototype - don't use its setter, create own property
-                break;
-            }
-            proto = proto.prototype;
-        }
-
-        // Property doesn't exist in chain or is a data property, add it (only if extensible)
-        if (extensible) {
-            defineProperty(key, PropertyDescriptor.defaultData(value));
-        } else {
-            // In strict mode, throw TypeError when trying to add property to non-extensible object
-            if (context != null && context.isStrictMode()) {
-                context.throwTypeError(
-                        "Cannot add property " + key.toPropertyString() + ", object is not extensible");
-            }
-            // In non-strict mode, silently fail
-        }
+        setInternal(key, value, context, receiver, true);
     }
 
     /**
@@ -745,6 +781,94 @@ public non-sealed class JSObject implements JSValue {
         this.htmlDDA = htmlDDA;
     }
 
+    private boolean setInternal(PropertyKey key, JSValue value, JSContext context, JSObject receiver, boolean throwOnFailure) {
+        // Check if property already exists
+        PropertyKey ownShapeKey = getOwnShapeKey(key);
+        if (ownShapeKey != null) {
+            int offset = shape.getPropertyOffset(ownShapeKey);
+            PropertyDescriptor descriptor = shape.getDescriptorAt(offset);
+
+            if (descriptor != null && descriptor.isAccessorDescriptor()) {
+                JSFunction setter = descriptor.getSetter();
+                if (setter != null && context != null) {
+                    setter.call(context, receiver, new JSValue[]{value});
+                    return !context.hasPendingException();
+                }
+                return failSet(key, context, throwOnFailure);
+            }
+
+            if (descriptor == null || !descriptor.isWritable() || frozen) {
+                return failSet(key, context, throwOnFailure);
+            }
+
+            if (receiver != this) {
+                return setOnReceiver(key, value, context, receiver, throwOnFailure);
+            }
+
+            propertyValues[offset] = value;
+            return true;
+        }
+
+        // Property doesn't exist on own object - walk prototype chain for setters/writability checks.
+        Set<JSObject> visited = new HashSet<>();
+        visited.add(this);
+        JSObject proto = prototype;
+        while (proto != null && !visited.contains(proto)) {
+            visited.add(proto);
+            PropertyKey protoShapeKey = proto.getOwnShapeKey(key);
+            if (protoShapeKey != null) {
+                int protoOffset = proto.shape.getPropertyOffset(protoShapeKey);
+                PropertyDescriptor protoDescriptor = proto.shape.getDescriptorAt(protoOffset);
+                if (protoDescriptor != null && protoDescriptor.isAccessorDescriptor()) {
+                    JSFunction setter = protoDescriptor.getSetter();
+                    if (setter != null && context != null) {
+                        setter.call(context, receiver, new JSValue[]{value});
+                        return !context.hasPendingException();
+                    }
+                    return failSet(key, context, throwOnFailure);
+                }
+                if (protoDescriptor != null && !protoDescriptor.isWritable()) {
+                    return failSet(key, context, throwOnFailure);
+                }
+                break;
+            }
+            proto = proto.prototype;
+        }
+
+        return setOnReceiver(key, value, context, receiver, throwOnFailure);
+    }
+
+    private boolean setOnReceiver(PropertyKey key, JSValue value, JSContext context, JSObject receiver, boolean throwOnFailure) {
+        PropertyKey receiverShapeKey = receiver.getOwnShapeKey(key);
+        if (receiverShapeKey != null) {
+            int receiverOffset = receiver.shape.getPropertyOffset(receiverShapeKey);
+            PropertyDescriptor receiverDescriptor = receiver.shape.getDescriptorAt(receiverOffset);
+            if (receiverDescriptor != null && receiverDescriptor.isAccessorDescriptor()) {
+                JSFunction receiverSetter = receiverDescriptor.getSetter();
+                if (receiverSetter != null && context != null) {
+                    receiverSetter.call(context, receiver, new JSValue[]{value});
+                    return !context.hasPendingException();
+                }
+                return failSet(key, context, throwOnFailure);
+            }
+            if (receiverDescriptor == null || !receiverDescriptor.isWritable() || receiver.frozen) {
+                return failSet(key, context, throwOnFailure);
+            }
+            receiver.propertyValues[receiverOffset] = value;
+            return true;
+        }
+
+        if (!receiver.extensible) {
+            if (throwOnFailure && context != null && context.isStrictMode()) {
+                context.throwTypeError("Cannot add property " + key.toPropertyString() + ", object is not extensible");
+            }
+            return false;
+        }
+
+        receiver.defineProperty(key, PropertyDescriptor.defaultData(value));
+        return true;
+    }
+
     /**
      * Set the [[PrimitiveValue]] internal slot.
      * This is for internal use only - not accessible from JavaScript.
@@ -753,10 +877,18 @@ public non-sealed class JSObject implements JSValue {
         this.primitiveValue = value;
     }
 
-    // JSValue implementation
-
     public void setPrototype(JSObject prototype) {
         this.prototype = prototype;
+    }
+
+    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context) {
+        return setWithResult(key, value, context, this);
+    }
+
+    // JSValue implementation
+
+    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
+        return setInternal(key, value, context, receiver, false);
     }
 
     @Override

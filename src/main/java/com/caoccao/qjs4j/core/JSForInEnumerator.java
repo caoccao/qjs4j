@@ -43,8 +43,8 @@ public class JSForInEnumerator {
         // Get own enumerable property keys using the enumerableKeys() method
         var ownKeys = obj.enumerableKeys();
         for (PropertyKey key : ownKeys) {
-            // Only include string keys in for-in (not symbols)
-            if (key.isString()) {
+            // For-in includes string keys (array index keys are emitted as strings), but not symbols.
+            if (!key.isSymbol()) {
                 keys.add(key.toPropertyString());
             }
         }
