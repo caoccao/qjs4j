@@ -23,17 +23,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Represents a FinalizationRegistry object in JavaScript.
- * Based on ES2021 FinalizationRegistry specification.
+ * Based on QuickJS JS_CLASS_FINALIZATION_REGISTRY implementation.
  * <p>
  * FinalizationRegistry allows you to register cleanup callbacks that are
  * called when registered objects are garbage collected.
  * <p>
- * Key characteristics:
- * - Register objects with associated held values
- * - Cleanup callback is called with the held value when object is collected
- * - Optional unregister token for manual cleanup removal
- * - Callbacks run in microtasks after garbage collection
- * - Part of the WeakRefs proposal (ES2021)
+ * Prototype methods (register, unregister) are defined on the prototype
+ * in JSGlobalObject, not on each instance.
  */
 public final class JSFinalizationRegistry extends JSObject {
     public static final String NAME = "FinalizationRegistry";
@@ -42,7 +38,6 @@ public final class JSFinalizationRegistry extends JSObject {
     private final JSContext context;
     private final ReferenceQueue<JSObject> referenceQueue;
     private final Map<PhantomReference<JSObject>, RegistrationRecord> registrations;
-    private final Map<JSValue, PhantomReference<JSObject>> unregisterTokenMap;
     private volatile boolean running;
 
     /**
@@ -57,56 +52,18 @@ public final class JSFinalizationRegistry extends JSObject {
         this.context = context;
         this.referenceQueue = new ReferenceQueue<>();
         this.registrations = new ConcurrentHashMap<>();
-        this.unregisterTokenMap = new ConcurrentHashMap<>();
         this.running = true;
 
         // Start cleanup thread to monitor the reference queue
         this.cleanupThread = new Thread(this::cleanupLoop, "FinalizationRegistry-Cleanup");
         this.cleanupThread.setDaemon(true);
         this.cleanupThread.start();
-
-        // Add register() method
-        this.set("register", new JSNativeFunction("register", 2, (childContext, thisArg, args) -> {
-            if (args.length < 2) {
-                return childContext.throwTypeError("FinalizationRegistry.register requires target and heldValue");
-            }
-
-            JSValue target = args[0];
-            JSValue heldValue = args[1];
-            JSValue unregisterToken = args.length > 2 ? args[2] : null;
-
-            if (!(target instanceof JSObject targetObj)) {
-                return childContext.throwTypeError("FinalizationRegistry target must be an object");
-            }
-
-            // Cannot register the same object as target and unregister token
-            if (unregisterToken != null && target == unregisterToken) {
-                return childContext.throwTypeError("Target and unregister token cannot be the same object");
-            }
-
-            register(targetObj, heldValue, unregisterToken);
-            return JSUndefined.INSTANCE;
-        }));
-
-        // Add unregister() method
-        this.set("unregister", new JSNativeFunction("unregister", 1, (childContext, thisArg, args) -> {
-            if (args.length == 0) {
-                return childContext.throwTypeError("FinalizationRegistry.unregister requires unregisterToken");
-            }
-
-            JSValue unregisterToken = args[0];
-            boolean removed = unregister(unregisterToken);
-            return JSBoolean.valueOf(removed);
-        }));
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        // FinalizationRegistry requires exactly 1 argument: cleanupCallback
-        if (args.length == 0) {
-            return context.throwTypeError("FinalizationRegistry constructor requires a cleanup callback");
-        }
-        if (!(args[0] instanceof JSFunction callback)) {
-            return context.throwTypeError("FinalizationRegistry cleanup callback must be a function");
+        JSValue cbArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (!(cbArg instanceof JSFunction callback)) {
+            return context.throwTypeError("argument must be a function");
         }
         JSObject jsObject = new JSFinalizationRegistry(context, callback);
         context.transferPrototype(jsObject, NAME);
@@ -127,11 +84,6 @@ public final class JSFinalizationRegistry extends JSObject {
                 RegistrationRecord record = registrations.remove(ref);
 
                 if (record != null) {
-                    // Remove from unregister token map
-                    if (record.unregisterToken != null) {
-                        unregisterTokenMap.remove(record.unregisterToken);
-                    }
-
                     // Call cleanup callback as a microtask
                     context.enqueueMicrotask(() -> {
                         try {
@@ -168,11 +120,11 @@ public final class JSFinalizationRegistry extends JSObject {
 
     /**
      * Register an object for finalization.
-     * ES2021 FinalizationRegistry.prototype.register()
+     * Called by FinalizationRegistryPrototype.register() after validation.
      *
      * @param target          The object to monitor
      * @param heldValue       Value passed to cleanup callback
-     * @param unregisterToken Optional token for manual unregistration
+     * @param unregisterToken Optional token for manual unregistration (null if none)
      */
     public void register(JSObject target, JSValue heldValue, JSValue unregisterToken) {
         // Create phantom reference to track when target is collected
@@ -181,11 +133,6 @@ public final class JSFinalizationRegistry extends JSObject {
         // Store registration
         RegistrationRecord record = new RegistrationRecord(heldValue, unregisterToken);
         registrations.put(phantomRef, record);
-
-        // Store unregister token mapping if provided
-        if (unregisterToken != null) {
-            unregisterTokenMap.put(unregisterToken, phantomRef);
-        }
     }
 
     /**
@@ -196,7 +143,6 @@ public final class JSFinalizationRegistry extends JSObject {
         running = false;
         cleanupThread.interrupt();
         registrations.clear();
-        unregisterTokenMap.clear();
     }
 
     @Override
@@ -205,19 +151,27 @@ public final class JSFinalizationRegistry extends JSObject {
     }
 
     /**
-     * Unregister an object using its unregister token.
-     * ES2021 FinalizationRegistry.prototype.unregister()
+     * Unregister all entries matching the given token.
+     * Following QuickJS behavior, removes ALL entries with matching token,
+     * not just the first one.
+     * Called by FinalizationRegistryPrototype.unregister() after validation.
      *
      * @param unregisterToken The token provided during registration
-     * @return True if a registration was removed
+     * @return True if at least one registration was removed
      */
     public boolean unregister(JSValue unregisterToken) {
-        PhantomReference<JSObject> phantomRef = unregisterTokenMap.remove(unregisterToken);
-        if (phantomRef != null) {
-            registrations.remove(phantomRef);
-            return true;
+        boolean removed = false;
+        var iterator = registrations.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            RegistrationRecord record = entry.getValue();
+            if (record.unregisterToken != null && record.unregisterToken == unregisterToken) {
+                iterator.remove();
+                entry.getKey().clear();
+                removed = true;
+            }
         }
-        return false;
+        return removed;
     }
 
     /**

@@ -693,17 +693,19 @@ public final class JSGlobalObject {
      * Initialize FinalizationRegistry constructor.
      */
     private void initializeFinalizationRegistryConstructor(JSContext context, JSObject global) {
-        // Create FinalizationRegistry.prototype
         JSObject finalizationRegistryPrototype = context.createJSObject();
-        // register() and unregister() methods are added in JSFinalizationRegistry constructor
+        finalizationRegistryPrototype.definePropertyWritableConfigurable("register",
+                new JSNativeFunction("register", 2, FinalizationRegistryPrototype::register));
+        finalizationRegistryPrototype.definePropertyWritableConfigurable("unregister",
+                new JSNativeFunction("unregister", 1, FinalizationRegistryPrototype::unregister));
+        finalizationRegistryPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG,
+                new JSString("FinalizationRegistry"));
 
-        // Create FinalizationRegistry constructor as JSNativeFunction
-        // FinalizationRegistry requires 'new'
         JSNativeFunction finalizationRegistryConstructor = new JSNativeFunction(
                 "FinalizationRegistry", 1, FinalizationRegistryConstructor::call, true, true);
-        finalizationRegistryConstructor.set("prototype", finalizationRegistryPrototype);
+        finalizationRegistryConstructor.definePropertyReadonlyNonConfigurable("prototype", finalizationRegistryPrototype);
         finalizationRegistryConstructor.setConstructorType(JSConstructorType.FINALIZATION_REGISTRY);
-        finalizationRegistryPrototype.set("constructor", finalizationRegistryConstructor);
+        finalizationRegistryPrototype.definePropertyWritableConfigurable("constructor", finalizationRegistryConstructor);
 
         global.definePropertyWritableConfigurable("FinalizationRegistry", finalizationRegistryConstructor);
     }

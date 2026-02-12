@@ -17,72 +17,103 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Unit tests for FinalizationRegistryConstructor methods.
+ * Unit tests for FinalizationRegistry constructor.
  */
 public class FinalizationRegistryConstructorTest extends BaseJavetTest {
 
     @Test
-    public void testConstruct() {
-        // FinalizationRegistry must be called with 'new'
-        // Calling without 'new' should throw TypeError
-        assertErrorWithJavet("FinalizationRegistry(function(){});");
+    public void testCallWithoutNew() {
+        assertErrorWithJavet("FinalizationRegistry(function(){})");
     }
 
     @Test
-    public void testCreateFinalizationRegistry() {
-        // Create a cleanup callback function
-        JSFunction cleanupCallback = new JSNativeFunction("cleanup", 1, (context, thisArg, args) -> {
-            // Simple cleanup callback that does nothing
-            return JSUndefined.INSTANCE;
-        });
-
-        // Test successful creation
-        JSValue result = JSFinalizationRegistry.create(context, cleanupCallback);
-        assertThat(result).isNotNull();
-        assertThat(result.isFinalizationRegistry()).isTrue();
-
-        assertThat(result).isInstanceOfSatisfying(JSFinalizationRegistry.class, registry ->
-                assertThat(registry.toString()).isEqualTo("[object FinalizationRegistry]"));
+    public void testCallWithoutNewAndNoArgs() {
+        assertErrorWithJavet("FinalizationRegistry()");
     }
 
     @Test
-    public void testCreateFinalizationRegistryWithNonFunction() {
-        // Test with non-function cleanup callback - should throw TypeError
-        assertThat(JSFinalizationRegistry.create(context, new JSString("not a function")))
-                .isInstanceOfSatisfying(JSTypeError.class,
-                        error -> assertThat(error.getName().value()).isEqualTo("TypeError"));
-        assertThat(context.getPendingException()).isNotNull();
+    public void testConstructorLength() {
+        assertIntegerWithJavet("FinalizationRegistry.length");
     }
 
     @Test
-    public void testCreateFinalizationRegistryWithNull() {
-        // Test with null cleanup callback - should throw TypeError
-        assertThat(JSFinalizationRegistry.create(context, JSNull.INSTANCE))
-                .isInstanceOfSatisfying(JSTypeError.class,
-                        error -> assertThat(error.getName().value()).isEqualTo("TypeError"));
-        assertThat(context.getPendingException()).isNotNull();
+    public void testConstructorName() {
+        assertStringWithJavet("FinalizationRegistry.name");
     }
 
     @Test
-    public void testCreateFinalizationRegistryWithUndefined() {
-        // Test with undefined cleanup callback - should throw TypeError
-        assertThat(JSFinalizationRegistry.create(context, JSUndefined.INSTANCE))
-                .isInstanceOfSatisfying(JSTypeError.class,
-                        error -> assertThat(error.getName().value()).isEqualTo("TypeError"));
-        assertThat(context.getPendingException()).isNotNull();
+    public void testConstructorPrototypeDescriptor() {
+        assertBooleanWithJavet(
+                "Object.getOwnPropertyDescriptor(FinalizationRegistry, 'prototype').writable === false",
+                "Object.getOwnPropertyDescriptor(FinalizationRegistry, 'prototype').enumerable === false",
+                "Object.getOwnPropertyDescriptor(FinalizationRegistry, 'prototype').configurable === false");
+    }
+
+    @Test
+    public void testGlobalDescriptor() {
+        assertBooleanWithJavet(
+                "Object.getOwnPropertyDescriptor(globalThis, 'FinalizationRegistry').writable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'FinalizationRegistry').enumerable === false",
+                "Object.getOwnPropertyDescriptor(globalThis, 'FinalizationRegistry').configurable === true");
+    }
+
+    @Test
+    public void testNewWithNoArgs() {
+        assertThatThrownBy(() -> context.eval("new FinalizationRegistry()"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
+    }
+
+    @Test
+    public void testNewWithNonFunction() {
+        for (String code : new String[]{
+                "new FinalizationRegistry(42)",
+                "new FinalizationRegistry('string')",
+                "new FinalizationRegistry(true)",
+                "new FinalizationRegistry(null)",
+                "new FinalizationRegistry(undefined)",
+                "new FinalizationRegistry({})",
+                "new FinalizationRegistry([])"}) {
+            assertThatThrownBy(() -> context.eval(code))
+                    .isInstanceOf(JSException.class)
+                    .hasMessageContaining("TypeError");
+        }
+    }
+
+    @Test
+    public void testNewWithValidFunction() {
+        assertBooleanWithJavet(
+                "new FinalizationRegistry(function(){}) instanceof FinalizationRegistry");
+    }
+
+    @Test
+    public void testPrototypeChain() {
+        assertBooleanWithJavet(
+                "Object.getPrototypeOf(FinalizationRegistry.prototype) === Object.prototype");
+    }
+
+    @Test
+    public void testPrototypeConstructor() {
+        assertBooleanWithJavet(
+                "FinalizationRegistry.prototype.constructor === FinalizationRegistry");
+    }
+
+    @Test
+    public void testPrototypeConstructorDescriptor() {
+        assertBooleanWithJavet(
+                "Object.getOwnPropertyDescriptor(FinalizationRegistry.prototype, 'constructor').writable === true",
+                "Object.getOwnPropertyDescriptor(FinalizationRegistry.prototype, 'constructor').enumerable === false",
+                "Object.getOwnPropertyDescriptor(FinalizationRegistry.prototype, 'constructor').configurable === true");
     }
 
     @Test
     public void testTypeof() {
-        assertStringWithJavet(
-                "typeof FinalizationRegistry;");
-        assertIntegerWithJavet(
-                "FinalizationRegistry.length;");
+        assertStringWithJavet("typeof FinalizationRegistry");
     }
 }
