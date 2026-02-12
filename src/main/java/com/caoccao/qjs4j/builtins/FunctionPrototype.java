@@ -23,7 +23,6 @@ import com.caoccao.qjs4j.core.*;
  * Based on ES2020 Function.prototype specification.
  */
 public final class FunctionPrototype {
-
     /**
      * Function.prototype.apply(thisArg, argArray)
      * ES2020 19.2.3.1
@@ -32,37 +31,31 @@ public final class FunctionPrototype {
         // thisArg for apply() is the function itself (or a proxy to a function)
         // Following QuickJS: proxies to functions should work with Function.prototype.apply
 
-        // First argument is the 'this' value for the called function
-        JSValue applyThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-
-        // Second argument is the array of arguments
-        JSValue[] callArgs;
-        if (args.length > 1 && args[1] != null && !(args[1] instanceof JSUndefined) && !(args[1] instanceof JSNull)) {
-            if (args[1] instanceof JSArray arr) {
-                // Convert JSArray to JSValue[]
-                long length = arr.getLength();
-                callArgs = new JSValue[(int) length];
-                for (int i = 0; i < length; i++) {
-                    callArgs[i] = arr.get(i);
-                }
-            } else {
-                return context.throwTypeError("CreateListFromArrayLike called on non-object");
-            }
-        } else {
-            callArgs = new JSValue[0];
-        }
-
+        JSProxy callableProxy = null;
+        JSFunction callableFunction = null;
         if (thisArg instanceof JSProxy proxy) {
-            // Check if proxy's target is callable
             if (!JSTypeChecking.isFunction(proxy.getTarget())) {
                 return context.throwTypeError("Function.prototype.apply called on non-function");
             }
-            // Use the proxy's apply mechanism
-            return proxy.apply(context, applyThisArg, callArgs);
+            callableProxy = proxy;
         } else if (thisArg instanceof JSFunction func) {
-            return func.call(context, applyThisArg, callArgs);
+            callableFunction = func;
         } else {
             return context.throwTypeError("Function.prototype.apply called on non-function");
+        }
+
+        // First argument is the 'this' value for the called function
+        JSValue applyThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arrayArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue[] callArgs = buildArgumentList(context, arrayArg);
+        if (callArgs == null) {
+            return context.getPendingException();
+        }
+
+        if (callableProxy != null) {
+            return callableProxy.apply(context, applyThisArg, callArgs);
+        } else {
+            return callableFunction.call(context, applyThisArg, callArgs);
         }
     }
 
@@ -80,13 +73,56 @@ public final class FunctionPrototype {
         JSValue boundThis = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
         // Remaining arguments are pre-bound arguments
-        JSValue[] boundArgs = new JSValue[args.length - 1];
+        JSValue[] boundArgs = new JSValue[Math.max(0, args.length - 1)];
         if (args.length > 1) {
             System.arraycopy(args, 1, boundArgs, 0, args.length - 1);
         }
 
         // Create a bound function
         return new JSBoundFunction(targetFunc, boundThis, boundArgs);
+    }
+
+    private static JSValue[] buildArgumentList(JSContext context, JSValue arrayArg) {
+        if (arrayArg == null || arrayArg instanceof JSUndefined || arrayArg instanceof JSNull) {
+            return new JSValue[0];
+        }
+        if (!(arrayArg instanceof JSObject arrayLike)) {
+            context.throwTypeError("CreateListFromArrayLike called on non-object");
+            return null;
+        }
+
+        JSValue lengthValue = arrayLike.get(PropertyKey.fromString("length"), context);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
+        long length = JSTypeConversions.toLength(context, lengthValue);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (length > Integer.MAX_VALUE) {
+            context.throwRangeError("too many arguments in function call");
+            return null;
+        }
+
+        JSValue[] callArgs = new JSValue[(int) length];
+        for (int i = 0; i < callArgs.length; i++) {
+            JSValue argumentValue = arrayLike.get(PropertyKey.fromString(String.valueOf(i)), context);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (argumentValue instanceof JSUndefined) {
+                argumentValue = arrayLike.get(PropertyKey.fromIndex(i), context);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+            }
+            callArgs[i] = argumentValue;
+            if (context.hasPendingException()) {
+                return null;
+            }
+        }
+        return callArgs;
     }
 
     /**
@@ -103,7 +139,7 @@ public final class FunctionPrototype {
             }
             // Use the proxy's apply mechanism
             JSValue callThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-            JSValue[] callArgs = new JSValue[args.length - 1];
+            JSValue[] callArgs = new JSValue[Math.max(0, args.length - 1)];
             if (args.length > 1) {
                 System.arraycopy(args, 1, callArgs, 0, args.length - 1);
             }
@@ -113,7 +149,7 @@ public final class FunctionPrototype {
             JSValue callThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
             // Remaining arguments are passed to the function
-            JSValue[] callArgs = new JSValue[args.length - 1];
+            JSValue[] callArgs = new JSValue[Math.max(0, args.length - 1)];
             if (args.length > 1) {
                 System.arraycopy(args, 1, callArgs, 0, args.length - 1);
             }

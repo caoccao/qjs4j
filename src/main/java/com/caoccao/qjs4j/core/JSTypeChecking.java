@@ -97,9 +97,11 @@ public final class JSTypeChecking {
         // Check if function has [[Construct]] internal method
         if (value instanceof JSBytecodeFunction bytecodeFunc) {
             return bytecodeFunc.isConstructor();
+        } else if (value instanceof JSBoundFunction boundFunction) {
+            return isConstructor(boundFunction.getTarget());
         } else if (value instanceof JSNativeFunction nativeFunc) {
             return nativeFunc.isConstructor();
-        } else // Other function types (bound functions) default to true
+        } else // Other function types default to constructor-capable.
             if (value instanceof JSClass) {
                 return true;
             } else return value instanceof JSFunction;

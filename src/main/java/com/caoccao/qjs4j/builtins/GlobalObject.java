@@ -766,10 +766,10 @@ public final class GlobalObject {
         functionPrototype.delete(PropertyKey.fromString("length"));
         functionPrototype.delete(PropertyKey.fromString("name"));
 
-        functionPrototype.set("call", new JSNativeFunction("call", 1, FunctionPrototype::call));
-        functionPrototype.set("apply", new JSNativeFunction("apply", 2, FunctionPrototype::apply));
-        functionPrototype.set("bind", new JSNativeFunction("bind", 1, FunctionPrototype::bind));
-        functionPrototype.set("toString", new JSNativeFunction("toString", 0, FunctionPrototype::toString_));
+        functionPrototype.definePropertyWritableConfigurable("call", new JSNativeFunction("call", 1, FunctionPrototype::call));
+        functionPrototype.definePropertyWritableConfigurable("apply", new JSNativeFunction("apply", 2, FunctionPrototype::apply));
+        functionPrototype.definePropertyWritableConfigurable("bind", new JSNativeFunction("bind", 1, FunctionPrototype::bind));
+        functionPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, FunctionPrototype::toString_));
 
         // Add 'arguments' and 'caller' as accessor properties that throw TypeError
         // These properties exist for backwards compatibility but throw when accessed
@@ -789,8 +789,8 @@ public final class GlobalObject {
 
         // Function constructor should be a function, not a plain object
         JSNativeFunction functionConstructor = new JSNativeFunction(JSFunction.NAME, 1, FunctionConstructor::call, true);
-        functionConstructor.set("prototype", functionPrototype);
-        functionPrototype.set("constructor", functionConstructor);
+        functionConstructor.definePropertyReadonlyNonConfigurable("prototype", functionPrototype);
+        functionPrototype.definePropertyWritableConfigurable("constructor", functionConstructor);
 
         global.definePropertyWritableConfigurable(JSFunction.NAME, functionConstructor);
     }

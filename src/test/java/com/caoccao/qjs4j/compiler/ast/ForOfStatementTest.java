@@ -41,7 +41,6 @@ public class ForOfStatementTest extends BaseJavetTest {
                     result""";
             JSValue value = context.eval(code);
             String result = value.toString();
-            System.out.println("Result: " + result);
             assertThat(result).isEqualTo("1a2b");
         }
     }
@@ -58,7 +57,6 @@ public class ForOfStatementTest extends BaseJavetTest {
                     test()""";
             JSValue value = context.eval(code);
             String result = value.toString();
-            System.out.println("For-of in function: " + result);
             assertThat(result).isEqualTo("abc");
         }
     }
@@ -72,7 +70,6 @@ public class ForOfStatementTest extends BaseJavetTest {
                     result""";
             JSValue value = context.eval(code);
             String result = value.toString();
-            System.out.println("For-of in global: " + result);
             assertThat(result).isEqualTo("abc");
         }
     }
@@ -96,7 +93,6 @@ public class ForOfStatementTest extends BaseJavetTest {
                     result""";
             JSValue value = context.eval(code);
             String result = value.toString();
-            System.out.println("Result: " + result);
             assertThat(result).isEqualTo("abc");
         }
     }

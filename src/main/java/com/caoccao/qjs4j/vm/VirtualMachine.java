@@ -60,6 +60,99 @@ public final class VirtualMachine {
         this.pendingException = null;
     }
 
+    private JSValue constructFunction(JSFunction function, JSValue[] args) {
+        if (function instanceof JSBoundFunction boundFunction) {
+            JSFunction targetFunction = boundFunction.getTarget();
+            if (!JSTypeChecking.isConstructor(targetFunction)) {
+                context.throwTypeError(boundFunction.getName() + " is not a constructor");
+                return JSUndefined.INSTANCE;
+            }
+            return constructFunction(targetFunction, boundFunction.prependBoundArgs(args));
+        }
+        if (function instanceof JSClass jsClass) {
+            return jsClass.construct(context, args);
+        }
+
+        JSConstructorType constructorType = function.getConstructorType();
+        if (constructorType == null) {
+            JSObject thisObject = new JSObject();
+            context.transferPrototype(thisObject, function);
+
+            JSValue result;
+            if (function instanceof JSNativeFunction nativeFunc) {
+                result = nativeFunc.call(context, thisObject, args);
+                if (context.hasPendingException()) {
+                    JSValue exception = context.getPendingException();
+                    String errorMessage = "Unhandled exception in constructor";
+                    if (exception instanceof JSObject errorObj) {
+                        JSValue messageValue = errorObj.get("message");
+                        if (messageValue instanceof JSString messageString) {
+                            errorMessage = messageString.value();
+                        }
+                    }
+                    throw new JSVirtualMachineException(errorMessage);
+                }
+            } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
+                result = execute(bytecodeFunction, thisObject, args);
+            } else {
+                result = JSUndefined.INSTANCE;
+            }
+
+            if (result instanceof JSObject) {
+                return result;
+            }
+            return thisObject;
+        }
+
+        JSObject result = null;
+        switch (constructorType) {
+            case AGGREGATE_ERROR,
+                 ARRAY,
+                 ARRAY_BUFFER,
+                 BIG_INT_OBJECT,
+                 BOOLEAN_OBJECT,
+                 DATA_VIEW,
+                 DATE,
+                 ERROR,
+                 EVAL_ERROR,
+                 FINALIZATION_REGISTRY,
+                 MAP,
+                 NUMBER_OBJECT,
+                 PROMISE,
+                 PROXY,
+                 RANGE_ERROR,
+                 REFERENCE_ERROR,
+                 REGEXP,
+                 SET,
+                 SHARED_ARRAY_BUFFER,
+                 STRING_OBJECT,
+                 SUPPRESSED_ERROR,
+                 SYMBOL_OBJECT,
+                 SYNTAX_ERROR,
+                 TYPED_ARRAY_BIGINT64,
+                 TYPED_ARRAY_BIGUINT64,
+                 TYPED_ARRAY_FLOAT16,
+                 TYPED_ARRAY_FLOAT32,
+                 TYPED_ARRAY_FLOAT64,
+                 TYPED_ARRAY_INT16,
+                 TYPED_ARRAY_INT32,
+                 TYPED_ARRAY_INT8,
+                 TYPED_ARRAY_UINT16,
+                 TYPED_ARRAY_UINT32,
+                 TYPED_ARRAY_UINT8,
+                 TYPED_ARRAY_UINT8_CLAMPED,
+                 TYPE_ERROR,
+                 URI_ERROR,
+                 WEAK_MAP,
+                 WEAK_REF,
+                 WEAK_SET -> result = constructorType.create(context, args);
+        }
+        if (result != null && !result.isError() && !result.isProxy()) {
+            context.transferPrototype(result, function);
+        }
+        return result != null ? result : JSUndefined.INSTANCE;
+    }
+
     private void copyDataProperties(JSValue targetValue, JSValue sourceValue, JSValue excludeListValue) {
         if (!(targetValue instanceof JSObject targetObject)) {
             throw new JSVirtualMachineException(context.throwTypeError("copy target must be an object"));
@@ -2415,108 +2508,27 @@ public final class VirtualMachine {
             // Following QuickJS JS_CallConstructorInternal:
             // Check if target is a constructor BEFORE checking for construct trap
             JSValue target = jsProxy.getTarget();
-            if (target instanceof JSFunction) {
+            if (target instanceof JSFunction targetFunc && JSTypeChecking.isConstructor(targetFunc)) {
                 valueStack.push(proxyConstruct(jsProxy, args));
             } else {
                 context.throwTypeError("proxy is not a constructor");
+                pendingException = context.getPendingException();
                 valueStack.push(JSUndefined.INSTANCE);
             }
-        } else if (constructor instanceof JSClass jsClass) {
-            // Check for ES6 class constructor
-            // Use the class's construct() method
-            JSObject instance = jsClass.construct(context, args);
-            valueStack.push(instance);
         } else if (constructor instanceof JSFunction jsFunction) {
             // Check if the function is constructable
             if (!JSTypeChecking.isConstructor(jsFunction)) {
                 context.throwTypeError(jsFunction.getName() + " is not a constructor");
+                pendingException = context.getPendingException();
                 valueStack.push(JSUndefined.INSTANCE);
                 return;
             }
-            JSConstructorType constructorType = jsFunction.getConstructorType();
-            if (constructorType == null) {
-                JSObject thisObject = new JSObject();
-                context.transferPrototype(thisObject, jsFunction);
-                // Call constructor with new object as this
-                JSValue result;
-                if (constructor instanceof JSNativeFunction nativeFunc) {
-                    result = nativeFunc.call(context, thisObject, args);
-                    // Check for pending exception after native constructor call
-                    if (context.hasPendingException()) {
-                        // Throw immediately to propagate the exception
-                        JSValue exception = context.getPendingException();
-                        // Get error message safely
-                        String errorMsg = "Unhandled exception in constructor";
-                        if (exception instanceof JSObject errorObj) {
-                            JSValue msgValue = errorObj.get("message");
-                            if (msgValue instanceof JSString msgStr) {
-                                errorMsg = msgStr.value();
-                            }
-                        }
-                        throw new JSVirtualMachineException(errorMsg);
-                    }
-                } else if (constructor instanceof JSBytecodeFunction bytecodeFunc) {
-                    result = execute(bytecodeFunc, thisObject, args);
-                } else {
-                    result = JSUndefined.INSTANCE;
-                }
-                // Following QuickJS JS_CallConstructorInternal:
-                // If constructor returns an object, use that; otherwise use newObj
-                if (result instanceof JSObject) {
-                    valueStack.push(result);
-                } else {
-                    valueStack.push(thisObject);
-                }
+            JSValue result = constructFunction(jsFunction, args);
+            if (context.hasPendingException()) {
+                pendingException = context.getPendingException();
+                valueStack.push(JSUndefined.INSTANCE);
             } else {
-                JSObject result = null;
-                switch (jsFunction.getConstructorType()) {
-                    case AGGREGATE_ERROR,
-                         ARRAY,
-                         ARRAY_BUFFER,
-                         BIG_INT_OBJECT,
-                         BOOLEAN_OBJECT,
-                         DATA_VIEW,
-                         DATE,
-                         ERROR,
-                         EVAL_ERROR,
-                         FINALIZATION_REGISTRY,
-                         MAP,
-                         NUMBER_OBJECT,
-                         PROMISE,
-                         PROXY,
-                         RANGE_ERROR,
-                         REFERENCE_ERROR,
-                         REGEXP,
-                         SET,
-                         SHARED_ARRAY_BUFFER,
-                         STRING_OBJECT,
-                         SUPPRESSED_ERROR,
-                         SYMBOL_OBJECT,
-                         SYNTAX_ERROR,
-                         TYPED_ARRAY_BIGINT64,
-                         TYPED_ARRAY_BIGUINT64,
-                         TYPED_ARRAY_FLOAT16,
-                         TYPED_ARRAY_FLOAT32,
-                         TYPED_ARRAY_FLOAT64,
-                         TYPED_ARRAY_INT16,
-                         TYPED_ARRAY_INT32,
-                         TYPED_ARRAY_INT8,
-                         TYPED_ARRAY_UINT16,
-                         TYPED_ARRAY_UINT32,
-                         TYPED_ARRAY_UINT8,
-                         TYPED_ARRAY_UINT8_CLAMPED,
-                         TYPE_ERROR,
-                         URI_ERROR,
-                         WEAK_MAP,
-                         WEAK_REF,
-                         WEAK_SET -> result = constructorType.create(context, args);
-                }
-                if (result != null) {
-                    if (!result.isError() && !result.isProxy()) {
-                        context.transferPrototype(result, jsFunction);
-                    }
-                    valueStack.push(result);
-                }
+                valueStack.push(result);
             }
         } else {
             throw new JSVirtualMachineException("Cannot construct non-function value");
@@ -2842,34 +2854,39 @@ public final class VirtualMachine {
             throw new JSVirtualMachineException("Right-hand side of instanceof is not an object");
         }
 
-        // Get the prototype property from the constructor (right operand)
-        JSValue prototypeValue = constructor.get("prototype");
-
-        // If the constructor doesn't have a valid prototype property, return false
-        // (This can happen with some built-in functions that aren't constructors)
-        if (!(prototypeValue instanceof JSObject constructorPrototype)) {
-            valueStack.push(JSBoolean.FALSE);
-            return;
-        }
-
-        // If left is not an object, instanceof is false
-        if (!(left instanceof JSObject obj)) {
-            valueStack.push(JSBoolean.FALSE);
-            return;
-        }
-
-        // Walk the prototype chain of left to see if it matches constructor.prototype
-        JSObject currentPrototype = obj.getPrototype();
-
-        while (currentPrototype != null) {
-            if (currentPrototype == constructorPrototype) {
-                valueStack.push(JSBoolean.TRUE);
-                return;
+        JSValue hasInstanceMethod = constructor.get(PropertyKey.fromSymbol(JSSymbol.HAS_INSTANCE), context);
+        if (context.hasPendingException()) {
+            JSValue pendingException = context.getPendingException();
+            if (pendingException instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
             }
-            currentPrototype = currentPrototype.getPrototype();
+            throw new JSVirtualMachineException("instanceof check failed");
+        }
+        if (!(hasInstanceMethod instanceof JSUndefined) && !(hasInstanceMethod instanceof JSNull)) {
+            if (!(hasInstanceMethod instanceof JSFunction hasInstanceFunction)) {
+                throw new JSVirtualMachineException(context.throwTypeError("@@hasInstance is not callable"));
+            }
+            JSValue result = hasInstanceFunction.call(context, right, new JSValue[]{left});
+            if (context.hasPendingException()) {
+                JSValue pendingException = context.getPendingException();
+                if (pendingException instanceof JSError jsError) {
+                    throw new JSVirtualMachineException(jsError);
+                }
+                throw new JSVirtualMachineException("instanceof check failed");
+            }
+            valueStack.push(JSTypeConversions.toBoolean(result) == JSBoolean.TRUE ? JSBoolean.TRUE : JSBoolean.FALSE);
+            return;
         }
 
-        valueStack.push(JSBoolean.FALSE);
+        boolean callable = right instanceof JSFunction;
+        if (right instanceof JSProxy proxy && JSTypeChecking.isFunction(proxy.getTarget())) {
+            callable = true;
+        }
+        if (!callable) {
+            throw new JSVirtualMachineException(context.throwTypeError("Right-hand side of instanceof is not callable"));
+        }
+
+        valueStack.push(ordinaryHasInstance(right, left) ? JSBoolean.TRUE : JSBoolean.FALSE);
     }
 
     private void handleIsUndefinedOrNull() {
@@ -3100,6 +3117,39 @@ public final class VirtualMachine {
 
     private boolean isUninitialized(JSValue value) {
         return value == UNINITIALIZED_MARKER;
+    }
+
+    private boolean ordinaryHasInstance(JSValue constructorValue, JSValue objectValue) {
+        if (constructorValue instanceof JSBoundFunction boundFunction) {
+            return ordinaryHasInstance(boundFunction.getTarget(), objectValue);
+        }
+        if (!(objectValue instanceof JSObject object)) {
+            return false;
+        }
+        if (!(constructorValue instanceof JSObject constructorObject)) {
+            return false;
+        }
+
+        JSValue prototypeValue = constructorObject.get(PropertyKey.fromString("prototype"), context);
+        if (context.hasPendingException()) {
+            JSValue pendingException = context.getPendingException();
+            if (pendingException instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("instanceof check failed");
+        }
+        if (!(prototypeValue instanceof JSObject constructorPrototype)) {
+            throw new JSVirtualMachineException(context.throwTypeError("Function has non-object prototype in instanceof check"));
+        }
+
+        JSObject currentPrototype = object.getPrototype();
+        while (currentPrototype != null) {
+            if (currentPrototype == constructorPrototype) {
+                return true;
+            }
+            currentPrototype = currentPrototype.getPrototype();
+        }
+        return false;
     }
 
     /**

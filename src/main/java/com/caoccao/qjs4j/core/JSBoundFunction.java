@@ -28,7 +28,7 @@ public final class JSBoundFunction extends JSFunction {
         super(); // Initialize as JSObject
         this.target = target;
         this.boundThis = boundThis;
-        this.boundArgs = boundArgs;
+        this.boundArgs = boundArgs != null ? boundArgs.clone() : new JSValue[0];
 
         // Set up function properties on the object
         // Per ECMAScript spec, bound functions have "name" and "length" properties
@@ -58,10 +58,7 @@ public final class JSBoundFunction extends JSFunction {
     @Override
     public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         // Merge bound args with call args
-        JSValue[] mergedArgs = new JSValue[boundArgs.length + args.length];
-        System.arraycopy(boundArgs, 0, mergedArgs, 0, boundArgs.length);
-        System.arraycopy(args, 0, mergedArgs, boundArgs.length, args.length);
-        return target.call(context, boundThis, mergedArgs);
+        return target.call(context, boundThis, prependBoundArgs(args));
     }
 
     @Override
@@ -71,7 +68,22 @@ public final class JSBoundFunction extends JSFunction {
 
     @Override
     public String getName() {
-        return "bound " + target.getName();
+        String targetName = target.getName();
+        if (targetName == null) {
+            targetName = "";
+        }
+        return "bound " + targetName;
+    }
+
+    public JSFunction getTarget() {
+        return target;
+    }
+
+    public JSValue[] prependBoundArgs(JSValue[] args) {
+        JSValue[] mergedArgs = new JSValue[boundArgs.length + args.length];
+        System.arraycopy(boundArgs, 0, mergedArgs, 0, boundArgs.length);
+        System.arraycopy(args, 0, mergedArgs, boundArgs.length, args.length);
+        return mergedArgs;
     }
 
     @Override

@@ -68,6 +68,15 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE, JSNull.INSTANCE});
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
 
+        // Normal case: apply with array-like object
+        JSObject arrayLikeObject = new JSObject();
+        arrayLikeObject.set("0", new JSNumber(4));
+        arrayLikeObject.set("1", new JSNumber(5));
+        arrayLikeObject.set("2", new JSNumber(6));
+        arrayLikeObject.set("length", new JSNumber(3));
+        result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE, arrayLikeObject});
+        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(15.0));
+
         // Edge case: apply with non-array arguments
         result = FunctionPrototype.apply(context, testFunc, new JSValue[]{
                 JSUndefined.INSTANCE,
@@ -167,6 +176,10 @@ public class FunctionPrototypeTest extends BaseJavetTest {
 
         // Normal case: call with no arguments
         result = FunctionPrototype.call(context, testFunc, new JSValue[]{JSUndefined.INSTANCE});
+        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
+
+        // Normal case: call with no thisArg and no arguments
+        result = FunctionPrototype.call(context, testFunc, new JSValue[]{});
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
 
         // Edge case: called on non-function
@@ -300,6 +313,55 @@ public class FunctionPrototypeTest extends BaseJavetTest {
                 // Test boolean return
                 "new Function('x', 'return x > 5;')(10)",
                 "new Function('a', 'b', 'return a === b;')(5, 5)");
+    }
+
+    @Test
+    public void testFunctionEdgeCasesWithJavet() {
+        assertIntegerWithJavet("""
+                (() => {
+                  function sum(a, b, c) {
+                    return a + b + c;
+                  }
+                  return sum.apply(null, { 0: 1, 1: 2, 2: 3, length: 3 });
+                })()
+                """, """
+                (() => {
+                  function sum(a, b, c) {
+                    return a + b + c;
+                  }
+                  const args = (function() { return arguments; })(1, 2, 3);
+                  return sum.apply(null, args);
+                })()
+                """);
+
+        assertBooleanWithJavet("""
+                (() => {
+                  function C(a, b) {
+                    this.sum = a + b;
+                  }
+                  const Bound = C.bind({ sum: -1 }, 2);
+                  const instance = new Bound(5);
+                  return instance.sum === 7 && instance instanceof C && instance instanceof Bound;
+                })()
+                """, """
+                (() => {
+                  const methods = ['call', 'apply', 'bind', 'toString'];
+                  const methodsOk = methods.every((name) => {
+                    const d = Object.getOwnPropertyDescriptor(Function.prototype, name);
+                    return d.writable === true && d.enumerable === false && d.configurable === true;
+                  });
+                  const constructorDesc = Object.getOwnPropertyDescriptor(Function, 'prototype');
+                  return methodsOk
+                    && constructorDesc.writable === false
+                    && constructorDesc.enumerable === false
+                    && constructorDesc.configurable === false;
+                })()
+                """);
+
+        assertErrorWithJavet("new Function(Symbol('x'))");
+
+        JSValue nonConstructorBoundFunction = context.eval("(() => 1).bind(null)");
+        assertThat(JSTypeChecking.isConstructor(nonConstructorBoundFunction)).isFalse();
     }
 
     @Test

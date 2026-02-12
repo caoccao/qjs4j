@@ -19,8 +19,10 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.compiler.Compiler;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
 import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSTypeConversions;
 import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
+import com.caoccao.qjs4j.exceptions.JSException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -59,13 +61,23 @@ public final class FunctionConstructor {
             body = "";
         } else if (args.length == 1) {
             // Only body provided: function () { body }
-            body = args[0].toJavaObject().toString();
+            body = toSourceString(context, args[0]);
+            if (body == null) {
+                return context.getPendingException();
+            }
         } else {
             // Parameters + body: function (p1, p2, ...) { body }
             for (int i = 0; i < args.length - 1; i++) {
-                paramNames.add(args[i].toJavaObject().toString());
+                String paramName = toSourceString(context, args[i]);
+                if (paramName == null) {
+                    return context.getPendingException();
+                }
+                paramNames.add(paramName);
             }
-            body = args[args.length - 1].toJavaObject().toString();
+            body = toSourceString(context, args[args.length - 1]);
+            if (body == null) {
+                return context.getPendingException();
+            }
         }
 
         // Build the function source code
@@ -90,8 +102,22 @@ public final class FunctionConstructor {
             return result;
         } catch (JSCompilerException e) {
             return context.throwSyntaxError(e.getMessage());
+        } catch (JSException e) {
+            return e.getErrorValue();
         } catch (Exception e) {
             return context.throwError("Failed to create function: " + e.getMessage());
+        }
+    }
+
+    private static String toSourceString(JSContext context, JSValue value) {
+        try {
+            String result = JSTypeConversions.toString(context, value).value();
+            if (context.hasPendingException()) {
+                return null;
+            }
+            return result;
+        } catch (JSException e) {
+            return null;
         }
     }
 }
