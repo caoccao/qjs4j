@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 import java.util.List;
-import java.util.stream.LongStream;
 
 /**
  * Implementation of Object constructor and static methods.
@@ -575,12 +574,8 @@ public final class ObjectConstructor {
     public static JSValue getOwnPropertyNames(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length > 0) {
             JSValue objArg = args[0];
-            JSArray result = context.createJSArray();
-
-            if (objArg instanceof JSArray jsArray) {
-                LongStream.range(0, jsArray.getLength()).forEach(l -> result.push(new JSString(String.valueOf(l))));
-            }
             if (objArg instanceof JSObject jsObject) {
+                JSArray result = context.createJSArray();
                 List<PropertyKey> keys = jsObject.getOwnPropertyKeys();
                 for (PropertyKey key : keys) {
                     // Only include string keys (not symbols)
@@ -588,10 +583,10 @@ public final class ObjectConstructor {
                         result.push(new JSString(key.toPropertyString()));
                     }
                 }
+                return result;
             } else {
                 return context.throwTypeError("Cannot convert undefined or null to object");
             }
-            return result;
         }
         return context.throwTypeError("Cannot convert undefined or null to object");
     }

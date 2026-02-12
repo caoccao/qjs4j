@@ -16,12 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.exceptions.JSException;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
@@ -38,8 +33,11 @@ import java.util.stream.LongStream;
 public final class JSArray extends JSObject {
     public static final int INITIAL_CAPACITY = 8;
     public static final String NAME = "Array";
+    private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL; // 2^32 - 2
+    private static final long MAX_ARRAY_LENGTH = 0xFFFF_FFFFL; // 2^32 - 1
     private static final int MAX_DENSE_SIZE = 10000;
-
+    private static final double UINT32_MAX_DOUBLE = 4_294_967_295d;
+    private static final double UINT32_MODULO = 4_294_967_296d;
     private JSValue[] denseArray;
     private long length;
 
@@ -91,18 +89,13 @@ public final class JSArray extends JSObject {
 
         // Special case: single numeric argument sets array length
         if (args.length == 1 && args[0] instanceof JSNumber num) {
-            double value = num.value();
-            // Check if it's an integer value
-            if (value >= 0 && value == Math.floor(value) && value <= 0xFFFFFFFFL) {
-                // Set array length
-                int length = (int) value;
-                // In JavaScript, setting length creates an array with that many undefined slots
-                // We just set the length property
-                array.setLength(length);
-                return array;
+            Long length = toArrayLengthFromNumber(num.value());
+            if (length == null) {
+                context.throwRangeError("Invalid array length");
+                return context.createJSArray();
             }
-            // If not a valid length, throw RangeError
-            throw new JSException(context.throwRangeError("Invalid array length"));
+            array.setLength(length);
+            return array;
         }
 
         // Multiple arguments or non-numeric single argument: create array with elements
@@ -111,6 +104,92 @@ public final class JSArray extends JSObject {
         }
 
         return array;
+    }
+
+    private static long getArrayIndex(PropertyKey key) {
+        if (key.isIndex()) {
+            int index = key.asIndex();
+            return index >= 0 ? index : -1;
+        }
+        if (key.isString()) {
+            return parseArrayIndex(key.asString());
+        }
+        return -1;
+    }
+
+    private static long parseArrayIndex(String value) {
+        if (value == null || value.isEmpty()) {
+            return -1;
+        }
+        if ("0".equals(value)) {
+            return 0;
+        }
+        if (value.charAt(0) == '0') {
+            return -1;
+        }
+
+        long result = 0;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c < '0' || c > '9') {
+                return -1;
+            }
+            result = result * 10 + (c - '0');
+            if (result > MAX_ARRAY_INDEX) {
+                return -1;
+            }
+        }
+        return result;
+    }
+
+    private static Long toArrayLengthFromNumber(double value) {
+        if (!(value >= 0 && value <= UINT32_MAX_DOUBLE)) {
+            return null;
+        }
+        long length = (long) value;
+        return ((double) length == value) ? length : null;
+    }
+
+    private static long toUint32(double value) {
+        if (Double.isNaN(value) || Double.isInfinite(value) || value == 0.0) {
+            return 0;
+        }
+        double integer = value > 0 ? Math.floor(value) : Math.ceil(value);
+        double modulo = integer % UINT32_MODULO;
+        if (modulo < 0) {
+            modulo += UINT32_MODULO;
+        }
+        return (long) modulo;
+    }
+
+    @Override
+    public boolean delete(PropertyKey key, JSContext context) {
+        long index = getArrayIndex(key);
+        if (index < 0) {
+            return super.delete(key, context);
+        }
+
+        if (sealed || frozen) {
+            PropertyKey stringKey = key.isString() ? key : PropertyKey.fromString(Long.toString(index));
+            return super.delete(stringKey, context);
+        }
+
+        if (index <= Integer.MAX_VALUE) {
+            int intIndex = (int) index;
+            if (intIndex < denseArray.length && denseArray[intIndex] != null) {
+                denseArray[intIndex] = null;
+                return true;
+            }
+            if (sparseProperties != null && sparseProperties.remove(intIndex) != null) {
+                return true;
+            }
+        }
+
+        PropertyKey stringKey = PropertyKey.fromString(Long.toString(index));
+        if (shape.hasProperty(stringKey)) {
+            return super.delete(stringKey, context);
+        }
+        return true;
     }
 
     /**
@@ -127,6 +206,11 @@ public final class JSArray extends JSObject {
         denseArray = Arrays.copyOf(denseArray, newCapacity);
     }
 
+    @Override
+    public PropertyKey[] enumerableKeys() {
+        return getOwnPropertyKeysInternal(true).toArray(new PropertyKey[0]);
+    }
+
     /**
      * Get element at index.
      */
@@ -135,17 +219,26 @@ public final class JSArray extends JSObject {
             return JSUndefined.INSTANCE;
         }
 
-        // Try dense array first
-        if (index < denseArray.length && denseArray[(int) index] != null) {
-            return denseArray[(int) index];
+        if (index <= Integer.MAX_VALUE) {
+            int intIndex = (int) index;
+
+            // Try dense array first
+            if (intIndex < denseArray.length && denseArray[intIndex] != null) {
+                return denseArray[intIndex];
+            }
+
+            // Check sparse storage
+            if (sparseProperties != null) {
+                JSValue value = sparseProperties.get(intIndex);
+                if (value != null) {
+                    return value;
+                }
+            }
         }
 
-        // Check sparse storage
-        if (sparseProperties != null && index <= Integer.MAX_VALUE) {
-            JSValue value = sparseProperties.get((int) index);
-            if (value != null) {
-                return value;
-            }
+        JSValue value = super.get(PropertyKey.fromString(Long.toString(index)), null);
+        if (!(value instanceof JSUndefined)) {
+            return value;
         }
 
         return JSUndefined.INSTANCE;
@@ -169,10 +262,11 @@ public final class JSArray extends JSObject {
      */
     @Override
     public JSValue get(PropertyKey key, JSContext context) {
-        // If it's an index, use dense/sparse array storage
-        if (key.isIndex()) {
-            return get(key.asIndex());
+        long index = getArrayIndex(key);
+        if (index >= 0) {
+            return get(index);
         }
+
         // Otherwise, use the shape-based storage from JSObject
         return super.get(key, context);
     }
@@ -184,6 +278,89 @@ public final class JSArray extends JSObject {
         return length;
     }
 
+    @Override
+    public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+        PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+        if (descriptor != null) {
+            return descriptor;
+        }
+
+        long index = getArrayIndex(key);
+        if (index < 0) {
+            return null;
+        }
+
+        if (index <= Integer.MAX_VALUE) {
+            int intIndex = (int) index;
+            if (intIndex < denseArray.length && denseArray[intIndex] != null) {
+                return PropertyDescriptor.dataDescriptor(denseArray[intIndex], true, true, true);
+            }
+            if (sparseProperties != null) {
+                JSValue sparseValue = sparseProperties.get(intIndex);
+                if (sparseValue != null) {
+                    return PropertyDescriptor.dataDescriptor(sparseValue, true, true, true);
+                }
+            }
+        } else {
+            PropertyDescriptor largeIndexDescriptor = super.getOwnPropertyDescriptor(PropertyKey.fromString(Long.toString(index)));
+            return largeIndexDescriptor;
+        }
+
+        return null;
+    }
+
+    @Override
+    public List<PropertyKey> getOwnPropertyKeys() {
+        return getOwnPropertyKeysInternal(false);
+    }
+
+    private List<PropertyKey> getOwnPropertyKeysInternal(boolean enumerableOnly) {
+        Map<Long, JSValue> indexedValues = new HashMap<>();
+        long denseLimit = Math.min(length, denseArray.length);
+        for (int i = 0; i < denseLimit; i++) {
+            JSValue value = denseArray[i];
+            if (value != null) {
+                indexedValues.put((long) i, value);
+            }
+        }
+        if (sparseProperties != null) {
+            for (Map.Entry<Integer, JSValue> entry : sparseProperties.entrySet()) {
+                long index = entry.getKey();
+                if (index >= 0 && index < length) {
+                    indexedValues.put(index, entry.getValue());
+                }
+            }
+        }
+
+        List<PropertyKey> keys = new ArrayList<>(indexedValues.size() + shape.getPropertyCount());
+        indexedValues.keySet().stream()
+                .sorted()
+                .forEach(index -> keys.add(PropertyKey.fromString(Long.toString(index))));
+
+        for (PropertyKey key : shape.getPropertyKeys()) {
+            long index = getArrayIndex(key);
+            if (index >= 0) {
+                if (!indexedValues.containsKey(index)) {
+                    PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+                    if (descriptor != null && (!enumerableOnly || descriptor.isEnumerable())) {
+                        keys.add(PropertyKey.fromString(Long.toString(index)));
+                    }
+                }
+                continue;
+            }
+            if (!enumerableOnly) {
+                keys.add(key);
+                continue;
+            }
+            PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+            if (descriptor != null && descriptor.isEnumerable()) {
+                keys.add(key);
+            }
+        }
+
+        return keys;
+    }
+
     /**
      * Check whether an index has an own element (distinguishes holes from undefined values).
      */
@@ -191,12 +368,33 @@ public final class JSArray extends JSObject {
         if (index < 0 || index >= length) {
             return false;
         }
-        if (index < denseArray.length && denseArray[(int) index] != null) {
+
+        if (index <= Integer.MAX_VALUE) {
+            int intIndex = (int) index;
+            if (intIndex < denseArray.length && denseArray[intIndex] != null) {
+                return true;
+            }
+            return sparseProperties != null && sparseProperties.containsKey(intIndex);
+        }
+        return super.hasOwnProperty(PropertyKey.fromString(Long.toString(index)));
+    }
+
+    @Override
+    public boolean hasOwnProperty(PropertyKey key) {
+        if (super.hasOwnProperty(key)) {
             return true;
         }
-        return sparseProperties != null
-                && index <= Integer.MAX_VALUE
-                && sparseProperties.containsKey((int) index);
+
+        long index = getArrayIndex(key);
+        if (index < 0) {
+            return false;
+        }
+
+        if (index <= Integer.MAX_VALUE) {
+            int intIndex = (int) index;
+            return intIndex < denseArray.length && denseArray[intIndex] != null;
+        }
+        return super.hasOwnProperty(PropertyKey.fromString(Long.toString(index)));
     }
 
     /**
@@ -230,6 +428,16 @@ public final class JSArray extends JSObject {
         return true;
     }
 
+    private boolean isLengthWritable() {
+        PropertyDescriptor descriptor = shape.getDescriptor(PropertyKey.fromString("length"));
+        return descriptor == null || descriptor.isWritable();
+    }
+
+    @Override
+    public PropertyKey[] ownPropertyKeys() {
+        return getOwnPropertyKeys().toArray(new PropertyKey[0]);
+    }
+
     /**
      * Remove and return the last element.
      */
@@ -244,8 +452,10 @@ public final class JSArray extends JSObject {
         // Remove the element
         if (lastIndex < denseArray.length) {
             denseArray[(int) lastIndex] = null;
-        } else if (sparseProperties != null) {
+        } else if (lastIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             sparseProperties.remove((int) lastIndex);
+        } else {
+            super.delete(PropertyKey.fromString(Long.toString(lastIndex)), null);
         }
 
         setLength(lastIndex);
@@ -263,7 +473,19 @@ public final class JSArray extends JSObject {
      * Add element to the end of the array with context for strict mode checking.
      */
     public void push(JSValue value, JSContext context) {
+        long previousLength = length;
         set(length, value, context);
+
+        // Array.prototype.push must throw when append fails because the array is not extensible
+        // or length is read-only.
+        if (context != null && !context.hasPendingException() && length == previousLength) {
+            if (!extensible) {
+                context.throwTypeError("Cannot add property " + previousLength + ", object is not extensible");
+            } else if (!isLengthWritable()) {
+                context.throwTypeError(
+                        "Cannot assign to read only property 'length' of object '[object Array]'");
+            }
+        }
     }
 
     /**
@@ -277,7 +499,7 @@ public final class JSArray extends JSObject {
      * Set element at index with context for strict mode checking.
      */
     public void set(long index, JSValue value, JSContext context) {
-        if (index < 0) {
+        if (index < 0 || index > MAX_ARRAY_INDEX) {
             // Negative indices are treated as string properties
             super.set(PropertyKey.fromString(Long.toString(index)), value, context);
             return;
@@ -288,10 +510,19 @@ public final class JSArray extends JSObject {
 
         // Check if array is not extensible/frozen before adding new elements
         if (isAddingNewElement && !extensible) {
-            // In strict mode, throw TypeError when trying to add to non-extensible/frozen array
-            if (context != null) {
+            // In strict mode, throw TypeError when trying to add to non-extensible array
+            if (context != null && context.isStrictMode()) {
                 context.throwTypeError(
                         "Cannot add property " + index + ", object is not extensible");
+            }
+            return;
+        }
+
+        // Growing the array requires writable length.
+        if (isAddingNewElement && !isLengthWritable()) {
+            if (context != null && context.isStrictMode()) {
+                context.throwTypeError(
+                        "Cannot assign to read only property 'length' of object '[object Array]'");
             }
             return;
         }
@@ -315,12 +546,15 @@ public final class JSArray extends JSObject {
         if (index < MAX_DENSE_SIZE) {
             ensureDenseCapacity((int) index + 1);
             denseArray[(int) index] = value;
-        } else {
+        } else if (index <= Integer.MAX_VALUE) {
             // Use sparse storage for large indices
             if (sparseProperties == null) {
                 sparseProperties = new HashMap<>();
             }
             sparseProperties.put((int) index, value);
+        } else {
+            // Preserve semantics for very large array indices without integer overflow.
+            super.set(PropertyKey.fromString(Long.toString(index)), value, context);
         }
     }
 
@@ -342,13 +576,18 @@ public final class JSArray extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue value, JSContext context) {
-        // If it's an index, use dense/sparse array storage
-        if (key.isIndex()) {
-            set(key.asIndex(), value, context);
+        long index = getArrayIndex(key);
+        if (index >= 0) {
+            set(index, value, context);
         } else if (key.isString() && "length".equals(key.asString())) {
             // Special handling for length property
-            if (value instanceof JSNumber num) {
-                setLength((long) num.value());
+            if (!isLengthWritable()) {
+                super.set(key, value, context);
+                return;
+            }
+            Long newLength = toArrayLengthForLengthProperty(context, value);
+            if (newLength != null) {
+                setLength(newLength);
             }
         } else {
             // Otherwise, use the shape-based storage from JSObject
@@ -361,7 +600,7 @@ public final class JSArray extends JSObject {
      * When length is reduced, elements beyond the new length are deleted.
      */
     public void setLength(long newLength) {
-        if (newLength < 0 || newLength > 0xFFFFFFFFL) {
+        if (newLength < 0 || newLength > MAX_ARRAY_LENGTH) {
             throw new IllegalArgumentException("Invalid array length: " + newLength);
         }
 
@@ -375,6 +614,14 @@ public final class JSArray extends JSObject {
             // Remove sparse elements beyond new length
             if (sparseProperties != null) {
                 sparseProperties.entrySet().removeIf(entry -> entry.getKey() >= newLength);
+            }
+
+            // Remove indexed string properties outside the new length range.
+            for (PropertyKey key : shape.getPropertyKeys()) {
+                long index = getArrayIndex(key);
+                if (index >= newLength && index >= 0) {
+                    super.delete(key, null);
+                }
             }
         }
 
@@ -441,6 +688,19 @@ public final class JSArray extends JSObject {
     private void shiftElementsRight(int start, int count) {
         ensureDenseCapacity((int) Math.min(length + count, MAX_DENSE_SIZE));
 
+        Map<Integer, JSValue> newSparse = null;
+        if (sparseProperties != null) {
+            newSparse = new HashMap<>();
+            for (Map.Entry<Integer, JSValue> entry : sparseProperties.entrySet()) {
+                int index = entry.getKey();
+                if (index >= start) {
+                    newSparse.put(index + count, entry.getValue());
+                } else {
+                    newSparse.put(index, entry.getValue());
+                }
+            }
+        }
+
         // Shift dense elements
         int denseEnd = (int) Math.min(length, denseArray.length);
         for (int i = denseEnd - 1; i >= start; i--) {
@@ -448,10 +708,10 @@ public final class JSArray extends JSObject {
                 denseArray[i + count] = denseArray[i];
             } else if (denseArray[i] != null) {
                 // Move to sparse storage
-                if (sparseProperties == null) {
-                    sparseProperties = new HashMap<>();
+                if (newSparse == null) {
+                    newSparse = new HashMap<>();
                 }
-                sparseProperties.put(i + count, denseArray[i]);
+                newSparse.put(i + count, denseArray[i]);
             }
         }
 
@@ -460,6 +720,7 @@ public final class JSArray extends JSObject {
             denseArray[i] = null;
         }
 
+        sparseProperties = newSparse == null || newSparse.isEmpty() ? null : newSparse;
         setLength(length + count);
     }
 
@@ -472,6 +733,34 @@ public final class JSArray extends JSObject {
             result[i] = get(i);
         }
         return result;
+    }
+
+    private Long toArrayLengthForLengthProperty(JSContext context, JSValue value) {
+        if (value.isSymbol() || value.isSymbolObject()) {
+            context.throwTypeError("cannot convert symbol to number");
+            return null;
+        }
+        if (value.isBigInt() || value.isBigIntObject()) {
+            context.throwTypeError("cannot convert bigint to number");
+            return null;
+        }
+
+        JSNumber uint32Source = JSTypeConversions.toNumber(context, value);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        long uint32Length = toUint32(uint32Source.value());
+
+        JSNumber numericValue = JSTypeConversions.toNumber(context, value);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        Long exactLength = toArrayLengthFromNumber(numericValue.value());
+        if (exactLength == null || exactLength != uint32Length) {
+            context.throwRangeError("Invalid array length");
+            return null;
+        }
+        return exactLength;
     }
 
     @Override
