@@ -266,8 +266,8 @@ public final class JSGlobalObject {
         initializePromiseConstructor(context, global);
         initializeDisposableStackConstructor(context, global);
         initializeAsyncDisposableStackConstructor(context, global);
-        initializeGeneratorPrototype(context, global);
         initializeIteratorConstructor(context, global);
+        initializeGeneratorPrototype(context, global);
 
         // Binary data constructors
         initializeArrayBufferConstructor(context, global);
@@ -782,19 +782,56 @@ public final class JSGlobalObject {
     }
 
     /**
-     * Initialize Generator prototype methods.
-     * Note: Generator functions (function*) would require compiler support.
-     * This provides the prototype for manually created generators.
+     * Initialize Generator and GeneratorFunction prototypes.
+     * Based on QuickJS JS_AddIntrinsicGenerator.
+     * <p>
+     * Prototype chain:
+     * - Generator.prototype inherits from Iterator.prototype
+     * - GeneratorFunction.prototype inherits from Function.prototype
+     * - GeneratorFunction.prototype.prototype = Generator.prototype (configurable)
+     * - Generator.prototype.constructor = GeneratorFunction.prototype (configurable)
      */
     private void initializeGeneratorPrototype(JSContext context, JSObject global) {
-        // Create Generator.prototype
+        // Get Iterator.prototype for Generator.prototype to inherit from
+        JSObject iteratorConstructor = (JSObject) global.get("Iterator");
+        JSObject iteratorPrototype = (JSObject) iteratorConstructor.get("prototype");
+
+        // Create Generator.prototype inheriting from Iterator.prototype
+        // This gives generators Symbol.iterator automatically
         JSObject generatorPrototype = context.createJSObject();
-        generatorPrototype.set("next", new JSNativeFunction("next", 1, GeneratorPrototype::next));
-        generatorPrototype.set("return", new JSNativeFunction("return", 1, GeneratorPrototype::returnMethod));
-        generatorPrototype.set("throw", new JSNativeFunction("throw", 1, GeneratorPrototype::throwMethod));
-        // Generator.prototype[Symbol.iterator] returns this
-        generatorPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
-                new JSNativeFunction("[Symbol.iterator]", 0, (childContext, thisArg, args) -> thisArg));
+        generatorPrototype.setPrototype(iteratorPrototype);
+
+        // Generator.prototype methods: writable+configurable (not enumerable)
+        // Matches QuickJS js_generator_proto_funcs using JS_ITERATOR_NEXT_DEF
+        generatorPrototype.definePropertyWritableConfigurable("next",
+                new JSNativeFunction("next", 1, GeneratorPrototype::next));
+        generatorPrototype.definePropertyWritableConfigurable("return",
+                new JSNativeFunction("return", 1, GeneratorPrototype::returnMethod));
+        generatorPrototype.definePropertyWritableConfigurable("throw",
+                new JSNativeFunction("throw", 1, GeneratorPrototype::throwMethod));
+
+        // Symbol.toStringTag = "Generator" (configurable only)
+        // Matches QuickJS JS_PROP_STRING_DEF("[Symbol.toStringTag]", "Generator", JS_PROP_CONFIGURABLE)
+        generatorPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG,
+                new JSString("Generator"));
+
+        // Create GeneratorFunction.prototype (not exposed in global scope)
+        // All generator function objects (function*) inherit from this
+        JSObject generatorFunctionPrototype = context.createJSObject();
+        context.transferPrototype(generatorFunctionPrototype, JSFunction.NAME);
+
+        // GeneratorFunction.prototype[Symbol.toStringTag] = "GeneratorFunction" (configurable)
+        generatorFunctionPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG,
+                new JSString("GeneratorFunction"));
+
+        // Link: GeneratorFunction.prototype.prototype = Generator.prototype (configurable)
+        generatorFunctionPrototype.definePropertyConfigurable("prototype", generatorPrototype);
+
+        // Link: Generator.prototype.constructor = GeneratorFunction.prototype (configurable)
+        generatorPrototype.definePropertyConfigurable("constructor", generatorFunctionPrototype);
+
+        // Store in context for generator function prototype chain setup
+        context.setGeneratorFunctionPrototype(generatorFunctionPrototype);
     }
 
     /**

@@ -16,6 +16,10 @@
 
 package com.caoccao.qjs4j.core;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Represents the execution state of a generator function.
  * Based on QuickJS JSAsyncFunctionState and JSGeneratorData structures.
@@ -30,6 +34,7 @@ package com.caoccao.qjs4j.core;
 public final class GeneratorState {
     private final JSValue[] args;
     private final JSBytecodeFunction function;
+    private final List<ResumeRecord> resumeRecords;
     private final JSValue thisArg;
     // Execution state that needs to be preserved across yields
     // TODO: Add full state preservation (PC, stack, locals) for proper resumption
@@ -44,6 +49,7 @@ public final class GeneratorState {
         this.state = State.SUSPENDED_START;
         this.isCompleted = false;
         this.yieldCount = 0;
+        this.resumeRecords = new ArrayList<>();
     }
 
     public JSValue[] getArgs() {
@@ -52,6 +58,10 @@ public final class GeneratorState {
 
     public JSBytecodeFunction getFunction() {
         return function;
+    }
+
+    public List<ResumeRecord> getResumeRecords() {
+        return Collections.unmodifiableList(resumeRecords);
     }
 
     public State getState() {
@@ -74,6 +84,10 @@ public final class GeneratorState {
         return isCompleted;
     }
 
+    public void recordResume(ResumeKind kind, JSValue value) {
+        resumeRecords.add(new ResumeRecord(kind, value));
+    }
+
     public void setCompleted(boolean completed) {
         this.isCompleted = completed;
         if (completed) {
@@ -85,6 +99,11 @@ public final class GeneratorState {
         this.state = state;
     }
 
+    public enum ResumeKind {
+        NEXT,
+        THROW
+    }
+
     /**
      * Generator state constants matching QuickJS JS_GENERATOR_STATE_*
      */
@@ -93,5 +112,8 @@ public final class GeneratorState {
         SUSPENDED_YIELD,    // Suspended at a yield point
         EXECUTING,          // Currently executing
         COMPLETED           // Execution finished
+    }
+
+    public record ResumeRecord(ResumeKind kind, JSValue value) {
     }
 }

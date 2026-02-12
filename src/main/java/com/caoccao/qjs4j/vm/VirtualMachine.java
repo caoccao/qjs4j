@@ -35,6 +35,8 @@ public final class VirtualMachine {
     private final StringBuilder propertyAccessChain;  // Track last property access for better error messages
     private final CallStack valueStack;
     private StackFrame currentFrame;
+    private int generatorResumeIndex;
+    private List<GeneratorState.ResumeRecord> generatorResumeRecords;
     private JSValue pendingException;
     private boolean propertyAccessLock;  // When true, don't update lastPropertyAccess (during argument evaluation)
     private YieldResult yieldResult;  // Set when generator yields
@@ -45,6 +47,8 @@ public final class VirtualMachine {
         this.context = context;
         this.initializedConstantObjects = Collections.newSetFromMap(new IdentityHashMap<>());
         this.currentFrame = null;
+        this.generatorResumeRecords = List.of();
+        this.generatorResumeIndex = 0;
         this.pendingException = null;
         this.propertyAccessChain = new StringBuilder();
         this.propertyAccessLock = false;
@@ -2238,6 +2242,8 @@ public final class VirtualMachine {
         // Set yield skip count - we'll skip this many yields to resume from the right place
         // This is a workaround since we're not saving/restoring PC
         yieldSkipCount = state.getYieldCount();
+        generatorResumeRecords = state.getResumeRecords();
+        generatorResumeIndex = 0;
 
         // Execute (or resume) the generator
         JSValue result = execute(function, thisArg, args);
@@ -3093,8 +3099,20 @@ public final class VirtualMachine {
         // Check if we should skip this yield (resuming from later point)
         if (yieldSkipCount > 0) {
             yieldSkipCount--;
-            // Don't yield - just continue execution
-            // The value is already on the stack from the yield expression
+            JSValue yieldedValue = valueStack.pop();
+            GeneratorState.ResumeRecord resumeRecord = generatorResumeIndex < generatorResumeRecords.size()
+                    ? generatorResumeRecords.get(generatorResumeIndex++)
+                    : null;
+            if (resumeRecord != null && resumeRecord.kind() == GeneratorState.ResumeKind.THROW) {
+                pendingException = resumeRecord.value();
+                context.setPendingException(resumeRecord.value());
+            } else if (resumeRecord != null) {
+                valueStack.push(resumeRecord.value());
+            } else {
+                // If resume data is missing, default to undefined to preserve stack shape.
+                valueStack.push(JSUndefined.INSTANCE);
+            }
+            // Don't yield - just continue execution from the resumed generator state.
             return;
         }
 

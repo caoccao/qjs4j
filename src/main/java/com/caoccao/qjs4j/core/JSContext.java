@@ -55,6 +55,8 @@ public final class JSContext implements AutoCloseable {
     // Internal constructor references (not exposed in global scope)
     private JSObject asyncFunctionConstructor;
     private JSValue currentThis;
+    // Generator prototype chain (not exposed in global scope)
+    private JSObject generatorFunctionPrototype;
     private boolean inCatchHandler;
     private int maxStackDepth;
     // Exception state
@@ -632,8 +634,6 @@ public final class JSContext implements AutoCloseable {
         return callStack.peek();
     }
 
-    // Stack management
-
     /**
      * Get the current 'this' binding.
      */
@@ -641,11 +641,21 @@ public final class JSContext implements AutoCloseable {
         return currentThis;
     }
 
+    // Stack management
+
     /**
      * Get the error stack trace.
      */
     public List<StackTraceElement> getErrorStackTrace() {
         return new ArrayList<>(errorStackTrace);
+    }
+
+    /**
+     * Get the GeneratorFunction prototype (internal use only).
+     * Used for setting up prototype chains for generator functions.
+     */
+    public JSObject getGeneratorFunctionPrototype() {
+        return generatorFunctionPrototype;
     }
 
     public JSObject getGlobalObject() {
@@ -804,6 +814,14 @@ public final class JSContext implements AutoCloseable {
      */
     public void setCurrentThis(JSValue thisValue) {
         this.currentThis = thisValue != null ? thisValue : globalObject;
+    }
+
+    /**
+     * Set the GeneratorFunction prototype (internal use only).
+     * Called during global object initialization.
+     */
+    public void setGeneratorFunctionPrototype(JSObject generatorFunctionPrototype) {
+        this.generatorFunctionPrototype = generatorFunctionPrototype;
     }
 
     // Microtask queue management

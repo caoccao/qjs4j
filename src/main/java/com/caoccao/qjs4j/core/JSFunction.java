@@ -47,15 +47,38 @@ public abstract sealed class JSFunction extends JSObject
     /**
      * Initialize the function's prototype chain to inherit from Function.prototype.
      * This should be called after creation when the context is available.
+     * <p>
+     * For generator functions, also sets up the function's own "prototype" property
+     * to inherit from Generator.prototype, matching QuickJS js_closure2 behavior.
      */
     public void initializePrototypeChain(JSContext context) {
         if (homeContext == null) {
             homeContext = context;
         }
-        // For async functions, use AsyncFunction.prototype if available
-        if (this instanceof JSBytecodeFunction bytecodeFunc && bytecodeFunc.isAsync()) {
-            if (context.transferPrototype(this, context.getAsyncFunctionConstructor())) {
-                return;
+        if (this instanceof JSBytecodeFunction bytecodeFunc) {
+            // For generator functions (sync or async), use GeneratorFunction.prototype
+            if (bytecodeFunc.isGenerator() && !bytecodeFunc.isAsync()) {
+                JSObject gfp = context.getGeneratorFunctionPrototype();
+                if (gfp != null) {
+                    this.setPrototype(gfp);
+                    // Set up the function's own "prototype" property:
+                    // In QuickJS, each generator function gets a prototype object
+                    // that inherits from Generator.prototype (writable, not configurable)
+                    JSValue genProto = gfp.get("prototype");
+                    if (genProto instanceof JSObject genProtoObj) {
+                        JSObject funcPrototype = new JSObject();
+                        funcPrototype.setPrototype(genProtoObj);
+                        this.defineProperty(PropertyKey.fromString("prototype"),
+                                PropertyDescriptor.dataDescriptor(funcPrototype, true, false, false));
+                    }
+                    return;
+                }
+            }
+            // For async functions, use AsyncFunction.prototype if available
+            if (bytecodeFunc.isAsync()) {
+                if (context.transferPrototype(this, context.getAsyncFunctionConstructor())) {
+                    return;
+                }
             }
         }
         context.transferPrototype(this, NAME);

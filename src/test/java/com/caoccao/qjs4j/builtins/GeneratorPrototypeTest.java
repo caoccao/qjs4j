@@ -16,16 +16,22 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Unit tests for GeneratorPrototype methods.
+ * Unit tests for Generator.prototype methods.
  */
-public class GeneratorPrototypeTest extends BaseTest {
+public class GeneratorPrototypeTest extends BaseJavetTest {
+
+    @Test
+    public void testBasicYield() {
+        assertIntegerWithJavet(
+                "function* gen() { yield 1; yield 2; yield 3; } var g = gen(); g.next().value");
+    }
 
     @Test
     public void testCustomGenerator() {
@@ -60,6 +66,12 @@ public class GeneratorPrototypeTest extends BaseTest {
     }
 
     @Test
+    public void testDoneAfterCompletion() {
+        assertBooleanWithJavet(
+                "function* gen() { yield 1; } var g = gen(); g.next(); g.next().done === true");
+    }
+
+    @Test
     public void testEmptyGenerator() {
         // Create an empty generator
         JSArray emptyArray = new JSArray();
@@ -77,6 +89,48 @@ public class GeneratorPrototypeTest extends BaseTest {
         iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("done"));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+    }
+
+    @Test
+    public void testEmptyGeneratorEval() {
+        assertBooleanWithJavet(
+                "function* gen() {} var g = gen(); g.next().done === true");
+    }
+
+    @Test
+    public void testEmptyGeneratorValueIsUndefined() {
+        assertBooleanWithJavet(
+                "function* gen() {} var g = gen(); g.next().value === undefined");
+    }
+
+    @Test
+    public void testForOfLoop() {
+        assertIntegerWithJavet(
+                "function* gen() { yield 1; yield 2; yield 3; } var sum = 0; for (var v of gen()) sum += v; sum");
+    }
+
+    @Test
+    public void testGeneratorIsIterable() {
+        assertBooleanWithJavet(
+                "function* gen() { yield 1; } var g = gen(); g[Symbol.iterator]() === g");
+    }
+
+    @Test
+    public void testGeneratorReturnIsDone() {
+        assertBooleanWithJavet(
+                "function* gen() { yield 1; return 99; } var g = gen(); g.next(); g.next().done === true");
+    }
+
+    @Test
+    public void testGeneratorWithReturn() {
+        assertIntegerWithJavet(
+                "function* gen() { yield 1; return 99; } var g = gen(); g.next(); g.next().value");
+    }
+
+    @Test
+    public void testMultipleGeneratorInstances() {
+        assertIntegerWithJavet(
+                "function* gen() { yield 1; yield 2; } var g1 = gen(); var g2 = gen(); g1.next(); g1.next().value + g2.next().value");
     }
 
     @Test
@@ -142,6 +196,18 @@ public class GeneratorPrototypeTest extends BaseTest {
     }
 
     @Test
+    public void testNextAfterDone() {
+        assertBooleanWithJavet(
+                "function* gen() { yield 1; } var g = gen(); g.next(); g.next(); g.next().value === undefined");
+    }
+
+    @Test
+    public void testNextValueUndefinedWhenDone() {
+        assertBooleanWithJavet(
+                "function* gen() { yield 1; } var g = gen(); g.next(); g.next().value === undefined");
+    }
+
+    @Test
     public void testReturn() {
         // Create a generator
         JSArray array = new JSArray();
@@ -157,9 +223,10 @@ public class GeneratorPrototypeTest extends BaseTest {
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: subsequent next() calls after return
+        // QuickJS: completed generator's next() returns {value: undefined, done: true}
         result = GeneratorPrototype.next(context, generator, new JSValue[]{});
         iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("returned"));
+        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: return without value (undefined)
@@ -184,6 +251,36 @@ public class GeneratorPrototypeTest extends BaseTest {
                     assertThat(name.value()).isEqualTo("TypeError"));
         });
         assertThat(context.getPendingException()).isNotNull();
+    }
+
+    @Test
+    public void testReturnCompletesGenerator() {
+        assertBooleanWithJavet(
+                "function* gen() { yield 1; yield 2; } var g = gen(); g.next(); g.return(42).done === true");
+    }
+
+    @Test
+    public void testReturnValue() {
+        assertIntegerWithJavet(
+                "function* gen() { yield 1; yield 2; } var g = gen(); g.next(); g.return(42).value");
+    }
+
+    @Test
+    public void testReturnWithoutValue() {
+        assertBooleanWithJavet(
+                "function* gen() { yield 1; } var g = gen(); g.return().value === undefined");
+    }
+
+    @Test
+    public void testSequentialYields() {
+        assertIntegerWithJavet(
+                "function* gen() { yield 10; yield 20; yield 30; } var g = gen(); g.next(); g.next(); g.next().value");
+    }
+
+    @Test
+    public void testSpreadOperator() {
+        assertIntegerWithJavet(
+                "function* gen() { yield 1; yield 2; yield 3; } var arr = [...gen()]; arr.length");
     }
 
     @Test
@@ -227,5 +324,37 @@ public class GeneratorPrototypeTest extends BaseTest {
                     assertThat(name.value()).isEqualTo("TypeError"));
         });
         assertThat(context.getPendingException()).isNotNull();
+    }
+
+    @Test
+    public void testThrowIntoGeneratorCanBeCaught() {
+        assertStringWithJavet(
+                "function* gen() { try { yield 1; } catch (e) { return 'caught:' + e; } } var g = gen(); g.next(); g.throw('x').value");
+    }
+
+    @Test
+    public void testThrowOnCompletedGeneratorThrowsRawValue() {
+        assertBooleanWithJavet(
+                "function* gen() { yield 1; } var g = gen(); g.next(); try { g.throw('z'); false; } catch (e) { e === 'z'; }");
+    }
+
+    @Test
+    public void testThrowOnSuspendedStartThrowsRawValueAndClosesGenerator() {
+        assertBooleanWithJavet(
+                "function* gen() { yield 1; } var g = gen(); " +
+                        "var ok; try { g.throw('s'); ok = false; } catch (e) { ok = (e === 's'); } " +
+                        "ok && g.next().done === true");
+    }
+
+    @Test
+    public void testYieldExpression() {
+        assertIntegerWithJavet(
+                "function* gen() { var x = yield 1; yield x + 10; } var g = gen(); g.next().value");
+    }
+
+    @Test
+    public void testYieldExpressionReceivesNextValue() {
+        assertIntegerWithJavet(
+                "function* gen() { var x = yield 1; return x + 1; } var g = gen(); g.next(); g.next(41).value");
     }
 }

@@ -183,68 +183,25 @@ public final class JSBytecodeFunction extends JSFunction {
             // Create generator state to track execution
             GeneratorState generatorState = new GeneratorState(this, thisArg, args);
 
-            // Create a sync generator object
-            // The generator object is both an iterator and an iterable
-            JSObject generatorObj = context.createJSObject();
+            // Create generator object with proper prototype chain
+            // In QuickJS, js_create_from_ctor gets prototype from the generator function's
+            // "prototype" property and creates JS_CLASS_GENERATOR object
+            JSGenerator generatorObj = new JSGenerator(context, generatorState);
 
-            // Set up the `next` method
-            generatorObj.set("next", new JSNativeFunction("next", 0, (ctx, thisValue, arguments) -> {
-                // Check if generator is completed
-                if (generatorState.isCompleted()) {
-                    JSObject result = context.createJSObject();
-                    result.set("value", JSUndefined.INSTANCE);
-                    result.set("done", JSBoolean.TRUE);
-                    return result;
-                }
-
-                try {
-                    // Execute/resume the generator function
-                    // The VM will execute until it hits a yield or return
-                    JSValue yieldValue = ctx.getVirtualMachine().executeGenerator(generatorState, ctx);
-
-                    // Create iterator result object
-                    JSObject result = context.createJSObject();
-                    result.set("value", yieldValue);
-                    result.set("done", generatorState.isCompleted() ? JSBoolean.TRUE : JSBoolean.FALSE);
-                    return result;
-                } catch (Exception e) {
-                    throw new RuntimeException("Generator execution failed: " + e.getMessage(), e);
-                }
-            }));
-
-            // Set up the `return` method
-            generatorObj.set("return", new JSNativeFunction("return", 1, (ctx, thisValue, arguments) -> {
-                JSValue value = arguments.length > 0 ? arguments[0] : JSUndefined.INSTANCE;
-
-                // Resume execution until completion so finally blocks run.
-                if (!generatorState.isCompleted()) {
-                    while (!generatorState.isCompleted()) {
-                        ctx.getVirtualMachine().executeGenerator(generatorState, ctx);
+            // Set prototype: use this function's prototype property (which inherits from Generator.prototype)
+            JSValue funcPrototype = this.get("prototype");
+            if (funcPrototype instanceof JSObject protoObj) {
+                generatorObj.setPrototype(protoObj);
+            } else {
+                // Fallback: use Generator.prototype from context
+                JSObject gfp = context.getGeneratorFunctionPrototype();
+                if (gfp != null) {
+                    JSValue genProto = gfp.get("prototype");
+                    if (genProto instanceof JSObject genProtoObj) {
+                        generatorObj.setPrototype(genProtoObj);
                     }
                 }
-
-                // Return the value with done: true
-                JSObject result = context.createJSObject();
-                result.set("value", value);
-                result.set("done", JSBoolean.TRUE);
-                return result;
-            }));
-
-            // Set up the `throw` method
-            generatorObj.set("throw", new JSNativeFunction("throw", 1, (ctx, thisValue, arguments) -> {
-                JSValue exception = arguments.length > 0 ? arguments[0] : JSUndefined.INSTANCE;
-
-                // Mark generator as completed
-                generatorState.setCompleted(true);
-
-                // Throw the exception
-                throw new RuntimeException("Exception thrown into generator: " + exception);
-            }));
-
-            // Make the generator iterable by adding Symbol.iterator
-            // According to ES spec, generators return `this` when Symbol.iterator is called
-            generatorObj.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
-                    new JSNativeFunction("[Symbol.iterator]", 0, (ctx, thisValue, arguments) -> thisValue));
+            }
 
             return generatorObj;
         }

@@ -18,33 +18,50 @@ package com.caoccao.qjs4j.core;
 
 /**
  * Represents a JavaScript Generator object.
- * Based on ES2020 Generator specification (simplified).
+ * Based on QuickJS JS_CLASS_GENERATOR and JSGeneratorData.
  * <p>
- * A generator is both an iterator and an iterable.
- * It implements the generator protocol with next(), return(), and throw() methods.
+ * Supports two modes:
+ * - Bytecode generators: created by function* declarations/expressions,
+ * execution managed by GeneratorState and the VM
+ * - Iterator function generators: simplified mode using an IteratorFunction callback
  * <p>
- * This is a simplified implementation that wraps an iterator function.
- * In a full implementation, generators would support yield expressions
- * and maintain execution state across calls.
+ * Prototype methods (next, return, throw) are defined on Generator.prototype
+ * in JSGlobalObject, not on each instance.
  */
 public final class JSGenerator extends JSObject {
     private final JSContext context;
+    private final GeneratorState generatorState;
     private final JSIterator.IteratorFunction iteratorFunction;
     private boolean done;
     private JSValue returnValue;
-    private GeneratorState state;
+    private State state;
+
+    /**
+     * Create a generator backed by bytecode execution.
+     * Used by JSBytecodeFunction.call() for function* generators.
+     */
+    public JSGenerator(JSContext context, com.caoccao.qjs4j.core.GeneratorState generatorState) {
+        super();
+        this.context = context;
+        this.generatorState = generatorState;
+        this.iteratorFunction = null;
+        this.done = false;
+        this.returnValue = JSUndefined.INSTANCE;
+        this.state = State.SUSPENDED_START;
+    }
 
     /**
      * Create a generator with the given iteration logic.
-     * Simplified: uses an iterator function rather than bytecode with yield.
+     * Used for manually created generators (fromArray, fromIteratorFunction).
      */
     public JSGenerator(JSContext context, JSIterator.IteratorFunction iteratorFunction) {
         super();
         this.context = context;
+        this.generatorState = null;
         this.iteratorFunction = iteratorFunction;
         this.done = false;
         this.returnValue = JSUndefined.INSTANCE;
-        this.state = GeneratorState.SUSPENDED_START;
+        this.state = State.SUSPENDED_START;
     }
 
     /**
@@ -81,75 +98,175 @@ public final class JSGenerator extends JSObject {
     /**
      * Get the current state of the generator.
      */
-    public GeneratorState getState() {
+    public State getState() {
         return state;
     }
 
     /**
      * Generator.prototype.next(value)
-     * ES2020 25.5.1.2
-     * Resumes execution and returns the next yielded value.
+     * Based on QuickJS js_generator_next with GEN_MAGIC_NEXT.
      */
     public JSObject next(JSValue value) {
-        if (state == GeneratorState.COMPLETED) {
-            return createIteratorResult(returnValue, true);
+        if (state == State.EXECUTING) {
+            context.throwTypeError("cannot invoke a running generator");
+            return createIteratorResult(JSUndefined.INSTANCE, true);
         }
 
+        if (state == State.COMPLETED) {
+            return createIteratorResult(JSUndefined.INSTANCE, true);
+        }
+
+        State previousState = state;
+        state = State.EXECUTING;
+
+        if (generatorState != null) {
+            return nextBytecode(value, previousState);
+        } else {
+            return nextIterator(value);
+        }
+    }
+
+    private JSObject nextBytecode(JSValue value, State previousState) {
+        if (generatorState.isCompleted()) {
+            state = State.COMPLETED;
+            return createIteratorResult(JSUndefined.INSTANCE, true);
+        }
+
+        if (previousState == State.SUSPENDED_YIELD) {
+            generatorState.recordResume(GeneratorState.ResumeKind.NEXT, value);
+        }
+
+        try {
+            JSValue yieldValue = context.getVirtualMachine().executeGenerator(generatorState, context);
+            if (generatorState.isCompleted()) {
+                state = State.COMPLETED;
+                return createIteratorResult(yieldValue, true);
+            } else {
+                state = State.SUSPENDED_YIELD;
+                return createIteratorResult(yieldValue, false);
+            }
+        } catch (Exception e) {
+            state = State.COMPLETED;
+            generatorState.setCompleted(true);
+            if (!context.hasPendingException()) {
+                context.throwError(e.getMessage() == null ? "Generator execution failed" : e.getMessage());
+            }
+            JSValue pendingException = context.getPendingException();
+            return createIteratorResult(pendingException != null ? pendingException : JSUndefined.INSTANCE, true);
+        }
+    }
+
+    private JSObject nextIterator(JSValue value) {
         if (done) {
-            state = GeneratorState.COMPLETED;
+            state = State.COMPLETED;
             return createIteratorResult(returnValue, true);
         }
-
-        state = GeneratorState.EXECUTING;
 
         JSIterator.IteratorResult result = iteratorFunction.next();
 
         if (result.done) {
             done = true;
-            state = GeneratorState.COMPLETED;
+            state = State.COMPLETED;
             returnValue = result.value;
             return createIteratorResult(result.value, true);
         } else {
-            state = GeneratorState.SUSPENDED_YIELD;
+            state = State.SUSPENDED_YIELD;
             return createIteratorResult(result.value, false);
         }
     }
 
     /**
      * Generator.prototype.return(value)
-     * ES2020 25.5.1.3
-     * Finishes the generator and returns the given value.
+     * Based on QuickJS js_generator_next with GEN_MAGIC_RETURN.
      */
     public JSObject returnMethod(JSValue value) {
-        if (state == GeneratorState.COMPLETED) {
-            return createIteratorResult(returnValue, true);
+        JSValue returnVal = value != null ? value : JSUndefined.INSTANCE;
+
+        if (state == State.EXECUTING) {
+            context.throwTypeError("cannot invoke a running generator");
+            return createIteratorResult(JSUndefined.INSTANCE, true);
         }
 
+        if (state == State.COMPLETED) {
+            return createIteratorResult(returnVal, true);
+        }
+
+        if (state == State.SUSPENDED_START) {
+            // Generator hasn't started yet - just complete it
+            state = State.COMPLETED;
+            done = true;
+            if (generatorState != null) {
+                generatorState.setCompleted(true);
+            }
+            return createIteratorResult(returnVal, true);
+        }
+
+        // Generator is suspended at a yield point
+        state = State.COMPLETED;
         done = true;
-        state = GeneratorState.COMPLETED;
-        returnValue = value != null ? value : JSUndefined.INSTANCE;
-        return createIteratorResult(returnValue, true);
+        if (generatorState != null) {
+            // Run to completion so finally blocks execute
+            while (!generatorState.isCompleted()) {
+                context.getVirtualMachine().executeGenerator(generatorState, context);
+            }
+        }
+        return createIteratorResult(returnVal, true);
     }
 
     /**
      * Generator.prototype.throw(exception)
-     * ES2020 25.5.1.4
-     * Throws an exception into the generator.
-     * Simplified: just completes the generator with the exception.
+     * Based on QuickJS js_generator_next with GEN_MAGIC_THROW.
      */
     public JSObject throwMethod(JSValue exception) {
-        if (state == GeneratorState.COMPLETED) {
-            // Generator already completed, re-throw the exception
-            throw new RuntimeException("Uncaught exception in generator: " + exception);
+        if (state == State.EXECUTING) {
+            context.throwTypeError("cannot invoke a running generator");
+            return createIteratorResult(JSUndefined.INSTANCE, true);
         }
 
-        done = true;
-        state = GeneratorState.COMPLETED;
+        if (state == State.COMPLETED) {
+            context.setPendingException(exception);
+            return createIteratorResult(JSUndefined.INSTANCE, true);
+        }
 
-        // In a full implementation, this would resume the generator
-        // at the current yield point and throw the exception there.
-        // For simplicity, we just complete the generator.
-        throw new RuntimeException("Exception thrown into generator: " + exception);
+        if (state == State.SUSPENDED_START) {
+            // Generator hasn't started - complete and throw
+            state = State.COMPLETED;
+            done = true;
+            if (generatorState != null) {
+                generatorState.setCompleted(true);
+            }
+            context.setPendingException(exception);
+            return createIteratorResult(JSUndefined.INSTANCE, true);
+        }
+
+        if (generatorState != null) {
+            state = State.EXECUTING;
+            generatorState.recordResume(GeneratorState.ResumeKind.THROW, exception);
+            try {
+                JSValue yieldValue = context.getVirtualMachine().executeGenerator(generatorState, context);
+                if (generatorState.isCompleted()) {
+                    state = State.COMPLETED;
+                    done = true;
+                    return createIteratorResult(yieldValue, true);
+                }
+                state = State.SUSPENDED_YIELD;
+                return createIteratorResult(yieldValue, false);
+            } catch (Exception e) {
+                state = State.COMPLETED;
+                done = true;
+                generatorState.setCompleted(true);
+                if (!context.hasPendingException()) {
+                    context.setPendingException(exception);
+                }
+                return createIteratorResult(JSUndefined.INSTANCE, true);
+            }
+        }
+
+        // Iterator-backed generator: close and throw into caller.
+        state = State.COMPLETED;
+        done = true;
+        context.setPendingException(exception);
+        return createIteratorResult(JSUndefined.INSTANCE, true);
     }
 
     @Override
@@ -158,9 +275,9 @@ public final class JSGenerator extends JSObject {
     }
 
     /**
-     * Generator state.
+     * Generator state matching QuickJS JSGeneratorStateEnum.
      */
-    public enum GeneratorState {
+    public enum State {
         SUSPENDED_START,    // Created but not yet started
         SUSPENDED_YIELD,    // Suspended at a yield expression
         EXECUTING,          // Currently running
