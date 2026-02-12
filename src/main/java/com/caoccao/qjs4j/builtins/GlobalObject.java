@@ -1363,63 +1363,67 @@ public final class GlobalObject {
     private static void initializeStringConstructor(JSContext context, JSObject global) {
         // Create String.prototype
         JSObject stringPrototype = context.createJSObject();
-        stringPrototype.set("at", new JSNativeFunction("at", 1, StringPrototype::at));
-        stringPrototype.set("charAt", new JSNativeFunction("charAt", 1, StringPrototype::charAt));
-        stringPrototype.set("charCodeAt", new JSNativeFunction("charCodeAt", 1, StringPrototype::charCodeAt));
-        stringPrototype.set("codePointAt", new JSNativeFunction("codePointAt", 1, StringPrototype::codePointAt));
-        stringPrototype.set("concat", new JSNativeFunction("concat", 1, StringPrototype::concat));
-        stringPrototype.set("endsWith", new JSNativeFunction("endsWith", 1, StringPrototype::endsWith));
-        stringPrototype.set("includes", new JSNativeFunction("includes", 1, StringPrototype::includes));
-        stringPrototype.set("indexOf", new JSNativeFunction("indexOf", 1, StringPrototype::indexOf));
-        stringPrototype.set("lastIndexOf", new JSNativeFunction("lastIndexOf", 1, StringPrototype::lastIndexOf));
-        stringPrototype.set("localeCompare", new JSNativeFunction("localeCompare", 1, StringPrototype::localeCompare));
-        stringPrototype.set("match", new JSNativeFunction("match", 1, StringPrototype::match));
-        stringPrototype.set("matchAll", new JSNativeFunction("matchAll", 1, StringPrototype::matchAll));
-        stringPrototype.set("padEnd", new JSNativeFunction("padEnd", 1, StringPrototype::padEnd));
-        stringPrototype.set("padStart", new JSNativeFunction("padStart", 1, StringPrototype::padStart));
-        stringPrototype.set("repeat", new JSNativeFunction("repeat", 1, StringPrototype::repeat));
-        stringPrototype.set("replace", new JSNativeFunction("replace", 2, StringPrototype::replace));
-        stringPrototype.set("replaceAll", new JSNativeFunction("replaceAll", 2, StringPrototype::replaceAll));
-        stringPrototype.set("search", new JSNativeFunction("search", 1, StringPrototype::search));
-        stringPrototype.set("slice", new JSNativeFunction("slice", 2, StringPrototype::slice));
-        stringPrototype.set("split", new JSNativeFunction("split", 2, StringPrototype::split));
-        stringPrototype.set("startsWith", new JSNativeFunction("startsWith", 1, StringPrototype::startsWith));
-        stringPrototype.set("substr", new JSNativeFunction("substr", 2, StringPrototype::substr));
-        stringPrototype.set("substring", new JSNativeFunction("substring", 2, StringPrototype::substring));
-        stringPrototype.set("toLowerCase", new JSNativeFunction("toLowerCase", 0, StringPrototype::toLowerCase));
-        stringPrototype.set("toString", new JSNativeFunction("toString", 0, StringPrototype::toString_));
-        stringPrototype.set("toUpperCase", new JSNativeFunction("toUpperCase", 0, StringPrototype::toUpperCase));
-        stringPrototype.set("trim", new JSNativeFunction("trim", 0, StringPrototype::trim));
-        stringPrototype.set("trimEnd", new JSNativeFunction("trimEnd", 0, StringPrototype::trimEnd));
-        stringPrototype.set("trimStart", new JSNativeFunction("trimStart", 0, StringPrototype::trimStart));
-        stringPrototype.set("trimLeft", new JSNativeFunction("trimLeft", 0, StringPrototype::trimStart));   // Alias for trimStart
-        stringPrototype.set("trimRight", new JSNativeFunction("trimRight", 0, StringPrototype::trimEnd));   // Alias for trimEnd
-        stringPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, StringPrototype::valueOf));
+        stringPrototype.definePropertyWritableConfigurable("at", new JSNativeFunction("at", 1, StringPrototype::at));
+        stringPrototype.definePropertyWritableConfigurable("charAt", new JSNativeFunction("charAt", 1, StringPrototype::charAt));
+        stringPrototype.definePropertyWritableConfigurable("charCodeAt", new JSNativeFunction("charCodeAt", 1, StringPrototype::charCodeAt));
+        stringPrototype.definePropertyWritableConfigurable("codePointAt", new JSNativeFunction("codePointAt", 1, StringPrototype::codePointAt));
+        stringPrototype.definePropertyWritableConfigurable("concat", new JSNativeFunction("concat", 1, StringPrototype::concat));
+        stringPrototype.definePropertyWritableConfigurable("endsWith", new JSNativeFunction("endsWith", 1, StringPrototype::endsWith));
+        stringPrototype.definePropertyWritableConfigurable("includes", new JSNativeFunction("includes", 1, StringPrototype::includes));
+        stringPrototype.definePropertyWritableConfigurable("indexOf", new JSNativeFunction("indexOf", 1, StringPrototype::indexOf));
+        stringPrototype.definePropertyWritableConfigurable("lastIndexOf", new JSNativeFunction("lastIndexOf", 1, StringPrototype::lastIndexOf));
+        stringPrototype.definePropertyWritableConfigurable("localeCompare", new JSNativeFunction("localeCompare", 1, StringPrototype::localeCompare));
+        stringPrototype.definePropertyWritableConfigurable("match", new JSNativeFunction("match", 1, StringPrototype::match));
+        stringPrototype.definePropertyWritableConfigurable("matchAll", new JSNativeFunction("matchAll", 1, StringPrototype::matchAll));
+        stringPrototype.definePropertyWritableConfigurable("padEnd", new JSNativeFunction("padEnd", 1, StringPrototype::padEnd));
+        stringPrototype.definePropertyWritableConfigurable("padStart", new JSNativeFunction("padStart", 1, StringPrototype::padStart));
+        stringPrototype.definePropertyWritableConfigurable("repeat", new JSNativeFunction("repeat", 1, StringPrototype::repeat));
+        stringPrototype.definePropertyWritableConfigurable("replace", new JSNativeFunction("replace", 2, StringPrototype::replace));
+        stringPrototype.definePropertyWritableConfigurable("replaceAll", new JSNativeFunction("replaceAll", 2, StringPrototype::replaceAll));
+        stringPrototype.definePropertyWritableConfigurable("search", new JSNativeFunction("search", 1, StringPrototype::search));
+        stringPrototype.definePropertyWritableConfigurable("slice", new JSNativeFunction("slice", 2, StringPrototype::slice));
+        stringPrototype.definePropertyWritableConfigurable("split", new JSNativeFunction("split", 2, StringPrototype::split));
+        stringPrototype.definePropertyWritableConfigurable("startsWith", new JSNativeFunction("startsWith", 1, StringPrototype::startsWith));
+        stringPrototype.definePropertyWritableConfigurable("substr", new JSNativeFunction("substr", 2, StringPrototype::substr));
+        stringPrototype.definePropertyWritableConfigurable("substring", new JSNativeFunction("substring", 2, StringPrototype::substring));
+        stringPrototype.definePropertyWritableConfigurable("toLowerCase", new JSNativeFunction("toLowerCase", 0, StringPrototype::toLowerCase));
+        stringPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, StringPrototype::toString_));
+        stringPrototype.definePropertyWritableConfigurable("toUpperCase", new JSNativeFunction("toUpperCase", 0, StringPrototype::toUpperCase));
+        stringPrototype.definePropertyWritableConfigurable("trim", new JSNativeFunction("trim", 0, StringPrototype::trim));
+        JSNativeFunction trimEnd = new JSNativeFunction("trimEnd", 0, StringPrototype::trimEnd);
+        JSNativeFunction trimStart = new JSNativeFunction("trimStart", 0, StringPrototype::trimStart);
+        stringPrototype.definePropertyWritableConfigurable("trimEnd", trimEnd);
+        stringPrototype.definePropertyWritableConfigurable("trimRight", trimEnd);
+        stringPrototype.definePropertyWritableConfigurable("trimStart", trimStart);
+        stringPrototype.definePropertyWritableConfigurable("trimLeft", trimStart);
+        stringPrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, StringPrototype::valueOf));
 
         // HTML wrapper methods (deprecated but still part of spec)
-        stringPrototype.set("anchor", new JSNativeFunction("anchor", 1, StringPrototype::anchor));
-        stringPrototype.set("big", new JSNativeFunction("big", 0, StringPrototype::big));
-        stringPrototype.set("blink", new JSNativeFunction("blink", 0, StringPrototype::blink));
-        stringPrototype.set("bold", new JSNativeFunction("bold", 0, StringPrototype::bold));
-        stringPrototype.set("fixed", new JSNativeFunction("fixed", 0, StringPrototype::fixed));
-        stringPrototype.set("fontcolor", new JSNativeFunction("fontcolor", 1, StringPrototype::fontcolor));
-        stringPrototype.set("fontsize", new JSNativeFunction("fontsize", 1, StringPrototype::fontsize));
-        stringPrototype.set("italics", new JSNativeFunction("italics", 0, StringPrototype::italics));
-        stringPrototype.set("link", new JSNativeFunction("link", 1, StringPrototype::link));
-        stringPrototype.set("small", new JSNativeFunction("small", 0, StringPrototype::small));
-        stringPrototype.set("strike", new JSNativeFunction("strike", 0, StringPrototype::strike));
-        stringPrototype.set("sub", new JSNativeFunction("sub", 0, StringPrototype::sub));
-        stringPrototype.set("sup", new JSNativeFunction("sup", 0, StringPrototype::sup));
+        stringPrototype.definePropertyWritableConfigurable("anchor", new JSNativeFunction("anchor", 1, StringPrototype::anchor));
+        stringPrototype.definePropertyWritableConfigurable("big", new JSNativeFunction("big", 0, StringPrototype::big));
+        stringPrototype.definePropertyWritableConfigurable("blink", new JSNativeFunction("blink", 0, StringPrototype::blink));
+        stringPrototype.definePropertyWritableConfigurable("bold", new JSNativeFunction("bold", 0, StringPrototype::bold));
+        stringPrototype.definePropertyWritableConfigurable("fixed", new JSNativeFunction("fixed", 0, StringPrototype::fixed));
+        stringPrototype.definePropertyWritableConfigurable("fontcolor", new JSNativeFunction("fontcolor", 1, StringPrototype::fontcolor));
+        stringPrototype.definePropertyWritableConfigurable("fontsize", new JSNativeFunction("fontsize", 1, StringPrototype::fontsize));
+        stringPrototype.definePropertyWritableConfigurable("italics", new JSNativeFunction("italics", 0, StringPrototype::italics));
+        stringPrototype.definePropertyWritableConfigurable("link", new JSNativeFunction("link", 1, StringPrototype::link));
+        stringPrototype.definePropertyWritableConfigurable("small", new JSNativeFunction("small", 0, StringPrototype::small));
+        stringPrototype.definePropertyWritableConfigurable("strike", new JSNativeFunction("strike", 0, StringPrototype::strike));
+        stringPrototype.definePropertyWritableConfigurable("sub", new JSNativeFunction("sub", 0, StringPrototype::sub));
+        stringPrototype.definePropertyWritableConfigurable("sup", new JSNativeFunction("sup", 0, StringPrototype::sup));
 
         // Unicode methods
-        stringPrototype.set("isWellFormed", new JSNativeFunction("isWellFormed", 0, StringPrototype::isWellFormed));
-        stringPrototype.set("normalize", new JSNativeFunction("normalize", 0, StringPrototype::normalize));
-        stringPrototype.set("toLocaleLowerCase", new JSNativeFunction("toLocaleLowerCase", 0, StringPrototype::toLocaleLowerCase));
-        stringPrototype.set("toLocaleUpperCase", new JSNativeFunction("toLocaleUpperCase", 0, StringPrototype::toLocaleUpperCase));
-        stringPrototype.set("toWellFormed", new JSNativeFunction("toWellFormed", 0, StringPrototype::toWellFormed));
+        stringPrototype.definePropertyWritableConfigurable("isWellFormed", new JSNativeFunction("isWellFormed", 0, StringPrototype::isWellFormed));
+        stringPrototype.definePropertyWritableConfigurable("normalize", new JSNativeFunction("normalize", 0, StringPrototype::normalize));
+        stringPrototype.definePropertyWritableConfigurable("toLocaleLowerCase", new JSNativeFunction("toLocaleLowerCase", 0, StringPrototype::toLocaleLowerCase));
+        stringPrototype.definePropertyWritableConfigurable("toLocaleUpperCase", new JSNativeFunction("toLocaleUpperCase", 0, StringPrototype::toLocaleUpperCase));
+        stringPrototype.definePropertyWritableConfigurable("toWellFormed", new JSNativeFunction("toWellFormed", 0, StringPrototype::toWellFormed));
 
         // String.prototype[Symbol.iterator]
-        stringPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), new JSNativeFunction("[Symbol.iterator]", 0, IteratorPrototype::stringIterator));
+        stringPrototype.definePropertyWritableConfigurable(
+                JSSymbol.ITERATOR,
+                new JSNativeFunction("[Symbol.iterator]", 0, IteratorPrototype::stringIterator));
 
         // String.prototype.length is a data property with value 0 (not writable, not enumerable, not configurable)
         stringPrototype.definePropertyReadonlyNonConfigurable("length", new JSNumber(0));
@@ -1428,12 +1432,12 @@ public final class GlobalObject {
         JSNativeFunction stringConstructor = new JSNativeFunction("String", 1, StringConstructor::call, true);
         stringConstructor.set("prototype", stringPrototype);
         stringConstructor.setConstructorType(JSConstructorType.STRING_OBJECT); // Mark as String constructor
-        stringPrototype.set("constructor", stringConstructor);
+        stringPrototype.definePropertyWritableConfigurable("constructor", stringConstructor);
 
         // Add static methods
-        stringConstructor.set("fromCharCode", new JSNativeFunction("fromCharCode", 1, StringConstructor::fromCharCode));
-        stringConstructor.set("fromCodePoint", new JSNativeFunction("fromCodePoint", 1, StringConstructor::fromCodePoint));
-        stringConstructor.set("raw", new JSNativeFunction("raw", 1, StringConstructor::raw));
+        stringConstructor.definePropertyWritableConfigurable("fromCharCode", new JSNativeFunction("fromCharCode", 1, StringConstructor::fromCharCode));
+        stringConstructor.definePropertyWritableConfigurable("fromCodePoint", new JSNativeFunction("fromCodePoint", 1, StringConstructor::fromCodePoint));
+        stringConstructor.definePropertyWritableConfigurable("raw", new JSNativeFunction("raw", 1, StringConstructor::raw));
 
         global.definePropertyWritableConfigurable("String", stringConstructor);
     }

@@ -373,7 +373,7 @@ public final class JSTypeConversions {
             }
         }
         if (value instanceof JSSymbol) {
-            // Symbols cannot be converted to numbers - would throw TypeError
+            context.throwTypeError("cannot convert symbol to number");
             return new JSNumber(Double.NaN);
         }
 

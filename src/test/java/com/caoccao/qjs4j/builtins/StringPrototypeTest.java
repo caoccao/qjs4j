@@ -853,6 +853,18 @@ public class StringPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testStartsEndsIncludesIsRegExpSemantics() {
+        assertBooleanWithJavet(
+                "(() => { const o = { [Symbol.match]: false, toString() { return 'a'; } }; return 'ab'.includes(o); })()",
+                "(() => { const o = { [Symbol.match]: false, toString() { return 'a'; } }; return 'ab'.startsWith(o); })()",
+                "(() => { const o = { [Symbol.match]: false, toString() { return 'b'; } }; return 'ab'.endsWith(o); })()",
+                "(() => { const re = /a/; re[Symbol.match] = false; return 'ab'.includes(re) === false; })()",
+                "(() => { const o = { [Symbol.match]: true, toString() { return 'a'; } }; try { 'ab'.includes(o); return false; } catch (e) { return e instanceof TypeError; } })()",
+                "(() => { const o = { [Symbol.match]: true, toString() { return 'a'; } }; try { 'ab'.startsWith(o); return false; } catch (e) { return e instanceof TypeError; } })()",
+                "(() => { const o = { [Symbol.match]: true, toString() { return 'b'; } }; try { 'ab'.endsWith(o); return false; } catch (e) { return e instanceof TypeError; } })()");
+    }
+
+    @Test
     public void testStrike() {
         assertStringWithJavet(
                 "'test'.strike()",
@@ -910,6 +922,31 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         result = StringPrototype.substr(context, emoji, new JSValue[]{new JSNumber(2), new JSNumber(2)});
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("🌟"));
+    }
+
+    @Test
+    public void testSubstrAbruptConversions() {
+        int[] lengthCallCount = new int[]{0};
+        JSObject lenValueOf = context.createJSObject();
+        lenValueOf.set("valueOf", new JSNativeFunction("valueOf", 0, (ctx, thisArg, args) -> {
+            lengthCallCount[0]++;
+            return new JSNumber(1);
+        }));
+
+        StringPrototype.substr(context, new JSString(""), new JSValue[]{new JSSymbol("x"), lenValueOf});
+        assertThat(lengthCallCount[0]).isEqualTo(0);
+        assertPendingException(context);
+
+        lengthCallCount[0] = 0;
+        JSObject startValueOf = context.createJSObject();
+        startValueOf.set("valueOf", new JSNativeFunction("valueOf", 0, (ctx, thisArg, args) -> ctx.throwError("x")));
+
+        StringPrototype.substr(context, new JSString(""), new JSValue[]{startValueOf, lenValueOf});
+        assertThat(lengthCallCount[0]).isEqualTo(0);
+        assertPendingException(context);
+
+        StringPrototype.substr(context, new JSString(""), new JSValue[]{new JSNumber(0), new JSSymbol("x")});
+        assertPendingException(context);
     }
 
     @Test
@@ -1152,5 +1189,70 @@ public class StringPrototypeTest extends BaseJavetTest {
         // Verify it's identical to trimEnd
         assertBooleanWithJavet(
                 "'  test  '.trimRight() === '  test  '.trimEnd()");
+    }
+
+    @Test
+    public void testMethodDescriptorsAndAliases() {
+        assertBooleanWithJavet(
+                "!Object.getOwnPropertyDescriptor(String.prototype, 'blink').enumerable",
+                "!Object.getOwnPropertyDescriptor(String.prototype, 'substr').enumerable",
+                "!Object.getOwnPropertyDescriptor(String.prototype, 'trimLeft').enumerable",
+                "!Object.getOwnPropertyDescriptor(String.prototype, 'trimRight').enumerable",
+                "String.prototype.trimLeft === String.prototype.trimStart",
+                "String.prototype.trimRight === String.prototype.trimEnd");
+
+        assertStringWithJavet(
+                "String.prototype.trimLeft.name",
+                "String.prototype.trimRight.name");
+    }
+
+    @Test
+    public void testOptionalUndefinedArguments() {
+        assertStringWithJavet(
+                "'a'.substr(0, undefined)",
+                "'abc'.slice(1, undefined)",
+                "'abc'.substring(1, undefined)",
+                "'abc'.padStart(5, undefined)",
+                "'abc'.padEnd(5, undefined)",
+                "JSON.stringify('abc'.match())",
+                "JSON.stringify(Array.from('abc'.matchAll()).map(v => v[0]))");
+
+        assertIntegerWithJavet(
+                "'abc'.search()",
+                "'abc'.lastIndexOf('', undefined)");
+
+        assertBooleanWithJavet(
+                "'abc'.endsWith('abc', undefined)");
+    }
+
+    @Test
+    public void testSymbolMethodDispatch() {
+        assertStringWithJavet(
+                "'abc'.split({ [Symbol.split](s, l) { return 'split:' + s + ':' + l; } }, 2)",
+                "'abc'.match({ [Symbol.match](s) { return 'match:' + s; } })",
+                "'abc'.replace({ [Symbol.replace](s, r) { return 'replace:' + s + ':' + r; } }, 'x')",
+                "'abc'.replaceAll({ [Symbol.replace](s, r) { return 'replaceAll:' + s + ':' + r; } }, 'x')",
+                "'abc'.matchAll({ [Symbol.matchAll](s) { return 'matchAll:' + s; } })");
+
+        assertIntegerWithJavet(
+                "'abc'.search({ [Symbol.search](s) { return 7; } })");
+    }
+
+    @Test
+    public void testHtmlMethodArgumentChecks() {
+        StringPrototype.blink(context, JSUndefined.INSTANCE, new JSValue[]{});
+        assertPendingException(context);
+
+        StringPrototype.anchor(context, new JSString("x"), new JSValue[]{});
+        assertPendingException(context);
+
+        StringPrototype.fontcolor(context, new JSString("x"), new JSValue[]{});
+        assertPendingException(context);
+
+        StringPrototype.fontsize(context, new JSString("x"), new JSValue[]{});
+        assertPendingException(context);
+
+        StringPrototype.link(context, new JSString("x"), new JSValue[]{});
+        assertPendingException(context);
     }
 }

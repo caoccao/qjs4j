@@ -63,13 +63,21 @@ public final class StringPrototype {
         return replacement;
     }
 
+    private static JSString toStringCheckObject(JSContext context, JSValue value) {
+        if (value == null || value.isNullOrUndefined()) {
+            context.throwTypeError("null or undefined are forbidden");
+            return new JSString("");
+        }
+        return JSTypeConversions.toString(context, value);
+    }
+
     /**
      * String.prototype.at(index)
      * ES2022 22.1.3.1
      * Returns the character at the specified index, supporting negative indices.
      */
     public static JSValue at(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
         if (args.length == 0) {
@@ -121,7 +129,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.1
      */
     public static JSValue charAt(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
         long pos = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
 
@@ -137,7 +145,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.2
      */
     public static JSValue charCodeAt(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
         long pos = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
 
@@ -153,7 +161,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.3
      */
     public static JSValue codePointAt(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
         long pos = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
 
@@ -169,7 +177,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.4
      */
     public static JSValue concat(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         StringBuilder result = new StringBuilder(str.value());
 
         for (JSValue arg : args) {
@@ -185,7 +193,7 @@ public final class StringPrototype {
      */
     private static JSValue createHTML(JSContext context, JSValue thisArg, JSValue[] args,
                                       String tag, String attr) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         StringBuilder result = new StringBuilder();
 
         result.append('<').append(tag);
@@ -193,7 +201,7 @@ public final class StringPrototype {
         if (attr != null) {
             // Attribute requires a value from args[0]
             JSValue attrValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-            JSString attrStr = JSTypeConversions.toString(context, attrValue);
+            JSString attrStr = toStringCheckObject(context, attrValue);
             String attrText = attrStr.value();
 
             result.append(' ').append(attr).append("=\"");
@@ -241,15 +249,24 @@ public final class StringPrototype {
      * ES2020 21.1.3.6
      */
     public static JSValue endsWith(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
         if (args.length == 0) {
             return JSBoolean.FALSE;
         }
+        int regexp = isRegExp(context, args[0]);
+        if (regexp < 0) {
+            return JSUndefined.INSTANCE;
+        }
+        if (regexp > 0) {
+            return context.throwTypeError("regexp not supported");
+        }
 
         String searchStr = JSTypeConversions.toString(context, args[0]).value();
-        long endPosition = args.length > 1 ? (long) JSTypeConversions.toInteger(context, args[1]) : s.length();
+        long endPosition = args.length > 1 && !args[1].isUndefined()
+                ? (long) JSTypeConversions.toInteger(context, args[1])
+                : s.length();
         endPosition = Math.max(0, Math.min(endPosition, s.length()));
 
         int start = (int) (endPosition - searchStr.length());
@@ -284,6 +301,20 @@ public final class StringPrototype {
             }
         }
         return -1; // String is well-formed
+    }
+
+    private static int isRegExp(JSContext context, JSValue value) {
+        if (!(value instanceof JSObject obj)) {
+            return 0;
+        }
+        JSValue matcher = obj.get(PropertyKey.fromSymbol(JSSymbol.MATCH), context);
+        if (context.hasPendingException()) {
+            return -1;
+        }
+        if (!(matcher instanceof JSUndefined)) {
+            return JSTypeConversions.toBoolean(matcher).value() ? 1 : 0;
+        }
+        return value instanceof JSRegExp ? 1 : 0;
     }
 
     /**
@@ -335,11 +366,18 @@ public final class StringPrototype {
      * ES2020 21.1.3.7
      */
     public static JSValue includes(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
         if (args.length == 0) {
             return JSBoolean.FALSE;
+        }
+        int regexp = isRegExp(context, args[0]);
+        if (regexp < 0) {
+            return JSUndefined.INSTANCE;
+        }
+        if (regexp > 0) {
+            return context.throwTypeError("regexp not supported");
         }
 
         String searchStr = JSTypeConversions.toString(context, args[0]).value();
@@ -354,7 +392,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.8
      */
     public static JSValue indexOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
         if (args.length == 0) {
@@ -374,7 +412,7 @@ public final class StringPrototype {
      * Returns true if the string contains no unpaired surrogates.
      */
     public static JSValue isWellFormed(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         boolean wellFormed = findInvalidCodePoint(str.value()) < 0;
         return JSBoolean.valueOf(wellFormed);
     }
@@ -392,7 +430,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.9
      */
     public static JSValue lastIndexOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
         if (args.length == 0) {
@@ -400,7 +438,9 @@ public final class StringPrototype {
         }
 
         String searchStr = JSTypeConversions.toString(context, args[0]).value();
-        long position = args.length > 1 ? (long) JSTypeConversions.toInteger(context, args[1]) : s.length();
+        long position = args.length > 1 && !args[1].isUndefined()
+                ? (long) JSTypeConversions.toInteger(context, args[1])
+                : s.length();
         position = Math.max(0, Math.min(position, s.length()));
 
         int index = s.lastIndexOf(searchStr, (int) position);
@@ -421,14 +461,11 @@ public final class StringPrototype {
      * Compares two strings in the current locale.
      */
     public static JSValue localeCompare(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String thisStr = str.value();
 
-        if (args.length == 0) {
-            return new JSNumber(0);
-        }
-
-        JSString thatStr = JSTypeConversions.toString(context, args[0]);
+        JSString thatStr = JSTypeConversions.toString(
+                context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         String that = thatStr.value();
 
         Locale locale = Locale.getDefault();
@@ -458,19 +495,33 @@ public final class StringPrototype {
      * Returns an array of matches when matching a string against a regular expression.
      */
     public static JSValue match(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
-        String s = str.value();
-
-        if (args.length == 0) {
-            return JSNull.INSTANCE;
+        if (thisArg == null || thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("cannot convert to object");
         }
 
-        JSValue regexpArg = args[0];
+        JSValue regexpArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (regexpArg instanceof JSObject regexpObj) {
+            JSValue matcher = regexpObj.get(PropertyKey.fromSymbol(JSSymbol.MATCH), context);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(matcher instanceof JSUndefined) && !(matcher instanceof JSNull)) {
+                if (!(matcher instanceof JSFunction matcherFunction)) {
+                    return context.throwTypeError("not a function");
+                }
+                return matcherFunction.call(context, regexpObj, new JSValue[]{thisArg});
+            }
+        }
+
+        JSString str = toStringCheckObject(context, thisArg);
+        String s = str.value();
 
         // Convert to RegExp if not already
         JSRegExp regexp;
         if (regexpArg instanceof JSRegExp) {
             regexp = (JSRegExp) regexpArg;
+        } else if (regexpArg instanceof JSUndefined) {
+            regexp = new JSRegExp("", "");
         } else if (regexpArg instanceof JSString regexpStr) {
             regexp = new JSRegExp(regexpStr.value(), "");
         } else {
@@ -530,31 +581,42 @@ public final class StringPrototype {
      * including capturing groups.
      */
     public static JSValue matchAll(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
-        String s = str.value();
-
-        if (args.length == 0) {
-            return context.throwTypeError("String.prototype.matchAll requires a RegExp argument");
+        if (thisArg == null || thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("cannot convert to object");
         }
 
-        JSValue regexpArg = args[0];
+        JSValue regexpArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (regexpArg instanceof JSRegExp regexp && !regexp.isGlobal()) {
+            return context.throwTypeError("String.prototype.matchAll called with a non-global RegExp argument");
+        }
+        if (regexpArg instanceof JSObject regexpObj) {
+            JSValue matcher = regexpObj.get(PropertyKey.fromSymbol(JSSymbol.MATCH_ALL), context);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(matcher instanceof JSUndefined) && !(matcher instanceof JSNull)) {
+                if (!(matcher instanceof JSFunction matcherFunction)) {
+                    return context.throwTypeError("not a function");
+                }
+                return matcherFunction.call(context, regexpObj, new JSValue[]{thisArg});
+            }
+        }
+
+        JSString str = toStringCheckObject(context, thisArg);
+        String s = str.value();
 
         // Convert to RegExp if not already
         JSRegExp regexp;
-        if (regexpArg instanceof JSRegExp) {
-            regexp = (JSRegExp) regexpArg;
+        if (regexpArg instanceof JSRegExp inputRegExp) {
+            regexp = new JSRegExp(inputRegExp.getPattern(), "g");
+        } else if (regexpArg instanceof JSUndefined) {
+            regexp = new JSRegExp("", "g");
         } else if (regexpArg instanceof JSString regexpStr) {
-            // For matchAll, the regexp must have the 'g' flag
             regexp = new JSRegExp(regexpStr.value(), "g");
         } else {
             // Convert to string and create RegExp with 'g' flag
             String pattern = JSTypeConversions.toString(context, regexpArg).value();
             regexp = new JSRegExp(pattern, "g");
-        }
-
-        // matchAll requires global flag
-        if (!regexp.isGlobal()) {
-            return context.throwTypeError("String.prototype.matchAll called with a non-global RegExp argument");
         }
 
         // Collect all matches into an array and return an iterator
@@ -607,7 +669,7 @@ public final class StringPrototype {
      * Valid forms: "NFC" (default), "NFD", "NFKC", "NFKD"
      */
     public static JSValue normalize(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
 
         // Default to NFC
         UnicodeNormalization.Form form = UnicodeNormalization.Form.NFC;
@@ -644,7 +706,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.11
      */
     public static JSValue padEnd(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
         long maxLength = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
@@ -652,12 +714,13 @@ public final class StringPrototype {
             return str;
         }
 
-        String fillStr = args.length > 1 ? JSTypeConversions.toString(context, args[1]).value() : " ";
+        String fillStr = args.length > 1 && !args[1].isUndefined()
+                ? JSTypeConversions.toString(context, args[1]).value()
+                : " ";
         if (fillStr.isEmpty()) {
             return str;
         }
 
-        int fillLen = (int) (maxLength - s.length());
         StringBuilder result = new StringBuilder(s);
 
         while (result.length() < maxLength) {
@@ -674,7 +737,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.12
      */
     public static JSValue padStart(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
         long maxLength = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
@@ -682,7 +745,9 @@ public final class StringPrototype {
             return str;
         }
 
-        String fillStr = args.length > 1 ? JSTypeConversions.toString(context, args[1]).value() : " ";
+        String fillStr = args.length > 1 && !args[1].isUndefined()
+                ? JSTypeConversions.toString(context, args[1]).value()
+                : " ";
         if (fillStr.isEmpty()) {
             return str;
         }
@@ -704,7 +769,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.13
      */
     public static JSValue repeat(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
         long count = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
@@ -731,15 +796,28 @@ public final class StringPrototype {
      * Accepts a string or regular expression as the first argument.
      */
     public static JSValue replace(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
-        String s = str.value();
-
-        if (args.length == 0) {
-            return str;
+        if (thisArg == null || thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("cannot convert to object");
         }
 
-        JSValue searchValue = args[0];
-        String replaceStr = args.length > 1 ? JSTypeConversions.toString(context, args[1]).value() : "undefined";
+        JSValue searchValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue replaceValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        if (searchValue instanceof JSObject searchValueObject) {
+            JSValue replacer = searchValueObject.get(PropertyKey.fromSymbol(JSSymbol.REPLACE), context);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(replacer instanceof JSUndefined) && !(replacer instanceof JSNull)) {
+                if (!(replacer instanceof JSFunction replacerFunction)) {
+                    return context.throwTypeError("not a function");
+                }
+                return replacerFunction.call(context, searchValueObject, new JSValue[]{thisArg, replaceValue});
+            }
+        }
+
+        JSString str = toStringCheckObject(context, thisArg);
+        String s = str.value();
+        String replaceStr = JSTypeConversions.toString(context, replaceValue).value();
 
         // Handle RegExp
         if (searchValue instanceof JSRegExp regexp) {
@@ -797,23 +875,34 @@ public final class StringPrototype {
      * If a RegExp is provided, it must have the global (g) flag.
      */
     public static JSValue replaceAll(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
-        String s = str.value();
-
-        if (args.length == 0) {
-            return str;
+        if (thisArg == null || thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("cannot convert to object");
         }
 
-        JSValue searchValue = args[0];
-        String replaceStr = args.length > 1 ? JSTypeConversions.toString(context, args[1]).value() : "undefined";
+        JSValue searchValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue replaceValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        if (searchValue instanceof JSRegExp regexp && !regexp.isGlobal()) {
+            return context.throwTypeError("String.prototype.replaceAll called with a non-global RegExp argument");
+        }
+        if (searchValue instanceof JSObject searchValueObject) {
+            JSValue replacer = searchValueObject.get(PropertyKey.fromSymbol(JSSymbol.REPLACE), context);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(replacer instanceof JSUndefined) && !(replacer instanceof JSNull)) {
+                if (!(replacer instanceof JSFunction replacerFunction)) {
+                    return context.throwTypeError("not a function");
+                }
+                return replacerFunction.call(context, searchValueObject, new JSValue[]{thisArg, replaceValue});
+            }
+        }
+
+        JSString str = toStringCheckObject(context, thisArg);
+        String s = str.value();
+        String replaceStr = JSTypeConversions.toString(context, replaceValue).value();
 
         // Handle RegExp
         if (searchValue instanceof JSRegExp regexp) {
-            // replaceAll requires global flag
-            if (!regexp.isGlobal()) {
-                return context.throwTypeError("String.prototype.replaceAll called with a non-global RegExp argument");
-            }
-
             RegExpEngine engine = regexp.getEngine();
             StringBuilder result = new StringBuilder();
             int lastIndex = 0;
@@ -900,19 +989,33 @@ public final class StringPrototype {
      * Returns the index of the first match, or -1.
      */
     public static JSValue search(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
-        String s = str.value();
-
-        if (args.length == 0) {
-            return new JSNumber(-1);
+        if (thisArg == null || thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("cannot convert to object");
         }
 
-        JSValue regexpArg = args[0];
+        JSValue regexpArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (regexpArg instanceof JSObject regexpObj) {
+            JSValue searcher = regexpObj.get(PropertyKey.fromSymbol(JSSymbol.SEARCH), context);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(searcher instanceof JSUndefined) && !(searcher instanceof JSNull)) {
+                if (!(searcher instanceof JSFunction searchFunction)) {
+                    return context.throwTypeError("not a function");
+                }
+                return searchFunction.call(context, regexpObj, new JSValue[]{thisArg});
+            }
+        }
+
+        JSString str = toStringCheckObject(context, thisArg);
+        String s = str.value();
 
         // Convert to RegExp if not already
         JSRegExp regexp;
         if (regexpArg instanceof JSRegExp) {
             regexp = (JSRegExp) regexpArg;
+        } else if (regexpArg instanceof JSUndefined) {
+            regexp = new JSRegExp("", "");
         } else if (regexpArg instanceof JSString regexpStr) {
             regexp = new JSRegExp(regexpStr.value(), "");
         } else {
@@ -943,12 +1046,14 @@ public final class StringPrototype {
      * ES2020 21.1.3.16
      */
     public static JSValue slice(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
         int len = s.length();
 
         long begin = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
-        long end = args.length > 1 ? (long) JSTypeConversions.toInteger(context, args[1]) : len;
+        long end = args.length > 1 && !args[1].isUndefined()
+                ? (long) JSTypeConversions.toInteger(context, args[1])
+                : len;
 
         // Handle negative indices
         if (begin < 0) {
@@ -983,21 +1088,39 @@ public final class StringPrototype {
      * ES2020 21.1.3.17
      */
     public static JSValue split(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        if (thisArg == null || thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("cannot convert to object");
+        }
+
+        JSValue separatorArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue limitArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        if (separatorArg instanceof JSObject separatorObject) {
+            JSValue splitter = separatorObject.get(PropertyKey.fromSymbol(JSSymbol.SPLIT), context);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(splitter instanceof JSUndefined) && !(splitter instanceof JSNull)) {
+                if (!(splitter instanceof JSFunction splitFunction)) {
+                    return context.throwTypeError("not a function");
+                }
+                return splitFunction.call(context, separatorObject, new JSValue[]{thisArg, limitArg});
+            }
+        }
+
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
-        if (args.length == 0 || args[0] instanceof JSUndefined) {
-            JSArray arr = context.createJSArray();
+        JSArray arr = context.createJSArray();
+        long limit = !(limitArg instanceof JSUndefined)
+                ? JSTypeConversions.toUint32(context, limitArg)
+                : 0xFFFFFFFFL;
+        if (limit == 0) {
+            return arr;
+        }
+        if (separatorArg instanceof JSUndefined) {
             arr.push(str);
             return arr;
         }
-
-        JSValue separatorArg = args[0];
-        long limit = args.length > 1 && !(args[1] instanceof JSUndefined)
-                ? JSTypeConversions.toUint32(context, args[1])
-                : Long.MAX_VALUE;
-
-        JSArray arr = context.createJSArray();
 
         // Handle RegExp separator
         if (separatorArg instanceof JSRegExp regexp) {
@@ -1086,15 +1209,24 @@ public final class StringPrototype {
      * ES2020 21.1.3.21
      */
     public static JSValue startsWith(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
         if (args.length == 0) {
             return JSBoolean.FALSE;
         }
+        int regexp = isRegExp(context, args[0]);
+        if (regexp < 0) {
+            return JSUndefined.INSTANCE;
+        }
+        if (regexp > 0) {
+            return context.throwTypeError("regexp not supported");
+        }
 
         String searchStr = JSTypeConversions.toString(context, args[0]).value();
-        long position = args.length > 1 ? (long) JSTypeConversions.toInteger(context, args[1]) : 0;
+        long position = args.length > 1 && !args[1].isUndefined()
+                ? (long) JSTypeConversions.toInteger(context, args[1])
+                : 0;
         position = Math.max(0, Math.min(position, s.length()));
 
         return JSBoolean.valueOf(s.substring((int) position).startsWith(searchStr));
@@ -1121,12 +1253,20 @@ public final class StringPrototype {
      * ES2020 B.2.3.1 (Deprecated, but still widely used)
      */
     public static JSValue substr(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
         int len = s.length();
 
         long start = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
-        long length = args.length > 1 ? (long) JSTypeConversions.toInteger(context, args[1]) : len;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        long length = args.length > 1 && !args[1].isUndefined()
+                ? (long) JSTypeConversions.toInteger(context, args[1])
+                : len;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
 
         // Handle negative start
         if (start < 0) {
@@ -1145,12 +1285,14 @@ public final class StringPrototype {
      * ES2020 21.1.3.19
      */
     public static JSValue substring(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
         int len = s.length();
 
         long start = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
-        long end = args.length > 1 ? (long) JSTypeConversions.toInteger(context, args[1]) : len;
+        long end = args.length > 1 && !args[1].isUndefined()
+                ? (long) JSTypeConversions.toInteger(context, args[1])
+                : len;
 
         // Clamp to [0, len]
         start = Math.max(0, Math.min(start, len));
@@ -1180,7 +1322,7 @@ public final class StringPrototype {
      * For now, this is the same as toLowerCase() (locale parameter is ignored).
      */
     public static JSValue toLocaleLowerCase(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         // In QuickJS, this just calls toLowerCase() - locale is ignored
         return new JSString(str.value().toLowerCase());
     }
@@ -1191,7 +1333,7 @@ public final class StringPrototype {
      * For now, this is the same as toUpperCase() (locale parameter is ignored).
      */
     public static JSValue toLocaleUpperCase(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         // In QuickJS, this just calls toUpperCase() - locale is ignored
         return new JSString(str.value().toUpperCase());
     }
@@ -1201,7 +1343,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.22
      */
     public static JSValue toLowerCase(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         return new JSString(str.value().toLowerCase());
     }
 
@@ -1220,7 +1362,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.24
      */
     public static JSValue toUpperCase(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         return new JSString(str.value().toUpperCase());
     }
 
@@ -1229,7 +1371,7 @@ public final class StringPrototype {
      * Returns a string where all unpaired surrogates are replaced with U+FFFD (replacement character).
      */
     public static JSValue toWellFormed(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
         // Check if string is already well-formed
@@ -1267,7 +1409,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.26
      */
     public static JSValue trim(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         return new JSString(str.value().strip());
     }
 
@@ -1276,7 +1418,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.28
      */
     public static JSValue trimEnd(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         return new JSString(str.value().stripTrailing());
     }
 
@@ -1285,7 +1427,7 @@ public final class StringPrototype {
      * ES2020 21.1.3.27
      */
     public static JSValue trimStart(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = JSTypeConversions.toString(context, thisArg);
+        JSString str = toStringCheckObject(context, thisArg);
         return new JSString(str.value().stripLeading());
     }
 
