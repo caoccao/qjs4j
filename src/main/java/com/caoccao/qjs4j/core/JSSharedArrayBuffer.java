@@ -37,7 +37,9 @@ import java.nio.ByteOrder;
 public final class JSSharedArrayBuffer extends JSObject implements JSArrayBufferable {
     public static final String NAME = "SharedArrayBuffer";
     private final ByteBuffer buffer;
-    private final int byteLength;
+    private final boolean growable;
+    private final int maxByteLength;
+    private int byteLength;
 
     /**
      * Create a SharedArrayBuffer with the specified byte length.
@@ -45,25 +47,76 @@ public final class JSSharedArrayBuffer extends JSObject implements JSArrayBuffer
      * @param byteLength The length in bytes
      */
     public JSSharedArrayBuffer(int byteLength) {
+        this(byteLength, byteLength, false);
+    }
+
+    /**
+     * Create a growable SharedArrayBuffer with the specified current and max lengths.
+     *
+     * @param byteLength    The current length in bytes
+     * @param maxByteLength The maximum length in bytes
+     */
+    public JSSharedArrayBuffer(int byteLength, int maxByteLength) {
+        this(byteLength, maxByteLength, true);
+    }
+
+    private JSSharedArrayBuffer(int byteLength, int maxByteLength, boolean growable) {
         super();
         if (byteLength < 0) {
             throw new IllegalArgumentException("Invalid array buffer length");
         }
+        if (maxByteLength < byteLength) {
+            throw new IllegalArgumentException("Invalid array buffer max length");
+        }
         // Use direct buffer for sharing across threads
-        this.buffer = ByteBuffer.allocateDirect(byteLength);
+        this.buffer = ByteBuffer.allocateDirect(maxByteLength);
         this.buffer.order(ByteOrder.LITTLE_ENDIAN); // JavaScript uses little-endian
         this.byteLength = byteLength;
+        this.maxByteLength = maxByteLength;
+        this.growable = growable;
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        int length = 0;
-        if (args.length > 0) {
-            length = (int) JSTypeConversions.toInteger(context, args[0]);
-        }
-        if (length < 0) {
+        long length = 0;
+        try {
+            if (args.length > 0) {
+                length = JSTypeConversions.toIndex(context, args[0]);
+            }
+        } catch (IllegalArgumentException e) {
             return context.throwRangeError("Invalid array buffer length");
         }
-        JSObject jsObject = new JSSharedArrayBuffer(length);
+        if (length > Integer.MAX_VALUE) {
+            return context.throwRangeError("Invalid array buffer length");
+        }
+
+        int intLength = (int) length;
+        int maxLength = intLength;
+        boolean growable = false;
+        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+            if (args[1] instanceof JSNull) {
+                return context.throwTypeError("Cannot convert undefined or null to object");
+            }
+            if (args[1] instanceof JSObject optionsObject) {
+                JSValue maxByteLengthValue = optionsObject.get("maxByteLength");
+                if (!(maxByteLengthValue instanceof JSUndefined)) {
+                    long maxLen;
+                    try {
+                        maxLen = JSTypeConversions.toIndex(context, maxByteLengthValue);
+                    } catch (IllegalArgumentException e) {
+                        return context.throwRangeError("Invalid array buffer max length");
+                    }
+                    if (maxLen > Integer.MAX_VALUE || maxLen < length) {
+                        return context.throwRangeError("Invalid array buffer max length");
+                    }
+                    maxLength = (int) maxLen;
+                    growable = true;
+                }
+            }
+        }
+
+        JSObject jsObject = growable
+                ? new JSSharedArrayBuffer(intLength, maxLength)
+                : new JSSharedArrayBuffer(intLength);
         context.transferPrototype(jsObject, NAME);
         return jsObject;
     }
@@ -89,6 +142,31 @@ public final class JSSharedArrayBuffer extends JSObject implements JSArrayBuffer
     }
 
     /**
+     * Get the maximum byte length of this buffer.
+     *
+     * @return The maximum byte length
+     */
+    public int getMaxByteLength() {
+        return maxByteLength;
+    }
+
+    /**
+     * Grow the SharedArrayBuffer to the specified byte length.
+     * SharedArrayBuffers can only grow, never shrink.
+     *
+     * @param newByteLength The new byte length
+     */
+    public void grow(int newByteLength) {
+        if (!growable) {
+            throw new IllegalStateException("array buffer is not growable");
+        }
+        if (newByteLength < byteLength || newByteLength > maxByteLength) {
+            throw new IllegalArgumentException("invalid array buffer length");
+        }
+        this.byteLength = newByteLength;
+    }
+
+    /**
      * Check if this SharedArrayBuffer is detached.
      * SharedArrayBuffers cannot be detached.
      *
@@ -96,6 +174,15 @@ public final class JSSharedArrayBuffer extends JSObject implements JSArrayBuffer
      */
     public boolean isDetached() {
         return false;
+    }
+
+    /**
+     * Check if this SharedArrayBuffer is growable.
+     *
+     * @return true if growable, false otherwise
+     */
+    public boolean isGrowable() {
+        return growable;
     }
 
     /**
@@ -140,13 +227,15 @@ public final class JSSharedArrayBuffer extends JSObject implements JSArrayBuffer
         if (newLength > 0) {
             byte[] bytes = new byte[newLength];
             synchronized (buffer) {
-                buffer.position(begin);
-                buffer.get(bytes, 0, newLength);
-                buffer.position(0); // Reset position
+                ByteBuffer source = buffer.duplicate();
+                source.position(begin);
+                source.limit(begin + newLength);
+                source.get(bytes);
             }
             synchronized (newBuffer.getBuffer()) {
-                newBuffer.getBuffer().put(bytes);
-                newBuffer.getBuffer().position(0);
+                ByteBuffer target = newBuffer.getBuffer().duplicate();
+                target.position(0);
+                target.put(bytes);
             }
         }
 

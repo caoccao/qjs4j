@@ -414,8 +414,10 @@ This document provides a comprehensive list of all JavaScript features implement
 
 ### SharedArrayBuffer
 - **Shared memory**: Direct ByteBuffer for multi-threaded access
-- **Fixed-length**: Cannot be detached
+- **Detachment**: Cannot be detached
+- **Growable support**: `maxByteLength`, `growable`, `grow()`
 - **Methods**: slice() for copying byte ranges
+- **Constructor metadata**: `SharedArrayBuffer[Symbol.species]`
 - **Thread-safe**: Synchronization for concurrent access
 
 ### Atomics

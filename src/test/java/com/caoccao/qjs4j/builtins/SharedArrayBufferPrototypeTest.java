@@ -17,10 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.core.JSNumber;
-import com.caoccao.qjs4j.core.JSSharedArrayBuffer;
-import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,6 +42,64 @@ public class SharedArrayBufferPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-SharedArrayBuffer
         assertTypeError(SharedArrayBufferPrototype.getByteLength(context, new JSString("not sab"), new JSValue[]{}));
+        assertPendingException(context);
+    }
+
+    @Test
+    public void testGetGrowable() {
+        JSSharedArrayBuffer fixed = new JSSharedArrayBuffer(32);
+        JSValue result = SharedArrayBufferPrototype.getGrowable(context, fixed, new JSValue[]{});
+        assertThat(result).isEqualTo(JSBoolean.FALSE);
+
+        JSSharedArrayBuffer growable = new JSSharedArrayBuffer(16, 64);
+        result = SharedArrayBufferPrototype.getGrowable(context, growable, new JSValue[]{});
+        assertThat(result).isEqualTo(JSBoolean.TRUE);
+
+        assertTypeError(SharedArrayBufferPrototype.getGrowable(context, new JSString("not sab"), new JSValue[]{}));
+        assertPendingException(context);
+    }
+
+    @Test
+    public void testGetMaxByteLength() {
+        JSSharedArrayBuffer fixed = new JSSharedArrayBuffer(32);
+        JSValue result = SharedArrayBufferPrototype.getMaxByteLength(context, fixed, new JSValue[]{});
+        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(32.0));
+
+        JSSharedArrayBuffer growable = new JSSharedArrayBuffer(16, 64);
+        result = SharedArrayBufferPrototype.getMaxByteLength(context, growable, new JSValue[]{});
+        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(64.0));
+
+        assertTypeError(SharedArrayBufferPrototype.getMaxByteLength(context, new JSString("not sab"), new JSValue[]{}));
+        assertPendingException(context);
+    }
+
+    @Test
+    public void testGrow() {
+        JSSharedArrayBuffer growable = new JSSharedArrayBuffer(8, 32);
+
+        JSValue result = SharedArrayBufferPrototype.grow(context, growable, new JSValue[]{new JSNumber(16)});
+        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
+        assertThat(growable.getByteLength()).isEqualTo(16);
+
+        result = SharedArrayBufferPrototype.grow(context, growable, new JSValue[]{new JSNumber(16)});
+        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
+        assertThat(growable.getByteLength()).isEqualTo(16);
+
+        result = SharedArrayBufferPrototype.grow(context, growable, new JSValue[]{new JSNumber(33)});
+        assertRangeError(result);
+        assertPendingException(context);
+
+        result = SharedArrayBufferPrototype.grow(context, growable, new JSValue[]{new JSNumber(15)});
+        assertRangeError(result);
+        assertPendingException(context);
+
+        JSSharedArrayBuffer fixed = new JSSharedArrayBuffer(8);
+        result = SharedArrayBufferPrototype.grow(context, fixed, new JSValue[]{new JSNumber(12)});
+        assertTypeError(result);
+        assertPendingException(context);
+
+        result = SharedArrayBufferPrototype.grow(context, new JSString("not sab"), new JSValue[]{new JSNumber(8)});
+        assertTypeError(result);
         assertPendingException(context);
     }
 
@@ -79,5 +134,73 @@ public class SharedArrayBufferPrototypeTest extends BaseJavetTest {
         // Edge case: called on non-SharedArrayBuffer
         assertTypeError(SharedArrayBufferPrototype.slice(context, new JSString("not sab"), new JSValue[]{}));
         assertPendingException(context);
+    }
+
+    @Test
+    public void testTypeofAndDescriptors() {
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                          const d = Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, "byteLength");
+                          return typeof d.get === "function"
+                            && d.set === undefined
+                            && d.enumerable === false
+                            && d.configurable === true;
+                        })()
+                        """,
+                """
+                        (() => {
+                          const d = Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, "maxByteLength");
+                          return typeof d.get === "function"
+                            && d.set === undefined
+                            && d.enumerable === false
+                            && d.configurable === true;
+                        })()
+                        """,
+                """
+                        (() => {
+                          const d = Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, "growable");
+                          return typeof d.get === "function"
+                            && d.set === undefined
+                            && d.enumerable === false
+                            && d.configurable === true;
+                        })()
+                        """,
+                """
+                        (() => {
+                          const d = Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, "grow");
+                          return typeof d.value === "function"
+                            && d.writable === true
+                            && d.enumerable === false
+                            && d.configurable === true;
+                        })()
+                        """,
+                """
+                        (() => {
+                          const d = Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, Symbol.toStringTag);
+                          return d.value === "SharedArrayBuffer"
+                            && d.writable === false
+                            && d.enumerable === false
+                            && d.configurable === true;
+                        })()
+                        """,
+                """
+                        (() => {
+                          const sab = new SharedArrayBuffer(8, { maxByteLength: 32 });
+                          sab.grow(16);
+                          return sab.byteLength === 16 && sab.maxByteLength === 32 && sab.growable === true;
+                        })()
+                        """,
+                """
+                        (() => {
+                          const sab = new SharedArrayBuffer(8);
+                          try {
+                            sab.grow(16);
+                            return false;
+                          } catch (e) {
+                            return e instanceof TypeError;
+                          }
+                        })()
+                        """);
     }
 }

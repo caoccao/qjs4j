@@ -35,4 +35,12 @@ public final class SharedArrayBufferConstructor {
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         return JSSharedArrayBuffer.create(context, args);
     }
+
+    /**
+     * get SharedArrayBuffer[@@species]
+     * ES2024 SharedArrayBuffer constructor species getter.
+     */
+    public static JSValue getSpecies(JSContext context, JSValue thisArg, JSValue[] args) {
+        return thisArg;
+    }
 }

@@ -38,12 +38,67 @@ public final class SharedArrayBufferPrototype {
     }
 
     /**
+     * get SharedArrayBuffer.prototype.growable
+     * Returns whether this SharedArrayBuffer is growable.
+     */
+    public static JSValue getGrowable(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSSharedArrayBuffer buffer)) {
+            return context.throwTypeError("SharedArrayBuffer.prototype.growable called on non-SharedArrayBuffer");
+        }
+
+        return JSBoolean.valueOf(buffer.isGrowable());
+    }
+
+    /**
+     * get SharedArrayBuffer.prototype.maxByteLength
+     * Returns the maximum byte length.
+     */
+    public static JSValue getMaxByteLength(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSSharedArrayBuffer buffer)) {
+            return context.throwTypeError("SharedArrayBuffer.prototype.maxByteLength called on non-SharedArrayBuffer");
+        }
+
+        return new JSNumber(buffer.getMaxByteLength());
+    }
+
+    /**
      * get SharedArrayBuffer.prototype[@@toStringTag]
      * ES2017 24.2.4.2
      * Returns "SharedArrayBuffer".
      */
     public static JSValue getToStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
         return new JSString("SharedArrayBuffer");
+    }
+
+    /**
+     * SharedArrayBuffer.prototype.grow(newByteLength)
+     * Grows a growable SharedArrayBuffer to the specified new length.
+     */
+    public static JSValue grow(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSSharedArrayBuffer buffer)) {
+            return context.throwTypeError("SharedArrayBuffer.prototype.grow called on non-SharedArrayBuffer");
+        }
+
+        int newByteLength;
+        try {
+            JSValue lengthArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            long length = JSTypeConversions.toIndex(context, lengthArg);
+            if (length > Integer.MAX_VALUE) {
+                return context.throwRangeError("Invalid array buffer length");
+            }
+            newByteLength = (int) length;
+        } catch (IllegalArgumentException e) {
+            return context.throwRangeError("Invalid array buffer length");
+        }
+
+        try {
+            buffer.grow(newByteLength);
+            return JSUndefined.INSTANCE;
+        } catch (IllegalStateException e) {
+            return context.throwTypeError(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return context.throwRangeError(e.getMessage());
+        }
     }
 
     /**
@@ -60,14 +115,14 @@ public final class SharedArrayBufferPrototype {
 
         // Get begin parameter
         int begin = 0;
-        if (args.length > 0 && args[0] instanceof JSNumber num) {
-            begin = (int) num.value();
+        if (args.length > 0) {
+            begin = JSTypeConversions.toInt32(context, args[0]);
         }
 
         // Get end parameter (default to byteLength)
         int end = byteLength;
-        if (args.length > 1 && args[1] instanceof JSNumber num) {
-            end = (int) num.value();
+        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+            end = JSTypeConversions.toInt32(context, args[1]);
         }
 
         // Perform the slice

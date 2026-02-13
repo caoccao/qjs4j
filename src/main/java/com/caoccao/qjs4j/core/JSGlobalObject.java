@@ -1406,11 +1406,14 @@ public final class JSGlobalObject {
     private void initializeSharedArrayBufferConstructor(JSContext context, JSObject global) {
         // Create SharedArrayBuffer.prototype
         JSObject sharedArrayBufferPrototype = context.createJSObject();
-        sharedArrayBufferPrototype.set("slice", new JSNativeFunction("slice", 2, SharedArrayBufferPrototype::slice));
+        sharedArrayBufferPrototype.definePropertyWritableConfigurable("grow", new JSNativeFunction("grow", 1, SharedArrayBufferPrototype::grow));
+        sharedArrayBufferPrototype.definePropertyWritableConfigurable("slice", new JSNativeFunction("slice", 2, SharedArrayBufferPrototype::slice));
 
         // Define getter properties
         sharedArrayBufferPrototype.defineGetterConfigurable("byteLength", SharedArrayBufferPrototype::getByteLength);
-        sharedArrayBufferPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, SharedArrayBufferPrototype::getToStringTag);
+        sharedArrayBufferPrototype.defineGetterConfigurable("maxByteLength", SharedArrayBufferPrototype::getMaxByteLength);
+        sharedArrayBufferPrototype.defineGetterConfigurable("growable", SharedArrayBufferPrototype::getGrowable);
+        sharedArrayBufferPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("SharedArrayBuffer"));
 
         // Create SharedArrayBuffer constructor as a function
         JSNativeFunction sharedArrayBufferConstructor = new JSNativeFunction(
@@ -1420,9 +1423,10 @@ public final class JSGlobalObject {
                 true,  // isConstructor
                 true   // requiresNew - SharedArrayBuffer() must be called with new
         );
-        sharedArrayBufferConstructor.set("prototype", sharedArrayBufferPrototype);
+        sharedArrayBufferConstructor.definePropertyReadonlyNonConfigurable("prototype", sharedArrayBufferPrototype);
         sharedArrayBufferConstructor.setConstructorType(JSConstructorType.SHARED_ARRAY_BUFFER);
-        sharedArrayBufferPrototype.set("constructor", sharedArrayBufferConstructor);
+        sharedArrayBufferPrototype.definePropertyWritableConfigurable("constructor", sharedArrayBufferConstructor);
+        sharedArrayBufferConstructor.defineGetterConfigurable(JSSymbol.SPECIES, SharedArrayBufferConstructor::getSpecies);
 
         global.definePropertyWritableConfigurable("SharedArrayBuffer", sharedArrayBufferConstructor);
     }

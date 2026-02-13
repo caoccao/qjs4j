@@ -604,17 +604,20 @@ All symbols available as Symbol.* properties and via getWellKnownSymbol() helper
 #### Phase 24.1: SharedArrayBuffer
 - JSSharedArrayBuffer.java: Shared memory buffer for multi-threaded access
   - Uses direct ByteBuffer for efficient sharing across threads
-  - Fixed-length binary data buffer
+  - Supports fixed-length and growable SharedArrayBuffer instances
   - Cannot be detached (unlike ArrayBuffer)
   - slice(begin, end) creates new SharedArrayBuffer with copied bytes
+  - maxByteLength and growable tracking
+  - grow(newByteLength) support with SharedArrayBuffer-only growth semantics
   - isShared() method returns true for identification
   - Thread-safe slice operation with synchronized access
 - SharedArrayBufferConstructor.java: Constructor helper
-  - createSharedArrayBuffer(): Creates buffer with specified byte length
-  - Validates non-negative byte length
-  - TypeError for invalid arguments
+  - Constructor supports options.maxByteLength for growable SAB
+  - SharedArrayBuffer[Symbol.species] getter
+  - Validates length/max length bounds
 - SharedArrayBufferPrototype.java: Prototype methods
-  - byteLength getter: Returns buffer byte length
+  - byteLength/maxByteLength/growable getters
+  - grow(): Grows growable SharedArrayBuffer
   - slice(): Creates copy of byte range
 - GlobalObject integration: initializeSharedArrayBufferConstructor()
 - VM integration: [[SharedArrayBufferConstructor]] marker handling

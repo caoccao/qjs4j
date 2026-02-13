@@ -17,10 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.core.JSNumber;
-import com.caoccao.qjs4j.core.JSSharedArrayBuffer;
-import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,6 +42,26 @@ public class SharedArrayBufferConstructorTest extends BaseJavetTest {
         // Edge case: non-numeric length
         result = JSSharedArrayBuffer.create(context, new JSString("32"));
         assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class, jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(32));
+
+        // Growable case: maxByteLength option
+        result = JSSharedArrayBuffer.create(
+                context,
+                new JSNumber(16),
+                context.createJSObject());
+        assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class, jsSab -> {
+            assertThat(jsSab.getByteLength()).isEqualTo(16);
+            assertThat(jsSab.getMaxByteLength()).isEqualTo(16);
+            assertThat(jsSab.isGrowable()).isFalse();
+        });
+
+        JSObject options = context.createJSObject();
+        options.set("maxByteLength", new JSNumber(64));
+        result = JSSharedArrayBuffer.create(context, new JSNumber(16), options);
+        assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class, jsSab -> {
+            assertThat(jsSab.getByteLength()).isEqualTo(16);
+            assertThat(jsSab.getMaxByteLength()).isEqualTo(64);
+            assertThat(jsSab.isGrowable()).isTrue();
+        });
     }
 
     @Test
@@ -60,5 +77,34 @@ public class SharedArrayBufferConstructorTest extends BaseJavetTest {
                 "new SharedArrayBuffer(10).toString()");
 
         assertErrorWithJavet("SharedArrayBuffer()");
+
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                          const d = Object.getOwnPropertyDescriptor(SharedArrayBuffer, Symbol.species);
+                          return typeof d.get === "function"
+                            && d.set === undefined
+                            && d.enumerable === false
+                            && d.configurable === true
+                            && SharedArrayBuffer[Symbol.species] === SharedArrayBuffer;
+                        })()
+                        """,
+                """
+                        (() => {
+                          const d = Object.getOwnPropertyDescriptor(SharedArrayBuffer, "prototype");
+                          return d.value === SharedArrayBuffer.prototype
+                            && d.writable === false
+                            && d.enumerable === false
+                            && d.configurable === false;
+                        })()
+                        """);
+
+        assertStringWithJavet(
+                """
+                        (() => {
+                          const names = Object.getOwnPropertyNames(SharedArrayBuffer.prototype).sort();
+                          return JSON.stringify(names);
+                        })()
+                        """);
     }
 }
