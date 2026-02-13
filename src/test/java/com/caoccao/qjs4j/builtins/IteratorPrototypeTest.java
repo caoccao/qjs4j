@@ -16,16 +16,28 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 /**
  * Unit tests for IteratorPrototype methods.
  */
-public class IteratorPrototypeTest extends BaseTest {
+public class IteratorPrototypeTest extends BaseJavetTest {
+
+    private JSValue evalError(String code) {
+        try {
+            context.eval(code);
+            fail("Expected JSException for code: " + code);
+            return null;
+        } catch (JSException e) {
+            return e.getErrorValue();
+        }
+    }
 
     @Test
     public void testArrayEntries() {
@@ -135,6 +147,50 @@ public class IteratorPrototypeTest extends BaseTest {
                     assertThat(name.value()).isEqualTo("TypeError"));
         });
         assertThat(context.getPendingException()).isNotNull();
+    }
+
+    @Test
+    void testIteratorHelperErrorPaths() {
+        assertTypeError(evalError("Iterator.from([]).map(1)"));
+        assertTypeError(evalError("Iterator.from([]).filter(1)"));
+        assertTypeError(evalError("Iterator.from([]).flatMap(1)"));
+        assertRangeError(evalError("Iterator.from([1]).drop(-1)"));
+        assertRangeError(evalError("Iterator.from([1]).take(-1)"));
+        assertTypeError(evalError("Iterator.from([]).reduce((a, b) => a + b)"));
+    }
+
+    @Test
+    void testIteratorHelpersBasicTransformations() {
+        assertStringWithJavet(
+                "Iterator.from([1, 2, 3]).map(v => v * 2).toArray().join(',');",
+                "Iterator.from([1, 2, 3, 4]).filter(v => v % 2 === 0).toArray().join(',');",
+                "Iterator.from([1, 2, 3, 4]).drop(2).toArray().join(',');",
+                "Iterator.from([1, 2, 3, 4]).take(2).toArray().join(',');",
+                "Iterator.from([1, 2]).flatMap(v => [v, v + 10]).toArray().join(',');",
+                "Iterator.from('ab').toArray().join(',');");
+    }
+
+    @Test
+    void testIteratorHelpersEdgeErrors() {
+        assertStringWithJavet(
+                "(() => { try { Iterator.from(1); return 'OK'; } catch (e) { return e.name; } })();",
+                "(() => { try { Iterator.from([1]).drop(-1); return 'OK'; } catch (e) { return e.name; } })();",
+                "(() => { try { Iterator.from([1]).drop(NaN); return 'OK'; } catch (e) { return e.name; } })();",
+                "(() => { try { Iterator.from([1]).take(-1); return 'OK'; } catch (e) { return e.name; } })();",
+                "(() => { try { Iterator.from([]).reduce((a, b) => a + b); return 'OK'; } catch (e) { return e.name; } })();",
+                "(() => { try { Iterator.prototype.map.call(1, x => x); return 'OK'; } catch (e) { return e.name; } })();");
+    }
+
+    @Test
+    void testIteratorHelpersTerminalOperations() {
+        assertBooleanWithJavet(
+                "Iterator.from([2, 4, 6]).every(v => v % 2 === 0);",
+                "Iterator.from([1, 3, 4]).some(v => v % 2 === 0);");
+        assertIntegerWithJavet(
+                "Iterator.from([1, 2, 3]).reduce((a, b) => a + b, 0);",
+                "Iterator.from([1, 2, 3]).reduce((a, b) => a + b);");
+        assertStringWithJavet(
+                "String(Iterator.from([1, 3, 4]).find(v => v % 2 === 0));");
     }
 
     @Test

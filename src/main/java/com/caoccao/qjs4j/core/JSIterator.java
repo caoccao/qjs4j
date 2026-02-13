@@ -24,6 +24,7 @@ package com.caoccao.qjs4j.core;
  * that returns an object with two properties: value and done.
  */
 public class JSIterator extends JSObject {
+    public static final String NAME = "Iterator";
     private final JSContext context;
     private final IteratorFunction iteratorFunction;
     private boolean exhausted;
@@ -32,10 +33,18 @@ public class JSIterator extends JSObject {
      * Create an iterator with the given iteration logic.
      */
     public JSIterator(JSContext context, IteratorFunction iteratorFunction) {
+        this(context, iteratorFunction, null);
+    }
+
+    /**
+     * Create an iterator with the given iteration logic and optional toStringTag.
+     */
+    public JSIterator(JSContext context, IteratorFunction iteratorFunction, String toStringTag) {
         super();
         this.context = context;
         this.iteratorFunction = iteratorFunction;
         this.exhausted = false;
+        context.transferPrototype(this, NAME);
 
         // Set up 'next' method as a property (required by iterator protocol)
         JSNativeFunction nextMethod = new JSNativeFunction("next", 0, (childContext, thisArg, args) -> {
@@ -47,8 +56,14 @@ public class JSIterator extends JSObject {
         this.set("next", nextMethod);
 
         // Make the iterator iterable by adding [Symbol.iterator] method
-        JSNativeFunction iteratorMethod = new JSNativeFunction("@@iterator", 0, (childContext, thisArg, args) -> this);
+        JSNativeFunction iteratorMethod = new JSNativeFunction("@@iterator", 0, (childContext, thisArg, args) -> thisArg);
         this.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), iteratorMethod);
+
+        if (toStringTag != null) {
+            defineProperty(
+                    PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                    PropertyDescriptor.dataDescriptor(new JSString(toStringTag), false, false, true));
+        }
     }
 
     /**
@@ -62,7 +77,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, value);
             }
             return IteratorResult.done(context);
-        });
+        }, "Array Iterator");
     }
 
     /**
@@ -79,7 +94,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, pair);
             }
             return IteratorResult.done(context);
-        });
+        }, "Map Iterator");
     }
 
     /**
@@ -93,7 +108,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, key);
             }
             return IteratorResult.done(context);
-        });
+        }, "Map Iterator");
     }
 
     /**
@@ -107,7 +122,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, value);
             }
             return IteratorResult.done(context);
-        });
+        }, "Map Iterator");
     }
 
     /**
@@ -125,7 +140,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, pair);
             }
             return IteratorResult.done(context);
-        });
+        }, "Set Iterator");
     }
 
     /**
@@ -139,7 +154,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, value);
             }
             return IteratorResult.done(context);
-        });
+        }, "Set Iterator");
     }
 
     /**
@@ -157,7 +172,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, new JSString(character));
             }
             return IteratorResult.done(context);
-        });
+        }, "String Iterator");
     }
 
     /**

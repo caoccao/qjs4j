@@ -17,12 +17,27 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 /**
  * Unit tests for Iterator constructor static methods.
  */
 public class IteratorConstructorTest extends BaseJavetTest {
+    private JSValue evalError(String code) {
+        try {
+            context.eval(code);
+            fail("Expected JSException for code: " + code);
+            return null;
+        } catch (JSException e) {
+            return e.getErrorValue();
+        }
+    }
+
     @Test
     void testIteratorCannotBeConstructedDirectly() {
         assertErrorWithJavet(
@@ -31,9 +46,49 @@ public class IteratorConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    void testIteratorConcat() {
+        assertThat(context.eval("typeof Iterator.concat").toJavaObject()).isEqualTo("function");
+        assertThat(context.eval("Iterator.concat([1, 2], new Set([3, 4])).toArray().join(',')").toJavaObject())
+                .isEqualTo("1,2,3,4");
+        assertThat(context.eval("Object.prototype.toString.call(Iterator.concat([1]))").toJavaObject())
+                .isEqualTo("[object Iterator Concat]");
+    }
+
+    @Test
+    void testIteratorConcatErrors() {
+        assertTypeError(evalError("Iterator.concat(1)"));
+        assertTypeError(evalError("Iterator.concat({})"));
+        assertTypeError(evalError(
+                "(() => { let it; const src = { [Symbol.iterator]() { return { next() { return it.next(); } }; } }; it = Iterator.concat(src); it.next(); })();"));
+    }
+
+    @Test
     void testIteratorName() throws Exception {
         assertStringWithJavet(
                 "Iterator.name");
+    }
+
+    @Test
+    void testIteratorPrototypeConstructorDescriptor() {
+        assertStringWithJavet(
+                "(() => { const d = Object.getOwnPropertyDescriptor(Iterator.prototype, 'constructor'); return typeof d.get + ',' + typeof d.set + ',' + d.enumerable + ',' + d.configurable; })();");
+    }
+
+    @Test
+    void testIteratorRegistrationSemantics() {
+        assertStringWithJavet(
+                "Object.prototype.toString.call(Iterator.prototype);",
+                "Object.prototype.toString.call(Iterator.from([1]).map(v => v));");
+        assertBooleanWithJavet(
+                "(() => { try { Iterator.prototype.constructor = 1; return false; } catch (e) { return e instanceof TypeError; } })();");
+    }
+
+    @Test
+    void testIteratorToStringTagSemantics() {
+        assertThat(context.eval("(() => { try { Iterator.prototype[Symbol.toStringTag] = 'X'; return 'OK'; } catch (e) { return e.name; } })();").toJavaObject())
+                .isEqualTo("TypeError");
+        assertThat(context.eval("(() => { const it = Iterator.from([1]).map(v => v); it[Symbol.toStringTag] = 'X'; return Object.prototype.toString.call(it); })();").toJavaObject())
+                .isEqualTo("[object Iterator Helper]");
     }
 
     @Test

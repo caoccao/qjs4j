@@ -110,6 +110,13 @@ This document tracks the progress of migrating QuickJS functionality to pure Jav
 - JSIterator.java: Implements iterator protocol with next()
 - IteratorResult: {value, done} object structure
 - Factory methods for Array, Map, Set, String iterators
+- Iterator constructor registration aligned with QuickJS:
+  - Global `Iterator` with `from()` and `concat()`
+  - `Iterator.prototype.constructor` accessor semantics
+  - `Iterator.prototype[Symbol.toStringTag]` getter/setter semantics
+- Iterator helper methods implemented:
+  - `drop`, `filter`, `flatMap`, `map`, `take`
+  - `every`, `find`, `forEach`, `some`, `reduce`, `toArray`
 - Symbol.iterator integration:
   - Array.prototype: values(), keys(), entries(), [Symbol.iterator]
   - String.prototype: [Symbol.iterator] for Unicode-aware iteration

@@ -100,6 +100,9 @@ This document provides a comprehensive list of all JavaScript features implement
 
 ### Iterators & Generators (ES2015)
 - **Iterator protocol**: Symbol.iterator, next(), {value, done}
+- **Iterator constructor**: global `Iterator`, abstract construction checks
+- **Iterator static methods**: `Iterator.from()`, `Iterator.concat()`
+- **Iterator helper methods**: `drop()`, `filter()`, `flatMap()`, `map()`, `take()`, `every()`, `find()`, `forEach()`, `some()`, `reduce()`, `toArray()`
 - **Generator functions**: function* syntax
 - **yield expressions**: yield, yield*
 - **Generator methods**: next(), return(), throw()

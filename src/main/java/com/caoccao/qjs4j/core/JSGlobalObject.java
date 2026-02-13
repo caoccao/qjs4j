@@ -793,7 +793,7 @@ public final class JSGlobalObject {
      */
     private void initializeGeneratorPrototype(JSContext context, JSObject global) {
         // Get Iterator.prototype for Generator.prototype to inherit from
-        JSObject iteratorConstructor = (JSObject) global.get("Iterator");
+        JSObject iteratorConstructor = (JSObject) global.get(JSIterator.NAME);
         JSObject iteratorPrototype = (JSObject) iteratorConstructor.get("prototype");
 
         // Create Generator.prototype inheriting from Iterator.prototype
@@ -946,40 +946,78 @@ public final class JSGlobalObject {
      * Based on ECMAScript 2024 Iterator specification.
      */
     private void initializeIteratorConstructor(JSContext context, JSObject global) {
-        // Create Iterator.prototype with helper methods
         JSObject iteratorPrototype = context.createJSObject();
 
-        // Iterator.prototype methods (ES2024)
-        // Note: These are placeholders. Full implementation requires iterator helper support.
-        iteratorPrototype.set("drop", new JSNativeFunction("drop", 1, IteratorPrototype::drop));
-        iteratorPrototype.set("filter", new JSNativeFunction("filter", 1, IteratorPrototype::filter));
-        iteratorPrototype.set("flatMap", new JSNativeFunction("flatMap", 1, IteratorPrototype::flatMap));
-        iteratorPrototype.set("map", new JSNativeFunction("map", 1, IteratorPrototype::map));
-        iteratorPrototype.set("take", new JSNativeFunction("take", 1, IteratorPrototype::take));
-        iteratorPrototype.set("every", new JSNativeFunction("every", 1, IteratorPrototype::every));
-        iteratorPrototype.set("find", new JSNativeFunction("find", 1, IteratorPrototype::find));
-        iteratorPrototype.set("forEach", new JSNativeFunction("forEach", 1, IteratorPrototype::forEach));
-        iteratorPrototype.set("some", new JSNativeFunction("some", 1, IteratorPrototype::some));
-        iteratorPrototype.set("reduce", new JSNativeFunction("reduce", 1, IteratorPrototype::reduce));
-        iteratorPrototype.set("toArray", new JSNativeFunction("toArray", 0, IteratorPrototype::toArray));
+        iteratorPrototype.definePropertyWritableConfigurable("drop", new JSNativeFunction("drop", 1, IteratorPrototype::drop));
+        iteratorPrototype.definePropertyWritableConfigurable("filter", new JSNativeFunction("filter", 1, IteratorPrototype::filter));
+        iteratorPrototype.definePropertyWritableConfigurable("flatMap", new JSNativeFunction("flatMap", 1, IteratorPrototype::flatMap));
+        iteratorPrototype.definePropertyWritableConfigurable("map", new JSNativeFunction("map", 1, IteratorPrototype::map));
+        iteratorPrototype.definePropertyWritableConfigurable("take", new JSNativeFunction("take", 1, IteratorPrototype::take));
+        iteratorPrototype.definePropertyWritableConfigurable("every", new JSNativeFunction("every", 1, IteratorPrototype::every));
+        iteratorPrototype.definePropertyWritableConfigurable("find", new JSNativeFunction("find", 1, IteratorPrototype::find));
+        iteratorPrototype.definePropertyWritableConfigurable("forEach", new JSNativeFunction("forEach", 1, IteratorPrototype::forEach));
+        iteratorPrototype.definePropertyWritableConfigurable("some", new JSNativeFunction("some", 1, IteratorPrototype::some));
+        iteratorPrototype.definePropertyWritableConfigurable("reduce", new JSNativeFunction("reduce", 1, IteratorPrototype::reduce));
+        iteratorPrototype.definePropertyWritableConfigurable("toArray", new JSNativeFunction("toArray", 0, IteratorPrototype::toArray));
+        iteratorPrototype.definePropertyWritableConfigurable(JSSymbol.ITERATOR, new JSNativeFunction("[Symbol.iterator]", 0, (childContext, thisArg, args) -> thisArg));
 
-        // Iterator.prototype[Symbol.iterator] returns this
-        iteratorPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
-                new JSNativeFunction("[Symbol.iterator]", 0, (childContext, thisArg, args) -> thisArg));
+        JSNativeFunction iteratorConstructor = new JSNativeFunction(JSIterator.NAME, 0, IteratorConstructor::call, true, true);
+        iteratorConstructor.definePropertyWritableConfigurable("prototype", iteratorPrototype);
+        iteratorConstructor.definePropertyWritableConfigurable("from", new JSNativeFunction("from", 1, IteratorPrototype::from));
+        iteratorConstructor.definePropertyWritableConfigurable("concat", new JSNativeFunction("concat", 0, IteratorPrototype::concat));
 
-        // Create Iterator constructor as JSNativeFunction
-        // Iterator is an abstract class - it requires 'new' but throws when constructed directly
-        JSNativeFunction iteratorConstructor = new JSNativeFunction("Iterator", 0, IteratorConstructor::call, true, true);
-        iteratorConstructor.set("prototype", iteratorPrototype);
+        JSNativeFunction constructorAccessor = new JSNativeFunction("constructor", 0, (childContext, thisArg, args) -> {
+            if (args.length > 0) {
+                if (!(args[0] instanceof JSObject valueObject)) {
+                    return childContext.throwTypeError("not an object");
+                }
+                if (!(thisArg instanceof JSObject thisObject)) {
+                    return childContext.throwTypeError("not an object");
+                }
+                thisObject.defineProperty(
+                        PropertyKey.fromString("constructor"),
+                        PropertyDescriptor.dataDescriptor(valueObject, true, false, true));
+                return JSUndefined.INSTANCE;
+            }
+            return iteratorConstructor;
+        });
+        iteratorPrototype.defineProperty(
+                PropertyKey.fromString("constructor"),
+                PropertyDescriptor.accessorDescriptor(constructorAccessor, constructorAccessor, false, true));
 
-        // Iterator static methods (ES2024)
-        iteratorConstructor.set("from", new JSNativeFunction("from", 1, IteratorPrototype::from));
+        JSNativeFunction toStringTagGetter = new JSNativeFunction(
+                "get [Symbol.toStringTag]",
+                0,
+                (childContext, thisArg, args) -> new JSString(JSIterator.NAME),
+                false);
+        JSNativeFunction toStringTagSetter = new JSNativeFunction(
+                "set [Symbol.toStringTag]",
+                1,
+                (childContext, thisArg, args) -> {
+                    if (!(thisArg instanceof JSObject thisObject)) {
+                        return childContext.throwTypeError("not an object");
+                    }
+                    if (thisObject == iteratorPrototype) {
+                        return childContext.throwTypeError("Cannot assign to read only property");
+                    }
+                    JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                    PropertyKey toStringTagKey = PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG);
+                    PropertyDescriptor descriptor = thisObject.getOwnPropertyDescriptor(toStringTagKey);
+                    if (descriptor != null) {
+                        thisObject.set(toStringTagKey, value, childContext);
+                    } else {
+                        thisObject.defineProperty(
+                                toStringTagKey,
+                                PropertyDescriptor.dataDescriptor(value, true, true, true));
+                    }
+                    return JSUndefined.INSTANCE;
+                },
+                false);
+        iteratorPrototype.defineProperty(
+                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                PropertyDescriptor.accessorDescriptor(toStringTagGetter, toStringTagSetter, false, true));
 
-        // Set Iterator.prototype.constructor
-        iteratorPrototype.set("constructor", iteratorConstructor);
-
-        // Add Iterator to global object
-        global.definePropertyWritableConfigurable("Iterator", iteratorConstructor);
+        global.definePropertyWritableConfigurable(JSIterator.NAME, iteratorConstructor);
     }
 
     /**
