@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -49,15 +51,24 @@ public final class JSPromise extends JSObject {
         }
         // Create Promise object
         JSPromise jsPromise = new JSPromise();
+        final ResolveState resolveState = new ResolveState();
         // Create resolve and reject functions
         JSNativeFunction resolveFunc = new JSNativeFunction("resolve", 1,
                 (childContext, thisArg, funcArgs) -> {
+                    if (resolveState.alreadyResolved) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    resolveState.alreadyResolved = true;
                     JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                    jsPromise.fulfill(value);
+                    jsPromise.resolve(childContext, value);
                     return JSUndefined.INSTANCE;
                 });
         JSNativeFunction rejectFunc = new JSNativeFunction("reject", 1,
                 (childContext, thisArg, funcArgs) -> {
+                    if (resolveState.alreadyResolved) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    resolveState.alreadyResolved = true;
                     JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
                     jsPromise.reject(reason);
                     return JSUndefined.INSTANCE;
@@ -66,9 +77,25 @@ public final class JSPromise extends JSObject {
         try {
             JSValue[] executorArgs = new JSValue[]{resolveFunc, rejectFunc};
             executor.call(context, JSUndefined.INSTANCE, executorArgs);
+            if (context.hasPendingException()) {
+                JSValue error = context.getPendingException();
+                context.clearPendingException();
+                if (!resolveState.alreadyResolved) {
+                    resolveState.alreadyResolved = true;
+                    jsPromise.reject(error);
+                }
+            }
+        } catch (JSException e) {
+            if (!resolveState.alreadyResolved) {
+                resolveState.alreadyResolved = true;
+                jsPromise.reject(e.getErrorValue());
+            }
         } catch (Exception e) {
             // If executor throws, reject the promise
-            jsPromise.reject(new JSString("Error in Promise executor: " + e.getMessage()));
+            if (!resolveState.alreadyResolved) {
+                resolveState.alreadyResolved = true;
+                jsPromise.reject(new JSString("Error in Promise executor: " + e.getMessage()));
+            }
         }
         context.transferPrototype(jsPromise, NAME);
         return jsPromise;
@@ -152,6 +179,89 @@ public final class JSPromise extends JSObject {
         rejectReactions.clear();
     }
 
+    /**
+     * Resolve the promise using the Promise Resolution Procedure.
+     */
+    public void resolve(JSContext context, JSValue resolution) {
+        if (state != PromiseState.PENDING) {
+            return;
+        }
+
+        if (resolution == this) {
+            JSValue error = context.throwTypeError("promise self resolution");
+            context.clearPendingException();
+            reject(error);
+            return;
+        }
+
+        if (resolution instanceof JSPromise resolvedPromise) {
+            resolvedPromise.addReactions(
+                    new ReactionRecord(null, this, context),
+                    new ReactionRecord(null, this, context));
+            return;
+        }
+
+        if (!(resolution instanceof JSObject resolutionObject)) {
+            fulfill(resolution);
+            return;
+        }
+
+        JSValue thenValue = resolutionObject.get("then");
+        if (context.hasPendingException()) {
+            JSValue error = context.getPendingException();
+            context.clearPendingException();
+            reject(error);
+            return;
+        }
+        if (!(thenValue instanceof JSFunction thenFunction)) {
+            fulfill(resolution);
+            return;
+        }
+
+        ResolveState resolveState = new ResolveState();
+        context.enqueueMicrotask(() -> {
+            JSNativeFunction resolveFunc = new JSNativeFunction("resolve", 1,
+                    (childContext, thisArg, funcArgs) -> {
+                        if (resolveState.alreadyResolved) {
+                            return JSUndefined.INSTANCE;
+                        }
+                        resolveState.alreadyResolved = true;
+                        JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                        resolve(context, value);
+                        return JSUndefined.INSTANCE;
+                    });
+            JSNativeFunction rejectFunc = new JSNativeFunction("reject", 1,
+                    (childContext, thisArg, funcArgs) -> {
+                        if (resolveState.alreadyResolved) {
+                            return JSUndefined.INSTANCE;
+                        }
+                        resolveState.alreadyResolved = true;
+                        JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                        reject(reason);
+                        return JSUndefined.INSTANCE;
+                    });
+            try {
+                thenFunction.call(context, resolutionObject, new JSValue[]{resolveFunc, rejectFunc});
+                if (context.hasPendingException() && !resolveState.alreadyResolved) {
+                    JSValue error = context.getPendingException();
+                    context.clearPendingException();
+                    resolveState.alreadyResolved = true;
+                    reject(error);
+                }
+            } catch (JSException e) {
+                if (!resolveState.alreadyResolved) {
+                    resolveState.alreadyResolved = true;
+                    reject(e.getErrorValue());
+                }
+            } catch (Exception e) {
+                if (!resolveState.alreadyResolved) {
+                    resolveState.alreadyResolved = true;
+                    reject(new JSString("Error in promise resolution: " + e.getMessage()));
+                }
+            }
+        });
+    }
+
     @Override
     public String toString() {
         return "[object Promise]";
@@ -168,27 +278,22 @@ public final class JSPromise extends JSObject {
                 try {
                     JSValue[] args = new JSValue[]{value};
                     JSValue handlerResult = reaction.handler.call(reaction.context, JSUndefined.INSTANCE, args);
-
-                    // If the handler returned a value, fulfill the chained promise
-                    if (reaction.promise != null) {
-                        if (handlerResult instanceof JSPromise returnedPromise) {
-                            // If handler returns a promise, chain it
-                            returnedPromise.addReactions(
-                                    new ReactionRecord(null, reaction.promise, reaction.context) {
-                                        {
-                                            // When the returned promise fulfills, fulfill the chained promise
-                                        }
-                                    },
-                                    new ReactionRecord(null, reaction.promise, reaction.context) {
-                                        {
-                                            // When the returned promise rejects, reject the chained promise
-                                        }
-                                    }
-                            );
-                        } else {
-                            // Normal value, fulfill the chained promise
-                            reaction.promise.fulfill(handlerResult);
+                    if (reaction.context.hasPendingException()) {
+                        JSValue error = reaction.context.getPendingException();
+                        reaction.context.clearPendingException();
+                        if (reaction.promise != null) {
+                            reaction.promise.reject(error);
                         }
+                        return;
+                    }
+
+                    // If the handler returned a value, resolve the chained promise.
+                    if (reaction.promise != null) {
+                        reaction.promise.resolve(reaction.context, handlerResult);
+                    }
+                } catch (JSException e) {
+                    if (reaction.promise != null) {
+                        reaction.promise.reject(e.getErrorValue());
                     }
                 } catch (Exception e) {
                     // If handler throws, reject the chained promise
@@ -219,17 +324,12 @@ public final class JSPromise extends JSObject {
     }
 
     /**
-     * A reaction record stores a callback and the promise it will affect.
-     */
-    public static class ReactionRecord {
-        public final JSContext context;
-        public final JSFunction handler;
-        public final JSPromise promise;
+         * A reaction record stores a callback and the promise it will affect.
+         */
+        public record ReactionRecord(JSFunction handler, JSPromise promise, JSContext context) {
+    }
 
-        public ReactionRecord(JSFunction handler, JSPromise promise, JSContext context) {
-            this.handler = handler;
-            this.promise = promise;
-            this.context = context;
-        }
+    private static final class ResolveState {
+        private boolean alreadyResolved;
     }
 }

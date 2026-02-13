@@ -108,6 +108,7 @@ This document tracks the progress of migrating QuickJS functionality to pure Jav
   - Promise.race() - settles on first completion
   - Promise.allSettled() - waits for all with status tracking
   - Promise.any() - fulfills on first success or rejects with AggregateError
+  - Promise.try() / Promise.withResolvers()
 
 #### Phase 12.4: Promise VM Integration
 - VM constructor handling with executor function

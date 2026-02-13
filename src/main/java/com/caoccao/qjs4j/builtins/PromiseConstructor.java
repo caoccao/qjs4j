@@ -17,323 +17,235 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSException;
+
+import java.util.Arrays;
 
 /**
  * Implementation of Promise constructor and static methods.
- * Based on ES2020 Promise specification (simplified).
+ * Based on QuickJS Promise behavior.
  */
 public final class PromiseConstructor {
 
     /**
      * Promise.all(iterable)
-     * ES2020 25.6.4.1
-     * Returns a Promise that fulfills when all promises fulfill, or rejects when any promise rejects.
      */
     public static JSValue all(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Promise.all requires an iterable");
+        if (!(thisArg instanceof JSObject)) {
+            return context.throwTypeError("Promise.all called on non-object");
         }
-
-        // Convert iterable to array
-        JSArray array;
-        if (args[0] instanceof JSArray jsArray) {
-            array = jsArray;
-        } else if (JSIteratorHelper.isIterable(args[0])) {
-            array = JSIteratorHelper.toArray(context, args[0]);
-        } else {
-            return context.throwTypeError("Promise.all requires an iterable");
+        JSArray array = toArray(context, args, "Promise.all");
+        if (array == null) {
+            return JSUndefined.INSTANCE;
         }
-
         int length = (int) array.getLength();
-
-        // Empty array resolves immediately
-        if (length == 0) {
-            JSPromise promise = context.createJSPromise();
-            promise.fulfill(context.createJSArray());
-            return promise;
-        }
-
         JSPromise resultPromise = context.createJSPromise();
         JSArray results = context.createJSArray();
-        final int[] remaining = {length}; // How many promises left to resolve
-
-        for (int i = 0; i < length; i++) {
-            final int index = i;
-            JSValue element = array.get(i);
-
-            // Convert to promise if needed
-            if (element instanceof JSPromise elementPromise) {
-                // Add reaction to track completion
-                elementPromise.addReactions(
-                        new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
-                                    results.set(index, funcArgs[0]);
-                                    remaining[0]--;
-                                    if (remaining[0] == 0) {
-                                        resultPromise.fulfill(results);
-                                    }
-                                    return JSUndefined.INSTANCE;
-                                }),
-                                null,
-                                context
-                        ),
-                        new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
-                                    resultPromise.reject(funcArgs[0]);
-                                    return JSUndefined.INSTANCE;
-                                }),
-                                null,
-                                context
-                        )
-                );
-            } else {
-                // Not a promise, treat as already resolved
-                results.set(index, element);
-                remaining[0]--;
-                if (remaining[0] == 0) {
-                    resultPromise.fulfill(results);
-                }
-            }
+        if (length == 0) {
+            resultPromise.fulfill(results);
+            return resultPromise;
         }
 
+        final int[] remaining = {length};
+        for (int i = 0; i < length; i++) {
+            final int index = i;
+            JSPromise elementPromise = toPromise(context, thisArg, array.get(i));
+            if (elementPromise == null) {
+                return JSUndefined.INSTANCE;
+            }
+            elementPromise.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
+                                JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                                results.set(index, value);
+                                if (--remaining[0] == 0) {
+                                    resultPromise.fulfill(results);
+                                }
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
+                                JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                                resultPromise.reject(reason);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context));
+        }
         return resultPromise;
     }
 
     /**
      * Promise.allSettled(iterable)
-     * ES2020 25.6.4.2
-     * Returns a Promise that fulfills when all promises have settled (fulfilled or rejected).
      */
     public static JSValue allSettled(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Promise.allSettled requires an iterable");
+        if (!(thisArg instanceof JSObject)) {
+            return context.throwTypeError("Promise.allSettled called on non-object");
         }
-
-        // Convert iterable to array
-        JSArray array;
-        if (args[0] instanceof JSArray jsArray) {
-            array = jsArray;
-        } else if (JSIteratorHelper.isIterable(args[0])) {
-            array = JSIteratorHelper.toArray(context, args[0]);
-        } else {
-            return context.throwTypeError("Promise.allSettled requires an iterable");
+        JSArray array = toArray(context, args, "Promise.allSettled");
+        if (array == null) {
+            return JSUndefined.INSTANCE;
         }
-
         int length = (int) array.getLength();
-
-        // Empty array resolves immediately
-        if (length == 0) {
-            JSPromise promise = context.createJSPromise();
-            promise.fulfill(context.createJSArray());
-            return promise;
-        }
-
         JSPromise resultPromise = context.createJSPromise();
         JSArray results = context.createJSArray();
-        final int[] remaining = {length};
-
-        for (int i = 0; i < length; i++) {
-            final int index = i;
-            JSValue element = array.get(i);
-
-            if (element instanceof JSPromise elementPromise) {
-                // Add reactions for both fulfill and reject
-                elementPromise.addReactions(
-                        new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
-                                    JSObject result = context.createJSObject();
-                                    result.set("status", new JSString("fulfilled"));
-                                    result.set("value", funcArgs[0]);
-                                    results.set(index, result);
-                                    remaining[0]--;
-                                    if (remaining[0] == 0) {
-                                        resultPromise.fulfill(results);
-                                    }
-                                    return JSUndefined.INSTANCE;
-                                }),
-                                null,
-                                context
-                        ),
-                        new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
-                                    JSObject result = context.createJSObject();
-                                    result.set("status", new JSString("rejected"));
-                                    result.set("reason", funcArgs[0]);
-                                    results.set(index, result);
-                                    remaining[0]--;
-                                    if (remaining[0] == 0) {
-                                        resultPromise.fulfill(results);
-                                    }
-                                    return JSUndefined.INSTANCE;
-                                }),
-                                null,
-                                context
-                        )
-                );
-            } else {
-                // Not a promise, treat as already fulfilled
-                JSObject result = context.createJSObject();
-                result.set("status", new JSString("fulfilled"));
-                result.set("value", element);
-                results.set(index, result);
-                remaining[0]--;
-                if (remaining[0] == 0) {
-                    resultPromise.fulfill(results);
-                }
-            }
+        if (length == 0) {
+            resultPromise.fulfill(results);
+            return resultPromise;
         }
 
+        final int[] remaining = {length};
+        for (int i = 0; i < length; i++) {
+            final int index = i;
+            JSPromise elementPromise = toPromise(context, thisArg, array.get(i));
+            if (elementPromise == null) {
+                return JSUndefined.INSTANCE;
+            }
+            elementPromise.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
+                                JSObject result = childContext.createJSObject();
+                                result.set("status", new com.caoccao.qjs4j.core.JSString("fulfilled"));
+                                result.set("value", funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE);
+                                results.set(index, result);
+                                if (--remaining[0] == 0) {
+                                    resultPromise.fulfill(results);
+                                }
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
+                                JSObject result = childContext.createJSObject();
+                                result.set("status", new com.caoccao.qjs4j.core.JSString("rejected"));
+                                result.set("reason", funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE);
+                                results.set(index, result);
+                                if (--remaining[0] == 0) {
+                                    resultPromise.fulfill(results);
+                                }
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context));
+        }
         return resultPromise;
     }
 
     /**
      * Promise.any(iterable)
-     * ES2021 25.6.4.3
-     * Returns a Promise that fulfills when any promise fulfills, or rejects when all promises reject.
      */
     public static JSValue any(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Promise.any requires an iterable");
+        if (!(thisArg instanceof JSObject)) {
+            return context.throwTypeError("Promise.any called on non-object");
         }
-
-        // Convert iterable to array
-        JSArray array;
-        if (args[0] instanceof JSArray jsArray) {
-            array = jsArray;
-        } else if (JSIteratorHelper.isIterable(args[0])) {
-            array = JSIteratorHelper.toArray(context, args[0]);
-        } else {
-            return context.throwTypeError("Promise.any requires an iterable");
+        JSArray array = toArray(context, args, "Promise.any");
+        if (array == null) {
+            return JSUndefined.INSTANCE;
         }
-
         int length = (int) array.getLength();
-
-        // Empty array rejects with AggregateError
-        if (length == 0) {
-            JSPromise promise = context.createJSPromise();
-            promise.reject(new JSString("AggregateError: All promises were rejected"));
-            return promise;
-        }
-
         JSPromise resultPromise = context.createJSPromise();
         JSArray errors = context.createJSArray();
-        final int[] remaining = {length};
-
-        for (int i = 0; i < length; i++) {
-            final int index = i;
-            JSValue element = array.get(i);
-
-            if (element instanceof JSPromise elementPromise) {
-                elementPromise.addReactions(
-                        new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
-                                    resultPromise.fulfill(funcArgs[0]);
-                                    return JSUndefined.INSTANCE;
-                                }),
-                                null,
-                                context
-                        ),
-                        new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
-                                    errors.set(index, funcArgs[0]);
-                                    remaining[0]--;
-                                    if (remaining[0] == 0) {
-                                        resultPromise.reject(new JSString("AggregateError: All promises were rejected"));
-                                    }
-                                    return JSUndefined.INSTANCE;
-                                }),
-                                null,
-                                context
-                        )
-                );
-            } else {
-                // Not a promise, fulfill immediately
-                resultPromise.fulfill(element);
-                break;
-            }
+        if (length == 0) {
+            resultPromise.reject(JSAggregateError.create(context, errors));
+            return resultPromise;
         }
 
+        final int[] remaining = {length};
+        for (int i = 0; i < length; i++) {
+            final int index = i;
+            JSPromise elementPromise = toPromise(context, thisArg, array.get(i));
+            if (elementPromise == null) {
+                return JSUndefined.INSTANCE;
+            }
+            elementPromise.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
+                                JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                                resultPromise.fulfill(value);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
+                                JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                                errors.set(index, reason);
+                                if (--remaining[0] == 0) {
+                                    resultPromise.reject(JSAggregateError.create(context, errors));
+                                }
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context));
+        }
         return resultPromise;
     }
 
     /**
      * Promise constructor call handler.
-     * Creates a new Promise object.
-     *
-     * @param context The execution context
-     * @param thisArg The this value (unused for constructor)
-     * @param args    The arguments array (executor function)
-     * @return New Promise object
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         return JSPromise.create(context, args);
     }
 
     /**
+     * get Promise[@@species]
+     */
+    public static JSValue getSpecies(JSContext context, JSValue thisArg, JSValue[] args) {
+        return thisArg;
+    }
+
+    /**
      * Promise.race(iterable)
-     * ES2020 25.6.4.5
-     * Returns a Promise that settles as soon as any promise in the iterable settles.
      */
     public static JSValue race(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Promise.race requires an iterable");
+        if (!(thisArg instanceof JSObject)) {
+            return context.throwTypeError("Promise.race called on non-object");
+        }
+        JSArray array = toArray(context, args, "Promise.race");
+        if (array == null) {
+            return JSUndefined.INSTANCE;
         }
 
-        // Convert iterable to array
-        JSArray array;
-        if (args[0] instanceof JSArray jsArray) {
-            array = jsArray;
-        } else if (JSIteratorHelper.isIterable(args[0])) {
-            array = JSIteratorHelper.toArray(context, args[0]);
-        } else {
-            return context.throwTypeError("Promise.race requires an iterable");
-        }
-
-        int length = (int) array.getLength();
         JSPromise resultPromise = context.createJSPromise();
-
+        int length = (int) array.getLength();
         for (int i = 0; i < length; i++) {
-            JSValue element = array.get(i);
-
-            if (element instanceof JSPromise elementPromise) {
-                // Add reaction to settle on first completion
-                elementPromise.addReactions(
-                        new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
-                                    resultPromise.fulfill(funcArgs[0]);
-                                    return JSUndefined.INSTANCE;
-                                }),
-                                null,
-                                context
-                        ),
-                        new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
-                                    resultPromise.reject(funcArgs[0]);
-                                    return JSUndefined.INSTANCE;
-                                }),
-                                null,
-                                context
-                        )
-                );
-            } else {
-                // Not a promise, fulfill immediately
-                resultPromise.fulfill(element);
-                break;
+            JSPromise elementPromise = toPromise(context, thisArg, array.get(i));
+            if (elementPromise == null) {
+                return JSUndefined.INSTANCE;
             }
+            elementPromise.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
+                                JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                                resultPromise.fulfill(value);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
+                                JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
+                                resultPromise.reject(reason);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context));
         }
-
         return resultPromise;
     }
 
     /**
      * Promise.reject(reason)
-     * ES2020 25.6.4.4
-     * Returns a Promise that is rejected with the given reason.
      */
     public static JSValue reject(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSObject)) {
+            return context.throwTypeError("Promise.reject called on non-object");
+        }
         JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-
-        // Create a new promise and reject it
         JSPromise promise = context.createJSPromise();
         promise.reject(reason);
         return promise;
@@ -341,51 +253,131 @@ public final class PromiseConstructor {
 
     /**
      * Promise.resolve(value)
-     * ES2020 25.6.4.6
-     * Returns a Promise that is resolved with the given value.
      */
     public static JSValue resolve(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSObject)) {
+            return context.throwTypeError("Promise.resolve called on non-object");
+        }
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
-        // If value is already a promise, return it
-        if (value instanceof JSPromise) {
-            return value;
+        if (value instanceof JSPromise jsPromise) {
+            JSValue constructor = jsPromise.get("constructor");
+            if (constructor == thisArg) {
+                return jsPromise;
+            }
         }
 
-        // Create a new promise and fulfill it
         JSPromise promise = context.createJSPromise();
-        promise.fulfill(value);
+        promise.resolve(context, value);
         return promise;
+    }
+
+    private static JSArray toArray(JSContext context, JSValue[] args, String methodName) {
+        if (args.length == 0) {
+            context.throwTypeError(methodName + " requires an iterable");
+            return null;
+        }
+        JSValue iterable = args[0];
+        if (iterable instanceof JSArray jsArray) {
+            return jsArray;
+        }
+        if (!JSIteratorHelper.isIterable(iterable)) {
+            context.throwTypeError(methodName + " requires an iterable");
+            return null;
+        }
+        return JSIteratorHelper.toArray(context, iterable);
+    }
+
+    private static JSPromise toPromise(JSContext context, JSValue thisArg, JSValue value) {
+        JSValue resolved = resolve(context, thisArg, new JSValue[]{value});
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (resolved instanceof JSPromise jsPromise) {
+            return jsPromise;
+        }
+        context.throwTypeError("Promise.resolve must return a Promise");
+        return null;
+    }
+
+    /**
+     * Promise.try(callback, ...args)
+     */
+    public static JSValue tryMethod(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSObject)) {
+            return context.throwTypeError("Promise.try called on non-object");
+        }
+        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
+            return context.throwTypeError("Promise.try requires a function");
+        }
+        JSValue[] callbackArgs = args.length > 1
+                ? Arrays.copyOfRange(args, 1, args.length)
+                : new JSValue[0];
+
+        JSPromise resultPromise = context.createJSPromise();
+        try {
+            JSValue result = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
+            if (context.hasPendingException()) {
+                JSValue error = context.getPendingException();
+                context.clearPendingException();
+                resultPromise.reject(error);
+            } else {
+                resultPromise.resolve(context, result);
+            }
+        } catch (JSException e) {
+            if (context.hasPendingException()) {
+                context.clearPendingException();
+            }
+            resultPromise.reject(e.getErrorValue());
+        } catch (Exception e) {
+            if (context.hasPendingException()) {
+                JSValue error = context.getPendingException();
+                context.clearPendingException();
+                resultPromise.reject(error);
+                return resultPromise;
+            }
+            if (context.hasPendingException()) {
+                context.clearPendingException();
+            }
+            resultPromise.reject(new com.caoccao.qjs4j.core.JSString(
+                    "Error in Promise.try callback: " + e.getMessage()));
+        }
+        return resultPromise;
     }
 
     /**
      * Promise.withResolvers()
-     * ES2024 27.2.4.9
-     * Returns an object with a new promise and its resolve/reject functions.
      */
     public static JSValue withResolvers(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSObject)) {
+            return context.throwTypeError("Promise.withResolvers called on non-object");
+        }
         JSPromise promise = context.createJSPromise();
+        final boolean[] alreadyResolved = {false};
 
-        // Create resolve function
         JSNativeFunction resolveFn = new JSNativeFunction("resolve", 1, (childContext, thisValue, funcArgs) -> {
+            if (alreadyResolved[0]) {
+                return JSUndefined.INSTANCE;
+            }
+            alreadyResolved[0] = true;
             JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-            promise.fulfill(value);
+            promise.resolve(childContext, value);
             return JSUndefined.INSTANCE;
         });
-
-        // Create reject function
         JSNativeFunction rejectFn = new JSNativeFunction("reject", 1, (childContext, thisValue, funcArgs) -> {
+            if (alreadyResolved[0]) {
+                return JSUndefined.INSTANCE;
+            }
+            alreadyResolved[0] = true;
             JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
             promise.reject(reason);
             return JSUndefined.INSTANCE;
         });
 
-        // Create result object
         JSObject result = context.createJSObject();
         result.set("promise", promise);
         result.set("resolve", resolveFn);
         result.set("reject", rejectFn);
-
         return result;
     }
 }

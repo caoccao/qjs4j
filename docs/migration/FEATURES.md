@@ -95,6 +95,7 @@ This document provides a comprehensive list of all JavaScript features implement
   - Promise.any() - ES2021
   - Promise.resolve() - ES2015
   - Promise.reject() - ES2015
+  - Promise.try() - QuickJS extension
   - Promise.withResolvers() - ES2024
 - **Microtask integration**: Proper microtask queue timing
 

@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.core.JSPromise;
 import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSValue;
 import org.junit.jupiter.api.Test;
@@ -95,6 +96,14 @@ public class PromiseConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testPromiseAllThenableAssimilation() {
+        assertStringWithJavet("""
+                Promise.all([1, Promise.resolve(2), { then(resolve) { resolve(3); } }])
+                    .then(values => JSON.stringify(values))
+                """);
+    }
+
+    @Test
     public void testPromiseAllWithArray() {
         assertStringWithJavet("""
                 var p1 = Promise.resolve(1);
@@ -111,6 +120,21 @@ public class PromiseConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testPromiseAnyAggregateError() {
+        assertBooleanWithJavet("""
+                Promise.any([Promise.reject(1), Promise.reject(2)])
+                    .then(
+                        () => false,
+                        e => e instanceof AggregateError
+                            && Array.isArray(e.errors)
+                            && e.errors.length === 2
+                            && e.errors[0] === 1
+                            && e.errors[1] === 2
+                    )
+                """);
+    }
+
+    @Test
     void testPromiseConstructorBehavior() {
         assertBooleanWithJavet("""
                 let value = null;
@@ -119,6 +143,75 @@ public class PromiseConstructorTest extends BaseJavetTest {
                     resolve(42);
                 });
                 value === 'resolved'
+                """);
+    }
+
+    @Test
+    public void testPromiseFinallySemantics() {
+        assertBooleanWithJavet("""
+                Promise.resolve(42)
+                    .finally(0)
+                    .then(v => v === 42)
+                """);
+        assertBooleanWithJavet("""
+                Promise.reject('x')
+                    .finally(0)
+                    .then(
+                        () => false,
+                        e => e === 'x'
+                    )
+                """);
+        assertBooleanWithJavet("""
+                Promise.resolve('ok')
+                    .finally(() => Promise.reject('boom'))
+                    .then(
+                        () => false,
+                        e => e === 'boom'
+                    )
+                """);
+    }
+
+    @Test
+    public void testPromiseRegistration() {
+        assertBooleanWithJavet("""
+                (() => {
+                  const protoDesc = Object.getOwnPropertyDescriptor(Promise, 'prototype');
+                  const thenDesc = Object.getOwnPropertyDescriptor(Promise.prototype, 'then');
+                  const catchDesc = Object.getOwnPropertyDescriptor(Promise.prototype, 'catch');
+                  const finallyDesc = Object.getOwnPropertyDescriptor(Promise.prototype, 'finally');
+                  const tagDesc = Object.getOwnPropertyDescriptor(Promise.prototype, Symbol.toStringTag);
+                  const speciesDesc = Object.getOwnPropertyDescriptor(Promise, Symbol.species);
+                  return protoDesc.writable === false
+                    && protoDesc.enumerable === false
+                    && protoDesc.configurable === false
+                    && thenDesc.writable === true
+                    && thenDesc.enumerable === false
+                    && thenDesc.configurable === true
+                    && catchDesc.writable === true
+                    && catchDesc.enumerable === false
+                    && catchDesc.configurable === true
+                    && finallyDesc.writable === true
+                    && finallyDesc.enumerable === false
+                    && finallyDesc.configurable === true
+                    && tagDesc.value === 'Promise'
+                    && tagDesc.writable === false
+                    && tagDesc.enumerable === false
+                    && tagDesc.configurable === true
+                    && typeof speciesDesc.get === 'function'
+                    && speciesDesc.set === undefined
+                    && speciesDesc.enumerable === false
+                    && speciesDesc.configurable === true;
+                })()
+                """);
+    }
+
+    @Test
+    public void testPromiseResolveReturnsSamePromise() {
+        assertBooleanWithJavet("""
+                (() => {
+                  const p = Promise.resolve(1);
+                  return Promise.resolve(p) === p;
+                })()
                 """);
     }
 
@@ -141,6 +234,18 @@ public class PromiseConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testPromiseTryQuickJSExtension() {
+        assertThat(context.eval("typeof Promise.try").toJavaObject()).isEqualTo("function");
+        JSPromise fulfilledPromise = (JSPromise) context.eval("Promise.try(x => x + 1, 41)");
+        assertThat(awaitPromise(fulfilledPromise)).isTrue();
+        assertThat(fulfilledPromise.getResult().toJavaObject()).isEqualTo(42.0);
+
+        JSPromise rejectedPromise = (JSPromise) context.eval("Promise.try(() => { throw 'e'; })");
+        assertThat(awaitPromise(rejectedPromise)).isTrue();
+        assertThat(rejectedPromise.getResult().toJavaObject()).isEqualTo("e");
+    }
+
+    @Test
     void testPromiseTypeof() {
         // Promise should be a function
         assertStringWithJavet("typeof Promise");
@@ -156,5 +261,22 @@ public class PromiseConstructorTest extends BaseJavetTest {
 
         // Promise() without new should throw TypeError (requires new)
         assertErrorWithJavet("Promise(() => {})");
+    }
+
+    @Test
+    public void testPromiseWithResolversResolveOnce() {
+        assertBooleanWithJavet("""
+                Promise.withResolvers()
+                    .promise
+                    .constructor === Promise
+                """);
+        assertBooleanWithJavet("""
+                (() => {
+                  const cap = Promise.withResolvers();
+                  cap.resolve(Promise.resolve(1));
+                  cap.reject(2);
+                  return cap.promise.then(v => v === 1, () => false);
+                })()
+                """);
     }
 }

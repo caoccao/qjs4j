@@ -1237,24 +1237,28 @@ public final class JSGlobalObject {
     private void initializePromiseConstructor(JSContext context, JSObject global) {
         // Create Promise.prototype
         JSObject promisePrototype = context.createJSObject();
-        promisePrototype.set("then", new JSNativeFunction("then", 2, PromisePrototype::then));
-        promisePrototype.set("catch", new JSNativeFunction("catch", 1, PromisePrototype::catchMethod));
-        promisePrototype.set("finally", new JSNativeFunction("finally", 1, PromisePrototype::finallyMethod));
+        promisePrototype.definePropertyWritableConfigurable("then", new JSNativeFunction("then", 2, PromisePrototype::then));
+        promisePrototype.definePropertyWritableConfigurable("catch", new JSNativeFunction("catch", 1, PromisePrototype::catchMethod));
+        promisePrototype.definePropertyWritableConfigurable("finally", new JSNativeFunction("finally", 1, PromisePrototype::finallyMethod));
+        promisePrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("Promise"));
 
         // Create Promise constructor as JSNativeFunction
         JSNativeFunction promiseConstructor = new JSNativeFunction("Promise", 1, PromiseConstructor::call, true, true);
-        promiseConstructor.set("prototype", promisePrototype);
+        context.transferPrototype(promiseConstructor, JSFunction.NAME);
+        promiseConstructor.definePropertyReadonlyNonConfigurable("prototype", promisePrototype);
         promiseConstructor.setConstructorType(JSConstructorType.PROMISE); // Mark as Promise constructor
-        promisePrototype.set("constructor", promiseConstructor);
+        promisePrototype.definePropertyWritableConfigurable("constructor", promiseConstructor);
 
         // Static methods
-        promiseConstructor.set("resolve", new JSNativeFunction("resolve", 1, PromiseConstructor::resolve));
-        promiseConstructor.set("reject", new JSNativeFunction("reject", 1, PromiseConstructor::reject));
-        promiseConstructor.set("all", new JSNativeFunction("all", 1, PromiseConstructor::all));
-        promiseConstructor.set("race", new JSNativeFunction("race", 1, PromiseConstructor::race));
-        promiseConstructor.set("allSettled", new JSNativeFunction("allSettled", 1, PromiseConstructor::allSettled));
-        promiseConstructor.set("any", new JSNativeFunction("any", 1, PromiseConstructor::any));
-        promiseConstructor.set("withResolvers", new JSNativeFunction("withResolvers", 0, PromiseConstructor::withResolvers));
+        promiseConstructor.definePropertyWritableConfigurable("resolve", new JSNativeFunction("resolve", 1, PromiseConstructor::resolve));
+        promiseConstructor.definePropertyWritableConfigurable("reject", new JSNativeFunction("reject", 1, PromiseConstructor::reject));
+        promiseConstructor.definePropertyWritableConfigurable("all", new JSNativeFunction("all", 1, PromiseConstructor::all));
+        promiseConstructor.definePropertyWritableConfigurable("allSettled", new JSNativeFunction("allSettled", 1, PromiseConstructor::allSettled));
+        promiseConstructor.definePropertyWritableConfigurable("any", new JSNativeFunction("any", 1, PromiseConstructor::any));
+        promiseConstructor.definePropertyWritableConfigurable("try", new JSNativeFunction("try", 1, PromiseConstructor::tryMethod));
+        promiseConstructor.definePropertyWritableConfigurable("race", new JSNativeFunction("race", 1, PromiseConstructor::race));
+        promiseConstructor.definePropertyWritableConfigurable("withResolvers", new JSNativeFunction("withResolvers", 0, PromiseConstructor::withResolvers));
+        promiseConstructor.defineGetterConfigurable(JSSymbol.SPECIES, PromiseConstructor::getSpecies);
 
         global.definePropertyWritableConfigurable("Promise", promiseConstructor);
     }
