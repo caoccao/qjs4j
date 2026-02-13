@@ -26,9 +26,10 @@ This document tracks the progress of migrating QuickJS functionality to pure Jav
 #### Phase 10.1: Symbol Constructor
 - SymbolConstructor.java: Symbol(), Symbol.for(), Symbol.keyFor()
 - SymbolPrototype.java: toString(), valueOf(), description getter
-- Well-known symbols: iterator, toStringTag, hasInstance, isConcatSpreadable, toPrimitive
+- Well-known symbols registered on `Symbol` (including ES2024 `dispose` / `asyncDispose` extensions)
 - Runtime-scoped global symbol registry (with synchronization)
 - VM handling: Symbol cannot be called with `new` operator
+- Registration parity: non-enumerable function properties, readonly/non-configurable well-known symbol properties, and proper `Symbol.prototype` descriptor flags
 
 #### Phase 10.2: BigInt Constructor
 - BigIntConstructor.java: BigInt(), BigInt.asIntN(), BigInt.asUintN()

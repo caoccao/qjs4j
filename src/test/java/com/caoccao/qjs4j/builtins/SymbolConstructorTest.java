@@ -173,6 +173,48 @@ public class SymbolConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testSymbolRegistrationDescriptors() {
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                          const d = Object.getOwnPropertyDescriptor(Symbol, "for");
+                          return typeof d.value === "function"
+                            && d.writable === true
+                            && d.enumerable === false
+                            && d.configurable === true;
+                        })()
+                        """,
+                """
+                        (() => {
+                          const d = Object.getOwnPropertyDescriptor(Symbol, "keyFor");
+                          return typeof d.value === "function"
+                            && d.writable === true
+                            && d.enumerable === false
+                            && d.configurable === true;
+                        })()
+                        """,
+                """
+                        (() => {
+                          const d = Object.getOwnPropertyDescriptor(Symbol, "iterator");
+                          return typeof d.value === "symbol"
+                            && d.value === Symbol.iterator
+                            && d.writable === false
+                            && d.enumerable === false
+                            && d.configurable === false;
+                        })()
+                        """,
+                """
+                        (() => {
+                          const d = Object.getOwnPropertyDescriptor(Symbol, "prototype");
+                          return d.value === Symbol.prototype
+                            && d.writable === false
+                            && d.enumerable === false
+                            && d.configurable === false;
+                        })()
+                        """);
+    }
+
+    @Test
     public void testSymbolRegistryIsRuntimeScoped() {
         try (JSRuntime runtime1 = new JSRuntime(); JSContext context1 = runtime1.createContext();
              JSRuntime runtime2 = new JSRuntime(); JSContext context2 = runtime2.createContext()) {
@@ -193,5 +235,37 @@ public class SymbolConstructorTest extends BaseJavetTest {
             assertThat(crossKey1).isEqualTo(JSUndefined.INSTANCE);
             assertThat(crossKey2).isEqualTo(JSUndefined.INSTANCE);
         }
+    }
+
+    @Test
+    public void testWellKnownSymbolProperties() {
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                          const names = [
+                            "iterator", "asyncIterator", "toStringTag", "hasInstance",
+                            "isConcatSpreadable", "toPrimitive", "match", "matchAll",
+                            "replace", "search", "split", "species", "unscopables",
+                            "dispose", "asyncDispose"
+                          ];
+                          return names.every(name => typeof Symbol[name] === "symbol");
+                        })()
+                        """,
+                """
+                        (() => {
+                          const sym = Symbol.iterator;
+                          const before = Symbol.iterator;
+                          let strictTypeError = false;
+                          try {
+                            (function() {
+                              "use strict";
+                              Symbol.iterator = Symbol("x");
+                            })();
+                          } catch (e) {
+                            strictTypeError = e instanceof TypeError;
+                          }
+                          return strictTypeError && Symbol.iterator === before && Symbol.iterator === sym;
+                        })()
+                        """);
     }
 }

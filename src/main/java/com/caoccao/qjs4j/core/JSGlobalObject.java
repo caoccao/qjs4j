@@ -1522,49 +1522,50 @@ public final class JSGlobalObject {
 
         JSNativeFunction symbolToString = new JSNativeFunction("toString", 0, SymbolPrototype::toString);
         symbolToString.initializePrototypeChain(context);
-        symbolPrototype.set("toString", symbolToString);
+        symbolPrototype.definePropertyWritableConfigurable("toString", symbolToString);
 
         JSNativeFunction symbolValueOf = new JSNativeFunction("valueOf", 0, SymbolPrototype::valueOf);
         symbolValueOf.initializePrototypeChain(context);
-        symbolPrototype.set("valueOf", symbolValueOf);
+        symbolPrototype.definePropertyWritableConfigurable("valueOf", symbolValueOf);
 
         // Symbol.prototype.description is a getter
         symbolPrototype.defineGetterConfigurable("description", SymbolPrototype::getDescription);
 
         JSNativeFunction symbolToPrimitive = new JSNativeFunction("[Symbol.toPrimitive]", 1, SymbolPrototype::toPrimitive);
         symbolToPrimitive.initializePrototypeChain(context);
-        symbolPrototype.set(PropertyKey.fromSymbol(JSSymbol.TO_PRIMITIVE), symbolToPrimitive);
+        symbolPrototype.definePropertyWritableConfigurable(JSSymbol.TO_PRIMITIVE, symbolToPrimitive);
 
-        symbolPrototype.set(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Symbol"));
+        symbolPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("Symbol"));
 
         // Create Symbol constructor
         // Note: Symbol cannot be called with 'new' in JavaScript (throws TypeError)
         // Symbol objects are created using Object(symbolValue) for use with Proxy
         JSNativeFunction symbolConstructor = new JSNativeFunction(JSSymbol.NAME, 0, SymbolConstructor::call);
-        symbolConstructor.set("prototype", symbolPrototype);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("prototype", symbolPrototype);
         symbolConstructor.setConstructorType(JSConstructorType.SYMBOL_OBJECT); // Mark as Symbol constructor
-        symbolPrototype.set("constructor", symbolConstructor);
+        symbolPrototype.definePropertyWritableConfigurable("constructor", symbolConstructor);
 
         // Symbol static methods
-        symbolConstructor.set("for", new JSNativeFunction("for", 1, SymbolConstructor::symbolFor));
-        symbolConstructor.set("keyFor", new JSNativeFunction("keyFor", 1, SymbolConstructor::keyFor));
+        symbolConstructor.definePropertyWritableConfigurable("for", new JSNativeFunction("for", 1, SymbolConstructor::symbolFor));
+        symbolConstructor.definePropertyWritableConfigurable("keyFor", new JSNativeFunction("keyFor", 1, SymbolConstructor::keyFor));
 
         // Well-known symbols (ES2015+)
-        symbolConstructor.set("iterator", JSSymbol.ITERATOR);
-        symbolConstructor.set("asyncIterator", JSSymbol.ASYNC_ITERATOR);
-        symbolConstructor.set("toStringTag", JSSymbol.TO_STRING_TAG);
-        symbolConstructor.set("hasInstance", JSSymbol.HAS_INSTANCE);
-        symbolConstructor.set("isConcatSpreadable", JSSymbol.IS_CONCAT_SPREADABLE);
-        symbolConstructor.set("toPrimitive", JSSymbol.TO_PRIMITIVE);
-        symbolConstructor.set("match", JSSymbol.MATCH);
-        symbolConstructor.set("matchAll", JSSymbol.MATCH_ALL);
-        symbolConstructor.set("replace", JSSymbol.REPLACE);
-        symbolConstructor.set("search", JSSymbol.SEARCH);
-        symbolConstructor.set("split", JSSymbol.SPLIT);
-        symbolConstructor.set("species", JSSymbol.SPECIES);
-        symbolConstructor.set("unscopables", JSSymbol.UNSCOPABLES);
-        symbolConstructor.set("dispose", JSSymbol.DISPOSE);
-        symbolConstructor.set("asyncDispose", JSSymbol.ASYNC_DISPOSE);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("iterator", JSSymbol.ITERATOR);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("asyncIterator", JSSymbol.ASYNC_ITERATOR);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("toStringTag", JSSymbol.TO_STRING_TAG);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("hasInstance", JSSymbol.HAS_INSTANCE);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("isConcatSpreadable", JSSymbol.IS_CONCAT_SPREADABLE);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("toPrimitive", JSSymbol.TO_PRIMITIVE);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("match", JSSymbol.MATCH);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("matchAll", JSSymbol.MATCH_ALL);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("replace", JSSymbol.REPLACE);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("search", JSSymbol.SEARCH);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("split", JSSymbol.SPLIT);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("species", JSSymbol.SPECIES);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("unscopables", JSSymbol.UNSCOPABLES);
+        // ES2024 additions kept intentionally even though not in upstream QuickJS.
+        symbolConstructor.definePropertyReadonlyNonConfigurable("dispose", JSSymbol.DISPOSE);
+        symbolConstructor.definePropertyReadonlyNonConfigurable("asyncDispose", JSSymbol.ASYNC_DISPOSE);
 
         global.definePropertyWritableConfigurable("Symbol", symbolConstructor);
     }
