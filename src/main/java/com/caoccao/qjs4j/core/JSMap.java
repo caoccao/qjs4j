@@ -16,8 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Represents a JavaScript Map object.
@@ -25,9 +24,9 @@ import java.util.Map;
  */
 public final class JSMap extends JSObject {
     public static final String NAME = "Map";
-    // Use LinkedHashMap to maintain insertion order
-    // Use a wrapper class for keys to handle JSValue equality properly
-    private final Map<KeyWrapper, JSValue> data;
+    private final Map<KeyWrapper, EntryRecord> data;
+    private final Map<Long, EntryRecord> entriesById;
+    private long nextEntryId;
 
     /**
      * Create an empty Map.
@@ -35,68 +34,104 @@ public final class JSMap extends JSObject {
     public JSMap() {
         super();
         this.data = new LinkedHashMap<>();
+        this.entriesById = new HashMap<>();
+        this.nextEntryId = 1;
+    }
+
+    private static void closeIterator(JSContext context, JSValue iterator) {
+        if (!(iterator instanceof JSObject iteratorObject)) {
+            return;
+        }
+        JSValue returnMethod = iteratorObject.get("return");
+        if (returnMethod instanceof JSFunction returnFunction) {
+            returnFunction.call(context, iterator, new JSValue[0]);
+        }
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        // Create Map object
         JSMap mapObj = new JSMap();
-        // If an iterable is provided, populate the map
+        context.transferPrototype(mapObj, NAME);
+
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
-            // Handle array directly for efficiency
-            if (iterableArg instanceof JSArray arr) {
-                for (long i = 0; i < arr.getLength(); i++) {
-                    JSValue entry = arr.get((int) i);
-                    if (!(entry instanceof JSObject entryObj)) {
-                        return context.throwTypeError("Iterator value must be an object");
+
+            JSValue adder = mapObj.get("set");
+            if (!(adder instanceof JSFunction adderFunction)) {
+                return context.throwTypeError("set/add is not a function");
+            }
+
+            JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
+            if (!(iterator instanceof JSObject)) {
+                return context.throwTypeError("Object is not iterable");
+            }
+
+            while (true) {
+                JSObject nextResult = JSIteratorHelper.iteratorNext(iterator, context);
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    JSValue pendingException = context.getPendingException();
+                    if (pendingException instanceof JSObject pendingObject) {
+                        return pendingObject;
                     }
-                    // Get key and value from entry [key, value]
-                    JSValue key = entryObj.get(0);
-                    JSValue value = entryObj.get(1);
-                    mapObj.mapSet(key, value);
+                    return context.throwTypeError("Map constructor failed");
                 }
-            } else {
-                // Follow the generic iterator protocol for all iterable inputs.
-                JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
-                if (iterator == null) {
-                    return context.throwTypeError("Object is not iterable");
+                if (nextResult == null) {
+                    closeIterator(context, iterator);
+                    return context.throwTypeError("Iterator result must be an object");
                 }
-                while (true) {
-                    JSObject nextResult = JSIteratorHelper.iteratorNext(iterator, context);
-                    if (nextResult == null) {
-                        return context.throwTypeError("Iterator result must be an object");
+                JSValue done = nextResult.get("done");
+                if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
+                    break;
+                }
+
+                JSValue entry = nextResult.get("value");
+                if (!(entry instanceof JSObject entryObj)) {
+                    closeIterator(context, iterator);
+                    return context.throwTypeError("Iterator value must be an object");
+                }
+
+                JSValue key = entryObj.get(0);
+                JSValue value = entryObj.get(1);
+                adderFunction.call(context, mapObj, new JSValue[]{key, value});
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    JSValue pendingException = context.getPendingException();
+                    if (pendingException instanceof JSObject pendingObject) {
+                        return pendingObject;
                     }
-                    JSValue done = nextResult.get("done");
-                    if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
-                        break;
-                    }
-                    JSValue entry = nextResult.get("value");
-                    if (!(entry instanceof JSObject entryObj)) {
-                        return context.throwTypeError("Iterator value must be an object");
-                    }
-                    // Get key and value from entry [key, value]
-                    JSValue key = entryObj.get(0);
-                    JSValue value = entryObj.get(1);
-                    mapObj.mapSet(key, value);
+                    return context.throwTypeError("Map constructor failed");
                 }
             }
         }
-        context.transferPrototype(mapObj, NAME);
         return mapObj;
+    }
+
+    public IterationCursor createIterationCursor() {
+        IterationCursor cursor = new IterationCursor();
+        refreshIterationCursor(cursor);
+        return cursor;
     }
 
     /**
      * Get all entries as an iterable.
      */
     public Iterable<Map.Entry<KeyWrapper, JSValue>> entries() {
-        return data.entrySet();
+        List<Map.Entry<KeyWrapper, JSValue>> entries = new ArrayList<>(data.size());
+        for (EntryRecord entryRecord : data.values()) {
+            entries.add(Map.entry(entryRecord.keyWrapper, entryRecord.value));
+        }
+        return entries;
     }
 
     /**
      * Get all keys as an iterable.
      */
     public Iterable<KeyWrapper> keys() {
-        return data.keySet();
+        List<KeyWrapper> keys = new ArrayList<>(data.size());
+        for (EntryRecord entryRecord : data.values()) {
+            keys.add(entryRecord.keyWrapper);
+        }
+        return keys;
     }
 
     /**
@@ -104,35 +139,83 @@ public final class JSMap extends JSObject {
      */
     public void mapClear() {
         data.clear();
+        entriesById.clear();
     }
 
     /**
      * Delete a key from the Map.
      */
     public boolean mapDelete(JSValue key) {
-        return data.remove(new KeyWrapper(key)) != null;
+        KeyWrapper keyWrapper = new KeyWrapper(normalizeKey(key));
+        EntryRecord removedRecord = data.remove(keyWrapper);
+        if (removedRecord == null) {
+            return false;
+        }
+        entriesById.remove(removedRecord.id);
+        return true;
     }
 
     /**
      * Get a value from the Map by key.
      */
     public JSValue mapGet(JSValue key) {
-        JSValue value = data.get(new KeyWrapper(key));
-        return value != null ? value : JSUndefined.INSTANCE;
+        EntryRecord record = data.get(new KeyWrapper(normalizeKey(key)));
+        return record != null ? record.value : JSUndefined.INSTANCE;
     }
 
     /**
      * Check if the Map has a key.
      */
     public boolean mapHas(JSValue key) {
-        return data.containsKey(new KeyWrapper(key));
+        return data.containsKey(new KeyWrapper(normalizeKey(key)));
     }
 
     /**
      * Set a key-value pair in the Map.
      */
     public void mapSet(JSValue key, JSValue value) {
-        data.put(new KeyWrapper(key), value);
+        KeyWrapper keyWrapper = new KeyWrapper(normalizeKey(key));
+        EntryRecord existingRecord = data.get(keyWrapper);
+        if (existingRecord != null) {
+            existingRecord.value = value;
+            return;
+        }
+        EntryRecord record = new EntryRecord(nextEntryId++, keyWrapper, value);
+        data.put(keyWrapper, record);
+        entriesById.put(record.id, record);
+    }
+
+    public IterationEntry nextIterationEntry(IterationCursor cursor) {
+        while (true) {
+            while (cursor.index < cursor.orderedIds.size()) {
+                long entryId = cursor.orderedIds.get(cursor.index++);
+                EntryRecord record = entriesById.get(entryId);
+                if (record != null) {
+                    return new IterationEntry(record.keyWrapper.value(), record.value);
+                }
+            }
+            if (!refreshIterationCursor(cursor)) {
+                return null;
+            }
+        }
+    }
+
+    private JSValue normalizeKey(JSValue key) {
+        if (key instanceof JSNumber number && number.value() == 0.0) {
+            return new JSNumber(0.0);
+        }
+        return key;
+    }
+
+    private boolean refreshIterationCursor(IterationCursor cursor) {
+        boolean appended = false;
+        for (EntryRecord record : data.values()) {
+            if (cursor.seenIds.add(record.id)) {
+                cursor.orderedIds.add(record.id);
+                appended = true;
+            }
+        }
+        return appended;
     }
 
     /**
@@ -151,7 +234,38 @@ public final class JSMap extends JSObject {
      * Get all values as an iterable.
      */
     public Iterable<JSValue> values() {
-        return data.values();
+        List<JSValue> values = new ArrayList<>(data.size());
+        for (EntryRecord entryRecord : data.values()) {
+            values.add(entryRecord.value);
+        }
+        return values;
+    }
+
+    private static final class EntryRecord {
+        private final long id;
+        private final KeyWrapper keyWrapper;
+        private JSValue value;
+
+        private EntryRecord(long id, KeyWrapper keyWrapper, JSValue value) {
+            this.id = id;
+            this.keyWrapper = keyWrapper;
+            this.value = value;
+        }
+    }
+
+    public static final class IterationCursor {
+        private final List<Long> orderedIds;
+        private final Set<Long> seenIds;
+        private int index;
+
+        private IterationCursor() {
+            this.orderedIds = new ArrayList<>();
+            this.seenIds = new HashSet<>();
+            this.index = 0;
+        }
+    }
+
+    public record IterationEntry(JSValue key, JSValue value) {
     }
 
     /**

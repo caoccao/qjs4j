@@ -82,6 +82,17 @@ public final class JSONObject {
         return result;
     }
 
+    private static boolean isJSONStringControlCharacter(char ch) {
+        return ch <= 0x1F;
+    }
+
+    private static boolean isJSONWrapperObject(JSValue value) {
+        return value instanceof JSBooleanObject
+                || value instanceof JSNumberObject
+                || value instanceof JSStringObject
+                || value instanceof JSBigIntObject;
+    }
+
     /**
      * Check and transform value according to toJSON and replacer
      * Based on QuickJS js_json_check
@@ -108,17 +119,6 @@ public final class JSONObject {
         }
 
         return val;
-    }
-
-    private static boolean isJSONStringControlCharacter(char ch) {
-        return ch <= 0x1F;
-    }
-
-    private static boolean isJSONWrapperObject(JSValue value) {
-        return value instanceof JSBooleanObject
-                || value instanceof JSNumberObject
-                || value instanceof JSStringObject
-                || value instanceof JSBigIntObject;
     }
 
     /**

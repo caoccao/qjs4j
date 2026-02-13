@@ -31,7 +31,7 @@ public class MapConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGroupBy() {
-        JSArray items = new JSArray();
+        JSArray items = context.createJSArray();
         items.push(new JSNumber(1));
         items.push(new JSNumber(2));
         items.push(new JSNumber(3));
@@ -62,7 +62,7 @@ public class MapConstructorTest extends BaseJavetTest {
         assertThat(oddArray.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(3.0);
 
         // Edge case: empty array
-        JSArray emptyItems = new JSArray();
+        JSArray emptyItems = context.createJSArray();
         result = MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{emptyItems, callback});
         map = result.asMap().orElseThrow();
         assertThat(map.size()).isEqualTo(0);
@@ -71,8 +71,8 @@ public class MapConstructorTest extends BaseJavetTest {
         assertTypeError(MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items}));
         assertPendingException(context);
 
-        // Edge case: non-array items
-        assertTypeError(MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not array"), callback}));
+        // Edge case: non-iterable items
+        assertTypeError(MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(1), callback}));
         assertPendingException(context);
 
         // Edge case: non-function callback
@@ -111,6 +111,17 @@ public class MapConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    void testMapSpeciesDescriptor() {
+        assertBooleanWithJavet("""
+                const desc = Object.getOwnPropertyDescriptor(Map, Symbol.species);
+                typeof desc.get === 'function'
+                && desc.enumerable === false
+                && desc.configurable === true
+                && desc.set === undefined
+                && Map[Symbol.species] === Map""");
+    }
+
+    @Test
     void testMapStaticMethods() {
         // Map.groupBy should still work
         assertStringWithJavet("typeof Map.groupBy");
@@ -121,6 +132,20 @@ public class MapConstructorTest extends BaseJavetTest {
                 const arr = [1, 2, 3, 4, 5];
                 const grouped = Map.groupBy(arr, (x) => x % 2 === 0 ? 'even' : 'odd');
                 grouped.get('even').length === 2 && grouped.get('odd').length === 3""");
+
+        assertBooleanWithJavet("""
+                const iterable = {
+                  [Symbol.iterator]() {
+                    let i = 0;
+                    return {
+                      next() {
+                        return i < 4 ? { value: i++, done: false } : { done: true };
+                      }
+                    };
+                  }
+                };
+                const grouped = Map.groupBy(iterable, (x) => x % 2);
+                grouped.get(0).length === 2 && grouped.get(1).length === 2""");
     }
 
     @Test
@@ -139,5 +164,34 @@ public class MapConstructorTest extends BaseJavetTest {
 
         // Map() without new should throw TypeError (requires new)
         assertErrorWithJavet("Map()");
+    }
+
+    @Test
+    void testMapUsesOverriddenSetDuringConstruction() {
+        JSArray entry1 = context.createJSArray();
+        entry1.push(new JSNumber(1));
+        entry1.push(new JSString("a"));
+        JSArray entry2 = context.createJSArray();
+        entry2.push(new JSNumber(2));
+        entry2.push(new JSString("b"));
+        JSArray entries = context.createJSArray();
+        entries.push(entry1);
+        entries.push(entry2);
+
+        JSObject mapConstructor = context.getGlobalObject().get("Map").asObject().orElseThrow();
+        JSObject mapPrototype = mapConstructor.get("prototype").asObject().orElseThrow();
+        JSValue originalSet = mapPrototype.get("set");
+        int[] called = {0};
+        mapPrototype.set("set", new JSNativeFunction("set", 2, (childContext, thisArg, args) -> {
+            called[0]++;
+            return thisArg;
+        }));
+        try {
+            JSMap map = JSMap.create(context, entries).asMap().orElseThrow();
+            assertThat(called[0]).isEqualTo(2);
+            assertThat(map.size()).isEqualTo(0);
+        } finally {
+            mapPrototype.set("set", originalSet);
+        }
     }
 }

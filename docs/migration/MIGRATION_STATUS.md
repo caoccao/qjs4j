@@ -40,7 +40,12 @@ This document tracks the progress of migrating QuickJS functionality to pure Jav
 #### Phase 10.3: Map Constructor
 - JSMap.java: LinkedHashMap-based implementation with insertion order
 - KeyWrapper class implementing SameValueZero equality (NaN equals NaN, +0 equals -0)
-- MapPrototype.java: set, get, has, delete, clear, forEach, entries, keys, values
+- Map constructor iterable handling aligned with QuickJS adder/iterator semantics
+- MapPrototype.java: set, get, getOrInsert, getOrInsertComputed, has, delete, clear, forEach, entries, keys, values
+- Map constructor/prototype registration aligned with QuickJS:
+  - `Map.groupBy()` + `Map[Symbol.species]`
+  - `Map.prototype[Symbol.iterator]` aliasing `entries`
+  - `Map.prototype[Symbol.toStringTag] = "Map"`
 - Proper hashCode() and equals() for all JSValue types
 
 #### Phase 10.4: Set Constructor

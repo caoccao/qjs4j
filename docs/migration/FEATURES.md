@@ -222,10 +222,12 @@ This document provides a comprehensive list of all JavaScript features implement
 ### Map (ES2015)
 - **Creation**: new Map(), new Map(iterable)
 - **Methods**: set, get, has, delete, clear
+- **QuickJS extensions**: getOrInsert(), getOrInsertComputed()
 - **Size**: size property
 - **Iteration**: keys(), values(), entries(), forEach()
 - **Insertion order**: Maintains insertion order
 - **SameValueZero**: Proper NaN and -0/+0 equality
+- **Metadata**: `Map[Symbol.species]`, `Map.prototype[Symbol.toStringTag]`
 - **ES2024**: Map.groupBy()
 
 ### Set (ES2015)

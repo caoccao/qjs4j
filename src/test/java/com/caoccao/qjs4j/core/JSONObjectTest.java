@@ -340,17 +340,6 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
-    public void testParseWithReviverArrayWithJavet() {
-        assertIntegerWithJavet("""
-                JSON.parse('[1,2,3,4,5]', function(key, value) {
-                  if (typeof value === 'number') {
-                    return value * 2;
-                  }
-                  return value;
-                })[2]""");
-    }
-
-    @Test
     public void testParseWithReviverArray() {
         // Test reviver with arrays - simplified test
         String json = "[1,2]";
@@ -374,15 +363,14 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
-    public void testParseWithReviverFilterWithJavet() {
-        assertBooleanWithJavet("""
-                var result = JSON.parse('{"a":1,"b":2,"c":3}', function(key, value) {
-                  if (key === 'b') {
-                    return undefined;
+    public void testParseWithReviverArrayWithJavet() {
+        assertIntegerWithJavet("""
+                JSON.parse('[1,2,3,4,5]', function(key, value) {
+                  if (typeof value === 'number') {
+                    return value * 2;
                   }
                   return value;
-                });
-                result.b === undefined""");
+                })[2]""");
     }
 
     @Test
@@ -410,14 +398,15 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
-    public void testParseWithReviverNestedWithJavet() {
-        assertIntegerWithJavet("""
-                JSON.parse('{"user":{"name":"Bob","age":25}}', function(key, value) {
-                  if (key === 'age' && typeof value === 'number') {
-                    return value + 10;
+    public void testParseWithReviverFilterWithJavet() {
+        assertBooleanWithJavet("""
+                var result = JSON.parse('{"a":1,"b":2,"c":3}', function(key, value) {
+                  if (key === 'b') {
+                    return undefined;
                   }
                   return value;
-                }).user.age""");
+                });
+                result.b === undefined""");
     }
 
     @Test
@@ -441,6 +430,17 @@ public class JSONObjectTest extends BaseJavetTest {
         JSObject user = obj.get("user").asObject().orElseThrow();
 
         assertThat(user.get("age").asString().map(JSString::value).orElseThrow()).isEqualTo("25 years");
+    }
+
+    @Test
+    public void testParseWithReviverNestedWithJavet() {
+        assertIntegerWithJavet("""
+                JSON.parse('{"user":{"name":"Bob","age":25}}', function(key, value) {
+                  if (key === 'age' && typeof value === 'number') {
+                    return value + 10;
+                  }
+                  return value;
+                }).user.age""");
     }
 
     @Test
@@ -484,15 +484,6 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
-    public void testRoundTripWithJavet() {
-        assertIntegerWithJavet("""
-                var original = {name: 'test', value: 42, items: [1, 2, 3]};
-                var json = JSON.stringify(original);
-                var parsed = JSON.parse(json);
-                parsed.value""");
-    }
-
-    @Test
     public void testRoundTrip() {
         // Test round-trip: stringify then parse
         JSObject original = new JSObject();
@@ -523,6 +514,15 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(parsedArr.getLength()).isEqualTo(2);
         assertThat(parsedArr.get(0).asString().map(JSString::value).orElseThrow()).isEqualTo("item1");
         assertThat(parsedArr.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
+    }
+
+    @Test
+    public void testRoundTripWithJavet() {
+        assertIntegerWithJavet("""
+                var original = {name: 'test', value: 42, items: [1, 2, 3]};
+                var json = JSON.stringify(original);
+                var parsed = JSON.parse(json);
+                parsed.value""");
     }
 
     @Test
@@ -1044,11 +1044,6 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
-    public void testStringifyWithReplacerArrayWithJavet() {
-        assertStringWithJavet("JSON.stringify({a: 1, b: 2, c: 3, d: 4}, ['a', 'c'])");
-    }
-
-    @Test
     public void testStringifyWithReplacerArray() {
         // Test replacer array (property whitelist)
         JSObject obj = new JSObject();
@@ -1069,16 +1064,6 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(jsonStr).contains("\"age\":30");
         assertThat(jsonStr).doesNotContain("internal");
         assertThat(jsonStr).doesNotContain("password");
-    }
-
-    @Test
-    public void testStringifyWithReplacerArrayNestedWithJavet() {
-        assertStringWithJavet("""
-                JSON.stringify({
-                  name: 'test',
-                  data: {x: 1, y: 2, z: 3},
-                  extra: 'value'
-                }, ['name', 'data', 'x', 'y'])""");
     }
 
     @Test
@@ -1110,13 +1095,18 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
-    public void testStringifyWithReplacerArrayNonIntegerNumber() {
-        assertStringWithJavet("JSON.stringify({'1.5': 'x', '1': 'y'}, [1.5])");
+    public void testStringifyWithReplacerArrayNestedWithJavet() {
+        assertStringWithJavet("""
+                JSON.stringify({
+                  name: 'test',
+                  data: {x: 1, y: 2, z: 3},
+                  extra: 'value'
+                }, ['name', 'data', 'x', 'y'])""");
     }
 
     @Test
-    public void testStringifyWithReplacerArrayNumbersWithJavet() {
-        assertStringWithJavet("JSON.stringify({0: 'a', 1: 'b', 2: 'c'}, [0, 2])");
+    public void testStringifyWithReplacerArrayNonIntegerNumber() {
+        assertStringWithJavet("JSON.stringify({'1.5': 'x', '1': 'y'}, [1.5])");
     }
 
     @Test
@@ -1146,8 +1136,18 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testStringifyWithReplacerArrayNumbersWithJavet() {
+        assertStringWithJavet("JSON.stringify({0: 'a', 1: 'b', 2: 'c'}, [0, 2])");
+    }
+
+    @Test
     public void testStringifyWithReplacerArraySkipsGenericObjects() {
         assertStringWithJavet("JSON.stringify({a: 1, b: 2}, [{toString: function() { return 'a'; }}, 'b'])");
+    }
+
+    @Test
+    public void testStringifyWithReplacerArrayWithJavet() {
+        assertStringWithJavet("JSON.stringify({a: 1, b: 2, c: 3, d: 4}, ['a', 'c'])");
     }
 
     @Test
@@ -1156,17 +1156,6 @@ public class JSONObjectTest extends BaseJavetTest {
                 JSON.stringify({a: 1, b: 2, c: 3}, function(key, value) {
                   if (key === 'b') {
                     return undefined;
-                  }
-                  return value;
-                })""");
-    }
-
-    @Test
-    public void testStringifyWithReplacerFunctionWithJavet() {
-        assertStringWithJavet("""
-                JSON.stringify({a: 1, b: 2, c: 3}, function(key, value) {
-                  if (typeof value === 'number') {
-                    return value * 2;
                   }
                   return value;
                 })""");
@@ -1200,6 +1189,17 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testStringifyWithReplacerFunctionWithJavet() {
+        assertStringWithJavet("""
+                JSON.stringify({a: 1, b: 2, c: 3}, function(key, value) {
+                  if (typeof value === 'number') {
+                    return value * 2;
+                  }
+                  return value;
+                })""");
+    }
+
+    @Test
     public void testStringifyWithSpaceLimitNumber() {
         // Space is limited to 10 characters
         assertStringWithJavet("JSON.stringify({a: 1}, null, 20)");
@@ -1223,18 +1223,6 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testStringifyWithTabSpace() {
         assertStringWithJavet("JSON.stringify({a: 1}, null, '\\t')");
-    }
-
-    @Test
-    public void testStringifyWithToJSONWithJavet() {
-        assertStringWithJavet("""
-                var obj = {
-                  value: 42,
-                  toJSON: function() {
-                    return this.value * 2;
-                  }
-                };
-                JSON.stringify(obj)""");
     }
 
     @Test
@@ -1270,6 +1258,18 @@ public class JSONObjectTest extends BaseJavetTest {
                   }
                   return value;
                 })""");
+    }
+
+    @Test
+    public void testStringifyWithToJSONWithJavet() {
+        assertStringWithJavet("""
+                var obj = {
+                  value: 42,
+                  toJSON: function() {
+                    return this.value * 2;
+                  }
+                };
+                JSON.stringify(obj)""");
     }
 
     @Test

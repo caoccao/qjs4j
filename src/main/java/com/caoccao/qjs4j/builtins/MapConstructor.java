@@ -23,6 +23,7 @@ import com.caoccao.qjs4j.core.*;
  * Based on ES2024 Map specification.
  */
 public final class MapConstructor {
+    private static final long MAX_SAFE_INTEGER = 9007199254740991L;
 
     /**
      * Map constructor call handler.
@@ -37,6 +38,20 @@ public final class MapConstructor {
         return JSMap.create(context, args);
     }
 
+    private static void closeIterator(JSContext context, JSValue iterator) {
+        if (!(iterator instanceof JSObject iteratorObject)) {
+            return;
+        }
+        JSValue returnMethod = iteratorObject.get("return");
+        if (returnMethod instanceof JSFunction returnFunction) {
+            returnFunction.call(context, iterator, new JSValue[0]);
+        }
+    }
+
+    public static JSValue getSpecies(JSContext context, JSValue thisArg, JSValue[] args) {
+        return thisArg;
+    }
+
     /**
      * Map.groupBy(items, callbackFn)
      * ES2024 24.1.2.2
@@ -44,42 +59,55 @@ public final class MapConstructor {
      * returning a Map where keys are callback results and values are arrays.
      */
     public static JSValue groupBy(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 2) {
-            return context.throwTypeError("Map.groupBy requires 2 arguments");
+        if (args.length < 2 || !(args[1] instanceof JSFunction callback)) {
+            return context.throwTypeError("not a function");
         }
 
-        JSValue items = args[0];
-        if (!(args[1] instanceof JSFunction callback)) {
-            return context.throwTypeError("Second argument must be a function");
+        JSValue items = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue iterator = JSIteratorHelper.getIterator(context, items);
+        if (!(iterator instanceof JSObject)) {
+            return context.throwTypeError("Object is not iterable");
         }
 
-        // Get iterator from items
-        if (!(items instanceof JSArray arr)) {
-            return context.throwTypeError("First argument must be an array");
-        }
-
-        // Create a new Map to store groups using JSMap.create to get proper prototype
         JSMap groups = context.createJSMap();
-
-        long length = arr.getLength();
-        for (long i = 0; i < length; i++) {
-            JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i)};
-            JSValue key = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
-
-            // Get existing group for this key from the Map
-            JSValue existingGroup = groups.mapGet(key);
-            JSArray group;
-            if (existingGroup instanceof JSArray) {
-                group = (JSArray) existingGroup;
-            } else {
-                // Create new array for this key
-                group = context.createJSArray();
-                groups.mapSet(key, group);
+        long index = 0;
+        while (true) {
+            if (index >= MAX_SAFE_INTEGER) {
+                closeIterator(context, iterator);
+                return context.throwTypeError("too many elements");
             }
 
-            // Add element to group
-            group.push(element);
+            JSObject nextResult = JSIteratorHelper.iteratorNext(iterator, context);
+            if (context.hasPendingException()) {
+                closeIterator(context, iterator);
+                return JSUndefined.INSTANCE;
+            }
+            if (nextResult == null) {
+                closeIterator(context, iterator);
+                return context.throwTypeError("Iterator result must be an object");
+            }
+
+            JSValue done = nextResult.get("done");
+            if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
+                break;
+            }
+
+            JSValue value = nextResult.get("value");
+            JSValue key = callback.call(context, JSUndefined.INSTANCE, new JSValue[]{value, new JSNumber(index)});
+            if (context.hasPendingException()) {
+                closeIterator(context, iterator);
+                return JSUndefined.INSTANCE;
+            }
+
+            JSValue existingGroup = groups.mapGet(key);
+            JSArray group = existingGroup instanceof JSArray existingArray
+                    ? existingArray
+                    : context.createJSArray();
+            if (!(existingGroup instanceof JSArray)) {
+                groups.mapSet(key, group);
+            }
+            group.push(value);
+            index++;
         }
 
         return groups;

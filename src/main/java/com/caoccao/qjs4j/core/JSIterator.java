@@ -84,13 +84,13 @@ public class JSIterator extends JSObject {
      * Create a Map entries iterator.
      */
     public static JSIterator mapEntriesIterator(JSContext context, JSMap map) {
-        final java.util.Iterator<java.util.Map.Entry<JSMap.KeyWrapper, JSValue>> iter = map.entries().iterator();
+        final JSMap.IterationCursor cursor = map.createIterationCursor();
         return new JSIterator(context, () -> {
-            if (iter.hasNext()) {
-                java.util.Map.Entry<JSMap.KeyWrapper, JSValue> entry = iter.next();
+            JSMap.IterationEntry entry = map.nextIterationEntry(cursor);
+            if (entry != null) {
                 JSArray pair = context.createJSArray();
-                pair.push(entry.getKey().value());
-                pair.push(entry.getValue());
+                pair.push(entry.key());
+                pair.push(entry.value());
                 return IteratorResult.of(context, pair);
             }
             return IteratorResult.done(context);
@@ -101,11 +101,11 @@ public class JSIterator extends JSObject {
      * Create a Map keys iterator.
      */
     public static JSIterator mapKeysIterator(JSContext context, JSMap map) {
-        final java.util.Iterator<JSMap.KeyWrapper> iter = map.keys().iterator();
+        final JSMap.IterationCursor cursor = map.createIterationCursor();
         return new JSIterator(context, () -> {
-            if (iter.hasNext()) {
-                JSValue key = iter.next().value();
-                return IteratorResult.of(context, key);
+            JSMap.IterationEntry entry = map.nextIterationEntry(cursor);
+            if (entry != null) {
+                return IteratorResult.of(context, entry.key());
             }
             return IteratorResult.done(context);
         }, "Map Iterator");
@@ -115,11 +115,11 @@ public class JSIterator extends JSObject {
      * Create a Map values iterator.
      */
     public static JSIterator mapValuesIterator(JSContext context, JSMap map) {
-        final java.util.Iterator<JSValue> iter = map.values().iterator();
+        final JSMap.IterationCursor cursor = map.createIterationCursor();
         return new JSIterator(context, () -> {
-            if (iter.hasNext()) {
-                JSValue value = iter.next();
-                return IteratorResult.of(context, value);
+            JSMap.IterationEntry entry = map.nextIterationEntry(cursor);
+            if (entry != null) {
+                return IteratorResult.of(context, entry.value());
             }
             return IteratorResult.done(context);
         }, "Map Iterator");

@@ -18,9 +18,6 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
 
-import java.util.ArrayList;
-import java.util.Map;
-
 /**
  * Implementation of Map.prototype methods.
  * Based on ES2020 Map specification.
@@ -86,56 +83,21 @@ public final class MapPrototype {
 
         JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
-        // Create a snapshot of keys to iterate over
-        // Following QuickJS behavior:
-        // - Visit entries present at start, plus any added during iteration
-        // - Skip entries that are deleted during iteration
-        ArrayList<JSMap.KeyWrapper> keys = new ArrayList<>();
-        for (Map.Entry<JSMap.KeyWrapper, JSValue> entry : map.entries()) {
-            keys.add(entry.getKey());
-        }
-
-        // Iterate through the keys using an index so we can see newly added entries
-        int index = 0;
-        while (index < keys.size()) {
-            JSMap.KeyWrapper keyWrapper = keys.get(index);
-            JSValue key = keyWrapper.value();
-
-            // Check if the key still exists in the map (might have been deleted during iteration)
-            if (!map.mapHas(key)) {
-                // Key was deleted, skip it (following QuickJS behavior)
-                index++;
-                continue;
+        JSMap.IterationCursor cursor = map.createIterationCursor();
+        while (true) {
+            JSMap.IterationEntry entry = map.nextIterationEntry(cursor);
+            if (entry == null) {
+                break;
             }
-
-            JSValue value = map.mapGet(key);
+            JSValue key = entry.key();
+            JSValue value = entry.value();
 
             // Call callback with (value, key, map)
             JSValue[] callbackArgs = new JSValue[]{value, key, map};
-            JSValue result = callback.call(context, callbackThisArg, callbackArgs);
-
-            // Check for exceptions
-            if (result instanceof JSError) {
-                return result;
+            callback.call(context, callbackThisArg, callbackArgs);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
-
-            // Check if new entries were added during the callback
-            // Add any new keys that aren't already in our iteration list
-            if (map.size() > keys.size()) {
-                // Get current keys from map
-                java.util.Set<JSMap.KeyWrapper> currentKeys = new java.util.HashSet<>();
-                for (Map.Entry<JSMap.KeyWrapper, JSValue> entry : map.entries()) {
-                    currentKeys.add(entry.getKey());
-                }
-                // Add keys that are in the map but not in our iteration list
-                for (JSMap.KeyWrapper newKey : currentKeys) {
-                    if (!keys.contains(newKey)) {
-                        keys.add(newKey);
-                    }
-                }
-            }
-
-            index++;
         }
 
         return JSUndefined.INSTANCE;
@@ -156,6 +118,49 @@ public final class MapPrototype {
     }
 
     /**
+     * Map.prototype.getOrInsert(key, defaultValue)
+     * QuickJS extension.
+     */
+    public static JSValue getOrInsert(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSMap map)) {
+            return context.throwTypeError("Map.prototype.getOrInsert called on non-Map");
+        }
+        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (map.mapHas(key)) {
+            return map.mapGet(key);
+        }
+        JSValue value = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        map.mapSet(key, value);
+        return value;
+    }
+
+    /**
+     * Map.prototype.getOrInsertComputed(key, callback)
+     * QuickJS extension.
+     */
+    public static JSValue getOrInsertComputed(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSMap map)) {
+            return context.throwTypeError("Map.prototype.getOrInsertComputed called on non-Map");
+        }
+        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (map.mapHas(key)) {
+            return map.mapGet(key);
+        }
+        if (args.length < 2 || !(args[1] instanceof JSFunction callback)) {
+            return context.throwTypeError("not a function");
+        }
+
+        JSValue value = callback.call(context, JSUndefined.INSTANCE, new JSValue[]{key});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        // Match QuickJS behavior: callback can mutate the map, but computed result wins.
+        map.mapDelete(key);
+        map.mapSet(key, value);
+        return value;
+    }
+
+    /**
      * get Map.prototype.size
      * ES2020 23.1.3.10
      * Returns the number of entries in the Map.
@@ -166,6 +171,13 @@ public final class MapPrototype {
         }
 
         return new JSNumber(map.size());
+    }
+
+    public static JSValue getToStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSMap)) {
+            return context.throwTypeError("get Map.prototype[Symbol.toStringTag] called on non-Map");
+        }
+        return new JSString(JSMap.NAME);
     }
 
     /**

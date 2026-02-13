@@ -861,6 +861,28 @@ public class MapPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    void testGetOrInsertMethods() {
+        assertThat(context.eval("""
+                const m = new Map();
+                const v1 = m.getOrInsert('x', 1);
+                const v2 = m.getOrInsert('x', 2);
+                let calls = 0;
+                const v3 = m.getOrInsertComputed('x', () => { calls++; return 3; });
+                const v4 = m.getOrInsertComputed('y', () => { calls++; m.set('y', 99); return 4; });
+                v1 === 1 && v2 === 1 && v3 === 1 && v4 === 4 && m.get('y') === 4 && calls === 1""").toJavaObject())
+                .isEqualTo(true);
+        assertThat(context.eval("""
+                (() => {
+                  try {
+                    new Map().getOrInsertComputed('x', 1);
+                    return false;
+                  } catch (e) {
+                    return e instanceof TypeError;
+                  }
+                })()""").toJavaObject()).isEqualTo(true);
+    }
+
+    @Test
     public void testGetSize() {
         JSMap map = new JSMap();
 
@@ -1112,6 +1134,53 @@ public class MapPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    void testMapConstructorClosesIteratorOnError() {
+        boolean[] closed = {false};
+        boolean[] produced = {false};
+        JSObject iterator = context.createJSObject();
+        JSNativeFunction nextFunction = new JSNativeFunction("next", 0, (childContext, thisArg, args) -> {
+            JSObject result = childContext.createJSObject();
+            if (produced[0]) {
+                result.set("done", JSBoolean.TRUE);
+                result.set("value", JSUndefined.INSTANCE);
+                return result;
+            }
+            produced[0] = true;
+            JSArray entry = childContext.createJSArray();
+            entry.push(new JSNumber(1));
+            entry.push(new JSNumber(2));
+            result.set("done", JSBoolean.FALSE);
+            result.set("value", entry);
+            return result;
+        });
+        JSNativeFunction returnFunction = new JSNativeFunction("return", 0, (childContext, thisArg, args) -> {
+            JSObject result = childContext.createJSObject();
+            result.set("done", JSBoolean.TRUE);
+            result.set("value", JSUndefined.INSTANCE);
+            closed[0] = true;
+            return result;
+        });
+        iterator.set("next", nextFunction);
+        iterator.set("return", returnFunction);
+
+        JSObject iterable = context.createJSObject();
+        iterable.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
+                new JSNativeFunction("[Symbol.iterator]", 0, (childContext, thisArg, args) -> iterator));
+
+        JSObject mapConstructor = context.getGlobalObject().get("Map").asObject().orElseThrow();
+        JSObject mapPrototype = mapConstructor.get("prototype").asObject().orElseThrow();
+        JSValue originalSet = mapPrototype.get("set");
+        mapPrototype.set("set", new JSNativeFunction("set", 2, (childContext, thisArg, args) -> childContext.throwError("Error", "boom")));
+        try {
+            JSValue result = JSMap.create(context, iterable);
+            assertThat(result.isError()).isTrue();
+            assertThat(closed[0]).isTrue();
+        } finally {
+            mapPrototype.set("set", originalSet);
+        }
+    }
+
+    @Test
     void testMapConstructorEmpty() {
         // Empty Map
         assertIntegerWithJavet("new Map().size");
@@ -1156,12 +1225,71 @@ public class MapPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    void testMapIteratorMutationSemantics() {
+        assertStringWithJavet("""
+                const m = new Map([[1, 'a'], [2, 'b']]);
+                const it = m.keys();
+                const out = [];
+                out.push(it.next().value);
+                m.set(3, 'c');
+                out.push(it.next().value);
+                out.push(it.next().value);
+                JSON.stringify(out)""");
+
+        assertStringWithJavet("""
+                const m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
+                const it = m.keys();
+                const out = [];
+                out.push(it.next().value);
+                m.delete(2);
+                m.set(2, 'bb');
+                for (let n = it.next(); !n.done; n = it.next()) out.push(n.value);
+                JSON.stringify(out)""");
+    }
+
+    @Test
     void testMapKeysWithForOf() {
         // for-of over Map.keys()
         assertStringWithJavet("""
                 var result = '';
                 for (var k of new Map([[1, 'a'], [2, 'b']]).keys()) result += k;
                 result""");
+    }
+
+    @Test
+    void testMapPrototypeDescriptors() {
+        assertBooleanWithJavet("""
+                (() => {
+                  const setDesc = Object.getOwnPropertyDescriptor(Map.prototype, 'set');
+                  const iteratorDesc = Object.getOwnPropertyDescriptor(Map.prototype, Symbol.iterator);
+                  const tagDesc = Object.getOwnPropertyDescriptor(Map.prototype, Symbol.toStringTag);
+                  return setDesc.enumerable === false
+                    && setDesc.writable === true
+                    && setDesc.configurable === true
+                    && iteratorDesc.enumerable === false
+                    && Map.prototype[Symbol.iterator] === Map.prototype.entries
+                    && tagDesc.value === 'Map'
+                    && tagDesc.enumerable === false
+                    && tagDesc.writable === false
+                    && tagDesc.configurable === true
+                    && Object.prototype.toString.call(new Map()) === '[object Map]';
+                })()""");
+
+        assertThat(context.eval("""
+                (() => {
+                  const d1 = Object.getOwnPropertyDescriptor(Map.prototype, 'getOrInsert');
+                  const d2 = Object.getOwnPropertyDescriptor(Map.prototype, 'getOrInsertComputed');
+                  return typeof d1.value === 'function'
+                    && d1.writable === true
+                    && d1.enumerable === false
+                    && d1.configurable === true
+                    && d1.value.length === 2
+                    && typeof d2.value === 'function'
+                    && d2.writable === true
+                    && d2.enumerable === false
+                    && d2.configurable === true
+                    && d2.value.length === 2;
+                })()""").toJavaObject()).isEqualTo(true);
     }
 
     @Test

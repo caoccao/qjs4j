@@ -1038,31 +1038,35 @@ public final class JSGlobalObject {
     private void initializeMapConstructor(JSContext context, JSObject global) {
         // Create Map.prototype
         JSObject mapPrototype = context.createJSObject();
-        mapPrototype.set("set", new JSNativeFunction("set", 2, MapPrototype::set));
-        mapPrototype.set("get", new JSNativeFunction("get", 1, MapPrototype::get));
-        mapPrototype.set("has", new JSNativeFunction("has", 1, MapPrototype::has));
-        mapPrototype.set("delete", new JSNativeFunction("delete", 1, MapPrototype::delete));
-        mapPrototype.set("clear", new JSNativeFunction("clear", 0, MapPrototype::clear));
-        mapPrototype.set("forEach", new JSNativeFunction("forEach", 1, MapPrototype::forEach));
+        mapPrototype.definePropertyWritableConfigurable("set", new JSNativeFunction("set", 2, MapPrototype::set));
+        mapPrototype.definePropertyWritableConfigurable("get", new JSNativeFunction("get", 1, MapPrototype::get));
+        mapPrototype.definePropertyWritableConfigurable("getOrInsert", new JSNativeFunction("getOrInsert", 2, MapPrototype::getOrInsert));
+        mapPrototype.definePropertyWritableConfigurable("getOrInsertComputed", new JSNativeFunction("getOrInsertComputed", 2, MapPrototype::getOrInsertComputed));
+        mapPrototype.definePropertyWritableConfigurable("has", new JSNativeFunction("has", 1, MapPrototype::has));
+        mapPrototype.definePropertyWritableConfigurable("delete", new JSNativeFunction("delete", 1, MapPrototype::delete));
+        mapPrototype.definePropertyWritableConfigurable("clear", new JSNativeFunction("clear", 0, MapPrototype::clear));
+        mapPrototype.definePropertyWritableConfigurable("forEach", new JSNativeFunction("forEach", 1, MapPrototype::forEach));
         // Create entries function once and use it for both entries and Symbol.iterator (ES spec requirement)
         JSNativeFunction entriesFunction = new JSNativeFunction("entries", 0, IteratorPrototype::mapEntriesIterator);
-        mapPrototype.set("entries", entriesFunction);
-        mapPrototype.set("keys", new JSNativeFunction("keys", 0, IteratorPrototype::mapKeysIterator));
-        mapPrototype.set("values", new JSNativeFunction("values", 0, IteratorPrototype::mapValuesIterator));
+        mapPrototype.definePropertyWritableConfigurable("entries", entriesFunction);
+        mapPrototype.definePropertyWritableConfigurable("keys", new JSNativeFunction("keys", 0, IteratorPrototype::mapKeysIterator));
+        mapPrototype.definePropertyWritableConfigurable("values", new JSNativeFunction("values", 0, IteratorPrototype::mapValuesIterator));
         // Map.prototype[Symbol.iterator] is the same function object as entries() (QuickJS uses JS_ALIAS_DEF)
-        mapPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), entriesFunction);
+        mapPrototype.definePropertyWritableConfigurable(JSSymbol.ITERATOR, entriesFunction);
 
         // Map.prototype.size getter
         mapPrototype.defineGetterConfigurable("size", MapPrototype::getSize);
+        mapPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSMap.NAME));
 
         // Create Map constructor as JSNativeFunction
         JSNativeFunction mapConstructor = new JSNativeFunction("Map", 0, MapConstructor::call, true, true);
         mapConstructor.set("prototype", mapPrototype);
         mapConstructor.setConstructorType(JSConstructorType.MAP); // Mark as Map constructor
-        mapPrototype.set("constructor", mapConstructor);
+        mapPrototype.definePropertyWritableConfigurable("constructor", mapConstructor);
 
         // Map static methods
-        mapConstructor.set("groupBy", new JSNativeFunction("groupBy", 2, MapConstructor::groupBy));
+        mapConstructor.definePropertyWritableConfigurable("groupBy", new JSNativeFunction("groupBy", 2, MapConstructor::groupBy));
+        mapConstructor.defineGetterConfigurable(JSSymbol.SPECIES, MapConstructor::getSpecies);
 
         global.definePropertyWritableConfigurable("Map", mapConstructor);
     }
