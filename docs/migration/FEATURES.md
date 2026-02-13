@@ -211,7 +211,7 @@ This document provides a comprehensive list of all JavaScript features implement
 - **Exponential**: exp, log, log10, log2, log1p, expm1
 - **Power**: pow, sqrt, cbrt, hypot
 - **Trigonometric**: sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh
-- **Utility**: min, max, random, clz32, imul, fround
+- **Utility**: min, max, random, clz32, imul, fround, f16round, sumPrecise
 
 ### JSON
 - **Parsing**: JSON.parse() with reviver function

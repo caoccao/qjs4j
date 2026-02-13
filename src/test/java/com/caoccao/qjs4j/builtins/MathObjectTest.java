@@ -163,6 +163,15 @@ public class MathObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testF16Round() {
+        assertThat(context.eval("typeof Math.f16round").toJavaObject()).isEqualTo("function");
+        assertThat(context.eval("Math.f16round.length").toJavaObject()).isEqualTo(1.0);
+        assertThat(context.eval("Math.f16round(1.337)").toJavaObject()).isEqualTo(1.3369140625);
+        assertThat(context.eval("Object.is(Math.f16round(-0), -0)").toJavaObject()).isEqualTo(true);
+        assertThat(context.eval("Math.f16round(Infinity)").toJavaObject()).isEqualTo(Double.POSITIVE_INFINITY);
+    }
+
+    @Test
     public void testFloor() {
         // Normal case: positive number
         JSValue result = MathObject.floor(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(4.9)});
@@ -238,6 +247,30 @@ public class MathObjectTest extends BaseJavetTest {
         // Edge case: no arguments
         result = MathObject.asin(context, JSUndefined.INSTANCE, new JSValue[]{});
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+    }
+
+    @Test
+    public void testMathObjectRegistration() {
+        assertBooleanWithJavet("""
+                (() => {
+                  const piDesc = Object.getOwnPropertyDescriptor(Math, 'PI');
+                  const absDesc = Object.getOwnPropertyDescriptor(Math, 'abs');
+                  const tagDesc = Object.getOwnPropertyDescriptor(Math, Symbol.toStringTag);
+                  return Object.keys(Math).length === 0
+                    && piDesc.writable === false
+                    && piDesc.enumerable === false
+                    && piDesc.configurable === false
+                    && typeof piDesc.value === 'number'
+                    && absDesc.writable === true
+                    && absDesc.enumerable === false
+                    && absDesc.configurable === true
+                    && typeof absDesc.value === 'function'
+                    && tagDesc.value === 'Math'
+                    && tagDesc.writable === false
+                    && tagDesc.enumerable === false
+                    && tagDesc.configurable === true;
+                })()
+                """);
     }
 
     @Test
@@ -370,6 +403,17 @@ public class MathObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testRoundAndFroundEdgeCases() {
+        assertBooleanWithJavet("Object.is(Math.round(-0.5), -0)");
+        assertBooleanWithJavet("Object.is(Math.round(-0.1), -0)");
+        assertBooleanWithJavet("Math.round(-1.5) === -1");
+        assertBooleanWithJavet("Math.round(0.5) === 1");
+        assertBooleanWithJavet("Object.is(Math.fround(-0), -0)");
+        assertBooleanWithJavet("Math.fround(1.337) === 1.3370000123977661");
+        assertBooleanWithJavet("Math.hypot(NaN, Infinity) === Infinity");
+    }
+
+    @Test
     public void testSign() {
         // Normal case: positive number
         JSValue result = MathObject.sign(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(5)});
@@ -448,6 +492,56 @@ public class MathObjectTest extends BaseJavetTest {
                 "1 - 1",
                 "var a = 1; var b = 2; a - b",
                 "2**32 - 2**32");
+    }
+
+    @Test
+    public void testSumPrecise() {
+        assertThat(context.eval("typeof Math.sumPrecise").toJavaObject()).isEqualTo("function");
+        assertThat(context.eval("Math.sumPrecise.length").toJavaObject()).isEqualTo(1.0);
+        assertThat(context.eval("Math.sumPrecise([1e100, 1, -1e100])").toJavaObject()).isEqualTo(1.0);
+        assertThat(context.eval("Object.is(Math.sumPrecise([]), -0)").toJavaObject()).isEqualTo(true);
+        assertThat(context.eval("Object.is(Math.sumPrecise([0]), +0)").toJavaObject()).isEqualTo(true);
+        assertThat(context.eval("Object.is(Math.sumPrecise([-0]), -0)").toJavaObject()).isEqualTo(true);
+        assertThat(context.eval("Number.isNaN(Math.sumPrecise([Infinity, -Infinity]))").toJavaObject()).isEqualTo(true);
+        assertThat(context.eval("""
+                (() => {
+                  const iterable = {
+                    [Symbol.iterator]() {
+                      const iterator = {
+                        i: 0,
+                        closed: 0,
+                        next: function () {
+                          if (this.i === 0) {
+                            this.i++;
+                            return { value: 1, done: false };
+                          }
+                          if (this.i === 1) {
+                            this.i++;
+                            return { value: 'x', done: false };
+                          }
+                          return { value: undefined, done: true };
+                        },
+                        \u0072eturn: function () {
+                          this.closed++;
+                          return { done: true };
+                        }
+                      };
+                      this.iteratorRef = iterator;
+                      return iterator;
+                    }
+                  };
+                  try {
+                    Math.sumPrecise(iterable);
+                    return false;
+                  } catch (e) {
+                    const it = iterable.iteratorRef;
+                    return e instanceof TypeError
+                      && it
+                      && typeof it.return === 'function'
+                      && it.closed === 1;
+                  }
+                })()
+                """).toJavaObject()).isEqualTo(true);
     }
 
     @Test

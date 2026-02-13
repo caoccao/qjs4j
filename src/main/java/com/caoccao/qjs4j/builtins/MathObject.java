@@ -16,17 +16,14 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSNumber;
-import com.caoccao.qjs4j.core.JSTypeConversions;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.utils.Float16;
 
 /**
  * Implementation of JavaScript Math object.
  * Based on ES2020 Math object specification.
  */
 public final class MathObject {
-
     // Math constants
     public static final double E = Math.E;           // 2.718281828459045
     public static final double LN10 = Math.log(10);  // 2.302585092994046
@@ -36,6 +33,11 @@ public final class MathObject {
     public static final double PI = Math.PI;          // 3.141592653589793
     public static final double SQRT1_2 = Math.sqrt(0.5);     // 0.7071067811865476
     public static final double SQRT2 = Math.sqrt(2); // 1.4142135623730951
+    private static final int SP_LIMB_BITS = 56;
+    private static final long SP_LIMB_MASK = (1L << SP_LIMB_BITS) - 1;
+    private static final int SP_RND_BITS = SP_LIMB_BITS - 53;
+    private static final int SUM_PRECISE_ACC_LEN = 39;
+    private static final int SUM_PRECISE_COUNTER_INIT = 250;
 
     /**
      * Math.abs(x)
@@ -158,6 +160,20 @@ public final class MathObject {
         return new JSNumber(Math.ceil(x));
     }
 
+    private static void closeIterator(JSContext context, JSObject iterator) {
+        JSValue pendingException = context.getPendingException();
+        if (pendingException != null) {
+            context.clearPendingException();
+        }
+        JSValue returnMethod = iterator.get("return");
+        if (returnMethod instanceof JSFunction returnFunction) {
+            returnFunction.call(context, iterator, new JSValue[0]);
+        }
+        if (pendingException != null) {
+            context.setPendingException(pendingException);
+        }
+    }
+
     /**
      * Math.clz32(x)
      * ES2020 20.2.2.11
@@ -221,6 +237,19 @@ public final class MathObject {
     }
 
     /**
+     * Math.f16round(x)
+     * QuickJS extension.
+     */
+    public static JSValue f16round(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (args.length == 0) {
+            return new JSNumber(Double.NaN);
+        }
+        double x = JSTypeConversions.toNumber(context, args[0]).value();
+        short half = Float16.toHalf((float) x);
+        return new JSNumber(Float16.toFloat(half));
+    }
+
+    /**
      * Math.floor(x)
      * ES2020 20.2.2.16
      */
@@ -242,7 +271,7 @@ public final class MathObject {
             return new JSNumber(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(x);
+        return new JSNumber((float) x);
     }
 
     /**
@@ -251,18 +280,19 @@ public final class MathObject {
      * Returns sqrt(sum of squares)
      */
     public static JSValue hypot(JSContext context, JSValue thisArg, JSValue[] args) {
-        double sum = 0.0;
-        for (JSValue arg : args) {
-            double x = JSTypeConversions.toNumber(context, arg).value();
-            if (Double.isInfinite(x)) {
-                return new JSNumber(Double.POSITIVE_INFINITY);
+        double result = 0.0;
+        if (args.length > 0) {
+            result = JSTypeConversions.toNumber(context, args[0]).value();
+            if (args.length == 1) {
+                result = Math.abs(result);
+            } else {
+                for (int i = 1; i < args.length; i++) {
+                    double x = JSTypeConversions.toNumber(context, args[i]).value();
+                    result = Math.hypot(result, x);
+                }
             }
-            if (Double.isNaN(x)) {
-                return new JSNumber(Double.NaN);
-            }
-            sum += x * x;
         }
-        return new JSNumber(Math.sqrt(sum));
+        return new JSNumber(result);
     }
 
     /**
@@ -392,10 +422,13 @@ public final class MathObject {
             return new JSNumber(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        if (Double.isNaN(x)) {
-            return new JSNumber(Double.NaN);
+        if (Double.isNaN(x) || x == 0.0 || Double.isInfinite(x)) {
+            return new JSNumber(x);
         }
-        return new JSNumber(Math.round(x));
+        if (x >= -0.5 && x < 0) {
+            return new JSNumber(-0.0);
+        }
+        return new JSNumber(Math.floor(x + 0.5));
     }
 
     /**
@@ -447,6 +480,42 @@ public final class MathObject {
     }
 
     /**
+     * Math.sumPrecise(iterable)
+     * QuickJS extension.
+     */
+    public static JSValue sumPrecise(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSValue iterable = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue iteratorValue = JSIteratorHelper.getIterator(context, iterable);
+        if (!(iteratorValue instanceof JSObject iterator)) {
+            return context.throwTypeError("value is not iterable");
+        }
+
+        SumPreciseState state = new SumPreciseState();
+        while (true) {
+            JSObject nextResult = JSIteratorHelper.iteratorNext(iterator, context);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (nextResult == null) {
+                return context.throwTypeError("Iterator result must be an object");
+            }
+            JSValue done = nextResult.get("done");
+            if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
+                break;
+            }
+
+            JSValue item = nextResult.get("value");
+            if (!(item instanceof JSNumber number)) {
+                context.throwTypeError("not a number");
+                closeIterator(context, iterator);
+                return JSUndefined.INSTANCE;
+            }
+            state.add(number.value());
+        }
+        return new JSNumber(state.getResult());
+    }
+
+    /**
      * Math.tan(x)
      * ES2020 20.2.2.33
      */
@@ -483,5 +552,176 @@ public final class MathObject {
             return new JSNumber(x);
         }
         return new JSNumber(x > 0 ? Math.floor(x) : Math.ceil(x));
+    }
+
+    private enum SumPreciseStateType {
+        FINITE,
+        INFINITY,
+        MINUS_INFINITY,
+        NAN,
+    }
+
+    private static final class SumPreciseState {
+        private final long[] acc;
+        private int counter;
+        private int nLimbs;
+        private SumPreciseStateType state;
+
+        private SumPreciseState() {
+            this.acc = new long[SUM_PRECISE_ACC_LEN];
+            this.counter = SUM_PRECISE_COUNTER_INIT;
+            this.nLimbs = 0;
+            this.state = SumPreciseStateType.FINITE;
+        }
+
+        private void add(double d) {
+            long bits = Double.doubleToRawLongBits(d);
+            int sign = (int) (bits >>> 63);
+            int exponent = (int) ((bits >>> 52) & 0x7ffL);
+            long mantissa = bits & ((1L << 52) - 1);
+
+            if (exponent == 2047) {
+                if (mantissa == 0) {
+                    if (state == SumPreciseStateType.NAN
+                            || (state == SumPreciseStateType.MINUS_INFINITY && sign == 0)
+                            || (state == SumPreciseStateType.INFINITY && sign != 0)) {
+                        state = SumPreciseStateType.NAN;
+                    } else {
+                        state = sign == 0 ? SumPreciseStateType.INFINITY : SumPreciseStateType.MINUS_INFINITY;
+                    }
+                } else {
+                    state = SumPreciseStateType.NAN;
+                }
+                return;
+            }
+
+            int p;
+            int shift;
+            if (exponent == 0) {
+                if (mantissa == 0) {
+                    if (nLimbs == 0 && sign == 0) {
+                        nLimbs = 1;
+                    }
+                    return;
+                }
+                p = 0;
+                shift = 0;
+            } else {
+                mantissa |= (1L << 52);
+                shift = exponent - 1;
+                p = shift / SP_LIMB_BITS;
+                shift = shift % SP_LIMB_BITS;
+            }
+
+            long a0 = (mantissa << shift) & SP_LIMB_MASK;
+            long a1 = mantissa >>> (SP_LIMB_BITS - shift);
+            if (sign == 0) {
+                acc[p] += a0;
+                acc[p + 1] += a1;
+            } else {
+                acc[p] -= a0;
+                acc[p + 1] -= a1;
+            }
+            nLimbs = Math.max(nLimbs, p + 2);
+
+            if (--counter == 0) {
+                counter = SUM_PRECISE_COUNTER_INIT;
+                renorm();
+            }
+        }
+
+        private double getResult() {
+            if (state != SumPreciseStateType.FINITE) {
+                return switch (state) {
+                    case INFINITY -> Double.POSITIVE_INFINITY;
+                    case MINUS_INFINITY -> Double.NEGATIVE_INFINITY;
+                    default -> Double.NaN;
+                };
+            }
+
+            renorm();
+            int n = nLimbs;
+            if (n == 0) {
+                return -0.0;
+            }
+            while (n > 0 && acc[n - 1] == 0) {
+                n--;
+            }
+            if (n == 0) {
+                return 0.0;
+            }
+
+            boolean isNeg = acc[n - 1] < 0;
+            if (isNeg) {
+                long carry = 1;
+                for (int i = 0; i < n - 1; i++) {
+                    long v = SP_LIMB_MASK - acc[i] + carry;
+                    carry = v >> SP_LIMB_BITS;
+                    acc[i] = v & SP_LIMB_MASK;
+                }
+                acc[n - 1] = -acc[n - 1] + carry - 1;
+                while (n > 1 && acc[n - 1] == 0) {
+                    n--;
+                }
+            }
+
+            if (n == 1 && Long.compareUnsigned(acc[0], 1L << 52) < 0) {
+                long bits = ((isNeg ? 1L : 0L) << 63) | acc[0];
+                return Double.longBitsToDouble(bits);
+            }
+
+            int exponent = n * SP_LIMB_BITS;
+            int p = n - 1;
+            long mantissa = acc[p];
+            int shift = Long.numberOfLeadingZeros(mantissa) - (64 - SP_LIMB_BITS);
+            exponent = exponent - shift - 52;
+            if (shift != 0) {
+                mantissa <<= shift;
+                if (p > 0) {
+                    p--;
+                    int shift1 = SP_LIMB_BITS - shift;
+                    long nz = acc[p] & ((1L << shift1) - 1);
+                    mantissa = mantissa | (acc[p] >>> shift1) | (nz != 0 ? 1L : 0L);
+                }
+            }
+
+            long roundMask = (1L << SP_RND_BITS) - 1;
+            long half = 1L << (SP_RND_BITS - 1);
+            if ((mantissa & roundMask) == half) {
+                while (p > 0) {
+                    p--;
+                    if (acc[p] != 0) {
+                        mantissa |= 1L;
+                        break;
+                    }
+                }
+            }
+
+            long addend = half - 1 + ((mantissa >> SP_RND_BITS) & 1L);
+            mantissa = (mantissa + addend) >> SP_RND_BITS;
+            if (mantissa == (1L << 53)) {
+                exponent++;
+            }
+            if (exponent >= 2047) {
+                long bits = ((isNeg ? 1L : 0L) << 63) | ((long) 2047 << 52);
+                return Double.longBitsToDouble(bits);
+            }
+
+            mantissa &= ((1L << 52) - 1);
+            long bits = ((isNeg ? 1L : 0L) << 63) | ((long) exponent << 52) | mantissa;
+            return Double.longBitsToDouble(bits);
+        }
+
+        private void renorm() {
+            long carry = 0;
+            for (int i = 0; i < nLimbs; i++) {
+                long v = acc[i] + carry;
+                acc[i] = v & SP_LIMB_MASK;
+                carry = v >> SP_LIMB_BITS;
+            }
+            if (carry != 0 && nLimbs < SUM_PRECISE_ACC_LEN) {
+                acc[nLimbs++] = carry;
+            }
+        }
     }
 }

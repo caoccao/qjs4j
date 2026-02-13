@@ -14,7 +14,7 @@ This document tracks the progress of migrating QuickJS functionality to pure Jav
 - Date constructor and methods
 - RegExp support
 - Error constructors (Error, TypeError, RangeError, etc.)
-- Math object with all functions
+- Math object with QuickJS function coverage (including `f16round()` and `sumPrecise()`)
 - JSON object (parse, stringify)
 - Global functions (parseInt, parseFloat, isNaN, isFinite, URI encoding/decoding)
 - Object constructor with static methods
