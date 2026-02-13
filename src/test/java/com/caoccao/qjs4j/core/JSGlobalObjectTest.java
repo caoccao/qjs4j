@@ -86,6 +86,33 @@ public class JSGlobalObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testGlobalFunctionDescriptorsForUriAndNumericParsing() {
+        assertBooleanWithJavet(
+                "Object.getOwnPropertyDescriptor(globalThis, 'decodeURI').writable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'decodeURI').enumerable === false",
+                "Object.getOwnPropertyDescriptor(globalThis, 'decodeURI').configurable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'decodeURIComponent').writable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'encodeURI').writable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'encodeURIComponent').writable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'escape').writable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'unescape').writable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'isFinite').writable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'isNaN').writable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'parseFloat').writable === true",
+                "Object.getOwnPropertyDescriptor(globalThis, 'parseInt').writable === true",
+                "decodeURI.length === 1",
+                "decodeURIComponent.length === 1",
+                "encodeURI.length === 1",
+                "encodeURIComponent.length === 1",
+                "escape.length === 1",
+                "unescape.length === 1",
+                "isFinite.length === 1",
+                "isNaN.length === 1",
+                "parseFloat.length === 1",
+                "parseInt.length === 2");
+    }
+
+    @Test
     public void testGlobalFunctionErrorsWithQuickJSSemantics() {
         String[] codeArray = {
                 "new parseInt()",
@@ -156,6 +183,38 @@ public class JSGlobalObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testParseFloatEdgeCasesWithJavet() {
+        assertBooleanWithJavet(
+                "Object.is(parseFloat('1e'), 1)",
+                "Object.is(parseFloat('1e+'), 1)",
+                "Object.is(parseFloat('-0x1'), -0)",
+                "Object.is(parseFloat('+.8xyz'), 0.8)",
+                "Object.is(parseFloat('InfinityandMore'), Infinity)",
+                "Object.is(parseFloat('-Infinity-and-more'), -Infinity)",
+                "Number.isNaN(parseFloat('.'))",
+                "Number.isNaN(parseFloat('+.'))",
+                "Number.isNaN(parseFloat('e10'))");
+    }
+
+    @Test
+    public void testParseIntEdgeCasesWithJavet() {
+        assertBooleanWithJavet(
+                "Object.is(parseInt('10', Infinity), 10)",
+                "Object.is(parseInt('10', -Infinity), 10)",
+                "Object.is(parseInt('10', 4294967298), 2)",
+                "Object.is(parseInt('0x10', 17), 0)",
+                "Object.is(parseInt('  -0xF'), -15)",
+                "Object.is(parseInt('+0x10', 16), 16)",
+                "Object.is(parseInt('123xyz', 10), 123)",
+                "Number.isNaN(parseInt('１２３', 10))",
+                "Number.isNaN(parseInt('', 10))",
+                "Number.isNaN(parseInt('+', 10))");
+        assertStringWithJavet(
+                "(() => { try { parseInt('10', 1n); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { parseInt('10', Symbol()); return 'no error'; } catch (e) { return e.name; } })()");
+    }
+
+    @Test
     public void testUnescape() {
         assertStringWithJavet(
                 // Test basic %XX sequences
@@ -180,5 +239,26 @@ public class JSGlobalObjectTest extends BaseJavetTest {
                 "unescape('%uGGGG')",
                 "JSON.stringify(Object.getOwnPropertyDescriptor(unescape, \"name\"))",
                 "JSON.stringify(Object.getOwnPropertyDescriptor(unescape, \"length\"))");
+    }
+
+    @Test
+    public void testUriEncodeDecodeEdgeCasesWithJavet() {
+        assertStringWithJavet(
+                "encodeURI('https://example.com/a b?x=1&y=#hash')",
+                "encodeURI(';/?:@&=+$,#')",
+                "encodeURIComponent(';/?:@&=+$,#')",
+                "encodeURIComponent('a+b c')",
+                "decodeURI('https://example.com/a%20b?x=%23#hash')",
+                "decodeURIComponent('a%2Bb%20c%2F%3F%23')",
+                "decodeURIComponent('%F0%9F%98%80')",
+                "decodeURI('%E4%BD%A0%E5%A5%BD')");
+        assertStringWithJavet(
+                "(() => { try { decodeURI('%'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { decodeURI('%E0%A4%A'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { decodeURI('%C0%AF'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { decodeURIComponent('%ED%A0%80'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { encodeURI('\\uD800'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { encodeURI('\\uDC00'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { encodeURI('\\uD800A'); return 'no error'; } catch (e) { return e.name; } })()");
     }
 }

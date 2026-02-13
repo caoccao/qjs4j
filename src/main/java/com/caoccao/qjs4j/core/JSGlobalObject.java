@@ -20,9 +20,6 @@ import com.caoccao.qjs4j.builtins.*;
 import com.caoccao.qjs4j.exceptions.JSErrorType;
 import com.caoccao.qjs4j.exceptions.JSException;
 
-import java.net.URLDecoder;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -38,10 +35,49 @@ import java.util.stream.Stream;
  * - URI handling functions (encodeURI, decodeURI, encodeURIComponent, decodeURIComponent)
  */
 public final class JSGlobalObject {
+    private static final char[] HEX_CHARS = "0123456789ABCDEF".toCharArray();
+    private static final String URI_RESERVED = ";/?:@&=+$,#";
     private final JSConsole console;
 
     public JSGlobalObject() {
         this.console = new JSConsole();
+    }
+
+    private void appendPercentHex(StringBuilder result, int c) {
+        result.append('%');
+        result.append(HEX_CHARS[(c >> 4) & 0xF]);
+        result.append(HEX_CHARS[c & 0xF]);
+    }
+
+    private int asciiDigitValue(char c) {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if (c >= 'A' && c <= 'Z') {
+            return c - 'A' + 10;
+        }
+        if (c >= 'a' && c <= 'z') {
+            return c - 'a' + 10;
+        }
+        return -1;
+    }
+
+    private int decodeHexByte(JSContext context, String str, int index) {
+        if (index >= str.length() || str.charAt(index) != '%') {
+            context.throwURIError("expecting %");
+            return -1;
+        }
+        if (index + 2 >= str.length()) {
+            context.throwURIError("expecting hex digit");
+            return -1;
+        }
+        int high = fromHex(str.charAt(index + 1));
+        int low = fromHex(str.charAt(index + 2));
+        if (high < 0 || low < 0) {
+            context.throwURIError("expecting hex digit");
+            return -1;
+        }
+        return (high << 4) | low;
     }
 
     /**
@@ -53,13 +89,7 @@ public final class JSGlobalObject {
     public JSValue decodeURI(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue encodedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String encodedString = JSTypeConversions.toString(context, encodedValue).value();
-
-        try {
-            String decoded = URLDecoder.decode(encodedString, StandardCharsets.UTF_8);
-            return new JSString(decoded);
-        } catch (Exception e) {
-            return context.throwURIError("URI malformed");
-        }
+        return decodeURIImpl(context, encodedString, false);
     }
 
     /**
@@ -71,13 +101,75 @@ public final class JSGlobalObject {
     public JSValue decodeURIComponent(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue encodedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String encodedString = JSTypeConversions.toString(context, encodedValue).value();
+        return decodeURIImpl(context, encodedString, true);
+    }
 
-        try {
-            String decoded = URLDecoder.decode(encodedString, StandardCharsets.UTF_8);
-            return new JSString(decoded);
-        } catch (Exception e) {
-            return context.throwURIError("URI malformed");
+    private JSValue decodeURIImpl(JSContext context, String encodedString, boolean isComponent) {
+        StringBuilder result = new StringBuilder(encodedString.length());
+        int k = 0;
+        while (k < encodedString.length()) {
+            int c = encodedString.charAt(k);
+            if (c == '%') {
+                int decodedByte = decodeHexByte(context, encodedString, k);
+                if (decodedByte < 0) {
+                    return context.throwURIError("expecting hex digit");
+                }
+                k += 3;
+                if (decodedByte < 0x80) {
+                    if (!isComponent && isURIReserved(decodedByte)) {
+                        result.append('%');
+                        k -= 2;
+                    } else {
+                        result.append((char) decodedByte);
+                    }
+                    continue;
+                }
+
+                int continuationCount;
+                int minCodePoint;
+                int codePoint;
+                if (decodedByte >= 0xC0 && decodedByte <= 0xDF) {
+                    continuationCount = 1;
+                    minCodePoint = 0x80;
+                    codePoint = decodedByte & 0x1F;
+                } else if (decodedByte >= 0xE0 && decodedByte <= 0xEF) {
+                    continuationCount = 2;
+                    minCodePoint = 0x800;
+                    codePoint = decodedByte & 0x0F;
+                } else if (decodedByte >= 0xF0 && decodedByte <= 0xF7) {
+                    continuationCount = 3;
+                    minCodePoint = 0x10000;
+                    codePoint = decodedByte & 0x07;
+                } else {
+                    continuationCount = 0;
+                    minCodePoint = 1;
+                    codePoint = 0;
+                }
+
+                while (continuationCount-- > 0) {
+                    int continuationByte = decodeHexByte(context, encodedString, k);
+                    if (continuationByte < 0) {
+                        return context.throwURIError("expecting hex digit");
+                    }
+                    k += 3;
+                    if ((continuationByte & 0xC0) != 0x80) {
+                        codePoint = 0;
+                        break;
+                    }
+                    codePoint = (codePoint << 6) | (continuationByte & 0x3F);
+                }
+                if (codePoint < minCodePoint
+                        || codePoint > Character.MAX_CODE_POINT
+                        || (codePoint >= Character.MIN_SURROGATE && codePoint <= Character.MAX_SURROGATE)) {
+                    return context.throwURIError("malformed UTF-8");
+                }
+                result.appendCodePoint(codePoint);
+            } else {
+                result.append((char) c);
+                k++;
+            }
         }
+        return new JSString(result.toString());
     }
 
     /**
@@ -90,28 +182,7 @@ public final class JSGlobalObject {
     public JSValue encodeURI(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue uriValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String uriString = JSTypeConversions.toString(context, uriValue).value();
-
-        try {
-            // Encode, but preserve URI structure characters
-            String encoded = URLEncoder.encode(uriString, StandardCharsets.UTF_8);
-
-            // Restore characters that should not be encoded by encodeURI
-            encoded = encoded
-                    .replace("%3B", ";").replace("%2C", ",")
-                    .replace("%2F", "/").replace("%3F", "?")
-                    .replace("%3A", ":").replace("%40", "@")
-                    .replace("%26", "&").replace("%3D", "=")
-                    .replace("%2B", "+").replace("%24", "$")
-                    .replace("%2D", "-").replace("%5F", "_")
-                    .replace("%2E", ".").replace("%21", "!")
-                    .replace("%7E", "~").replace("%2A", "*")
-                    .replace("%27", "'").replace("%28", "(")
-                    .replace("%29", ")").replace("%23", "#");
-
-            return new JSString(encoded);
-        } catch (Exception e) {
-            return context.throwURIError("URI malformed");
-        }
+        return encodeURIImpl(context, uriString, false);
     }
 
     /**
@@ -124,22 +195,49 @@ public final class JSGlobalObject {
     public JSValue encodeURIComponent(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue componentValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String componentString = JSTypeConversions.toString(context, componentValue).value();
+        return encodeURIImpl(context, componentString, true);
+    }
 
-        try {
-            String encoded = URLEncoder.encode(componentString, StandardCharsets.UTF_8);
+    private JSValue encodeURIImpl(JSContext context, String inputString, boolean isComponent) {
+        StringBuilder result = new StringBuilder(inputString.length());
+        int k = 0;
+        while (k < inputString.length()) {
+            int c = inputString.charAt(k++);
+            if (isURIUnescaped(c, isComponent)) {
+                result.append((char) c);
+                continue;
+            }
+            if (Character.isLowSurrogate((char) c)) {
+                return context.throwURIError("invalid character");
+            }
+            if (Character.isHighSurrogate((char) c)) {
+                if (k >= inputString.length()) {
+                    return context.throwURIError("expecting surrogate pair");
+                }
+                char c1 = inputString.charAt(k++);
+                if (!Character.isLowSurrogate(c1)) {
+                    return context.throwURIError("expecting surrogate pair");
+                }
+                c = Character.toCodePoint((char) c, c1);
+            }
 
-            // Restore only the unreserved characters: - _ . ! ~ * ' ( )
-            encoded = encoded
-                    .replace("%2D", "-").replace("%5F", "_")
-                    .replace("%2E", ".").replace("%21", "!")
-                    .replace("%7E", "~").replace("%2A", "*")
-                    .replace("%27", "'").replace("%28", "(")
-                    .replace("%29", ")");
-
-            return new JSString(encoded);
-        } catch (Exception e) {
-            return context.throwURIError("URI malformed");
+            if (c < 0x80) {
+                appendPercentHex(result, c);
+            } else if (c < 0x800) {
+                appendPercentHex(result, (c >> 6) | 0xC0);
+                appendPercentHex(result, (c & 0x3F) | 0x80);
+            } else if (c < 0x10000) {
+                appendPercentHex(result, (c >> 12) | 0xE0);
+                appendPercentHex(result, ((c >> 6) & 0x3F) | 0x80);
+                appendPercentHex(result, (c & 0x3F) | 0x80);
+            } else {
+                appendPercentHex(result, (c >> 18) | 0xF0);
+                appendPercentHex(result, ((c >> 12) & 0x3F) | 0x80);
+                appendPercentHex(result, ((c >> 6) & 0x3F) | 0x80);
+                appendPercentHex(result, (c & 0x3F) | 0x80);
+            }
         }
+        return new JSString(result.toString());
     }
 
     /**
@@ -165,12 +263,14 @@ public final class JSGlobalObject {
                 // Escape the character
                 if (c < 256) {
                     // Use %XX format for characters < 256
-                    result.append('%');
-                    result.append(String.format("%02X", (int) c));
+                    appendPercentHex(result, c);
                 } else {
                     // Use %uXXXX format for characters >= 256
-                    result.append("%u");
-                    result.append(String.format("%04X", (int) c));
+                    result.append('%').append('u');
+                    result.append(HEX_CHARS[(c >> 12) & 0xF]);
+                    result.append(HEX_CHARS[(c >> 8) & 0xF]);
+                    result.append(HEX_CHARS[(c >> 4) & 0xF]);
+                    result.append(HEX_CHARS[c & 0xF]);
                 }
             }
         }
@@ -201,6 +301,19 @@ public final class JSGlobalObject {
             context.setPendingException(e.getErrorValue());
             return JSUndefined.INSTANCE;
         }
+    }
+
+    private int fromHex(char c) {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if (c >= 'a' && c <= 'f') {
+            return c - 'a' + 10;
+        }
+        if (c >= 'A' && c <= 'F') {
+            return c - 'A' + 10;
+        }
+        return -1;
     }
 
     public JSConsole getConsole() {
@@ -1711,6 +1824,18 @@ public final class JSGlobalObject {
         global.definePropertyWritableConfigurable("WeakSet", weakSetConstructor);
     }
 
+    private boolean isAsciiDigit(char c) {
+        return c >= '0' && c <= '9';
+    }
+
+    private boolean isEcmaWhitespace(char c) {
+        return switch (c) {
+            case '\t', '\n', '\u000B', '\f', '\r', ' ', '\u00A0', '\u1680', '\u2028',
+                 '\u2029', '\u202F', '\u205F', '\u3000', '\uFEFF' -> true;
+            default -> c >= '\u2000' && c <= '\u200A';
+        };
+    }
+
     /**
      * isFinite(value)
      * Determine whether a value is a finite number.
@@ -1729,6 +1854,10 @@ public final class JSGlobalObject {
         return JSBoolean.valueOf(!Double.isNaN(num) && !Double.isInfinite(num));
     }
 
+    private boolean isInfinityPrefix(String str, int start) {
+        return start + 8 <= str.length() && str.startsWith("Infinity", start);
+    }
+
     /**
      * isNaN(value)
      * Determine whether a value is NaN.
@@ -1745,6 +1874,19 @@ public final class JSGlobalObject {
         }
         double num = JSTypeConversions.toNumber(context, value).value();
         return JSBoolean.valueOf(Double.isNaN(num));
+    }
+
+    private boolean isURIReserved(int c) {
+        return c < 0x100 && URI_RESERVED.indexOf(c) >= 0;
+    }
+
+    private boolean isURIUnescaped(int c, boolean isComponent) {
+        return c < 0x100
+                && ((c >= 'a' && c <= 'z')
+                || (c >= 'A' && c <= 'Z')
+                || (c >= '0' && c <= '9')
+                || "-_.!~*'()".indexOf(c) >= 0
+                || (!isComponent && isURIReserved(c)));
     }
 
     /**
@@ -1766,66 +1908,61 @@ public final class JSGlobalObject {
      * @see <a href="https://tc39.es/ecma262/#sec-parsefloat-string">ECMAScript parseFloat</a>
      */
     public JSValue parseFloat(JSContext context, JSValue thisArg, JSValue[] args) {
-        // Get input string
         JSValue input = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String inputString = JSTypeConversions.toString(context, input).value().trim();
-
-        if (inputString.isEmpty()) {
+        String inputString = JSTypeConversions.toString(context, input).value();
+        int index = skipLeadingWhitespace(inputString);
+        if (index >= inputString.length()) {
             return new JSNumber(Double.NaN);
         }
 
-        // Try to parse as double
-        try {
-            // Handle Infinity
-            if (inputString.startsWith("Infinity") || inputString.startsWith("+Infinity")) {
-                return new JSNumber(Double.POSITIVE_INFINITY);
-            }
-            if (inputString.startsWith("-Infinity")) {
-                return new JSNumber(Double.NEGATIVE_INFINITY);
-            }
+        int signIndex = index;
+        if (inputString.charAt(index) == '+' || inputString.charAt(index) == '-') {
+            index++;
+        }
+        if (isInfinityPrefix(inputString, index)) {
+            boolean isNegative = inputString.charAt(signIndex) == '-';
+            return new JSNumber(isNegative ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY);
+        }
 
-            // Parse as much as possible from the beginning
-            StringBuilder validPart = new StringBuilder();
-            boolean hasDecimal = false;
-            boolean hasExponent = false;
-            int i = 0;
+        int i = index;
+        boolean hasLeadingDigits = false;
+        while (i < inputString.length() && isAsciiDigit(inputString.charAt(i))) {
+            hasLeadingDigits = true;
+            i++;
+        }
 
-            // Sign
+        boolean hasFractionDigits = false;
+        if (i < inputString.length() && inputString.charAt(i) == '.') {
+            i++;
+            while (i < inputString.length() && isAsciiDigit(inputString.charAt(i))) {
+                hasFractionDigits = true;
+                i++;
+            }
+        }
+
+        if (!hasLeadingDigits && !hasFractionDigits) {
+            return new JSNumber(Double.NaN);
+        }
+
+        if (i < inputString.length() && (inputString.charAt(i) == 'e' || inputString.charAt(i) == 'E')) {
+            int exponentMarkerIndex = i;
+            i++;
             if (i < inputString.length() && (inputString.charAt(i) == '+' || inputString.charAt(i) == '-')) {
-                validPart.append(inputString.charAt(i));
                 i++;
             }
-
-            // Digits, decimal point, exponent
-            while (i < inputString.length()) {
-                char c = inputString.charAt(i);
-                if (Character.isDigit(c)) {
-                    validPart.append(c);
-                } else if (c == '.' && !hasDecimal && !hasExponent) {
-                    validPart.append(c);
-                    hasDecimal = true;
-                } else if ((c == 'e' || c == 'E') && !hasExponent && validPart.length() > 0) {
-                    validPart.append(c);
-                    hasExponent = true;
-                    // Check for exponent sign
-                    if (i + 1 < inputString.length() &&
-                            (inputString.charAt(i + 1) == '+' || inputString.charAt(i + 1) == '-')) {
-                        i++;
-                        validPart.append(inputString.charAt(i));
-                    }
-                } else {
-                    break;
-                }
+            int exponentDigitsStart = i;
+            while (i < inputString.length() && isAsciiDigit(inputString.charAt(i))) {
                 i++;
             }
-
-            if (validPart.length() == 0 || validPart.toString().equals("+") || validPart.toString().equals("-")) {
-                return new JSNumber(Double.NaN);
+            if (i == exponentDigitsStart) {
+                i = exponentMarkerIndex;
             }
+        }
 
-            double result = Double.parseDouble(validPart.toString());
-            return new JSNumber(result);
-        } catch (NumberFormatException e) {
+        String validNumber = inputString.substring(signIndex, i);
+        try {
+            return new JSNumber(Double.parseDouble(validNumber));
+        } catch (NumberFormatException ignored) {
             return new JSNumber(Double.NaN);
         }
     }
@@ -1837,59 +1974,55 @@ public final class JSGlobalObject {
      * @see <a href="https://tc39.es/ecma262/#sec-parseint-string-radix">ECMAScript parseInt</a>
      */
     public JSValue parseInt(JSContext context, JSValue thisArg, JSValue[] args) {
-        // Get input string
         JSValue input = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String inputString = JSTypeConversions.toString(context, input).value().trim();
-
-        // Get radix
-        int radix = 0;
-        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            double radixNum = JSTypeConversions.toNumber(context, args[1]).value();
-            radix = (int) radixNum;
-        }
-
-        // Handle empty string
-        if (inputString.isEmpty()) {
+        String inputString = JSTypeConversions.toString(context, input).value();
+        int index = skipLeadingWhitespace(inputString);
+        if (index >= inputString.length()) {
             return new JSNumber(Double.NaN);
         }
 
-        // Determine sign
         int sign = 1;
-        int index = 0;
-        char firstChar = inputString.charAt(0);
-        if (firstChar == '+') {
-            index = 1;
-        } else if (firstChar == '-') {
+        if (inputString.charAt(index) == '+') {
+            index++;
+        } else if (inputString.charAt(index) == '-') {
             sign = -1;
-            index = 1;
+            index++;
         }
 
-        // Auto-detect radix 16 for 0x/0X prefix (after optional sign).
-        if (radix == 0 || radix == 16) {
-            if (index + 1 < inputString.length() &&
-                    inputString.charAt(index) == '0' &&
-                    (inputString.charAt(index + 1) == 'x' || inputString.charAt(index + 1) == 'X')) {
-                radix = 16;
-                index += 2;
+        int radix = 0;
+        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+            JSValue radixValue = args[1];
+            if (radixValue.isSymbol() || radixValue.isSymbolObject()) {
+                return context.throwTypeError("cannot convert symbol to number");
             }
+            if (radixValue.isBigInt() || radixValue.isBigIntObject()) {
+                return context.throwTypeError("cannot convert bigint to number");
+            }
+            radix = JSTypeConversions.toInt32(context, radixValue);
         }
+
+        if (radix != 0 && (radix < 2 || radix > 36)) {
+            return new JSNumber(Double.NaN);
+        }
+
+        boolean stripPrefix = radix == 0 || radix == 16;
         if (radix == 0) {
             radix = 10;
         }
-
-        // Validate radix
-        if (radix < 2 || radix > 36) {
-            return new JSNumber(Double.NaN);
+        if (stripPrefix
+                && index + 1 < inputString.length()
+                && inputString.charAt(index) == '0'
+                && (inputString.charAt(index + 1) == 'x' || inputString.charAt(index + 1) == 'X')) {
+            index += 2;
+            radix = 16;
         }
 
-        // Parse digits using double accumulation to match JavaScript number range.
         double result = 0.0;
         boolean foundDigit = false;
         while (index < inputString.length()) {
-            char c = inputString.charAt(index);
-            int digit = Character.digit(c, radix);
-            if (digit == -1) {
-                break; // Stop at first invalid character
+            int digit = asciiDigitValue(inputString.charAt(index));
+            if (digit < 0 || digit >= radix) {
+                break;
             }
             result = result * radix + digit;
             foundDigit = true;
@@ -1903,6 +2036,13 @@ public final class JSGlobalObject {
         return new JSNumber(sign * result);
     }
 
+    private int skipLeadingWhitespace(String str) {
+        int index = 0;
+        while (index < str.length() && isEcmaWhitespace(str.charAt(index))) {
+            index++;
+        }
+        return index;
+    }
 
     /**
      * unescape(string)
