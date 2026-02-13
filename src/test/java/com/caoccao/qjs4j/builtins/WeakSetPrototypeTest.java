@@ -19,6 +19,8 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 /**
  * Unit tests for WeakSet.prototype methods.
  */
@@ -148,5 +150,16 @@ public class WeakSetPrototypeTest extends BaseJavetTest {
                 const ws = new WeakSet([o1, o2]);
                 ws.has(o1) && ws.has(o2);
                 """);
+    }
+
+    @Test
+    void testWeakSetWithSymbolValue() {
+        assertThat(context.eval("""
+                (() => {
+                  const value = Symbol('value');
+                  const weakSet = new WeakSet();
+                  weakSet.add(value);
+                  return weakSet.has(value) && weakSet.delete(value) && !weakSet.has(value);
+                })()""").toJavaObject()).isEqualTo(true);
     }
 }

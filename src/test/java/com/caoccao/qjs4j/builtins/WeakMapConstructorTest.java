@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class WeakMapConstructorTest extends BaseJavetTest {
@@ -52,6 +53,86 @@ public class WeakMapConstructorTest extends BaseJavetTest {
         assertThatThrownBy(() -> context.eval("new WeakMap([[1, 'a']])"))
                 .isInstanceOf(JSException.class)
                 .hasMessageContaining("TypeError");
+    }
+
+    @Test
+    void testWeakMapConstructorIteratorCloseAndAdderLookup() {
+        assertThat(context.eval("""
+                (() => {
+                  const original = WeakMap.prototype.set;
+                  try {
+                    WeakMap.prototype.set = function (k, v) {
+                      this.__adderUsed = true;
+                      return original.call(this, k, v);
+                    };
+                    const key = {};
+                    const weakMap = new WeakMap([[key, 1]]);
+                    return weakMap.__adderUsed === true && weakMap.get(key) === 1;
+                  } finally {
+                    WeakMap.prototype.set = original;
+                  }
+                })()""").toJavaObject()).isEqualTo(true);
+
+        assertThat(context.eval("""
+                (() => {
+                  const original = WeakMap.prototype.set;
+                  try {
+                    WeakMap.prototype.set = 1;
+                    new WeakMap([]);
+                    return false;
+                  } catch (e) {
+                    return e instanceof TypeError;
+                  } finally {
+                    WeakMap.prototype.set = original;
+                  }
+                })()""").toJavaObject()).isEqualTo(true);
+    }
+
+    @Test
+    void testWeakMapPrototypeDescriptors() {
+        assertBooleanWithJavet("""
+                (() => {
+                  const setDesc = Object.getOwnPropertyDescriptor(WeakMap.prototype, 'set');
+                  const tagDesc = Object.getOwnPropertyDescriptor(WeakMap.prototype, Symbol.toStringTag);
+                  return !!setDesc
+                    && setDesc.writable
+                    && !setDesc.enumerable
+                    && setDesc.configurable
+                    && !!tagDesc
+                    && tagDesc.value === 'WeakMap'
+                    && !tagDesc.writable
+                    && !tagDesc.enumerable
+                    && tagDesc.configurable
+                    && typeof tagDesc.get === 'undefined';
+                })()""");
+
+        assertThat(context.eval("""
+                (() => {
+                  const d1 = Object.getOwnPropertyDescriptor(WeakMap.prototype, 'getOrInsert');
+                  const d2 = Object.getOwnPropertyDescriptor(WeakMap.prototype, 'getOrInsertComputed');
+                  return !!d1
+                    && d1.writable
+                    && !d1.enumerable
+                    && d1.configurable
+                    && !!d2
+                    && d2.writable
+                    && !d2.enumerable
+                    && d2.configurable;
+                })()""").toJavaObject()).isEqualTo(true);
+    }
+
+    @Test
+    void testWeakMapSymbolKeys() {
+        assertThat(context.eval("""
+                (() => {
+                  const weakMap = new WeakMap();
+                  const symbolKey = Symbol('k');
+                  weakMap.set(symbolKey, 1);
+                  return weakMap.get(symbolKey) === 1
+                    && weakMap.has(symbolKey)
+                    && weakMap.delete(symbolKey)
+                    && !weakMap.has(symbolKey);
+                })()""").toJavaObject()).isEqualTo(true);
     }
 
 }

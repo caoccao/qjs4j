@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class WeakSetConstructorTest extends BaseJavetTest {
@@ -52,6 +53,71 @@ public class WeakSetConstructorTest extends BaseJavetTest {
         assertThatThrownBy(() -> context.eval("new WeakSet([1])"))
                 .isInstanceOf(JSException.class)
                 .hasMessageContaining("TypeError");
+    }
+
+    @Test
+    void testWeakSetConstructorIteratorCloseAndAdderLookup() {
+        assertThat(context.eval("""
+                (() => {
+                  const original = WeakSet.prototype.add;
+                  try {
+                    WeakSet.prototype.add = function (v) {
+                      this.__adderUsed = true;
+                      return original.call(this, v);
+                    };
+                    const value = {};
+                    const weakSet = new WeakSet([value]);
+                    return weakSet.__adderUsed === true && weakSet.has(value);
+                  } finally {
+                    WeakSet.prototype.add = original;
+                  }
+                })()""").toJavaObject()).isEqualTo(true);
+
+        assertThat(context.eval("""
+                (() => {
+                  const original = WeakSet.prototype.add;
+                  try {
+                    WeakSet.prototype.add = 1;
+                    new WeakSet([]);
+                    return false;
+                  } catch (e) {
+                    return e instanceof TypeError;
+                  } finally {
+                    WeakSet.prototype.add = original;
+                  }
+                })()""").toJavaObject()).isEqualTo(true);
+    }
+
+    @Test
+    void testWeakSetPrototypeDescriptors() {
+        assertBooleanWithJavet("""
+                (() => {
+                  const addDesc = Object.getOwnPropertyDescriptor(WeakSet.prototype, 'add');
+                  const tagDesc = Object.getOwnPropertyDescriptor(WeakSet.prototype, Symbol.toStringTag);
+                  return !!addDesc
+                    && addDesc.writable
+                    && !addDesc.enumerable
+                    && addDesc.configurable
+                    && !!tagDesc
+                    && tagDesc.value === 'WeakSet'
+                    && !tagDesc.writable
+                    && !tagDesc.enumerable
+                    && tagDesc.configurable
+                    && typeof tagDesc.get === 'undefined';
+                })()""");
+    }
+
+    @Test
+    void testWeakSetSymbolValues() {
+        assertThat(context.eval("""
+                (() => {
+                  const weakSet = new WeakSet();
+                  const symbolValue = Symbol('k');
+                  weakSet.add(symbolValue);
+                  return weakSet.has(symbolValue)
+                    && weakSet.delete(symbolValue)
+                    && !weakSet.has(symbolValue);
+                })()""").toJavaObject()).isEqualTo(true);
     }
 
 }

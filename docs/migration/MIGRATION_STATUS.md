@@ -64,15 +64,16 @@ This document tracks the progress of migrating QuickJS functionality to pure Jav
 **Completed**: All ES2020 meta-programming features
 
 #### Phase 11.1: WeakMap Constructor
-- JSWeakMap.java: WeakHashMap-based for automatic garbage collection
-- WeakMapPrototype.java: set, get, has, delete
-- Object-only keys with type checking (primitives rejected)
-- Weak references allow keys to be GC'd when no longer referenced
+- JSWeakMap.java: WeakHashMap-backed weak storage for object/symbol keys
+- Constructor iterable handling aligned with QuickJS adder/iterator-close semantics
+- WeakMapPrototype.java: set, get, has, delete, getOrInsert, getOrInsertComputed
+- Registration parity: non-enumerable prototype methods and configurable `[Symbol.toStringTag]`
 
 #### Phase 11.2: WeakSet Constructor
-- JSWeakSet.java: WeakHashMap-backed Set implementation
+- JSWeakSet.java: WeakHashMap-backed weak storage for object/symbol values
+- Constructor iterable handling aligned with QuickJS adder/iterator-close semantics
 - WeakSetPrototype.java: add, has, delete
-- Object-only values with type checking
+- Registration parity: non-enumerable prototype methods and configurable `[Symbol.toStringTag]`
 
 #### Phase 11.3: Reflect Object
 - ReflectObject.java: 13 static methods

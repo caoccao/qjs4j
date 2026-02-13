@@ -245,15 +245,18 @@ This document provides a comprehensive list of all JavaScript features implement
 ### WeakMap (ES2015)
 - **Creation**: new WeakMap(), new WeakMap(iterable)
 - **Methods**: set, get, has, delete
+- **QuickJS extensions**: getOrInsert(), getOrInsertComputed()
 - **Weak references**: Automatic garbage collection
-- **Object keys only**: Only accepts object keys
+- **Key types**: Accepts objects and symbols
+- **Metadata**: `WeakMap.prototype[Symbol.toStringTag] = "WeakMap"`
 - **No iteration**: Cannot enumerate keys
 
 ### WeakSet (ES2015)
 - **Creation**: new WeakSet(), new WeakSet(iterable)
 - **Methods**: add, has, delete
 - **Weak references**: Automatic garbage collection
-- **Object values only**: Only accepts objects
+- **Value types**: Accepts objects and symbols
+- **Metadata**: `WeakSet.prototype[Symbol.toStringTag] = "WeakSet"`
 - **No iteration**: Cannot enumerate values
 
 ## Meta-programming ✅

@@ -27,60 +27,107 @@ import java.util.WeakHashMap;
  */
 public final class JSWeakSet extends JSObject {
     public static final String NAME = "WeakSet";
-    // Use WeakHashMap with dummy values to implement WeakSet
-    // Keys are compared by identity (reference equality)
-    private final Set<JSObject> data;
+    private final Set<JSObject> objectData;
+    private final Set<JSSymbol> symbolData;
 
     /**
      * Create an empty WeakSet.
      */
     public JSWeakSet() {
         super();
-        // WeakHashMap's keySet backed by weak references
-        this.data = Collections.newSetFromMap(new WeakHashMap<>());
+        this.objectData = Collections.newSetFromMap(new WeakHashMap<>());
+        this.symbolData = Collections.newSetFromMap(new WeakHashMap<>());
+    }
+
+    private static void closeIterator(JSContext context, JSValue iterator) {
+        if (!(iterator instanceof JSObject iteratorObject)) {
+            return;
+        }
+        JSValue pendingException = context.getPendingException();
+        if (pendingException != null) {
+            context.clearPendingException();
+        }
+        JSValue returnMethod = iteratorObject.get("return");
+        if (returnMethod instanceof JSFunction returnFunction) {
+            returnFunction.call(context, iterator, new JSValue[0]);
+        }
+        if (pendingException != null) {
+            context.setPendingException(pendingException);
+        }
+    }
+
+    public static boolean isWeakSetValue(JSValue value) {
+        return value instanceof JSObject || value instanceof JSSymbol;
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        // Create WeakSet object
         JSWeakSet weakSetObj = new JSWeakSet();
-        // If an iterable is provided, populate the weakset
+        context.transferPrototype(weakSetObj, NAME);
+
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
-            // Handle array directly for efficiency
-            if (iterableArg instanceof JSArray arr) {
-                for (long i = 0; i < arr.getLength(); i++) {
-                    JSValue value = arr.get((int) i);
-                    // WeakSet requires object values
-                    if (!(value instanceof JSObject)) {
-                        return context.throwTypeError("WeakSet value must be an object");
-                    }
-                    weakSetObj.weakSetAdd((JSObject) value);
+
+            JSValue adder = weakSetObj.get("add");
+            if (!(adder instanceof JSFunction adderFunction)) {
+                return context.throwTypeError("set/add is not a function");
+            }
+
+            JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
+            if (!(iterator instanceof JSObject)) {
+                return context.throwTypeError("Object is not iterable");
+            }
+
+            while (true) {
+                JSObject nextResult;
+                try {
+                    nextResult = JSIteratorHelper.iteratorNext(iterator, context);
+                } catch (RuntimeException e) {
+                    closeIterator(context, iterator);
+                    throw e;
                 }
-            } else {
-                // Follow the generic iterator protocol for all iterable inputs.
-                JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
-                if (iterator == null) {
-                    return context.throwTypeError("Object is not iterable");
+                if (nextResult instanceof JSError) {
+                    closeIterator(context, iterator);
+                    return nextResult;
                 }
-                while (true) {
-                    JSObject nextResult = JSIteratorHelper.iteratorNext(iterator, context);
-                    if (nextResult == null) {
-                        return context.throwTypeError("Iterator result must be an object");
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    JSValue pendingException = context.getPendingException();
+                    if (pendingException instanceof JSObject pendingObject) {
+                        return pendingObject;
                     }
-                    JSValue done = nextResult.get("done");
-                    if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
-                        break;
+                    return context.throwTypeError("WeakSet constructor failed");
+                }
+                if (nextResult == null) {
+                    closeIterator(context, iterator);
+                    return context.throwTypeError("Iterator result must be an object");
+                }
+
+                JSValue done = nextResult.get("done");
+                if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
+                    break;
+                }
+
+                JSValue value = nextResult.get("value");
+                JSValue adderResult;
+                try {
+                    adderResult = adderFunction.call(context, weakSetObj, new JSValue[]{value});
+                } catch (RuntimeException e) {
+                    closeIterator(context, iterator);
+                    throw e;
+                }
+                if (adderResult instanceof JSError || context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    if (adderResult instanceof JSObject adderResultObject) {
+                        return adderResultObject;
                     }
-                    JSValue value = nextResult.get("value");
-                    // WeakSet requires object values
-                    if (!(value instanceof JSObject)) {
-                        return context.throwTypeError("WeakSet value must be an object");
+                    JSValue pendingException = context.getPendingException();
+                    if (pendingException instanceof JSObject pendingObject) {
+                        return pendingObject;
                     }
-                    weakSetObj.weakSetAdd((JSObject) value);
+                    return context.throwTypeError("WeakSet constructor failed");
                 }
             }
         }
-        context.transferPrototype(weakSetObj, NAME);
         return weakSetObj;
     }
 
@@ -93,21 +140,39 @@ public final class JSWeakSet extends JSObject {
      * Add a value to the WeakSet.
      * Value must be an object.
      */
-    public void weakSetAdd(JSObject value) {
-        data.add(value);
+    public void weakSetAdd(JSValue value) {
+        if (value instanceof JSObject valueObject) {
+            objectData.add(valueObject);
+        } else if (value instanceof JSSymbol symbolValue) {
+            symbolData.add(symbolValue);
+        } else {
+            throw new IllegalArgumentException("Invalid WeakSet value type");
+        }
     }
 
     /**
      * Delete a value from the WeakSet.
      */
-    public boolean weakSetDelete(JSObject value) {
-        return data.remove(value);
+    public boolean weakSetDelete(JSValue value) {
+        if (value instanceof JSObject valueObject) {
+            return objectData.remove(valueObject);
+        }
+        if (value instanceof JSSymbol symbolValue) {
+            return symbolData.remove(symbolValue);
+        }
+        return false;
     }
 
     /**
      * Check if the WeakSet has a value.
      */
-    public boolean weakSetHas(JSObject value) {
-        return data.contains(value);
+    public boolean weakSetHas(JSValue value) {
+        if (value instanceof JSObject valueObject) {
+            return objectData.contains(valueObject);
+        }
+        if (value instanceof JSSymbol symbolValue) {
+            return symbolData.contains(symbolValue);
+        }
+        return false;
     }
 }

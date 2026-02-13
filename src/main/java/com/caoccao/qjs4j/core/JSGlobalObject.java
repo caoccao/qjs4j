@@ -1579,7 +1579,7 @@ public final class JSGlobalObject {
                              int bytesPerElement) {
         }
         JSValue arrayToString = JSUndefined.INSTANCE;
-        JSValue arrayConstructorValue = global.get("Array");
+        JSValue arrayConstructorValue = global.get(JSArray.NAME);
         if (arrayConstructorValue instanceof JSObject arrayConstructor) {
             JSValue arrayPrototypeValue = arrayConstructor.get("prototype");
             if (arrayPrototypeValue instanceof JSObject arrayPrototype) {
@@ -1588,18 +1588,18 @@ public final class JSGlobalObject {
         }
 
         for (TypedArrayDef def : List.of(
-                new TypedArrayDef("Int8Array", Int8ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_INT8, JSInt8Array.BYTES_PER_ELEMENT),
-                new TypedArrayDef("Uint8Array", Uint8ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_UINT8, JSUint8Array.BYTES_PER_ELEMENT),
-                new TypedArrayDef("Uint8ClampedArray", Uint8ClampedArrayConstructor::call, JSConstructorType.TYPED_ARRAY_UINT8_CLAMPED, JSUint8ClampedArray.BYTES_PER_ELEMENT),
-                new TypedArrayDef("Int16Array", Int16ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_INT16, JSInt16Array.BYTES_PER_ELEMENT),
-                new TypedArrayDef("Uint16Array", Uint16ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_UINT16, JSUint16Array.BYTES_PER_ELEMENT),
-                new TypedArrayDef("Int32Array", Int32ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_INT32, JSInt32Array.BYTES_PER_ELEMENT),
-                new TypedArrayDef("Uint32Array", Uint32ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_UINT32, JSUint32Array.BYTES_PER_ELEMENT),
-                new TypedArrayDef("Float16Array", Float16ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_FLOAT16, JSFloat16Array.BYTES_PER_ELEMENT),
-                new TypedArrayDef("Float32Array", Float32ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_FLOAT32, JSFloat32Array.BYTES_PER_ELEMENT),
-                new TypedArrayDef("Float64Array", Float64ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_FLOAT64, JSFloat64Array.BYTES_PER_ELEMENT),
-                new TypedArrayDef("BigInt64Array", BigInt64ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_BIGINT64, JSBigInt64Array.BYTES_PER_ELEMENT),
-                new TypedArrayDef("BigUint64Array", BigUint64ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_BIGUINT64, JSBigUint64Array.BYTES_PER_ELEMENT)
+                new TypedArrayDef(JSInt8Array.NAME, Int8ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_INT8, JSInt8Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef(JSUint8Array.NAME, Uint8ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_UINT8, JSUint8Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef(JSUint8ClampedArray.NAME, Uint8ClampedArrayConstructor::call, JSConstructorType.TYPED_ARRAY_UINT8_CLAMPED, JSUint8ClampedArray.BYTES_PER_ELEMENT),
+                new TypedArrayDef(JSInt16Array.NAME, Int16ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_INT16, JSInt16Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef(JSUint16Array.NAME, Uint16ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_UINT16, JSUint16Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef(JSInt32Array.NAME, Int32ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_INT32, JSInt32Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef(JSUint32Array.NAME, Uint32ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_UINT32, JSUint32Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef(JSFloat16Array.NAME, Float16ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_FLOAT16, JSFloat16Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef(JSFloat32Array.NAME, Float32ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_FLOAT32, JSFloat32Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef(JSFloat64Array.NAME, Float64ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_FLOAT64, JSFloat64Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef(JSBigInt64Array.NAME, BigInt64ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_BIGINT64, JSBigInt64Array.BYTES_PER_ELEMENT),
+                new TypedArrayDef(JSBigUint64Array.NAME, BigUint64ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_BIGUINT64, JSBigUint64Array.BYTES_PER_ELEMENT)
         )) {
             JSObject prototype = context.createJSObject();
 
@@ -1642,27 +1642,25 @@ public final class JSGlobalObject {
      * Initialize WeakMap constructor and prototype methods.
      */
     private void initializeWeakMapConstructor(JSContext context, JSObject global) {
-        // Create WeakMap.prototype
         JSObject weakMapPrototype = context.createJSObject();
-        weakMapPrototype.set("set", new JSNativeFunction("set", 2, WeakMapPrototype::set));
-        weakMapPrototype.set("get", new JSNativeFunction("get", 1, WeakMapPrototype::get));
-        weakMapPrototype.set("has", new JSNativeFunction("has", 1, WeakMapPrototype::has));
-        weakMapPrototype.set("delete", new JSNativeFunction("delete", 1, WeakMapPrototype::delete));
+        weakMapPrototype.definePropertyWritableConfigurable("set", new JSNativeFunction("set", 2, WeakMapPrototype::set));
+        weakMapPrototype.definePropertyWritableConfigurable("get", new JSNativeFunction("get", 1, WeakMapPrototype::get));
+        weakMapPrototype.definePropertyWritableConfigurable("getOrInsert", new JSNativeFunction("getOrInsert", 2, WeakMapPrototype::getOrInsert));
+        weakMapPrototype.definePropertyWritableConfigurable("getOrInsertComputed", new JSNativeFunction("getOrInsertComputed", 2, WeakMapPrototype::getOrInsertComputed));
+        weakMapPrototype.definePropertyWritableConfigurable("has", new JSNativeFunction("has", 1, WeakMapPrototype::has));
+        weakMapPrototype.definePropertyWritableConfigurable("delete", new JSNativeFunction("delete", 1, WeakMapPrototype::delete));
+        weakMapPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSWeakMap.NAME));
 
-        // Symbol.toStringTag
-        weakMapPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, WeakMapPrototype::getToStringTag);
-
-        // Create WeakMap constructor as a function
         JSNativeFunction weakMapConstructor = new JSNativeFunction(
                 "WeakMap",
                 0,
                 WeakMapConstructor::call,
-                true,  // isConstructor
-                true   // requiresNew - WeakMap() must be called with new
+                true,
+                true
         );
-        weakMapConstructor.set("prototype", weakMapPrototype);
+        weakMapConstructor.definePropertyReadonlyNonConfigurable("prototype", weakMapPrototype);
         weakMapConstructor.setConstructorType(JSConstructorType.WEAK_MAP);
-        weakMapPrototype.set("constructor", weakMapConstructor);
+        weakMapPrototype.definePropertyWritableConfigurable("constructor", weakMapConstructor);
 
         global.definePropertyWritableConfigurable("WeakMap", weakMapConstructor);
     }
@@ -1697,26 +1695,22 @@ public final class JSGlobalObject {
      * Initialize WeakSet constructor and prototype methods.
      */
     private void initializeWeakSetConstructor(JSContext context, JSObject global) {
-        // Create WeakSet.prototype
         JSObject weakSetPrototype = context.createJSObject();
-        weakSetPrototype.set("add", new JSNativeFunction("add", 1, WeakSetPrototype::add));
-        weakSetPrototype.set("has", new JSNativeFunction("has", 1, WeakSetPrototype::has));
-        weakSetPrototype.set("delete", new JSNativeFunction("delete", 1, WeakSetPrototype::delete));
+        weakSetPrototype.definePropertyWritableConfigurable("add", new JSNativeFunction("add", 1, WeakSetPrototype::add));
+        weakSetPrototype.definePropertyWritableConfigurable("has", new JSNativeFunction("has", 1, WeakSetPrototype::has));
+        weakSetPrototype.definePropertyWritableConfigurable("delete", new JSNativeFunction("delete", 1, WeakSetPrototype::delete));
+        weakSetPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSWeakSet.NAME));
 
-        // Symbol.toStringTag
-        weakSetPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, WeakSetPrototype::getToStringTag);
-
-        // Create WeakSet constructor as a function
         JSNativeFunction weakSetConstructor = new JSNativeFunction(
                 "WeakSet",
                 0,
                 WeakSetConstructor::call,
-                true,  // isConstructor
-                true   // requiresNew - WeakSet() must be called with new
+                true,
+                true
         );
-        weakSetConstructor.set("prototype", weakSetPrototype);
+        weakSetConstructor.definePropertyReadonlyNonConfigurable("prototype", weakSetPrototype);
         weakSetConstructor.setConstructorType(JSConstructorType.WEAK_SET);
-        weakSetPrototype.set("constructor", weakSetConstructor);
+        weakSetPrototype.definePropertyWritableConfigurable("constructor", weakSetConstructor);
 
         global.definePropertyWritableConfigurable("WeakSet", weakSetConstructor);
     }
