@@ -30,7 +30,7 @@ package com.caoccao.qjs4j.core;
  */
 public final class JSGenerator extends JSObject {
     private final JSContext context;
-    private final GeneratorState generatorState;
+    private final JSGeneratorState generatorState;
     private final JSIterator.IteratorFunction iteratorFunction;
     private boolean done;
     private JSValue returnValue;
@@ -40,7 +40,7 @@ public final class JSGenerator extends JSObject {
      * Create a generator backed by bytecode execution.
      * Used by JSBytecodeFunction.call() for function* generators.
      */
-    public JSGenerator(JSContext context, com.caoccao.qjs4j.core.GeneratorState generatorState) {
+    public JSGenerator(JSContext context, JSGeneratorState generatorState) {
         super();
         this.context = context;
         this.generatorState = generatorState;
@@ -133,7 +133,7 @@ public final class JSGenerator extends JSObject {
         }
 
         if (previousState == State.SUSPENDED_YIELD) {
-            generatorState.recordResume(GeneratorState.ResumeKind.NEXT, value);
+            generatorState.recordResume(JSGeneratorState.ResumeKind.NEXT, value);
         }
 
         try {
@@ -241,7 +241,7 @@ public final class JSGenerator extends JSObject {
 
         if (generatorState != null) {
             state = State.EXECUTING;
-            generatorState.recordResume(GeneratorState.ResumeKind.THROW, exception);
+            generatorState.recordResume(JSGeneratorState.ResumeKind.THROW, exception);
             try {
                 JSValue yieldValue = context.getVirtualMachine().executeGenerator(generatorState, context);
                 if (generatorState.isCompleted()) {

@@ -1025,8 +1025,9 @@ public final class JSGlobalObject {
      */
     private void initializeJSONObject(JSContext context, JSObject global) {
         JSObject json = context.createJSObject();
-        json.set("parse", new JSNativeFunction("parse", 1, JSONObject::parse));
-        json.set("stringify", new JSNativeFunction("stringify", 1, JSONObject::stringify));
+        json.definePropertyWritableConfigurable("parse", new JSNativeFunction("parse", 2, JSONObject::parse));
+        json.definePropertyWritableConfigurable("stringify", new JSNativeFunction("stringify", 3, JSONObject::stringify));
+        json.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("JSON"));
 
         global.definePropertyWritableConfigurable("JSON", json);
     }

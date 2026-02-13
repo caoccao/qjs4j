@@ -36,7 +36,7 @@ public final class VirtualMachine {
     private final CallStack valueStack;
     private StackFrame currentFrame;
     private int generatorResumeIndex;
-    private List<GeneratorState.ResumeRecord> generatorResumeRecords;
+    private List<JSGeneratorState.ResumeRecord> generatorResumeRecords;
     private JSValue pendingException;
     private boolean propertyAccessLock;  // When true, don't update lastPropertyAccess (during argument evaluation)
     private YieldResult yieldResult;  // Set when generator yields
@@ -2231,7 +2231,7 @@ public final class VirtualMachine {
      * Execute a generator function with state management.
      * Resumes from saved state if generator was previously yielded.
      */
-    public JSValue executeGenerator(GeneratorState state, JSContext context) {
+    public JSValue executeGenerator(JSGeneratorState state, JSContext context) {
         JSBytecodeFunction function = state.getFunction();
         JSValue thisArg = state.getThisArg();
         JSValue[] args = state.getArgs();
@@ -2252,7 +2252,7 @@ public final class VirtualMachine {
         if (yieldResult != null) {
             // Generator yielded - increment count and update state
             state.incrementYieldCount();
-            state.setState(GeneratorState.State.SUSPENDED_YIELD);
+            state.setState(JSGeneratorState.State.SUSPENDED_YIELD);
             return yieldResult.value();
         } else {
             // Generator completed (returned)
@@ -3100,10 +3100,10 @@ public final class VirtualMachine {
         if (yieldSkipCount > 0) {
             yieldSkipCount--;
             JSValue yieldedValue = valueStack.pop();
-            GeneratorState.ResumeRecord resumeRecord = generatorResumeIndex < generatorResumeRecords.size()
+            JSGeneratorState.ResumeRecord resumeRecord = generatorResumeIndex < generatorResumeRecords.size()
                     ? generatorResumeRecords.get(generatorResumeIndex++)
                     : null;
-            if (resumeRecord != null && resumeRecord.kind() == GeneratorState.ResumeKind.THROW) {
+            if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
                 pendingException = resumeRecord.value();
                 context.setPendingException(resumeRecord.value());
             } else if (resumeRecord != null) {

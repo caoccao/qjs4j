@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.builtins;
+package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Unit tests for JSONObject methods.
  */
-public class JSONObjectTest extends BaseTest {
+public class JSONObjectTest extends BaseJavetTest {
 
     @Test
     public void testComplexJSON() {
@@ -175,6 +174,137 @@ public class JSONObjectTest extends BaseTest {
     }
 
     @Test
+    public void testParseArrayElement() {
+        assertIntegerWithJavet("JSON.parse('[1,2,3]')[1]");
+    }
+
+    @Test
+    public void testParseArrayLength() {
+        assertIntegerWithJavet("JSON.parse('[1,\"two\",true,null]').length");
+    }
+
+    @Test
+    public void testParseBoolean() {
+        assertBooleanWithJavet("JSON.parse('true')");
+    }
+
+    @Test
+    public void testParseComplexNested() {
+        assertStringWithJavet("""
+                var json = '{"users":[{"name":"Alice","age":30},{"name":"Bob","age":25}],"metadata":{"version":"1.0"}}';
+                var obj = JSON.parse(json);
+                obj.users[0].name""");
+    }
+
+    @Test
+    public void testParseEmptyString() {
+        assertErrorWithJavet("JSON.parse('')");
+    }
+
+    @Test
+    public void testParseEscapedNewline() {
+        assertStringWithJavet("JSON.parse('\"hello\\\\nworld\"')");
+    }
+
+    @Test
+    public void testParseEscapedTab() {
+        assertStringWithJavet("JSON.parse('\"tab\\\\there\"')");
+    }
+
+    @Test
+    public void testParseInvalidJSON() {
+        assertErrorWithJavet("JSON.parse('{invalid}')");
+    }
+
+    @Test
+    public void testParseInvalidNumber() {
+        assertErrorWithJavet("JSON.parse('01')"); // Leading zeros not allowed
+    }
+
+    @Test
+    public void testParseNestedArray() {
+        assertIntegerWithJavet("JSON.parse('{\"items\":[1,2,3]}').items[1]");
+    }
+
+    @Test
+    public void testParseNestedObject() {
+        assertStringWithJavet("JSON.parse('{\"user\":{\"name\":\"Alice\",\"age\":30}}').user.name");
+    }
+
+    @Test
+    public void testParseNoArguments() {
+        assertErrorWithJavet("JSON.parse()");
+    }
+
+    @Test
+    public void testParseNull() {
+        assertStringWithJavet("String(JSON.parse('null'))");
+    }
+
+    @Test
+    public void testParseNumber() {
+        assertIntegerWithJavet("JSON.parse('42')");
+    }
+
+    @Test
+    public void testParseObjectProperty() {
+        assertIntegerWithJavet("JSON.parse('{\"a\":1,\"b\":2}').a");
+    }
+
+    @Test
+    public void testParseObjectStringProperty() {
+        assertStringWithJavet("JSON.parse('{\"name\":\"test\",\"value\":42}').name");
+    }
+
+    @Test
+    public void testParseString() {
+        assertStringWithJavet("JSON.parse('\"hello\"')");
+    }
+
+    @Test
+    public void testParseTrailingComma() {
+        assertErrorWithJavet("JSON.parse('{\"a\":1,}')");
+    }
+
+    @Test
+    public void testParseTrailingData() {
+        assertBooleanWithJavet("""
+                (() => {
+                  try {
+                    JSON.parse('1 2');
+                    return false;
+                  } catch (e) {
+                    return e instanceof SyntaxError;
+                  }
+                })()""");
+    }
+
+    @Test
+    public void testParseUnterminatedArray() {
+        assertErrorWithJavet("JSON.parse('[1,2,3')");
+    }
+
+    @Test
+    public void testParseUnterminatedObject() {
+        assertErrorWithJavet("JSON.parse('{\"a\":1')");
+    }
+
+    @Test
+    public void testParseUnterminatedString() {
+        assertErrorWithJavet("JSON.parse('\"unterminated')");
+    }
+
+    @Test
+    public void testParseWithControlCharacterInPropertyName() {
+        assertErrorWithJavet("JSON.parse('{\"' + String.fromCharCode(1) + '\":1}')");
+    }
+
+    @Test
+    public void testParseWithControlCharacterInString() {
+        assertErrorWithJavet("JSON.parse('\"' + String.fromCharCode(1) + '\"')");
+    }
+
+    @Test
     public void testParseWithReviver() {
         // Test basic reviver functionality
         String json = "{\"a\":1,\"b\":2,\"c\":3}";
@@ -194,6 +324,30 @@ public class JSONObjectTest extends BaseTest {
         assertThat(obj.get("a").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
         assertThat(obj.get("b").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(4.0);
         assertThat(obj.get("c").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(6.0);
+    }
+
+    @Test
+    public void testParseWithReviverAndComplexStructure() {
+        assertIntegerWithJavet("""
+                var json = '{"numbers":[1,2,3],"data":{"x":10,"y":20}}';
+                var result = JSON.parse(json, function(key, value) {
+                  if (typeof value === 'number') {
+                    return value + 1;
+                  }
+                  return value;
+                });
+                result.data.x""");
+    }
+
+    @Test
+    public void testParseWithReviverArrayWithJavet() {
+        assertIntegerWithJavet("""
+                JSON.parse('[1,2,3,4,5]', function(key, value) {
+                  if (typeof value === 'number') {
+                    return value * 2;
+                  }
+                  return value;
+                })[2]""");
     }
 
     @Test
@@ -217,6 +371,18 @@ public class JSONObjectTest extends BaseTest {
 
         assertThat(arr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
         assertThat(arr.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(4.0);
+    }
+
+    @Test
+    public void testParseWithReviverFilterWithJavet() {
+        assertBooleanWithJavet("""
+                var result = JSON.parse('{"a":1,"b":2,"c":3}', function(key, value) {
+                  if (key === 'b') {
+                    return undefined;
+                  }
+                  return value;
+                });
+                result.b === undefined""");
     }
 
     @Test
@@ -244,6 +410,17 @@ public class JSONObjectTest extends BaseTest {
     }
 
     @Test
+    public void testParseWithReviverNestedWithJavet() {
+        assertIntegerWithJavet("""
+                JSON.parse('{"user":{"name":"Bob","age":25}}', function(key, value) {
+                  if (key === 'age' && typeof value === 'number') {
+                    return value + 10;
+                  }
+                  return value;
+                }).user.age""");
+    }
+
+    @Test
     public void testParseWithReviverNested() {
         // Test reviver with nested objects
         String json = "{\"user\":{\"name\":\"Bob\",\"age\":25},\"count\":5}";
@@ -264,6 +441,55 @@ public class JSONObjectTest extends BaseTest {
         JSObject user = obj.get("user").asObject().orElseThrow();
 
         assertThat(user.get("age").asString().map(JSString::value).orElseThrow()).isEqualTo("25 years");
+    }
+
+    @Test
+    public void testParseWithReviverTransform() {
+        assertStringWithJavet("""
+                JSON.parse('{"date":"2023-01-01"}', function(key, value) {
+                  if (key === 'date') {
+                    return 'Transformed: ' + value;
+                  }
+                  return value;
+                }).date""");
+    }
+
+    @Test
+    public void testParseWithReviverWithJavet() {
+        assertIntegerWithJavet("""
+                JSON.parse('{"a":1,"b":2,"c":3}', function(key, value) {
+                  if (typeof value === 'number') {
+                    return value * 2;
+                  }
+                  return value;
+                }).b""");
+    }
+
+    @Test
+    public void testParseWithWhitespace() {
+        assertIntegerWithJavet("JSON.parse('  {  \"a\"  :  1  }  ').a");
+    }
+
+    @Test
+    public void testParseWithWhitespaceFormFeed() {
+        assertBooleanWithJavet("""
+                (() => {
+                  try {
+                    JSON.parse('\\f1\\f');
+                    return false;
+                  } catch (e) {
+                    return e instanceof SyntaxError;
+                  }
+                })()""");
+    }
+
+    @Test
+    public void testRoundTripWithJavet() {
+        assertIntegerWithJavet("""
+                var original = {name: 'test', value: 42, items: [1, 2, 3]};
+                var json = JSON.stringify(original);
+                var parsed = JSON.parse(json);
+                parsed.value""");
     }
 
     @Test
@@ -297,6 +523,178 @@ public class JSONObjectTest extends BaseTest {
         assertThat(parsedArr.getLength()).isEqualTo(2);
         assertThat(parsedArr.get(0).asString().map(JSString::value).orElseThrow()).isEqualTo("item1");
         assertThat(parsedArr.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
+    }
+
+    @Test
+    public void testRoundTripWithReplacerReviverForBigInt() {
+        assertLongWithJavet("""
+                var original = {a: 1n, b: 2n, c: 3};
+                var json = JSON.stringify(original, function(key, value) {
+                  if (typeof value === "bigint") {
+                    return value.toString() + "n";
+                  }
+                  return value;
+                });
+                var parsed = JSON.parse(json, function(key, value) {
+                  if (typeof value === 'string' && /^\\d+n$/.test(value)) {
+                    return BigInt(value.slice(0, -1));
+                  }
+                  return value;
+                });
+                parsed.b""");
+    }
+
+    @Test
+    public void testRoundTripWithReplacerReviverForNumber() {
+        assertIntegerWithJavet("""
+                var original = {a: 1, b: 2, c: 3};
+                var json = JSON.stringify(original, function(key, value) {
+                  if (typeof value === 'number') {
+                    return value * 2;
+                  }
+                  return value;
+                });
+                var parsed = JSON.parse(json, function(key, value) {
+                  if (typeof value === 'number') {
+                    return value / 2;
+                  }
+                  return value;
+                });
+                parsed.b""");
+    }
+
+    @Test
+    public void testRoundTripWithSpace() {
+        assertIntegerWithJavet("""
+                var original = {a: 1, b: 2};
+                var json = JSON.stringify(original, null, 2);
+                var parsed = JSON.parse(json);
+                parsed.b""");
+    }
+
+    @Test
+    public void testStringifyArrayMixed() {
+        assertStringWithJavet("JSON.stringify([1, 'two', true, null])");
+    }
+
+    @Test
+    public void testStringifyArrayNested() {
+        assertStringWithJavet("JSON.stringify([[1, 2], [3, 4]])");
+    }
+
+    @Test
+    public void testStringifyArraySimple() {
+        assertStringWithJavet("JSON.stringify([1, 2, 3])");
+    }
+
+    @Test
+    public void testStringifyArrayWithMixedTypes() {
+        assertStringWithJavet("JSON.stringify([1, 'two', true, null, {a: 5}, [6, 7]])");
+    }
+
+    @Test
+    public void testStringifyArrayWithNumberSpace() {
+        assertStringWithJavet("JSON.stringify([1, 2, 3], null, 4)");
+    }
+
+    @Test
+    public void testStringifyArrayWithUndefined() {
+        assertStringWithJavet("JSON.stringify([1, undefined, 3])");
+    }
+
+    @Test
+    public void testStringifyBoolean() {
+        assertStringWithJavet("JSON.stringify(true)");
+    }
+
+    @Test
+    public void testStringifyCircularReference() {
+        assertErrorWithJavet("""
+                var obj = {a: 1};
+                obj.self = obj;
+                JSON.stringify(obj)""");
+    }
+
+    @Test
+    public void testStringifyCircularReferenceInArray() {
+        assertErrorWithJavet("""
+                var arr = [1, 2];
+                arr.push(arr);
+                JSON.stringify(arr)""");
+    }
+
+    @Test
+    public void testStringifyCircularReferenceNested() {
+        assertErrorWithJavet("""
+                var a = {name: 'a'};
+                var b = {name: 'b', ref: a};
+                a.ref = b;
+                JSON.stringify(a)""");
+    }
+
+    @Test
+    public void testStringifyComplexNested() {
+        String code = """
+                JSON.stringify({
+                  users: [
+                    {name: 'Alice', age: 30, tags: ['dev', 'admin']},
+                    {name: 'Bob', age: 25, tags: ['user']}
+                  ],
+                  metadata: {version: '1.0', count: 2}
+                })""";
+        assertStringWithJavet(code);
+    }
+
+    @Test
+    public void testStringifyDescriptorAndToStringTag() {
+        assertStringWithJavet("""
+                var parseDesc = Object.getOwnPropertyDescriptor(JSON, 'parse');
+                var stringifyDesc = Object.getOwnPropertyDescriptor(JSON, 'stringify');
+                JSON.stringify([
+                  [typeof parseDesc.value, parseDesc.writable, parseDesc.enumerable, parseDesc.configurable, parseDesc.value.length],
+                  [typeof stringifyDesc.value, stringifyDesc.writable, stringifyDesc.enumerable, stringifyDesc.configurable, stringifyDesc.value.length],
+                  JSON[Symbol.toStringTag],
+                  Object.keys(JSON).length
+                ])""");
+    }
+
+    @Test
+    public void testStringifyEmptyArray() {
+        assertStringWithJavet("JSON.stringify([])");
+    }
+
+    @Test
+    public void testStringifyEmptyObject() {
+        assertStringWithJavet("JSON.stringify({})");
+    }
+
+    @Test
+    public void testStringifyEnumerableOwnStringKeysOnly() {
+        assertStringWithJavet("""
+                var o = {a: 1};
+                o[1] = 3;
+                Object.defineProperty(o, 'b', {value: 2, enumerable: false});
+                JSON.stringify(o)""");
+    }
+
+    @Test
+    public void testStringifyEscapeNewline() {
+        assertStringWithJavet("JSON.stringify('hello\\nworld')");
+    }
+
+    @Test
+    public void testStringifyEscapeQuote() {
+        assertStringWithJavet("JSON.stringify('quote\\\"test')");
+    }
+
+    @Test
+    public void testStringifyEscapeTab() {
+        assertStringWithJavet("JSON.stringify('tab\\there')");
+    }
+
+    @Test
+    public void testStringifyFloatingPoint() {
+        assertStringWithJavet("JSON.stringify(0.1 + 0.2)");
     }
 
     @Test
@@ -509,6 +907,115 @@ public class JSONObjectTest extends BaseTest {
     }
 
     @Test
+    public void testStringifyFunction() {
+        assertStringWithJavet("String(JSON.stringify(function() {}))");
+    }
+
+    @Test
+    public void testStringifyGenericObjectSpaceIgnored() {
+        assertStringWithJavet("JSON.stringify({a: 1}, null, {toString: function() { return '  '; }})");
+    }
+
+    @Test
+    public void testStringifyInfinity() {
+        assertStringWithJavet("JSON.stringify(Infinity)");
+    }
+
+    @Test
+    public void testStringifyNaN() {
+        assertStringWithJavet("JSON.stringify(NaN)");
+    }
+
+    @Test
+    public void testStringifyNegativeInfinity() {
+        assertStringWithJavet("JSON.stringify(-Infinity)");
+    }
+
+    @Test
+    public void testStringifyNestedStructure() {
+        assertStringWithJavet("""
+                JSON.stringify({
+                  user: {
+                    name: 'Alice',
+                    age: 30
+                  },
+                  items: [1, 2, 3]
+                })""");
+    }
+
+    @Test
+    public void testStringifyNull() {
+        assertStringWithJavet("JSON.stringify(null)");
+    }
+
+    @Test
+    public void testStringifyNumber() {
+        assertStringWithJavet("JSON.stringify(42)");
+    }
+
+    @Test
+    public void testStringifyObjectComplex() {
+        assertStringWithJavet("JSON.stringify({name: 'test', value: 42, active: true})");
+    }
+
+    @Test
+    public void testStringifyObjectSimple() {
+        assertStringWithJavet("JSON.stringify({a: 1, b: 2})");
+    }
+
+    @Test
+    public void testStringifyObjectWithFunction() {
+        assertStringWithJavet("JSON.stringify({a: 1, b: function() {}, c: 2})");
+    }
+
+    @Test
+    public void testStringifyObjectWithUndefined() {
+        assertStringWithJavet("JSON.stringify({a: 1, b: undefined, c: 3})");
+    }
+
+    @Test
+    public void testStringifyScientificNotationLarge() {
+        assertStringWithJavet("JSON.stringify(1e10)");
+    }
+
+    @Test
+    public void testStringifyScientificNotationSmall() {
+        assertStringWithJavet("JSON.stringify(1e-10)");
+    }
+
+    @Test
+    public void testStringifyString() {
+        assertStringWithJavet("JSON.stringify('hello')");
+    }
+
+    @Test
+    public void testStringifyUndefined() {
+        assertBooleanWithJavet("JSON.stringify(undefined) === undefined");
+    }
+
+    @Test
+    public void testStringifyWithBigInt() {
+        assertErrorWithJavet("JSON.stringify(1n)");
+        assertErrorWithJavet("JSON.stringify({a: 1n})");
+        assertErrorWithJavet("JSON.stringify([1n])");
+    }
+
+    @Test
+    public void testStringifyWithNumberSpace() {
+        assertStringWithJavet("JSON.stringify({a: 1, b: 2}, null, 2)");
+    }
+
+    @Test
+    public void testStringifyWithReplacerAndSpace() {
+        assertStringWithJavet("""
+                JSON.stringify(
+                  {a: 1, b: 2, c: 3, d: 4},
+                  ['a', 'c'],
+                  2
+                )""");
+    }
+
+    @Test
     public void testStringifyWithReplacerAndToJSON() {
         // Test that toJSON is called before replacer
         JSObject obj = new JSObject();
@@ -537,6 +1044,11 @@ public class JSONObjectTest extends BaseTest {
     }
 
     @Test
+    public void testStringifyWithReplacerArrayWithJavet() {
+        assertStringWithJavet("JSON.stringify({a: 1, b: 2, c: 3, d: 4}, ['a', 'c'])");
+    }
+
+    @Test
     public void testStringifyWithReplacerArray() {
         // Test replacer array (property whitelist)
         JSObject obj = new JSObject();
@@ -557,6 +1069,16 @@ public class JSONObjectTest extends BaseTest {
         assertThat(jsonStr).contains("\"age\":30");
         assertThat(jsonStr).doesNotContain("internal");
         assertThat(jsonStr).doesNotContain("password");
+    }
+
+    @Test
+    public void testStringifyWithReplacerArrayNestedWithJavet() {
+        assertStringWithJavet("""
+                JSON.stringify({
+                  name: 'test',
+                  data: {x: 1, y: 2, z: 3},
+                  extra: 'value'
+                }, ['name', 'data', 'x', 'y'])""");
     }
 
     @Test
@@ -588,6 +1110,16 @@ public class JSONObjectTest extends BaseTest {
     }
 
     @Test
+    public void testStringifyWithReplacerArrayNonIntegerNumber() {
+        assertStringWithJavet("JSON.stringify({'1.5': 'x', '1': 'y'}, [1.5])");
+    }
+
+    @Test
+    public void testStringifyWithReplacerArrayNumbersWithJavet() {
+        assertStringWithJavet("JSON.stringify({0: 'a', 1: 'b', 2: 'c'}, [0, 2])");
+    }
+
+    @Test
     public void testStringifyWithReplacerArrayNumbers() {
         // Test that replacer array can contain numbers (for array indices)
         JSArray arr = new JSArray();
@@ -611,6 +1143,33 @@ public class JSONObjectTest extends BaseTest {
         assertThat(jsonStr).contains("\"0\":\"zero\"");
         assertThat(jsonStr).contains("\"2\":\"two\"");
         assertThat(jsonStr).doesNotContain("\"1\"");
+    }
+
+    @Test
+    public void testStringifyWithReplacerArraySkipsGenericObjects() {
+        assertStringWithJavet("JSON.stringify({a: 1, b: 2}, [{toString: function() { return 'a'; }}, 'b'])");
+    }
+
+    @Test
+    public void testStringifyWithReplacerFilteringOut() {
+        assertStringWithJavet("""
+                JSON.stringify({a: 1, b: 2, c: 3}, function(key, value) {
+                  if (key === 'b') {
+                    return undefined;
+                  }
+                  return value;
+                })""");
+    }
+
+    @Test
+    public void testStringifyWithReplacerFunctionWithJavet() {
+        assertStringWithJavet("""
+                JSON.stringify({a: 1, b: 2, c: 3}, function(key, value) {
+                  if (typeof value === 'number') {
+                    return value * 2;
+                  }
+                  return value;
+                })""");
     }
 
     @Test
@@ -641,6 +1200,44 @@ public class JSONObjectTest extends BaseTest {
     }
 
     @Test
+    public void testStringifyWithSpaceLimitNumber() {
+        // Space is limited to 10 characters
+        assertStringWithJavet("JSON.stringify({a: 1}, null, 20)");
+    }
+
+    @Test
+    public void testStringifyWithSpaceLimitString() {
+        assertStringWithJavet("JSON.stringify({a: 1}, null, 'abcdefghijklmnop')");
+    }
+
+    @Test
+    public void testStringifyWithSpaceNumberObject() {
+        assertStringWithJavet("JSON.stringify({a: 1}, null, new Number(2))");
+    }
+
+    @Test
+    public void testStringifyWithStringSpace() {
+        assertStringWithJavet("JSON.stringify({a: 1, b: 2}, null, '  ')");
+    }
+
+    @Test
+    public void testStringifyWithTabSpace() {
+        assertStringWithJavet("JSON.stringify({a: 1}, null, '\\t')");
+    }
+
+    @Test
+    public void testStringifyWithToJSONWithJavet() {
+        assertStringWithJavet("""
+                var obj = {
+                  value: 42,
+                  toJSON: function() {
+                    return this.value * 2;
+                  }
+                };
+                JSON.stringify(obj)""");
+    }
+
+    @Test
     public void testStringifyWithToJSON() {
         // Test toJSON method support
         JSObject obj = new JSObject();
@@ -656,5 +1253,27 @@ public class JSONObjectTest extends BaseTest {
         String jsonStr = result.asString().map(JSString::value).orElseThrow();
 
         assertThat(jsonStr).isEqualTo("\"custom\"");
+    }
+
+    @Test
+    public void testStringifyWithToJSONAndReplacer() {
+        assertStringWithJavet("""
+                var obj = {
+                  value: 10,
+                  toJSON: function() {
+                    return this.value * 2;
+                  }
+                };
+                JSON.stringify(obj, function(key, value) {
+                  if (typeof value === 'number') {
+                    return value + 10;
+                  }
+                  return value;
+                })""");
+    }
+
+    @Test
+    public void testStringifyWithWrapperObjects() {
+        assertStringWithJavet("JSON.stringify([new Number(1.5), new String('x'), new Boolean(false)])");
     }
 }

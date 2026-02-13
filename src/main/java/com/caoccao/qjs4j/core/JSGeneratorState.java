@@ -31,7 +31,7 @@ import java.util.List;
  * - Local variables
  * - Generator state (SUSPENDED_START, SUSPENDED_YIELD, EXECUTING, COMPLETED)
  */
-public final class GeneratorState {
+public final class JSGeneratorState {
     private final JSValue[] args;
     private final JSBytecodeFunction function;
     private final List<ResumeRecord> resumeRecords;
@@ -42,7 +42,7 @@ public final class GeneratorState {
     private State state;
     private int yieldCount;  // Track how many times we've yielded (workaround for no PC saving)
 
-    public GeneratorState(JSBytecodeFunction function, JSValue thisArg, JSValue[] args) {
+    public JSGeneratorState(JSBytecodeFunction function, JSValue thisArg, JSValue[] args) {
         this.function = function;
         this.thisArg = thisArg;
         this.args = args;

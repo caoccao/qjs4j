@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.builtins;
-
-import com.caoccao.qjs4j.core.*;
+package com.caoccao.qjs4j.core;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -112,6 +110,17 @@ public final class JSONObject {
         return val;
     }
 
+    private static boolean isJSONStringControlCharacter(char ch) {
+        return ch <= 0x1F;
+    }
+
+    private static boolean isJSONWrapperObject(JSValue value) {
+        return value instanceof JSBooleanObject
+                || value instanceof JSNumberObject
+                || value instanceof JSStringObject
+                || value instanceof JSBigIntObject;
+    }
+
     /**
      * Convert value to JSON string representation
      * Based on QuickJS js_json_to_str
@@ -123,6 +132,10 @@ public final class JSONObject {
             JSValue holder,
             JSValue val,
             String currentIndent) {
+        if (isJSONWrapperObject(val) && val instanceof JSObject objectValue) {
+            val = objectValue.getPrimitiveValue();
+        }
+
         // Handle primitives
         if (val instanceof JSNull || val instanceof JSUndefined) {
             sb.append("null");
@@ -153,6 +166,7 @@ public final class JSONObject {
 
         if (val instanceof JSBigInt) {
             // BigInt cannot be serialized in JSON
+            context.throwTypeError("Do not know how to serialize a BigInt");
             return false;
         }
 
@@ -239,12 +253,18 @@ public final class JSONObject {
             return context.throwSyntaxError("\"undefined\" is not valid JSON");
         }
 
-        String text = JSTypeConversions.toString(context, args[0]).value();
+        JSValue source = args[0];
+        String text = JSTypeConversions.toString(context, source).value();
 
         JSValue obj;
         try {
-            ParseContext parseContext = new ParseContext(text.strip());
-            obj = parseValue(context, parseContext, 0).value;
+            ParseContext parseContext = new ParseContext(text);
+            ParseResult parseResult = parseValue(context, parseContext, 0);
+            int end = skipWhitespace(parseContext.text, parseResult.endIndex);
+            if (end != parseContext.text.length()) {
+                throw new JSONParseException("Unexpected data after JSON " + parseContext.getPositionInfo(end));
+            }
+            obj = parseResult.value;
         } catch (JSONParseException e) {
             return context.throwSyntaxError(e.getMessage());
         } catch (Exception e) {
@@ -460,13 +480,20 @@ public final class JSONObject {
                             throw new JSONParseException("Invalid unicode escape in property name " + ctx.getPositionInfo(i));
                         }
                         String hex = ctx.text.substring(i + 1, i + 5);
-                        sb.append((char) Integer.parseInt(hex, 16));
+                        try {
+                            sb.append((char) Integer.parseInt(hex, 16));
+                        } catch (NumberFormatException e) {
+                            throw new JSONParseException("Invalid unicode escape in property name " + ctx.getPositionInfo(i));
+                        }
                         i += 4;
                     }
                     default ->
                             throw new JSONParseException("Invalid escape in property name: \\" + escaped + ctx.getPositionInfo(i));
                 }
             } else {
+                if (isJSONStringControlCharacter(ch)) {
+                    throw new JSONParseException("Bad control character in string literal in JSON " + ctx.getPositionInfo(i));
+                }
                 sb.append(ch);
             }
             i++;
@@ -511,13 +538,20 @@ public final class JSONObject {
                             throw new JSONParseException("Invalid unicode escape " + parseContext.getPositionInfo(i));
                         }
                         String hex = parseContext.text.substring(i + 1, i + 5);
-                        sb.append((char) Integer.parseInt(hex, 16));
+                        try {
+                            sb.append((char) Integer.parseInt(hex, 16));
+                        } catch (NumberFormatException e) {
+                            throw new JSONParseException("Invalid unicode escape " + parseContext.getPositionInfo(i));
+                        }
                         i += 4;
                     }
                     default ->
                             throw new JSONParseException("Invalid escape: \\" + escaped + parseContext.getPositionInfo(i));
                 }
             } else {
+                if (isJSONStringControlCharacter(ch)) {
+                    throw new JSONParseException("Bad control character in string literal in JSON " + parseContext.getPositionInfo(i));
+                }
                 sb.append(ch);
             }
             i++;
@@ -603,10 +637,8 @@ public final class JSONObject {
                     if (item instanceof JSString) {
                         propName = ((JSString) item).value();
                     } else if (item instanceof JSNumber) {
-                        propName = String.valueOf((long) ((JSNumber) item).value());
-                    } else if (item instanceof JSObject obj) {
-                        // Handle String/Number objects
-                        // Simplified: just convert to string
+                        propName = JSTypeConversions.toString(context, item).value();
+                    } else if (item instanceof JSStringObject || item instanceof JSNumberObject) {
                         propName = JSTypeConversions.toString(context, item).value();
                     }
 
@@ -624,13 +656,8 @@ public final class JSONObject {
             JSValue space = args[2];
 
             // Handle Number/String objects
-            if (space instanceof JSObject && !(space instanceof JSFunction)) {
-                // Simplified: convert to primitive
-                if (space instanceof JSNumber) {
-                    space = space; // already a number
-                } else {
-                    space = JSTypeConversions.toString(context, space);
-                }
+            if (space instanceof JSNumberObject || space instanceof JSStringObject) {
+                space = JSTypeConversions.toPrimitive(context, space, JSTypeConversions.PreferredType.NUMBER);
             }
 
             if (space instanceof JSNumber num) {
@@ -659,6 +686,9 @@ public final class JSONObject {
             ctx.path = new ArrayList<>();
             if (jsonToStr(context, ctx, sb, wrapper, processedValue, "")) {
                 return new JSString(sb.toString());
+            }
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
             return JSUndefined.INSTANCE;
         } catch (CircularReferenceException e) {
@@ -700,6 +730,9 @@ public final class JSONObject {
                     sb.append("null");
                 } else {
                     if (!jsonToStr(context, ctx, sb, arr, processedElem, newIndent)) {
+                        if (context.hasPendingException()) {
+                            return false;
+                        }
                         sb.append("null");
                     }
                 }
@@ -730,10 +763,9 @@ public final class JSONObject {
             keys = ctx.propertyList;
         } else {
             keys = new ArrayList<>();
-            List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
-            for (PropertyKey key : propertyKeys) {
-                if (key.isString()) {
-                    keys.add(key.asString());
+            for (PropertyKey key : obj.enumerableKeys()) {
+                if (!key.isSymbol()) {
+                    keys.add(key.toPropertyString());
                 }
             }
         }
@@ -770,6 +802,8 @@ public final class JSONObject {
 
                         sb.append(tempSb);
                         hasContent = true;
+                    } else if (context.hasPendingException()) {
+                        return false;
                     }
                 } finally {
                     ctx.currentProperty = previousProperty;

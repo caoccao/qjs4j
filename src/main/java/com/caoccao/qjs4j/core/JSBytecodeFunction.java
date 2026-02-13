@@ -133,7 +133,7 @@ public final class JSBytecodeFunction extends JSFunction {
         // Following QuickJS pattern: create generator without executing the body
         if (isAsync && isGenerator) {
             // Create generator state to track execution
-            GeneratorState generatorState = new GeneratorState(this, thisArg, args);
+            JSGeneratorState generatorState = new JSGeneratorState(this, thisArg, args);
 
             return new JSAsyncGenerator((inputValue, isThrow) -> {
                 JSPromise promise = new JSPromise();
@@ -181,7 +181,7 @@ public final class JSBytecodeFunction extends JSFunction {
         // Following QuickJS js_generator_function_call pattern
         if (isGenerator && !isAsync) {
             // Create generator state to track execution
-            GeneratorState generatorState = new GeneratorState(this, thisArg, args);
+            JSGeneratorState generatorState = new JSGeneratorState(this, thisArg, args);
 
             // Create generator object with proper prototype chain
             // In QuickJS, js_create_from_ctor gets prototype from the generator function's
