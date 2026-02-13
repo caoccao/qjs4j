@@ -99,6 +99,23 @@ public abstract class JSTypedArray extends JSObject {
         }
     }
 
+    protected String formatElement(double value) {
+        if (Double.isNaN(value)) {
+            return "NaN";
+        }
+        if (Double.isInfinite(value)) {
+            return value > 0 ? "Infinity" : "-Infinity";
+        }
+        if (value == 0) {
+            return "0";
+        }
+        long asLong = (long) value;
+        if (value == asLong) {
+            return Long.toString(asLong);
+        }
+        return Double.toString(value);
+    }
+
     /**
      * Get the underlying ArrayBuffer or SharedArrayBuffer.
      */
@@ -113,10 +130,10 @@ public abstract class JSTypedArray extends JSObject {
         if (buffer.isDetached()) {
             throw new IllegalStateException("TypedArray buffer is detached");
         }
-        ByteBuffer buf = buffer.getBuffer();
+        ByteBuffer buf = buffer.getBuffer().duplicate();
         buf.position(byteOffset);
         buf.limit(byteOffset + byteLength);
-        return buf;
+        return buf.slice();
     }
 
     /**
@@ -157,7 +174,7 @@ public abstract class JSTypedArray extends JSObject {
      * Copy values from array into this TypedArray.
      */
     public void setArray(JSContext context, JSValue source, int offset) {
-        if (offset < 0 || offset >= length) {
+        if (offset < 0 || offset > length) {
             throw new JSRangeErrorException("TypedArray offset out of range");
         }
 
@@ -179,6 +196,21 @@ public abstract class JSTypedArray extends JSObject {
             for (int i = 0; i < srcLength; i++) {
                 setElement(offset + i, srcTyped.getElement(i));
             }
+        } else if (source instanceof JSIterator jsIterator) {
+            JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
+            setArray(context, jsArray, offset);
+        } else if (source instanceof JSObject srcObject) {
+            int srcLength = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, srcObject.get("length")));
+            if (offset + srcLength > length) {
+                throw new JSRangeErrorException("Source array too large");
+            }
+            for (int i = 0; i < srcLength; i++) {
+                JSValue value = srcObject.get(i);
+                if (value.isUndefined()) {
+                    value = srcObject.get(String.valueOf(i));
+                }
+                setElement(offset + i, JSTypeConversions.toNumber(context, value).value());
+            }
         }
     }
 
@@ -195,7 +227,16 @@ public abstract class JSTypedArray extends JSObject {
 
     @Override
     public String toString() {
-        ByteBuffer byteBuffer = getByteBuffer();
-        return byteBuffer.toString();
+        if (length == 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < length; i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(formatElement(getElement(i)));
+        }
+        return sb.toString();
     }
 }

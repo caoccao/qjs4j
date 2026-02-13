@@ -28,6 +28,42 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testDescriptorsAndAliases() {
+        assertStringWithJavet(
+                "(() => {" +
+                        "const c = Object.getOwnPropertyDescriptor(Uint8Array, 'BYTES_PER_ELEMENT');" +
+                        "const p = Object.getOwnPropertyDescriptor(Uint8Array.prototype, 'BYTES_PER_ELEMENT');" +
+                        "return [c.value, c.writable, c.enumerable, c.configurable, p.value, p.writable, p.enumerable, p.configurable].join(',');" +
+                        "})()",
+                "(() => Uint8Array.prototype.toString === Array.prototype.toString)().toString()",
+                "(() => Uint8Array.prototype[Symbol.iterator] === Uint8Array.prototype.values)().toString()");
+    }
+
+    @Test
+    public void testFromOfAndSpecies() {
+        assertStringWithJavet(
+                "Uint8Array.of(1, 2, 3).toString()",
+                "Uint8Array.from([1, 2, 3]).toString()",
+                "Uint8Array.from([1, 2, 3], x => x + 1).toString()",
+                "Uint8Array.from({0: 7, 1: 8, length: 2}).toString()");
+        assertBooleanWithJavet(
+                "(() => { class X extends Uint8Array {}; return X[Symbol.species] === X; })()",
+                "(() => { try { Uint8Array.from.call({}, [1]); return false; } catch (e) { return e instanceof TypeError; } })()");
+    }
+
+    @Test
+    public void testPrototypeMethodsAndEdgeCases() {
+        assertStringWithJavet(
+                "(() => { const b = new ArrayBuffer(4); const a = new Uint8Array(b); a.set([1, 2, 3, 4]); return new Uint8Array(b, 1, 2).toString(); })()",
+                "(() => { const a = new Uint8Array([1, 2, 3, 4]); a.set([9, 8], 1); return a.toString(); })()",
+                "(() => { const a = new Uint8Array([1, 2, 3, 4]); return a.subarray(1, -1).toString(); })()",
+                "(() => { const b = new ArrayBuffer(8); const a = new Uint16Array(b, 2, 3); return [a.length, a.byteLength, a.byteOffset, a.buffer === b].join(','); })()");
+        assertBooleanWithJavet(
+                "(() => { const a = new Uint8Array(2); try { a.set([1], 3); return false; } catch (e) { return e instanceof RangeError; } })()",
+                "(() => { const a = new Uint8Array(2); try { a.set([1, 2, 3], 0); return false; } catch (e) { return e instanceof RangeError; } })()");
+    }
+
+    @Test
     public void testTypeof() {
         assertStringWithJavet(
                 "typeof BigInt64Array",
@@ -38,6 +74,7 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
                 "typeof Int16Array",
                 "typeof Int32Array",
                 "typeof Int8Array",
+                "typeof TypedArray",
                 "typeof Uint16Array",
                 "typeof Uint32Array",
                 "typeof Uint8Array",

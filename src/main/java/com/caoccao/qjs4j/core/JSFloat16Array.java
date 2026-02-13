@@ -95,7 +95,7 @@ public final class JSFloat16Array extends JSTypedArray {
     public double getElement(int index) {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
-        short halfFloat = buf.getShort(byteOffset + index * BYTES_PER_ELEMENT);
+        short halfFloat = buf.getShort(index * BYTES_PER_ELEMENT);
         return Float16.toFloat(halfFloat);
     }
 
@@ -104,7 +104,7 @@ public final class JSFloat16Array extends JSTypedArray {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
         short halfFloat = Float16.toHalf((float) value);
-        buf.putShort(byteOffset + index * BYTES_PER_ELEMENT, halfFloat);
+        buf.putShort(index * BYTES_PER_ELEMENT, halfFloat);
     }
 
     @Override

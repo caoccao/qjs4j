@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.core;
 
 import java.nio.ByteBuffer;
-import java.util.StringJoiner;
 
 /**
  * Represents a JavaScript Uint8Array.
@@ -118,14 +117,5 @@ public final class JSUint8Array extends JSTypedArray {
         int newByteOffset = byteOffset + begin * BYTES_PER_ELEMENT;
 
         return new JSUint8Array(buffer, newByteOffset, newLength);
-    }
-
-    @Override
-    public String toString() {
-        StringJoiner stringJoiner = new StringJoiner(",");
-        for (byte b : getByteBuffer().array()) {
-            stringJoiner.add(Integer.toString(b & 0xFF));
-        }
-        return stringJoiner.toString();
     }
 }

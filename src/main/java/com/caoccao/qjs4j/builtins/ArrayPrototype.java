@@ -1126,11 +1126,17 @@ public final class ArrayPrototype {
      * Returns a string representing the array.
      */
     public static JSValue toString(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
         if (thisArg.isArray()) {
             return join(context, thisArg, new JSValue[0]);
         }
-        if (thisArg.isNullOrUndefined()) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
+        if (thisArg instanceof JSObject jsObject) {
+            JSValue joinValue = jsObject.get("join");
+            if (joinValue instanceof JSFunction joinFn) {
+                return joinFn.call(context, thisArg, new JSValue[0]);
+            }
         }
         return ObjectPrototype.toString(context, thisArg, args);
     }
