@@ -979,18 +979,7 @@ public final class IteratorPrototype {
         if (!(thisArg instanceof JSSet set)) {
             return context.throwTypeError("Set.prototype.entries called on non-Set");
         }
-
-        final java.util.Iterator<JSMap.KeyWrapper> iter = set.values().iterator();
-        return new JSIterator(context, () -> {
-            if (iter.hasNext()) {
-                JSValue value = iter.next().value();
-                JSArray pair = context.createJSArray();
-                pair.push(value);
-                pair.push(value); // In Set, both elements are the same
-                return JSIterator.IteratorResult.of(context, pair);
-            }
-            return JSIterator.IteratorResult.done(context);
-        });
+        return JSIterator.setEntriesIterator(context, set);
     }
 
     /**

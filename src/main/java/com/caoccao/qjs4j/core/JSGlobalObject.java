@@ -1349,29 +1349,40 @@ public final class JSGlobalObject {
     private void initializeSetConstructor(JSContext context, JSObject global) {
         // Create Set.prototype
         JSObject setPrototype = context.createJSObject();
-        setPrototype.set("add", new JSNativeFunction("add", 1, SetPrototype::add));
-        setPrototype.set("has", new JSNativeFunction("has", 1, SetPrototype::has));
-        setPrototype.set("delete", new JSNativeFunction("delete", 1, SetPrototype::delete));
-        setPrototype.set("clear", new JSNativeFunction("clear", 0, SetPrototype::clear));
-        setPrototype.set("forEach", new JSNativeFunction("forEach", 1, SetPrototype::forEach));
-        setPrototype.set("entries", new JSNativeFunction("entries", 0, IteratorPrototype::setEntriesIterator));
+        setPrototype.definePropertyWritableConfigurable("add", new JSNativeFunction("add", 1, SetPrototype::add));
+        setPrototype.definePropertyWritableConfigurable("has", new JSNativeFunction("has", 1, SetPrototype::has));
+        setPrototype.definePropertyWritableConfigurable("delete", new JSNativeFunction("delete", 1, SetPrototype::delete));
+        setPrototype.definePropertyWritableConfigurable("clear", new JSNativeFunction("clear", 0, SetPrototype::clear));
+        setPrototype.definePropertyWritableConfigurable("forEach", new JSNativeFunction("forEach", 1, SetPrototype::forEach));
+        setPrototype.definePropertyWritableConfigurable("isDisjointFrom", new JSNativeFunction("isDisjointFrom", 1, SetPrototype::isDisjointFrom));
+        setPrototype.definePropertyWritableConfigurable("isSubsetOf", new JSNativeFunction("isSubsetOf", 1, SetPrototype::isSubsetOf));
+        setPrototype.definePropertyWritableConfigurable("isSupersetOf", new JSNativeFunction("isSupersetOf", 1, SetPrototype::isSupersetOf));
+        setPrototype.definePropertyWritableConfigurable("intersection", new JSNativeFunction("intersection", 1, SetPrototype::intersection));
+        setPrototype.definePropertyWritableConfigurable("difference", new JSNativeFunction("difference", 1, SetPrototype::difference));
+        setPrototype.definePropertyWritableConfigurable("symmetricDifference", new JSNativeFunction("symmetricDifference", 1, SetPrototype::symmetricDifference));
+        setPrototype.definePropertyWritableConfigurable("union", new JSNativeFunction("union", 1, SetPrototype::union));
+        setPrototype.definePropertyWritableConfigurable("entries", new JSNativeFunction("entries", 0, SetPrototype::entries));
 
         // Create values function - keys and Symbol.iterator will alias to this
-        JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, IteratorPrototype::setValuesIterator);
-        setPrototype.set("values", valuesFunction);
+        JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, SetPrototype::values);
+        setPrototype.definePropertyWritableConfigurable("values", valuesFunction);
         // Set.prototype.keys is the same function object as values (ES spec requirement)
-        setPrototype.set("keys", valuesFunction);
+        setPrototype.definePropertyWritableConfigurable("keys", valuesFunction);
         // Set.prototype[Symbol.iterator] is the same as values()
-        setPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction);
+        setPrototype.definePropertyWritableConfigurable(JSSymbol.ITERATOR, valuesFunction);
 
         // Set.prototype.size getter
         setPrototype.defineGetterConfigurable("size", SetPrototype::getSize);
+        setPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSSet.NAME));
 
         // Create Set constructor as a function
         JSNativeFunction setConstructor = new JSNativeFunction("Set", 0, SetConstructor::call, true, true);
         setConstructor.set("prototype", setPrototype);
         setConstructor.setConstructorType(JSConstructorType.SET);
-        setPrototype.set("constructor", setConstructor);
+        setPrototype.definePropertyWritableConfigurable("constructor", setConstructor);
+
+        setConstructor.definePropertyWritableConfigurable("groupBy", new JSNativeFunction("groupBy", 2, SetConstructor::groupBy));
+        setConstructor.defineGetterConfigurable(JSSymbol.SPECIES, SetConstructor::getSpecies);
 
         global.definePropertyWritableConfigurable("Set", setConstructor);
     }

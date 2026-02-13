@@ -18,9 +18,11 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for Set.prototype methods.
@@ -169,6 +171,61 @@ public class SetPrototypeTest extends BaseJavetTest {
         // Add symbols
         assertIntegerWithJavet("var s = new Set(); var sym = Symbol('test'); s.add(sym); s.add(sym); s.size");
         assertIntegerWithJavet("var s = new Set(); s.add(Symbol('a')); s.add(Symbol('a')); s.size");
+    }
+
+    @Test
+    void testAdvancedSetMethods() {
+        assertThat(context.eval("""
+                (() => {
+                  const a = new Set([1, 2, 3]);
+                  const b = new Set([3, 4]);
+                  const union = [...a.union(b)].join(',');
+                  const intersection = [...a.intersection(b)].join(',');
+                  const difference = [...a.difference(b)].join(',');
+                  const symmetricDifference = [...a.symmetricDifference(b)].join(',');
+                  const d1 = Object.getOwnPropertyDescriptor(Set.prototype, 'union');
+                  const d2 = Object.getOwnPropertyDescriptor(Set.prototype, 'isSubsetOf');
+                  return union === '1,2,3,4'
+                    && intersection === '3'
+                    && difference === '1,2'
+                    && symmetricDifference === '1,2,4'
+                    && a.isSubsetOf(new Set([1, 2, 3, 4]))
+                    && !a.isSubsetOf(new Set([1, 2]))
+                    && a.isSupersetOf(new Set([1, 2]))
+                    && !a.isSupersetOf(new Set([1, 2, 5]))
+                    && a.isDisjointFrom(new Set([4, 5]))
+                    && !a.isDisjointFrom(new Set([2, 5]))
+                    && a.size === 3
+                    && typeof d1.value === 'function'
+                    && d1.value.length === 1
+                    && d1.writable === true
+                    && d1.enumerable === false
+                    && d1.configurable === true
+                    && typeof d2.value === 'function'
+                    && d2.value.length === 1;
+                })()
+                """).toJavaObject()).isEqualTo(true);
+    }
+
+    @Test
+    void testAdvancedSetMethodsWithSetLikeObject() {
+        assertThat(context.eval("""
+                (() => {
+                  const a = new Set([1, 2, 3]);
+                  const setLike = {
+                    size: 2,
+                    has(v) { return v === 2 || v === 5; },
+                    keys() { return [2, 5][Symbol.iterator](); }
+                  };
+                  return [...a.union(setLike)].join(',') === '1,2,3,5'
+                    && [...a.intersection(setLike)].join(',') === '2'
+                    && [...a.difference(setLike)].join(',') === '1,3'
+                    && [...a.symmetricDifference(setLike)].join(',') === '1,3,5'
+                    && a.isSupersetOf(setLike) === false
+                    && a.isSubsetOf(setLike) === false
+                    && a.isDisjointFrom(setLike) === false;
+                })()
+                """).toJavaObject()).isEqualTo(true);
     }
 
     @Test
@@ -1092,6 +1149,21 @@ public class SetPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    void testSetIteratorMutationSemantics() {
+        assertStringWithJavet("""
+                const s = new Set([1, 2, 3]);
+                const it = s.values();
+                const out = [];
+                out.push(it.next().value);
+                s.delete(2);
+                s.add(2);
+                out.push(it.next().value);
+                out.push(it.next().value);
+                out.join(',');
+                """);
+    }
+
+    @Test
     void testSetKeysIsValues() {
         // The core requirement: keys and values must be the same object
         assertBooleanWithJavet("Set.prototype.keys === Set.prototype.values");
@@ -1101,6 +1173,42 @@ public class SetPrototypeTest extends BaseJavetTest {
     void testSetKeysSymbolIteratorIdentity() {
         // Transitively, keys and Symbol.iterator must be the same
         assertBooleanWithJavet("Set.prototype.keys === Set.prototype[Symbol.iterator]");
+    }
+
+    @Test
+    void testSetMethodInputValidation() {
+        assertThatThrownBy(() -> context.eval("new Set([1]).union({ size: 1, keys() { return [1][Symbol.iterator](); } })"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
+        assertThatThrownBy(() -> context.eval("new Set([1]).intersection({ size: 1, has: 1, keys() { return [1][Symbol.iterator](); } })"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
+        assertThatThrownBy(() -> context.eval("new Set([1]).isSubsetOf({ size: -1, has() { return true; }, keys() { return [][Symbol.iterator](); } })"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("RangeError");
+    }
+
+    @Test
+    void testSetMethodsDoNotUseOverriddenAdd() {
+        assertThat(context.eval("""
+                (() => {
+                  const a = new Set([1]);
+                  const b = new Set([2]);
+                  const originalAdd = Set.prototype.add;
+                  Set.prototype.add = function() { throw new Error('boom'); };
+                  try {
+                    const union = a.union(b);
+                    const intersection = a.intersection(b);
+                    return union instanceof Set
+                      && union.has(1)
+                      && union.has(2)
+                      && intersection instanceof Set
+                      && intersection.size === 0;
+                  } finally {
+                    Set.prototype.add = originalAdd;
+                  }
+                })()
+                """).toJavaObject()).isEqualTo(true);
     }
 
     @Test
@@ -1115,6 +1223,20 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertStringWithJavet("new Set().toString()");
         assertStringWithJavet("new Set([1,2,3]).toString()");
         assertStringWithJavet("Object.prototype.toString.call(new Set())");
+    }
+
+    @Test
+    void testSetToStringTagDescriptor() {
+        assertBooleanWithJavet("""
+                (() => {
+                  const d = Object.getOwnPropertyDescriptor(Set.prototype, Symbol.toStringTag);
+                  return d.value === 'Set'
+                    && d.writable === false
+                    && d.enumerable === false
+                    && d.configurable === true
+                    && d.get === undefined;
+                })()
+                """);
     }
 
     @Test

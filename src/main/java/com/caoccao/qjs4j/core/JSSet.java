@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import java.util.LinkedHashSet;
+import java.util.*;
 
 /**
  * Represents a JavaScript Set object.
@@ -24,59 +24,157 @@ import java.util.LinkedHashSet;
  */
 public final class JSSet extends JSObject {
     public static final String NAME = "Set";
-    // Use LinkedHashSet to maintain insertion order
-    // Use KeyWrapper from JSMap for consistent SameValueZero equality
-    private final LinkedHashSet<JSMap.KeyWrapper> data;
+    private final Map<JSMap.KeyWrapper, EntryRecord> data;
+    private final Map<Long, EntryRecord> entriesById;
+    private long nextEntryId;
 
     /**
      * Create an empty Set.
      */
     public JSSet() {
         super();
-        this.data = new LinkedHashSet<>();
+        this.data = new LinkedHashMap<>();
+        this.entriesById = new HashMap<>();
+        this.nextEntryId = 1;
+    }
+
+    private static void closeIterator(JSContext context, JSValue iterator) {
+        if (!(iterator instanceof JSObject iteratorObject)) {
+            return;
+        }
+        JSValue pendingException = context.getPendingException();
+        if (pendingException != null) {
+            context.clearPendingException();
+        }
+        JSValue returnMethod = iteratorObject.get("return");
+        if (returnMethod instanceof JSFunction returnFunction) {
+            returnFunction.call(context, iterator, new JSValue[0]);
+        }
+        if (pendingException != null) {
+            context.setPendingException(pendingException);
+        }
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        // Create Set object
         JSSet setObj = new JSSet();
-        // If an iterable is provided, populate the set
+        context.transferPrototype(setObj, NAME);
+
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
-            // Handle array directly for efficiency
-            if (iterableArg instanceof JSArray arr) {
-                for (long i = 0; i < arr.getLength(); i++) {
-                    JSValue value = arr.get((int) i);
-                    setObj.setAdd(value);
+
+            JSValue adder = setObj.get("add");
+            if (!(adder instanceof JSFunction adderFunction)) {
+                return context.throwTypeError("set/add is not a function");
+            }
+
+            JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
+            if (!(iterator instanceof JSObject)) {
+                return context.throwTypeError("Object is not iterable");
+            }
+
+            while (true) {
+                JSObject nextResult;
+                try {
+                    nextResult = JSIteratorHelper.iteratorNext(iterator, context);
+                } catch (RuntimeException e) {
+                    closeIterator(context, iterator);
+                    throw e;
                 }
-            } else {
-                // Follow the generic iterator protocol for all iterable inputs.
-                JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
-                if (iterator == null) {
-                    return context.throwTypeError("Object is not iterable");
+                if (nextResult instanceof JSError) {
+                    closeIterator(context, iterator);
+                    return nextResult;
                 }
-                while (true) {
-                    JSObject nextResult = JSIteratorHelper.iteratorNext(iterator, context);
-                    if (nextResult == null) {
-                        return context.throwTypeError("Iterator result must be an object");
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    JSValue pendingException = context.getPendingException();
+                    if (pendingException instanceof JSObject pendingObject) {
+                        return pendingObject;
                     }
-                    JSValue done = nextResult.get("done");
-                    if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
-                        break;
+                    return context.throwTypeError("Set constructor failed");
+                }
+                if (nextResult == null) {
+                    closeIterator(context, iterator);
+                    return context.throwTypeError("Iterator result must be an object");
+                }
+                JSValue done = nextResult.get("done");
+                if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
+                    break;
+                }
+
+                JSValue value = nextResult.get("value");
+                JSValue adderResult;
+                try {
+                    adderResult = adderFunction.call(context, setObj, new JSValue[]{value});
+                } catch (RuntimeException e) {
+                    closeIterator(context, iterator);
+                    throw e;
+                }
+                if (adderResult instanceof JSError || context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    if (adderResult instanceof JSObject adderResultObject) {
+                        return adderResultObject;
                     }
-                    JSValue value = nextResult.get("value");
-                    setObj.setAdd(value);
+                    JSValue pendingException = context.getPendingException();
+                    if (pendingException instanceof JSObject pendingObject) {
+                        return pendingObject;
+                    }
+                    return context.throwTypeError("Set constructor failed");
                 }
             }
         }
-        context.transferPrototype(setObj, NAME);
         return setObj;
+    }
+
+    public IterationCursor createIterationCursor() {
+        IterationCursor cursor = new IterationCursor();
+        refreshIterationCursor(cursor);
+        return cursor;
+    }
+
+    public JSValue nextIterationValue(IterationCursor cursor) {
+        while (true) {
+            while (cursor.index < cursor.orderedIds.size()) {
+                long entryId = cursor.orderedIds.get(cursor.index++);
+                EntryRecord record = entriesById.get(entryId);
+                if (record != null) {
+                    return record.keyWrapper.value();
+                }
+            }
+            if (!refreshIterationCursor(cursor)) {
+                return null;
+            }
+        }
+    }
+
+    private JSValue normalizeValue(JSValue value) {
+        if (value instanceof JSNumber number && number.value() == 0.0) {
+            return new JSNumber(0.0);
+        }
+        return value;
+    }
+
+    private boolean refreshIterationCursor(IterationCursor cursor) {
+        boolean appended = false;
+        for (EntryRecord record : data.values()) {
+            if (cursor.seenIds.add(record.id)) {
+                cursor.orderedIds.add(record.id);
+                appended = true;
+            }
+        }
+        return appended;
     }
 
     /**
      * Add a value to the Set.
      */
     public void setAdd(JSValue value) {
-        data.add(new JSMap.KeyWrapper(value));
+        JSMap.KeyWrapper keyWrapper = new JSMap.KeyWrapper(normalizeValue(value));
+        if (data.containsKey(keyWrapper)) {
+            return;
+        }
+        EntryRecord record = new EntryRecord(nextEntryId++, keyWrapper);
+        data.put(keyWrapper, record);
+        entriesById.put(record.id, record);
     }
 
     /**
@@ -84,20 +182,26 @@ public final class JSSet extends JSObject {
      */
     public void setClear() {
         data.clear();
+        entriesById.clear();
     }
 
     /**
      * Delete a value from the Set.
      */
     public boolean setDelete(JSValue value) {
-        return data.remove(new JSMap.KeyWrapper(value));
+        EntryRecord removedRecord = data.remove(new JSMap.KeyWrapper(normalizeValue(value)));
+        if (removedRecord == null) {
+            return false;
+        }
+        entriesById.remove(removedRecord.id);
+        return true;
     }
 
     /**
      * Check if the Set has a value.
      */
     public boolean setHas(JSValue value) {
-        return data.contains(new JSMap.KeyWrapper(value));
+        return data.containsKey(new JSMap.KeyWrapper(normalizeValue(value)));
     }
 
     /**
@@ -116,6 +220,25 @@ public final class JSSet extends JSObject {
      * Get all values as an iterable.
      */
     public Iterable<JSMap.KeyWrapper> values() {
-        return data;
+        List<JSMap.KeyWrapper> values = new ArrayList<>(data.size());
+        for (EntryRecord entryRecord : data.values()) {
+            values.add(entryRecord.keyWrapper);
+        }
+        return values;
+    }
+
+    private record EntryRecord(long id, JSMap.KeyWrapper keyWrapper) {
+    }
+
+    public static final class IterationCursor {
+        private final List<Long> orderedIds;
+        private final Set<Long> seenIds;
+        private int index;
+
+        private IterationCursor() {
+            this.orderedIds = new ArrayList<>();
+            this.seenIds = new HashSet<>();
+            this.index = 0;
+        }
     }
 }

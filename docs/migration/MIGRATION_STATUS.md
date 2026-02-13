@@ -49,9 +49,15 @@ This document tracks the progress of migrating QuickJS functionality to pure Jav
 - Proper hashCode() and equals() for all JSValue types
 
 #### Phase 10.4: Set Constructor
-- JSSet.java: LinkedHashSet-based implementation reusing Map's KeyWrapper
-- SetPrototype.java: add, has, delete, clear, forEach, entries, keys, values
-- SameValueZero equality consistency with Map
+- JSSet.java: record-based Set storage with mutation-safe iteration cursors and key normalization
+- Set constructor iterable handling aligned with QuickJS adder/iterator-close semantics
+- SetPrototype.java:
+  - core methods: add, has, delete, clear, forEach, entries, keys, values
+  - set operations: isDisjointFrom, isSubsetOf, isSupersetOf, intersection, difference, symmetricDifference, union
+- Set constructor/prototype registration aligned with QuickJS:
+  - `Set.groupBy()` + `Set[Symbol.species]`
+  - `Set.prototype[Symbol.iterator]` aliasing `values`
+  - `Set.prototype[Symbol.toStringTag] = "Set"`
 
 ### Phase 11: WeakMap, WeakSet, Reflect, Proxy ✅
 **Completed**: All ES2020 meta-programming features

@@ -35,4 +35,19 @@ public final class SetConstructor {
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         return JSSet.create(context, args);
     }
+
+    /**
+     * get Set[Symbol.species]
+     */
+    public static JSValue getSpecies(JSContext context, JSValue thisArg, JSValue[] args) {
+        return thisArg;
+    }
+
+    /**
+     * Set.groupBy(items, callbackFn)
+     * QuickJS extension (same behavior as Map.groupBy()).
+     */
+    public static JSValue groupBy(JSContext context, JSValue thisArg, JSValue[] args) {
+        return MapConstructor.groupBy(context, thisArg, args);
+    }
 }

@@ -233,10 +233,13 @@ This document provides a comprehensive list of all JavaScript features implement
 ### Set (ES2015)
 - **Creation**: new Set(), new Set(iterable)
 - **Methods**: add, has, delete, clear
+- **Set operations**: isDisjointFrom(), isSubsetOf(), isSupersetOf(), intersection(), difference(), symmetricDifference(), union()
 - **Size**: size property
 - **Iteration**: keys(), values(), entries(), forEach()
 - **Insertion order**: Maintains insertion order
 - **SameValueZero**: Proper NaN and -0/+0 equality
+- **Metadata**: `Set[Symbol.species]`, `Set.prototype[Symbol.toStringTag]`
+- **QuickJS extension**: Set.groupBy()
 
 ### WeakMap (ES2015)
 - **Creation**: new WeakMap(), new WeakMap(iterable)

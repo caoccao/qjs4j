@@ -42,9 +42,16 @@ public final class JSMap extends JSObject {
         if (!(iterator instanceof JSObject iteratorObject)) {
             return;
         }
+        JSValue pendingException = context.getPendingException();
+        if (pendingException != null) {
+            context.clearPendingException();
+        }
         JSValue returnMethod = iteratorObject.get("return");
         if (returnMethod instanceof JSFunction returnFunction) {
             returnFunction.call(context, iterator, new JSValue[0]);
+        }
+        if (pendingException != null) {
+            context.setPendingException(pendingException);
         }
     }
 
@@ -66,7 +73,17 @@ public final class JSMap extends JSObject {
             }
 
             while (true) {
-                JSObject nextResult = JSIteratorHelper.iteratorNext(iterator, context);
+                JSObject nextResult;
+                try {
+                    nextResult = JSIteratorHelper.iteratorNext(iterator, context);
+                } catch (RuntimeException e) {
+                    closeIterator(context, iterator);
+                    throw e;
+                }
+                if (nextResult instanceof JSError) {
+                    closeIterator(context, iterator);
+                    return nextResult;
+                }
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
                     JSValue pendingException = context.getPendingException();
@@ -92,9 +109,18 @@ public final class JSMap extends JSObject {
 
                 JSValue key = entryObj.get(0);
                 JSValue value = entryObj.get(1);
-                adderFunction.call(context, mapObj, new JSValue[]{key, value});
-                if (context.hasPendingException()) {
+                JSValue adderResult;
+                try {
+                    adderResult = adderFunction.call(context, mapObj, new JSValue[]{key, value});
+                } catch (RuntimeException e) {
                     closeIterator(context, iterator);
+                    throw e;
+                }
+                if (adderResult instanceof JSError || context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    if (adderResult instanceof JSObject adderResultObject) {
+                        return adderResultObject;
+                    }
                     JSValue pendingException = context.getPendingException();
                     if (pendingException instanceof JSObject pendingObject) {
                         return pendingObject;
