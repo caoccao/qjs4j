@@ -180,6 +180,18 @@ public class ProxyConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testProxyCallableTypeof() {
+        assertStringWithJavet("""
+                var proxy = new Proxy(function() {}, {});
+                typeof proxy""");
+
+        assertStringWithJavet("""
+                var proxy1 = new Proxy(function() {}, {});
+                var proxy2 = new Proxy(proxy1, {});
+                typeof proxy2""");
+    }
+
+    @Test
     public void testProxyChainWithMultipleLevels() {
         // Test proxy chain with 3 levels
         assertIntegerWithJavet("""
@@ -372,6 +384,19 @@ public class ProxyConstructorTest extends BaseJavetTest {
                 var proxy = new Proxy(target, {});
                 delete proxy.x;
                 'x' in proxy""");
+    }
+
+    @Test
+    public void testProxyDeletePropertyInvariantOnNonExtensibleTarget() {
+        assertErrorWithJavet("""
+                var target = {x: 1};
+                Object.preventExtensions(target);
+                var proxy = new Proxy(target, {
+                  deleteProperty: function() {
+                    return true;
+                  }
+                });
+                delete proxy.x""");
     }
 
     @Test
@@ -626,6 +651,20 @@ public class ProxyConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testProxyHasInvariantOnInheritedPropertyForNonExtensibleTarget() {
+        assertBooleanWithJavet("""
+                var proto = {x: 1};
+                var target = Object.create(proto);
+                Object.preventExtensions(target);
+                var proxy = new Proxy(target, {
+                  has: function() {
+                    return false;
+                  }
+                });
+                'x' in proxy""");
+    }
+
+    @Test
     public void testProxyInPrototypeChain() {
         // Test proxy used in prototype chain
         assertIntegerWithJavet("""
@@ -697,6 +736,17 @@ public class ProxyConstructorTest extends BaseJavetTest {
                 var val = proxy.x;
                 proxy.y = 2;
                 getCalled && setCalled""");
+    }
+
+    @Test
+    public void testProxyNestedProxyConstructor() {
+        assertIntegerWithJavet("""
+                function C(v) {
+                    this.value = v;
+                }
+                var proxy1 = new Proxy(C, {});
+                var proxy2 = new Proxy(proxy1, {});
+                (new proxy2(7)).value""");
     }
 
     @Test
@@ -868,6 +918,20 @@ public class ProxyConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testProxyRegistrationDescriptors() {
+        assertBooleanWithJavet("""
+                var d = Object.getOwnPropertyDescriptor(Proxy, 'revocable');
+                d.writable === true &&
+                d.enumerable === false &&
+                d.configurable === true &&
+                typeof d.value === 'function'""");
+
+        assertBooleanWithJavet("""
+                Object.prototype.hasOwnProperty.call(Proxy, 'prototype') === false &&
+                Proxy.prototype === undefined""");
+    }
+
+    @Test
     public void testProxyRevocableAccessAfterRevoke() {
         // Test that accessing revoked proxy throws TypeError
         assertErrorWithJavet("""
@@ -935,6 +999,20 @@ public class ProxyConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testProxyRevokedCallAndConstruct() {
+        assertErrorWithJavet("""
+                var revocable = Proxy.revocable(function() { return 1; }, {});
+                revocable.revoke();
+                revocable.proxy()""");
+
+        assertErrorWithJavet("""
+                function C() {}
+                var revocable = Proxy.revocable(C, {});
+                revocable.revoke();
+                new revocable.proxy()""");
+    }
+
+    @Test
     public void testProxySetBasic() {
         assertIntegerWithJavet("""
                 var target = {};
@@ -956,6 +1034,36 @@ public class ProxyConstructorTest extends BaseJavetTest {
                 var proxy = new Proxy(target, {});
                 proxy.x = 42;
                 proxy.x""");
+    }
+
+    @Test
+    public void testProxySetInvariantChecks() {
+        assertErrorWithJavet("""
+                var target = {};
+                Object.defineProperty(target, 'x', {
+                  value: 1,
+                  writable: false,
+                  configurable: false
+                });
+                var proxy = new Proxy(target, {
+                  set: function() {
+                    return true;
+                  }
+                });
+                proxy.x = 2""");
+
+        assertErrorWithJavet("""
+                var target = {};
+                Object.defineProperty(target, 'x', {
+                  get: function() { return 1; },
+                  configurable: false
+                });
+                var proxy = new Proxy(target, {
+                  set: function() {
+                    return true;
+                  }
+                });
+                proxy.x = 2""");
     }
 
     @Test
@@ -1051,6 +1159,28 @@ public class ProxyConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testProxySetTrapThroughReflectSet() {
+        assertBooleanWithJavet("""
+                var called = false;
+                var gotReceiver = false;
+                var receiver = {};
+                var proxy = new Proxy({}, {
+                  set: function(target, property, value, recv) {
+                    called = true;
+                    gotReceiver = recv === receiver;
+                    return true;
+                  }
+                });
+                Reflect.set(proxy, 'x', 1, receiver) && called && gotReceiver""");
+
+        assertBooleanWithJavet("""
+                var proxy = new Proxy({}, {
+                  set: function() { return false; }
+                });
+                Reflect.set(proxy, 'x', 1) === false""");
+    }
+
+    @Test
     public void testProxyThrowingTrap() {
         // Test that trap can throw custom error
         assertErrorWithJavet("""
@@ -1096,6 +1226,17 @@ public class ProxyConstructorTest extends BaseJavetTest {
                 var proxy = new Proxy(target, handler);
                 proxy(1, 2);
                 result === 'function'""");
+    }
+
+    @Test
+    public void testProxyTrapMustBeCallable() {
+        assertErrorWithJavet("""
+                var proxy = new Proxy({}, {has: 1});
+                'x' in proxy""");
+
+        assertErrorWithJavet("""
+                var proxy = new Proxy({}, {set: 1});
+                proxy.x = 1""");
     }
 
     @Test

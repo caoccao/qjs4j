@@ -53,7 +53,7 @@ public final class JSTypeChecking {
         if (value instanceof JSBigInt) {
             return "bigint";
         }
-        if (value instanceof JSFunction) {
+        if (isFunction(value)) {
             return "function";
         }
         if (value instanceof JSObject) {
@@ -87,7 +87,7 @@ public final class JSTypeChecking {
      * Check if value is callable (can be invoked as a function).
      */
     public static boolean isCallable(JSValue value) {
-        return value instanceof JSFunction;
+        return isFunction(value);
     }
 
     /**
@@ -101,6 +101,8 @@ public final class JSTypeChecking {
             return isConstructor(boundFunction.getTarget());
         } else if (value instanceof JSNativeFunction nativeFunc) {
             return nativeFunc.isConstructor();
+        } else if (value instanceof JSProxy proxy) {
+            return isProxyConstructor(proxy, 0);
         } else // Other function types default to constructor-capable.
             if (value instanceof JSClass) {
                 return true;
@@ -125,7 +127,13 @@ public final class JSTypeChecking {
      * Check if value is a function.
      */
     public static boolean isFunction(JSValue value) {
-        return value instanceof JSFunction;
+        if (value instanceof JSFunction) {
+            return true;
+        }
+        if (value instanceof JSProxy proxy) {
+            return isProxyFunction(proxy, 0);
+        }
+        return false;
     }
 
     /**
@@ -191,6 +199,30 @@ public final class JSTypeChecking {
                 value instanceof JSBigInt;
     }
 
+    private static boolean isProxyConstructor(JSProxy proxy, int depth) {
+        if (depth > 1000) {
+            return false;
+        }
+        JSValue target = proxy.getTarget();
+        if (target instanceof JSProxy nestedProxy) {
+            return isProxyConstructor(nestedProxy, depth + 1);
+        }
+        return isConstructor(target);
+    }
+
+    private static boolean isProxyFunction(JSProxy proxy, int depth) {
+        if (depth > 1000) {
+            return false;
+        }
+        JSValue target = proxy.getTarget();
+        if (target instanceof JSProxy nestedProxy) {
+            return isProxyFunction(nestedProxy, depth + 1);
+        }
+        return target instanceof JSFunction;
+    }
+
+    // Boolean value checks
+
     /**
      * Check if value is a safe integer (-(2^53 - 1) to 2^53 - 1).
      */
@@ -214,7 +246,7 @@ public final class JSTypeChecking {
         return a.type() == b.type();
     }
 
-    // Boolean value checks
+    // Type equality checks
 
     /**
      * Check if value is a string.
@@ -230,7 +262,7 @@ public final class JSTypeChecking {
         return value instanceof JSSymbol;
     }
 
-    // Type equality checks
+    // Validation helpers
 
     /**
      * Check if value is truthy (converts to true in boolean context).
@@ -245,8 +277,6 @@ public final class JSTypeChecking {
     public static boolean isUndefined(JSValue value) {
         return value instanceof JSUndefined;
     }
-
-    // Validation helpers
 
     /**
      * Require that value is a function.
@@ -330,7 +360,7 @@ public final class JSTypeChecking {
             if (obj.isHTMLDDA()) {
                 return "undefined";
             }
-            if (value instanceof JSFunction) {
+            if (isFunction(value)) {
                 return "function";
             }
             return "object";

@@ -2514,8 +2514,8 @@ public final class VirtualMachine {
             // Following QuickJS JS_CallConstructorInternal:
             // Check if target is a constructor BEFORE checking for construct trap
             JSValue target = jsProxy.getTarget();
-            if (target instanceof JSFunction targetFunc && JSTypeChecking.isConstructor(targetFunc)) {
-                valueStack.push(proxyConstruct(jsProxy, args));
+            if (JSTypeChecking.isConstructor(target)) {
+                valueStack.push(proxyConstruct(jsProxy, args, jsProxy));
             } else {
                 context.throwTypeError("proxy is not a constructor");
                 pendingException = context.getPendingException();
@@ -3180,53 +3180,51 @@ public final class VirtualMachine {
      * @return The result of the call
      */
     private JSValue proxyApply(JSProxy proxy, JSValue thisArg, JSValue[] args) {
-        // Following QuickJS js_proxy_call:
-        // Check if target is callable BEFORE checking for apply trap
+        if (proxy.isRevoked()) {
+            throw new JSException(context.throwTypeError("Cannot perform 'apply' on a proxy that has been revoked"));
+        }
+
         JSValue target = proxy.getTarget();
-        if (!(target instanceof JSFunction)) {
+        if (!JSTypeChecking.isFunction(target)) {
             throw new JSException(context.throwTypeError("proxy is not a function"));
         }
 
-        // Get the apply trap from the handler
         JSValue applyTrap = proxy.getHandler().get("apply");
-
-        // If no apply trap, forward to target
-        if (applyTrap == JSUndefined.INSTANCE || applyTrap == null) {
-            // Forward call to target
-            if (target instanceof JSNativeFunction nativeFunc) {
-                return nativeFunc.call(context, thisArg, args);
-            } else if (target instanceof JSBytecodeFunction bytecodeFunc) {
-                return execute(bytecodeFunc, thisArg, args);
-            } else {
-                return JSUndefined.INSTANCE;
-            }
+        if (applyTrap instanceof JSNull) {
+            applyTrap = JSUndefined.INSTANCE;
         }
 
-        // Check that apply trap is a function
+        if (applyTrap == JSUndefined.INSTANCE || applyTrap == null) {
+            if (target instanceof JSProxy targetProxy) {
+                return proxyApply(targetProxy, thisArg, args);
+            }
+            if (target instanceof JSNativeFunction nativeFunc) {
+                return nativeFunc.call(context, thisArg, args);
+            }
+            if (target instanceof JSBytecodeFunction bytecodeFunc) {
+                return execute(bytecodeFunc, thisArg, args);
+            }
+            if (target instanceof JSFunction targetFunc) {
+                return targetFunc.call(context, thisArg, args);
+            }
+            return JSUndefined.INSTANCE;
+        }
+
         if (!(applyTrap instanceof JSFunction applyFunc)) {
             throw new JSException(context.throwTypeError("apply trap is not a function"));
         }
 
-        // Create arguments array
         JSArray argArray = context.createJSArray(0, args.length);
         for (JSValue arg : args) {
             argArray.push(arg);
         }
 
-        // Call the apply trap: apply(target, thisArg, argArray)
         JSValue[] trapArgs = new JSValue[]{
                 proxy.getTarget(),
                 thisArg,
                 argArray
         };
-
-        if (applyFunc instanceof JSNativeFunction nativeFunc) {
-            return nativeFunc.call(context, proxy.getHandler(), trapArgs);
-        } else if (applyFunc instanceof JSBytecodeFunction bytecodeFunc) {
-            return execute(bytecodeFunc, proxy.getHandler(), trapArgs);
-        } else {
-            return JSUndefined.INSTANCE;
-        }
+        return applyFunc.call(context, proxy.getHandler(), trapArgs);
     }
 
     /**
@@ -3237,36 +3235,42 @@ public final class VirtualMachine {
      * @param args  The arguments
      * @return The constructed object
      */
-    private JSValue proxyConstruct(JSProxy proxy, JSValue[] args) {
-        // Following QuickJS: target is already validated as a constructor
-        // by the caller (handleCallConstructor)
+    private JSValue proxyConstruct(JSProxy proxy, JSValue[] args, JSValue newTarget) {
+        if (proxy.isRevoked()) {
+            throw new JSException(context.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked"));
+        }
+
         JSValue target = proxy.getTarget();
+        if (!JSTypeChecking.isConstructor(target)) {
+            throw new JSException(context.throwTypeError("proxy is not a constructor"));
+        }
 
-        // Get the construct trap from the handler
         JSValue constructTrap = proxy.getHandler().get("construct");
+        if (constructTrap instanceof JSNull) {
+            constructTrap = JSUndefined.INSTANCE;
+        }
 
-        // If no construct trap, forward to target
         if (constructTrap == JSUndefined.INSTANCE || constructTrap == null) {
-            // Forward to target constructor
-            // Create a new instance
+            if (target instanceof JSProxy targetProxy) {
+                return proxyConstruct(targetProxy, args, newTarget);
+            }
+
             JSObject instance = new JSObject();
             if (target instanceof JSObject targetObj) {
                 context.transferPrototype(instance, targetObj);
             }
 
-            // Call the function with the new instance as 'this'
-            // Target is already validated as JSFunction by caller
             JSValue result;
             if (target instanceof JSNativeFunction nativeFunc) {
                 result = nativeFunc.call(context, instance, args);
             } else if (target instanceof JSBytecodeFunction bytecodeFunc) {
                 result = execute(bytecodeFunc, instance, args);
+            } else if (target instanceof JSFunction targetFunc) {
+                result = targetFunc.call(context, instance, args);
             } else {
-                // Should never reach here since target is validated as JSFunction
                 return instance;
             }
 
-            // If function returned an object, use that; otherwise use instance
             if (result instanceof JSObject) {
                 return result;
             } else {
@@ -3274,35 +3278,23 @@ public final class VirtualMachine {
             }
         }
 
-        // Check that construct trap is a function
         if (!(constructTrap instanceof JSFunction constructFunc)) {
             throw new JSException(context.throwTypeError("construct trap is not a function"));
         }
 
-        // Create arguments array
         JSArray argArray = context.createJSArray(0, args.length);
         for (JSValue arg : args) {
             argArray.push(arg);
         }
 
-        // Call the construct trap: construct(target, argArray, newTarget)
-        // newTarget is the proxy itself
         JSValue[] trapArgs = new JSValue[]{
                 target,
                 argArray,
-                proxy  // newTarget
+                newTarget
         };
 
-        JSValue result;
-        if (constructFunc instanceof JSNativeFunction nativeFunc) {
-            result = nativeFunc.call(context, proxy.getHandler(), trapArgs);
-        } else if (constructFunc instanceof JSBytecodeFunction bytecodeFunc) {
-            result = execute(bytecodeFunc, proxy.getHandler(), trapArgs);
-        } else {
-            return JSUndefined.INSTANCE;
-        }
+        JSValue result = constructFunc.call(context, proxy.getHandler(), trapArgs);
 
-        // Validate that construct trap returned an object
         if (!(result instanceof JSObject)) {
             throw new JSException(context.throwTypeError(
                     "'construct' on proxy: trap returned non-object ('" +

@@ -68,7 +68,7 @@ public final class ProxyConstructor {
         result.set("proxy", proxy);
 
         // Create revoke function that invalidates the proxy
-        JSNativeFunction revokeFunc = new JSNativeFunction("revoke", 0, (childContext, thisValue, funcArgs) -> {
+        JSNativeFunction revokeFunc = new JSNativeFunction("", 0, (childContext, thisValue, funcArgs) -> {
             // Revoke the proxy - all subsequent operations will throw TypeError
             proxy.revoke();
             return JSUndefined.INSTANCE;

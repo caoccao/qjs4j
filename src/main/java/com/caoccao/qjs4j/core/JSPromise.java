@@ -324,9 +324,9 @@ public final class JSPromise extends JSObject {
     }
 
     /**
-         * A reaction record stores a callback and the promise it will affect.
-         */
-        public record ReactionRecord(JSFunction handler, JSPromise promise, JSContext context) {
+     * A reaction record stores a callback and the promise it will affect.
+     */
+    public record ReactionRecord(JSFunction handler, JSPromise promise, JSContext context) {
     }
 
     private static final class ResolveState {

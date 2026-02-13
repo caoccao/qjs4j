@@ -1273,8 +1273,11 @@ public final class JSGlobalObject {
         proxyConstructor.setConstructorType(JSConstructorType.PROXY);
         context.transferPrototype(proxyConstructor, JSFunction.NAME);
 
-        // Add static methods
-        proxyConstructor.set("revocable", new JSNativeFunction("revocable", 2, ProxyConstructor::revocable));
+        // Proxy has no "prototype" own property per QuickJS / spec.
+        proxyConstructor.delete(PropertyKey.fromString("prototype"));
+
+        // Add static methods.
+        proxyConstructor.definePropertyWritableConfigurable("revocable", new JSNativeFunction("revocable", 2, ProxyConstructor::revocable));
 
         global.definePropertyWritableConfigurable("Proxy", proxyConstructor);
     }
