@@ -436,6 +436,9 @@ This document provides a comprehensive list of all JavaScript features implement
 - **String.prototype.replaceAll**: Replace all occurrences
 - **Promise.any**: Fulfills when any promise fulfills
 - **WeakRef**: Weak references using Java WeakReference
+  - `WeakRef.prototype.deref()` on prototype
+  - `[Symbol.toStringTag] = "WeakRef"` (configurable)
+  - target types: objects and symbols
 - **FinalizationRegistry**: Cleanup callbacks on object collection
 
 ### ES2022

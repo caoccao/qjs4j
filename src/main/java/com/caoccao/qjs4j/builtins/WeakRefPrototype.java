@@ -17,8 +17,8 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.JSWeakRef;
 
 /**
  * Implementation of WeakRef.prototype methods.
@@ -27,11 +27,13 @@ import com.caoccao.qjs4j.core.JSValue;
 public final class WeakRefPrototype {
 
     /**
-     * get WeakRef.prototype[@@toStringTag]
-     * ES2021 25.1.4.3
-     * Returns "WeakRef".
+     * WeakRef.prototype.deref()
+     * ES2021 25.1.3.2
      */
-    public static JSValue getToStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
-        return new JSString("WeakRef");
+    public static JSValue deref(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSWeakRef weakRef)) {
+            return context.throwTypeError("WeakRef.prototype.deref called on incompatible receiver");
+        }
+        return weakRef.deref();
     }
 }

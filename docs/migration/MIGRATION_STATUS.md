@@ -522,17 +522,19 @@ This fix enables:
 ### Phase 21: WeakRef and FinalizationRegistry ✅
 **Completed**: ES2021 weak reference and finalization support
 
-#### Phase 21.1: WeakRef for Weak Object References
-- JSWeakRef.java: Weak reference wrapper for objects
+#### Phase 21.1: WeakRef for Weak References
+- JSWeakRef.java: Weak reference wrapper for objects/symbols
   - Uses Java WeakReference for automatic GC integration
   - deref() method: Returns target if alive, undefined if collected
-  - Target must be an object (primitives rejected)
+  - Target must be an object or symbol (other primitives rejected)
   - No resurrection: Objects can be collected at any time
 - WeakRefConstructor.java: Constructor helper
-  - createWeakRef(): Validates target is an object
+  - createWeakRef(): Validates target is object/symbol
   - Cannot create WeakRef to null
-  - TypeError for non-object targets
+  - TypeError for invalid targets
 - GlobalObject integration: initializeWeakRefConstructor()
+  - `WeakRef.prototype.deref` registered as non-enumerable method
+  - `WeakRef.prototype[Symbol.toStringTag] = "WeakRef"` data property
 - VM integration: [[WeakRefConstructor]] marker handling
 
 #### Phase 21.2: FinalizationRegistry for Cleanup Callbacks

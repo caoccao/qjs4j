@@ -54,10 +54,6 @@ public final class JSWeakMap extends JSObject {
         }
     }
 
-    public static boolean isWeakMapKey(JSValue key) {
-        return key instanceof JSObject || key instanceof JSSymbol;
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         JSWeakMap weakMapObj = new JSWeakMap();
         context.transferPrototype(weakMapObj, NAME);
@@ -134,6 +130,10 @@ public final class JSWeakMap extends JSObject {
             }
         }
         return weakMapObj;
+    }
+
+    public static boolean isWeakMapKey(JSValue key) {
+        return key instanceof JSObject || key instanceof JSSymbol;
     }
 
     @Override

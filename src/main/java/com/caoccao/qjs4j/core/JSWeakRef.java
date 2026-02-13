@@ -28,19 +28,19 @@ import java.lang.ref.WeakReference;
  * Key characteristics:
  * - Does not prevent garbage collection of the target
  * - deref() returns the target if still alive, undefined if collected
- * - Only works with objects, not primitives
+ * - Works with objects and symbols
  * - Part of the WeakRefs proposal (ES2021)
  */
 public final class JSWeakRef extends JSObject {
     public static final String NAME = "WeakRef";
-    private final WeakReference<JSObject> targetRef;
+    private final WeakReference<JSValue> targetRef;
 
     /**
      * Create a new WeakRef.
      *
      * @param target The target object to weakly reference
      */
-    public JSWeakRef(JSObject target) {
+    public JSWeakRef(JSValue target) {
         super();
         if (target == null) {
             throw new IllegalArgumentException("WeakRef target cannot be null");
@@ -54,14 +54,16 @@ public final class JSWeakRef extends JSObject {
             return context.throwTypeError("WeakRef: invalid target");
         }
         JSValue targetArg = args[0];
-        if (!(targetArg instanceof JSObject targetObj)) {
+        if (!isWeakRefTarget(targetArg)) {
             return context.throwTypeError("WeakRef: invalid target");
         }
-        JSWeakRef weakRef = new JSWeakRef(targetObj);
+        JSWeakRef weakRef = new JSWeakRef(targetArg);
         context.transferPrototype(weakRef, NAME);
-        // Add deref() method AFTER transferPrototype
-        weakRef.set("deref", new JSNativeFunction("deref", 0, (childContext, thisArg, args1) -> weakRef.deref()));
         return weakRef;
+    }
+
+    public static boolean isWeakRefTarget(JSValue value) {
+        return value instanceof JSObject || value instanceof JSSymbol;
     }
 
     /**
@@ -71,7 +73,7 @@ public final class JSWeakRef extends JSObject {
      * @return The target object if still alive, undefined if collected
      */
     public JSValue deref() {
-        JSObject target = targetRef.get();
+        JSValue target = targetRef.get();
         return target != null ? target : JSUndefined.INSTANCE;
     }
 
@@ -81,7 +83,7 @@ public final class JSWeakRef extends JSObject {
      *
      * @return The Java WeakReference
      */
-    public WeakReference<JSObject> getWeakReference() {
+    public WeakReference<JSValue> getWeakReference() {
         return targetRef;
     }
 

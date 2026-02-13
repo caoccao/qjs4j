@@ -51,6 +51,12 @@ public class WeakRefConstructorTest extends BaseJavetTest {
                         var ref = new WeakRef(obj);
                         ref.deref().x;""");
 
+        assertBooleanWithJavet("""
+                const symbolTarget = Symbol('target');
+                const ref = new WeakRef(symbolTarget);
+                ref.deref() === symbolTarget;
+                """);
+
         assertErrorWithJavet(
                 // Edge case: target is null
                 "new WeakRef(null);",
@@ -68,6 +74,14 @@ public class WeakRefConstructorTest extends BaseJavetTest {
         assertIntegerWithJavet("WeakRef.length");
 
         assertStringWithJavet("WeakRef.name");
+
+        assertBooleanWithJavet("""
+                (() => {
+                  const ref = new WeakRef({});
+                  return typeof WeakRef.prototype.deref === 'function'
+                    && !ref.hasOwnProperty('deref')
+                    && WeakRef.prototype.deref.length === 0;
+                })()""");
 
         assertErrorWithJavet(
                 "new WeakRef().toString()",

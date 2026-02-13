@@ -24,7 +24,7 @@ import com.caoccao.qjs4j.core.JSWeakRef;
  * WeakRef constructor implementation.
  * Based on ES2021 WeakRef specification.
  * <p>
- * WeakRef(target) creates a weak reference to an object.
+ * WeakRef(target) creates a weak reference to an object or symbol.
  */
 public final class WeakRefConstructor {
 

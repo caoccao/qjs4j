@@ -159,16 +159,6 @@ public class WeakMapPrototypeTest extends BaseJavetTest {
     }
 
     @Test
-    void testWeakMapHas() {
-        assertBooleanWithJavet("""
-                const wm = new WeakMap();
-                const key = {};
-                wm.set(key, 'value');
-                wm.has(key);
-                """);
-    }
-
-    @Test
     void testWeakMapGetOrInsertMethods() {
         assertThat(context.eval("""
                 (() => {
@@ -220,5 +210,15 @@ public class WeakMapPrototypeTest extends BaseJavetTest {
                     return e instanceof TypeError;
                   }
                 })()""").toJavaObject()).isEqualTo(true);
+    }
+
+    @Test
+    void testWeakMapHas() {
+        assertBooleanWithJavet("""
+                const wm = new WeakMap();
+                const key = {};
+                wm.set(key, 'value');
+                wm.has(key);
+                """);
     }
 }

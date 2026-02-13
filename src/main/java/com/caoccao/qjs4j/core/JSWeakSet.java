@@ -56,10 +56,6 @@ public final class JSWeakSet extends JSObject {
         }
     }
 
-    public static boolean isWeakSetValue(JSValue value) {
-        return value instanceof JSObject || value instanceof JSSymbol;
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         JSWeakSet weakSetObj = new JSWeakSet();
         context.transferPrototype(weakSetObj, NAME);
@@ -129,6 +125,10 @@ public final class JSWeakSet extends JSObject {
             }
         }
         return weakSetObj;
+    }
+
+    public static boolean isWeakSetValue(JSValue value) {
+        return value instanceof JSObject || value instanceof JSSymbol;
     }
 
     @Override

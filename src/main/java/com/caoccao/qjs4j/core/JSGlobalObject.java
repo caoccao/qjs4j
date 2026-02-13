@@ -1669,24 +1669,20 @@ public final class JSGlobalObject {
      * Initialize WeakRef constructor.
      */
     private void initializeWeakRefConstructor(JSContext context, JSObject global) {
-        // Create WeakRef.prototype
         JSObject weakRefPrototype = context.createJSObject();
-        // deref() method is added in JSWeakRef constructor
+        weakRefPrototype.definePropertyWritableConfigurable("deref", new JSNativeFunction("deref", 0, WeakRefPrototype::deref));
+        weakRefPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSWeakRef.NAME));
 
-        // Symbol.toStringTag
-        weakRefPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, WeakRefPrototype::getToStringTag);
-
-        // Create WeakRef constructor as a function
         JSNativeFunction weakRefConstructor = new JSNativeFunction(
                 "WeakRef",
                 1,
                 WeakRefConstructor::call,
-                true,  // isConstructor
-                true   // requiresNew - WeakRef() must be called with new
+                true,
+                true
         );
-        weakRefConstructor.set("prototype", weakRefPrototype);
+        weakRefConstructor.definePropertyReadonlyNonConfigurable("prototype", weakRefPrototype);
         weakRefConstructor.setConstructorType(JSConstructorType.WEAK_REF);
-        weakRefPrototype.set("constructor", weakRefConstructor);
+        weakRefPrototype.definePropertyWritableConfigurable("constructor", weakRefConstructor);
 
         global.definePropertyWritableConfigurable("WeakRef", weakRefConstructor);
     }
