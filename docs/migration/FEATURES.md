@@ -265,6 +265,7 @@ This document provides a comprehensive list of all JavaScript features implement
 - **Function operations**: apply, construct
 - **Object testing**: isExtensible, preventExtensions
 - **Property definition**: defineProperty, getOwnPropertyDescriptor
+- **Metadata**: `Reflect[Symbol.toStringTag] = "Reflect"` (configurable)
 
 ### Proxy (ES2015)
 - **Construction**: new Proxy(target, handler)

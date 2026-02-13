@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.builtins;
-
-import com.caoccao.qjs4j.core.*;
+package com.caoccao.qjs4j.core;
 
 import java.time.format.FormatStyle;
 import java.util.ArrayList;
@@ -27,7 +25,7 @@ import java.util.Locale;
 /**
  * Implementation of Intl object and Intl.* prototype methods.
  */
-public final class IntlObject {
+public final class JSIntlObject {
     private static final String[] FORMAT_STYLE_VALUES = {"short", "medium", "long", "full"};
 
     private static List<String> canonicalizeLocaleList(JSContext context, JSValue localeValue) {

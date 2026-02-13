@@ -839,99 +839,99 @@ public final class JSGlobalObject {
      */
     private void initializeIntlObject(JSContext context, JSObject global) {
         JSObject intlObject = context.createJSObject();
-        intlObject.set("getCanonicalLocales", new JSNativeFunction("getCanonicalLocales", 1, IntlObject::getCanonicalLocales));
+        intlObject.set("getCanonicalLocales", new JSNativeFunction("getCanonicalLocales", 1, JSIntlObject::getCanonicalLocales));
 
         JSObject dateTimeFormatPrototype = context.createJSObject();
-        dateTimeFormatPrototype.set("format", new JSNativeFunction("format", 1, IntlObject::dateTimeFormatFormat));
-        dateTimeFormatPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, IntlObject::dateTimeFormatResolvedOptions));
+        dateTimeFormatPrototype.set("format", new JSNativeFunction("format", 1, JSIntlObject::dateTimeFormatFormat));
+        dateTimeFormatPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::dateTimeFormatResolvedOptions));
         JSNativeFunction dateTimeFormatConstructor = new JSNativeFunction(
                 "DateTimeFormat",
                 0,
-                (childContext, thisArg, args) -> IntlObject.createDateTimeFormat(childContext, dateTimeFormatPrototype, args),
+                (childContext, thisArg, args) -> JSIntlObject.createDateTimeFormat(childContext, dateTimeFormatPrototype, args),
                 true);
         dateTimeFormatConstructor.set("prototype", dateTimeFormatPrototype);
-        dateTimeFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, IntlObject::supportedLocalesOf));
+        dateTimeFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
         dateTimeFormatPrototype.set("constructor", dateTimeFormatConstructor);
         intlObject.set("DateTimeFormat", dateTimeFormatConstructor);
 
         JSObject numberFormatPrototype = context.createJSObject();
-        numberFormatPrototype.set("format", new JSNativeFunction("format", 1, IntlObject::numberFormatFormat));
-        numberFormatPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, IntlObject::numberFormatResolvedOptions));
+        numberFormatPrototype.set("format", new JSNativeFunction("format", 1, JSIntlObject::numberFormatFormat));
+        numberFormatPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::numberFormatResolvedOptions));
         JSNativeFunction numberFormatConstructor = new JSNativeFunction(
                 "NumberFormat",
                 0,
-                (childContext, thisArg, args) -> IntlObject.createNumberFormat(childContext, numberFormatPrototype, args),
+                (childContext, thisArg, args) -> JSIntlObject.createNumberFormat(childContext, numberFormatPrototype, args),
                 true);
         numberFormatConstructor.set("prototype", numberFormatPrototype);
-        numberFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, IntlObject::supportedLocalesOf));
+        numberFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
         numberFormatPrototype.set("constructor", numberFormatConstructor);
         intlObject.set("NumberFormat", numberFormatConstructor);
 
         JSObject collatorPrototype = context.createJSObject();
-        collatorPrototype.set("compare", new JSNativeFunction("compare", 2, IntlObject::collatorCompare));
-        collatorPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, IntlObject::collatorResolvedOptions));
+        collatorPrototype.set("compare", new JSNativeFunction("compare", 2, JSIntlObject::collatorCompare));
+        collatorPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::collatorResolvedOptions));
         JSNativeFunction collatorConstructor = new JSNativeFunction(
                 "Collator",
                 0,
-                (childContext, thisArg, args) -> IntlObject.createCollator(childContext, collatorPrototype, args),
+                (childContext, thisArg, args) -> JSIntlObject.createCollator(childContext, collatorPrototype, args),
                 true);
         collatorConstructor.set("prototype", collatorPrototype);
-        collatorConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, IntlObject::supportedLocalesOf));
+        collatorConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
         collatorPrototype.set("constructor", collatorConstructor);
         intlObject.set("Collator", collatorConstructor);
 
         JSObject pluralRulesPrototype = context.createJSObject();
-        pluralRulesPrototype.set("select", new JSNativeFunction("select", 1, IntlObject::pluralRulesSelect));
-        pluralRulesPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, IntlObject::pluralRulesResolvedOptions));
+        pluralRulesPrototype.set("select", new JSNativeFunction("select", 1, JSIntlObject::pluralRulesSelect));
+        pluralRulesPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::pluralRulesResolvedOptions));
         JSNativeFunction pluralRulesConstructor = new JSNativeFunction(
                 "PluralRules",
                 0,
-                (childContext, thisArg, args) -> IntlObject.createPluralRules(childContext, pluralRulesPrototype, args),
+                (childContext, thisArg, args) -> JSIntlObject.createPluralRules(childContext, pluralRulesPrototype, args),
                 true,
                 true);
         pluralRulesConstructor.set("prototype", pluralRulesPrototype);
-        pluralRulesConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, IntlObject::supportedLocalesOf));
+        pluralRulesConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
         pluralRulesPrototype.set("constructor", pluralRulesConstructor);
         intlObject.set("PluralRules", pluralRulesConstructor);
 
         JSObject relativeTimeFormatPrototype = context.createJSObject();
-        relativeTimeFormatPrototype.set("format", new JSNativeFunction("format", 2, IntlObject::relativeTimeFormatFormat));
-        relativeTimeFormatPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, IntlObject::relativeTimeFormatResolvedOptions));
+        relativeTimeFormatPrototype.set("format", new JSNativeFunction("format", 2, JSIntlObject::relativeTimeFormatFormat));
+        relativeTimeFormatPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::relativeTimeFormatResolvedOptions));
         JSNativeFunction relativeTimeFormatConstructor = new JSNativeFunction(
                 "RelativeTimeFormat",
                 0,
-                (childContext, thisArg, args) -> IntlObject.createRelativeTimeFormat(childContext, relativeTimeFormatPrototype, args),
+                (childContext, thisArg, args) -> JSIntlObject.createRelativeTimeFormat(childContext, relativeTimeFormatPrototype, args),
                 true,
                 true);
         relativeTimeFormatConstructor.set("prototype", relativeTimeFormatPrototype);
-        relativeTimeFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, IntlObject::supportedLocalesOf));
+        relativeTimeFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
         relativeTimeFormatPrototype.set("constructor", relativeTimeFormatConstructor);
         intlObject.set("RelativeTimeFormat", relativeTimeFormatConstructor);
 
         JSObject listFormatPrototype = context.createJSObject();
-        listFormatPrototype.set("format", new JSNativeFunction("format", 1, IntlObject::listFormatFormat));
-        listFormatPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, IntlObject::listFormatResolvedOptions));
+        listFormatPrototype.set("format", new JSNativeFunction("format", 1, JSIntlObject::listFormatFormat));
+        listFormatPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::listFormatResolvedOptions));
         JSNativeFunction listFormatConstructor = new JSNativeFunction(
                 "ListFormat",
                 0,
-                (childContext, thisArg, args) -> IntlObject.createListFormat(childContext, listFormatPrototype, args),
+                (childContext, thisArg, args) -> JSIntlObject.createListFormat(childContext, listFormatPrototype, args),
                 true,
                 true);
         listFormatConstructor.set("prototype", listFormatPrototype);
-        listFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, IntlObject::supportedLocalesOf));
+        listFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
         listFormatPrototype.set("constructor", listFormatConstructor);
         intlObject.set("ListFormat", listFormatConstructor);
 
         JSObject localePrototype = context.createJSObject();
-        localePrototype.set("toString", new JSNativeFunction("toString", 0, IntlObject::localeToString));
-        localePrototype.defineGetterConfigurable("baseName", IntlObject::localeGetBaseName);
-        localePrototype.defineGetterConfigurable("language", IntlObject::localeGetLanguage);
-        localePrototype.defineGetterConfigurable("script", IntlObject::localeGetScript);
-        localePrototype.defineGetterConfigurable("region", IntlObject::localeGetRegion);
+        localePrototype.set("toString", new JSNativeFunction("toString", 0, JSIntlObject::localeToString));
+        localePrototype.defineGetterConfigurable("baseName", JSIntlObject::localeGetBaseName);
+        localePrototype.defineGetterConfigurable("language", JSIntlObject::localeGetLanguage);
+        localePrototype.defineGetterConfigurable("script", JSIntlObject::localeGetScript);
+        localePrototype.defineGetterConfigurable("region", JSIntlObject::localeGetRegion);
         JSNativeFunction localeConstructor = new JSNativeFunction(
                 "Locale",
                 1,
-                (childContext, thisArg, args) -> IntlObject.createLocale(childContext, localePrototype, args),
+                (childContext, thisArg, args) -> JSIntlObject.createLocale(childContext, localePrototype, args),
                 true,
                 true);
         localeConstructor.set("prototype", localePrototype);
@@ -1287,17 +1287,20 @@ public final class JSGlobalObject {
      */
     private void initializeReflectObject(JSContext context, JSObject global) {
         JSObject reflect = context.createJSObject();
-        reflect.set("get", new JSNativeFunction("get", 2, ReflectObject::get));
-        reflect.set("set", new JSNativeFunction("set", 3, ReflectObject::set));
-        reflect.set("has", new JSNativeFunction("has", 2, ReflectObject::has));
-        reflect.set("deleteProperty", new JSNativeFunction("deleteProperty", 2, ReflectObject::deleteProperty));
-        reflect.set("getPrototypeOf", new JSNativeFunction("getPrototypeOf", 1, ReflectObject::getPrototypeOf));
-        reflect.set("setPrototypeOf", new JSNativeFunction("setPrototypeOf", 2, ReflectObject::setPrototypeOf));
-        reflect.set("ownKeys", new JSNativeFunction("ownKeys", 1, ReflectObject::ownKeys));
-        reflect.set("apply", new JSNativeFunction("apply", 3, ReflectObject::apply));
-        reflect.set("construct", new JSNativeFunction("construct", 2, ReflectObject::construct));
-        reflect.set("isExtensible", new JSNativeFunction("isExtensible", 1, ReflectObject::isExtensible));
-        reflect.set("preventExtensions", new JSNativeFunction("preventExtensions", 1, ReflectObject::preventExtensions));
+        reflect.definePropertyWritableConfigurable("apply", new JSNativeFunction("apply", 3, JSReflectObject::apply));
+        reflect.definePropertyWritableConfigurable("construct", new JSNativeFunction("construct", 2, JSReflectObject::construct));
+        reflect.definePropertyWritableConfigurable("defineProperty", new JSNativeFunction("defineProperty", 3, JSReflectObject::defineProperty));
+        reflect.definePropertyWritableConfigurable("deleteProperty", new JSNativeFunction("deleteProperty", 2, JSReflectObject::deleteProperty));
+        reflect.definePropertyWritableConfigurable("get", new JSNativeFunction("get", 2, JSReflectObject::get));
+        reflect.definePropertyWritableConfigurable("getOwnPropertyDescriptor", new JSNativeFunction("getOwnPropertyDescriptor", 2, JSReflectObject::getOwnPropertyDescriptor));
+        reflect.definePropertyWritableConfigurable("getPrototypeOf", new JSNativeFunction("getPrototypeOf", 1, JSReflectObject::getPrototypeOf));
+        reflect.definePropertyWritableConfigurable("has", new JSNativeFunction("has", 2, JSReflectObject::has));
+        reflect.definePropertyWritableConfigurable("isExtensible", new JSNativeFunction("isExtensible", 1, JSReflectObject::isExtensible));
+        reflect.definePropertyWritableConfigurable("ownKeys", new JSNativeFunction("ownKeys", 1, JSReflectObject::ownKeys));
+        reflect.definePropertyWritableConfigurable("preventExtensions", new JSNativeFunction("preventExtensions", 1, JSReflectObject::preventExtensions));
+        reflect.definePropertyWritableConfigurable("set", new JSNativeFunction("set", 3, JSReflectObject::set));
+        reflect.definePropertyWritableConfigurable("setPrototypeOf", new JSNativeFunction("setPrototypeOf", 2, JSReflectObject::setPrototypeOf));
+        reflect.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("Reflect"));
 
         global.definePropertyWritableConfigurable("Reflect", reflect);
     }

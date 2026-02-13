@@ -165,6 +165,13 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
+        boolean success = definePropertyWithResult(key, descriptor);
+        if (!success) {
+            throw new JSException(context.throwTypeError("defineProperty returned false"));
+        }
+    }
+
+    public boolean definePropertyWithResult(PropertyKey key, PropertyDescriptor descriptor) {
         if (revoked) {
             throw new JSException(context.throwTypeError("Cannot perform 'defineProperty' on a proxy that has been revoked"));
         }
@@ -174,7 +181,7 @@ public final class JSProxy extends JSObject {
         JSValue trap = getTrapMethod("defineProperty");
         if (trap instanceof JSUndefined) {
             targetObj.defineProperty(key, descriptor);
-            return;
+            return true;
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {
@@ -194,7 +201,7 @@ public final class JSProxy extends JSObject {
 
         boolean boolResult = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
         if (!boolResult) {
-            throw new JSException(context.throwTypeError("defineProperty returned false"));
+            return false;
         }
 
         // Validate invariants
@@ -224,6 +231,7 @@ public final class JSProxy extends JSObject {
                         "proxy: inconsistent defineProperty"));
             }
         }
+        return true;
     }
 
     /**
@@ -839,6 +847,13 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public void preventExtensions() {
+        boolean success = preventExtensionsWithResult();
+        if (!success) {
+            throw new JSException(context.throwTypeError("'preventExtensions' on proxy: trap returned falsish"));
+        }
+    }
+
+    public boolean preventExtensionsWithResult() {
         if (revoked) {
             throw new JSException(context.throwTypeError("Cannot perform 'preventExtensions' on a proxy that has been revoked"));
         }
@@ -848,7 +863,7 @@ public final class JSProxy extends JSObject {
         JSValue trap = getTrapMethod("preventExtensions");
         if (trap instanceof JSUndefined) {
             targetObj.preventExtensions();
-            return;
+            return true;
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {
@@ -866,9 +881,8 @@ public final class JSProxy extends JSObject {
                 throw new JSException(context.throwTypeError(
                         "'preventExtensions' on proxy: trap returned truish but the proxy target is extensible"));
             }
-        } else {
-            throw new JSException(context.throwTypeError("'preventExtensions' on proxy: trap returned falsish"));
         }
+        return boolResult;
     }
 
     private boolean proxySetInternal(
@@ -1012,6 +1026,13 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public void setPrototype(JSObject proto) {
+        boolean success = setPrototypeWithResult(proto);
+        if (!success) {
+            throw new JSException(context.throwTypeError("'setPrototypeOf' on proxy: trap returned falsish for property 'undefined'"));
+        }
+    }
+
+    public boolean setPrototypeWithResult(JSObject proto) {
         if (revoked) {
             throw new JSException(context.throwTypeError("Cannot perform 'setPrototype' on a proxy that has been revoked"));
         }
@@ -1022,7 +1043,7 @@ public final class JSProxy extends JSObject {
         if (trapFunc == null) {
             // No trap - forward to target per ES2020 9.5.2 step 5
             targetObj.setPrototype(proto);
-            return;
+            return true;
         }
 
         // Call trap: handler.setPrototypeOf(target, proto)
@@ -1040,9 +1061,8 @@ public final class JSProxy extends JSObject {
                             "'setPrototypeOf' on proxy: trap returned truish for setting a new prototype on the non-extensible proxy target"));
                 }
             }
-        } else {
-            throw new JSException(context.throwTypeError("'setPrototypeOf' on proxy: trap returned falsish for property 'undefined'"));
         }
+        return boolResult;
     }
 
     @Override

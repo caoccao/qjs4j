@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.builtins;
+package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.exceptions.JSException;
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Unit tests for Intl object and Intl.* constructors.
  */
-public class IntlObjectTest extends BaseJavetTest {
+public class JSIntlObjectTest extends BaseJavetTest {
 
     @Test
     public void testCollator() {

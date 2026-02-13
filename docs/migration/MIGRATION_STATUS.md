@@ -74,11 +74,12 @@ This document tracks the progress of migrating QuickJS functionality to pure Jav
 - Object-only values with type checking
 
 #### Phase 11.3: Reflect Object
-- ReflectObject.java: 11 static methods
-  - Property operations: get, set, has, deleteProperty
+- ReflectObject.java: 13 static methods
+  - Function operations: apply, construct
+  - Property operations: defineProperty, deleteProperty, get, getOwnPropertyDescriptor, has, set
   - Prototype operations: getPrototypeOf, setPrototypeOf
   - Introspection: ownKeys, isExtensible, preventExtensions
-  - Function operations: apply, construct
+  - Registration parity: non-enumerable writable/configurable methods and `Reflect[Symbol.toStringTag] = "Reflect"` (configurable)
 
 #### Phase 11.4: Proxy Constructor
 - JSProxy.java: Wraps target with handler traps

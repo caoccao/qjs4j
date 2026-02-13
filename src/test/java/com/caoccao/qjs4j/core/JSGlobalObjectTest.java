@@ -1,4 +1,4 @@
-package com.caoccao.qjs4j.builtins;
+package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.exceptions.JSException;
@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Tests for global object functions.
  */
-public class GlobalObjectTest extends BaseJavetTest {
+public class JSGlobalObjectTest extends BaseJavetTest {
     @Test
     public void testEscape() {
         assertStringWithJavet(
