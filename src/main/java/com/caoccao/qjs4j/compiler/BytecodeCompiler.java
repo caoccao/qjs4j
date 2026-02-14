@@ -30,6 +30,7 @@ import java.util.*;
  * Implements visitor pattern for traversing AST nodes and emitting appropriate bytecode.
  */
 public final class BytecodeCompiler {
+    private final Set<String> annexBFunctionNames;
     private final CaptureResolver captureResolver;
     private final BytecodeEmitter emitter;
     private final Deque<LoopContext> loopStack;
@@ -59,6 +60,7 @@ public final class BytecodeCompiler {
     }
 
     private BytecodeCompiler(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver) {
+        this.annexBFunctionNames = new HashSet<>();
         this.emitter = new BytecodeEmitter();
         this.scopes = new ArrayDeque<>();
         this.loopStack = new ArrayDeque<>();
@@ -72,6 +74,16 @@ public final class BytecodeCompiler {
         this.scopeDepth = 0;
         this.privateSymbols = Map.of();  // Empty by default
         this.strictMode = inheritedStrictMode;
+    }
+
+    private void collectLexicalBindings(List<Statement> body, Set<String> lexicals) {
+        for (Statement s : body) {
+            if (s instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                    collectPatternBindingNames(d.id(), lexicals);
+                }
+            }
+        }
     }
 
     private void collectPatternBindingNames(Pattern pattern, Set<String> names) {
@@ -103,6 +115,8 @@ public final class BytecodeCompiler {
         }
         return emitter.build(maxLocalCount);
     }
+
+    // ==================== Program Compilation ====================
 
     private void compileArrayExpression(ArrayExpression arrayExpr) {
         emitter.emitOpcode(Opcode.ARRAY_NEW);
@@ -195,8 +209,6 @@ public final class BytecodeCompiler {
             }
         }
     }
-
-    // ==================== Program Compilation ====================
 
     private void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
@@ -303,6 +315,8 @@ public final class BytecodeCompiler {
         // Emit FCLOSURE opcode with function in constant pool
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
     }
+
+    // ==================== Statement Compilation ====================
 
     private void compileAssignmentExpression(AssignmentExpression assignExpr) {
         Expression left = assignExpr.left();
@@ -446,8 +460,6 @@ public final class BytecodeCompiler {
             }
         }
     }
-
-    // ==================== Statement Compilation ====================
 
     private void compileAwaitExpression(AwaitExpression awaitExpr) {
         // Compile the argument expression
@@ -1814,7 +1826,14 @@ public final class BytecodeCompiler {
         // Store the function in a variable with its name
         Integer localIndex = findLocalInScopes(functionName);
         if (localIndex != null) {
-            emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+            if (annexBFunctionNames.contains(functionName)) {
+                // Annex B.3.3.3 runtime hook: store in both block scope and global scope
+                emitter.emitOpcode(Opcode.DUP);
+                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
+            } else {
+                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+            }
         } else {
             // Declare the function as a global variable or in the current scope
             if (inGlobalScope) {
@@ -2557,11 +2576,23 @@ public final class BytecodeCompiler {
 
         // Phase 1: Hoist top-level function declarations (ES spec requires function
         // declarations to be initialized before any code executes).
+        Set<String> declaredFuncVarNames = new HashSet<>();
         for (Statement stmt : body) {
             if (stmt instanceof FunctionDeclaration funcDecl) {
+                if (funcDecl.id() != null) {
+                    declaredFuncVarNames.add(funcDecl.id().name());
+                }
                 compileFunctionDeclaration(funcDecl);
+            } else if (stmt instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
+                    collectPatternBindingNames(d.id(), declaredFuncVarNames);
+                }
             }
         }
+
+        // Phase 1.5: Annex B.3.3.3 - create var bindings for function declarations
+        // nested inside blocks, if-statements, catch clauses, etc.
+        scanAnnexBFunctions(body, declaredFuncVarNames);
 
         // Find the effective last statement index (last non-FunctionDeclaration),
         // since function declarations don't contribute a completion value.
@@ -2652,6 +2683,8 @@ public final class BytecodeCompiler {
         compileStatement(stmt, false);
     }
 
+    // ==================== Expression Compilation ====================
+
     private void compileStatement(Statement stmt, boolean isLastInProgram) {
         if (stmt instanceof ExpressionStatement exprStmt) {
             compileExpression(exprStmt.expression());
@@ -2691,8 +2724,6 @@ public final class BytecodeCompiler {
             compileClassDeclaration(classDecl);
         }
     }
-
-    // ==================== Expression Compilation ====================
 
     /**
      * Compile a static block as a function.
@@ -3741,11 +3772,11 @@ public final class BytecodeCompiler {
         return sourceCode.substring(startOffset, endOffset);
     }
 
+    // ==================== Scope Management ====================
+
     private Integer findCapturedBindingIndex(String name) {
         return captureResolver.findCapturedBindingIndex(name);
     }
-
-    // ==================== Scope Management ====================
 
     private Integer findLocalInScopes(String name) {
         // Search from innermost scope (most recently pushed) to outermost
@@ -3867,6 +3898,113 @@ public final class BytecodeCompiler {
 
     private Integer resolveCapturedBindingIndex(String name) {
         return captureResolver.resolveCapturedBindingIndex(name);
+    }
+
+    private void scanAnnexBBlock(List<Statement> body, Set<String> parentLexicals, Set<String> result) {
+        Set<String> blockLexicals = new HashSet<>(parentLexicals);
+        collectLexicalBindings(body, blockLexicals);
+        for (Statement s : body) {
+            if (s instanceof FunctionDeclaration fd && fd.id() != null) {
+                if (!blockLexicals.contains(fd.id().name())) {
+                    result.add(fd.id().name());
+                }
+            }
+            scanAnnexBStatement(s, blockLexicals, result);
+        }
+    }
+
+    /**
+     * Scan the program body for Annex B.3.3.3 eligible function declarations.
+     * These are function declarations nested inside blocks, if-statements, catch clauses,
+     * switch cases, etc. (not top-level in the program body).
+     * <p>
+     * For each eligible name not already in declaredFuncVarNames, a var binding
+     * initialized to undefined is created, and the name is recorded for the runtime
+     * hook (copying the block-scoped value to the var-scoped value when evaluated).
+     */
+    private void scanAnnexBFunctions(List<Statement> programBody, Set<String> declaredFuncVarNames) {
+        if (strictMode) {
+            return; // Annex B does not apply in strict mode
+        }
+        Set<String> candidates = new HashSet<>();
+        for (Statement stmt : programBody) {
+            // Only recurse into compound statements; top-level FunctionDeclarations
+            // are regular hoisting, not Annex B.
+            scanAnnexBStatement(stmt, new HashSet<>(), candidates);
+        }
+        for (String name : candidates) {
+            annexBFunctionNames.add(name);
+            if (!declaredFuncVarNames.contains(name)) {
+                // Create initial var binding: var name = undefined
+                emitter.emitOpcode(Opcode.UNDEFINED);
+                emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
+            }
+        }
+    }
+
+    /**
+     * Recursively scan a statement for Annex B eligible function declarations.
+     * A function declaration is Annex B eligible if it appears inside a block, if-statement,
+     * catch clause, or switch case (not at the top level of the program).
+     * The early error check prevents hoisting when a let/const with the same name
+     * exists in the same block scope.
+     */
+    private void scanAnnexBStatement(Statement stmt, Set<String> lexicalBindings, Set<String> result) {
+        if (stmt instanceof BlockStatement block) {
+            scanAnnexBBlock(block.body(), lexicalBindings, result);
+        } else if (stmt instanceof IfStatement ifStmt) {
+            if (ifStmt.consequent() instanceof FunctionDeclaration fd && fd.id() != null) {
+                if (!lexicalBindings.contains(fd.id().name())) {
+                    result.add(fd.id().name());
+                }
+            } else {
+                scanAnnexBStatement(ifStmt.consequent(), lexicalBindings, result);
+            }
+            if (ifStmt.alternate() != null) {
+                if (ifStmt.alternate() instanceof FunctionDeclaration fd && fd.id() != null) {
+                    if (!lexicalBindings.contains(fd.id().name())) {
+                        result.add(fd.id().name());
+                    }
+                } else {
+                    scanAnnexBStatement(ifStmt.alternate(), lexicalBindings, result);
+                }
+            }
+        } else if (stmt instanceof TryStatement tryStmt) {
+            scanAnnexBBlock(tryStmt.block().body(), lexicalBindings, result);
+            if (tryStmt.handler() != null) {
+                // Per B.3.5, catch parameter does not block Annex B var hoisting
+                scanAnnexBBlock(tryStmt.handler().body().body(), lexicalBindings, result);
+            }
+            if (tryStmt.finalizer() != null) {
+                scanAnnexBBlock(tryStmt.finalizer().body(), lexicalBindings, result);
+            }
+        } else if (stmt instanceof SwitchStatement switchStmt) {
+            // Collect lexical bindings across all cases (switch shares one scope)
+            Set<String> switchLexicals = new HashSet<>(lexicalBindings);
+            for (SwitchStatement.SwitchCase sc : switchStmt.cases()) {
+                collectLexicalBindings(sc.consequent(), switchLexicals);
+            }
+            for (SwitchStatement.SwitchCase sc : switchStmt.cases()) {
+                for (Statement s : sc.consequent()) {
+                    if (s instanceof FunctionDeclaration fd && fd.id() != null) {
+                        if (!switchLexicals.contains(fd.id().name())) {
+                            result.add(fd.id().name());
+                        }
+                    }
+                    scanAnnexBStatement(s, switchLexicals, result);
+                }
+            }
+        } else if (stmt instanceof ForStatement forStmt) {
+            if (forStmt.body() != null) {
+                scanAnnexBStatement(forStmt.body(), lexicalBindings, result);
+            }
+        } else if (stmt instanceof WhileStatement whileStmt) {
+            scanAnnexBStatement(whileStmt.body(), lexicalBindings, result);
+        } else if (stmt instanceof ForInStatement forInStmt) {
+            scanAnnexBStatement(forInStmt.body(), lexicalBindings, result);
+        } else if (stmt instanceof ForOfStatement forOfStmt) {
+            scanAnnexBStatement(forOfStmt.body(), lexicalBindings, result);
+        }
     }
 
     /**
