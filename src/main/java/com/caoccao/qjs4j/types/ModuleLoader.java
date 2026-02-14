@@ -133,7 +133,7 @@ public final class ModuleLoader implements JSModule.ModuleResolver {
         // Compile module
         JSBytecodeFunction moduleFunction;
         try {
-            moduleFunction = Compiler.compileModule(source, absoluteUrl);
+            moduleFunction = new Compiler(source, absoluteUrl).compile(true).function();
         } catch (Exception e) {
             throw new JSModule.ModuleLinkingException("Cannot compile module " + specifier + ": " + e.getMessage(), e);
         }

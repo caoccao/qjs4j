@@ -16,15 +16,11 @@
 
 package com.caoccao.qjs4j.compiler;
 
-import com.caoccao.qjs4j.compiler.ast.*;
+import com.caoccao.qjs4j.compiler.ast.Program;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.vm.Bytecode;
-
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 /**
  * Main compiler interface that integrates the entire compilation pipeline.
@@ -32,195 +28,36 @@ import java.util.Set;
  * Pipeline: JavaScript Source → Lexer → Tokens → Parser → AST → BytecodeCompiler → Bytecode
  */
 public final class Compiler {
+    private final String fileName;
+    private final String source;
 
-    /**
-     * Collect lexical (let/const) declaration names from a list of statements.
-     */
-    private static void collectBlockLexicals(List<Statement> stmts, Set<String> lexicals) {
-        for (Statement s : stmts) {
-            if (s instanceof VariableDeclaration varDecl && varDecl.kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                    collectPatternNames(d.id(), lexicals);
-                }
-            }
+    public Compiler(String source, String fileName) {
+        if (source == null) {
+            throw new JSCompilerException("Source code cannot be null");
         }
-    }
-
-    /**
-     * Collect global declarations from a parsed program following ES2024 GlobalDeclarationInstantiation.
-     * Collects var and lex (let/const) names declared at the top level.
-     *
-     * @param program  The parsed program AST
-     * @param varDecls Output: var/function names declared by this program
-     * @param lexDecls Output: let/const names declared by this program
-     */
-    public static void collectGlobalDeclarations(
-            Program program,
-            Set<String> varDecls,
-            Set<String> lexDecls) {
-        for (Statement stmt : program.body()) {
-            if (stmt instanceof VariableDeclaration varDecl) {
-                if (varDecl.kind() == VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                        collectPatternNames(d.id(), varDecls);
-                    }
-                } else {
-                    // let or const
-                    for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                        collectPatternNames(d.id(), lexDecls);
-                    }
-                }
-            } else if (stmt instanceof FunctionDeclaration funcDecl) {
-                if (funcDecl.id() != null) {
-                    varDecls.add(funcDecl.id().name());
-                }
-            }
-        }
-
-        // Also collect Annex B function hoisting candidates (functions in blocks/if/switch)
-        // since they create var bindings at the global level
-        if (!program.strict()) {
-            Set<String> topLevelLexicals = new HashSet<>(lexDecls);
-            Set<String> annexBCandidates = new HashSet<>();
-            for (Statement stmt : program.body()) {
-                scanAnnexBForCollisionCheck(stmt, topLevelLexicals, annexBCandidates);
-            }
-            varDecls.addAll(annexBCandidates);
-        }
-    }
-
-    private static void collectPatternNames(Pattern pattern, Set<String> names) {
-        if (pattern instanceof Identifier id) {
-            names.add(id.name());
-        } else if (pattern instanceof ArrayPattern arr) {
-            for (Pattern element : arr.elements()) {
-                if (element != null) {
-                    collectPatternNames(element, names);
-                }
-            }
-        } else if (pattern instanceof ObjectPattern obj) {
-            for (ObjectPattern.Property prop : obj.properties()) {
-                collectPatternNames(prop.value(), names);
-            }
-        } else if (pattern instanceof RestElement rest) {
-            collectPatternNames(rest.argument(), names);
-        }
+        this.source = source;
+        this.fileName = fileName;
     }
 
     /**
      * Compile JavaScript source code into executable bytecode.
      *
-     * @param source   The JavaScript source code to compile
-     * @param filename Optional filename for error reporting (can be null)
-     * @return A JSBytecodeFunction containing the compiled bytecode
-     * @throws JSCompilerException if compilation fails
-     */
-    public static JSBytecodeFunction compile(String source, String filename) {
-        if (source == null) {
-            throw new JSCompilerException("Source code cannot be null");
-        }
-
-        try {
-            Lexer lexer = new Lexer(source);
-            Parser parser = new Parser(lexer, false);
-            Program ast = parser.parse();
-
-            BytecodeCompiler compiler = new BytecodeCompiler();
-            compiler.setSourceCode(source);
-            Bytecode bytecode = compiler.compile(ast);
-
-            String name = filename != null ? filename : "<script>";
-            return new JSBytecodeFunction(bytecode, name, 0, ast.strict(), null);
-
-        } catch (BytecodeCompiler.CompilerException e) {
-            throw new JSCompilerException("Bytecode compiler error: " + e.getMessage(), e);
-        } catch (JSErrorException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new JSCompilerException("Unexpected compilation error: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Compile JavaScript source code into executable bytecode (with default filename).
-     *
-     * @param source The JavaScript source code to compile
-     * @return A JSBytecodeFunction containing the compiled bytecode
-     * @throws JSCompilerException if compilation fails
-     */
-    public static JSBytecodeFunction compile(String source) {
-        return compile(source, null);
-    }
-
-    /**
-     * Compile ES6 module source code into executable bytecode.
-     * The resulting function will be executed in module scope.
-     *
-     * @param source   The module source code to compile
-     * @param filename Optional filename for error reporting (can be null)
-     * @return A JSBytecodeFunction containing the compiled module bytecode
-     * @throws JSCompilerException if compilation fails
-     */
-    public static JSBytecodeFunction compileModule(String source, String filename) {
-        if (source == null) {
-            throw new JSCompilerException("Source code cannot be null");
-        }
-
-        try {
-            // Stage 1 & 2: Lexical and Syntax Analysis (Source → Tokens → AST)
-            Lexer lexer = new Lexer(source);
-            Parser parser = new Parser(lexer, true);
-            Program ast = parser.parse();
-
-            // Stage 3: Code Generation (AST → Bytecode)
-            BytecodeCompiler compiler = new BytecodeCompiler();
-            compiler.setSourceCode(source);  // Store source for extracting function source
-            Bytecode bytecode = compiler.compile(ast);
-
-            // Create and return bytecode function
-            // Note: Module code is always strict mode
-            String name = filename != null ? filename : "<module>";
-            return new JSBytecodeFunction(bytecode, name, 0, true, null);
-
-        } catch (BytecodeCompiler.CompilerException e) {
-            throw new JSCompilerException("Module compiler error: " + e.getMessage(), e);
-        } catch (RuntimeException e) {
-            throw new JSCompilerException("Module compilation error: " + e.getMessage(), e);
-        } catch (Exception e) {
-            throw new JSCompilerException("Unexpected module compilation error: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Compile JavaScript source code, returning both the bytecode function and the parsed AST.
-     * This overload allows the caller to perform GlobalDeclarationInstantiation checks
-     * using the AST before execution.
-     *
-     * @param source   The JavaScript source code to compile
-     * @param filename Optional filename for error reporting (can be null)
+     * @param isModule true to compile as ES6 module (always strict), false for script
      * @return A CompileResult containing the bytecode function and parsed AST
      * @throws JSCompilerException if compilation fails
      */
-    public static CompileResult compileWithAST(String source, String filename) {
-        if (source == null) {
-            throw new JSCompilerException("Source code cannot be null");
-        }
-
+    public CompileResult compile(boolean isModule) {
         try {
-            Lexer lexer = new Lexer(source);
-            Parser parser = new Parser(lexer, false);
-            Program ast = parser.parse();
-
+            Program ast = parse(isModule);
             BytecodeCompiler compiler = new BytecodeCompiler();
             compiler.setSourceCode(source);
             Bytecode bytecode = compiler.compile(ast);
-
-            String name = filename != null ? filename : "<script>";
-            JSBytecodeFunction func = new JSBytecodeFunction(bytecode, name, 0, ast.strict(), null);
+            String name = fileName != null ? fileName : (isModule ? "<module>" : "<script>");
+            boolean strict = isModule || ast.strict();
+            JSBytecodeFunction func = new JSBytecodeFunction(bytecode, name, 0, strict, null);
             return new CompileResult(func, ast);
-
         } catch (BytecodeCompiler.CompilerException e) {
-            throw new JSCompilerException("Bytecode compiler error: " + e.getMessage(), e);
+            throw new JSCompilerException("Compiler error: " + e.getMessage(), e);
         } catch (JSErrorException e) {
             throw e;
         } catch (Exception e) {
@@ -232,101 +69,16 @@ public final class Compiler {
      * Parse JavaScript source code into an AST (without bytecode compilation).
      * Useful for static analysis, code transformation, etc.
      *
-     * @param source   The JavaScript source code to parse
-     * @param filename Optional filename for error reporting (can be null)
+     * @param isModule the is module
      * @return The parsed AST Program node
      * @throws JSCompilerException if parsing fails
      */
-    public static Program parse(String source, String filename) {
-        if (source == null) {
-            throw new JSCompilerException("Source code cannot be null");
-        }
-
-        try {
-            Lexer lexer = new Lexer(source);
-            Parser parser = new Parser(lexer, false);
-            return parser.parse();
-
-        } catch (RuntimeException e) {
-            throw new JSCompilerException("Parsing error: " + e.getMessage(), e);
-        } catch (Exception e) {
-            throw new JSCompilerException("Unexpected parsing error: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Parse JavaScript source code into an AST (with default filename).
-     *
-     * @param source The JavaScript source code to parse
-     * @return The parsed AST Program node
-     * @throws JSCompilerException if parsing fails
-     */
-    public static Program parse(String source) {
-        return parse(source, null);
-    }
-
-    /**
-     * Scan for Annex B function declaration candidates in compound statements.
-     * These are function declarations inside blocks, if-statements, switch cases, etc.
-     * that would create var bindings via Annex B.3.3 hoisting.
-     * <p>
-     * Per B.3.3.2: hoisting is skipped if replacing the FunctionDeclaration with a
-     * VariableStatement would produce early errors — i.e. if there's a let/const
-     * with the same name in an enclosing block scope.
-     */
-    private static void scanAnnexBForCollisionCheck(
-            Statement stmt, Set<String> lexicalBindings, Set<String> result) {
-        if (stmt instanceof BlockStatement block) {
-            // Collect block-level lexical declarations
-            Set<String> blockLexicals = new HashSet<>(lexicalBindings);
-            collectBlockLexicals(block.body(), blockLexicals);
-
-            for (Statement s : block.body()) {
-                if (s instanceof FunctionDeclaration fd && fd.id() != null) {
-                    if (!blockLexicals.contains(fd.id().name())) {
-                        result.add(fd.id().name());
-                    }
-                }
-                scanAnnexBForCollisionCheck(s, blockLexicals, result);
-            }
-        } else if (stmt instanceof IfStatement ifStmt) {
-            if (ifStmt.consequent() instanceof FunctionDeclaration fd && fd.id() != null) {
-                if (!lexicalBindings.contains(fd.id().name())) {
-                    result.add(fd.id().name());
-                }
-            } else {
-                scanAnnexBForCollisionCheck(ifStmt.consequent(), lexicalBindings, result);
-            }
-            if (ifStmt.alternate() != null) {
-                if (ifStmt.alternate() instanceof FunctionDeclaration fd && fd.id() != null) {
-                    if (!lexicalBindings.contains(fd.id().name())) {
-                        result.add(fd.id().name());
-                    }
-                } else {
-                    scanAnnexBForCollisionCheck(ifStmt.alternate(), lexicalBindings, result);
-                }
-            }
-        } else if (stmt instanceof SwitchStatement switchStmt) {
-            // Switch cases share a single scope for lexical declarations
-            Set<String> switchLexicals = new HashSet<>(lexicalBindings);
-            for (SwitchStatement.SwitchCase sc : switchStmt.cases()) {
-                collectBlockLexicals(sc.consequent(), switchLexicals);
-            }
-
-            for (SwitchStatement.SwitchCase sc : switchStmt.cases()) {
-                for (Statement s : sc.consequent()) {
-                    if (s instanceof FunctionDeclaration fd && fd.id() != null) {
-                        if (!switchLexicals.contains(fd.id().name())) {
-                            result.add(fd.id().name());
-                        }
-                    }
-                    scanAnnexBForCollisionCheck(s, switchLexicals, result);
-                }
-            }
-        }
+    public Program parse(boolean isModule) {
+        Lexer lexer = new Lexer(source);
+        Parser parser = new Parser(lexer, isModule);
+        return parser.parse();
     }
 
     public record CompileResult(JSBytecodeFunction function, Program ast) {
     }
-
 }

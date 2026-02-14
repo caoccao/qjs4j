@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.compiler.AstUtils;
 import com.caoccao.qjs4j.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.types.JSModule;
@@ -559,20 +560,20 @@ public final class JSContext implements AutoCloseable {
             return throwError("RangeError", "Maximum call stack size exceeded");
         }
 
+        Compiler compiler = new Compiler(code, filename);
         try {
             // Phase 1-3: Lexer → Parser → Compiler (compile to bytecode)
             JSBytecodeFunction func;
-            if (isModule) {
-                func = Compiler.compileModule(code, filename);
-            } else if (!isDirectEval) {
+            Compiler.CompileResult compileResult = compiler.compile(isModule);
+            func = compileResult.function();
+            if (!isModule && !isDirectEval) {
                 // Top-level script: check GlobalDeclarationInstantiation per ES2024 16.1.7
-                Compiler.CompileResult result = Compiler.compileWithAST(code, filename);
-                func = result.function();
+                func = compileResult.function();
 
                 // Collect new declarations from this script
                 Set<String> newVarDecls = new HashSet<>();
                 Set<String> newLexDecls = new HashSet<>();
-                Compiler.collectGlobalDeclarations(result.ast(), newVarDecls, newLexDecls);
+                AstUtils.collectGlobalDeclarations(compileResult.ast(), newVarDecls, newLexDecls);
 
                 // Check: let/const names must not collide with existing lex declarations
                 // or restricted global properties (non-configurable or script-level var)
@@ -626,10 +627,6 @@ public final class JSContext implements AutoCloseable {
                                 ));
                     }
                 }
-            } else {
-                // JS eval() — no GlobalDeclarationInstantiation check;
-                // eval-created var bindings are configurable (not restricted)
-                func = Compiler.compile(code, filename);
             }
 
             // Initialize the function's prototype chain so it inherits from Function.prototype
