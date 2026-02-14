@@ -1811,7 +1811,14 @@ public final class BytecodeCompiler {
             } else {
                 // Declare it as a local
                 localIndex = currentScope().declareLocal(functionName);
-                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                if (annexBFunctionNames.contains(functionName)) {
+                    // Annex B.3.3.3 runtime hook: store in both block scope and global scope
+                    emitter.emitOpcode(Opcode.DUP);
+                    emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
+                } else {
+                    emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                }
             }
         }
     }
@@ -2910,14 +2917,11 @@ public final class BytecodeCompiler {
         int jumpToDefault = emitter.emitJump(Opcode.GOTO);
 
         // Compile case bodies
-        // In strict mode, the switch body creates a block scope for lexical declarations
-        // and function declarations (no Annex B hoisting in strict mode).
-        boolean switchScope = strictMode;
+        // The switch body always creates a block scope for lexical declarations (let/const).
+        // Per QuickJS: push_scope is unconditional for switch statements.
         boolean savedGlobalScope = inGlobalScope;
-        if (switchScope) {
-            enterScope();
-            inGlobalScope = false;
-        }
+        enterScope();
+        inGlobalScope = false;
 
         LoopContext loop = new LoopContext(emitter.currentOffset(), scopeDepth, scopeDepth);
         loopStack.push(loop);
@@ -2959,11 +2963,9 @@ public final class BytecodeCompiler {
 
         loopStack.pop();
 
-        if (switchScope) {
-            inGlobalScope = savedGlobalScope;
-            emitCurrentScopeUsingDisposal();
-            exitScope();
-        }
+        inGlobalScope = savedGlobalScope;
+        emitCurrentScopeUsingDisposal();
+        exitScope();
     }
 
     private void compileTaggedTemplateExpression(TaggedTemplateExpression taggedTemplate) {
