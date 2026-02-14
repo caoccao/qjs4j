@@ -36,28 +36,72 @@ public final class TypedArrayConstructor {
         JSValue mapFnValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         JSValue thisArgValue = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
 
-        if (!(mapFnValue instanceof JSFunction mapFn)) {
-            if (!(mapFnValue instanceof JSUndefined)) {
+        // Validate mapfn
+        JSFunction mapFn = null;
+        if (!(mapFnValue instanceof JSUndefined)) {
+            if (!(mapFnValue instanceof JSFunction mapFnFunc)) {
                 return context.throwTypeError("TypedArray.from mapFn must be a function");
             }
-            JSObject result = constructorType.create(context, items);
-            context.transferPrototype(result, constructor);
-            return result;
+            mapFn = mapFnFunc;
         }
 
-        JSArray sourceArray;
-        if (items instanceof JSIterator jsIterator) {
-            sourceArray = JSIteratorHelper.toArray(context, jsIterator);
-        } else if (items instanceof JSArray jsArray) {
-            sourceArray = jsArray;
-        } else if (items instanceof JSObject jsObject) {
-            int length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, jsObject.get("length")));
-            sourceArray = context.createJSArray(length, length);
-            for (int i = 0; i < length; i++) {
-                sourceArray.set(i, jsObject.get(i));
+        // GetMethod(items, @@iterator) - check for Symbol.iterator on generic JSObject
+        // (JSArray, JSIterator, JSTypedArray are handled by fast paths in create())
+        JSArray sourceArray = null;
+        if (items instanceof JSObject itemsObj
+                && !(items instanceof JSArray)
+                && !(items instanceof JSIterator)
+                && !(items instanceof JSTypedArray)
+                && !(items instanceof JSArrayBufferable)) {
+            JSValue iteratorMethod = itemsObj.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR));
+            if (iteratorMethod instanceof JSFunction iteratorFunc) {
+                JSValue iterator = iteratorFunc.call(context, items, new JSValue[0]);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (!(iterator instanceof JSObject)) {
+                    return context.throwTypeError("Result of the Symbol.iterator method is not an object");
+                }
+                sourceArray = context.createJSArray();
+                while (true) {
+                    JSObject result = JSIteratorHelper.iteratorNext(iterator, context);
+                    if (result == null) break;
+                    JSValue doneValue = result.get("done");
+                    if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) break;
+                    sourceArray.push(result.get("value"));
+                }
+            } else if (iteratorMethod != null
+                    && !(iteratorMethod instanceof JSUndefined)
+                    && !(iteratorMethod instanceof JSNull)) {
+                return context.throwTypeError("@@iterator is not a function");
             }
-        } else {
-            return context.throwTypeError("TypedArray.from source must be iterable or array-like");
+        }
+
+        if (sourceArray == null) {
+            if (mapFn == null) {
+                JSObject result = constructorType.create(context, items);
+                context.transferPrototype(result, constructor);
+                return result;
+            }
+            if (items instanceof JSIterator jsIterator) {
+                sourceArray = JSIteratorHelper.toArray(context, jsIterator);
+            } else if (items instanceof JSArray jsArray) {
+                sourceArray = jsArray;
+            } else if (items instanceof JSObject jsObject) {
+                int length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, jsObject.get("length")));
+                sourceArray = context.createJSArray(length, length);
+                for (int i = 0; i < length; i++) {
+                    sourceArray.set(i, jsObject.get(i));
+                }
+            } else {
+                return context.throwTypeError("TypedArray.from source must be iterable or array-like");
+            }
+        }
+
+        if (mapFn == null) {
+            JSObject result = constructorType.create(context, sourceArray);
+            context.transferPrototype(result, constructor);
+            return result;
         }
 
         int length = (int) sourceArray.getLength();
