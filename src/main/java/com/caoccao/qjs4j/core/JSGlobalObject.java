@@ -343,7 +343,7 @@ public final class JSGlobalObject {
         }
 
         try {
-            JSValue result = context.eval(code);
+            JSValue result = context.eval(code, "<eval>", false, true);
 
             // Copy modified values back to caller's locals
             if (localVarNames != null) {

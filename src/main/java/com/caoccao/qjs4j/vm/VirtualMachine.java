@@ -2494,15 +2494,23 @@ public final class VirtualMachine {
                     throw new JSVirtualMachineException(context.throwTypeError(errorMessage));
                 }
                 // Call native function with receiver as thisArg
-                JSValue result = nativeFunc.call(context, receiver, args);
-                // Check for pending exception after native function call
-                if (context.hasPendingException()) {
-                    // Set pending exception in VM and push placeholder
-                    // The main loop will handle the exception on next iteration
-                    pendingException = context.getPendingException();
+                try {
+                    JSValue result = nativeFunc.call(context, receiver, args);
+                    // Check for pending exception after native function call
+                    if (context.hasPendingException()) {
+                        // Set pending exception in VM and push placeholder
+                        // The main loop will handle the exception on next iteration
+                        pendingException = context.getPendingException();
+                        valueStack.push(JSUndefined.INSTANCE);
+                    } else {
+                        valueStack.push(result);
+                    }
+                } catch (JSException e) {
+                    // Native function threw a JSException (e.g. from eval/evalScript)
+                    // Convert to pending exception so VM try-catch handles it
+                    pendingException = e.getErrorValue();
+                    context.clearPendingException();
                     valueStack.push(JSUndefined.INSTANCE);
-                } else {
-                    valueStack.push(result);
                 }
             } else if (function instanceof JSBytecodeFunction bytecodeFunc) {
                 try {

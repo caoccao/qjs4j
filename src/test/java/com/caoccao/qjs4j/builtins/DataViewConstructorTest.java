@@ -58,7 +58,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
                 dv.getBigUint64(0).toString();
                 """);
 
-        assertThatThrownBy(() -> context.eval("""
+        assertThatThrownBy(() -> resetContext().eval("""
                 const dv = new DataView(new ArrayBuffer(8));
                 dv.setBigInt64(0, 1);
                 """))
@@ -331,13 +331,13 @@ public class DataViewConstructorTest extends BaseJavetTest {
                 dv.getFloat16(0, true);
                 """);
 
-        assertThatThrownBy(() -> context.eval("""
+        assertThatThrownBy(() -> resetContext().eval("""
                 const dv = new DataView(new ArrayBuffer(8));
                 dv.getInt8(-1);
                 """))
                 .isInstanceOf(JSException.class)
                 .hasMessageContaining("RangeError");
-        assertThatThrownBy(() -> context.eval("""
+        assertThatThrownBy(() -> resetContext().eval("""
                 const dv = new DataView(new ArrayBuffer(8));
                 dv.getInt8(Symbol());
                 """))

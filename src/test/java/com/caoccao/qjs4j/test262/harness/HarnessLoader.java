@@ -79,11 +79,9 @@ public class HarnessLoader {
      *
      * @param context  The JavaScript context
      * @param includes The harness files to load
-     * @throws IOException If a harness file cannot be read
      * @throws JSException If a harness file cannot be evaluated
      */
-    public void loadIntoContext(JSContext context, Set<String> includes)
-            throws IOException, JSException {
+    public void loadIntoContext(JSContext context, Set<String> includes) throws JSException {
         for (String include : includes) {
             String code = loadHarness(include);
             context.eval(code, include, false);

@@ -17,10 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.compiler.Compiler;
-import com.caoccao.qjs4j.exceptions.JSCompilerException;
-import com.caoccao.qjs4j.exceptions.JSErrorException;
-import com.caoccao.qjs4j.exceptions.JSException;
-import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
+import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.types.JSModule;
 import com.caoccao.qjs4j.vm.VirtualMachine;
 
@@ -45,7 +42,11 @@ public final class JSContext implements AutoCloseable {
     private final Deque<StackFrame> callStack;
     // Stack trace capture
     private final List<StackTraceElement> errorStackTrace;
+    // Global declaration tracking for cross-script collision detection
+    // Following QuickJS global_var_obj pattern (GlobalDeclarationInstantiation)
+    private final Set<String> globalLexDeclarations;
     private final JSObject globalObject;
+    private final Set<String> globalVarDeclarations;
     private final JSGlobalObject jsGlobalObject;
     // Microtask queue for promise resolution and async operations
     private final JSMicrotaskQueue microtaskQueue;
@@ -74,6 +75,8 @@ public final class JSContext implements AutoCloseable {
         this.callStack = new ArrayDeque<>();
         this.errorStackTrace = new ArrayList<>();
         this.globalObject = new JSObject();
+        this.globalLexDeclarations = new HashSet<>();
+        this.globalVarDeclarations = new HashSet<>();
         this.inCatchHandler = false;
         this.jsGlobalObject = new JSGlobalObject();
         this.maxStackDepth = DEFAULT_MAX_STACK_DEPTH;
@@ -522,7 +525,7 @@ public final class JSContext implements AutoCloseable {
      * @return The completion value, or exception if eval throws
      */
     public JSValue eval(String code) {
-        return eval(code, "<eval>", false);
+        return eval(code, "<eval>", false, false);
     }
 
     /**
@@ -534,6 +537,19 @@ public final class JSContext implements AutoCloseable {
      * @return The completion value
      */
     public JSValue eval(String code, String filename, boolean isModule) {
+        return eval(code, filename, isModule, false);
+    }
+
+    /**
+     * Eval js value.
+     *
+     * @param code         the code
+     * @param filename     the filename
+     * @param isModule     the is module
+     * @param isDirectEval the is direct eval
+     * @return the js value
+     */
+    public JSValue eval(String code, String filename, boolean isModule, boolean isDirectEval) {
         if (code == null || code.isEmpty()) {
             return JSUndefined.INSTANCE;
         }
@@ -545,9 +561,57 @@ public final class JSContext implements AutoCloseable {
 
         try {
             // Phase 1-3: Lexer → Parser → Compiler (compile to bytecode)
-            JSBytecodeFunction func = isModule
-                    ? Compiler.compileModule(code, filename)
-                    : Compiler.compile(code, filename);
+            JSBytecodeFunction func;
+            if (isModule) {
+                func = Compiler.compileModule(code, filename);
+            } else if (!isDirectEval) {
+                // Top-level script: check GlobalDeclarationInstantiation per ES2024 16.1.7
+                Compiler.CompileResult result = Compiler.compileWithAST(code, filename);
+                func = result.function();
+
+                // Collect new declarations from this script
+                Set<String> newVarDecls = new HashSet<>();
+                Set<String> newLexDecls = new HashSet<>();
+                Compiler.collectGlobalDeclarations(result.ast(), newVarDecls, newLexDecls);
+
+                // Check: let/const names must not collide with existing lex declarations
+                // or restricted global properties (non-configurable or script-level var)
+                for (String name : newLexDecls) {
+                    if (globalLexDeclarations.contains(name)) {
+                        throw new JSSyntaxErrorException(
+                                "Identifier '" + name + "' has already been declared");
+                    }
+                    // Check for non-configurable property on global object
+                    PropertyKey key = PropertyKey.fromString(name);
+                    PropertyDescriptor desc = globalObject.getOwnPropertyDescriptor(key);
+                    if (desc != null && !desc.isConfigurable()) {
+                        throw new JSSyntaxErrorException(
+                                "Identifier '" + name + "' has already been declared");
+                    }
+                    // Check against script-level var declarations (these should be
+                    // non-configurable per spec, tracked separately)
+                    if (globalVarDeclarations.contains(name)) {
+                        throw new JSSyntaxErrorException(
+                                "Identifier '" + name + "' has already been declared");
+                    }
+                }
+
+                // Check: var/function names must not collide with existing lex declarations
+                for (String name : newVarDecls) {
+                    if (globalLexDeclarations.contains(name)) {
+                        throw new JSSyntaxErrorException(
+                                "Identifier '" + name + "' has already been declared");
+                    }
+                }
+
+                // Register new declarations for future collision checks
+                globalLexDeclarations.addAll(newLexDecls);
+                globalVarDeclarations.addAll(newVarDecls);
+            } else {
+                // JS eval() — no GlobalDeclarationInstantiation check;
+                // eval-created var bindings are configurable (not restricted)
+                func = Compiler.compile(code, filename);
+            }
 
             // Initialize the function's prototype chain so it inherits from Function.prototype
             func.initializePrototypeChain(this);
