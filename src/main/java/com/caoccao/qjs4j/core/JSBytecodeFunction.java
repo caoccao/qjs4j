@@ -129,6 +129,11 @@ public final class JSBytecodeFunction extends JSFunction {
 
     @Override
     public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        // OrdinaryCallBindThis: in non-strict mode, undefined/null this → global object
+        if (!strict && (thisArg instanceof JSUndefined || thisArg instanceof JSNull)) {
+            thisArg = context.getGlobalObject();
+        }
+
         // If this is an async generator function, create and return an async generator object
         // Following QuickJS pattern: create generator without executing the body
         if (isAsync && isGenerator) {
