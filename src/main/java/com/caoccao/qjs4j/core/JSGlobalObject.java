@@ -293,6 +293,10 @@ public final class JSGlobalObject {
         }
 
         String code = ((JSString) x).value();
+        // Per ES2024 19.2.1.1 PerformEval: eval inherits strict mode from caller
+        if (context.isStrictMode()) {
+            code = "'use strict';\n" + code;
+        }
         try {
             return context.eval(code);
         } catch (JSException e) {

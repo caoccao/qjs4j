@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.compiler;
 
 import com.caoccao.qjs4j.compiler.ast.*;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.regexp.RegExpLiteralValue;
 import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.Opcode;
@@ -1988,6 +1989,16 @@ public final class BytecodeCompiler {
     }
 
     private void compileIfStatement(IfStatement ifStmt) {
+        // In strict mode, function declarations are not allowed as direct body of if/else
+        // (they must be at top level or inside a block). Per ES2024 B.3.3 Note.
+        if (strictMode) {
+            if (ifStmt.consequent() instanceof FunctionDeclaration
+                    || ifStmt.alternate() instanceof FunctionDeclaration) {
+                throw new JSSyntaxErrorException(
+                        "In strict mode code, functions can only be declared at top level or inside a block.");
+            }
+        }
+
         // Compile condition
         compileExpression(ifStmt.test());
 
@@ -2576,19 +2587,33 @@ public final class BytecodeCompiler {
 
         // Phase 1: Hoist top-level function declarations (ES spec requires function
         // declarations to be initialized before any code executes).
-        Set<String> declaredFuncVarNames = new HashSet<>();
+        Set<String> hoistedFunctionNames = new HashSet<>();
+        Set<String> varNames = new HashSet<>();
         for (Statement stmt : body) {
             if (stmt instanceof FunctionDeclaration funcDecl) {
                 if (funcDecl.id() != null) {
-                    declaredFuncVarNames.add(funcDecl.id().name());
+                    hoistedFunctionNames.add(funcDecl.id().name());
                 }
                 compileFunctionDeclaration(funcDecl);
             } else if (stmt instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
                 for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                    collectPatternBindingNames(d.id(), declaredFuncVarNames);
+                    collectPatternBindingNames(d.id(), varNames);
                 }
             }
         }
+
+        // Phase 1.25: Var hoisting — create undefined bindings for var names not
+        // already covered by hoisted function declarations.
+        for (String varName : varNames) {
+            if (!hoistedFunctionNames.contains(varName)) {
+                emitter.emitOpcode(Opcode.UNDEFINED);
+                emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+            }
+        }
+
+        Set<String> declaredFuncVarNames = new HashSet<>();
+        declaredFuncVarNames.addAll(hoistedFunctionNames);
+        declaredFuncVarNames.addAll(varNames);
 
         // Phase 1.5: Annex B.3.3.3 - create var bindings for function declarations
         // nested inside blocks, if-statements, catch clauses, etc.
@@ -2887,15 +2912,27 @@ public final class BytecodeCompiler {
         int jumpToDefault = emitter.emitJump(Opcode.GOTO);
 
         // Compile case bodies
+        // In strict mode, the switch body creates a block scope for lexical declarations
+        // and function declarations (no Annex B hoisting in strict mode).
+        boolean switchScope = strictMode;
+        boolean savedGlobalScope = inGlobalScope;
+        if (switchScope) {
+            enterScope();
+            inGlobalScope = false;
+        }
+
         LoopContext loop = new LoopContext(emitter.currentOffset(), scopeDepth, scopeDepth);
         loopStack.push(loop);
 
+        int defaultBodyStart = -1;
         for (int i = 0; i < switchStmt.cases().size(); i++) {
             SwitchStatement.SwitchCase switchCase = switchStmt.cases().get(i);
 
             if (switchCase.test() != null) {
                 int bodyStart = emitter.currentOffset();
                 caseBodyStarts.add(bodyStart);
+            } else {
+                defaultBodyStart = emitter.currentOffset();
             }
 
             for (Statement stmt : switchCase.consequent()) {
@@ -2911,19 +2948,8 @@ public final class BytecodeCompiler {
         }
 
         // Patch default jump
-        boolean hasDefault = switchStmt.cases().stream().anyMatch(c -> c.test() == null);
-        if (hasDefault) {
-            // Find default case body start
-            int defaultIndex = 0;
-            for (int i = 0; i < switchStmt.cases().size(); i++) {
-                if (switchStmt.cases().get(i).test() == null) {
-                    defaultIndex = i;
-                    break;
-                }
-            }
-            int defaultStart = caseBodyStarts.isEmpty() ? switchEnd :
-                    (defaultIndex < caseBodyStarts.size() ? caseBodyStarts.get(defaultIndex) : switchEnd);
-            emitter.patchJump(jumpToDefault, defaultStart);
+        if (defaultBodyStart >= 0) {
+            emitter.patchJump(jumpToDefault, defaultBodyStart);
         } else {
             emitter.patchJump(jumpToDefault, switchEnd);
         }
@@ -2934,6 +2960,12 @@ public final class BytecodeCompiler {
         }
 
         loopStack.pop();
+
+        if (switchScope) {
+            inGlobalScope = savedGlobalScope;
+            emitCurrentScopeUsingDisposal();
+            exitScope();
+        }
     }
 
     private void compileTaggedTemplateExpression(TaggedTemplateExpression taggedTemplate) {
