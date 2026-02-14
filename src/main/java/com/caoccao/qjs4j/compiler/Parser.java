@@ -1459,8 +1459,20 @@ public final class Parser {
                     do {
                         if (match(TokenType.COMMA)) {
                             advance();
+                            // Handle trailing comma
+                            if (match(TokenType.RPAREN)) {
+                                break;
+                            }
                         }
-                        args.add(parseAssignmentExpression());
+                        if (match(TokenType.ELLIPSIS)) {
+                            // Spread argument: ...expr
+                            SourceLocation spreadLocation = getLocation();
+                            advance(); // consume ELLIPSIS
+                            Expression argument = parseAssignmentExpression();
+                            args.add(new SpreadElement(argument, spreadLocation));
+                        } else {
+                            args.add(parseAssignmentExpression());
+                        }
                     } while (match(TokenType.COMMA));
                 }
                 expect(TokenType.RPAREN);

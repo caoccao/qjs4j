@@ -663,57 +663,7 @@ public final class BytecodeCompiler {
             // Stack: thisArg function
         }
 
-        // Build arguments array with spread handling
-        // Create empty array
-        emitter.emitOpcode(Opcode.ARRAY_NEW);
-
-        // Check if we have any spread elements
-        boolean hasSpread = callExpr.arguments().stream()
-                .anyMatch(arg -> arg instanceof SpreadElement);
-
-        if (!hasSpread) {
-            // Simple case: no spread (shouldn't reach here, but handle it)
-            for (Expression arg : callExpr.arguments()) {
-                compileExpression(arg);
-                emitter.emitOpcode(Opcode.PUSH_ARRAY);
-            }
-        } else {
-            // Complex case: has spread elements
-            // Following QuickJS: emit position tracking
-            int idx = 0;
-            boolean needsIndex = false;
-
-            for (Expression arg : callExpr.arguments()) {
-                if (arg instanceof SpreadElement spreadElement) {
-                    // Emit index if not already on stack
-                    if (!needsIndex) {
-                        emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
-                        needsIndex = true;
-                    }
-                    // Spread: ...expr
-                    compileExpression(spreadElement.argument());
-                    emitter.emitOpcode(Opcode.APPEND);
-                } else {
-                    // Normal argument
-                    if (needsIndex) {
-                        // We have index on stack, use DEFINE_ARRAY_EL
-                        compileExpression(arg);
-                        emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
-                        emitter.emitOpcode(Opcode.INC);
-                    } else {
-                        // No index on stack yet, use simple PUSH_ARRAY
-                        compileExpression(arg);
-                        emitter.emitOpcode(Opcode.PUSH_ARRAY);
-                        idx++;
-                    }
-                }
-            }
-
-            // Drop the index if it's on the stack
-            if (needsIndex) {
-                emitter.emitOpcode(Opcode.DROP);
-            }
-        }
+        emitArgumentsArrayWithSpread(callExpr.arguments());
 
         // Stack: thisArg function argsArray
         // Use APPLY to call with the array
@@ -2354,15 +2304,23 @@ public final class BytecodeCompiler {
     }
 
     private void compileNewExpression(NewExpression newExpr) {
+        boolean hasSpread = newExpr.arguments().stream()
+                .anyMatch(arg -> arg instanceof SpreadElement);
+
         // Push constructor
         compileExpression(newExpr.callee());
 
-        // Push arguments
+        if (hasSpread) {
+            // QuickJS `OP_apply` constructor path: thisArg/newTarget, function, argsArray.
+            emitter.emitOpcode(Opcode.DUP);
+            emitArgumentsArrayWithSpread(newExpr.arguments());
+            emitter.emitOpcodeU16(Opcode.APPLY, 1);
+            return;
+        }
+
         for (Expression arg : newExpr.arguments()) {
             compileExpression(arg);
         }
-
-        // Call constructor
         emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, newExpr.arguments().size());
     }
 
@@ -2708,8 +2666,6 @@ public final class BytecodeCompiler {
         compileStatement(stmt, false);
     }
 
-    // ==================== Expression Compilation ====================
-
     private void compileStatement(Statement stmt, boolean isLastInProgram) {
         if (stmt instanceof ExpressionStatement exprStmt) {
             compileExpression(exprStmt.expression());
@@ -2749,6 +2705,8 @@ public final class BytecodeCompiler {
             compileClassDeclaration(classDecl);
         }
     }
+
+    // ==================== Expression Compilation ====================
 
     /**
      * Compile a static block as a function.
@@ -3645,6 +3603,46 @@ public final class BytecodeCompiler {
             if (loopContext.hasIterator) {
                 emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
             }
+        }
+    }
+
+    private void emitArgumentsArrayWithSpread(List<Expression> arguments) {
+        emitter.emitOpcode(Opcode.ARRAY_NEW);
+
+        boolean hasSpread = arguments.stream()
+                .anyMatch(arg -> arg instanceof SpreadElement);
+
+        if (!hasSpread) {
+            for (Expression arg : arguments) {
+                compileExpression(arg);
+                emitter.emitOpcode(Opcode.PUSH_ARRAY);
+            }
+            return;
+        }
+
+        // QuickJS-style lowering keeps an explicit append index once spread appears.
+        int idx = 0;
+        boolean needsIndex = false;
+        for (Expression arg : arguments) {
+            if (arg instanceof SpreadElement spreadElement) {
+                if (!needsIndex) {
+                    emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
+                    needsIndex = true;
+                }
+                compileExpression(spreadElement.argument());
+                emitter.emitOpcode(Opcode.APPEND);
+            } else if (needsIndex) {
+                compileExpression(arg);
+                emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
+                emitter.emitOpcode(Opcode.INC);
+            } else {
+                compileExpression(arg);
+                emitter.emitOpcode(Opcode.PUSH_ARRAY);
+                idx++;
+            }
+        }
+        if (needsIndex) {
+            emitter.emitOpcode(Opcode.DROP);
         }
     }
 

@@ -1602,31 +1602,40 @@ public final class VirtualMachine {
                         JSValue functionValue = valueStack.pop();
                         JSValue thisArgValue = valueStack.pop();
 
-                        if (!(functionValue instanceof JSFunction applyFunction)) {
-                            throw new JSVirtualMachineException("APPLY: not a function");
-                        }
-
-                        if (!(argsArrayValue instanceof JSArray argsArray)) {
-                            throw new JSVirtualMachineException("APPLY: arguments must be an array");
-                        }
-
-                        // Convert array to arguments
-                        int argCount = (int) argsArray.getLength();
-                        JSValue[] applyArgs = new JSValue[argCount];
-                        for (int i = 0; i < argCount; i++) {
-                            applyArgs[i] = argsArray.get(i);
-                        }
-
-                        // Call the function (constructor call if isConstructorCall == 1)
                         JSValue result;
                         if (isConstructorCall != 0) {
-                            // TODO: Implement constructor call via APPLY (new with spread)
-                            // For now, use handleCallConstructor logic
-                            throw new JSVirtualMachineException("APPLY with constructor call not yet implemented");
+                            // QuickJS OP_apply constructor mode routes to CallConstructor2
+                            // with thisArg as newTarget.
+                            JSValue newTarget = thisArgValue;
+                            if (newTarget.isUndefined() || newTarget.isNull()) {
+                                newTarget = functionValue;
+                            }
+                            result = JSReflectObject.construct(
+                                    context,
+                                    JSUndefined.INSTANCE,
+                                    new JSValue[]{functionValue, argsArrayValue, newTarget});
                         } else {
-                            result = applyFunction.call(context, thisArgValue, applyArgs);
+                            JSValue[] applyArgs = buildApplyArguments(argsArrayValue, true);
+                            if (applyArgs == null) {
+                                pendingException = context.getPendingException();
+                                valueStack.push(JSUndefined.INSTANCE);
+                                pc += op.getSize();
+                                break;
+                            }
+                            if (functionValue instanceof JSProxy proxyFunction) {
+                                result = proxyApply(proxyFunction, thisArgValue, applyArgs);
+                            } else if (functionValue instanceof JSFunction applyFunction) {
+                                result = applyFunction.call(context, thisArgValue, applyArgs);
+                            } else {
+                                throw new JSVirtualMachineException("APPLY: not a function");
+                            }
                         }
-                        valueStack.push(result);
+                        if (context.hasPendingException()) {
+                            pendingException = context.getPendingException();
+                            valueStack.push(JSUndefined.INSTANCE);
+                        } else {
+                            valueStack.push(result);
+                        }
                         pc += op.getSize();
                     }
                     case PUSH_ARRAY -> {
@@ -2551,6 +2560,46 @@ public final class VirtualMachine {
         } else {
             throw new JSVirtualMachineException("Cannot construct non-function value");
         }
+    }
+
+    private JSValue[] buildApplyArguments(JSValue argsArrayValue, boolean allowNullOrUndefined) {
+        if (allowNullOrUndefined && (argsArrayValue.isUndefined() || argsArrayValue.isNull())) {
+            return new JSValue[0];
+        }
+        if (!(argsArrayValue instanceof JSObject arrayLike)) {
+            context.throwTypeError("CreateListFromArrayLike called on non-object");
+            return null;
+        }
+
+        JSValue lengthValue = arrayLike.get(PropertyKey.fromString("length"), context);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
+        long length = JSTypeConversions.toLength(context, lengthValue);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (length > Integer.MAX_VALUE) {
+            context.throwRangeError("too many arguments in function call");
+            return null;
+        }
+
+        JSValue[] args = new JSValue[(int) length];
+        for (int i = 0; i < args.length; i++) {
+            JSValue argValue = arrayLike.get(PropertyKey.fromString(String.valueOf(i)), context);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (argValue instanceof JSUndefined) {
+                argValue = arrayLike.get(PropertyKey.fromIndex(i), context);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+            }
+            args[i] = argValue;
+        }
+        return args;
     }
 
     private void handleDec() {
