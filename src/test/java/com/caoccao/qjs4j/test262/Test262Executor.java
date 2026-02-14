@@ -204,6 +204,15 @@ public class Test262Executor {
                     if (nameValue != null && !(nameValue instanceof JSUndefined)) {
                         return nameValue.toString();
                     }
+
+                    // Try constructor.name for custom error types (e.g. Test262Error)
+                    JSValue constructor = errorObj.get("constructor");
+                    if (constructor instanceof JSObject constructorObj) {
+                        JSValue constructorName = constructorObj.get("name");
+                        if (constructorName instanceof JSString nameStr && !nameStr.value().isEmpty()) {
+                            return nameStr.value();
+                        }
+                    }
                 } catch (Exception ignored) {
                     // Fall through to message parsing
                 }
