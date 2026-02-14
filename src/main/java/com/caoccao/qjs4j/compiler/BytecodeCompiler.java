@@ -2604,10 +2604,10 @@ public final class BytecodeCompiler {
 
         // Phase 1.25: Var hoisting — create undefined bindings for var names not
         // already covered by hoisted function declarations.
+        // Per ES2024 CreateGlobalVarBinding, only create binding if it doesn't already exist.
         for (String varName : varNames) {
             if (!hoistedFunctionNames.contains(varName)) {
-                emitter.emitOpcode(Opcode.UNDEFINED);
-                emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                emitConditionalVarInit(varName);
             }
         }
 
@@ -3665,6 +3665,32 @@ public final class BytecodeCompiler {
         }
     }
 
+    /**
+     * Emit a conditional var initialization: only create the binding with undefined
+     * if the property doesn't already exist on the global object.
+     * Implements ES2024 CreateGlobalVarBinding semantics.
+     * <p>
+     * Bytecode sequence:
+     * <pre>
+     *   PUSH_ATOM_VALUE "name"   // push property name
+     *   PUSH_THIS                // push global object
+     *   IN                       // "name" in globalObject -> boolean
+     *   IF_TRUE skip             // if exists, skip initialization
+     *   UNDEFINED                // push undefined
+     *   PUT_VAR "name"           // create the binding
+     *   skip:
+     * </pre>
+     */
+    private void emitConditionalVarInit(String name) {
+        emitter.emitOpcodeAtom(Opcode.PUSH_ATOM_VALUE, name);
+        emitter.emitOpcode(Opcode.PUSH_THIS);
+        emitter.emitOpcode(Opcode.IN);
+        int skipJump = emitter.emitJump(Opcode.IF_TRUE);
+        emitter.emitOpcode(Opcode.UNDEFINED);
+        emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
+        emitter.patchJump(skipJump, emitter.currentOffset());
+    }
+
     private void emitCurrentScopeUsingDisposal() {
         emitScopeUsingDisposal(currentScope());
     }
@@ -3967,9 +3993,9 @@ public final class BytecodeCompiler {
         for (String name : candidates) {
             annexBFunctionNames.add(name);
             if (!declaredFuncVarNames.contains(name)) {
-                // Create initial var binding: var name = undefined
-                emitter.emitOpcode(Opcode.UNDEFINED);
-                emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
+                // Create initial var binding only if the property doesn't already exist
+                // on the global object (ES2024 CreateGlobalVarBinding semantics).
+                emitConditionalVarInit(name);
             }
         }
     }

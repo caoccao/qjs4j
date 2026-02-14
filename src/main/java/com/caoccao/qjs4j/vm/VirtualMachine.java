@@ -463,6 +463,13 @@ public final class VirtualMachine {
                         valueStack.push(constValue);
                         pc += op.getSize();
                     }
+                    case PUSH_ATOM_VALUE -> {
+                        // QuickJS OP_push_atom_value: read atom, convert to string value, push
+                        int atomIndex = bytecode.readU32(pc + 1);
+                        String atomStr = bytecode.getAtoms()[atomIndex];
+                        valueStack.push(new JSString(atomStr));
+                        pc += op.getSize();
+                    }
                     case PRIVATE_SYMBOL -> {
                         // Create a unique private symbol for a private class field
                         // Reads: atom (field name)
