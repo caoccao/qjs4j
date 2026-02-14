@@ -535,6 +535,14 @@ public final class VirtualMachine {
                                 capturedClosureVars[i] = valueStack.pop();
                             }
                             JSBytecodeFunction closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
+                            // Patch closure self-reference if needed.
+                            // Following QuickJS var_refs pattern: when a function captures its own name
+                            // from a block scope, the capture happens before the function is stored,
+                            // resulting in undefined. We patch it here after creation.
+                            int selfIdx = templateFunction.getSelfCaptureIndex();
+                            if (selfIdx >= 0 && selfIdx < capturedClosureVars.length) {
+                                capturedClosureVars[selfIdx] = closureFunction;
+                            }
                             closureFunction.initializePrototypeChain(context);
                             valueStack.push(closureFunction);
                         } else {

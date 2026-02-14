@@ -534,11 +534,14 @@ public final class BytecodeCompiler {
     }
 
     private void compileBlockStatement(BlockStatement block) {
+        boolean savedGlobalScope = inGlobalScope;
         enterScope();
+        inGlobalScope = false;
         for (Statement stmt : block.body()) {
             compileStatement(stmt);
         }
         emitCurrentScopeUsingDisposal();
+        inGlobalScope = savedGlobalScope;
         exitScope();
     }
 
@@ -1670,6 +1673,14 @@ public final class BytecodeCompiler {
     }
 
     private void compileFunctionDeclaration(FunctionDeclaration funcDecl) {
+        // Pre-declare function name as a local in the current scope (if non-global and not
+        // already declared). This must happen BEFORE creating the child compiler so the
+        // function body can capture the name via closure for self-reference.
+        String functionName = funcDecl.id().name();
+        if (!inGlobalScope && findLocalInScopes(functionName) == null) {
+            currentScope().declareLocal(functionName);
+        }
+
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
         BytecodeCompiler functionCompiler = new BytecodeCompiler(this.strictMode, this.captureResolver);
@@ -1738,8 +1749,7 @@ public final class BytecodeCompiler {
         // Build the function bytecode
         Bytecode functionBytecode = functionCompiler.emitter.build(localCount, localVarNames);
 
-        // Get function name
-        String functionName = funcDecl.id().name();
+        // Function name (already extracted at start of method)
 
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
@@ -1773,6 +1783,14 @@ public final class BytecodeCompiler {
             functionSource = funcSource.toString();
         }
 
+        // Check if the function captures its own name (e.g., block-scoped function declaration
+        // where the body references f). This fixes the chicken-and-egg problem where FCLOSURE
+        // captures the local before the function is stored in it.
+        // Following QuickJS var_refs pattern: the closure variable pointing to the function
+        // itself is patched after creation via selfCaptureIndex metadata.
+        Integer selfCaptureIdx = functionCompiler.captureResolver.findCapturedBindingIndex(functionName);
+        int selfCaptureIndex = selfCaptureIdx != null ? selfCaptureIdx : -1;
+
         // Create JSBytecodeFunction
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
@@ -1785,7 +1803,8 @@ public final class BytecodeCompiler {
                 funcDecl.isGenerator(),
                 false,           // isArrow - regular function, not arrow
                 isStrict,        // strict - detected from "use strict" directive in function body
-                functionSource   // source code for toString()
+                functionSource,  // source code for toString()
+                selfCaptureIndex // closure self-reference index (-1 if none)
         );
 
         emitCapturedValues(functionCompiler);
@@ -2011,20 +2030,13 @@ public final class BytecodeCompiler {
      */
     private void compileImplicitBlockStatement(Statement stmt) {
         if (stmt instanceof FunctionDeclaration funcDecl && funcDecl.id() != null) {
-            if (annexBFunctionNames.contains(funcDecl.id().name())) {
-                // Annex B case: don't create implicit block scope.
-                // The function body will reference f via GET_VAR (global),
-                // avoiding the stale closure snapshot problem with FCLOSURE.
-                compileFunctionDeclaration(funcDecl);
-            } else {
-                // Non-Annex B case (lexical conflict in enclosing scope):
-                // create implicit block scope to prevent overwriting let/const bindings.
-                enterScope();
-                currentScope().declareLocal(funcDecl.id().name());
-                compileFunctionDeclaration(funcDecl);
-                emitCurrentScopeUsingDisposal();
-                exitScope();
-            }
+            // Per ES2024 B.3.3, function declarations in if-statement positions
+            // are treated as if wrapped in a block scope.
+            enterScope();
+            currentScope().declareLocal(funcDecl.id().name());
+            compileFunctionDeclaration(funcDecl);
+            emitCurrentScopeUsingDisposal();
+            exitScope();
         } else {
             compileStatement(stmt);
         }

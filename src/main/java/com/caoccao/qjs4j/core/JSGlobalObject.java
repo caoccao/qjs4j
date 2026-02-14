@@ -300,12 +300,29 @@ public final class JSGlobalObject {
         // Scope overlay: capture enclosing function's local variables onto the global
         // object so that eval code's GET_VAR/PUT_VAR can access them.
         StackFrame callerFrame = context.getVirtualMachine().getCurrentFrame();
+        // Eval is "inside a function" only if the callerFrame is NOT the top-level program.
+        // The top-level program frame has caller == null; function frames have a non-null caller.
+        boolean isEvalInFunction = callerFrame != null
+                && callerFrame.getFunction() instanceof JSBytecodeFunction
+                && callerFrame.getCaller() != null;
         String[] localVarNames = null;
         Map<String, JSValue> savedGlobals = null;
         Set<String> absentKeys = null;
         JSObject global = context.getGlobalObject();
 
-        if (callerFrame != null
+        // When eval runs inside a function, snapshot global property names so we can
+        // clean up var/function bindings that should be function-scoped (not global).
+        Set<String> globalKeysBefore = null;
+        if (isEvalInFunction) {
+            globalKeysBefore = new HashSet<>();
+            for (PropertyKey pk : global.ownPropertyKeys()) {
+                if (pk.isString()) {
+                    globalKeysBefore.add(pk.asString());
+                }
+            }
+        }
+
+        if (isEvalInFunction
                 && callerFrame.getFunction() instanceof JSBytecodeFunction bcFunc
                 && bcFunc.getBytecode().getLocalVarNames() != null) {
             localVarNames = bcFunc.getBytecode().getLocalVarNames();
@@ -347,7 +364,7 @@ public final class JSGlobalObject {
             context.setPendingException(e.getErrorValue());
             return JSUndefined.INSTANCE;
         } finally {
-            // Restore global object state
+            // Restore global object state for scope overlay
             if (savedGlobals != null) {
                 for (var entry : savedGlobals.entrySet()) {
                     global.set(PropertyKey.fromString(entry.getKey()), entry.getValue());
@@ -356,6 +373,16 @@ public final class JSGlobalObject {
             if (absentKeys != null) {
                 for (String name : absentKeys) {
                     global.delete(PropertyKey.fromString(name), context);
+                }
+            }
+            // Clean up eval-created bindings that should be function-scoped (not global).
+            // Per ES2024 B.3.3.3, var/function declarations in eval inside a function
+            // go to the function's variable environment, not the global.
+            if (globalKeysBefore != null) {
+                for (PropertyKey pk : global.ownPropertyKeys()) {
+                    if (pk.isString() && !globalKeysBefore.contains(pk.asString())) {
+                        global.delete(pk, context);
+                    }
                 }
             }
         }

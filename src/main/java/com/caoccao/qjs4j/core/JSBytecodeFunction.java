@@ -45,6 +45,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private final int length;
     private final String name;
     private final JSObject prototype;
+    private final int selfCaptureIndex;
     private final boolean strict;
     private String sourceCode;
 
@@ -56,7 +57,7 @@ public final class JSBytecodeFunction extends JSFunction {
      * @param length   Number of formal parameters
      */
     public JSBytecodeFunction(Bytecode bytecode, String name, int length) {
-        this(bytecode, name, length, new JSValue[0], null, true, false, false, false, false, null);
+        this(bytecode, name, length, new JSValue[0], null, true, false, false, false, false, null, -1);
     }
 
     /**
@@ -68,7 +69,7 @@ public final class JSBytecodeFunction extends JSFunction {
      * @param strict   Whether the function is in strict mode
      */
     public JSBytecodeFunction(Bytecode bytecode, String name, int length, boolean strict) {
-        this(bytecode, name, length, new JSValue[0], null, true, false, false, false, strict, null);
+        this(bytecode, name, length, new JSValue[0], null, true, false, false, false, strict, null, -1);
     }
 
     /**
@@ -81,7 +82,7 @@ public final class JSBytecodeFunction extends JSFunction {
      * @param sourceCode The original source code of the function (for toString())
      */
     public JSBytecodeFunction(Bytecode bytecode, String name, int length, boolean strict, String sourceCode) {
-        this(bytecode, name, length, new JSValue[0], null, true, false, false, false, strict, sourceCode);
+        this(bytecode, name, length, new JSValue[0], null, true, false, false, false, strict, sourceCode, -1);
     }
 
     /**
@@ -99,6 +100,25 @@ public final class JSBytecodeFunction extends JSFunction {
             boolean isArrow,
             boolean strict,
             String sourceCode) {
+        this(bytecode, name, length, closureVars, prototype, isConstructor, isAsync, isGenerator, isArrow, strict, sourceCode, -1);
+    }
+
+    /**
+     * Create a bytecode function with full configuration and self-capture index.
+     */
+    public JSBytecodeFunction(
+            Bytecode bytecode,
+            String name,
+            int length,
+            JSValue[] closureVars,
+            JSObject prototype,
+            boolean isConstructor,
+            boolean isAsync,
+            boolean isGenerator,
+            boolean isArrow,
+            boolean strict,
+            String sourceCode,
+            int selfCaptureIndex) {
         super(); // Initialize as JSObject
         this.bytecode = bytecode;
         this.name = name != null ? name : "";
@@ -111,6 +131,7 @@ public final class JSBytecodeFunction extends JSFunction {
         this.isArrow = isArrow;
         this.strict = strict;
         this.sourceCode = sourceCode;
+        this.selfCaptureIndex = selfCaptureIndex;
 
         // Set up function properties on the object
         // Functions are objects in JavaScript and have these standard properties
@@ -266,7 +287,8 @@ public final class JSBytecodeFunction extends JSFunction {
                 isGenerator,
                 isArrow,
                 strict,
-                sourceCode
+                sourceCode,
+                selfCaptureIndex
         );
         return copiedFunction;
     }
@@ -301,6 +323,16 @@ public final class JSBytecodeFunction extends JSFunction {
     @Override
     public String getName() {
         return name;
+    }
+
+    /**
+     * Get the self-capture index for closure self-reference patching.
+     * Returns -1 if this function does not capture its own name.
+     * Following QuickJS var_refs pattern where a function's closure variable
+     * pointing to itself is patched after creation.
+     */
+    public int getSelfCaptureIndex() {
+        return selfCaptureIndex;
     }
 
     /**
