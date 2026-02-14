@@ -2011,13 +2011,20 @@ public final class BytecodeCompiler {
      */
     private void compileImplicitBlockStatement(Statement stmt) {
         if (stmt instanceof FunctionDeclaration funcDecl && funcDecl.id() != null) {
-            enterScope();
-            // Pre-declare the function name in this block scope so it shadows
-            // any outer binding (let/const/var) with the same name.
-            currentScope().declareLocal(funcDecl.id().name());
-            compileFunctionDeclaration(funcDecl);
-            emitCurrentScopeUsingDisposal();
-            exitScope();
+            if (annexBFunctionNames.contains(funcDecl.id().name())) {
+                // Annex B case: don't create implicit block scope.
+                // The function body will reference f via GET_VAR (global),
+                // avoiding the stale closure snapshot problem with FCLOSURE.
+                compileFunctionDeclaration(funcDecl);
+            } else {
+                // Non-Annex B case (lexical conflict in enclosing scope):
+                // create implicit block scope to prevent overwriting let/const bindings.
+                enterScope();
+                currentScope().declareLocal(funcDecl.id().name());
+                compileFunctionDeclaration(funcDecl);
+                emitCurrentScopeUsingDisposal();
+                exitScope();
+            }
         } else {
             compileStatement(stmt);
         }
