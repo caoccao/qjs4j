@@ -97,6 +97,10 @@ public final class Lexer {
         this.lastTokenType = null;
     }
 
+    private static boolean isLineTerminator(char c) {
+        return c == '\n' || c == '\r' || c == '\u2028' || c == '\u2029';
+    }
+
     private char advance() {
         char c = source.charAt(position);
         position++;
@@ -147,11 +151,11 @@ public final class Lexer {
         return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
     }
 
+    // Core scanning logic
+
     private boolean isAtEnd() {
         return position >= source.length();
     }
-
-    // Core scanning logic
 
     private boolean isDigitForRadix(char c, int radix) {
         return Character.digit(c, radix) >= 0;
@@ -204,6 +208,8 @@ public final class Lexer {
         return scanToken();
     }
 
+    // Character utilities
+
     private char parseLegacyOctalEscape(char firstDigit) {
         int value = firstDigit - '0';
         int maxDigits = firstDigit <= '3' ? 3 : 2;
@@ -214,8 +220,6 @@ public final class Lexer {
         }
         return (char) value;
     }
-
-    // Character utilities
 
     private int parseUnicodeEscapeSequence() {
         if (isAtEnd() || peek() != 'u') {
@@ -1194,11 +1198,11 @@ public final class Lexer {
             char c = peek();
 
             // Line terminators (must be checked BEFORE isWhiteSpace)
-            if (c == '\n' || c == '\r') {
+            if (isLineTerminator(c)) {
                 if (c == '\r' && position + 1 < source.length() && source.charAt(position + 1) == '\n') {
                     advance(); // consume \r
                 }
-                advance(); // consume \n
+                advance(); // consume line terminator
                 line++;
                 column = 1;
                 seenLineTerminator = true;
@@ -1219,7 +1223,7 @@ public final class Lexer {
                 if (next == '/') {
                     advance(); // consume first /
                     advance(); // consume second /
-                    while (!isAtEnd() && peek() != '\n' && peek() != '\r') {
+                    while (!isAtEnd() && !isLineTerminator(peek())) {
                         advance();
                     }
                     continue;
@@ -1237,7 +1241,7 @@ public final class Lexer {
                             closed = true;
                             break;
                         }
-                        if (peek() == '\n') {
+                        if (isLineTerminator(peek())) {
                             line++;
                             column = 0;
                             seenLineTerminator = true;
@@ -1260,7 +1264,7 @@ public final class Lexer {
                 advance(); // !
                 advance(); // -
                 advance(); // -
-                while (!isAtEnd() && peek() != '\n' && peek() != '\r') {
+                while (!isAtEnd() && !isLineTerminator(peek())) {
                     advance();
                 }
                 continue;
@@ -1275,7 +1279,7 @@ public final class Lexer {
                 advance(); // -
                 advance(); // -
                 advance(); // >
-                while (!isAtEnd() && peek() != '\n' && peek() != '\r') {
+                while (!isAtEnd() && !isLineTerminator(peek())) {
                     advance();
                 }
                 continue;
