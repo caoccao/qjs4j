@@ -2916,7 +2916,10 @@ public final class BytecodeCompiler {
         List<Integer> caseJumps = new ArrayList<>();
         List<Integer> caseBodyStarts = new ArrayList<>();
 
-        // Emit comparisons for each case
+        // Emit comparisons for each case.
+        // Following QuickJS pattern: when a case matches, drop the discriminant
+        // before jumping to the case body. This ensures the stack depth is
+        // consistent regardless of which case (or no case) matches.
         for (SwitchStatement.SwitchCase switchCase : switchStmt.cases()) {
             if (switchCase.test() != null) {
                 // Duplicate discriminant for comparison
@@ -2924,12 +2927,18 @@ public final class BytecodeCompiler {
                 compileExpression(switchCase.test());
                 emitter.emitOpcode(Opcode.STRICT_EQ);
 
-                int jumpToCase = emitter.emitJump(Opcode.IF_TRUE);
-                caseJumps.add(jumpToCase);
+                // If no match, skip to next test
+                int jumpToNextTest = emitter.emitJump(Opcode.IF_FALSE);
+                // Match: drop discriminant and jump to case body
+                emitter.emitOpcode(Opcode.DROP);
+                int jumpToBody = emitter.emitJump(Opcode.GOTO);
+                caseJumps.add(jumpToBody);
+                // Patch IF_FALSE to continue with next test
+                emitter.patchJump(jumpToNextTest, emitter.currentOffset());
             }
         }
 
-        // Drop discriminant
+        // No case matched: drop discriminant
         emitter.emitOpcode(Opcode.DROP);
 
         // Jump to default or end
