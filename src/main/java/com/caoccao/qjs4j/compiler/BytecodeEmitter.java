@@ -50,11 +50,18 @@ public final class BytecodeEmitter {
      * Build the final Bytecode object.
      */
     public Bytecode build(int localCount) {
+        return build(localCount, null);
+    }
+
+    /**
+     * Build the final Bytecode object with local variable name information.
+     */
+    public Bytecode build(int localCount, String[] localVarNames) {
         byte[] instructions = code.toByteArray();
         JSValue[] constants = constantPool.toArray(new JSValue[0]);
         String[] atoms = atomPool.toArray(new String[0]);
 
-        return new Bytecode(instructions, constants, atoms, localCount);
+        return new Bytecode(instructions, constants, atoms, localCount, localVarNames);
     }
 
     /**

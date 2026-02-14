@@ -77,6 +77,22 @@ public final class BytecodeCompiler {
         this.strictMode = inheritedStrictMode;
     }
 
+    private static String[] extractLocalVarNames(Scope scope) {
+        int count = scope.getLocalCount();
+        if (count == 0) {
+            return null;
+        }
+        String[] names = new String[count];
+        for (var entry : scope.locals.entrySet()) {
+            String name = entry.getKey();
+            int index = entry.getValue();
+            if (index >= 0 && index < count && !name.startsWith("$")) {
+                names[index] = name;
+            }
+        }
+        return names;
+    }
+
     private void collectLexicalBindings(List<Statement> body, Set<String> lexicals) {
         for (Statement s : body) {
             if (s instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
@@ -105,6 +121,8 @@ public final class BytecodeCompiler {
         }
     }
 
+    // ==================== Program Compilation ====================
+
     /**
      * Compile an AST node into bytecode.
      */
@@ -116,8 +134,6 @@ public final class BytecodeCompiler {
         }
         return emitter.build(maxLocalCount);
     }
-
-    // ==================== Program Compilation ====================
 
     private void compileArrayExpression(ArrayExpression arrayExpr) {
         emitter.emitOpcode(Opcode.ARRAY_NEW);
@@ -211,6 +227,8 @@ public final class BytecodeCompiler {
         }
     }
 
+    // ==================== Statement Compilation ====================
+
     private void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
@@ -282,10 +300,11 @@ public final class BytecodeCompiler {
         }
 
         int localCount = functionCompiler.currentScope().getLocalCount();
+        String[] localVarNames = extractLocalVarNames(functionCompiler.currentScope());
         functionCompiler.exitScope();
 
         // Build the function bytecode
-        Bytecode functionBytecode = functionCompiler.emitter.build(localCount);
+        Bytecode functionBytecode = functionCompiler.emitter.build(localCount, localVarNames);
 
         // Arrow functions are always anonymous
         String functionName = "";
@@ -316,8 +335,6 @@ public final class BytecodeCompiler {
         // Emit FCLOSURE opcode with function in constant pool
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
     }
-
-    // ==================== Statement Compilation ====================
 
     private void compileAssignmentExpression(AssignmentExpression assignExpr) {
         Expression left = assignExpr.left();
@@ -1715,10 +1732,11 @@ public final class BytecodeCompiler {
         }
 
         int localCount = functionCompiler.currentScope().getLocalCount();
+        String[] localVarNames = extractLocalVarNames(functionCompiler.currentScope());
         functionCompiler.exitScope();
 
         // Build the function bytecode
-        Bytecode functionBytecode = functionCompiler.emitter.build(localCount);
+        Bytecode functionBytecode = functionCompiler.emitter.build(localCount, localVarNames);
 
         // Get function name
         String functionName = funcDecl.id().name();
@@ -1861,10 +1879,11 @@ public final class BytecodeCompiler {
         }
 
         int localCount = functionCompiler.currentScope().getLocalCount();
+        String[] localVarNames = extractLocalVarNames(functionCompiler.currentScope());
         functionCompiler.exitScope();
 
         // Build the function bytecode
-        Bytecode functionBytecode = functionCompiler.emitter.build(localCount);
+        Bytecode functionBytecode = functionCompiler.emitter.build(localCount, localVarNames);
 
         // Get function name (empty string for anonymous)
         String functionName = funcExpr.id() != null ? funcExpr.id().name() : "";
@@ -2687,6 +2706,8 @@ public final class BytecodeCompiler {
         compileStatement(stmt, false);
     }
 
+    // ==================== Expression Compilation ====================
+
     private void compileStatement(Statement stmt, boolean isLastInProgram) {
         if (stmt instanceof ExpressionStatement exprStmt) {
             compileExpression(exprStmt.expression());
@@ -2726,8 +2747,6 @@ public final class BytecodeCompiler {
             compileClassDeclaration(classDecl);
         }
     }
-
-    // ==================== Expression Compilation ====================
 
     /**
      * Compile a static block as a function.

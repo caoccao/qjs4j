@@ -26,12 +26,18 @@ public final class Bytecode {
     private final JSValue[] constantPool;
     private final byte[] instructions;
     private final int localCount;
+    private final String[] localVarNames;
 
     public Bytecode(byte[] instructions, JSValue[] constantPool, String[] atomPool, int localCount) {
+        this(instructions, constantPool, atomPool, localCount, null);
+    }
+
+    public Bytecode(byte[] instructions, JSValue[] constantPool, String[] atomPool, int localCount, String[] localVarNames) {
         this.instructions = instructions;
         this.constantPool = constantPool;
         this.atomPool = atomPool;
         this.localCount = localCount;
+        this.localVarNames = localVarNames;
     }
 
     public String getAtom(int index) {
@@ -60,6 +66,10 @@ public final class Bytecode {
 
     public int getLocalCount() {
         return localCount;
+    }
+
+    public String[] getLocalVarNames() {
+        return localVarNames;
     }
 
     public int readI32(int offset) {

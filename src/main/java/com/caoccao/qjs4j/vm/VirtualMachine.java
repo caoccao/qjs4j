@@ -56,6 +56,46 @@ public final class VirtualMachine {
         this.yieldSkipCount = 0;
     }
 
+    private JSValue[] buildApplyArguments(JSValue argsArrayValue, boolean allowNullOrUndefined) {
+        if (allowNullOrUndefined && (argsArrayValue.isUndefined() || argsArrayValue.isNull())) {
+            return new JSValue[0];
+        }
+        if (!(argsArrayValue instanceof JSObject arrayLike)) {
+            context.throwTypeError("CreateListFromArrayLike called on non-object");
+            return null;
+        }
+
+        JSValue lengthValue = arrayLike.get(PropertyKey.fromString("length"), context);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
+        long length = JSTypeConversions.toLength(context, lengthValue);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (length > Integer.MAX_VALUE) {
+            context.throwRangeError("too many arguments in function call");
+            return null;
+        }
+
+        JSValue[] args = new JSValue[(int) length];
+        for (int i = 0; i < args.length; i++) {
+            JSValue argValue = arrayLike.get(PropertyKey.fromString(String.valueOf(i)), context);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (argValue instanceof JSUndefined) {
+                argValue = arrayLike.get(PropertyKey.fromIndex(i), context);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+            }
+            args[i] = argValue;
+        }
+        return args;
+    }
+
     /**
      * Clear the pending exception in the VM.
      * This is needed when an async function catches an exception.
@@ -2305,6 +2345,10 @@ public final class VirtualMachine {
         return new JSString(key.toPropertyString());
     }
 
+    public StackFrame getCurrentFrame() {
+        return currentFrame;
+    }
+
     private JSValue getLocalValue(int index) {
         JSValue[] locals = currentFrame.getLocals();
         if (index >= 0 && index < locals.length) {
@@ -2561,46 +2605,6 @@ public final class VirtualMachine {
         } else {
             throw new JSVirtualMachineException("Cannot construct non-function value");
         }
-    }
-
-    private JSValue[] buildApplyArguments(JSValue argsArrayValue, boolean allowNullOrUndefined) {
-        if (allowNullOrUndefined && (argsArrayValue.isUndefined() || argsArrayValue.isNull())) {
-            return new JSValue[0];
-        }
-        if (!(argsArrayValue instanceof JSObject arrayLike)) {
-            context.throwTypeError("CreateListFromArrayLike called on non-object");
-            return null;
-        }
-
-        JSValue lengthValue = arrayLike.get(PropertyKey.fromString("length"), context);
-        if (context.hasPendingException()) {
-            return null;
-        }
-
-        long length = JSTypeConversions.toLength(context, lengthValue);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (length > Integer.MAX_VALUE) {
-            context.throwRangeError("too many arguments in function call");
-            return null;
-        }
-
-        JSValue[] args = new JSValue[(int) length];
-        for (int i = 0; i < args.length; i++) {
-            JSValue argValue = arrayLike.get(PropertyKey.fromString(String.valueOf(i)), context);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (argValue instanceof JSUndefined) {
-                argValue = arrayLike.get(PropertyKey.fromIndex(i), context);
-                if (context.hasPendingException()) {
-                    return null;
-                }
-            }
-            args[i] = argValue;
-        }
-        return args;
     }
 
     private void handleDec() {

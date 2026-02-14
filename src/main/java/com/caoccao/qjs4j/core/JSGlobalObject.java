@@ -19,10 +19,9 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.builtins.*;
 import com.caoccao.qjs4j.exceptions.JSErrorType;
 import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.vm.StackFrame;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Stream;
 
 /**
@@ -297,13 +296,68 @@ public final class JSGlobalObject {
         if (context.isStrictMode()) {
             code = "'use strict';\n" + code;
         }
+
+        // Scope overlay: capture enclosing function's local variables onto the global
+        // object so that eval code's GET_VAR/PUT_VAR can access them.
+        StackFrame callerFrame = context.getVirtualMachine().getCurrentFrame();
+        String[] localVarNames = null;
+        Map<String, JSValue> savedGlobals = null;
+        Set<String> absentKeys = null;
+        JSObject global = context.getGlobalObject();
+
+        if (callerFrame != null
+                && callerFrame.getFunction() instanceof JSBytecodeFunction bcFunc
+                && bcFunc.getBytecode().getLocalVarNames() != null) {
+            localVarNames = bcFunc.getBytecode().getLocalVarNames();
+            savedGlobals = new HashMap<>();
+            absentKeys = new HashSet<>();
+            JSValue[] locals = callerFrame.getLocals();
+            for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
+                String name = localVarNames[i];
+                if (name == null) continue;
+                PropertyKey key = PropertyKey.fromString(name);
+                if (global.has(key)) {
+                    savedGlobals.put(name, global.get(key));
+                } else {
+                    absentKeys.add(name);
+                }
+                global.set(key, locals[i]);
+            }
+        }
+
         try {
-            return context.eval(code);
+            JSValue result = context.eval(code);
+
+            // Copy modified values back to caller's locals
+            if (localVarNames != null) {
+                JSValue[] locals = callerFrame.getLocals();
+                for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
+                    String name = localVarNames[i];
+                    if (name == null) continue;
+                    PropertyKey key = PropertyKey.fromString(name);
+                    if (global.has(key)) {
+                        locals[i] = global.get(key);
+                    }
+                }
+            }
+
+            return result;
         } catch (JSException e) {
             // Re-throw as pending exception so JavaScript try-catch can handle it
-            // Don't set pending exception here - instead, convert to a throw by setting pending and returning undefined
             context.setPendingException(e.getErrorValue());
             return JSUndefined.INSTANCE;
+        } finally {
+            // Restore global object state
+            if (savedGlobals != null) {
+                for (var entry : savedGlobals.entrySet()) {
+                    global.set(PropertyKey.fromString(entry.getKey()), entry.getValue());
+                }
+            }
+            if (absentKeys != null) {
+                for (String name : absentKeys) {
+                    global.delete(PropertyKey.fromString(name), context);
+                }
+            }
         }
     }
 
