@@ -1956,8 +1956,8 @@ public final class BytecodeCompiler {
         // Jump to else/end if condition is false
         int jumpToElse = emitter.emitJump(Opcode.IF_FALSE);
 
-        // Compile consequent
-        compileStatement(ifStmt.consequent());
+        // Compile consequent — wrap bare function declarations in implicit block scope
+        compileImplicitBlockStatement(ifStmt.consequent());
 
         if (ifStmt.alternate() != null) {
             // Jump over else block after consequent
@@ -1966,14 +1966,34 @@ public final class BytecodeCompiler {
             // Patch jump to else
             emitter.patchJump(jumpToElse, emitter.currentOffset());
 
-            // Compile alternate
-            compileStatement(ifStmt.alternate());
+            // Compile alternate — wrap bare function declarations in implicit block scope
+            compileImplicitBlockStatement(ifStmt.alternate());
 
             // Patch jump to end
             emitter.patchJump(jumpToEnd, emitter.currentOffset());
         } else {
             // Patch jump to end
             emitter.patchJump(jumpToElse, emitter.currentOffset());
+        }
+    }
+
+    /**
+     * Compile a statement that may be a bare function declaration in sloppy mode.
+     * Per ES2024 B.3.3, function declarations in if-statement positions are treated
+     * as if wrapped in a block. This ensures the function binding is block-scoped
+     * and does not overwrite outer let/const bindings when Annex B is skipped.
+     */
+    private void compileImplicitBlockStatement(Statement stmt) {
+        if (stmt instanceof FunctionDeclaration funcDecl && funcDecl.id() != null) {
+            enterScope();
+            // Pre-declare the function name in this block scope so it shadows
+            // any outer binding (let/const/var) with the same name.
+            currentScope().declareLocal(funcDecl.id().name());
+            compileFunctionDeclaration(funcDecl);
+            emitCurrentScopeUsingDisposal();
+            exitScope();
+        } else {
+            compileStatement(stmt);
         }
     }
 
@@ -3981,11 +4001,17 @@ public final class BytecodeCompiler {
         if (strictMode) {
             return; // Annex B does not apply in strict mode
         }
+        // Collect top-level lexical bindings (let/const) from the program body.
+        // Per B.3.3.3 step ii, if replacing the function declaration with "var F"
+        // would produce an early error (conflict with let/const), the extension is skipped.
+        Set<String> topLevelLexicals = new HashSet<>();
+        collectLexicalBindings(programBody, topLevelLexicals);
+
         Set<String> candidates = new HashSet<>();
         for (Statement stmt : programBody) {
             // Only recurse into compound statements; top-level FunctionDeclarations
             // are regular hoisting, not Annex B.
-            scanAnnexBStatement(stmt, new HashSet<>(), candidates);
+            scanAnnexBStatement(stmt, topLevelLexicals, candidates);
         }
         for (String name : candidates) {
             annexBFunctionNames.add(name);
