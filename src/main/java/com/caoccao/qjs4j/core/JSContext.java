@@ -607,6 +607,25 @@ public final class JSContext implements AutoCloseable {
                 // Register new declarations for future collision checks
                 globalLexDeclarations.addAll(newLexDecls);
                 globalVarDeclarations.addAll(newVarDecls);
+
+                // CreateGlobalVarDeclaration: define var bindings as non-configurable
+                // properties on the global object (per ES2024 9.1.1.4.17 / QuickJS
+                // js_closure_define_global_var with is_direct_or_indirect_eval=FALSE).
+                // This must happen BEFORE execution so bindings exist at script start.
+                for (String name : newVarDecls) {
+                    PropertyKey key = PropertyKey.fromString(name);
+                    PropertyDescriptor existing = globalObject.getOwnPropertyDescriptor(key);
+                    if (existing == null) {
+                        // Property doesn't exist: create {writable, enumerable, NOT configurable}
+                        globalObject.defineProperty(key,
+                                PropertyDescriptor.dataDescriptor(
+                                        JSUndefined.INSTANCE,
+                                        true,   // writable
+                                        true,   // enumerable
+                                        false   // configurable
+                                ));
+                    }
+                }
             } else {
                 // JS eval() — no GlobalDeclarationInstantiation check;
                 // eval-created var bindings are configurable (not restricted)

@@ -23,6 +23,7 @@ import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.vm.Bytecode;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -31,6 +32,19 @@ import java.util.Set;
  * Pipeline: JavaScript Source → Lexer → Tokens → Parser → AST → BytecodeCompiler → Bytecode
  */
 public final class Compiler {
+
+    /**
+     * Collect lexical (let/const) declaration names from a list of statements.
+     */
+    private static void collectBlockLexicals(List<Statement> stmts, Set<String> lexicals) {
+        for (Statement s : stmts) {
+            if (s instanceof VariableDeclaration varDecl && varDecl.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
+                    collectPatternNames(d.id(), lexicals);
+                }
+            }
+        }
+    }
 
     /**
      * Collect global declarations from a parsed program following ES2024 GlobalDeclarationInstantiation.
@@ -240,9 +254,6 @@ public final class Compiler {
         }
     }
 
-    // Note: Tokenization is internal to the Lexer/Parser pipeline
-    // and not exposed as a public API in this implementation.
-
     /**
      * Parse JavaScript source code into an AST (with default filename).
      *
@@ -258,17 +269,25 @@ public final class Compiler {
      * Scan for Annex B function declaration candidates in compound statements.
      * These are function declarations inside blocks, if-statements, switch cases, etc.
      * that would create var bindings via Annex B.3.3 hoisting.
+     * <p>
+     * Per B.3.3.2: hoisting is skipped if replacing the FunctionDeclaration with a
+     * VariableStatement would produce early errors — i.e. if there's a let/const
+     * with the same name in an enclosing block scope.
      */
     private static void scanAnnexBForCollisionCheck(
             Statement stmt, Set<String> lexicalBindings, Set<String> result) {
         if (stmt instanceof BlockStatement block) {
+            // Collect block-level lexical declarations
+            Set<String> blockLexicals = new HashSet<>(lexicalBindings);
+            collectBlockLexicals(block.body(), blockLexicals);
+
             for (Statement s : block.body()) {
                 if (s instanceof FunctionDeclaration fd && fd.id() != null) {
-                    if (!lexicalBindings.contains(fd.id().name())) {
+                    if (!blockLexicals.contains(fd.id().name())) {
                         result.add(fd.id().name());
                     }
                 }
-                scanAnnexBForCollisionCheck(s, lexicalBindings, result);
+                scanAnnexBForCollisionCheck(s, blockLexicals, result);
             }
         } else if (stmt instanceof IfStatement ifStmt) {
             if (ifStmt.consequent() instanceof FunctionDeclaration fd && fd.id() != null) {
@@ -288,14 +307,20 @@ public final class Compiler {
                 }
             }
         } else if (stmt instanceof SwitchStatement switchStmt) {
+            // Switch cases share a single scope for lexical declarations
+            Set<String> switchLexicals = new HashSet<>(lexicalBindings);
+            for (SwitchStatement.SwitchCase sc : switchStmt.cases()) {
+                collectBlockLexicals(sc.consequent(), switchLexicals);
+            }
+
             for (SwitchStatement.SwitchCase sc : switchStmt.cases()) {
                 for (Statement s : sc.consequent()) {
                     if (s instanceof FunctionDeclaration fd && fd.id() != null) {
-                        if (!lexicalBindings.contains(fd.id().name())) {
+                        if (!switchLexicals.contains(fd.id().name())) {
                             result.add(fd.id().name());
                         }
                     }
-                    scanAnnexBForCollisionCheck(s, lexicalBindings, result);
+                    scanAnnexBForCollisionCheck(s, switchLexicals, result);
                 }
             }
         }
