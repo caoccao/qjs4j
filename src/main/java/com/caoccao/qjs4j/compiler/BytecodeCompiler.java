@@ -4051,14 +4051,35 @@ public final class BytecodeCompiler {
             }
         } else if (stmt instanceof ForStatement forStmt) {
             if (forStmt.body() != null) {
-                scanAnnexBStatement(forStmt.body(), lexicalBindings, result);
+                // Collect lexical bindings from the for-loop's init clause (e.g. "let f" in "for (let f; ; )")
+                // Per B.3.3.3 step ii, if replacing the function declaration with "var F" would produce
+                // an early error (conflict with let/const), the Annex B extension is skipped.
+                Set<String> forLexicals = new HashSet<>(lexicalBindings);
+                if (forStmt.init() instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                        collectPatternBindingNames(d.id(), forLexicals);
+                    }
+                }
+                scanAnnexBStatement(forStmt.body(), forLexicals, result);
             }
         } else if (stmt instanceof WhileStatement whileStmt) {
             scanAnnexBStatement(whileStmt.body(), lexicalBindings, result);
         } else if (stmt instanceof ForInStatement forInStmt) {
-            scanAnnexBStatement(forInStmt.body(), lexicalBindings, result);
+            Set<String> forInLexicals = new HashSet<>(lexicalBindings);
+            if (forInStmt.left() != null && forInStmt.left().kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : forInStmt.left().declarations()) {
+                    collectPatternBindingNames(d.id(), forInLexicals);
+                }
+            }
+            scanAnnexBStatement(forInStmt.body(), forInLexicals, result);
         } else if (stmt instanceof ForOfStatement forOfStmt) {
-            scanAnnexBStatement(forOfStmt.body(), lexicalBindings, result);
+            Set<String> forOfLexicals = new HashSet<>(lexicalBindings);
+            if (forOfStmt.left() != null && forOfStmt.left().kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : forOfStmt.left().declarations()) {
+                    collectPatternBindingNames(d.id(), forOfLexicals);
+                }
+            }
+            scanAnnexBStatement(forOfStmt.body(), forOfLexicals, result);
         }
     }
 
