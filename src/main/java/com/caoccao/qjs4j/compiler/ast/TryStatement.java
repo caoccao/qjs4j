@@ -31,7 +31,7 @@ public record TryStatement(
     }
 
     public record CatchClause(
-            Identifier param,
+            Pattern param,
             BlockStatement body
     ) {
     }

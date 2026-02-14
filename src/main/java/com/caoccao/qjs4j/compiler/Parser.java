@@ -2270,10 +2270,10 @@ public final class Parser {
         TryStatement.CatchClause handler = null;
         if (match(TokenType.CATCH)) {
             advance();
-            Identifier param = null;
+            Pattern param = null;
             if (match(TokenType.LPAREN)) {
                 advance();
-                param = parseIdentifier();
+                param = parsePattern();
                 expect(TokenType.RPAREN);
             }
             BlockStatement catchBody = parseBlockStatement();

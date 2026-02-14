@@ -3163,9 +3163,17 @@ public final class BytecodeCompiler {
                 boolean savedGlobalScope = inGlobalScope;
                 inGlobalScope = false;
 
-                String paramName = handler.param().name();
-                int localIndex = currentScope().declareLocal(paramName);
-                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                // Declare all pattern variables and assign the exception value
+                Pattern catchParam = handler.param();
+                if (catchParam instanceof Identifier id) {
+                    // Simple catch parameter: catch (e)
+                    int localIndex = currentScope().declareLocal(id.name());
+                    emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                } else {
+                    // Destructuring catch parameter: catch ({ f }) or catch ([a, b])
+                    declarePatternVariables(catchParam);
+                    compilePatternAssignment(catchParam);
+                }
 
                 // Compile catch body in the SAME scope as the parameter
                 List<Statement> body = handler.body().body();
@@ -4093,8 +4101,16 @@ public final class BytecodeCompiler {
         } else if (stmt instanceof TryStatement tryStmt) {
             scanAnnexBBlock(tryStmt.block().body(), lexicalBindings, result);
             if (tryStmt.handler() != null) {
-                // Per B.3.5, catch parameter does not block Annex B var hoisting
-                scanAnnexBBlock(tryStmt.handler().body().body(), lexicalBindings, result);
+                // Per B.3.5, simple catch parameter (catch(e)) does NOT block Annex B var hoisting.
+                // But destructuring catch parameter (catch({ f })) creates let-like bindings
+                // that DO block hoisting (following QuickJS: destructuring uses TOK_LET).
+                Set<String> catchLexicals = new HashSet<>(lexicalBindings);
+                Pattern catchParam = tryStmt.handler().param();
+                if (catchParam != null && !(catchParam instanceof Identifier)) {
+                    // Destructuring pattern: collect binding names as lexical blockers
+                    collectPatternBindingNames(catchParam, catchLexicals);
+                }
+                scanAnnexBBlock(tryStmt.handler().body().body(), catchLexicals, result);
             }
             if (tryStmt.finalizer() != null) {
                 scanAnnexBBlock(tryStmt.finalizer().body(), lexicalBindings, result);
