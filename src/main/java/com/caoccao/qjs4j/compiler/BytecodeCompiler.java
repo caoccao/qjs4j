@@ -1356,8 +1356,6 @@ public final class BytecodeCompiler {
     }
 
     private void compileForInStatement(ForInStatement forInStmt) {
-        enterScope();
-
         // Get the loop variable name
         VariableDeclaration varDecl = forInStmt.left();
         if (varDecl.declarations().size() != 1) {
@@ -1368,8 +1366,19 @@ public final class BytecodeCompiler {
             throw new CompilerException("for-in loop variable must be an identifier");
         }
         String varName = id.name();
-        currentScope().declareLocal(varName);
-        Integer varIndex = currentScope().getLocal(varName);
+
+        // `var` in for-in is function/global scoped, not the loop lexical scope.
+        if ("var".equals(varDecl.kind())) {
+            currentScope().declareLocal(varName);
+        }
+
+        enterScope();
+
+        // For let/const, declare in the loop scope; for var, find it in the parent scope
+        if (!"var".equals(varDecl.kind())) {
+            currentScope().declareLocal(varName);
+        }
+        Integer varIndex = findLocalInScopes(varName);
 
         // Compile the object expression
         compileExpression(forInStmt.right());
@@ -1440,6 +1449,22 @@ public final class BytecodeCompiler {
     }
 
     private void compileForOfStatement(ForOfStatement forOfStmt) {
+        // Declare the loop variable(s) - supports both Identifier and destructuring patterns
+        VariableDeclaration varDecl = forOfStmt.left();
+        if (varDecl.declarations().size() != 1) {
+            throw new CompilerException("for-of loop must have exactly one variable");
+        }
+        Pattern pattern = varDecl.declarations().get(0).id();
+        boolean isVar = "var".equals(varDecl.kind());
+
+        // `var` in for-of is function/global scoped, not the loop lexical scope.
+        // Pre-declare var bindings in the parent scope so they survive after the loop exits.
+        // Only do this when inside a function (not global scope), since at global scope
+        // var bindings are stored as global object properties via PUT_VAR.
+        if (isVar && !inGlobalScope) {
+            declarePatternVariables(pattern);
+        }
+
         enterScope();
 
         // Compile the iterable expression
@@ -1453,15 +1478,12 @@ public final class BytecodeCompiler {
             emitter.emitOpcode(Opcode.FOR_OF_START);
         }
 
-        // Declare the loop variable(s) - supports both Identifier and destructuring patterns
-        VariableDeclaration varDecl = forOfStmt.left();
-        if (varDecl.declarations().size() != 1) {
-            throw new CompilerException("for-of loop must have exactly one variable");
+        // For let/const, declare in the loop scope.
+        // For var at global scope, declare in the loop scope (will use PUT_VAR for storage).
+        // For var inside a function, already declared in parent scope above.
+        if (!isVar || inGlobalScope) {
+            declarePatternVariables(pattern);
         }
-        Pattern pattern = varDecl.declarations().get(0).id();
-
-        // Declare all variables in the pattern (handles Identifier, ArrayPattern, ObjectPattern)
-        declarePatternVariables(pattern);
 
         // Save and temporarily disable inGlobalScope since for-of loop variables are always local
         boolean savedInGlobalScope = inGlobalScope;
@@ -1506,8 +1528,8 @@ public final class BytecodeCompiler {
             emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
             // Stack: iter, next, catch_offset, value
 
-            // Assign value to pattern (handles Identifier, ArrayPattern, ObjectPattern)
-            compilePatternAssignment(pattern);
+            // Assign value to pattern
+            compileForOfValueAssignment(pattern, isVar);
             // Stack: iter, next, catch_offset
         } else {
             // Sync for-of: FOR_OF_NEXT pushes value and done separately
@@ -1520,8 +1542,8 @@ public final class BytecodeCompiler {
             jumpToEnd = emitter.emitJump(Opcode.IF_TRUE);
             // Stack: iter, next, catch_offset, value
 
-            // Assign value to pattern (handles Identifier, ArrayPattern, ObjectPattern)
-            compilePatternAssignment(pattern);
+            // Assign value to pattern
+            compileForOfValueAssignment(pattern, isVar);
             // Stack: iter, next, catch_offset
         }
 
@@ -1569,11 +1591,40 @@ public final class BytecodeCompiler {
         exitScope();
     }
 
+    /**
+     * Assign the iteration value in a for-of loop.
+     * For var declarations, use findLocalInScopes to store to the parent scope's local
+     * (since var is function-scoped, not block-scoped). For let/const, use the normal
+     * compilePatternAssignment which creates locals in the current (loop) scope.
+     */
+    private void compileForOfValueAssignment(Pattern pattern, boolean isVar) {
+        if (isVar && pattern instanceof Identifier id) {
+            Integer localIndex = findLocalInScopes(id.name());
+            if (localIndex != null) {
+                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+            } else if (inGlobalScope) {
+                emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
+            } else {
+                int idx = currentScope().declareLocal(id.name());
+                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, idx);
+            }
+        } else {
+            compilePatternAssignment(pattern);
+        }
+    }
+
     private void compileForStatement(ForStatement forStmt) {
+        boolean initCompiled = false;
+        if (forStmt.init() instanceof VariableDeclaration varDecl && "var".equals(varDecl.kind())) {
+            // `var` in for-init is function/global scoped, not the loop lexical scope.
+            compileVariableDeclaration(varDecl);
+            initCompiled = true;
+        }
+
         enterScope();
 
         // Compile init
-        if (forStmt.init() != null) {
+        if (!initCompiled && forStmt.init() != null) {
             if (forStmt.init() instanceof VariableDeclaration varDecl) {
                 boolean savedInGlobalScope = inGlobalScope;
                 if (inGlobalScope && !"var".equals(varDecl.kind())) {
@@ -1761,7 +1812,7 @@ public final class BytecodeCompiler {
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
 
         // Store the function in a variable with its name
-        Integer localIndex = currentScope().getLocal(functionName);
+        Integer localIndex = findLocalInScopes(functionName);
         if (localIndex != null) {
             emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
         } else {
@@ -3224,6 +3275,32 @@ public final class BytecodeCompiler {
             } else {
                 throw new CompilerException("Invalid operand for increment/decrement operator");
             }
+            return;
+        }
+
+        if (unaryExpr.operator() == UnaryExpression.UnaryOperator.TYPEOF
+                && unaryExpr.operand() instanceof Identifier id) {
+            String name = id.name();
+            if ("this".equals(name)) {
+                emitter.emitOpcode(Opcode.PUSH_THIS);
+            } else if (JSArguments.NAME.equals(name) && !inGlobalScope) {
+                emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                emitter.emitU8(0);
+            } else {
+                Integer localIndex = findLocalInScopes(name);
+                if (localIndex != null) {
+                    emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                } else {
+                    Integer capturedIndex = resolveCapturedBindingIndex(name);
+                    if (capturedIndex != null) {
+                        emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
+                    } else {
+                        emitter.emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
+                        emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
+                    }
+                }
+            }
+            emitter.emitOpcode(Opcode.TYPEOF);
             return;
         }
 

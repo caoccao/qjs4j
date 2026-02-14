@@ -183,6 +183,24 @@ public class JSGlobalObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testIdentifierResolutionWithReferenceErrorAndTypeof() {
+        assertThatThrownBy(() -> context.eval("missingIdentifier;"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("ReferenceError");
+        assertStringWithJavet("typeof missingIdentifier");
+        assertBooleanWithJavet("""
+                (() => {
+                  globalThis.__tmpMissing = undefined;
+                  try {
+                    return __tmpMissing === undefined;
+                  } finally {
+                    delete globalThis.__tmpMissing;
+                  }
+                })();
+                """);
+    }
+
+    @Test
     public void testParseFloatEdgeCasesWithJavet() {
         assertBooleanWithJavet(
                 "Object.is(parseFloat('1e'), 1)",
@@ -260,5 +278,45 @@ public class JSGlobalObjectTest extends BaseJavetTest {
                 "(() => { try { encodeURI('\\uD800'); return 'no error'; } catch (e) { return e.name; } })()",
                 "(() => { try { encodeURI('\\uDC00'); return 'no error'; } catch (e) { return e.name; } })()",
                 "(() => { try { encodeURI('\\uD800A'); return 'no error'; } catch (e) { return e.name; } })()");
+    }
+
+    @Test
+    public void testVarBindingsRemainFunctionScopedAcrossLoopScopes() {
+        assertBooleanWithJavet("""
+                (() => {
+                  function testFor() {
+                    for (var a = 0; a < 1; a++) {
+                    }
+                    for (a = 1; a < 2; a++) {
+                    }
+                    return a === 2;
+                  }
+                  function testForIn() {
+                    let last = "";
+                    for (var k in { x: 1 }) {
+                      last = k;
+                    }
+                    return k === last && k === "x";
+                  }
+                  function testForOf() {
+                    for (var v of [42]) {
+                    }
+                    return v === 42;
+                  }
+                  function testGeneratorVarReuse() {
+                    function* gen() {
+                      for (var alpha = 0x41; alpha <= 0x41; alpha++) {
+                        yield alpha;
+                      }
+                      for (alpha = 0x42; alpha <= 0x42; alpha++) {
+                        yield alpha;
+                      }
+                    }
+                    const values = Array.from(gen());
+                    return values.length === 2 && values[0] === 0x41 && values[1] === 0x42;
+                  }
+                  return testFor() && testForIn() && testForOf() && testGeneratorVarReuse();
+                })();
+                """);
     }
 }

@@ -932,7 +932,12 @@ public final class VirtualMachine {
                     case GET_VAR -> {
                         int getVarAtom = bytecode.readU32(pc + 1);
                         String getVarName = bytecode.getAtoms()[getVarAtom];
-                        JSValue varValue = context.getGlobalObject().get(PropertyKey.fromString(getVarName));
+                        PropertyKey key = PropertyKey.fromString(getVarName);
+                        JSObject globalObject = context.getGlobalObject();
+                        if (!globalObject.has(key)) {
+                            throw referenceErrorNotDefined(key);
+                        }
+                        JSValue varValue = globalObject.get(key);
                         // Start tracking property access from variable name (unless locked)
                         if (!propertyAccessLock) {
                             resetPropertyAccessTracking();
