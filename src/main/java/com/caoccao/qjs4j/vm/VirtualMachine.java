@@ -2696,39 +2696,49 @@ public final class VirtualMachine {
             // Try to auto-box the primitive
             iterableObj = toObject(iterable);
             if (iterableObj == null) {
-                throw new JSVirtualMachineException("Object is not async iterable");
+                pendingException = context.throwTypeError("object is not async iterable");
+                return;
             }
         }
 
         // First, try Symbol.asyncIterator
         JSValue asyncIteratorMethod = iterableObj.get(PropertyKey.fromSymbol(JSSymbol.ASYNC_ITERATOR));
         JSValue iteratorMethod = null;
-        boolean isAsync = true;
 
         if (asyncIteratorMethod instanceof JSFunction) {
             iteratorMethod = asyncIteratorMethod;
+        } else if (asyncIteratorMethod != null && !asyncIteratorMethod.isUndefined() && !asyncIteratorMethod.isNull()) {
+            // Non-callable, non-nullish value: TypeError
+            pendingException = context.throwTypeError("object is not async iterable");
+            return;
         } else {
             // Fall back to Symbol.iterator (sync iterator that will be auto-wrapped)
             iteratorMethod = iterableObj.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR));
-            isAsync = false;
 
             if (!(iteratorMethod instanceof JSFunction)) {
-                throw new JSVirtualMachineException("Object is not async iterable");
+                pendingException = context.throwTypeError("object is not async iterable");
+                return;
             }
         }
 
         // Call the iterator method to get an iterator
         JSValue iterator = ((JSFunction) iteratorMethod).call(context, iterable, new JSValue[0]);
+        if (context.hasPendingException()) {
+            pendingException = context.getPendingException();
+            return;
+        }
 
         if (!(iterator instanceof JSObject iteratorObj)) {
-            throw new JSVirtualMachineException("Iterator method must return an object");
+            pendingException = context.throwTypeError("iterator must return an object");
+            return;
         }
 
         // Get the next() method from the iterator
         JSValue nextMethod = iteratorObj.get(PropertyKey.fromString("next"));
 
         if (!(nextMethod instanceof JSFunction)) {
-            throw new JSVirtualMachineException("Iterator must have a next method");
+            pendingException = context.throwTypeError("iterator must have a next method");
+            return;
         }
 
         // Push iterator, next method, and catch offset (0) onto the stack

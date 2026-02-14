@@ -1661,7 +1661,36 @@ public final class Parser {
                 advance();
             }
 
+            // Check for getter/setter: get name() {} or set name(v) {}
+            // Similar to parseClassElement logic
+            if (!isAsync && !isGenerator && match(TokenType.IDENTIFIER)) {
+                String name = currentToken.value();
+                if (("get".equals(name) || "set".equals(name)) &&
+                        nextToken.type() != TokenType.COLON &&
+                        nextToken.type() != TokenType.COMMA &&
+                        nextToken.type() != TokenType.LPAREN &&
+                        nextToken.type() != TokenType.RBRACE) {
+                    String kind = name;
+                    advance(); // consume 'get' or 'set'
+
+                    // Parse property name after get/set (may be computed)
+                    boolean computed = match(TokenType.LBRACKET);
+                    Expression key = parsePropertyName();
+
+                    FunctionExpression value = parseMethod(kind);
+                    properties.add(new ObjectExpression.Property(key, value, kind, computed, false));
+
+                    if (match(TokenType.COMMA)) {
+                        advance();
+                    } else {
+                        break;
+                    }
+                    continue;
+                }
+            }
+
             // Parse property name (can be identifier, string, number, or computed [expr])
+            boolean computed = match(TokenType.LBRACKET);
             Expression key = parsePropertyName();
 
             // Determine if this is a method or regular property
@@ -1689,12 +1718,12 @@ public final class Parser {
                 } finally {
                     exitFunctionContext(isAsync);
                 }
-                properties.add(new ObjectExpression.Property(key, value, "init", false, false));
+                properties.add(new ObjectExpression.Property(key, value, "init", computed, false));
             } else {
                 // Regular property: key: value
                 expect(TokenType.COLON);
                 Expression value = parseAssignmentExpression();
-                properties.add(new ObjectExpression.Property(key, value, "init", false, false));
+                properties.add(new ObjectExpression.Property(key, value, "init", computed, false));
             }
 
             if (match(TokenType.COMMA)) {

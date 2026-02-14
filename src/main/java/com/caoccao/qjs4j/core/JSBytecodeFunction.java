@@ -235,6 +235,7 @@ public final class JSBytecodeFunction extends JSFunction {
         // If this is an async function, wrap execution in a promise
         if (isAsync) {
             JSPromise promise = new JSPromise();
+            context.transferPrototype(promise, JSPromise.NAME);
             try {
                 // Execute bytecode in the VM
                 JSValue result = context.getVirtualMachine().execute(this, thisArg, args);

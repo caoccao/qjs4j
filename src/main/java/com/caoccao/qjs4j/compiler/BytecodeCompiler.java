@@ -2394,18 +2394,42 @@ public final class BytecodeCompiler {
         emitter.emitOpcode(Opcode.OBJECT_NEW);
 
         for (ObjectExpression.Property prop : objExpr.properties()) {
-            // Push key
-            if (prop.key() instanceof Identifier id) {
-                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+            String kind = prop.kind();
+
+            if ("get".equals(kind) || "set".equals(kind)) {
+                // Getter/setter property: use DEFINE_METHOD_COMPUTED
+                // Stack: obj -> obj key method -> obj
+                // Push key
+                if (prop.computed()) {
+                    compileExpression(prop.key());
+                } else if (prop.key() instanceof Identifier id) {
+                    emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+                } else {
+                    compileExpression(prop.key());
+                }
+
+                // Compile the getter/setter function
+                compileFunctionExpression((FunctionExpression) prop.value());
+
+                // DEFINE_METHOD_COMPUTED with flags: kind (1=get, 2=set) | enumerable (4)
+                int methodKind = "get".equals(kind) ? 1 : 2;
+                int flags = methodKind | 4; // enumerable = true for object literal properties
+                emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, flags);
             } else {
-                compileExpression(prop.key());
+                // Regular property: key: value
+                // Push key
+                if (prop.key() instanceof Identifier id && !prop.computed()) {
+                    emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+                } else {
+                    compileExpression(prop.key());
+                }
+
+                // Push value
+                compileExpression(prop.value());
+
+                // Define property
+                emitter.emitOpcode(Opcode.DEFINE_PROP);
             }
-
-            // Push value
-            compileExpression(prop.value());
-
-            // Define property
-            emitter.emitOpcode(Opcode.DEFINE_PROP);
         }
     }
 
