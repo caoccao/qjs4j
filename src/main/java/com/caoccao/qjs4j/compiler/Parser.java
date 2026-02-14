@@ -2282,7 +2282,7 @@ public final class Parser {
 
     private Statement parseUsingDeclaration(boolean isAwaitUsing) {
         SourceLocation location = getLocation();
-        String kind;
+        VariableKind kind;
         if (isAwaitUsing) {
             if (!isAwaitExpressionAllowed()) {
                 throw new JSSyntaxErrorException("Unexpected 'await' keyword");
@@ -2292,25 +2292,25 @@ public final class Parser {
                 throw new RuntimeException("Expected using declaration after await");
             }
             advance();
-            kind = "await using";
+            kind = VariableKind.AWAIT_USING;
         } else {
             if (!isUsingIdentifierToken(currentToken)) {
                 throw new RuntimeException("Expected using declaration");
             }
             advance();
-            kind = "using";
+            kind = VariableKind.USING;
         }
         return parseVariableDeclarationBody(kind, location);
     }
 
     private Statement parseVariableDeclaration() {
         SourceLocation location = getLocation();
-        String kind = currentToken.value(); // "var", "let", or "const"
+        VariableKind kind = VariableKind.fromKeyword(currentToken.value()); // VAR, LET, or CONST
         advance();
         return parseVariableDeclarationBody(kind, location);
     }
 
-    private Statement parseVariableDeclarationBody(String kind, SourceLocation location) {
+    private Statement parseVariableDeclarationBody(VariableKind kind, SourceLocation location) {
         List<VariableDeclaration.VariableDeclarator> declarations = new ArrayList<>();
 
         do {

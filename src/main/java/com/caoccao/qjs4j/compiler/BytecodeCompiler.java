@@ -1368,14 +1368,14 @@ public final class BytecodeCompiler {
         String varName = id.name();
 
         // `var` in for-in is function/global scoped, not the loop lexical scope.
-        if ("var".equals(varDecl.kind())) {
+        if (varDecl.kind() == VariableKind.VAR) {
             currentScope().declareLocal(varName);
         }
 
         enterScope();
 
         // For let/const, declare in the loop scope; for var, find it in the parent scope
-        if (!"var".equals(varDecl.kind())) {
+        if (varDecl.kind() != VariableKind.VAR) {
             currentScope().declareLocal(varName);
         }
         Integer varIndex = findLocalInScopes(varName);
@@ -1455,7 +1455,7 @@ public final class BytecodeCompiler {
             throw new CompilerException("for-of loop must have exactly one variable");
         }
         Pattern pattern = varDecl.declarations().get(0).id();
-        boolean isVar = "var".equals(varDecl.kind());
+        boolean isVar = varDecl.kind() == VariableKind.VAR;
 
         // `var` in for-of is function/global scoped, not the loop lexical scope.
         // Pre-declare var bindings in the parent scope so they survive after the loop exits.
@@ -1615,7 +1615,7 @@ public final class BytecodeCompiler {
 
     private void compileForStatement(ForStatement forStmt) {
         boolean initCompiled = false;
-        if (forStmt.init() instanceof VariableDeclaration varDecl && "var".equals(varDecl.kind())) {
+        if (forStmt.init() instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
             // `var` in for-init is function/global scoped, not the loop lexical scope.
             compileVariableDeclaration(varDecl);
             initCompiled = true;
@@ -1627,7 +1627,7 @@ public final class BytecodeCompiler {
         if (!initCompiled && forStmt.init() != null) {
             if (forStmt.init() instanceof VariableDeclaration varDecl) {
                 boolean savedInGlobalScope = inGlobalScope;
-                if (inGlobalScope && !"var".equals(varDecl.kind())) {
+                if (inGlobalScope && varDecl.kind() != VariableKind.VAR) {
                     // Top-level lexical loop bindings should stay lexical, not become global object properties.
                     inGlobalScope = false;
                 }
@@ -3323,8 +3323,8 @@ public final class BytecodeCompiler {
     }
 
     private void compileVariableDeclaration(VariableDeclaration varDecl) {
-        boolean isUsingDeclaration = "using".equals(varDecl.kind()) || "await using".equals(varDecl.kind());
-        boolean isAwaitUsingDeclaration = "await using".equals(varDecl.kind());
+        boolean isUsingDeclaration = varDecl.kind() == VariableKind.USING || varDecl.kind() == VariableKind.AWAIT_USING;
+        boolean isAwaitUsingDeclaration = varDecl.kind() == VariableKind.AWAIT_USING;
         for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
             if (inGlobalScope) {
                 collectPatternBindingNames(declarator.id(), nonDeletableGlobalBindings);

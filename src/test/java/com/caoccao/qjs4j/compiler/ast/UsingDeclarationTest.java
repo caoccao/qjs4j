@@ -30,7 +30,7 @@ public class UsingDeclarationTest {
         Program program = new Parser(new Lexer("await using value = resource;"), true).parse();
         assertThat(program.body()).hasSize(1);
         VariableDeclaration declaration = (VariableDeclaration) program.body().get(0);
-        assertThat(declaration.kind()).isEqualTo("await using");
+        assertThat(declaration.kind()).isEqualTo(VariableKind.AWAIT_USING);
         assertThat(declaration.declarations()).hasSize(1);
         assertThat(declaration.declarations().get(0).id()).isInstanceOf(Identifier.class);
         assertThat(((Identifier) declaration.declarations().get(0).id()).name()).isEqualTo("value");
@@ -46,7 +46,7 @@ public class UsingDeclarationTest {
                 }""")).parse();
         FunctionDeclaration functionDeclaration = (FunctionDeclaration) program.body().get(0);
         ForOfStatement forOfStatement = (ForOfStatement) functionDeclaration.body().body().get(0);
-        assertThat(forOfStatement.left().kind()).isEqualTo("await using");
+        assertThat(forOfStatement.left().kind()).isEqualTo(VariableKind.AWAIT_USING);
         assertThat(forOfStatement.isAsync()).isFalse();
     }
 
@@ -64,7 +64,7 @@ public class UsingDeclarationTest {
                 }""")).parse();
         assertThat(program.body()).hasSize(1);
         ForOfStatement forOfStatement = (ForOfStatement) program.body().get(0);
-        assertThat(forOfStatement.left().kind()).isEqualTo("using");
+        assertThat(forOfStatement.left().kind()).isEqualTo(VariableKind.USING);
         assertThat(forOfStatement.left().declarations()).hasSize(1);
         assertThat(forOfStatement.left().declarations().get(0).id()).isInstanceOf(Identifier.class);
         assertThat(forOfStatement.left().declarations().get(0).init()).isNull();
@@ -78,11 +78,11 @@ public class UsingDeclarationTest {
         assertThat(program.body()).hasSize(2);
 
         VariableDeclaration objectPatternDeclaration = (VariableDeclaration) program.body().get(0);
-        assertThat(objectPatternDeclaration.kind()).isEqualTo("using");
+        assertThat(objectPatternDeclaration.kind()).isEqualTo(VariableKind.USING);
         assertThat(objectPatternDeclaration.declarations().get(0).id()).isInstanceOf(ObjectPattern.class);
 
         VariableDeclaration arrayPatternDeclaration = (VariableDeclaration) program.body().get(1);
-        assertThat(arrayPatternDeclaration.kind()).isEqualTo("using");
+        assertThat(arrayPatternDeclaration.kind()).isEqualTo(VariableKind.USING);
         assertThat(arrayPatternDeclaration.declarations().get(0).id()).isInstanceOf(ArrayPattern.class);
     }
 
@@ -91,7 +91,7 @@ public class UsingDeclarationTest {
         Program program = new Parser(new Lexer("using value = resource;")).parse();
         assertThat(program.body()).hasSize(1);
         VariableDeclaration declaration = (VariableDeclaration) program.body().get(0);
-        assertThat(declaration.kind()).isEqualTo("using");
+        assertThat(declaration.kind()).isEqualTo(VariableKind.USING);
         assertThat(declaration.declarations()).hasSize(1);
         assertThat(declaration.declarations().get(0).id()).isInstanceOf(Identifier.class);
         assertThat(((Identifier) declaration.declarations().get(0).id()).name()).isEqualTo("value");

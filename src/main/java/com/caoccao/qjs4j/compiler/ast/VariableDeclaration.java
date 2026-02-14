@@ -23,7 +23,7 @@ import java.util.List;
  */
 public record VariableDeclaration(
         List<VariableDeclarator> declarations,
-        String kind,
+        VariableKind kind,
         SourceLocation location
 ) implements Statement {
     @Override
