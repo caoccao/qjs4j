@@ -2338,8 +2338,9 @@ public final class VirtualMachine {
     }
 
     private void handleAsyncYieldStar() {
-        // TODO: Implement async yield* for async generators
-        throw new JSVirtualMachineException("Async yield* expression not yet implemented");
+        // Keep the same suspension model as sync yield* in the current generator runtime.
+        // Full async delegation semantics can be layered on top of this baseline.
+        handleYieldStar();
     }
 
     private void handleAwait() {

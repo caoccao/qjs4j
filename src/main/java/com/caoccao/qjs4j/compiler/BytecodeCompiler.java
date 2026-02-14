@@ -1807,6 +1807,7 @@ public final class BytecodeCompiler {
         // Enter function scope and add parameters as locals
         functionCompiler.enterScope();
         functionCompiler.inGlobalScope = false;
+        functionCompiler.isInAsyncFunction = funcExpr.isAsync();
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
@@ -1856,7 +1857,7 @@ public final class BytecodeCompiler {
             functionCompiler.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
             functionCompiler.emitCurrentScopeUsingDisposal();
             functionCompiler.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
-            functionCompiler.emitter.emitOpcode(Opcode.RETURN);
+            functionCompiler.emitter.emitOpcode(funcExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
         int localCount = functionCompiler.currentScope().getLocalCount();
@@ -3442,9 +3443,7 @@ public final class BytecodeCompiler {
         // Emit the appropriate yield opcode
         if (yieldExpr.delegate()) {
             // yield* delegates to another generator/iterable
-            // For now, use YIELD_STAR for sync generators
-            // TODO: Need to check if in async generator for ASYNC_YIELD_STAR
-            emitter.emitOpcode(Opcode.YIELD_STAR);
+            emitter.emitOpcode(isInAsyncFunction ? Opcode.ASYNC_YIELD_STAR : Opcode.YIELD_STAR);
         } else {
             // Regular yield
             emitter.emitOpcode(Opcode.YIELD);

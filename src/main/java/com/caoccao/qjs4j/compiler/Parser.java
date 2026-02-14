@@ -471,7 +471,39 @@ public final class Parser {
 
         // Check for async arrow function: async () => {} or async (params) => {}
         if (match(TokenType.ASYNC)) {
+            SourceLocation asyncLocation = location;
             advance(); // consume 'async'
+
+            // Async function expression: async function (...) {}
+            if (match(TokenType.FUNCTION)) {
+                return parseFunctionExpression(true, asyncLocation);
+            }
+
+            // Async arrow function with single identifier parameter: async x => x
+            if (match(TokenType.IDENTIFIER) && nextToken.type() == TokenType.ARROW) {
+                Identifier param = parseIdentifier();
+                expect(TokenType.ARROW);
+
+                ASTNode body;
+                enterFunctionContext(true);
+                try {
+                    if (match(TokenType.LBRACE)) {
+                        body = parseBlockStatement();
+                    } else {
+                        body = parseAssignmentExpression();
+                    }
+                } finally {
+                    exitFunctionContext(true);
+                }
+
+                SourceLocation fullLocation = new SourceLocation(
+                        asyncLocation.line(),
+                        asyncLocation.column(),
+                        asyncLocation.offset(),
+                        currentToken.offset()
+                );
+                return new ArrowFunctionExpression(List.of(param), null, body, true, fullLocation);
+            }
 
             // Check if followed by ( or identifier (for single param)
             if (match(TokenType.LPAREN) || match(TokenType.IDENTIFIER)) {
@@ -512,10 +544,36 @@ public final class Parser {
                 }
             }
 
-            // Not an arrow function, backtrack and parse normally
-            // This is tricky - we've already consumed 'async'
-            // For now, throw an error as proper backtracking requires lexer support
-            throw new RuntimeException("Expected arrow function after 'async'");
+            // Fallback: treat `async` as an identifier in expression position.
+            Expression left = new Identifier("async", asyncLocation);
+            if (isAssignmentOperator(currentToken.type())) {
+                TokenType op = currentToken.type();
+                SourceLocation assignmentLocation = getLocation();
+                advance();
+                Expression right = parseAssignmentExpression();
+
+                AssignmentExpression.AssignmentOperator operator = switch (op) {
+                    case ASSIGN -> AssignmentExpression.AssignmentOperator.ASSIGN;
+                    case AND_ASSIGN -> AssignmentExpression.AssignmentOperator.AND_ASSIGN;
+                    case DIV_ASSIGN -> AssignmentExpression.AssignmentOperator.DIV_ASSIGN;
+                    case EXP_ASSIGN -> AssignmentExpression.AssignmentOperator.EXP_ASSIGN;
+                    case LOGICAL_AND_ASSIGN -> AssignmentExpression.AssignmentOperator.LOGICAL_AND_ASSIGN;
+                    case LOGICAL_OR_ASSIGN -> AssignmentExpression.AssignmentOperator.LOGICAL_OR_ASSIGN;
+                    case LSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.LSHIFT_ASSIGN;
+                    case MINUS_ASSIGN -> AssignmentExpression.AssignmentOperator.MINUS_ASSIGN;
+                    case MOD_ASSIGN -> AssignmentExpression.AssignmentOperator.MOD_ASSIGN;
+                    case MUL_ASSIGN -> AssignmentExpression.AssignmentOperator.MUL_ASSIGN;
+                    case NULLISH_ASSIGN -> AssignmentExpression.AssignmentOperator.NULLISH_ASSIGN;
+                    case OR_ASSIGN -> AssignmentExpression.AssignmentOperator.OR_ASSIGN;
+                    case PLUS_ASSIGN -> AssignmentExpression.AssignmentOperator.PLUS_ASSIGN;
+                    case RSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.RSHIFT_ASSIGN;
+                    case URSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.URSHIFT_ASSIGN;
+                    case XOR_ASSIGN -> AssignmentExpression.AssignmentOperator.XOR_ASSIGN;
+                    default -> AssignmentExpression.AssignmentOperator.ASSIGN;
+                };
+                return new AssignmentExpression(left, operator, right, assignmentLocation);
+            }
+            return left;
         }
 
         Expression left = parseConditionalExpression();
@@ -631,6 +689,17 @@ public final class Parser {
         return left;
     }
 
+    private Statement parseAsyncDeclaration() {
+        if (nextToken.type() == TokenType.FUNCTION) {
+            SourceLocation asyncLocation = getLocation();
+            advance(); // consume async
+            return parseFunctionDeclaration(true, false, asyncLocation);
+        } else {
+            // Otherwise parse as an expression statement (e.g. async () => 1).
+            return parseExpressionStatement();
+        }
+    }
+
     private Expression parseBitwiseAndExpression() {
         Expression left = parseEqualityExpression();
 
@@ -657,6 +726,8 @@ public final class Parser {
         return left;
     }
 
+    // Expression parsing with precedence
+
     private Expression parseBitwiseXorExpression() {
         Expression left = parseBitwiseAndExpression();
 
@@ -669,8 +740,6 @@ public final class Parser {
 
         return left;
     }
-
-    // Expression parsing with precedence
 
     private BlockStatement parseBlockStatement() {
         SourceLocation location = getLocation();
@@ -1271,7 +1340,11 @@ public final class Parser {
     }
 
     private Expression parseFunctionExpression() {
-        SourceLocation location = getLocation();
+        return parseFunctionExpression(false, null);
+    }
+
+    private Expression parseFunctionExpression(boolean isAsync, SourceLocation startLocation) {
+        SourceLocation location = startLocation != null ? startLocation : getLocation();
         expect(TokenType.FUNCTION);
 
         // Check for generator function expression: function* () {}
@@ -1282,7 +1355,7 @@ public final class Parser {
             isGenerator = true;
         }
 
-        enterFunctionContext(false);
+        enterFunctionContext(isAsync);
         try {
             Identifier id = null;
             if (match(TokenType.IDENTIFIER) || match(TokenType.AWAIT)) {
@@ -1302,9 +1375,9 @@ public final class Parser {
                     currentToken.offset()
             );
 
-            return new FunctionExpression(id, funcParams.params, funcParams.restParameter, body, false, isGenerator, fullLocation);
+            return new FunctionExpression(id, funcParams.params, funcParams.restParameter, body, isAsync, isGenerator, fullLocation);
         } finally {
-            exitFunctionContext(false);
+            exitFunctionContext(isAsync);
         }
     }
 
@@ -1359,6 +1432,11 @@ public final class Parser {
     private Identifier parseIdentifier() {
         SourceLocation location = getLocation();
         if (match(TokenType.IDENTIFIER)) {
+            String name = currentToken.value();
+            advance();
+            return new Identifier(name, location);
+        }
+        if (match(TokenType.ASYNC)) {
             String name = currentToken.value();
             advance();
             return new Identifier(name, location);
@@ -1533,6 +1611,8 @@ public final class Parser {
         return new ClassDeclaration.MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
     }
 
+    // Utility methods
+
     private Expression parseMultiplicativeExpression() {
         Expression left = parseExponentiationExpression();
 
@@ -1551,8 +1631,6 @@ public final class Parser {
 
         return left;
     }
-
-    // Utility methods
 
     private Expression parseObjectExpression() {
         SourceLocation location = getLocation();
@@ -2032,26 +2110,12 @@ public final class Parser {
             case SWITCH -> parseSwitchStatement();
             case LBRACE -> parseBlockStatement();
             case VAR, LET, CONST -> parseVariableDeclaration();
-            case ASYNC -> {
-                // Capture location at 'async' keyword for proper source extraction
-                SourceLocation asyncLocation = getLocation();
-                // Consume 'async' and check if it's an async function declaration
-                advance();
-                if (match(TokenType.FUNCTION)) {
-                    yield parseFunctionDeclaration(true, false, asyncLocation);
-                } else {
-                    // Otherwise, it's an error - async must be followed by function
-                    throw new RuntimeException("Expected 'function' after 'async'");
-                }
-            }
-            case FUNCTION -> {
-                // Function declarations are treated as statements in JavaScript
-                yield parseFunctionDeclaration(false, false);
-            }
-            case CLASS -> {
-                // Class declarations are treated as statements in JavaScript
-                yield parseClassDeclaration();
-            }
+            case ASYNC -> // Async function declaration: async function f() {}
+                    parseAsyncDeclaration();
+            case FUNCTION -> // Function declarations are treated as statements in JavaScript
+                    parseFunctionDeclaration(false, false);
+            case CLASS -> // Class declarations are treated as statements in JavaScript
+                    parseClassDeclaration();
             case SEMICOLON -> {
                 advance(); // consume semicolon
                 yield null; // empty statement
