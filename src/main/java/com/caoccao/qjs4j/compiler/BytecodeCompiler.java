@@ -2554,16 +2554,37 @@ public final class BytecodeCompiler {
         registerGlobalProgramBindings(program.body());
 
         List<Statement> body = program.body();
-        int lastIndex = body.size() - 1;
-        boolean lastIsExpression = false;
+
+        // Phase 1: Hoist top-level function declarations (ES spec requires function
+        // declarations to be initialized before any code executes).
+        for (Statement stmt : body) {
+            if (stmt instanceof FunctionDeclaration funcDecl) {
+                compileFunctionDeclaration(funcDecl);
+            }
+        }
+
+        // Find the effective last statement index (last non-FunctionDeclaration),
+        // since function declarations don't contribute a completion value.
+        int effectiveLastIndex = -1;
+        for (int i = body.size() - 1; i >= 0; i--) {
+            if (!(body.get(i) instanceof FunctionDeclaration)) {
+                effectiveLastIndex = i;
+                break;
+            }
+        }
+
+        // Phase 2: Compile all non-FunctionDeclaration statements in source order.
         boolean lastProducesValue = false;
 
         for (int i = 0; i < body.size(); i++) {
-            boolean isLast = (i == lastIndex);
             Statement stmt = body.get(i);
+            if (stmt instanceof FunctionDeclaration) {
+                continue; // Already hoisted in Phase 1
+            }
+
+            boolean isLast = (i == effectiveLastIndex);
 
             if (isLast && stmt instanceof ExpressionStatement) {
-                lastIsExpression = true;
                 lastProducesValue = true;
             } else if (isLast && stmt instanceof TryStatement) {
                 // Try statements can produce values
