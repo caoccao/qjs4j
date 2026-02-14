@@ -2141,13 +2141,23 @@ public final class VirtualMachine {
                         if (iteratorValue instanceof JSObject iteratorObject && !iteratorValue.isUndefined()) {
                             JSValue returnMethodValue = iteratorObject.get(PropertyKey.fromString("return"));
                             if (returnMethodValue instanceof JSFunction returnMethod) {
-                                returnMethod.call(context, iteratorObject, new JSValue[0]);
+                                JSValue closeResult = returnMethod.call(context, iteratorObject, new JSValue[0]);
                                 if (context.hasPendingException()) {
                                     pendingException = context.getPendingException();
                                     context.clearPendingException();
+                                } else if (!(closeResult instanceof JSObject)) {
+                                    // Per ES2024 7.4.6 IteratorClose step 6:
+                                    // If innerResult.[[Value]] is not an Object, throw TypeError
+                                    pendingException = context.throwTypeError("iterator result is not an object");
                                 }
-                            } else if (!(returnMethodValue.isUndefined() || returnMethodValue.isNull())) {
-                                throw new JSVirtualMachineException(context.throwTypeError("iterator return is not a function"));
+                            } else if (returnMethodValue.isUndefined() || returnMethodValue.isNull()) {
+                                // No return method - that's fine, skip
+                            } else if (returnMethodValue instanceof JSObject returnObj && returnObj.isHTMLDDA()) {
+                                // IsHTMLDDA: typeof is "undefined" but it IS callable
+                                // This shouldn't happen since IsHTMLDDA is a JSFunction,
+                                // but handle for completeness
+                            } else {
+                                pendingException = context.throwTypeError("iterator return is not a function");
                             }
                         }
                         pc += op.getSize();
