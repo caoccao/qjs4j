@@ -279,11 +279,16 @@ public final class JSGlobalObject {
 
     /**
      * eval(code)
-     * Evaluate JavaScript code in the current context.
+     * Evaluate JavaScript code in the realm context.
+     * <p>
+     * Per ES spec, eval evaluates code in the realm of the eval function itself,
+     * not the calling realm. This matters for cross-realm calls like other.eval('code').
      *
+     * @param realmContext  the context where this eval function was created (the eval's realm)
+     * @param callerContext the context of the calling code (for scope overlay and exception propagation)
      * @see <a href="https://tc39.es/ecma262/#sec-eval-x">ECMAScript eval</a>
      */
-    public JSValue eval(JSContext context, JSValue thisArg, JSValue[] args) {
+    private JSValue eval(JSContext realmContext, JSContext callerContext, JSValue thisArg, JSValue[] args) {
         JSValue x = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
         // If x is not a string, return it unchanged
@@ -293,22 +298,25 @@ public final class JSGlobalObject {
 
         String code = ((JSString) x).value();
         // Per ES2024 19.2.1.1 PerformEval: eval inherits strict mode from caller
-        if (context.isStrictMode()) {
+        if (realmContext.isStrictMode()) {
             code = "'use strict';\n" + code;
         }
 
+        // Scope overlay is only valid for same-realm direct eval within a function.
+        // Cross-realm eval (other.eval('code')) should not overlay the caller's scope.
+        boolean isSameRealm = (realmContext == callerContext);
+
         // Scope overlay: capture enclosing function's local variables onto the global
         // object so that eval code's GET_VAR/PUT_VAR can access them.
-        StackFrame callerFrame = context.getVirtualMachine().getCurrentFrame();
-        // Eval is "inside a function" only if the callerFrame is NOT the top-level program.
-        // The top-level program frame has caller == null; function frames have a non-null caller.
-        boolean isEvalInFunction = callerFrame != null
+        StackFrame callerFrame = callerContext.getVirtualMachine().getCurrentFrame();
+        // Eval is "inside a function" only if same-realm and the callerFrame is NOT the top-level program.
+        boolean isEvalInFunction = isSameRealm && callerFrame != null
                 && callerFrame.getFunction() instanceof JSBytecodeFunction
                 && callerFrame.getCaller() != null;
         String[] localVarNames = null;
         Map<String, JSValue> savedGlobals = null;
         Set<String> absentKeys = null;
-        JSObject global = context.getGlobalObject();
+        JSObject global = realmContext.getGlobalObject();
 
         // When eval runs inside a function, snapshot global property names so we can
         // clean up var/function bindings that should be function-scoped (not global).
@@ -343,7 +351,7 @@ public final class JSGlobalObject {
         }
 
         try {
-            JSValue result = context.eval(code, "<eval>", false, true);
+            JSValue result = realmContext.eval(code, "<eval>", false, true);
 
             // Copy modified values back to caller's locals
             if (localVarNames != null) {
@@ -360,8 +368,8 @@ public final class JSGlobalObject {
 
             return result;
         } catch (JSException e) {
-            // Re-throw as pending exception so JavaScript try-catch can handle it
-            context.setPendingException(e.getErrorValue());
+            // Propagate exception to the caller's context so the caller's VM sees it
+            callerContext.setPendingException(e.getErrorValue());
             return JSUndefined.INSTANCE;
         } finally {
             // Restore global object state for scope overlay
@@ -372,7 +380,7 @@ public final class JSGlobalObject {
             }
             if (absentKeys != null) {
                 for (String name : absentKeys) {
-                    global.delete(PropertyKey.fromString(name), context);
+                    global.delete(PropertyKey.fromString(name), realmContext);
                 }
             }
             // Clean up eval-created bindings that should be function-scoped (not global).
@@ -381,7 +389,7 @@ public final class JSGlobalObject {
             if (globalKeysBefore != null) {
                 for (PropertyKey pk : global.ownPropertyKeys()) {
                     if (pk.isString() && !globalKeysBefore.contains(pk.asString())) {
-                        global.delete(pk, context);
+                        global.delete(pk, realmContext);
                     }
                 }
             }
@@ -415,7 +423,11 @@ public final class JSGlobalObject {
         global.definePropertyReadonlyNonConfigurable("undefined", JSUndefined.INSTANCE);
 
         // Global function properties
-        global.definePropertyWritableConfigurable("eval", new JSNativeFunction("eval", 1, this::eval));
+        // Capture the realm context so that eval code runs in the correct realm
+        // even when called cross-realm (e.g., other.eval('code')).
+        final JSContext realmContext = context;
+        global.definePropertyWritableConfigurable("eval", new JSNativeFunction("eval", 1,
+                (callerCtx, thisArg, args) -> eval(realmContext, callerCtx, thisArg, args)));
         global.definePropertyWritableConfigurable("isFinite", new JSNativeFunction("isFinite", 1, this::isFinite));
         global.definePropertyWritableConfigurable("isNaN", new JSNativeFunction("isNaN", 1, this::isNaN));
         global.definePropertyWritableConfigurable("parseFloat", new JSNativeFunction("parseFloat", 1, this::parseFloat));

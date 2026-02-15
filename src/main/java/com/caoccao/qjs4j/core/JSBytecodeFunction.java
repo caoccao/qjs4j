@@ -150,9 +150,13 @@ public final class JSBytecodeFunction extends JSFunction {
 
     @Override
     public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        // Per ES spec, each function has a [[Realm]] internal slot. When called cross-realm,
+        // the function should execute in its own realm, not the caller's realm.
+        JSContext executionContext = getHomeContext() != null ? getHomeContext() : context;
+
         // OrdinaryCallBindThis: in non-strict mode, undefined/null this → global object
         if (!strict && (thisArg instanceof JSUndefined || thisArg instanceof JSNull)) {
-            thisArg = context.getGlobalObject();
+            thisArg = executionContext.getGlobalObject();
         }
 
         // If this is an async generator function, create and return an async generator object
@@ -273,7 +277,7 @@ public final class JSBytecodeFunction extends JSFunction {
         }
 
         // For non-async functions, execute normally and let exceptions propagate
-        return context.getVirtualMachine().execute(this, thisArg, args);
+        return executionContext.getVirtualMachine().execute(this, thisArg, args);
     }
 
     public JSBytecodeFunction copyWithClosureVars(JSValue[] capturedClosureVars) {

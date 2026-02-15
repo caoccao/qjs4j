@@ -1370,6 +1370,23 @@ public final class VirtualMachine {
                                 pendingException = context.getPendingException();
                                 context.clearPendingException();
                             }
+                        } else if (putFieldObj instanceof JSNull || putFieldObj instanceof JSUndefined) {
+                            context.throwTypeError("cannot set property '" + putFieldName + "' of " +
+                                    (putFieldObj instanceof JSNull ? "null" : "undefined"));
+                            pendingException = context.getPendingException();
+                            context.clearPendingException();
+                        } else {
+                            // Primitive base: auto-box to object and set property.
+                            // Per ES spec 6.2.3.2 (PutValue), setters on the prototype
+                            // chain must be triggered even for primitive bases.
+                            JSObject boxed = toObject(putFieldObj);
+                            if (boxed != null) {
+                                boxed.set(PropertyKey.fromString(putFieldName), putFieldValue, context);
+                                if (context.hasPendingException()) {
+                                    pendingException = context.getPendingException();
+                                    context.clearPendingException();
+                                }
+                            }
                         }
                         pc += op.getSize();
                     }
@@ -1475,6 +1492,23 @@ public final class VirtualMachine {
                             if (context.hasPendingException()) {
                                 pendingException = context.getPendingException();
                                 context.clearPendingException();
+                            }
+                        } else if (putElObj instanceof JSNull || putElObj instanceof JSUndefined) {
+                            PropertyKey key = PropertyKey.fromValue(context, putElIndex);
+                            context.throwTypeError("cannot set property '" + key + "' of " +
+                                    (putElObj instanceof JSNull ? "null" : "undefined"));
+                            pendingException = context.getPendingException();
+                            context.clearPendingException();
+                        } else {
+                            // Primitive base: auto-box and set (triggers setters on prototype chain)
+                            JSObject boxed = toObject(putElObj);
+                            if (boxed != null) {
+                                PropertyKey key = PropertyKey.fromValue(context, putElIndex);
+                                boxed.set(key, putElValue, context);
+                                if (context.hasPendingException()) {
+                                    pendingException = context.getPendingException();
+                                    context.clearPendingException();
+                                }
                             }
                         }
                         // Assignment expressions return the assigned value
