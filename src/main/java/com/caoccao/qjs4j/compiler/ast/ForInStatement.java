@@ -20,9 +20,10 @@ package com.caoccao.qjs4j.compiler.ast;
  * Represents a for-in statement: for (variable in object) { ... }
  * <p>
  * Based on ES5 for-in loops.
+ * left can be a VariableDeclaration (e.g., var x) or a Pattern/Expression (e.g., x, obj.prop).
  */
 public record ForInStatement(
-        VariableDeclaration left,    // Variable declaration (let x, const x, var x)
+        ASTNode left,                 // VariableDeclaration or Pattern (Identifier, MemberExpression, etc.)
         Expression right,             // Object expression
         Statement body,               // Loop body
         SourceLocation location

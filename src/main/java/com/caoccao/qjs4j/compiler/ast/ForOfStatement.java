@@ -21,9 +21,10 @@ package com.caoccao.qjs4j.compiler.ast;
  * or async for-of: for await (variable of iterable) { ... }
  * <p>
  * Based on ES2015 for-of loops and ES2018 async iteration.
+ * left can be a VariableDeclaration (e.g., let x) or a Pattern/Expression (e.g., x, obj.prop).
  */
 public record ForOfStatement(
-        VariableDeclaration left,    // Variable declaration (let x, const x, var x)
+        ASTNode left,                 // VariableDeclaration or Pattern (Identifier, MemberExpression, etc.)
         Expression right,             // Iterable expression
         Statement body,               // Loop body
         boolean isAsync,              // true for 'for await', false for 'for'

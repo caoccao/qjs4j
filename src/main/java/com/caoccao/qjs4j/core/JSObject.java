@@ -914,21 +914,15 @@ public non-sealed class JSObject implements JSValue {
         return SetPrototypeResult.SUCCESS;
     }
 
-    public enum SetPrototypeResult {
-        SUCCESS,
-        NOT_EXTENSIBLE,
-        CIRCULAR
-    }
-
     public boolean setWithResult(PropertyKey key, JSValue value, JSContext context) {
         return setWithResult(key, value, context, this);
     }
 
-    // JSValue implementation
-
     public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
         return setInternal(key, value, context, receiver, false);
     }
+
+    // JSValue implementation
 
     @Override
     public Object toJavaObject() {
@@ -951,5 +945,11 @@ public non-sealed class JSObject implements JSValue {
     @Override
     public JSValueType type() {
         return JSValueType.OBJECT;
+    }
+
+    public enum SetPrototypeResult {
+        SUCCESS,
+        NOT_EXTENSIBLE,
+        CIRCULAR
     }
 }

@@ -44,6 +44,7 @@ public final class Parser {
     private int asyncFunctionNesting;
     private Token currentToken;
     private int functionNesting;
+    private boolean inOperatorAllowed = true; // false inside for-loop initializer (ES spec [~In])
     private Token nextToken; // Lookahead token
     private int previousTokenLine; // Line of previous token (for ASI checks)
 
@@ -355,6 +356,11 @@ public final class Parser {
         return nextToken.type() == TokenType.LPAREN
                 || nextToken.type() == TokenType.LBRACKET
                 || nextToken.type() == TokenType.TEMPLATE;
+    }
+
+    private boolean isValidForInOfTarget(Expression expr) {
+        return expr instanceof Identifier
+                || expr instanceof MemberExpression;
     }
 
     private boolean match(TokenType type) {
@@ -758,6 +764,8 @@ public final class Parser {
         return left;
     }
 
+    // Expression parsing with precedence
+
     private Expression parseBitwiseOrExpression() {
         Expression left = parseBitwiseXorExpression();
 
@@ -770,8 +778,6 @@ public final class Parser {
 
         return left;
     }
-
-    // Expression parsing with precedence
 
     private Expression parseBitwiseXorExpression() {
         Expression left = parseBitwiseAndExpression();
@@ -1340,7 +1346,43 @@ public final class Parser {
                     init = parseVariableDeclaration();
                 }
             } else {
-                init = parseExpressionStatement();
+                // Parse expression — could be for-in/for-of left side or traditional for init.
+                // Parse as assignment expression first, then check for 'in' or 'of'.
+                // Suppress 'in' as binary operator per ES spec [~In] grammar parameter.
+                boolean savedInOperatorAllowed = inOperatorAllowed;
+                inOperatorAllowed = false;
+                Expression expr = parseAssignmentExpression();
+                inOperatorAllowed = savedInOperatorAllowed;
+                if (match(TokenType.IN)) {
+                    // for (expr in obj) — expression-based for-in
+                    // Validate: left side must be a valid LeftHandSideExpression
+                    if (!isValidForInOfTarget(expr)) {
+                        throw new JSSyntaxErrorException("invalid for in/of left hand-side");
+                    }
+                    advance(); // consume 'in'
+                    Expression object = parseExpression();
+                    expect(TokenType.RPAREN);
+                    Statement body = parseStatement();
+                    return new ForInStatement(expr, object, body, location);
+                } else if (match(TokenType.OF)) {
+                    // for (expr of iterable) — expression-based for-of
+                    if (!isValidForInOfTarget(expr)) {
+                        throw new JSSyntaxErrorException("invalid for in/of left hand-side");
+                    }
+                    advance(); // consume 'of'
+                    Expression iterable = parseExpression();
+                    expect(TokenType.RPAREN);
+                    Statement body = parseStatement();
+                    return new ForOfStatement(expr, iterable, body, isAwait, location);
+                }
+                // Traditional for loop init — handle comma expressions
+                while (match(TokenType.COMMA)) {
+                    advance();
+                    Expression right = parseAssignmentExpression();
+                    expr = new SequenceExpression(java.util.List.of(expr, right), expr.getLocation());
+                }
+                init = new ExpressionStatement(expr, expr.getLocation());
+                consumeSemicolon();
             }
         } else {
             advance(); // consume semicolon
@@ -2168,7 +2210,7 @@ public final class Parser {
 
         while (match(TokenType.LT) || match(TokenType.LE) ||
                 match(TokenType.GT) || match(TokenType.GE) ||
-                match(TokenType.IN) || match(TokenType.INSTANCEOF)) {
+                (inOperatorAllowed && match(TokenType.IN)) || match(TokenType.INSTANCEOF)) {
             BinaryOperator op = switch (currentToken.type()) {
                 case LT -> BinaryOperator.LT;
                 case LE -> BinaryOperator.LE;

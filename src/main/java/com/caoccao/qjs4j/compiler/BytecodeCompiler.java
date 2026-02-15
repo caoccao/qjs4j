@@ -147,8 +147,8 @@ public final class BytecodeCompiler {
                 collectVarNamesFromStatement(forStmt.body(), varNames);
             }
         } else if (stmt instanceof ForInStatement forInStmt) {
-            if (forInStmt.left() != null && forInStmt.left().kind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : forInStmt.left().declarations()) {
+            if (forInStmt.left() instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
                     collectPatternBindingNames(d.id(), varNames);
                 }
             }
@@ -156,8 +156,8 @@ public final class BytecodeCompiler {
                 collectVarNamesFromStatement(forInStmt.body(), varNames);
             }
         } else if (stmt instanceof ForOfStatement forOfStmt) {
-            if (forOfStmt.left() != null && forOfStmt.left().kind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : forOfStmt.left().declarations()) {
+            if (forOfStmt.left() instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
                     collectPatternBindingNames(d.id(), varNames);
                 }
             }
@@ -1482,29 +1482,38 @@ public final class BytecodeCompiler {
     }
 
     private void compileForInStatement(ForInStatement forInStmt) {
-        // Get the loop variable name
-        VariableDeclaration varDecl = forInStmt.left();
-        if (varDecl.declarations().size() != 1) {
-            throw new CompilerException("for-in loop must have exactly one variable");
-        }
-        Pattern pattern = varDecl.declarations().get(0).id();
-        if (!(pattern instanceof Identifier id)) {
-            throw new CompilerException("for-in loop variable must be an identifier");
-        }
-        String varName = id.name();
+        // Determine how to assign the key: VariableDeclaration or expression
+        boolean isExpressionBased = forInStmt.left() instanceof Expression;
+        String varName = null;
+        VariableDeclaration varDecl = null;
 
-        // `var` in for-in is function/global scoped, not the loop lexical scope.
-        if (varDecl.kind() == VariableKind.VAR) {
-            currentScope().declareLocal(varName);
+        if (!isExpressionBased) {
+            varDecl = (VariableDeclaration) forInStmt.left();
+            if (varDecl.declarations().size() != 1) {
+                throw new CompilerException("for-in loop must have exactly one variable");
+            }
+            Pattern pattern = varDecl.declarations().get(0).id();
+            if (!(pattern instanceof Identifier id)) {
+                throw new CompilerException("for-in loop variable must be an identifier");
+            }
+            varName = id.name();
+
+            // `var` in for-in is function/global scoped, not the loop lexical scope.
+            if (varDecl.kind() == VariableKind.VAR) {
+                currentScope().declareLocal(varName);
+            }
         }
 
         enterScope();
 
-        // For let/const, declare in the loop scope; for var, find it in the parent scope
-        if (varDecl.kind() != VariableKind.VAR) {
-            currentScope().declareLocal(varName);
+        Integer varIndex = null;
+        if (!isExpressionBased) {
+            // For let/const, declare in the loop scope; for var, find it in the parent scope
+            if (varDecl.kind() != VariableKind.VAR) {
+                currentScope().declareLocal(varName);
+            }
+            varIndex = findLocalInScopes(varName);
         }
-        Integer varIndex = findLocalInScopes(varName);
 
         // Compile the object expression
         compileExpression(forInStmt.right());
@@ -1533,7 +1542,41 @@ public final class BytecodeCompiler {
         // Stack: enum_obj key
 
         // Store key in loop variable
-        if (varIndex != null) {
+        if (isExpressionBased) {
+            // Expression-based: for (expr in obj) — assign via PUT_VAR or member expression
+            Expression leftExpr = (Expression) forInStmt.left();
+            if (leftExpr instanceof Identifier id) {
+                Integer localIdx = findLocalInScopes(id.name());
+                if (localIdx != null) {
+                    emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIdx);
+                } else {
+                    emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
+                }
+            } else if (leftExpr instanceof MemberExpression memberExpr) {
+                // For member expressions like obj.prop or obj[expr]
+                compileExpression(memberExpr.object());
+                if (memberExpr.computed()) {
+                    compileExpression(memberExpr.property());
+                    // Stack: enum_obj key obj index
+                    // Need to reorder: swap obj and index under key
+                    // Use PUT_ARRAY_EL: pops [value, obj, index] -> obj[index] = value
+                    // But stack is: enum_obj key obj index - need key on top
+                    // This is complex; use a simpler approach with a local temp
+                    throw new CompilerException("Computed member expression in for-in not yet supported");
+                } else {
+                    // Stack: enum_obj key obj
+                    String propName = ((Identifier) memberExpr.property()).name();
+                    // Swap key and obj: we need obj on top then key, then PUT_FIELD
+                    emitter.emitOpcode(Opcode.SWAP);
+                    // Stack: enum_obj obj key
+                    emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propName);
+                    // Stack: enum_obj obj (PUT_FIELD leaves obj on stack)
+                    emitter.emitOpcode(Opcode.DROP);
+                }
+            } else {
+                emitter.emitOpcode(Opcode.DROP);
+            }
+        } else if (varIndex != null) {
             emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
         } else {
             emitter.emitOpcode(Opcode.DROP);
@@ -1576,7 +1619,9 @@ public final class BytecodeCompiler {
 
     private void compileForOfStatement(ForOfStatement forOfStmt) {
         // Declare the loop variable(s) - supports both Identifier and destructuring patterns
-        VariableDeclaration varDecl = forOfStmt.left();
+        if (!(forOfStmt.left() instanceof VariableDeclaration varDecl)) {
+            throw new CompilerException("Expression-based for-of not yet supported");
+        }
         if (varDecl.declarations().size() != 1) {
             throw new CompilerException("for-of loop must have exactly one variable");
         }
@@ -4520,16 +4565,16 @@ public final class BytecodeCompiler {
             scanAnnexBStatement(whileStmt.body(), lexicalBindings, result);
         } else if (stmt instanceof ForInStatement forInStmt) {
             Set<String> forInLexicals = new HashSet<>(lexicalBindings);
-            if (forInStmt.left() != null && forInStmt.left().kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : forInStmt.left().declarations()) {
+            if (forInStmt.left() instanceof VariableDeclaration varDecl && varDecl.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
                     collectPatternBindingNames(d.id(), forInLexicals);
                 }
             }
             scanAnnexBStatement(forInStmt.body(), forInLexicals, result);
         } else if (stmt instanceof ForOfStatement forOfStmt) {
             Set<String> forOfLexicals = new HashSet<>(lexicalBindings);
-            if (forOfStmt.left() != null && forOfStmt.left().kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : forOfStmt.left().declarations()) {
+            if (forOfStmt.left() instanceof VariableDeclaration varDecl && varDecl.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
                     collectPatternBindingNames(d.id(), forOfLexicals);
                 }
             }

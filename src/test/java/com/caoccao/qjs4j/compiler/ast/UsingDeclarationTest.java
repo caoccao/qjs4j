@@ -46,7 +46,7 @@ public class UsingDeclarationTest {
                 }""")).parse();
         FunctionDeclaration functionDeclaration = (FunctionDeclaration) program.body().get(0);
         ForOfStatement forOfStatement = (ForOfStatement) functionDeclaration.body().body().get(0);
-        assertThat(forOfStatement.left().kind()).isEqualTo(VariableKind.AWAIT_USING);
+        assertThat(((VariableDeclaration) forOfStatement.left()).kind()).isEqualTo(VariableKind.AWAIT_USING);
         assertThat(forOfStatement.isAsync()).isFalse();
     }
 
@@ -64,10 +64,11 @@ public class UsingDeclarationTest {
                 }""")).parse();
         assertThat(program.body()).hasSize(1);
         ForOfStatement forOfStatement = (ForOfStatement) program.body().get(0);
-        assertThat(forOfStatement.left().kind()).isEqualTo(VariableKind.USING);
-        assertThat(forOfStatement.left().declarations()).hasSize(1);
-        assertThat(forOfStatement.left().declarations().get(0).id()).isInstanceOf(Identifier.class);
-        assertThat(forOfStatement.left().declarations().get(0).init()).isNull();
+        VariableDeclaration leftDecl = (VariableDeclaration) forOfStatement.left();
+        assertThat(leftDecl.kind()).isEqualTo(VariableKind.USING);
+        assertThat(leftDecl.declarations()).hasSize(1);
+        assertThat(leftDecl.declarations().get(0).id()).isInstanceOf(Identifier.class);
+        assertThat(leftDecl.declarations().get(0).init()).isNull();
     }
 
     @Test
