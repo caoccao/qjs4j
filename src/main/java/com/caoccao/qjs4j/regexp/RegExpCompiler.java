@@ -483,6 +483,23 @@ public final class RegExpCompiler {
                 int[] propertyRanges = parseUnicodePropertyEscape(context);
                 emitRanges(context, propertyRanges, ch == 'P');
             }
+            case '0' -> {
+                // \0 escape: null character or legacy octal escape
+                if (context.isUnicodeMode()) {
+                    // Unicode mode: \0 is only valid when not followed by a decimal digit
+                    if (context.pos < context.codePoints.length) {
+                        int next = context.codePoints[context.pos];
+                        if (next >= '0' && next <= '9') {
+                            throw new RegExpSyntaxException("Invalid escape sequence");
+                        }
+                    }
+                    compileLiteralChar(context, 0);
+                } else {
+                    // Non-Unicode mode: legacy octal escape (\0, \00, \000, etc.)
+                    int value = parseLegacyOctalEscape(context, 0);
+                    compileLiteralChar(context, value);
+                }
+            }
             case '1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
                 // Back reference \1, \2, etc.
                 // Use totalCaptureCount (pre-scanned) to support forward references
