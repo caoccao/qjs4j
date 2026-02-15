@@ -38,6 +38,7 @@ public final class BytecodeCompiler {
     private final Set<String> nonDeletableGlobalBindings;
     private final Deque<Scope> scopes;
     private boolean inGlobalScope;
+    private boolean isGlobalProgram;  // true when compiling top-level program (not inside a function)
     private boolean isInArrowFunction;  // Track if we're currently compiling an arrow function
     private boolean isInAsyncFunction;  // Track if we're currently compiling an async function
     private int maxLocalCount;
@@ -46,6 +47,7 @@ public final class BytecodeCompiler {
     private int scopeDepth;  // Current lexical scope depth (1+ when inside a scope)
     private String sourceCode;  // Original source code for extracting function sources
     private boolean strictMode;  // Track strict mode context (inherited from parent or set by "use strict")
+    private boolean varInGlobalProgram;  // true when compiling a var declaration in a global program
 
     public BytecodeCompiler() {
         this(false, null);  // Default to non-strict mode
@@ -68,6 +70,7 @@ public final class BytecodeCompiler {
         this.loopStack = new ArrayDeque<>();
         this.captureResolver = new CaptureResolver(parentCaptureResolver, this::findLocalInScopes);
         this.inGlobalScope = false;
+        this.isGlobalProgram = false;
         this.isInAsyncFunction = false;
         this.isInArrowFunction = false;
         this.maxLocalCount = 0;
@@ -76,6 +79,7 @@ public final class BytecodeCompiler {
         this.scopeDepth = 0;
         this.privateSymbols = Map.of();  // Empty by default
         this.strictMode = inheritedStrictMode;
+        this.varInGlobalProgram = false;
     }
 
     private static String[] extractLocalVarNames(Scope scope) {
@@ -119,6 +123,80 @@ public final class BytecodeCompiler {
             }
         } else if (pattern instanceof RestElement restElement) {
             collectPatternBindingNames(restElement.argument(), names);
+        }
+    }
+
+    /**
+     * Recursively collect all var-declared names from a statement tree.
+     * var declarations are function/global-scoped, so they must be hoisted
+     * out of any block nesting (for, try, if, switch, etc.).
+     * Does NOT recurse into function declarations/expressions (they have their own scope).
+     */
+    private void collectVarNamesFromStatement(Statement stmt, Set<String> varNames) {
+        if (stmt instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
+            for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
+                collectPatternBindingNames(d.id(), varNames);
+            }
+        } else if (stmt instanceof ForStatement forStmt) {
+            if (forStmt.init() instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
+                    collectPatternBindingNames(d.id(), varNames);
+                }
+            }
+            if (forStmt.body() != null) {
+                collectVarNamesFromStatement(forStmt.body(), varNames);
+            }
+        } else if (stmt instanceof ForInStatement forInStmt) {
+            if (forInStmt.left() != null && forInStmt.left().kind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : forInStmt.left().declarations()) {
+                    collectPatternBindingNames(d.id(), varNames);
+                }
+            }
+            if (forInStmt.body() != null) {
+                collectVarNamesFromStatement(forInStmt.body(), varNames);
+            }
+        } else if (stmt instanceof ForOfStatement forOfStmt) {
+            if (forOfStmt.left() != null && forOfStmt.left().kind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : forOfStmt.left().declarations()) {
+                    collectPatternBindingNames(d.id(), varNames);
+                }
+            }
+            if (forOfStmt.body() != null) {
+                collectVarNamesFromStatement(forOfStmt.body(), varNames);
+            }
+        } else if (stmt instanceof BlockStatement block) {
+            for (Statement s : block.body()) {
+                collectVarNamesFromStatement(s, varNames);
+            }
+        } else if (stmt instanceof IfStatement ifStmt) {
+            collectVarNamesFromStatement(ifStmt.consequent(), varNames);
+            if (ifStmt.alternate() != null) {
+                collectVarNamesFromStatement(ifStmt.alternate(), varNames);
+            }
+        } else if (stmt instanceof WhileStatement whileStmt) {
+            collectVarNamesFromStatement(whileStmt.body(), varNames);
+        } else if (stmt instanceof TryStatement tryStmt) {
+            for (Statement s : tryStmt.block().body()) {
+                collectVarNamesFromStatement(s, varNames);
+            }
+            if (tryStmt.handler() != null) {
+                for (Statement s : tryStmt.handler().body().body()) {
+                    collectVarNamesFromStatement(s, varNames);
+                }
+            }
+            if (tryStmt.finalizer() != null) {
+                for (Statement s : tryStmt.finalizer().body()) {
+                    collectVarNamesFromStatement(s, varNames);
+                }
+            }
+        } else if (stmt instanceof SwitchStatement switchStmt) {
+            for (SwitchStatement.SwitchCase sc : switchStmt.cases()) {
+                for (Statement s : sc.consequent()) {
+                    collectVarNamesFromStatement(s, varNames);
+                }
+            }
+        } else if (stmt instanceof LabeledStatement labeledStmt) {
+            collectVarNamesFromStatement(labeledStmt.body(), varNames);
         }
     }
 
@@ -2576,6 +2654,16 @@ public final class BytecodeCompiler {
             String varName = id.name();
             if (inGlobalScope) {
                 emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+            } else if (varInGlobalProgram) {
+                // var declaration in global program inside a block (for, try, if, etc.).
+                // var is global-scoped, so use PUT_VAR — UNLESS the name is already
+                // a local (e.g., catch parameter per ES B.3.5), in which case use PUT_LOCAL.
+                Integer existingLocal = findLocalInScopes(varName);
+                if (existingLocal != null) {
+                    emitter.emitOpcodeU16(Opcode.PUT_LOCAL, existingLocal);
+                } else {
+                    emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                }
             } else {
                 int localIndex = currentScope().declareLocal(varName);
                 emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
@@ -2764,6 +2852,7 @@ public final class BytecodeCompiler {
 
     private void compileProgram(Program program) {
         inGlobalScope = true;
+        isGlobalProgram = true;
         strictMode = program.strict();  // Set strict mode from program directive
         enterScope();
         registerGlobalProgramBindings(program.body());
@@ -2780,10 +2869,11 @@ public final class BytecodeCompiler {
                     hoistedFunctionNames.add(funcDecl.id().name());
                 }
                 compileFunctionDeclaration(funcDecl);
-            } else if (stmt instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                    collectPatternBindingNames(d.id(), varNames);
-                }
+            } else {
+                // Collect var names from all statements, including nested ones.
+                // var declarations are function/global-scoped and must be hoisted
+                // regardless of block nesting (for, try, if, etc.).
+                collectVarNamesFromStatement(stmt, varNames);
             }
         }
 
@@ -2922,6 +3012,11 @@ public final class BytecodeCompiler {
             compileThrowStatement(throwStmt);
         } else if (stmt instanceof TryStatement tryStmt) {
             compileTryStatement(tryStmt);
+            // Try statements produce a value on the stack (the try/catch result).
+            // Drop it when not the last statement in a program.
+            if (!isLastInProgram) {
+                emitter.emitOpcode(Opcode.DROP);
+            }
         } else if (stmt instanceof SwitchStatement switchStmt) {
             compileSwitchStatement(switchStmt);
         } else if (stmt instanceof VariableDeclaration varDecl) {
@@ -3318,6 +3413,13 @@ public final class BytecodeCompiler {
         // Compile try block - preserve value of last expression
         compileTryFinallyBlock(tryStmt.block());
 
+        // Remove the CatchOffset marker from the stack (normal path, no exception).
+        // NIP_CATCH pops everything down to and including the CatchOffset marker,
+        // then re-pushes the try result value.
+        if (tryStmt.handler() != null) {
+            emitter.emitOpcode(Opcode.NIP_CATCH);
+        }
+
         // Jump over catch block
         int jumpOverCatch = emitter.emitJump(Opcode.GOTO);
 
@@ -3608,8 +3710,14 @@ public final class BytecodeCompiler {
     private void compileVariableDeclaration(VariableDeclaration varDecl) {
         boolean isUsingDeclaration = varDecl.kind() == VariableKind.USING || varDecl.kind() == VariableKind.AWAIT_USING;
         boolean isAwaitUsingDeclaration = varDecl.kind() == VariableKind.AWAIT_USING;
+        // Track whether this is a var declaration in global program scope
+        // so compilePatternAssignment can use PUT_VAR for global-scoped vars.
+        boolean savedVarInGlobalProgram = varInGlobalProgram;
+        if (isGlobalProgram && varDecl.kind() == VariableKind.VAR) {
+            varInGlobalProgram = true;
+        }
         for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
-            if (inGlobalScope) {
+            if (inGlobalScope || varInGlobalProgram) {
                 collectPatternBindingNames(declarator.id(), nonDeletableGlobalBindings);
             }
             if (isUsingDeclaration) {
@@ -3633,6 +3741,7 @@ public final class BytecodeCompiler {
             // Assign to pattern (handles Identifier, ObjectPattern, ArrayPattern)
             compilePatternAssignment(declarator.id());
         }
+        varInGlobalProgram = savedVarInGlobalProgram;
     }
 
     private void compileWhileStatement(WhileStatement whileStmt) {
