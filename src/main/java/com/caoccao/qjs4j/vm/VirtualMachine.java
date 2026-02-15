@@ -964,18 +964,29 @@ public final class VirtualMachine {
                         PropertyKey key = PropertyKey.fromValue(context, propertyValue);
 
                         if (objectValue.isUndefined()) {
-                            throw referenceErrorNotDefined(key);
+                            String name = key != null ? key.toPropertyString() : "variable";
+                            pendingException = context.throwReferenceError(name + " is not defined");
+                            valueStack.push(JSUndefined.INSTANCE);
+                            pc += op.getSize();
+                            break;
                         }
 
                         JSObject targetObject = toObject(objectValue);
                         if (targetObject == null) {
-                            throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
+                            pendingException = context.throwTypeError("value has no property");
+                            valueStack.push(JSUndefined.INSTANCE);
+                            pc += op.getSize();
+                            break;
                         }
 
                         JSValue value;
                         if (!targetObject.has(key)) {
                             if (context.isStrictMode()) {
-                                throw referenceErrorNotDefined(key);
+                                String name = key != null ? key.toPropertyString() : "variable";
+                                pendingException = context.throwReferenceError(name + " is not defined");
+                                valueStack.push(JSUndefined.INSTANCE);
+                                pc += op.getSize();
+                                break;
                             }
                             value = JSUndefined.INSTANCE;
                         } else {
@@ -990,15 +1001,19 @@ public final class VirtualMachine {
                         PropertyKey key = PropertyKey.fromString(getVarName);
                         JSObject globalObject = context.getGlobalObject();
                         if (!globalObject.has(key)) {
-                            throw referenceErrorNotDefined(key);
+                            // Set pendingException instead of throwing directly so the
+                            // VM's exception handler can unwind to JavaScript try-catch.
+                            pendingException = context.throwReferenceError(getVarName + " is not defined");
+                            valueStack.push(JSUndefined.INSTANCE);
+                        } else {
+                            JSValue varValue = globalObject.get(key);
+                            // Start tracking property access from variable name (unless locked)
+                            if (!propertyAccessLock) {
+                                resetPropertyAccessTracking();
+                                propertyAccessChain.append(getVarName);
+                            }
+                            valueStack.push(varValue);
                         }
-                        JSValue varValue = globalObject.get(key);
-                        // Start tracking property access from variable name (unless locked)
-                        if (!propertyAccessLock) {
-                            resetPropertyAccessTracking();
-                            propertyAccessChain.append(getVarName);
-                        }
-                        valueStack.push(varValue);
                         pc += op.getSize();
                     }
                     case PUT_VAR_INIT -> {
@@ -1015,18 +1030,26 @@ public final class VirtualMachine {
 
                         if (objectValue.isUndefined()) {
                             if (context.isStrictMode()) {
-                                throw referenceErrorNotDefined(key);
+                                String name = key != null ? key.toPropertyString() : "variable";
+                                pendingException = context.throwReferenceError(name + " is not defined");
+                                pc += op.getSize();
+                                break;
                             }
                             objectValue = context.getGlobalObject();
                         }
 
                         JSObject targetObject = toObject(objectValue);
                         if (targetObject == null) {
-                            throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
+                            pendingException = context.throwTypeError("value has no property");
+                            pc += op.getSize();
+                            break;
                         }
 
                         if (!targetObject.has(key) && context.isStrictMode()) {
-                            throw referenceErrorNotDefined(key);
+                            String name = key != null ? key.toPropertyString() : "variable";
+                            pendingException = context.throwReferenceError(name + " is not defined");
+                            pc += op.getSize();
+                            break;
                         }
 
                         targetObject.set(key, setValue, context);
