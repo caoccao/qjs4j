@@ -392,21 +392,22 @@ public final class JSReflectObject {
         }
 
         JSValue prototypeArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSObject proto;
         if (prototypeArg instanceof JSNull) {
-            if (target instanceof JSProxy proxy) {
-                return JSBoolean.valueOf(proxy.setPrototypeWithResult(null));
-            }
-            target.setPrototype(null);
-            return JSBoolean.TRUE;
-        } else if (prototypeArg instanceof JSObject prototype) {
-            if (target instanceof JSProxy proxy) {
-                return JSBoolean.valueOf(proxy.setPrototypeWithResult(prototype));
-            }
-            target.setPrototype(prototype);
-            return JSBoolean.TRUE;
+            proto = null;
+        } else if (prototypeArg instanceof JSObject p) {
+            proto = p;
         } else {
             return context.throwTypeError("Object prototype may only be an Object or null");
         }
+
+        if (target instanceof JSProxy proxy) {
+            return JSBoolean.valueOf(proxy.setPrototypeWithResult(proto));
+        }
+
+        // Following QuickJS: Reflect.setPrototypeOf uses throw_flag=FALSE (returns boolean)
+        JSObject.SetPrototypeResult result = target.setPrototypeChecked(proto);
+        return JSBoolean.valueOf(result == JSObject.SetPrototypeResult.SUCCESS);
     }
 
     private static PropertyDescriptor toPropertyDescriptor(JSContext context, JSObject descriptorObject) {

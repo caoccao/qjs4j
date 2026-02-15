@@ -176,10 +176,29 @@ public final class ObjectPrototype {
             return JSUndefined.INSTANCE;
         }
 
+        // Following QuickJS: __proto__ setter uses throw_flag=TRUE
+        JSObject protoObj;
         if (proto instanceof JSNull) {
-            obj.setPrototype(null);
-        } else if (proto instanceof JSObject protoObj) {
+            protoObj = null;
+        } else if (proto instanceof JSObject p) {
+            protoObj = p;
+        } else {
+            // Non-object, non-null values are silently ignored
+            return JSUndefined.INSTANCE;
+        }
+
+        // Proxies have their own setPrototype logic with trap handling
+        if (obj instanceof JSProxy) {
             obj.setPrototype(protoObj);
+            return JSUndefined.INSTANCE;
+        }
+
+        JSObject.SetPrototypeResult result = obj.setPrototypeChecked(protoObj);
+        if (result != JSObject.SetPrototypeResult.SUCCESS) {
+            String msg = result == JSObject.SetPrototypeResult.NOT_EXTENSIBLE
+                    ? "object is not extensible"
+                    : "circular prototype chain";
+            return context.throwTypeError(msg);
         }
 
         return JSUndefined.INSTANCE;

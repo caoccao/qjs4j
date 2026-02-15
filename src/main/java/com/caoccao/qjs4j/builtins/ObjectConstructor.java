@@ -952,12 +952,28 @@ public final class ObjectConstructor {
         }
 
         JSValue protoValue = args[1];
-        if (protoValue instanceof JSObject proto) {
-            obj.setPrototype(proto);
+        JSObject proto;
+        if (protoValue instanceof JSObject protoObj) {
+            proto = protoObj;
         } else if (protoValue instanceof JSNull) {
-            obj.setPrototype(null);
+            proto = null;
         } else {
             return context.throwTypeError("Object prototype may only be an Object or null");
+        }
+
+        // Proxies have their own setPrototype logic with trap handling
+        if (obj instanceof JSProxy) {
+            obj.setPrototype(proto);
+            return obj;
+        }
+
+        // Following QuickJS: Object.setPrototypeOf uses throw_flag=TRUE
+        JSObject.SetPrototypeResult result = obj.setPrototypeChecked(proto);
+        if (result != JSObject.SetPrototypeResult.SUCCESS) {
+            String msg = result == JSObject.SetPrototypeResult.NOT_EXTENSIBLE
+                    ? "object is not extensible"
+                    : "circular prototype chain";
+            return context.throwTypeError(msg);
         }
 
         return obj;

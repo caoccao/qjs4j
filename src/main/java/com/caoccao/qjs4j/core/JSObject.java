@@ -881,6 +881,45 @@ public non-sealed class JSObject implements JSValue {
         this.prototype = prototype;
     }
 
+    /**
+     * Set the prototype following ES spec invariants (QuickJS JS_SetPrototypeInternal).
+     * Checks: same prototype (no-op), extensibility, and circular chain.
+     *
+     * @param proto The new prototype (null for Object.prototype = null)
+     * @return SetPrototypeResult indicating success or failure reason
+     */
+    public SetPrototypeResult setPrototypeChecked(JSObject proto) {
+        // Same prototype - no change needed
+        if (this.prototype == proto) {
+            return SetPrototypeResult.SUCCESS;
+        }
+
+        // Non-extensible objects cannot have their prototype changed
+        if (!this.extensible) {
+            return SetPrototypeResult.NOT_EXTENSIBLE;
+        }
+
+        // Check for circular prototype chain
+        if (proto != null) {
+            JSObject p = proto;
+            while (p != null) {
+                if (p == this) {
+                    return SetPrototypeResult.CIRCULAR;
+                }
+                p = p.getPrototype();
+            }
+        }
+
+        this.prototype = proto;
+        return SetPrototypeResult.SUCCESS;
+    }
+
+    public enum SetPrototypeResult {
+        SUCCESS,
+        NOT_EXTENSIBLE,
+        CIRCULAR
+    }
+
     public boolean setWithResult(PropertyKey key, JSValue value, JSContext context) {
         return setWithResult(key, value, context, this);
     }
