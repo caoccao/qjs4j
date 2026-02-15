@@ -73,8 +73,14 @@ public final class Parser {
     private void consumeSemicolon() {
         if (match(TokenType.SEMICOLON)) {
             advance();
+            return;
         }
-        // Otherwise, automatic semicolon insertion
+        // ASI: semicolon is inserted if there's a line break before the current token,
+        // or if the current token is } or EOF (per ECMAScript spec 12.9.1)
+        if (hasNewlineBefore() || match(TokenType.RBRACE) || match(TokenType.EOF)) {
+            return;
+        }
+        throw new JSSyntaxErrorException("Unexpected token '" + currentToken.value() + "'");
     }
 
     private void enterFunctionContext(boolean asyncFunction) {
@@ -1256,15 +1262,24 @@ public final class Parser {
         boolean isForIn = false;
         Statement parsedDecl = null;
 
-        // Try to parse as variable declaration
+        // Try to parse as variable declaration (without consuming semicolon,
+        // since we need to check for 'of' or 'in' first)
         if (match(TokenType.VAR) || match(TokenType.LET) || match(TokenType.CONST)
                 || isUsingDeclarationStart() || isAwaitUsingDeclarationStart()) {
             if (isAwaitUsingDeclarationStart()) {
-                parsedDecl = parseUsingDeclaration(true);
+                SourceLocation declLocation = getLocation();
+                expect(TokenType.AWAIT);
+                advance(); // consume 'using'
+                parsedDecl = parseVariableDeclarationBody(VariableKind.AWAIT_USING, declLocation, false);
             } else if (isUsingDeclarationStart()) {
-                parsedDecl = parseUsingDeclaration(false);
+                SourceLocation declLocation = getLocation();
+                advance(); // consume 'using'
+                parsedDecl = parseVariableDeclarationBody(VariableKind.USING, declLocation, false);
             } else {
-                parsedDecl = parseVariableDeclaration();
+                SourceLocation declLocation = getLocation();
+                VariableKind kind = VariableKind.fromKeyword(currentToken.value());
+                advance();
+                parsedDecl = parseVariableDeclarationBody(kind, declLocation, false);
             }
             // Check if next token is 'of' or 'in'
             if (match(TokenType.OF)) {
@@ -1313,6 +1328,7 @@ public final class Parser {
         Statement init = null;
         if (parsedDecl != null) {
             init = parsedDecl;
+            expect(TokenType.SEMICOLON); // consume ; after init declaration
         } else if (!match(TokenType.SEMICOLON)) {
             if (match(TokenType.VAR) || match(TokenType.LET) || match(TokenType.CONST)
                     || isUsingDeclarationStart() || isAwaitUsingDeclarationStart()) {
@@ -2504,6 +2520,10 @@ public final class Parser {
     }
 
     private Statement parseVariableDeclarationBody(VariableKind kind, SourceLocation location) {
+        return parseVariableDeclarationBody(kind, location, true);
+    }
+
+    private VariableDeclaration parseVariableDeclarationBody(VariableKind kind, SourceLocation location, boolean consumeSemi) {
         List<VariableDeclaration.VariableDeclarator> declarations = new ArrayList<>();
 
         do {
@@ -2522,7 +2542,9 @@ public final class Parser {
             declarations.add(new VariableDeclaration.VariableDeclarator(id, init));
         } while (match(TokenType.COMMA));
 
-        consumeSemicolon();
+        if (consumeSemi) {
+            consumeSemicolon();
+        }
         return new VariableDeclaration(declarations, kind, location);
     }
 

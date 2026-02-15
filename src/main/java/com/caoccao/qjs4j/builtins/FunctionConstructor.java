@@ -23,6 +23,7 @@ import com.caoccao.qjs4j.core.JSTypeConversions;
 import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -101,6 +102,8 @@ public final class FunctionConstructor {
 
             return result;
         } catch (JSCompilerException e) {
+            return context.throwSyntaxError(e.getMessage());
+        } catch (JSSyntaxErrorException e) {
             return context.throwSyntaxError(e.getMessage());
         } catch (JSException e) {
             return e.getErrorValue();
