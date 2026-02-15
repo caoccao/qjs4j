@@ -4672,10 +4672,6 @@ public final class BytecodeCompiler {
         return sourceCode.substring(startOffset, endOffset);
     }
 
-    private Integer findCapturedBindingIndex(String name) {
-        return captureResolver.findCapturedBindingIndex(name);
-    }
-
     private Integer findLocalInScopes(String name) {
         // Search from innermost scope (most recently pushed) to outermost
         for (Scope scope : scopes) {

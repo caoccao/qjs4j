@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.compiler.AstUtils;
 import com.caoccao.qjs4j.compiler.Compiler;
+import com.caoccao.qjs4j.compiler.ast.FunctionDeclaration;
+import com.caoccao.qjs4j.compiler.ast.Statement;
 import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.types.JSModule;
 import com.caoccao.qjs4j.vm.VirtualMachine;
@@ -625,6 +627,36 @@ public final class JSContext implements AutoCloseable {
                                         true,   // enumerable
                                         false   // configurable
                                 ));
+                    }
+                }
+            }
+
+            // For eval code: EvalDeclarationInstantiation step 8 (ES2024 19.2.1.3)
+            // Check CanDeclareGlobalFunction for all function declarations before executing.
+            // If any function declaration targets a non-configurable global property that is
+            // not both writable and enumerable, throw TypeError before any code runs.
+            // Following QuickJS js_closure2 first-pass check with JS_CheckDefineGlobalVar.
+            if (!isModule && isDirectEval) {
+                List<Statement> evalBody = compileResult.ast().body();
+                Set<String> checkedFuncNames = new HashSet<>();
+                for (int i = evalBody.size() - 1; i >= 0; i--) {
+                    if (evalBody.get(i) instanceof FunctionDeclaration funcDecl && funcDecl.id() != null) {
+                        String funcName = funcDecl.id().name();
+                        if (checkedFuncNames.add(funcName)) {
+                            PropertyKey key = PropertyKey.fromString(funcName);
+                            PropertyDescriptor desc = globalObject.getOwnPropertyDescriptor(key);
+                            if (desc != null && !desc.isConfigurable()) {
+                                if (desc.isAccessorDescriptor()
+                                        || !(desc.isWritable() && desc.isEnumerable())) {
+                                    throw new JSException("TypeError",
+                                            "cannot define variable '" + funcName + "'");
+                                }
+                            }
+                            if (desc == null && !globalObject.isExtensible()) {
+                                throw new JSException("TypeError",
+                                        "cannot define variable '" + funcName + "'");
+                            }
+                        }
                     }
                 }
             }
