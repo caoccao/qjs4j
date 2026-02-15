@@ -210,13 +210,47 @@ public final class JSGenerator extends JSObject {
         }
 
         // Generator is suspended at a yield point
-        state = State.COMPLETED;
-        done = true;
         if (generatorState != null) {
-            // Run to completion so finally blocks execute
+            // Check if suspended at a yield* point - need to handle delegation protocol
+            // Following QuickJS js_generator_next with GEN_MAGIC_RETURN:
+            // For SUSPENDED_YIELD_STAR, the return value and magic are pushed on the stack,
+            // and the yield* bytecode calls iterator.return(value).
+            com.caoccao.qjs4j.vm.YieldResult lastYield = context.getVirtualMachine().getLastYieldResult();
+            if (lastYield != null && lastYield.isYieldStar()) {
+                generatorState.recordResume(JSGeneratorState.ResumeKind.RETURN, returnVal);
+                state = State.EXECUTING;
+                try {
+                    JSValue yieldValue = context.getVirtualMachine().executeGenerator(generatorState, context);
+                    if (generatorState.isCompleted()) {
+                        state = State.COMPLETED;
+                        done = true;
+                        return createIteratorResult(yieldValue, true);
+                    } else {
+                        // Inner iterator returned done:false - continue delegation
+                        state = State.SUSPENDED_YIELD;
+                        com.caoccao.qjs4j.vm.YieldResult newYield = context.getVirtualMachine().getLastYieldResult();
+                        if (newYield != null && newYield.isYieldStar() && yieldValue instanceof JSObject resultObj) {
+                            return resultObj;
+                        }
+                        return createIteratorResult(yieldValue, false);
+                    }
+                } catch (Exception e) {
+                    state = State.COMPLETED;
+                    done = true;
+                    generatorState.setCompleted(true);
+                    throw e;
+                }
+            }
+
+            // Regular yield - run to completion so finally blocks execute
+            state = State.COMPLETED;
+            done = true;
             while (!generatorState.isCompleted()) {
                 context.getVirtualMachine().executeGenerator(generatorState, context);
             }
+        } else {
+            state = State.COMPLETED;
+            done = true;
         }
         return createIteratorResult(returnVal, true);
     }

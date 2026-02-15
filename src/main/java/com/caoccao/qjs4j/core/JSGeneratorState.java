@@ -101,6 +101,7 @@ public final class JSGeneratorState {
 
     public enum ResumeKind {
         NEXT,
+        RETURN,
         THROW
     }
 

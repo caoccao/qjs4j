@@ -3362,19 +3362,121 @@ public final class VirtualMachine {
             throw new JSVirtualMachineException("Iterator method must return an object");
         }
 
-        // Get the next() method from the iterator
+        // Check for RETURN/THROW resume (yield* delegation protocol per ES2024 27.5.3.3)
+        // Following QuickJS js_generator_next: when resumed with GEN_MAGIC_RETURN or GEN_MAGIC_THROW,
+        // the magic and value are passed to the yield* bytecode which calls the appropriate method.
+        JSGeneratorState.ResumeRecord resumeRecord =
+                generatorResumeIndex < generatorResumeRecords.size()
+                        ? generatorResumeRecords.get(generatorResumeIndex)
+                        : null;
+
+        if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
+            generatorResumeIndex++; // consume the record
+            JSValue returnValue = resumeRecord.value();
+
+            // Get "return" method from iterator
+            JSValue returnMethodValue = iteratorObj.get(PropertyKey.fromString("return"));
+            boolean noReturnMethod = returnMethodValue.isUndefined() || returnMethodValue.isNull();
+
+            if (noReturnMethod) {
+                // No return method - complete with the return value (don't yield)
+                valueStack.push(returnValue);
+                return;
+            }
+
+            if (!(returnMethodValue instanceof JSFunction returnFunc)) {
+                throw new JSVirtualMachineException(context.throwTypeError("iterator return is not a function"));
+            }
+
+            // Call iterator.return(value)
+            JSValue result = returnFunc.call(context, iteratorObj, new JSValue[]{returnValue});
+
+            // Check result is an object (per spec, TypeError if not)
+            if (!(result instanceof JSObject)) {
+                throw new JSVirtualMachineException(context.throwTypeError("iterator must return an object"));
+            }
+
+            // Check done flag
+            JSValue doneValue = ((JSObject) result).get(PropertyKey.fromString("done"));
+            if (JSTypeConversions.toBoolean(doneValue).value()) {
+                // Done - push value and complete (don't yield)
+                JSValue value = ((JSObject) result).get(PropertyKey.fromString("value"));
+                valueStack.push(value);
+                return;
+            } else {
+                // Not done - yield the result and continue delegation
+                yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result);
+                valueStack.push(result);
+                return;
+            }
+        }
+
+        if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
+            generatorResumeIndex++; // consume the record
+            JSValue throwValue = resumeRecord.value();
+
+            // Get "throw" method from iterator
+            JSValue throwMethodValue = iteratorObj.get(PropertyKey.fromString("throw"));
+            boolean noThrowMethod = throwMethodValue.isUndefined() || throwMethodValue.isNull();
+
+            if (noThrowMethod) {
+                // No throw method - close iterator and throw TypeError
+                JSValue closeMethod = iteratorObj.get(PropertyKey.fromString("return"));
+                if (closeMethod instanceof JSFunction closeFunc) {
+                    closeFunc.call(context, iteratorObj, new JSValue[0]);
+                }
+                throw new JSVirtualMachineException(context.throwTypeError(
+                        "iterator does not have a throw method"));
+            }
+
+            if (!(throwMethodValue instanceof JSFunction throwFunc)) {
+                throw new JSVirtualMachineException(context.throwTypeError("iterator throw is not a function"));
+            }
+
+            // Call iterator.throw(value)
+            JSValue result = throwFunc.call(context, iteratorObj, new JSValue[]{throwValue});
+
+            // Check result is an object
+            if (!(result instanceof JSObject)) {
+                throw new JSVirtualMachineException(context.throwTypeError("iterator must return an object"));
+            }
+
+            // Check done flag
+            JSValue doneValue = ((JSObject) result).get(PropertyKey.fromString("done"));
+            if (JSTypeConversions.toBoolean(doneValue).value()) {
+                // Done - push value and complete the yield* expression
+                JSValue value = ((JSObject) result).get(PropertyKey.fromString("value"));
+                valueStack.push(value);
+                return;
+            } else {
+                // Not done - yield the result
+                yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result);
+                valueStack.push(result);
+                return;
+            }
+        }
+
+        // Default: NEXT protocol - call iterator.next()
         JSValue nextMethod = iteratorObj.get(PropertyKey.fromString("next"));
         if (!(nextMethod instanceof JSFunction nextFunc)) {
             throw new JSVirtualMachineException("Iterator must have a next method");
         }
 
-        // Call iterator.next()
         JSValue result = nextFunc.call(context, iterator, new JSValue[0]);
 
         // The result should be an object (the iterator result)
-        // For yield*, we return the raw iterator result without wrapping
         if (!(result instanceof JSObject)) {
             throw new JSVirtualMachineException("Iterator result must be an object");
+        }
+
+        // Check if the inner iterator is done
+        JSValue doneValue = ((JSObject) result).get(PropertyKey.fromString("done"));
+        if (JSTypeConversions.toBoolean(doneValue).value()) {
+            // Inner iterator done - yield* expression value is the final value
+            JSValue value = ((JSObject) result).get(PropertyKey.fromString("value"));
+            valueStack.push(value);
+            // Don't set yieldResult - the yield* expression completes
+            return;
         }
 
         // Set yield result to the raw iterator result object
