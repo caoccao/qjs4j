@@ -1860,8 +1860,27 @@ public final class Parser {
                     exitFunctionContext(isAsync);
                 }
                 properties.add(new ObjectExpression.Property(key, value, "init", computed, false));
-            } else {
+            } else if (match(TokenType.COLON)) {
                 // Regular property: key: value
+                advance();
+                Expression value = parseAssignmentExpression();
+                properties.add(new ObjectExpression.Property(key, value, "init", computed, false));
+            } else if (!computed && key instanceof Identifier keyId
+                    && (match(TokenType.COMMA) || match(TokenType.RBRACE) || match(TokenType.ASSIGN))) {
+                // Shorthand property: {x} or CoverInitializedName: {x = defaultExpr}
+                Expression value;
+                if (match(TokenType.ASSIGN)) {
+                    advance();
+                    Expression defaultValue = parseAssignmentExpression();
+                    value = new AssignmentExpression(keyId,
+                            AssignmentExpression.AssignmentOperator.ASSIGN,
+                            defaultValue, keyId.getLocation());
+                } else {
+                    value = keyId;
+                }
+                properties.add(new ObjectExpression.Property(key, value, "init", false, true));
+            } else {
+                // Fallback: expect colon
                 expect(TokenType.COLON);
                 Expression value = parseAssignmentExpression();
                 properties.add(new ObjectExpression.Property(key, value, "init", computed, false));

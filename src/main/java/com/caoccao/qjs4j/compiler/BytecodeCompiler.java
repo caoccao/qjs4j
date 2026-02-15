@@ -202,8 +202,6 @@ public final class BytecodeCompiler {
         }
     }
 
-    // ==================== Program Compilation ====================
-
     /**
      * Compile an AST node into bytecode.
      */
@@ -214,6 +212,45 @@ public final class BytecodeCompiler {
             throw new IllegalArgumentException("Expected Program node, got: " + ast.getClass().getName());
         }
         return emitter.build(maxLocalCount);
+    }
+
+    private void compileArrayDestructuringAssignment(ArrayExpression arrayExpr) {
+        // Stack: [array]
+        int index = 0;
+        for (Expression element : arrayExpr.elements()) {
+            if (element != null) {
+                // Duplicate array for property access
+                emitter.emitOpcode(Opcode.DUP);
+                emitter.emitOpcode(Opcode.PUSH_I32);
+                emitter.emitI32(index);
+                emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                // Stack: [array, value]
+
+                if (element instanceof AssignmentExpression assignExpr
+                        && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                    // Default value: check if value is undefined
+                    emitter.emitOpcode(Opcode.DUP);
+                    emitter.emitOpcode(Opcode.IS_UNDEFINED);
+                    int jumpNotUndefined = emitter.emitJump(Opcode.IF_FALSE);
+                    emitter.emitOpcode(Opcode.DROP);
+                    compileExpression(assignExpr.right());
+                    emitter.patchJump(jumpNotUndefined, emitter.currentOffset());
+                    // Assign to target
+                    compileAssignmentTarget(assignExpr.left());
+                } else if (element instanceof SpreadElement spreadElem) {
+                    // Rest element in assignment: [...rest] = value
+                    // Drop the single-element value we just got
+                    emitter.emitOpcode(Opcode.DROP);
+                    // Re-get remaining elements as array using Array.from + slice
+                    compileAssignmentTarget(spreadElem.argument());
+                } else {
+                    compileAssignmentTarget(element);
+                }
+            }
+            index++;
+        }
+        // Drop the array
+        emitter.emitOpcode(Opcode.DROP);
     }
 
     private void compileArrayExpression(ArrayExpression arrayExpr) {
@@ -307,8 +344,6 @@ public final class BytecodeCompiler {
             }
         }
     }
-
-    // ==================== Statement Compilation ====================
 
     private void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
@@ -564,6 +599,56 @@ public final class BytecodeCompiler {
                     emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
                 }
             }
+        } else if (left instanceof ArrayExpression arrayExpr) {
+            // Destructuring array assignment: [x, y] = rhs
+            // Stack: [rightValue]
+            emitter.emitOpcode(Opcode.DUP);
+            // Stack: [rightValue, rightValue]
+            compileArrayDestructuringAssignment(arrayExpr);
+            // Stack: [rightValue]
+        } else if (left instanceof ObjectExpression objExpr) {
+            // Destructuring object assignment: {x, y} = rhs
+            // Stack: [rightValue]
+            emitter.emitOpcode(Opcode.DUP);
+            // Stack: [rightValue, rightValue]
+            compileObjectDestructuringAssignment(objExpr);
+            // Stack: [rightValue]
+        }
+    }
+
+    private void compileAssignmentTarget(Expression target) {
+        // Stack: [value]
+        // Assign value to target and pop value from stack
+        if (target instanceof Identifier id) {
+            String name = id.name();
+            Integer localIndex = findLocalInScopes(name);
+            if (localIndex != null) {
+                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+            } else {
+                Integer capturedIndex = resolveCapturedBindingIndex(name);
+                if (capturedIndex != null) {
+                    emitter.emitOpcodeU16(Opcode.PUT_VAR_REF, capturedIndex);
+                } else {
+                    emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
+                }
+            }
+        } else if (target instanceof MemberExpression memberExpr) {
+            // Stack: [value]
+            compileExpression(memberExpr.object());
+            // Stack: [value, obj]
+            if (memberExpr.computed()) {
+                compileExpression(memberExpr.property());
+                // Stack: [value, obj, prop]
+                emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+            } else if (memberExpr.property() instanceof Identifier propId) {
+                emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+            }
+            // PUT_FIELD/PUT_ARRAY_EL leave value on stack; drop it
+            emitter.emitOpcode(Opcode.DROP);
+        } else if (target instanceof ArrayExpression nestedArray) {
+            compileArrayDestructuringAssignment(nestedArray);
+        } else if (target instanceof ObjectExpression nestedObj) {
+            compileObjectDestructuringAssignment(nestedObj);
         }
     }
 
@@ -2698,6 +2783,42 @@ public final class BytecodeCompiler {
         emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, newExpr.arguments().size());
     }
 
+    private void compileObjectDestructuringAssignment(ObjectExpression objExpr) {
+        // Stack: [object]
+        for (ObjectExpression.Property prop : objExpr.properties()) {
+            String propName;
+            if (prop.key() instanceof Identifier keyId) {
+                propName = keyId.name();
+            } else if (prop.key() instanceof Literal lit && lit.value() instanceof String s) {
+                propName = s;
+            } else {
+                continue;
+            }
+
+            // Duplicate object for property access
+            emitter.emitOpcode(Opcode.DUP);
+            emitter.emitOpcodeAtom(Opcode.GET_FIELD, propName);
+            // Stack: [object, value]
+
+            Expression value = prop.value();
+            if (value instanceof AssignmentExpression assignExpr
+                    && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                // Default value
+                emitter.emitOpcode(Opcode.DUP);
+                emitter.emitOpcode(Opcode.IS_UNDEFINED);
+                int jumpNotUndefined = emitter.emitJump(Opcode.IF_FALSE);
+                emitter.emitOpcode(Opcode.DROP);
+                compileExpression(assignExpr.right());
+                emitter.patchJump(jumpNotUndefined, emitter.currentOffset());
+                compileAssignmentTarget(assignExpr.left());
+            } else {
+                compileAssignmentTarget(value);
+            }
+        }
+        // Drop the object
+        emitter.emitOpcode(Opcode.DROP);
+    }
+
     private void compileObjectExpression(ObjectExpression objExpr) {
         emitter.emitOpcode(Opcode.OBJECT_NEW);
 
@@ -3184,8 +3305,6 @@ public final class BytecodeCompiler {
                 "static { [initializer] }"
         );
     }
-
-    // ==================== Expression Compilation ====================
 
     /**
      * Compile a static field initializer as a function and return it.
@@ -4382,8 +4501,6 @@ public final class BytecodeCompiler {
 
         return sourceCode.substring(startOffset, endOffset);
     }
-
-    // ==================== Scope Management ====================
 
     private Integer findCapturedBindingIndex(String name) {
         return captureResolver.findCapturedBindingIndex(name);
