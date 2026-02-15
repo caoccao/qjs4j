@@ -1969,7 +1969,10 @@ public final class Parser {
     private Expression parsePostfixExpression() {
         Expression expr = parseCallExpression();
 
-        if (match(TokenType.INC) || match(TokenType.DEC)) {
+        // Per ES spec 12.9.1: if a line terminator occurs between the operand
+        // and the ++/-- operator, ASI inserts a semicolon before the operator.
+        // Following QuickJS !s->got_lf check in postfix operator parsing.
+        if (!hasNewlineBefore() && (match(TokenType.INC) || match(TokenType.DEC))) {
             UnaryOperator op = match(TokenType.INC) ? UnaryOperator.INC : UnaryOperator.DEC;
             SourceLocation location = getLocation();
             advance();
