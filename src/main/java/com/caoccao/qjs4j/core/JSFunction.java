@@ -82,6 +82,15 @@ public abstract sealed class JSFunction extends JSObject
             }
         }
         context.transferPrototype(this, NAME);
+        // Also initialize the function's .prototype property's [[Prototype]] to Object.prototype.
+        // JSBytecodeFunction creates .prototype with new JSObject() which has [[Prototype]] = null,
+        // because the context is not available at construction time.
+        if (this instanceof JSBytecodeFunction) {
+            JSValue protoVal = this.get("prototype");
+            if (protoVal instanceof JSObject protoObj && protoObj.getPrototype() == null) {
+                context.transferPrototype(protoObj, JSObject.NAME);
+            }
+        }
     }
 
     @Override
