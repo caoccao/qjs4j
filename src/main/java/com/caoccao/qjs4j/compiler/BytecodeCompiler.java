@@ -38,6 +38,7 @@ public final class BytecodeCompiler {
     private final Set<String> nonDeletableGlobalBindings;
     private final Deque<Scope> scopes;
     private final Set<String> tdzLocals;
+    private boolean hasEnclosingArgumentsBinding;  // true if an enclosing non-arrow function provides 'arguments'
     private boolean inGlobalScope;
     private boolean isGlobalProgram;  // true when compiling top-level program (not inside a function)
     private boolean isInArrowFunction;  // Track if we're currently compiling an arrow function
@@ -84,6 +85,20 @@ public final class BytecodeCompiler {
         this.varInGlobalProgram = false;
     }
 
+    /**
+     * Check if a list of statements contains a {@code var arguments} declaration.
+     * Recurses into nested control structures (since var hoists) but NOT into
+     * nested functions (which have their own scope).
+     */
+    private static boolean containsVarArgumentsDeclaration(List<Statement> statements) {
+        for (Statement stmt : statements) {
+            if (statementContainsVarArguments(stmt)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static String[] extractLocalVarNames(Scope scope) {
         int count = scope.getLocalCount();
         if (count == 0) {
@@ -116,6 +131,59 @@ public final class BytecodeCompiler {
                 }
             }
         }
+        return false;
+    }
+
+    private static boolean statementContainsVarArguments(Statement stmt) {
+        if (stmt instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
+            for (var d : varDecl.declarations()) {
+                if (d.id() instanceof Identifier id && "arguments".equals(id.name())) {
+                    return true;
+                }
+            }
+        }
+        if (stmt instanceof BlockStatement block) {
+            return containsVarArgumentsDeclaration(block.body());
+        }
+        if (stmt instanceof IfStatement ifStmt) {
+            if (statementContainsVarArguments(ifStmt.consequent())) return true;
+            if (ifStmt.alternate() != null) return statementContainsVarArguments(ifStmt.alternate());
+        }
+        if (stmt instanceof ForStatement forStmt) {
+            if (forStmt.init() instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
+                for (var d : varDecl.declarations()) {
+                    if (d.id() instanceof Identifier id && "arguments".equals(id.name())) return true;
+                }
+            }
+            return statementContainsVarArguments(forStmt.body());
+        }
+        if (stmt instanceof WhileStatement whileStmt) {
+            return statementContainsVarArguments(whileStmt.body());
+        }
+        if (stmt instanceof ForInStatement forInStmt) {
+            return statementContainsVarArguments(forInStmt.body());
+        }
+        if (stmt instanceof ForOfStatement forOfStmt) {
+            return statementContainsVarArguments(forOfStmt.body());
+        }
+        if (stmt instanceof SwitchStatement switchStmt) {
+            for (var c : switchStmt.cases()) {
+                if (containsVarArgumentsDeclaration(c.consequent())) return true;
+            }
+        }
+        if (stmt instanceof TryStatement tryStmt) {
+            if (containsVarArgumentsDeclaration(tryStmt.block().body())) return true;
+            if (tryStmt.handler() != null) {
+                if (containsVarArgumentsDeclaration(tryStmt.handler().body().body())) return true;
+            }
+            if (tryStmt.finalizer() != null) {
+                if (containsVarArgumentsDeclaration(tryStmt.finalizer().body())) return true;
+            }
+        }
+        if (stmt instanceof LabeledStatement labeledStmt) {
+            return statementContainsVarArguments(labeledStmt.body());
+        }
+        // Don't recurse into FunctionDeclaration, ClassDeclaration, etc.
         return false;
     }
 
@@ -377,6 +445,15 @@ public final class BytecodeCompiler {
         functionCompiler.inGlobalScope = false;
         functionCompiler.isInAsyncFunction = arrowExpr.isAsync();  // Track if this is an async function
         functionCompiler.isInArrowFunction = true;  // Arrow functions don't have their own arguments
+        // Arrow functions inherit arguments from enclosing non-arrow function.
+        // If the parent is a regular function (not arrow, not global program), it has arguments binding.
+        // If the parent is also an arrow, inherit whatever it has.
+        // The global program is not a function and doesn't provide 'arguments'.
+        if (this.isInArrowFunction) {
+            functionCompiler.hasEnclosingArgumentsBinding = this.hasEnclosingArgumentsBinding;
+        } else {
+            functionCompiler.hasEnclosingArgumentsBinding = !this.isGlobalProgram;
+        }
 
         // Check for "use strict" directive if body is a block statement
         if (arrowExpr.body() instanceof BlockStatement block && hasUseStrictDirective(block)) {
@@ -385,6 +462,18 @@ public final class BytecodeCompiler {
 
         for (Identifier param : arrowExpr.params()) {
             functionCompiler.currentScope().declareLocal(param.name());
+        }
+
+        // Pre-declare 'arguments' as a local when the arrow function has parameter expressions
+        // and the body contains 'var arguments'. This is needed so that:
+        // 1. eval() in default params can set 'arguments' via the scope overlay
+        // 2. Inner arrows in defaults can capture 'arguments' via closure
+        // Only for arrows without enclosing arguments binding (top-level arrows), since
+        // arrows inside regular functions use SPECIAL_OBJECT for 'arguments' instead.
+        if (arrowExpr.defaults() != null && !functionCompiler.hasEnclosingArgumentsBinding
+                && arrowExpr.body() instanceof BlockStatement bodyBlock
+                && containsVarArgumentsDeclaration(bodyBlock.body())) {
+            functionCompiler.currentScope().declareLocal("arguments");
         }
 
         // Emit default parameter initialization following QuickJS pattern:
@@ -2323,21 +2412,10 @@ public final class BytecodeCompiler {
             return;
         }
 
-        // Handle 'arguments' keyword in function scope
-        // For arrow functions, SPECIAL_OBJECT will walk up to find parent's arguments
-        // For regular functions, SPECIAL_OBJECT will create the arguments object
-        // Following QuickJS: arrow functions inherit arguments from enclosing scope
-        if (JSArguments.NAME.equals(name) && !inGlobalScope) {
-            // Emit SPECIAL_OBJECT opcode with type 0 (SPECIAL_OBJECT_ARGUMENTS)
-            // The VM will handle differently for arrow vs regular functions
-            emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-            emitter.emitU8(0);  // Type 0 = arguments object
-            return;
-        }
-
         // Always check local scopes first, even in global scope (for nested blocks/loops)
-        // Search from innermost scope (most recently pushed) to outermost
-        // ArrayDeque.push() adds to front, iterator() iterates from front to back
+        // This must happen BEFORE the 'arguments' special handling so that
+        // explicit `var arguments` or `let arguments` declarations take precedence.
+        // Following QuickJS: arguments is resolved through normal variable lookup first.
         Integer localIndex = findLocalInScopes(name);
 
         if (localIndex != null) {
@@ -2348,6 +2426,21 @@ public final class BytecodeCompiler {
             } else {
                 emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
             }
+            return;
+        }
+
+        // Handle 'arguments' keyword in function scope (only if not found as a local)
+        // For regular functions: SPECIAL_OBJECT creates the arguments object
+        // For arrow functions with enclosing regular function: SPECIAL_OBJECT walks up call stack
+        // For arrow functions without enclosing regular function: resolve as normal variable
+        // Following QuickJS: arrow functions inherit arguments from enclosing scope,
+        // but only if there is an enclosing scope with arguments binding
+        if (JSArguments.NAME.equals(name) && !inGlobalScope
+                && (!isInArrowFunction || hasEnclosingArgumentsBinding)) {
+            // Emit SPECIAL_OBJECT opcode with type 0 (SPECIAL_OBJECT_ARGUMENTS)
+            // The VM will handle differently for arrow vs regular functions
+            emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+            emitter.emitU8(0);  // Type 0 = arguments object
             return;
         }
 
@@ -3968,7 +4061,9 @@ public final class BytecodeCompiler {
             String name = id.name();
             if ("this".equals(name)) {
                 emitter.emitOpcode(Opcode.PUSH_THIS);
-            } else if (JSArguments.NAME.equals(name) && !inGlobalScope) {
+            } else if (JSArguments.NAME.equals(name) && !inGlobalScope
+                    && (!isInArrowFunction || hasEnclosingArgumentsBinding)
+                    && findLocalInScopes(name) == null) {
                 emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                 emitter.emitU8(0);
             } else {
