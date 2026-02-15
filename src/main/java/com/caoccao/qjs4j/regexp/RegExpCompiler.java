@@ -1332,6 +1332,13 @@ public final class RegExpCompiler {
                         context.pos++;
                         yield next % 32;
                     }
+                    // Annex B.1.4: In non-unicode mode, \c inside character class also
+                    // accepts DecimalDigit (0-9) and _ as ClassControlLetter
+                    if (!context.isUnicodeMode() &&
+                            ((next >= '0' && next <= '9') || next == '_')) {
+                        context.pos++;
+                        yield next % 32;
+                    }
                 }
                 // AnnexB: Invalid \c in char class → class contains '\' and 'c'
                 if (context.isUnicodeMode()) {
