@@ -98,6 +98,25 @@ public final class BytecodeCompiler {
         return names;
     }
 
+    /**
+     * Check if a function has non-simple parameters (parameter expressions).
+     * Per ES spec, a function has parameter expressions if it uses default values or rest parameters.
+     * Following QuickJS has_parameter_expressions flag.
+     */
+    private static boolean hasNonSimpleParameters(List<Expression> defaults, RestParameter restParameter) {
+        if (restParameter != null) {
+            return true;
+        }
+        if (defaults != null) {
+            for (Expression d : defaults) {
+                if (d != null) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private void collectLexicalBindings(List<Statement> body, Set<String> lexicals) {
         for (Statement s : body) {
             if (s instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
@@ -450,6 +469,7 @@ public final class BytecodeCompiler {
                 false,           // strict - TODO: inherit from enclosing scope
                 functionSource   // source code for toString()
         );
+        function.setHasParameterExpressions(hasNonSimpleParameters(arrowExpr.defaults(), arrowExpr.restParameter()));
 
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
@@ -2140,6 +2160,7 @@ public final class BytecodeCompiler {
                 functionSource,  // source code for toString()
                 selfCaptureIndex // closure self-reference index (-1 if none)
         );
+        function.setHasParameterExpressions(hasNonSimpleParameters(funcDecl.defaults(), funcDecl.restParameter()));
 
         emitCapturedValues(functionCompiler);
         // Emit FCLOSURE opcode with function in constant pool
@@ -2275,6 +2296,7 @@ public final class BytecodeCompiler {
                 isStrict,        // strict - detected from "use strict" directive in function body
                 functionSource   // source code for toString()
         );
+        function.setHasParameterExpressions(hasNonSimpleParameters(funcExpr.defaults(), funcExpr.restParameter()));
 
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
@@ -2754,7 +2776,7 @@ public final class BytecodeCompiler {
 
         // Create JSBytecodeFunction for the method
         int definedArgCount = computeDefinedArgCount(funcExpr.params(), funcExpr.defaults(), funcExpr.restParameter() != null);
-        return new JSBytecodeFunction(
+        JSBytecodeFunction methodFunc = new JSBytecodeFunction(
                 methodBytecode,
                 methodName,
                 definedArgCount,
@@ -2767,6 +2789,8 @@ public final class BytecodeCompiler {
                 true,            // strict - classes are always strict mode
                 "method " + methodName + "() { [method body] }"  // source for toString
         );
+        methodFunc.setHasParameterExpressions(hasNonSimpleParameters(funcExpr.defaults(), funcExpr.restParameter()));
+        return methodFunc;
     }
 
     private void compileNewExpression(NewExpression newExpr) {
@@ -4019,6 +4043,12 @@ public final class BytecodeCompiler {
         loopStack.pop();
     }
 
+    /**
+     * Compute the defined_arg_count for Function.length per ES2024 spec.
+     * Following QuickJS js_parse_function_decl2: length stops counting at the first
+     * parameter with a default value or a rest parameter.
+     */
+
     private void compileYieldExpression(YieldExpression yieldExpr) {
         // Compile the argument expression (if present)
         if (yieldExpr.argument() != null) {
@@ -4038,11 +4068,6 @@ public final class BytecodeCompiler {
         }
     }
 
-    /**
-     * Compute the defined_arg_count for Function.length per ES2024 spec.
-     * Following QuickJS js_parse_function_decl2: length stops counting at the first
-     * parameter with a default value or a rest parameter.
-     */
     private int computeDefinedArgCount(List<Identifier> params, List<Expression> defaults, boolean hasRest) {
         if (defaults == null) {
             return params.size();

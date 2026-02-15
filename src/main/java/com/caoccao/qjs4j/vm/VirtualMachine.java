@@ -2291,7 +2291,18 @@ public final class VirtualMachine {
                     case INITIAL_YIELD -> {
                         handleInitialYield();
                         pc += op.getSize();
-                        // Initial yield doesn't suspend - generator creation continues
+                        // Check if we should suspend (initial yield during generator creation)
+                        if (yieldResult != null) {
+                            // Return undefined - execution will resume from here on first .next()
+                            valueStack.setStackTop(savedStackTop);
+                            currentFrame = previousFrame;
+                            if (savedStrictMode) {
+                                context.enterStrictMode();
+                            } else {
+                                context.exitStrictMode();
+                            }
+                            return JSUndefined.INSTANCE;
+                        }
                     }
                     case YIELD -> {
                         handleYield();
@@ -3005,9 +3016,16 @@ public final class VirtualMachine {
 
     private void handleInitialYield() {
         // Initial yield - generator is being created
-        // In QuickJS, this is where generator creation stops and returns the generator object
-        // For now, just continue - the generator state tracking will handle suspension
-        // The yieldResult will be null, so executeGenerator won't mark it as yielding
+        // In QuickJS, this is where generator creation stops and returns the generator object.
+        // Per ES spec, parameter defaults are evaluated before INITIAL_YIELD,
+        // so errors during parameter initialization (e.g., SyntaxError from eval)
+        // are thrown during the generator function call, not during .next().
+        if (yieldSkipCount > 0) {
+            yieldSkipCount--;
+            return;
+        }
+        // Signal suspension at INITIAL_YIELD
+        yieldResult = new YieldResult(YieldResult.Type.INITIAL_YIELD, JSUndefined.INSTANCE);
     }
 
     private void handleInstanceof() {

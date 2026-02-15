@@ -47,6 +47,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private final JSObject prototype;
     private final int selfCaptureIndex;
     private final boolean strict;
+    private boolean hasParameterExpressions;
     private String sourceCode;
 
     /**
@@ -165,6 +166,10 @@ public final class JSBytecodeFunction extends JSFunction {
             // Create generator state to track execution
             JSGeneratorState generatorState = new JSGeneratorState(this, thisArg, args);
 
+            // Per ES spec, execute up to INITIAL_YIELD to evaluate parameter defaults.
+            // Errors during parameter initialization propagate from the function call.
+            executionContext.getVirtualMachine().executeGenerator(generatorState, executionContext);
+
             return new JSAsyncGenerator((inputValue, isThrow) -> {
                 JSPromise promise = new JSPromise();
 
@@ -212,6 +217,13 @@ public final class JSBytecodeFunction extends JSFunction {
         if (isGenerator && !isAsync) {
             // Create generator state to track execution
             JSGeneratorState generatorState = new JSGeneratorState(this, thisArg, args);
+
+            // Per ES spec GeneratorStart, execute the generator function up to INITIAL_YIELD.
+            // This evaluates parameter defaults and FunctionDeclarationInstantiation.
+            // If an error occurs before INITIAL_YIELD (e.g., SyntaxError from eval),
+            // it propagates up from the generator function call.
+            // Following QuickJS js_generator_function_call which calls JS_CallInternal.
+            executionContext.getVirtualMachine().executeGenerator(generatorState, executionContext);
 
             // Create generator object with proper prototype chain
             // In QuickJS, js_create_from_ctor gets prototype from the generator function's
@@ -295,6 +307,7 @@ public final class JSBytecodeFunction extends JSFunction {
                 sourceCode,
                 selfCaptureIndex
         );
+        copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
         return copiedFunction;
     }
 
@@ -341,6 +354,15 @@ public final class JSBytecodeFunction extends JSFunction {
     }
 
     /**
+     * Check if this function has parameter expressions (default values, rest, or destructuring).
+     * Following QuickJS has_parameter_expressions flag.
+     * Used by eval() to detect when var declarations would conflict with implicit arguments binding.
+     */
+    public boolean hasParameterExpressions() {
+        return hasParameterExpressions;
+    }
+
+    /**
      * Check if this is an arrow function.
      */
     public boolean isArrow() {
@@ -374,6 +396,13 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public boolean isStrict() {
         return strict;
+    }
+
+    /**
+     * Set whether this function has parameter expressions.
+     */
+    public void setHasParameterExpressions(boolean hasParameterExpressions) {
+        this.hasParameterExpressions = hasParameterExpressions;
     }
 
     /**

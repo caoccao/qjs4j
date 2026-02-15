@@ -17,6 +17,9 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.builtins.*;
+import com.caoccao.qjs4j.compiler.AstUtils;
+import com.caoccao.qjs4j.compiler.Compiler;
+import com.caoccao.qjs4j.compiler.ast.Program;
 import com.caoccao.qjs4j.exceptions.JSErrorType;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.vm.StackFrame;
@@ -351,6 +354,33 @@ public final class JSGlobalObject {
         }
 
         try {
+            // EvalDeclarationInstantiation: check if eval code declares "var arguments"
+            // in a function with parameter expressions. Per QuickJS add_arguments_arg(),
+            // a lexical "arguments" binding exists in the argument scope when the function
+            // has parameter expressions (non-strict mode), preventing eval from redeclaring it.
+            if (isEvalInFunction
+                    && callerFrame.getFunction() instanceof JSBytecodeFunction bcFunc
+                    && bcFunc.hasParameterExpressions()
+                    && !bcFunc.isArrow()
+                    && !bcFunc.isStrict()) {
+                try {
+                    Compiler evalCompiler = new Compiler(code, "<eval>");
+                    Program evalAst = evalCompiler.parse(false);
+                    Set<String> varDecls = new HashSet<>();
+                    Set<String> lexDecls = new HashSet<>();
+                    AstUtils.collectGlobalDeclarations(evalAst, varDecls, lexDecls);
+                    if (varDecls.contains("arguments")) {
+                        throw new JSException(
+                                realmContext.throwError("SyntaxError",
+                                        "Identifier 'arguments' has already been declared"));
+                    }
+                } catch (JSException je) {
+                    throw je; // Re-throw our SyntaxError
+                } catch (Exception ignored) {
+                    // Parse error in eval code - let the normal eval handle it
+                }
+            }
+
             JSValue result = realmContext.eval(code, "<eval>", false, true);
 
             // Copy modified values back to caller's locals
