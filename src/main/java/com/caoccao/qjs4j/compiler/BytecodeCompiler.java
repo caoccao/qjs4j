@@ -4465,20 +4465,23 @@ public final class BytecodeCompiler {
      * if the property doesn't already exist on the global object.
      * Implements ES2024 CreateGlobalVarBinding semantics.
      * <p>
+     * Uses GET_VAR "globalThis" instead of PUSH_THIS to access the global object,
+     * because in strict-mode eval code, 'this' may be undefined rather than the global object.
+     * <p>
      * Bytecode sequence:
      * <pre>
-     *   PUSH_ATOM_VALUE "name"   // push property name
-     *   PUSH_THIS                // push global object
-     *   IN                       // "name" in globalObject -> boolean
-     *   IF_TRUE skip             // if exists, skip initialization
-     *   UNDEFINED                // push undefined
-     *   PUT_VAR "name"           // create the binding
+     *   PUSH_ATOM_VALUE "name"        // push property name
+     *   GET_VAR "globalThis"          // push global object
+     *   IN                            // "name" in globalObject -> boolean
+     *   IF_TRUE skip                  // if exists, skip initialization
+     *   UNDEFINED                     // push undefined
+     *   PUT_VAR "name"               // create the binding
      *   skip:
      * </pre>
      */
     private void emitConditionalVarInit(String name) {
         emitter.emitOpcodeAtom(Opcode.PUSH_ATOM_VALUE, name);
-        emitter.emitOpcode(Opcode.PUSH_THIS);
+        emitter.emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
         emitter.emitOpcode(Opcode.IN);
         int skipJump = emitter.emitJump(Opcode.IF_TRUE);
         emitter.emitOpcode(Opcode.UNDEFINED);

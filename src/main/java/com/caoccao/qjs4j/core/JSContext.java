@@ -665,7 +665,17 @@ public final class JSContext implements AutoCloseable {
             func.initializePrototypeChain(this);
 
             // Phase 4: Execute bytecode in the virtual machine
-            JSValue result = virtualMachine.execute(func, globalObject, new JSValue[0]);
+            // For direct eval, inherit the caller's 'this' binding per ES2024 PerformEval.
+            // In strict mode functions called without receiver, 'this' is undefined, and
+            // eval('this') must see that same undefined value, not the global object.
+            JSValue evalThisArg = globalObject;
+            if (isDirectEval) {
+                com.caoccao.qjs4j.vm.StackFrame callerFrame = virtualMachine.getCurrentFrame();
+                if (callerFrame != null) {
+                    evalThisArg = callerFrame.getThisArg();
+                }
+            }
+            JSValue result = virtualMachine.execute(func, evalThisArg, new JSValue[0]);
 
             // Check if there's a pending exception
             if (hasPendingException()) {
