@@ -1517,6 +1517,16 @@ public final class BytecodeCompiler {
             varIndex = findLocalInScopes(varName);
         }
 
+        // Annex B: for (var a = initializer in obj) — evaluate initializer first
+        if (!isExpressionBased && varDecl != null && varDecl.declarations().get(0).init() != null) {
+            compileExpression(varDecl.declarations().get(0).init());
+            if (varIndex != null) {
+                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
+            } else {
+                emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+            }
+        }
+
         // Compile the object expression
         compileExpression(forInStmt.right());
         // Stack: obj

@@ -47,6 +47,7 @@ public final class Parser {
     private boolean inOperatorAllowed = true; // false inside for-loop initializer (ES spec [~In])
     private Token nextToken; // Lookahead token
     private int previousTokenLine; // Line of previous token (for ASI checks)
+    private boolean strictMode; // true when in strict mode ("use strict" or module)
 
     public Parser(Lexer lexer) {
         this(lexer, false);
@@ -392,6 +393,7 @@ public final class Parser {
 
         // Parse directives (like "use strict") at the beginning
         boolean strict = parseDirectives();
+        strictMode = strict || moduleMode;
 
         while (!match(TokenType.EOF)) {
             Statement stmt = parseStatement();
@@ -1280,6 +1282,13 @@ public final class Parser {
         // since we need to check for 'of' or 'in' first)
         if (match(TokenType.VAR) || match(TokenType.LET) || match(TokenType.CONST)
                 || isUsingDeclarationStart() || isAwaitUsingDeclarationStart()) {
+            // Annex B: suppress 'in' as binary operator only for 'var' in non-strict mode
+            // (allows for-in initializers: for (var a = expr in obj))
+            boolean savedInOperatorAllowed = inOperatorAllowed;
+            boolean isVar = match(TokenType.VAR);
+            if (isVar && !strictMode) {
+                inOperatorAllowed = false;
+            }
             if (isAwaitUsingDeclarationStart()) {
                 SourceLocation declLocation = getLocation();
                 expect(TokenType.AWAIT);
@@ -1295,6 +1304,7 @@ public final class Parser {
                 advance();
                 parsedDecl = parseVariableDeclarationBody(kind, declLocation, false);
             }
+            inOperatorAllowed = savedInOperatorAllowed;
             // Check if next token is 'of' or 'in'
             if (match(TokenType.OF)) {
                 isForOf = true;
@@ -2090,7 +2100,11 @@ public final class Parser {
                             nextToken.type() != TokenType.ARROW) {
                         // This looks like a grouped expression, not arrow function params
                         // Parse the whole thing as an expression
+                        // ES spec: Expression[+In] inside parentheses
+                        boolean savedIn = inOperatorAllowed;
+                        inOperatorAllowed = true;
                         Expression expr = parseExpression();
+                        inOperatorAllowed = savedIn;
                         expect(TokenType.RPAREN);
                         yield expr;
                     }
@@ -2162,7 +2176,11 @@ public final class Parser {
                     }
                 } else {
                     // Not starting with identifier, parse as expression
+                    // ES spec: Expression[+In] inside parentheses
+                    boolean savedIn = inOperatorAllowed;
+                    inOperatorAllowed = true;
                     Expression expr = parseExpression();
+                    inOperatorAllowed = savedIn;
                     expect(TokenType.RPAREN);
                     yield expr;
                 }
