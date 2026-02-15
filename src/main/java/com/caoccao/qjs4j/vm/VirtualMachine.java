@@ -2629,7 +2629,9 @@ public final class VirtualMachine {
                 valueStack.push(result);
             }
         } else {
-            throw new JSVirtualMachineException("Cannot construct non-function value");
+            context.throwTypeError("not a constructor");
+            pendingException = context.getPendingException();
+            valueStack.push(JSUndefined.INSTANCE);
         }
     }
 
