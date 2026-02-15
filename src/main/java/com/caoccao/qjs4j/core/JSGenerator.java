@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.vm.YieldResult;
+
 /**
  * Represents a JavaScript Generator object.
  * Based on QuickJS JS_CLASS_GENERATOR and JSGeneratorData.
@@ -143,6 +145,12 @@ public final class JSGenerator extends JSObject {
                 return createIteratorResult(yieldValue, true);
             } else {
                 state = State.SUSPENDED_YIELD;
+                // Check if this was a yield* - if so, return the raw iterator result without wrapping
+                // This matches QuickJS behavior where *pdone = 2 signals not to wrap the result
+                YieldResult lastYield = context.getVirtualMachine().getLastYieldResult();
+                if (lastYield != null && lastYield.isYieldStar() && yieldValue instanceof JSObject resultObj) {
+                    return resultObj;
+                }
                 return createIteratorResult(yieldValue, false);
             }
         } catch (Exception e) {

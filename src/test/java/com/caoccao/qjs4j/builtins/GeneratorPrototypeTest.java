@@ -26,7 +26,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Unit tests for Generator.prototype methods.
  */
 public class GeneratorPrototypeTest extends BaseJavetTest {
-
     @Test
     public void testBasicYield() {
         assertIntegerWithJavet(
@@ -356,5 +355,19 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
     public void testYieldExpressionReceivesNextValue() {
         assertIntegerWithJavet(
                 "function* gen() { var x = yield 1; return x + 1; } var g = gen(); g.next(); g.next(41).value");
+    }
+
+    @Test
+    public void testYieldStarDelegatedIteratorMissingReturnMethodDoesNotAffectNext() {
+        assertStringWithJavet(
+                """
+                        var IsHTMLDDA = {}.IsHTMLDDA;
+                        var iter = {
+                          [Symbol.iterator]() { return this; },
+                          next() { return { a: 1 }; },
+                          return: IsHTMLDDA,
+                        };
+                        var outer = (function* () { yield* iter; })();
+                        JSON.stringify(outer.next());""");
     }
 }

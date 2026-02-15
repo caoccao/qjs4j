@@ -2456,6 +2456,14 @@ public final class VirtualMachine {
         return currentFrame;
     }
 
+    /**
+     * Get the last yield result from generator execution.
+     * Used to check if the yield was a yield* (delegation).
+     */
+    public YieldResult getLastYieldResult() {
+        return yieldResult;
+    }
+
     private JSValue getLocalValue(int index) {
         JSValue[] locals = currentFrame.getLocals();
         if (index >= 0 && index < locals.length) {
@@ -3327,10 +3335,54 @@ public final class VirtualMachine {
     }
 
     private void handleYieldStar() {
-        // TODO: Implement yield* (delegating yield)
-        JSValue value = valueStack.pop();
-        yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, value);
-        valueStack.push(value);
+        // yield* delegates to another iterator
+        // Pop the iterable from the stack
+        JSValue iterable = valueStack.pop();
+
+        // Get the iterator from the iterable
+        JSObject iterableObj;
+        if (iterable instanceof JSObject obj) {
+            iterableObj = obj;
+        } else {
+            iterableObj = toObject(iterable);
+            if (iterableObj == null) {
+                throw new JSVirtualMachineException("Object is not iterable");
+            }
+        }
+
+        // Get Symbol.iterator method
+        JSValue iteratorMethod = iterableObj.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR));
+        if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
+            throw new JSVirtualMachineException("Object is not iterable");
+        }
+
+        // Call Symbol.iterator to get the iterator
+        JSValue iterator = iteratorFunc.call(context, iterable, new JSValue[0]);
+        if (!(iterator instanceof JSObject iteratorObj)) {
+            throw new JSVirtualMachineException("Iterator method must return an object");
+        }
+
+        // Get the next() method from the iterator
+        JSValue nextMethod = iteratorObj.get(PropertyKey.fromString("next"));
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            throw new JSVirtualMachineException("Iterator must have a next method");
+        }
+
+        // Call iterator.next()
+        JSValue result = nextFunc.call(context, iterator, new JSValue[0]);
+
+        // The result should be an object (the iterator result)
+        // For yield*, we return the raw iterator result without wrapping
+        if (!(result instanceof JSObject)) {
+            throw new JSVirtualMachineException("Iterator result must be an object");
+        }
+
+        // Set yield result to the raw iterator result object
+        // This is what QuickJS does with *pdone = 2
+        yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result);
+
+        // Push the result back on the stack
+        valueStack.push(result);
     }
 
     private boolean isUninitialized(JSValue value) {
