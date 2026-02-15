@@ -41,6 +41,7 @@ public final class BytecodeCompiler {
     private boolean isInArrowFunction;  // Track if we're currently compiling an arrow function
     private boolean isInAsyncFunction;  // Track if we're currently compiling an async function
     private int maxLocalCount;
+    private String pendingLoopLabel;  // Label to attach to next loop context (for labeled loops)
     private Map<String, JSSymbol> privateSymbols;  // Private field symbols for current class
     private int scopeDepth;  // Current lexical scope depth (1+ when inside a scope)
     private String sourceCode;  // Original source code for extracting function sources
@@ -553,13 +554,43 @@ public final class BytecodeCompiler {
     }
 
     private void compileBreakStatement(BreakStatement breakStmt) {
-        if (loopStack.isEmpty()) {
-            throw new CompilerException("Break statement outside of loop");
+        if (breakStmt.label() != null) {
+            // Labeled break: find the matching label in the loop stack
+            String labelName = breakStmt.label().name();
+            LoopContext target = null;
+            for (LoopContext ctx : loopStack) {
+                if (labelName.equals(ctx.label)) {
+                    target = ctx;
+                    break;
+                }
+            }
+            if (target == null) {
+                throw new CompilerException("Undefined label '" + labelName + "'");
+            }
+            // Close iterators for any for-of loops between here and the target
+            emitIteratorCloseForLoopsUntil(target);
+            emitUsingDisposalsForScopeDepthGreaterThan(target.breakTargetScopeDepth);
+            int jumpPos = emitter.emitJump(Opcode.GOTO);
+            target.breakPositions.add(jumpPos);
+        } else {
+            if (loopStack.isEmpty()) {
+                throw new CompilerException("Break statement outside of loop");
+            }
+            // Unlabeled break: find the nearest non-regular-stmt (loop/switch) context
+            LoopContext loopContext = null;
+            for (LoopContext ctx : loopStack) {
+                if (!ctx.isRegularStmt) {
+                    loopContext = ctx;
+                    break;
+                }
+            }
+            if (loopContext == null) {
+                throw new CompilerException("Break statement outside of loop");
+            }
+            emitUsingDisposalsForScopeDepthGreaterThan(loopContext.breakTargetScopeDepth);
+            int jumpPos = emitter.emitJump(Opcode.GOTO);
+            loopContext.breakPositions.add(jumpPos);
         }
-        LoopContext loopContext = loopStack.peek();
-        emitUsingDisposalsForScopeDepthGreaterThan(loopContext.breakTargetScopeDepth);
-        int jumpPos = emitter.emitJump(Opcode.GOTO);
-        loopContext.breakPositions.add(jumpPos);
     }
 
     private void compileCallExpression(CallExpression callExpr) {
@@ -1206,13 +1237,40 @@ public final class BytecodeCompiler {
     }
 
     private void compileContinueStatement(ContinueStatement contStmt) {
-        if (loopStack.isEmpty()) {
-            throw new CompilerException("Continue statement outside of loop");
+        if (contStmt.label() != null) {
+            // Labeled continue: find the matching label in the loop stack (must be a loop, not regular stmt)
+            String labelName = contStmt.label().name();
+            LoopContext target = null;
+            for (LoopContext ctx : loopStack) {
+                if (labelName.equals(ctx.label) && !ctx.isRegularStmt) {
+                    target = ctx;
+                    break;
+                }
+            }
+            if (target == null) {
+                throw new CompilerException("Undefined label '" + labelName + "'");
+            }
+            // Close iterators for any for-of loops between here and the target
+            emitIteratorCloseForLoopsUntil(target);
+            emitUsingDisposalsForScopeDepthGreaterThan(target.continueTargetScopeDepth);
+            int jumpPos = emitter.emitJump(Opcode.GOTO);
+            target.continuePositions.add(jumpPos);
+        } else {
+            // Unlabeled continue: find the nearest loop (skip regular stmt entries)
+            LoopContext loopContext = null;
+            for (LoopContext ctx : loopStack) {
+                if (!ctx.isRegularStmt) {
+                    loopContext = ctx;
+                    break;
+                }
+            }
+            if (loopContext == null) {
+                throw new CompilerException("Continue statement outside of loop");
+            }
+            emitUsingDisposalsForScopeDepthGreaterThan(loopContext.continueTargetScopeDepth);
+            int jumpPos = emitter.emitJump(Opcode.GOTO);
+            loopContext.continuePositions.add(jumpPos);
         }
-        LoopContext loopContext = loopStack.peek();
-        emitUsingDisposalsForScopeDepthGreaterThan(loopContext.continueTargetScopeDepth);
-        int jumpPos = emitter.emitJump(Opcode.GOTO);
-        loopContext.continuePositions.add(jumpPos);
     }
 
     private void compileExpression(Expression expr) {
@@ -1380,7 +1438,7 @@ public final class BytecodeCompiler {
 
         // Start of loop
         int loopStart = emitter.currentOffset();
-        LoopContext loop = new LoopContext(loopStart, scopeDepth - 1, scopeDepth);
+        LoopContext loop = createLoopContext(loopStart, scopeDepth - 1, scopeDepth);
         loopStack.push(loop);
 
         // Emit FOR_IN_NEXT to get next key
@@ -1481,7 +1539,7 @@ public final class BytecodeCompiler {
 
         // Start of loop
         int loopStart = emitter.currentOffset();
-        LoopContext loop = new LoopContext(loopStart, scopeDepth - 1, scopeDepth);
+        LoopContext loop = createLoopContext(loopStart, scopeDepth - 1, scopeDepth);
         loop.hasIterator = true;
         loopStack.push(loop);
 
@@ -1630,7 +1688,7 @@ public final class BytecodeCompiler {
         }
 
         int loopStart = emitter.currentOffset();
-        LoopContext loop = new LoopContext(loopStart, scopeDepth - 1, scopeDepth);
+        LoopContext loop = createLoopContext(loopStart, scopeDepth - 1, scopeDepth);
         loopStack.push(loop);
 
         int jumpToEnd = -1;
@@ -2058,6 +2116,60 @@ public final class BytecodeCompiler {
             exitScope();
         } else {
             compileStatement(stmt);
+        }
+    }
+
+    /**
+     * Compile a labeled loop: the label is attached to the loop's LoopContext.
+     * This is needed so that 'break label;' and 'continue label;' work on the loop.
+     */
+    private void compileLabeledLoop(String labelName, Statement loopStmt) {
+        // We temporarily store the label name so the loop compilation methods can pick it up
+        pendingLoopLabel = labelName;
+        compileStatement(loopStmt);
+        pendingLoopLabel = null;
+    }
+
+    /**
+     * Compile a labeled statement following QuickJS js_parse_statement_or_decl.
+     * Creates a break entry so that 'break label;' jumps past the labeled body.
+     * For labeled loops (while/for/for-in/for-of), the label is attached to the
+     * loop's LoopContext so labeled break/continue work on the loop.
+     */
+    private void compileLabeledStatement(LabeledStatement labeledStmt) {
+        String labelName = labeledStmt.label().name();
+        Statement body = labeledStmt.body();
+
+        // In strict mode, function declarations are not allowed as labeled statement body
+        // (they must be at top level or inside a block). Per ES2024 B.3.3 Note.
+        if (strictMode && body instanceof FunctionDeclaration) {
+            throw new JSSyntaxErrorException(
+                    "In strict mode code, functions can only be declared at top level or inside a block.");
+        }
+
+        // Check if the body is a loop statement — if so, the label applies to the loop
+        if (body instanceof WhileStatement || body instanceof ForStatement
+                || body instanceof ForInStatement || body instanceof ForOfStatement) {
+            // Push a labeled loop context; the loop compilation will use loopStack.peek()
+            // We need to wrap the loop compilation to attach the label
+            compileLabeledLoop(labelName, body);
+        } else {
+            // Regular labeled statement: only 'break label;' is valid (not continue)
+            LoopContext labelContext = new LoopContext(emitter.currentOffset(), scopeDepth, scopeDepth, labelName);
+            labelContext.isRegularStmt = true;
+            loopStack.push(labelContext);
+
+            // Body can be null for empty statements (label: ;)
+            if (body != null) {
+                compileStatement(body);
+            }
+
+            // Patch all break positions to jump here
+            int breakTarget = emitter.currentOffset();
+            for (int pos : labelContext.breakPositions) {
+                emitter.patchJump(pos, breakTarget);
+            }
+            loopStack.pop();
         }
     }
 
@@ -2781,8 +2893,6 @@ public final class BytecodeCompiler {
         compileStatement(stmt, false);
     }
 
-    // ==================== Expression Compilation ====================
-
     private void compileStatement(Statement stmt, boolean isLastInProgram) {
         if (stmt instanceof ExpressionStatement exprStmt) {
             compileExpression(exprStmt.expression());
@@ -2820,6 +2930,8 @@ public final class BytecodeCompiler {
             compileFunctionDeclaration(funcDecl);
         } else if (stmt instanceof ClassDeclaration classDecl) {
             compileClassDeclaration(classDecl);
+        } else if (stmt instanceof LabeledStatement labeledStmt) {
+            compileLabeledStatement(labeledStmt);
         }
     }
 
@@ -2870,6 +2982,8 @@ public final class BytecodeCompiler {
                 "static { [initializer] }"
         );
     }
+
+    // ==================== Expression Compilation ====================
 
     /**
      * Compile a static field initializer as a function and return it.
@@ -3000,7 +3114,7 @@ public final class BytecodeCompiler {
         enterScope();
         inGlobalScope = false;
 
-        LoopContext loop = new LoopContext(emitter.currentOffset(), scopeDepth, scopeDepth);
+        LoopContext loop = createLoopContext(emitter.currentOffset(), scopeDepth, scopeDepth);
         loopStack.push(loop);
 
         int defaultBodyStart = -1;
@@ -3523,7 +3637,7 @@ public final class BytecodeCompiler {
 
     private void compileWhileStatement(WhileStatement whileStmt) {
         int loopStart = emitter.currentOffset();
-        LoopContext loop = new LoopContext(loopStart, scopeDepth, scopeDepth);
+        LoopContext loop = createLoopContext(loopStart, scopeDepth, scopeDepth);
         loopStack.push(loop);
 
         // Compile test condition
@@ -3648,6 +3762,15 @@ public final class BytecodeCompiler {
                 true,            // strict mode
                 "constructor() { [default] }"
         );
+    }
+
+    /**
+     * Create a LoopContext, consuming any pending loop label.
+     */
+    private LoopContext createLoopContext(int startOffset, int breakScopeDepth, int continueScopeDepth) {
+        String label = pendingLoopLabel;
+        pendingLoopLabel = null;
+        return new LoopContext(startOffset, breakScopeDepth, continueScopeDepth, label);
     }
 
     private Map<String, JSSymbol> createPrivateSymbols(List<ClassDeclaration.ClassElement> classElements) {
@@ -3793,17 +3916,17 @@ public final class BytecodeCompiler {
     /**
      * Emit default parameter initialization bytecode following QuickJS pattern.
      * For each parameter with a default value, emits:
-     *   GET_ARG idx
-     *   DUP
-     *   UNDEFINED
-     *   STRICT_EQ
-     *   IF_FALSE label
-     *   DROP
-     *   <compile default expression>
-     *   DUP
-     *   PUT_ARG idx
-     *   label:
-     *   PUT_LOCAL idx  (store into the local variable slot)
+     * GET_ARG idx
+     * DUP
+     * UNDEFINED
+     * STRICT_EQ
+     * IF_FALSE label
+     * DROP
+     * <compile default expression>
+     * DUP
+     * PUT_ARG idx
+     * label:
+     * PUT_LOCAL idx  (store into the local variable slot)
      */
 
     private void emitCaptureBindingLoad(CaptureSource captureSource) {
@@ -3879,6 +4002,23 @@ public final class BytecodeCompiler {
                 functionCompiler.emitter.patchJump(skipLabel, functionCompiler.emitter.currentOffset());
                 // PUT_LOCAL idx - store into the local variable slot
                 functionCompiler.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, i);
+            }
+        }
+    }
+
+    /**
+     * Emit ITERATOR_CLOSE for any for-of loops between the current position and the target
+     * loop context. This is needed when labeled break/continue crosses for-of loop boundaries,
+     * to properly close inner iterators whose cleanup code would otherwise be skipped.
+     * Following QuickJS close_scopes pattern for iterator cleanup.
+     */
+    private void emitIteratorCloseForLoopsUntil(LoopContext target) {
+        for (LoopContext ctx : loopStack) {
+            if (ctx == target) {
+                break;
+            }
+            if (ctx.hasIterator) {
+                emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
             }
         }
     }
@@ -4393,19 +4533,27 @@ public final class BytecodeCompiler {
 
     /**
      * Tracks loop context for break/continue statements.
+     * Also used for labeled statements (where isRegularStmt is true).
      */
     private static class LoopContext {
         final List<Integer> breakPositions = new ArrayList<>();
         final int breakTargetScopeDepth;
         final List<Integer> continuePositions = new ArrayList<>();
         final int continueTargetScopeDepth;
+        final String label;
         final int startOffset;
         boolean hasIterator;
+        boolean isRegularStmt; // true for labeled non-loop statements (break allowed, continue not)
 
         LoopContext(int startOffset, int breakTargetScopeDepth, int continueTargetScopeDepth) {
+            this(startOffset, breakTargetScopeDepth, continueTargetScopeDepth, null);
+        }
+
+        LoopContext(int startOffset, int breakTargetScopeDepth, int continueTargetScopeDepth, String label) {
             this.startOffset = startOffset;
             this.breakTargetScopeDepth = breakTargetScopeDepth;
             this.continueTargetScopeDepth = continueTargetScopeDepth;
+            this.label = label;
         }
     }
 

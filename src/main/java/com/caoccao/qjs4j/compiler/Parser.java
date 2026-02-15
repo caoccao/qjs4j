@@ -45,6 +45,7 @@ public final class Parser {
     private Token currentToken;
     private int functionNesting;
     private Token nextToken; // Lookahead token
+    private int previousTokenLine; // Line of previous token (for ASI checks)
 
     public Parser(Lexer lexer) {
         this(lexer, false);
@@ -64,6 +65,7 @@ public final class Parser {
     }
 
     private void advance() {
+        previousTokenLine = currentToken.line();
         currentToken = nextToken;
         nextToken = lexer.nextToken();
     }
@@ -89,8 +91,6 @@ public final class Parser {
         functionNesting--;
     }
 
-    // Statement parsing
-
     private Token expect(TokenType type) {
         if (!match(type)) {
             throw new RuntimeException("Expected " + type + " but got " + currentToken.type() +
@@ -100,6 +100,8 @@ public final class Parser {
         advance();
         return token;
     }
+
+    // Statement parsing
 
     private int findTemplateExpressionEnd(String templateStr, int expressionStart) {
         int braceDepth = 1;
@@ -252,6 +254,15 @@ public final class Parser {
 
     private SourceLocation getLocation() {
         return new SourceLocation(currentToken.line(), currentToken.column(), currentToken.offset());
+    }
+
+    /**
+     * Check if there was a newline between the previous token and the current token.
+     * Used for ASI (Automatic Semicolon Insertion) checks, e.g. break/continue labels
+     * must be on the same line as the keyword.
+     */
+    private boolean hasNewlineBefore() {
+        return currentToken.line() > previousTokenLine;
     }
 
     /**
@@ -788,8 +799,13 @@ public final class Parser {
     private Statement parseBreakStatement() {
         SourceLocation location = getLocation();
         expect(TokenType.BREAK);
+        // Check for optional label (identifier on same line, no ASI)
+        Identifier label = null;
+        if (match(TokenType.IDENTIFIER) && !hasNewlineBefore()) {
+            label = parseIdentifier();
+        }
         consumeSemicolon();
-        return new BreakStatement(null, location);
+        return new BreakStatement(label, location);
     }
 
     private Expression parseCallExpression() {
@@ -1088,8 +1104,13 @@ public final class Parser {
     private Statement parseContinueStatement() {
         SourceLocation location = getLocation();
         expect(TokenType.CONTINUE);
+        // Check for optional label (identifier on same line, no ASI)
+        Identifier label = null;
+        if (match(TokenType.IDENTIFIER) && !hasNewlineBefore()) {
+            label = parseIdentifier();
+        }
         consumeSemicolon();
-        return new ContinueStatement(null, location);
+        return new ContinueStatement(label, location);
     }
 
     /**
@@ -1512,6 +1533,19 @@ public final class Parser {
         return new IfStatement(test, consequent, alternate, location);
     }
 
+    /**
+     * Parse a labeled statement: label: statement
+     * Following QuickJS js_parse_statement_or_decl label handling.
+     * In non-strict mode, labeled function declarations are allowed (Annex B).
+     */
+    private Statement parseLabeledStatement() {
+        SourceLocation location = getLocation();
+        Identifier label = parseIdentifier();
+        expect(TokenType.COLON);
+        Statement body = parseStatement();
+        return new LabeledStatement(label, body, location);
+    }
+
     private Expression parseLogicalAndExpression() {
         Expression left = parseBitwiseOrExpression();
 
@@ -1625,6 +1659,8 @@ public final class Parser {
         return new FunctionExpression(null, funcParams.params, funcParams.defaults, funcParams.restParameter, body, false, false, location);
     }
 
+    // Utility methods
+
     /**
      * Parse method or field after the property name.
      */
@@ -1651,8 +1687,6 @@ public final class Parser {
         FunctionExpression method = parseMethod("method");
         return new ClassDeclaration.MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
     }
-
-    // Utility methods
 
     private Expression parseMultiplicativeExpression() {
         Expression left = parseExponentiationExpression();
@@ -2175,6 +2209,11 @@ public final class Parser {
         }
         if (isUsingDeclarationStart()) {
             return parseUsingDeclaration(false);
+        }
+        // Check for labeled statement: identifier followed by ':'
+        // Following QuickJS is_label() check
+        if (currentToken.type() == TokenType.IDENTIFIER && peek() != null && peek().type() == TokenType.COLON) {
+            return parseLabeledStatement();
         }
         return switch (currentToken.type()) {
             case IF -> parseIfStatement();

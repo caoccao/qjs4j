@@ -17,11 +17,15 @@
 package com.caoccao.qjs4j.compiler.ast;
 
 /**
- * Base sealed interface for all statement nodes.
+ * Represents a labeled statement: label: statement
  */
-public sealed interface Statement extends ASTNode permits
-        ExpressionStatement, BlockStatement, IfStatement, WhileStatement,
-        ForStatement, ForOfStatement, ForInStatement, ReturnStatement, BreakStatement, ContinueStatement,
-        ThrowStatement, TryStatement, SwitchStatement, VariableDeclaration,
-        LabeledStatement, Declaration {
+public record LabeledStatement(
+        Identifier label,
+        Statement body,
+        SourceLocation location
+) implements Statement {
+    @Override
+    public SourceLocation getLocation() {
+        return location;
+    }
 }

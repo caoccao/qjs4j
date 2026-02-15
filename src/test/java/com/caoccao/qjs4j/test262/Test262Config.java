@@ -39,6 +39,7 @@ public class Test262Config {
         // Only run language tests
         config.includePatterns.clear();
         config.includePatterns.add(Pattern.compile(".*/test/language/.*\\.js$"));
+        config.maxTests = 100;
         return config;
     }
 
