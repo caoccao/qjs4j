@@ -2712,9 +2712,8 @@ public final class BytecodeCompiler {
         // INSERT4: [a, b, c, d] -> [d, a, b, c, d]
         switch (depthLvalue) {
             case 0 -> {
-                // For identifier: stack is [newValue]
-                // We need to keep the value on stack for the result
-                emitter.emitOpcode(Opcode.DUP);
+                // For identifier: SET_VAR/SET_LOCAL/SET_VAR_REF all use peek(0),
+                // so the value is already kept on the stack. No DUP needed.
             }
             case 1 -> {
                 // For obj.prop: stack is [obj, newValue]
