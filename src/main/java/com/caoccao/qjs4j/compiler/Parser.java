@@ -394,6 +394,7 @@ public final class Parser {
         // Parse directives (like "use strict") at the beginning
         boolean strict = parseDirectives();
         strictMode = strict || moduleMode;
+        lexer.setStrictMode(strictMode);
 
         while (!match(TokenType.EOF)) {
             Statement stmt = parseStatement();
@@ -2416,8 +2417,10 @@ public final class Parser {
             throw new JSSyntaxErrorException("Empty template expression");
         }
 
+        Lexer expressionLexer = new Lexer(expressionSource);
+        expressionLexer.setStrictMode(strictMode);
         Parser expressionParser = new Parser(
-                new Lexer(expressionSource),
+                expressionLexer,
                 moduleMode,
                 functionNesting,
                 asyncFunctionNesting);

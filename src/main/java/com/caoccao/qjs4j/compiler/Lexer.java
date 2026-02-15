@@ -87,6 +87,7 @@ public final class Lexer {
     private int line;
     private Token lookahead;
     private int position;
+    private boolean strictMode;
 
     public Lexer(String source) {
         this.source = source;
@@ -95,6 +96,7 @@ public final class Lexer {
         this.column = 1;
         this.lookahead = null;
         this.lastTokenType = null;
+        this.strictMode = false;
     }
 
     private static boolean isLineTerminator(char c) {
@@ -151,11 +153,11 @@ public final class Lexer {
         return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
     }
 
-    // Core scanning logic
-
     private boolean isAtEnd() {
         return position >= source.length();
     }
+
+    // Core scanning logic
 
     private boolean isDigitForRadix(char c, int radix) {
         return Character.digit(c, radix) >= 0;
@@ -208,8 +210,6 @@ public final class Lexer {
         return scanToken();
     }
 
-    // Character utilities
-
     private char parseLegacyOctalEscape(char firstDigit) {
         int value = firstDigit - '0';
         int maxDigits = firstDigit <= '3' ? 3 : 2;
@@ -220,6 +220,8 @@ public final class Lexer {
         }
         return (char) value;
     }
+
+    // Character utilities
 
     private int parseUnicodeEscapeSequence() {
         if (isAtEnd() || peek() != 'u') {
@@ -708,6 +710,9 @@ public final class Lexer {
                     case 'v' -> value.append('\u000B');
                     case '0' -> {
                         if (!isAtEnd() && peek() >= '0' && peek() <= '7') {
+                            if (strictMode) {
+                                throw new JSSyntaxErrorException("Octal escape sequences are not allowed in strict mode");
+                            }
                             value.append(parseLegacyOctalEscape(escaped));
                         } else {
                             value.append('\0');
@@ -746,7 +751,12 @@ public final class Lexer {
                     }
                     default -> {
                         if (escaped >= '1' && escaped <= '7') {
+                            if (strictMode) {
+                                throw new JSSyntaxErrorException("Octal escape sequences are not allowed in strict mode");
+                            }
                             value.append(parseLegacyOctalEscape(escaped));
+                        } else if (strictMode && (escaped == '8' || escaped == '9')) {
+                            throw new JSSyntaxErrorException("\\8 and \\9 are not allowed in strict mode");
                         } else {
                             value.append(escaped);
                         }
@@ -1190,6 +1200,10 @@ public final class Lexer {
         Token token = scanOperatorOrPunctuation(c, startPos, startLine, startColumn);
         lastTokenType = token.type();
         return token;
+    }
+
+    public void setStrictMode(boolean strictMode) {
+        this.strictMode = strictMode;
     }
 
     private void skipWhitespaceAndComments() {
