@@ -3618,10 +3618,11 @@ public final class BytecodeCompiler {
                         emitter.emitOpcode(Opcode.ROT3R);
                         emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                     } else {
-                        // Postfix: arr[i]++ - returns old value
+                        // Postfix: arr[i]++ - returns old value (must be ToNumber'd per ES spec)
                         emitter.emitOpcode(Opcode.DUP2); // obj prop obj prop
                         emitter.emitOpcode(Opcode.GET_ARRAY_EL); // obj prop old_val
-                        emitter.emitOpcode(Opcode.DUP); // obj prop old_val old_val
+                        emitter.emitOpcode(Opcode.PLUS); // obj prop old_numeric (ToNumber conversion)
+                        emitter.emitOpcode(Opcode.DUP); // obj prop old_numeric old_numeric
                         emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
                         emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj prop old_val new_val
                         // SWAP2 to rearrange: [obj, prop, old_val, new_val] -> [old_val, new_val, obj, prop]
@@ -3645,10 +3646,11 @@ public final class BytecodeCompiler {
                             // PUT_FIELD pops obj, peeks new_val, leaves [new_val]
                             emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
                         } else {
-                            // Postfix: obj.prop++ - returns old value
+                            // Postfix: obj.prop++ - returns old value (must be ToNumber'd per ES spec)
                             emitter.emitOpcode(Opcode.DUP); // obj obj
                             emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name()); // obj old_val
-                            emitter.emitOpcode(Opcode.DUP); // obj old_val old_val
+                            emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
+                            emitter.emitOpcode(Opcode.DUP); // obj old_numeric old_numeric
                             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
                             emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj old_val new_val
                             // Stack: [obj, old_val, new_val] - need [old_val, new_val, obj] for PUT_FIELD
@@ -3681,11 +3683,12 @@ public final class BytecodeCompiler {
                             emitter.emitOpcode(Opcode.SWAP); // new_val obj symbol new_val
                             emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // new_val
                         } else {
-                            // Postfix: obj.#field++ - returns old value
+                            // Postfix: obj.#field++ - returns old value (must be ToNumber'd per ES spec)
                             emitter.emitOpcode(Opcode.DUP); // obj obj
                             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                             emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
-                            emitter.emitOpcode(Opcode.DUP); // obj old_val old_val
+                            emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
+                            emitter.emitOpcode(Opcode.DUP); // obj old_numeric old_numeric
                             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
                             emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj old_val new_val
                             emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
