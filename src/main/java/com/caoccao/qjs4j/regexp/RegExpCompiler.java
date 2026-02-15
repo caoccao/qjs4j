@@ -566,12 +566,13 @@ public final class RegExpCompiler {
                     }
                 }
                 // AnnexB: In non-unicode mode, \c without valid control letter
-                // is treated as literal backslash followed by literal 'c'
+                // returns literal '\' and backs up to re-parse 'c' as next term
+                // (matching QuickJS get_class_atom behavior)
                 if (context.isUnicodeMode()) {
                     throw new RegExpSyntaxException("Invalid control escape");
                 }
+                context.pos--; // back up to 'c' so it's re-parsed as next atom
                 compileLiteralChar(context, '\\');
-                compileLiteralChar(context, 'c');
             }
             case 'x' -> {
                 // Hex escape \xHH
@@ -647,7 +648,15 @@ public final class RegExpCompiler {
                 }
             }
             default -> {
-                // Literal escaped character
+                // Identity escape
+                if (context.isUnicodeMode()) {
+                    // In unicode mode, only syntax characters are valid identity escapes
+                    // QuickJS: ^$\.*+?()[]{}|/
+                    if (!isSyntaxCharacter(ch)) {
+                        throw new RegExpSyntaxException("invalid escape sequence in regular expression");
+                    }
+                }
+                // Non-unicode mode: any character is a valid identity escape (Annex B)
                 compileLiteralChar(context, ch);
             }
         }
@@ -1196,6 +1205,19 @@ public final class RegExpCompiler {
         return codePoint == ' ' || codePoint == '\t' || codePoint == '\n' || codePoint == '\r' || codePoint == '\f' ||
                 codePoint == 0x0B || codePoint == 0x00A0 || codePoint == 0xFEFF || codePoint == 0x2028 || codePoint == 0x2029 ||
                 Character.getType(codePoint) == Character.SPACE_SEPARATOR;
+    }
+
+    /**
+     * Returns true if the character is a RegExp syntax character per ES2024 11.8.5.
+     * These are: ^ $ \ . * + ? ( ) [ ] { } | /
+     */
+    private boolean isSyntaxCharacter(int ch) {
+        return ch == '^' || ch == '$' || ch == '\\' || ch == '.' ||
+                ch == '*' || ch == '+' || ch == '?' ||
+                ch == '(' || ch == ')' ||
+                ch == '[' || ch == ']' ||
+                ch == '{' || ch == '}' ||
+                ch == '|' || ch == '/';
     }
 
     private boolean isUnicodePropertyChar(int ch) {
