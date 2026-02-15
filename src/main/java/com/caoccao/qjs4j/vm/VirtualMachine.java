@@ -2120,6 +2120,30 @@ public final class VirtualMachine {
                         // This matches QuickJS behavior: goto exception;
                         // Don't advance PC - let the exception handler deal with it
                     }
+                    case THROW_ERROR -> {
+                        // QuickJS OP_throw_error: throws a typed error with an atom message
+                        // Format: opcode(1) + atom(4) + type(1) = 6 bytes
+                        int throwAtom = bytecode.readU32(pc + 1);
+                        int throwType = bytecode.readU8(pc + 5);
+                        String throwName = bytecode.getAtoms()[throwAtom];
+                        switch (throwType) {
+                            case 0 -> // JS_THROW_VAR_RO
+                                    context.throwTypeError("'" + throwName + "' is read-only");
+                            case 1 -> // JS_THROW_VAR_REDECL
+                                    context.throwError("SyntaxError: redeclaration of '" + throwName + "'");
+                            case 2 -> // JS_THROW_VAR_UNINITIALIZED
+                                    context.throwReferenceError(throwName + " is not initialized");
+                            case 3 -> // JS_THROW_ERROR_DELETE_SUPER
+                                    context.throwReferenceError("unsupported reference to 'super'");
+                            case 4 -> // JS_THROW_ERROR_ITERATOR_THROW
+                                    context.throwTypeError("iterator does not have a throw method");
+                            case 5 -> // JS_THROW_ERROR_INVALID_LVALUE (Annex B)
+                                    context.throwReferenceError(throwName);
+                            default -> throw new JSVirtualMachineException("invalid throw_error type: " + throwType);
+                        }
+                        pendingException = context.getPendingException();
+                        // Don't advance PC - let the exception handler deal with it
+                    }
                     case CATCH -> {
                         // QuickJS: pushes catch offset marker onto stack
                         // This marker is used during exception unwinding to find the catch handler

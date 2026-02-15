@@ -157,8 +157,6 @@ public final class Lexer {
         return position >= source.length();
     }
 
-    // Core scanning logic
-
     private boolean isDigitForRadix(char c, int radix) {
         return Character.digit(c, radix) >= 0;
     }
@@ -174,6 +172,8 @@ public final class Lexer {
         }
         return Character.isUnicodeIdentifierPart(codePoint);
     }
+
+    // Core scanning logic
 
     private boolean isIdentifierStart(char c) {
         return Character.isLetter(c) || c == '_' || c == '$' ||
@@ -220,8 +220,6 @@ public final class Lexer {
         }
         return (char) value;
     }
-
-    // Character utilities
 
     private int parseUnicodeEscapeSequence() {
         if (isAtEnd() || peek() != 'u') {
@@ -276,6 +274,8 @@ public final class Lexer {
         return source.charAt(position);
     }
 
+    // Character utilities
+
     /**
      * Peek at the next token without consuming it.
      */
@@ -295,6 +295,19 @@ public final class Lexer {
         column = 1;
         lookahead = null;
         lastTokenType = null;
+    }
+
+    void restoreState(LexerState state) {
+        this.position = state.position;
+        this.line = state.line;
+        this.column = state.column;
+        this.lastTokenType = state.lastTokenType;
+        this.lookahead = state.lookahead;
+        this.strictMode = state.strictMode;
+    }
+
+    LexerState saveState() {
+        return new LexerState(position, line, column, lastTokenType, lookahead, strictMode);
     }
 
     private Token scanBinaryNumber(int startPos, int startLine, int startColumn) {
@@ -1315,5 +1328,9 @@ public final class Lexer {
         if (isIdentifierStart(next) && next != 'n') {
             throw new JSSyntaxErrorException("Invalid or unexpected token");
         }
+    }
+
+    record LexerState(int position, int line, int column, TokenType lastTokenType, Token lookahead,
+                      boolean strictMode) {
     }
 }

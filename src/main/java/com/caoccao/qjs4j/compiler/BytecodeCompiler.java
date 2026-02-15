@@ -582,6 +582,16 @@ public final class BytecodeCompiler {
             return;
         }
 
+        // Annex B: CallExpression as assignment target throws ReferenceError at runtime.
+        // Evaluate the call expression, then throw. Don't evaluate the RHS.
+        if (left instanceof CallExpression) {
+            compileExpression(left);
+            emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+            emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
+            return;
+        }
+
         // For compound assignments (+=, -=, etc.), we need to load the current value first
         if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
             // Load current value of left side
@@ -645,12 +655,6 @@ public final class BytecodeCompiler {
             }
         } else {
             // Simple assignment
-            if (left instanceof CallExpression) {
-                // Per ES spec, left side is evaluated before right side.
-                // The call may throw at runtime (e.g., ReferenceError if callee not defined).
-                compileExpression(left);
-                emitter.emitOpcode(Opcode.DROP);
-            }
             // Compile right side
             compileExpression(assignExpr.right());
         }
@@ -1830,6 +1834,14 @@ public final class BytecodeCompiler {
                     // Stack: enum_obj obj (PUT_FIELD leaves obj on stack)
                     emitter.emitOpcode(Opcode.DROP);
                 }
+            } else if (leftExpr instanceof CallExpression) {
+                // Annex B: CallExpression as for-in LHS - runtime ReferenceError.
+                // Drop the key, evaluate f(), drop result, throw.
+                emitter.emitOpcode(Opcode.DROP); // drop key
+                compileExpression(leftExpr);     // call f()
+                emitter.emitOpcode(Opcode.DROP); // drop call result
+                emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+                emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
             } else {
                 emitter.emitOpcode(Opcode.DROP);
             }
@@ -1877,6 +1889,11 @@ public final class BytecodeCompiler {
     private void compileForOfStatement(ForOfStatement forOfStmt) {
         // Declare the loop variable(s) - supports both Identifier and destructuring patterns
         if (!(forOfStmt.left() instanceof VariableDeclaration varDecl)) {
+            // Annex B: CallExpression as for-of LHS - compile the loop, throw ReferenceError on assignment
+            if (forOfStmt.left() instanceof CallExpression callExpr) {
+                compileForOfWithCallExpressionTarget(forOfStmt, callExpr);
+                return;
+            }
             throw new CompilerException("Expression-based for-of not yet supported");
         }
         if (varDecl.declarations().size() != 1) {
@@ -2039,6 +2056,67 @@ public final class BytecodeCompiler {
         } else {
             compilePatternAssignment(pattern);
         }
+    }
+
+    /**
+     * Compile a for-of statement where the LHS is a CallExpression (Annex B).
+     * The call is evaluated each iteration, then a ReferenceError is thrown.
+     */
+    private void compileForOfWithCallExpressionTarget(ForOfStatement forOfStmt, CallExpression callExpr) {
+        enterScope();
+
+        // Compile the iterable expression
+        compileExpression(forOfStmt.right());
+
+        // FOR_OF_START to get iterator
+        if (forOfStmt.isAsync()) {
+            emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
+        } else {
+            emitter.emitOpcode(Opcode.FOR_OF_START);
+        }
+
+        // Stack: iter, next, catch_offset
+        int loopStart = emitter.currentOffset();
+
+        // FOR_OF_NEXT to get next value
+        if (forOfStmt.isAsync()) {
+            emitter.emitOpcode(Opcode.FOR_AWAIT_OF_NEXT);
+            emitter.emitOpcode(Opcode.AWAIT);
+            emitter.emitOpcode(Opcode.DUP);
+            emitter.emitOpcodeAtom(Opcode.GET_FIELD, "done");
+        } else {
+            emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
+        }
+
+        // Stack: iter, next, catch_offset, value, done
+        int jumpToEnd = emitter.emitJump(Opcode.IF_TRUE);
+        // Stack: iter, next, catch_offset, value (or result for async)
+
+        if (forOfStmt.isAsync()) {
+            emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
+        }
+
+        // Drop the value - we can't assign it
+        emitter.emitOpcode(Opcode.DROP);
+        // Evaluate the call expression (f() is called at runtime)
+        compileExpression(callExpr);
+        emitter.emitOpcode(Opcode.DROP);
+        // Throw ReferenceError
+        emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+        emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
+
+        // End label (when done=true)
+        emitter.patchJump(jumpToEnd, emitter.currentOffset());
+        // Drop remaining value on stack
+        emitter.emitOpcode(Opcode.DROP);
+
+        // Clean up iterator: drop catch_offset, next, iter
+        emitter.emitOpcode(Opcode.DROP);
+        emitter.emitOpcode(Opcode.DROP);
+        emitter.emitOpcode(Opcode.DROP);
+
+        emitCurrentScopeUsingDisposal();
+        exitScope();
     }
 
     private void compileForStatement(ForStatement forStmt) {
@@ -4049,6 +4127,12 @@ public final class BytecodeCompiler {
                         throw new CompilerException("Invalid member expression property for increment/decrement");
                     }
                 }
+            } else if (operand instanceof CallExpression) {
+                // Annex B: CallExpression as increment/decrement target throws ReferenceError at runtime.
+                compileExpression(operand);
+                emitter.emitOpcode(Opcode.DROP);
+                emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid increment/decrement operand");
+                emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
             } else {
                 throw new CompilerException("Invalid operand for increment/decrement operator");
             }

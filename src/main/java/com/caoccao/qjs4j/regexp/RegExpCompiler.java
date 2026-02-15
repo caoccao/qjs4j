@@ -778,55 +778,6 @@ public final class RegExpCompiler {
         context.buffer.appendU8(0); // Capture group 0
     }
 
-    /**
-     * Determine whether a quantified atom needs a zero-advance check.
-     * Returns true if the atom might match without advancing the position (e.g., lookahead,
-     * anchors, word boundaries). Following QuickJS re_need_check_adv_and_capture_init.
-     */
-    private boolean needCheckAdvance(byte[] atomCode) {
-        int pos = 0;
-        boolean needCheck = true;
-        while (pos < atomCode.length) {
-            int opcode = atomCode[pos] & 0xFF;
-            RegExpOpcode op = RegExpOpcode.fromCode(opcode);
-            switch (op) {
-                case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE:
-                    // These always advance the position
-                    needCheck = false;
-                    break;
-                case RANGE, RANGE_I: {
-                    // Variable length - read the range data length
-                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
-                    pos += 3 + rangeLen;
-                    needCheck = false;
-                    continue;
-                }
-                case RANGE32, RANGE32_I: {
-                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
-                    pos += 3 + rangeLen;
-                    needCheck = false;
-                    continue;
-                }
-                case NOT_RANGE, NOT_RANGE_I: {
-                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
-                    pos += 3 + rangeLen;
-                    needCheck = false;
-                    continue;
-                }
-                case LINE_START, LINE_START_M, LINE_END, LINE_END_M,
-                     WORD_BOUNDARY, WORD_BOUNDARY_I, NOT_WORD_BOUNDARY, NOT_WORD_BOUNDARY_I,
-                     SAVE_START, SAVE_END, SAVE_RESET, SET_CHAR_POS, SET_I32:
-                    // These don't advance - no effect on the check
-                    break;
-                default:
-                    // Unknown or complex opcode - assume might not advance
-                    return true;
-            }
-            pos += op.getLength();
-        }
-        return needCheck;
-    }
-
     private void compileQuantifier(CompileContext context, int atomStart, int captureCountBeforeAtom) {
         int ch = context.codePoints[context.pos];
         int min, max;
@@ -1224,6 +1175,55 @@ public final class RegExpCompiler {
                 (ch >= 'A' && ch <= 'Z') ||
                 (ch >= 'a' && ch <= 'z') ||
                 ch == '_';
+    }
+
+    /**
+     * Determine whether a quantified atom needs a zero-advance check.
+     * Returns true if the atom might match without advancing the position (e.g., lookahead,
+     * anchors, word boundaries). Following QuickJS re_need_check_adv_and_capture_init.
+     */
+    private boolean needCheckAdvance(byte[] atomCode) {
+        int pos = 0;
+        boolean needCheck = true;
+        while (pos < atomCode.length) {
+            int opcode = atomCode[pos] & 0xFF;
+            RegExpOpcode op = RegExpOpcode.fromCode(opcode);
+            switch (op) {
+                case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE:
+                    // These always advance the position
+                    needCheck = false;
+                    break;
+                case RANGE, RANGE_I: {
+                    // Variable length - read the range data length
+                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
+                    pos += 3 + rangeLen;
+                    needCheck = false;
+                    continue;
+                }
+                case RANGE32, RANGE32_I: {
+                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
+                    pos += 3 + rangeLen;
+                    needCheck = false;
+                    continue;
+                }
+                case NOT_RANGE, NOT_RANGE_I: {
+                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
+                    pos += 3 + rangeLen;
+                    needCheck = false;
+                    continue;
+                }
+                case LINE_START, LINE_START_M, LINE_END, LINE_END_M,
+                     WORD_BOUNDARY, WORD_BOUNDARY_I, NOT_WORD_BOUNDARY, NOT_WORD_BOUNDARY_I,
+                     SAVE_START, SAVE_END, SAVE_RESET, SET_CHAR_POS, SET_I32:
+                    // These don't advance - no effect on the check
+                    break;
+                default:
+                    // Unknown or complex opcode - assume might not advance
+                    return true;
+            }
+            pos += op.getLength();
+        }
+        return needCheck;
     }
 
     private int parseClassEscape(CompileContext context, List<Integer> ranges) {

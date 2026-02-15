@@ -366,8 +366,12 @@ public final class Parser {
     }
 
     private boolean isValidForInOfTarget(Expression expr) {
-        return expr instanceof Identifier
-                || expr instanceof MemberExpression;
+        if (expr instanceof Identifier || expr instanceof MemberExpression) {
+            return true;
+        }
+        // Annex B: In non-strict mode, CallExpression is allowed as a for-in/of
+        // target syntactically; it will throw ReferenceError at runtime.
+        return !strictMode && expr instanceof CallExpression;
     }
 
     private boolean match(TokenType type) {
@@ -510,110 +514,86 @@ public final class Parser {
         SourceLocation location = getLocation();
 
         // Check for async arrow function: async () => {} or async (params) => {}
+        // Following QuickJS's approach: save state before consuming 'async', try all
+        // async patterns, and restore state if none match so the normal expression
+        // parser handles 'async' as a regular identifier.
         if (match(TokenType.ASYNC)) {
             SourceLocation asyncLocation = location;
+            Token savedCurrent = currentToken;
+            Token savedNext = nextToken;
+            int savedPrevLine = previousTokenLine;
+            Lexer.LexerState savedLexer = lexer.saveState();
+
             advance(); // consume 'async'
 
-            // Async function expression: async function (...) {}
-            if (match(TokenType.FUNCTION)) {
-                return parseFunctionExpression(true, asyncLocation);
-            }
-
-            // Async arrow function with single identifier parameter: async x => x
-            if (match(TokenType.IDENTIFIER) && nextToken.type() == TokenType.ARROW) {
-                Identifier param = parseIdentifier();
-                expect(TokenType.ARROW);
-
-                ASTNode body;
-                enterFunctionContext(true);
-                try {
-                    if (match(TokenType.LBRACE)) {
-                        body = parseBlockStatement();
-                    } else {
-                        body = parseAssignmentExpression();
-                    }
-                } finally {
-                    exitFunctionContext(true);
+            // Line terminator after 'async' means it's an identifier, not async keyword
+            if (!hasNewlineBefore()) {
+                // Async function expression: async function (...) {}
+                if (match(TokenType.FUNCTION)) {
+                    return parseFunctionExpression(true, asyncLocation);
                 }
 
-                SourceLocation fullLocation = new SourceLocation(
-                        asyncLocation.line(),
-                        asyncLocation.column(),
-                        asyncLocation.offset(),
-                        currentToken.offset()
-                );
-                return new ArrowFunctionExpression(List.of(param), null, null, body, true, fullLocation);
-            }
+                // Async arrow function with single identifier parameter: async x => x
+                if (match(TokenType.IDENTIFIER) && nextToken.type() == TokenType.ARROW) {
+                    Identifier param = parseIdentifier();
+                    expect(TokenType.ARROW);
 
-            // Check if followed by ( or identifier (for single param)
-            if (match(TokenType.LPAREN) || match(TokenType.IDENTIFIER)) {
-                if (match(TokenType.LPAREN)) {
+                    ASTNode body;
+                    enterFunctionContext(true);
+                    try {
+                        if (match(TokenType.LBRACE)) {
+                            body = parseBlockStatement();
+                        } else {
+                            body = parseAssignmentExpression();
+                        }
+                    } finally {
+                        exitFunctionContext(true);
+                    }
+
+                    SourceLocation fullLocation = new SourceLocation(
+                            asyncLocation.line(),
+                            asyncLocation.column(),
+                            asyncLocation.offset(),
+                            currentToken.offset()
+                    );
+                    return new ArrowFunctionExpression(List.of(param), null, null, body, true, fullLocation);
+                }
+
+                // Async arrow function with parenthesized parameters: async (...) => {}
+                // Use peekPastParensIsArrow() to check without consuming tokens
+                if (match(TokenType.LPAREN) && peekPastParensIsArrow()) {
                     enterFunctionContext(true);
                     try {
                         advance(); // consume '('
-
-                        // Parse parameters using the same function parameter parser
                         FunctionParams funcParams = parseFunctionParameters();
+                        advance(); // consume '=>' (confirmed by peekPastParensIsArrow)
 
-                        // Check for arrow
-                        if (match(TokenType.ARROW)) {
-                            advance(); // consume '=>'
-
-                            // Parse body
-                            ASTNode body;
-                            if (match(TokenType.LBRACE)) {
-                                body = parseBlockStatement();
-                            } else {
-                                // Expression body
-                                body = parseAssignmentExpression();
-                            }
-
-                            // Update location to include end offset
-                            SourceLocation fullLocation = new SourceLocation(
-                                    location.line(),
-                                    location.column(),
-                                    location.offset(),
-                                    currentToken.offset()
-                            );
-
-                            return new ArrowFunctionExpression(funcParams.params, funcParams.defaults, funcParams.restParameter, body, true, fullLocation);
+                        ASTNode body;
+                        if (match(TokenType.LBRACE)) {
+                            body = parseBlockStatement();
+                        } else {
+                            body = parseAssignmentExpression();
                         }
+
+                        SourceLocation fullLocation = new SourceLocation(
+                                location.line(),
+                                location.column(),
+                                location.offset(),
+                                currentToken.offset()
+                        );
+                        return new ArrowFunctionExpression(funcParams.params, funcParams.defaults, funcParams.restParameter, body, true, fullLocation);
                     } finally {
                         exitFunctionContext(true);
                     }
                 }
             }
 
-            // Fallback: treat `async` as an identifier in expression position.
-            Expression left = new Identifier("async", asyncLocation);
-            if (isAssignmentOperator(currentToken.type())) {
-                TokenType op = currentToken.type();
-                SourceLocation assignmentLocation = getLocation();
-                advance();
-                Expression right = parseAssignmentExpression();
-
-                AssignmentExpression.AssignmentOperator operator = switch (op) {
-                    case ASSIGN -> AssignmentExpression.AssignmentOperator.ASSIGN;
-                    case AND_ASSIGN -> AssignmentExpression.AssignmentOperator.AND_ASSIGN;
-                    case DIV_ASSIGN -> AssignmentExpression.AssignmentOperator.DIV_ASSIGN;
-                    case EXP_ASSIGN -> AssignmentExpression.AssignmentOperator.EXP_ASSIGN;
-                    case LOGICAL_AND_ASSIGN -> AssignmentExpression.AssignmentOperator.LOGICAL_AND_ASSIGN;
-                    case LOGICAL_OR_ASSIGN -> AssignmentExpression.AssignmentOperator.LOGICAL_OR_ASSIGN;
-                    case LSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.LSHIFT_ASSIGN;
-                    case MINUS_ASSIGN -> AssignmentExpression.AssignmentOperator.MINUS_ASSIGN;
-                    case MOD_ASSIGN -> AssignmentExpression.AssignmentOperator.MOD_ASSIGN;
-                    case MUL_ASSIGN -> AssignmentExpression.AssignmentOperator.MUL_ASSIGN;
-                    case NULLISH_ASSIGN -> AssignmentExpression.AssignmentOperator.NULLISH_ASSIGN;
-                    case OR_ASSIGN -> AssignmentExpression.AssignmentOperator.OR_ASSIGN;
-                    case PLUS_ASSIGN -> AssignmentExpression.AssignmentOperator.PLUS_ASSIGN;
-                    case RSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.RSHIFT_ASSIGN;
-                    case URSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.URSHIFT_ASSIGN;
-                    case XOR_ASSIGN -> AssignmentExpression.AssignmentOperator.XOR_ASSIGN;
-                    default -> AssignmentExpression.AssignmentOperator.ASSIGN;
-                };
-                return new AssignmentExpression(left, operator, right, assignmentLocation);
-            }
-            return left;
+            // Not an async function/arrow. Restore state so 'async' is treated
+            // as a regular identifier by the normal expression parser.
+            currentToken = savedCurrent;
+            nextToken = savedNext;
+            previousTokenLine = savedPrevLine;
+            lexer.restoreState(savedLexer);
         }
 
         Expression left = parseConditionalExpression();
@@ -792,8 +772,6 @@ public final class Parser {
         return left;
     }
 
-    // Expression parsing with precedence
-
     private Expression parseBitwiseOrExpression() {
         Expression left = parseBitwiseXorExpression();
 
@@ -806,6 +784,8 @@ public final class Parser {
 
         return left;
     }
+
+    // Expression parsing with precedence
 
     private Expression parseBitwiseXorExpression() {
         Expression left = parseBitwiseAndExpression();
@@ -1753,8 +1733,6 @@ public final class Parser {
         return new FunctionExpression(null, funcParams.params, funcParams.defaults, funcParams.restParameter, body, false, false, location);
     }
 
-    // Utility methods
-
     /**
      * Parse method or field after the property name.
      */
@@ -1781,6 +1759,8 @@ public final class Parser {
         FunctionExpression method = parseMethod("method");
         return new ClassDeclaration.MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
     }
+
+    // Utility methods
 
     private Expression parseMultiplicativeExpression() {
         Expression left = parseExponentiationExpression();
@@ -2068,6 +2048,7 @@ public final class Parser {
                 yield new Literal(null, location);
             }
             case IDENTIFIER -> parseIdentifier();
+            case ASYNC -> parseIdentifier();
             case AWAIT -> parseIdentifier();
             case PRIVATE_NAME -> {
                 String name = currentToken.value();
@@ -2698,6 +2679,38 @@ public final class Parser {
 
     private Token peek() {
         return nextToken;
+    }
+
+    /**
+     * Check if the current '(' token begins a parenthesized group followed by '=>'.
+     * Used to disambiguate async arrow functions from regular calls (CoverCallExpressionAndAsyncArrowHead).
+     * Following QuickJS's js_parse_skip_parens_token approach: saves parser state,
+     * scans past balanced parentheses, checks for '=>', then restores state.
+     */
+    private boolean peekPastParensIsArrow() {
+        Token savedCurrent = currentToken;
+        Token savedNext = nextToken;
+        int savedPrevLine = previousTokenLine;
+        Lexer.LexerState savedLexer = lexer.saveState();
+        try {
+            advance(); // consume '('
+            int depth = 1;
+            while (depth > 0 && !match(TokenType.EOF)) {
+                if (match(TokenType.LPAREN)) depth++;
+                else if (match(TokenType.RPAREN)) depth--;
+                if (depth > 0) advance();
+            }
+            if (depth == 0) {
+                advance(); // consume closing ')'
+                return match(TokenType.ARROW);
+            }
+            return false;
+        } finally {
+            currentToken = savedCurrent;
+            nextToken = savedNext;
+            previousTokenLine = savedPrevLine;
+            lexer.restoreState(savedLexer);
+        }
     }
 
     private String processTemplateEscapeSequences(String str, boolean tagged) {
