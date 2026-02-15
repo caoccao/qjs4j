@@ -3612,6 +3612,7 @@ public final class BytecodeCompiler {
                         // Prefix: ++arr[i] - returns new value
                         emitter.emitOpcode(Opcode.DUP2);
                         emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                        emitter.emitOpcode(Opcode.PLUS); // ToNumber conversion
                         emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
                         emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
                         // Stack: [obj, prop, new_val] -> need [new_val, obj, prop]
@@ -3639,6 +3640,7 @@ public final class BytecodeCompiler {
                             // Prefix: ++obj.prop - returns new value
                             emitter.emitOpcode(Opcode.DUP);
                             emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                            emitter.emitOpcode(Opcode.PLUS); // ToNumber conversion
                             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
                             emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
                             // Stack: [obj, new_val] -> need [new_val, obj] for PUT_FIELD
@@ -3675,6 +3677,7 @@ public final class BytecodeCompiler {
                             emitter.emitOpcode(Opcode.DUP); // obj obj
                             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                             emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
+                            emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
                             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
                             emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj new_val
                             emitter.emitOpcode(Opcode.DUP); // obj new_val new_val
