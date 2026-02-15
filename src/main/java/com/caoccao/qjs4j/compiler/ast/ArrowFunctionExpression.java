@@ -23,6 +23,7 @@ import java.util.List;
  */
 public record ArrowFunctionExpression(
         List<Identifier> params,
+        List<Expression> defaults,  // Default values for params (null entries = no default)
         RestParameter restParameter,  // Optional rest parameter (...args)
         ASTNode body,
         boolean isAsync,

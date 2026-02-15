@@ -412,6 +412,11 @@ public final class JSTypeConversions {
 
         // For objects, call ToPrimitive with hint
         if (input instanceof JSObject obj) {
+            // IsHTMLDDA objects emulate undefined - return undefined for ToPrimitive
+            if (obj.isHTMLDDA()) {
+                return JSUndefined.INSTANCE;
+            }
+
             // Check for [[PrimitiveValue]] internal slot (wrapper objects)
             JSValue primitiveValue = obj.getPrimitiveValue();
             if (primitiveValue != null && !(primitiveValue instanceof JSUndefined)) {

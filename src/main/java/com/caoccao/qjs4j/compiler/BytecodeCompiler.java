@@ -250,6 +250,12 @@ public final class BytecodeCompiler {
             functionCompiler.currentScope().declareLocal(param.name());
         }
 
+        // Emit default parameter initialization following QuickJS pattern:
+        // GET_ARG idx, DUP, UNDEFINED, STRICT_EQ, IF_FALSE label, DROP, <default>, DUP, PUT_ARG idx, label:
+        if (arrowExpr.defaults() != null) {
+            emitDefaultParameterInit(functionCompiler, arrowExpr.defaults());
+        }
+
         // Handle rest parameter if present
         // The REST opcode must be emitted early in the function to initialize the rest array
         if (arrowExpr.restParameter() != null) {
@@ -314,10 +320,11 @@ public final class BytecodeCompiler {
 
         // Create JSBytecodeFunction
         // Arrow functions cannot be constructors
+        int definedArgCount = computeDefinedArgCount(arrowExpr.params(), arrowExpr.defaults(), arrowExpr.restParameter() != null);
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
                 functionName,
-                arrowExpr.params().size(),
+                definedArgCount,
                 new JSValue[functionCompiler.captureResolver.getCapturedBindingCount()],
                 null,            // prototype - arrow functions don't have prototype
                 false,           // isConstructor - arrow functions cannot be constructors
@@ -1701,6 +1708,11 @@ public final class BytecodeCompiler {
             functionCompiler.currentScope().declareLocal(param.name());
         }
 
+        // Emit default parameter initialization following QuickJS pattern
+        if (funcDecl.defaults() != null) {
+            emitDefaultParameterInit(functionCompiler, funcDecl.defaults());
+        }
+
         // Handle rest parameter if present
         // The REST opcode must be emitted early in the function to initialize the rest array
         if (funcDecl.restParameter() != null) {
@@ -1792,10 +1804,11 @@ public final class BytecodeCompiler {
         int selfCaptureIndex = selfCaptureIdx != null ? selfCaptureIdx : -1;
 
         // Create JSBytecodeFunction
+        int definedArgCount = computeDefinedArgCount(funcDecl.params(), funcDecl.defaults(), funcDecl.restParameter() != null);
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
                 functionName,
-                funcDecl.params().size(),
+                definedArgCount,
                 new JSValue[functionCompiler.captureResolver.getCapturedBindingCount()],
                 null,            // prototype - will be set by VM
                 true,            // isConstructor - regular functions can be constructors
@@ -1863,6 +1876,11 @@ public final class BytecodeCompiler {
             functionCompiler.currentScope().declareLocal(param.name());
         }
 
+        // Emit default parameter initialization following QuickJS pattern
+        if (funcExpr.defaults() != null) {
+            emitDefaultParameterInit(functionCompiler, funcExpr.defaults());
+        }
+
         // Handle rest parameter if present
         // The REST opcode must be emitted early in the function to initialize the rest array
         if (funcExpr.restParameter() != null) {
@@ -1922,10 +1940,11 @@ public final class BytecodeCompiler {
         String functionSource = extractSourceCode(funcExpr.getLocation());
 
         // Create JSBytecodeFunction
+        int definedArgCount = computeDefinedArgCount(funcExpr.params(), funcExpr.defaults(), funcExpr.restParameter() != null);
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
                 functionName,
-                funcExpr.params().size(),
+                definedArgCount,
                 new JSValue[functionCompiler.captureResolver.getCapturedBindingCount()],
                 null,            // prototype - will be set by VM
                 true,            // isConstructor - regular functions can be constructors
@@ -2309,6 +2328,11 @@ public final class BytecodeCompiler {
             methodCompiler.currentScope().declareLocal(param.name());
         }
 
+        // Emit default parameter initialization following QuickJS pattern
+        if (funcExpr.defaults() != null) {
+            emitDefaultParameterInit(methodCompiler, funcExpr.defaults());
+        }
+
         // If this is a generator method, emit INITIAL_YIELD at the start
         if (funcExpr.isGenerator()) {
             methodCompiler.emitter.emitOpcode(Opcode.INITIAL_YIELD);
@@ -2354,10 +2378,11 @@ public final class BytecodeCompiler {
         }
 
         // Create JSBytecodeFunction for the method
+        int definedArgCount = computeDefinedArgCount(funcExpr.params(), funcExpr.defaults(), funcExpr.restParameter() != null);
         return new JSBytecodeFunction(
                 methodBytecode,
                 methodName,
-                funcExpr.params().size(),
+                definedArgCount,
                 closureVars,     // closure vars contain private symbols
                 null,            // prototype
                 isConstructor,   // isConstructor - true for class constructors, false for methods
@@ -3552,6 +3577,25 @@ public final class BytecodeCompiler {
     }
 
     /**
+     * Compute the defined_arg_count for Function.length per ES2024 spec.
+     * Following QuickJS js_parse_function_decl2: length stops counting at the first
+     * parameter with a default value or a rest parameter.
+     */
+    private int computeDefinedArgCount(List<Identifier> params, List<Expression> defaults, boolean hasRest) {
+        if (defaults == null) {
+            return params.size();
+        }
+        int count = 0;
+        for (int i = 0; i < params.size(); i++) {
+            if (i < defaults.size() && defaults.get(i) != null) {
+                break; // Stop at first default parameter
+            }
+            count++;
+        }
+        return count;
+    }
+
+    /**
      * Create a default constructor for a class.
      */
     private JSBytecodeFunction createDefaultConstructor(
@@ -3746,6 +3790,22 @@ public final class BytecodeCompiler {
         }
     }
 
+    /**
+     * Emit default parameter initialization bytecode following QuickJS pattern.
+     * For each parameter with a default value, emits:
+     *   GET_ARG idx
+     *   DUP
+     *   UNDEFINED
+     *   STRICT_EQ
+     *   IF_FALSE label
+     *   DROP
+     *   <compile default expression>
+     *   DUP
+     *   PUT_ARG idx
+     *   label:
+     *   PUT_LOCAL idx  (store into the local variable slot)
+     */
+
     private void emitCaptureBindingLoad(CaptureSource captureSource) {
         if (captureSource.type == CaptureSourceType.LOCAL) {
             emitter.emitOpcodeU16(Opcode.GET_LOCAL, captureSource.index);
@@ -3791,6 +3851,36 @@ public final class BytecodeCompiler {
 
     private void emitCurrentScopeUsingDisposal() {
         emitScopeUsingDisposal(currentScope());
+    }
+
+    private void emitDefaultParameterInit(BytecodeCompiler functionCompiler, List<Expression> defaults) {
+        for (int i = 0; i < defaults.size(); i++) {
+            Expression defaultExpr = defaults.get(i);
+            if (defaultExpr != null) {
+                // GET_ARG idx - push the argument value onto the stack
+                functionCompiler.emitter.emitOpcodeU16(Opcode.GET_ARG, i);
+                // DUP - duplicate for the comparison
+                functionCompiler.emitter.emitOpcode(Opcode.DUP);
+                // UNDEFINED - push undefined for comparison
+                functionCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
+                // STRICT_EQ - check if arg === undefined
+                functionCompiler.emitter.emitOpcode(Opcode.STRICT_EQ);
+                // IF_FALSE label - if arg !== undefined, skip default
+                int skipLabel = functionCompiler.emitter.emitJump(Opcode.IF_FALSE);
+                // DROP - drop the duplicated arg value (it was undefined)
+                functionCompiler.emitter.emitOpcode(Opcode.DROP);
+                // Compile the default expression
+                functionCompiler.compileExpression(defaultExpr);
+                // DUP - duplicate for PUT_ARG
+                functionCompiler.emitter.emitOpcode(Opcode.DUP);
+                // PUT_ARG idx - store back into the argument slot
+                functionCompiler.emitter.emitOpcodeU16(Opcode.PUT_ARG, i);
+                // label: - skip target (value is on stack, either original arg or default)
+                functionCompiler.emitter.patchJump(skipLabel, functionCompiler.emitter.currentOffset());
+                // PUT_LOCAL idx - store into the local variable slot
+                functionCompiler.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, i);
+            }
+        }
     }
 
     private void emitMethodCallOnLocalObject(int localIndex, String methodName, int argCount) {

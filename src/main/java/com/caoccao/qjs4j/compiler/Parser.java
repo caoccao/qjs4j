@@ -502,7 +502,7 @@ public final class Parser {
                         asyncLocation.offset(),
                         currentToken.offset()
                 );
-                return new ArrowFunctionExpression(List.of(param), null, body, true, fullLocation);
+                return new ArrowFunctionExpression(List.of(param), null, null, body, true, fullLocation);
             }
 
             // Check if followed by ( or identifier (for single param)
@@ -536,7 +536,7 @@ public final class Parser {
                                     currentToken.offset()
                             );
 
-                            return new ArrowFunctionExpression(funcParams.params, funcParams.restParameter, body, true, fullLocation);
+                            return new ArrowFunctionExpression(funcParams.params, funcParams.defaults, funcParams.restParameter, body, true, fullLocation);
                         }
                     } finally {
                         exitFunctionContext(true);
@@ -583,11 +583,35 @@ public final class Parser {
         if (match(TokenType.ARROW)) {
             // Convert the parsed expression to arrow function parameters
             List<Identifier> params = new ArrayList<>();
+            List<Expression> defaults = new ArrayList<>();
             RestParameter restParameter = null;
 
             if (left instanceof Identifier) {
                 // Single parameter without parentheses: x => x + 1
                 params.add((Identifier) left);
+                defaults.add(null);
+            } else if (left instanceof AssignmentExpression assignExpr
+                    && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN
+                    && assignExpr.left() instanceof Identifier paramId) {
+                // Single parameter with default: (x = defaultExpr) => body
+                params.add(paramId);
+                defaults.add(assignExpr.right());
+            } else if (left instanceof SequenceExpression seqExpr) {
+                // Multiple parameters possibly with defaults: (x = a, y = b) => body
+                for (Expression expr : seqExpr.expressions()) {
+                    if (expr instanceof Identifier id) {
+                        params.add(id);
+                        defaults.add(null);
+                    } else if (expr instanceof AssignmentExpression ae
+                            && ae.operator() == AssignmentExpression.AssignmentOperator.ASSIGN
+                            && ae.left() instanceof Identifier aeParamId) {
+                        params.add(aeParamId);
+                        defaults.add(ae.right());
+                    } else {
+                        throw new RuntimeException("Invalid arrow function parameter at line " +
+                                currentToken.line() + ", column " + currentToken.column());
+                    }
+                }
             } else if (left instanceof ArrayExpression arrayExpr) {
                 // ArrayExpression is used as a marker for:
                 // 1. Empty parameter list: () => expr
@@ -608,15 +632,20 @@ public final class Parser {
 
                                 // Rest parameter must be last
                                 if (i != arrayExpr.elements().size() - 1) {
-                                    throw new RuntimeException("Rest parameter must be last at line " +
-                                            currentToken.line() + ", column " + currentToken.column());
+                                    throw new JSSyntaxErrorException("Rest parameter must be last formal parameter");
                                 }
                             } else {
                                 throw new RuntimeException("Invalid rest parameter at line " +
                                         currentToken.line() + ", column " + currentToken.column());
                             }
-                        } else if (expr instanceof Identifier) {
-                            params.add((Identifier) expr);
+                        } else if (expr instanceof Identifier id) {
+                            params.add(id);
+                            defaults.add(null);
+                        } else if (expr instanceof AssignmentExpression ae
+                                && ae.operator() == AssignmentExpression.AssignmentOperator.ASSIGN
+                                && ae.left() instanceof Identifier aeParamId) {
+                            params.add(aeParamId);
+                            defaults.add(ae.right());
                         } else {
                             throw new RuntimeException("Invalid arrow function parameter at line " +
                                     currentToken.line() + ", column " + currentToken.column());
@@ -625,7 +654,6 @@ public final class Parser {
                 }
             } else {
                 // Could be other complex cases that we don't support yet
-                // For simplicity, we'll throw an error
                 throw new RuntimeException("Unsupported arrow function parameters at line " +
                         currentToken.line() + ", column " + currentToken.column());
             }
@@ -654,7 +682,7 @@ public final class Parser {
                     currentToken.offset()
             );
 
-            return new ArrowFunctionExpression(params, restParameter, body, false, fullLocation);
+            return new ArrowFunctionExpression(params, defaults, restParameter, body, false, fullLocation);
         }
 
         if (isAssignmentOperator(currentToken.type())) {
@@ -1333,7 +1361,7 @@ public final class Parser {
                     currentToken.offset()
             );
 
-            return new FunctionDeclaration(id, funcParams.params, funcParams.restParameter, body, isAsync, isGenerator, fullLocation);
+            return new FunctionDeclaration(id, funcParams.params, funcParams.defaults, funcParams.restParameter, body, isAsync, isGenerator, fullLocation);
         } finally {
             exitFunctionContext(isAsync);
         }
@@ -1375,7 +1403,7 @@ public final class Parser {
                     currentToken.offset()
             );
 
-            return new FunctionExpression(id, funcParams.params, funcParams.restParameter, body, isAsync, isGenerator, fullLocation);
+            return new FunctionExpression(id, funcParams.params, funcParams.defaults, funcParams.restParameter, body, isAsync, isGenerator, fullLocation);
         } finally {
             exitFunctionContext(isAsync);
         }
@@ -1390,6 +1418,7 @@ public final class Parser {
      */
     private FunctionParams parseFunctionParameters() {
         List<Identifier> params = new ArrayList<>();
+        List<Expression> defaults = new ArrayList<>();
         RestParameter restParameter = null;
 
         if (!match(TokenType.RPAREN)) {
@@ -1403,8 +1432,7 @@ public final class Parser {
 
                     // Rest parameter must be last
                     if (match(TokenType.COMMA)) {
-                        throw new RuntimeException("Rest parameter must be last formal parameter at line " +
-                                currentToken.line() + ", column " + currentToken.column());
+                        throw new JSSyntaxErrorException("Rest parameter must be last formal parameter");
                     }
                     break;
                 }
@@ -1412,21 +1440,34 @@ public final class Parser {
                 // Regular parameter
                 params.add(parseIdentifier());
 
+                // Check for default value: param = defaultExpr
+                // Following QuickJS js_parse_function_decl2 pattern
+                if (match(TokenType.ASSIGN)) {
+                    advance(); // consume '='
+                    defaults.add(parseAssignmentExpression());
+                } else {
+                    defaults.add(null);
+                }
+
                 // Check for comma (more parameters)
                 if (!match(TokenType.COMMA)) {
                     break;
                 }
                 advance(); // consume comma
 
-                // Handle trailing comma before rest parameter or closing paren
-                if (match(TokenType.RPAREN) || match(TokenType.ELLIPSIS)) {
+                // Handle trailing comma before closing paren
+                if (match(TokenType.RPAREN)) {
+                    break;
+                }
+                // Handle trailing comma before rest parameter
+                if (match(TokenType.ELLIPSIS)) {
                     continue;
                 }
             }
         }
 
         expect(TokenType.RPAREN);
-        return new FunctionParams(params, restParameter);
+        return new FunctionParams(params, defaults, restParameter);
     }
 
     private Identifier parseIdentifier() {
@@ -1581,7 +1622,7 @@ public final class Parser {
             exitFunctionContext(false);
         }
 
-        return new FunctionExpression(null, funcParams.params, funcParams.restParameter, body, false, false, location);
+        return new FunctionExpression(null, funcParams.params, funcParams.defaults, funcParams.restParameter, body, false, false, location);
     }
 
     /**
@@ -1701,20 +1742,9 @@ public final class Parser {
                 Expression value;
                 try {
                     expect(TokenType.LPAREN);
-                    List<Identifier> params = new ArrayList<>();
-
-                    if (!match(TokenType.RPAREN)) {
-                        do {
-                            if (match(TokenType.COMMA)) {
-                                advance();
-                            }
-                            params.add(parseIdentifier());
-                        } while (match(TokenType.COMMA));
-                    }
-
-                    expect(TokenType.RPAREN);
+                    FunctionParams funcParams = parseFunctionParameters();
                     BlockStatement body = parseBlockStatement();
-                    value = new FunctionExpression(null, params, null, body, isAsync, isGenerator, funcLocation);
+                    value = new FunctionExpression(null, funcParams.params, funcParams.defaults, funcParams.restParameter, body, isAsync, isGenerator, funcLocation);
                 } finally {
                     exitFunctionContext(isAsync);
                 }
@@ -1951,10 +1981,20 @@ public final class Parser {
                         yield expr;
                     }
 
-                    // Could be (id) or (id, id, ...) or (id, ...rest)
+                    // Could be (id) or (id, id, ...) or (id, ...rest) or (id = default, ...)
                     // Parse as parameter list tentatively
                     List<Expression> potentialParams = new ArrayList<>();
-                    potentialParams.add(parseIdentifier());
+                    Identifier firstParam = parseIdentifier();
+                    // Check for default value on first param
+                    if (match(TokenType.ASSIGN)) {
+                        SourceLocation assignLoc = getLocation();
+                        advance(); // consume '='
+                        Expression defaultExpr = parseAssignmentExpression();
+                        potentialParams.add(new AssignmentExpression(firstParam,
+                                AssignmentExpression.AssignmentOperator.ASSIGN, defaultExpr, assignLoc));
+                    } else {
+                        potentialParams.add(firstParam);
+                    }
 
                     // Check for more parameters or rest parameter
                     while (match(TokenType.COMMA)) {
@@ -1976,11 +2016,20 @@ public final class Parser {
 
                         if (!match(TokenType.IDENTIFIER)) {
                             // Not a simple parameter list, might be complex expression
-                            // For now, throw error
                             throw new RuntimeException("Complex arrow function parameters not yet supported at line " +
                                     currentToken.line() + ", column " + currentToken.column());
                         }
-                        potentialParams.add(parseIdentifier());
+                        Identifier param = parseIdentifier();
+                        // Check for default value
+                        if (match(TokenType.ASSIGN)) {
+                            SourceLocation assignLoc = getLocation();
+                            advance(); // consume '='
+                            Expression defaultExpr = parseAssignmentExpression();
+                            potentialParams.add(new AssignmentExpression(param,
+                                    AssignmentExpression.AssignmentOperator.ASSIGN, defaultExpr, assignLoc));
+                        } else {
+                            potentialParams.add(param);
+                        }
                     }
 
                     expect(TokenType.RPAREN);
@@ -2736,6 +2785,6 @@ public final class Parser {
     /**
      * Helper record to hold the result of parsing function parameters.
      */
-    private record FunctionParams(List<Identifier> params, RestParameter restParameter) {
+    private record FunctionParams(List<Identifier> params, List<Expression> defaults, RestParameter restParameter) {
     }
 }
