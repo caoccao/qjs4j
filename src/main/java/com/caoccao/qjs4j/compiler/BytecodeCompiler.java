@@ -37,6 +37,7 @@ public final class BytecodeCompiler {
     private final Deque<LoopContext> loopStack;
     private final Set<String> nonDeletableGlobalBindings;
     private final Deque<Scope> scopes;
+    private final Set<String> tdzLocals;
     private boolean inGlobalScope;
     private boolean isGlobalProgram;  // true when compiling top-level program (not inside a function)
     private boolean isInArrowFunction;  // Track if we're currently compiling an arrow function
@@ -75,6 +76,7 @@ public final class BytecodeCompiler {
         this.isInArrowFunction = false;
         this.maxLocalCount = 0;
         this.nonDeletableGlobalBindings = new HashSet<>();
+        this.tdzLocals = new HashSet<>();
         this.sourceCode = null;
         this.scopeDepth = 0;
         this.privateSymbols = Map.of();  // Empty by default
@@ -1189,6 +1191,12 @@ public final class BytecodeCompiler {
             if (!inGlobalScope) {
                 currentScope().declareLocal(varName);
                 Integer localIndex = currentScope().getLocal(varName);
+                if (localIndex != null) {
+                    emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                }
+            } else if (tdzLocals.contains(varName)) {
+                // TDZ local: class was pre-declared as a local for TDZ enforcement
+                Integer localIndex = findLocalInScopes(varName);
                 if (localIndex != null) {
                     emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
                 }
@@ -2333,7 +2341,13 @@ public final class BytecodeCompiler {
         Integer localIndex = findLocalInScopes(name);
 
         if (localIndex != null) {
-            emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+            // Use GET_LOC_CHECK for TDZ locals (let/const/class in program scope)
+            // to throw ReferenceError if accessed before initialization
+            if (tdzLocals.contains(name)) {
+                emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
+            } else {
+                emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+            }
             return;
         }
 
@@ -2897,7 +2911,15 @@ public final class BytecodeCompiler {
         if (pattern instanceof Identifier id) {
             // Simple identifier: value is on stack, just assign it
             String varName = id.name();
-            if (inGlobalScope) {
+            if (inGlobalScope && tdzLocals.contains(varName)) {
+                // TDZ local: let/const was pre-declared as a local for TDZ enforcement
+                Integer tdzLocal = findLocalInScopes(varName);
+                if (tdzLocal != null) {
+                    emitter.emitOpcodeU16(Opcode.PUT_LOCAL, tdzLocal);
+                } else {
+                    emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                }
+            } else if (inGlobalScope) {
                 emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
             } else if (varInGlobalProgram) {
                 // var declaration in global program inside a block (for, try, if, etc.).
@@ -3114,6 +3136,21 @@ public final class BytecodeCompiler {
         isGlobalProgram = true;
         strictMode = program.strict();  // Set strict mode from program directive
         enterScope();
+
+        // Pre-declare class declarations as locals with TDZ.
+        // Per ES spec EvalDeclarationInstantiation step 14: lexically declared names
+        // are instantiated here but not initialized. Accessing them before their
+        // declaration throws ReferenceError (temporal dead zone).
+        // Following QuickJS js_closure_define_global_var pattern for eval lexical bindings.
+        for (Statement stmt : program.body()) {
+            if (stmt instanceof ClassDeclaration classDecl && classDecl.id() != null) {
+                String name = classDecl.id().name();
+                int localIndex = currentScope().declareLocal(name);
+                emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                tdzLocals.add(name);
+            }
+        }
+
         registerGlobalProgramBindings(program.body());
 
         List<Statement> body = program.body();
@@ -3937,7 +3974,13 @@ public final class BytecodeCompiler {
             } else {
                 Integer localIndex = findLocalInScopes(name);
                 if (localIndex != null) {
-                    emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                    // Use GET_LOC_CHECK for TDZ locals - typeof of an uninitialized
+                    // lexical binding throws ReferenceError per ES spec
+                    if (tdzLocals.contains(name)) {
+                        emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
+                    } else {
+                        emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                    }
                 } else {
                     Integer capturedIndex = resolveCapturedBindingIndex(name);
                     if (capturedIndex != null) {
