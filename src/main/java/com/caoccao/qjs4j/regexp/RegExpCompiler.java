@@ -778,6 +778,55 @@ public final class RegExpCompiler {
         context.buffer.appendU8(0); // Capture group 0
     }
 
+    /**
+     * Determine whether a quantified atom needs a zero-advance check.
+     * Returns true if the atom might match without advancing the position (e.g., lookahead,
+     * anchors, word boundaries). Following QuickJS re_need_check_adv_and_capture_init.
+     */
+    private boolean needCheckAdvance(byte[] atomCode) {
+        int pos = 0;
+        boolean needCheck = true;
+        while (pos < atomCode.length) {
+            int opcode = atomCode[pos] & 0xFF;
+            RegExpOpcode op = RegExpOpcode.fromCode(opcode);
+            switch (op) {
+                case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE:
+                    // These always advance the position
+                    needCheck = false;
+                    break;
+                case RANGE, RANGE_I: {
+                    // Variable length - read the range data length
+                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
+                    pos += 3 + rangeLen;
+                    needCheck = false;
+                    continue;
+                }
+                case RANGE32, RANGE32_I: {
+                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
+                    pos += 3 + rangeLen;
+                    needCheck = false;
+                    continue;
+                }
+                case NOT_RANGE, NOT_RANGE_I: {
+                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
+                    pos += 3 + rangeLen;
+                    needCheck = false;
+                    continue;
+                }
+                case LINE_START, LINE_START_M, LINE_END, LINE_END_M,
+                     WORD_BOUNDARY, WORD_BOUNDARY_I, NOT_WORD_BOUNDARY, NOT_WORD_BOUNDARY_I,
+                     SAVE_START, SAVE_END, SAVE_RESET, SET_CHAR_POS, SET_I32:
+                    // These don't advance - no effect on the check
+                    break;
+                default:
+                    // Unknown or complex opcode - assume might not advance
+                    return true;
+            }
+            pos += op.getLength();
+        }
+        return needCheck;
+    }
+
     private void compileQuantifier(CompileContext context, int atomStart, int captureCountBeforeAtom) {
         int ch = context.codePoints[context.pos];
         int min, max;
@@ -830,6 +879,10 @@ public final class RegExpCompiler {
         // Remove the atom from the buffer
         context.buffer.truncate(atomStart);
 
+        // Following QuickJS: check if the atom can match without advancing the position.
+        // If so, we need to add SET_CHAR_POS/CHECK_ADVANCE to prevent infinite loops.
+        boolean addZeroAdvanceCheck = needCheckAdvance(atomCode);
+
         // Implement quantifier using SPLIT opcodes
         if (min == 0 && max == 1) {
             // ? quantifier: SPLIT then atom
@@ -840,44 +893,88 @@ public final class RegExpCompiler {
             context.buffer.appendU32(atomSize);
             context.buffer.append(atomCode);
         } else if (min == 0 && max == Integer.MAX_VALUE) {
-            // * quantifier: SPLIT (skip or continue), atom, GOTO back
-            // Greedy: try atom first (SPLIT_NEXT_FIRST), then allow skip
-            // Structure:
-            //   loopStart: SPLIT_NEXT_FIRST +atomSize+5 (to end)
-            //              atom
-            //              GOTO -atomSize-5-5 (back to loopStart)
-            //   end:
+            // * quantifier: SPLIT (skip or continue), SET_CHAR_POS?, atom, CHECK_ADVANCE?, GOTO back
+            // Following QuickJS: if atom can match empty, insert SET_CHAR_POS before atom and
+            // CHECK_ADVANCE after atom to prevent infinite loops on zero-width patterns.
+            int advCheckSize = addZeroAdvanceCheck ? 4 : 0; // SET_CHAR_POS(2) + CHECK_ADVANCE(2)
             int loopStart = context.buffer.size();
             context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
                     RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
-            context.buffer.appendU32(atomSize + 5); // Skip atom and GOTO
+            context.buffer.appendU32(atomSize + 5 + advCheckSize); // Skip atom + GOTO + advance checks
+            if (addZeroAdvanceCheck) {
+                context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
+                context.buffer.appendU8(0); // register 0
+            }
             context.buffer.append(atomCode);
+            if (addZeroAdvanceCheck) {
+                context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
+                context.buffer.appendU8(0); // register 0
+            }
             context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
             int offset = loopStart - (context.buffer.size() + 4);
             context.buffer.appendU32(offset);
         } else if (min == 1 && max == Integer.MAX_VALUE) {
             // + quantifier: atom, then SPLIT back or continue
-            // Structure:
-            //   loopStart: atom
-            //              SPLIT (greedy: try loop first, non-greedy: try continue first)
-            context.buffer.append(atomCode);
-            int loopStart = context.buffer.size() - atomSize;
-            context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_GOTO_FIRST.getCode() :
-                    RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
-            int offset = loopStart - (context.buffer.size() + 4);
-            context.buffer.appendU32(offset);
+            // With advance check: atom, SET_CHAR_POS, SPLIT, SET_CHAR_POS, atom, CHECK_ADVANCE, GOTO SPLIT
+            if (addZeroAdvanceCheck) {
+                // First iteration (no advance check needed)
+                context.buffer.append(atomCode);
+                // Loop iterations with advance check
+                int loopStart = context.buffer.size();
+                context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
+                        RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
+                // Offset to skip: SET_CHAR_POS(2) + atom + CHECK_ADVANCE(2) + GOTO(5)
+                int skipSize = 2 + atomSize + 2 + 5;
+                context.buffer.appendU32(skipSize);
+                context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
+                context.buffer.appendU8(0);
+                context.buffer.append(atomCode);
+                context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
+                context.buffer.appendU8(0);
+                context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
+                int gotoOffset = loopStart - (context.buffer.size() + 4);
+                context.buffer.appendU32(gotoOffset);
+            } else {
+                context.buffer.append(atomCode);
+                int loopStart = context.buffer.size() - atomSize;
+                context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_GOTO_FIRST.getCode() :
+                        RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
+                int offset = loopStart - (context.buffer.size() + 4);
+                context.buffer.appendU32(offset);
+            }
         } else {
             // {n,m} quantifier: unroll min times, then optional max-min times
             for (int i = 0; i < min; i++) {
                 context.buffer.append(atomCode);
             }
             if (max != min) {
-                int remaining = max == Integer.MAX_VALUE ? 100 : (max - min); // Cap infinite to reasonable number
-                for (int i = 0; i < remaining; i++) {
+                if (max == Integer.MAX_VALUE) {
+                    // {n,} - unbounded: use loop with advance check if needed
+                    int advCheckSize = addZeroAdvanceCheck ? 4 : 0;
+                    int loopStart = context.buffer.size();
                     context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
                             RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
-                    context.buffer.appendU32(atomSize);
+                    context.buffer.appendU32(atomSize + 5 + advCheckSize);
+                    if (addZeroAdvanceCheck) {
+                        context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
+                        context.buffer.appendU8(0);
+                    }
                     context.buffer.append(atomCode);
+                    if (addZeroAdvanceCheck) {
+                        context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
+                        context.buffer.appendU8(0);
+                    }
+                    context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
+                    int offset = loopStart - (context.buffer.size() + 4);
+                    context.buffer.appendU32(offset);
+                } else {
+                    int remaining = max - min;
+                    for (int i = 0; i < remaining; i++) {
+                        context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
+                                RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
+                        context.buffer.appendU32(atomSize);
+                        context.buffer.append(atomCode);
+                    }
                 }
             }
         }

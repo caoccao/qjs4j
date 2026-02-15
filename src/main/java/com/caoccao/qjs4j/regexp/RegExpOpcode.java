@@ -73,6 +73,20 @@ public enum RegExpOpcode {
     LOOKBEHIND(47, 5),                      // positive lookbehind
     NEGATIVE_LOOKBEHIND(48, 5);             // negative lookbehind
 
+    private static final RegExpOpcode[] LOOKUP;
+
+    static {
+        // Build a fast lookup table indexed by opcode code value.
+        int max = 0;
+        for (RegExpOpcode op : values()) {
+            if (op.code > max) max = op.code;
+        }
+        LOOKUP = new RegExpOpcode[max + 1];
+        for (RegExpOpcode op : values()) {
+            LOOKUP[op.code] = op;
+        }
+    }
+
     private final int code;
     private final int length;
 
@@ -85,10 +99,8 @@ public enum RegExpOpcode {
      * Get opcode by code value.
      */
     public static RegExpOpcode fromCode(int code) {
-        for (RegExpOpcode op : values()) {
-            if (op.code == code) {
-                return op;
-            }
+        if (code >= 0 && code < LOOKUP.length && LOOKUP[code] != null) {
+            return LOOKUP[code];
         }
         return INVALID;
     }

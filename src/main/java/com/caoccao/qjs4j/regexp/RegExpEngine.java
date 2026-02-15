@@ -468,6 +468,44 @@ public final class RegExpEngine {
                     pc = pcNext;
                 }
 
+                case SET_CHAR_POS -> {
+                    // Save current character position to register (QuickJS REOP_set_char_pos)
+                    int regIdx = bc[pc + 1] & 0xFF;
+                    if (regIdx < executionContext.registers.length) {
+                        executionContext.registers[regIdx] = executionContext.pos;
+                    }
+                    pc += 2;
+                }
+
+                case CHECK_ADVANCE -> {
+                    // Check that position has advanced from saved position (QuickJS REOP_check_advance)
+                    // If position hasn't advanced, backtrack (prevents infinite loops on zero-width atoms)
+                    int regIdx = bc[pc + 1] & 0xFF;
+                    if (regIdx < executionContext.registers.length
+                            && executionContext.registers[regIdx] == executionContext.pos) {
+                        // No advance - fail this path
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 2;
+                }
+
+                case SAVE_RESET -> {
+                    // Reset capture groups in range [start, end] to -1
+                    int startCapture = bc[pc + 1] & 0xFF;
+                    int endCapture = bc[pc + 2] & 0xFF;
+                    for (int i = startCapture; i <= endCapture && i < executionContext.captureCount; i++) {
+                        executionContext.captureStarts[i] = -1;
+                        executionContext.captureEnds[i] = -1;
+                    }
+                    pc += 3;
+                }
+
                 default -> {
                     // Unsupported opcode - try backtracking
                     if (!backtrackStack.isEmpty()) {
@@ -554,7 +592,8 @@ public final class RegExpEngine {
             int pc,
             int pos,
             int[] captureStarts,
-            int[] captureEnds
+            int[] captureEnds,
+            int[] registers
     ) {
     }
 
@@ -562,6 +601,7 @@ public final class RegExpEngine {
      * Execution context for a single match attempt.
      */
     private static class ExecutionContext {
+        static final int MAX_REGISTERS = 16;
         final byte[] bytecode;
         final int captureCount;
         final int[] codePoints;
@@ -569,6 +609,7 @@ public final class RegExpEngine {
         final boolean ignoreCase;
         final String input;
         final boolean multiline;
+        final int[] registers;  // Registers for loop counters and position tracking (QuickJS capture[2*captureCount+...])
         final boolean unicode;
         int[] captureEnds;
         int[] captureStarts;
@@ -586,6 +627,7 @@ public final class RegExpEngine {
             this.unicode = unicode;
             this.captureStarts = new int[captureCount];
             this.captureEnds = new int[captureCount];
+            this.registers = new int[MAX_REGISTERS];
             Arrays.fill(captureStarts, -1);
             Arrays.fill(captureEnds, -1);
         }
@@ -596,7 +638,7 @@ public final class RegExpEngine {
         }
 
         BacktrackPoint createBacktrackPoint(int pc) {
-            return new BacktrackPoint(pc, pos, captureStarts.clone(), captureEnds.clone());
+            return new BacktrackPoint(pc, pos, captureStarts.clone(), captureEnds.clone(), registers.clone());
         }
 
         MatchResult createResult(boolean matched) {
@@ -915,6 +957,7 @@ public final class RegExpEngine {
             this.pos = bp.pos;
             this.captureStarts = bp.captureStarts.clone();
             this.captureEnds = bp.captureEnds.clone();
+            System.arraycopy(bp.registers, 0, this.registers, 0, bp.registers.length);
         }
 
         void saveEnd(int captureIndex) {
