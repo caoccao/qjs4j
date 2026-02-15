@@ -2220,6 +2220,14 @@ public final class Parser {
             case LBRACE -> parseObjectExpression();
             case FUNCTION -> parseFunctionExpression();
             case CLASS -> parseClassExpression(); // Class expressions
+            case SUPER -> {
+                // Per ES spec, 'super' is only valid in specific contexts:
+                // - super.property / super[expr] in methods (super_allowed)
+                // - super() in derived class constructors (super_call_allowed)
+                // Following QuickJS: check next token to give specific error messages
+                advance(); // consume 'super'
+                throw new JSSyntaxErrorException("'super' keyword unexpected here");
+            }
             default -> {
                 // Error case - return a literal undefined
                 advance();
