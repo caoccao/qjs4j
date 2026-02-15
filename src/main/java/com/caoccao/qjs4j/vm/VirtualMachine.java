@@ -1839,8 +1839,21 @@ public final class VirtualMachine {
                         // Create the class prototype object
                         JSObject prototype = context.createJSObject();
 
-                        // Set up prototype chain
-                        if (superClass != JSUndefined.INSTANCE && superClass != JSNull.INSTANCE) {
+                        // Set up prototype chain (ES spec ClassDefinitionEvaluation steps 5.e-5.g)
+                        if (superClass instanceof JSNull) {
+                            // Step 5.e: superclass is null — protoParent is null
+                            prototype.setPrototype(null);
+                        } else if (superClass != JSUndefined.INSTANCE) {
+                            // Step 5.f: If IsConstructor(superclass) is false, throw TypeError
+                            if (!JSTypeChecking.isConstructor(superClass)) {
+                                context.throwTypeError("parent class must be constructor");
+                                pendingException = context.getPendingException();
+                                valueStack.push(JSUndefined.INSTANCE);
+                                valueStack.push(JSUndefined.INSTANCE);
+                                pc += op.getSize();
+                                break;
+                            }
+                            // Step 5.g: superclass is a constructor
                             if (superClass instanceof JSFunction superFunc) {
                                 // prototype.__proto__ = superFunc.prototype
                                 context.transferPrototype(prototype, superFunc);
