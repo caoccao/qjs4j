@@ -1047,7 +1047,15 @@ public final class VirtualMachine {
                         int setVarAtom = bytecode.readU32(pc + 1);
                         String setVarName = bytecode.getAtoms()[setVarAtom];
                         JSValue setValue = valueStack.peek(0);
-                        context.getGlobalObject().set(PropertyKey.fromString(setVarName), setValue);
+                        PropertyKey setVarKey = PropertyKey.fromString(setVarName);
+                        JSObject setVarGlobal = context.getGlobalObject();
+                        // Per ES spec, in strict mode assigning to an undeclared variable
+                        // throws ReferenceError (QuickJS: JS_ThrowReferenceErrorNotDefined)
+                        if (context.isStrictMode() && !setVarGlobal.has(setVarKey)) {
+                            throw new JSVirtualMachineException(
+                                    context.throwReferenceError(setVarName + " is not defined"));
+                        }
+                        setVarGlobal.set(setVarKey, setValue);
                         pc += op.getSize();
                     }
                     case DELETE_VAR -> {
