@@ -584,6 +584,44 @@ public final class BytecodeCompiler {
             return;
         }
 
+        // Short-circuit operators: must NOT evaluate right operand eagerly
+        switch (binExpr.operator()) {
+            case LOGICAL_AND -> {
+                // left && right: if left is falsy, return left; otherwise evaluate and return right
+                compileExpression(binExpr.left());
+                emitter.emitOpcode(Opcode.DUP);
+                int jumpEnd = emitter.emitJump(Opcode.IF_FALSE);
+                emitter.emitOpcode(Opcode.DROP);
+                compileExpression(binExpr.right());
+                emitter.patchJump(jumpEnd, emitter.currentOffset());
+                return;
+            }
+            case LOGICAL_OR -> {
+                // left || right: if left is truthy, return left; otherwise evaluate and return right
+                compileExpression(binExpr.left());
+                emitter.emitOpcode(Opcode.DUP);
+                int jumpEnd = emitter.emitJump(Opcode.IF_TRUE);
+                emitter.emitOpcode(Opcode.DROP);
+                compileExpression(binExpr.right());
+                emitter.patchJump(jumpEnd, emitter.currentOffset());
+                return;
+            }
+            case NULLISH_COALESCING -> {
+                // left ?? right: if left is not null/undefined, return left; otherwise evaluate and return right
+                compileExpression(binExpr.left());
+                emitter.emitOpcode(Opcode.DUP);
+                emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+                int jumpEnd = emitter.emitJump(Opcode.IF_FALSE);
+                emitter.emitOpcode(Opcode.DROP);
+                compileExpression(binExpr.right());
+                emitter.patchJump(jumpEnd, emitter.currentOffset());
+                return;
+            }
+            default -> {
+                // Fall through to compile operands for other operators
+            }
+        }
+
         // Compile operands
         compileExpression(binExpr.left());
         compileExpression(binExpr.right());
@@ -602,19 +640,17 @@ public final class BytecodeCompiler {
             case IN -> Opcode.IN;
             case INSTANCEOF -> Opcode.INSTANCEOF;
             case LE -> Opcode.LTE;
-            case LOGICAL_AND -> Opcode.LOGICAL_AND;
-            case LOGICAL_OR -> Opcode.LOGICAL_OR;
             case LSHIFT -> Opcode.SHL;
             case LT -> Opcode.LT;
             case MOD -> Opcode.MOD;
             case MUL -> Opcode.MUL;
             case NE -> Opcode.NEQ;
-            case NULLISH_COALESCING -> Opcode.NULLISH_COALESCE;
             case RSHIFT -> Opcode.SAR;
             case STRICT_EQ -> Opcode.STRICT_EQ;
             case STRICT_NE -> Opcode.STRICT_NEQ;
             case SUB -> Opcode.SUB;
             case URSHIFT -> Opcode.SHR;
+            // LOGICAL_AND, LOGICAL_OR, NULLISH_COALESCING handled above with short-circuit evaluation
             default -> throw new CompilerException("Unknown binary operator: " + binExpr.operator());
         };
 
