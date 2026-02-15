@@ -274,7 +274,18 @@ public final class RegExpCompiler {
                     }
                     end = parseClassEscape(context, ranges);
                     if (end == -1) {
-                        throw new RegExpSyntaxException("Invalid range in character class");
+                        if (context.isUnicodeMode()) {
+                            throw new RegExpSyntaxException("Invalid range in character class");
+                        }
+                        // Annex B (B.1.4.1.1): In non-unicode mode, when the right side of a
+                        // range is a multi-character class (like \d, \w, \s), treat as union of
+                        // left atom, '-', and the class. The class ranges were already added by
+                        // parseClassEscape(). Add left atom and '-' as single characters.
+                        ranges.add(start);
+                        ranges.add(start);
+                        ranges.add((int) '-');
+                        ranges.add((int) '-');
+                        continue;
                     }
                 } else {
                     end = rangeCh;
