@@ -533,7 +533,14 @@ public final class BytecodeCompiler {
                 default -> throw new CompilerException("Unknown assignment operator: " + operator);
             }
         } else {
-            // Simple assignment: compile right side
+            // Simple assignment
+            if (left instanceof CallExpression) {
+                // Per ES spec, left side is evaluated before right side.
+                // The call may throw at runtime (e.g., ReferenceError if callee not defined).
+                compileExpression(left);
+                emitter.emitOpcode(Opcode.DROP);
+            }
+            // Compile right side
             compileExpression(assignExpr.right());
         }
 

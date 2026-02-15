@@ -21,8 +21,6 @@ import org.junit.jupiter.api.Test;
 
 public class LabeledStatementTest extends BaseJavetTest {
 
-    // ---- Basic Labeled Statements ----
-
     @Test
     public void testLabelInFunction() {
         assertIntegerWithJavet(
@@ -83,8 +81,6 @@ public class LabeledStatementTest extends BaseJavetTest {
                         count;""");
     }
 
-    // ---- Multiple Labels ----
-
     @Test
     public void testLabeledBreakForLoop() {
         assertIntegerWithJavet(
@@ -142,8 +138,6 @@ public class LabeledStatementTest extends BaseJavetTest {
                         count;""");
     }
 
-    // ---- Labeled Break (Block) ----
-
     @Test
     public void testLabeledBreakNestedBlocks() {
         assertStringWithJavet(
@@ -192,8 +186,6 @@ public class LabeledStatementTest extends BaseJavetTest {
                         count;""");
     }
 
-    // ---- Labeled Break (While Loop) ----
-
     @Test
     public void testLabeledBreakOuterForOfLoop() {
         assertIntegerWithJavet(
@@ -221,8 +213,6 @@ public class LabeledStatementTest extends BaseJavetTest {
                         }
                         count;""");
     }
-
-    // ---- Labeled Continue (While Loop) ----
 
     @Test
     public void testLabeledBreakSwitch() {
@@ -258,8 +248,6 @@ public class LabeledStatementTest extends BaseJavetTest {
                         count;""");
     }
 
-    // ---- Labeled Break (For Loop) ----
-
     @Test
     public void testLabeledBreakWhileLoop() {
         assertIntegerWithJavet(
@@ -283,8 +271,6 @@ public class LabeledStatementTest extends BaseJavetTest {
                         }
                         sum;""");
     }
-
-    // ---- Labeled Continue (For Loop) ----
 
     @Test
     public void testLabeledContinueForOfLoop() {
@@ -314,8 +300,6 @@ public class LabeledStatementTest extends BaseJavetTest {
                         count;""");
     }
 
-    // ---- Labeled Break (For-In Loop) ----
-
     @Test
     public void testLabeledContinueOuterForLoop() {
         assertStringWithJavet(
@@ -343,8 +327,6 @@ public class LabeledStatementTest extends BaseJavetTest {
                         }
                         count;""");
     }
-
-    // ---- Labeled Break/Continue (For-Of Loop) ----
 
     @Test
     public void testLabeledContinueOuterWhileLoop() {
@@ -388,8 +370,6 @@ public class LabeledStatementTest extends BaseJavetTest {
         assertIntegerWithJavet("var x = 0; label: x = 42; x;");
     }
 
-    // ---- Labeled Break in Switch ----
-
     @Test
     public void testLabeledForWithInnerForOf() {
         assertIntegerWithJavet(
@@ -420,8 +400,6 @@ public class LabeledStatementTest extends BaseJavetTest {
                         count;""");
     }
 
-    // ---- Unlabeled Break/Continue Still Works ----
-
     @Test
     public void testLabeledFunctionDeclaration() {
         assertUndefinedWithJavet("label: function g() {}");
@@ -432,8 +410,6 @@ public class LabeledStatementTest extends BaseJavetTest {
         assertIntegerWithJavet("label: function g() { return 42; } g();");
     }
 
-    // ---- Labeled Statement with If ----
-
     @Test
     public void testLabeledIfStatement() {
         assertIntegerWithJavet(
@@ -442,8 +418,6 @@ public class LabeledStatementTest extends BaseJavetTest {
                         label: if (true) { x = 42; }
                         x;""");
     }
-
-    // ---- Label Scope ----
 
     @Test
     public void testLabeledWhileWithInnerFor() {
@@ -474,8 +448,6 @@ public class LabeledStatementTest extends BaseJavetTest {
                         x;""");
     }
 
-    // ---- Mixed Loop Types with Labels ----
-
     @Test
     public void testMultipleLabelsBreakOuter() {
         assertIntegerWithJavet(
@@ -498,8 +470,6 @@ public class LabeledStatementTest extends BaseJavetTest {
     public void testMultipleLabelsOnStatement() {
         assertUndefinedWithJavet("label1: label2: function f() {}");
     }
-
-    // ---- Complex Scenarios ----
 
     @Test
     public void testSameLabelInDifferentScopes() {

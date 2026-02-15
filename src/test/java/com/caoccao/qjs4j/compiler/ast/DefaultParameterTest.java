@@ -21,8 +21,6 @@ import org.junit.jupiter.api.Test;
 
 public class DefaultParameterTest extends BaseJavetTest {
 
-    // ---- Function Declaration: Basic ----
-
     @Test
     public void testArrowBothParamsDefault() {
         assertIntegerWithJavet("var f = (x = 10, y = 20) => x + y; f();");
@@ -74,8 +72,6 @@ public class DefaultParameterTest extends BaseJavetTest {
         assertIntegerWithJavet("var f = (x, y = 100) => x + y; f(1, 200);");
     }
 
-    // ---- Function Declaration: Multiple Parameters ----
-
     @Test
     public void testArrowMultipleParamsWithDefault() {
         assertIntegerWithJavet("var f = (x, y = 100) => x + y; f(1);");
@@ -116,8 +112,6 @@ public class DefaultParameterTest extends BaseJavetTest {
                         function f(x = 42) { return arguments.length; }
                         f();""");
     }
-
-    // ---- Function Declaration: Expressions ----
 
     @Test
     public void testDefaultWithTrailingComma() {
@@ -201,8 +195,6 @@ public class DefaultParameterTest extends BaseJavetTest {
         assertIntegerWithJavet("function f(x = 42) { return x; } f(10);");
     }
 
-    // ---- Arrow Function: Single Parameter ----
-
     @Test
     public void testFunctionDeclarationDefaultReferencesEarlierParam() {
         assertIntegerWithJavet("function f(x, y = x * 2) { return y; } f(5);");
@@ -217,8 +209,6 @@ public class DefaultParameterTest extends BaseJavetTest {
     public void testFunctionDeclarationDefaultUsed() {
         assertIntegerWithJavet("function f(x = 42) { return x; } f();");
     }
-
-    // ---- Arrow Function: Multiple Parameters ----
 
     @Test
     public void testFunctionDeclarationDefaultUsedInBody() {
@@ -245,8 +235,6 @@ public class DefaultParameterTest extends BaseJavetTest {
                         f();""");
     }
 
-    // ---- Arrow Function: Expressions ----
-
     @Test
     public void testFunctionDeclarationDefaultWithCommaOperator() {
         assertIntegerWithJavet("function f(x = (1, 2, 3)) { return x; } f();");
@@ -272,8 +260,6 @@ public class DefaultParameterTest extends BaseJavetTest {
         assertIntegerWithJavet("function f(a, b = 10, c = 20) { return a + b + c; } f(1);");
     }
 
-    // ---- Function Expression ----
-
     @Test
     public void testFunctionDeclarationMixedDefaultPartial() {
         assertIntegerWithJavet("function f(a, b = 10, c = 20) { return a + b + c; } f(1, 2);");
@@ -294,8 +280,6 @@ public class DefaultParameterTest extends BaseJavetTest {
         assertIntegerWithJavet("function f(x = 10, y = 20) { return x + y; } f(5);");
     }
 
-    // ---- Method in Object Literal ----
-
     @Test
     public void testFunctionDeclarationSecondParamDefault() {
         assertIntegerWithJavet("function f(x, y = 100) { return y; } f(1);");
@@ -305,8 +289,6 @@ public class DefaultParameterTest extends BaseJavetTest {
     public void testFunctionDeclarationSecondParamDefaultNotUsed() {
         assertIntegerWithJavet("function f(x, y = 100) { return y; } f(1, 200);");
     }
-
-    // ---- Trailing Comma ----
 
     @Test
     public void testFunctionExpressionDefaultNotUsed() {
@@ -318,8 +300,6 @@ public class DefaultParameterTest extends BaseJavetTest {
         assertIntegerWithJavet("var f = function(x = 42) { return x; }; f();");
     }
 
-    // ---- Arguments Object ----
-
     @Test
     public void testFunctionExpressionLength() {
         assertIntegerWithJavet("var f = function(x = 1, y = 2, z) { return z; }; f.length;");
@@ -330,8 +310,6 @@ public class DefaultParameterTest extends BaseJavetTest {
         assertIntegerWithJavet("var f = function(x = 10, y = 20) { return x + y; }; f();");
     }
 
-    // ---- Multiple Calls ----
-
     @Test
     public void testFunctionExpressionNamedWithDefault() {
         assertIntegerWithJavet("var f = function foo(x = 42) { return x; }; f();");
@@ -341,8 +319,6 @@ public class DefaultParameterTest extends BaseJavetTest {
     public void testFunctionLengthAllDefaults() {
         assertIntegerWithJavet("function f(x = 1, y = 2) {} f.length;");
     }
-
-    // ---- Function.length ----
 
     @Test
     public void testFunctionLengthMixedDefaultsMiddle() {
@@ -393,8 +369,6 @@ public class DefaultParameterTest extends BaseJavetTest {
                         function f(x = counter()) { return x; }
                         '' + f() + ',' + f() + ',' + f(99);""");
     }
-
-    // ---- Error Cases ----
 
     @Test
     public void testMultipleCallsSameDefault() {

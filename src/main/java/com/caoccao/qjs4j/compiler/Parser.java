@@ -720,6 +720,17 @@ public final class Parser {
         }
 
         if (isAssignmentOperator(currentToken.type())) {
+            // Validate that left is a valid assignment target
+            // CallExpression is a valid LeftHandSideExpression syntactically;
+            // the error is a runtime ReferenceError, not a parse-time SyntaxError.
+            if (!(left instanceof Identifier)
+                    && !(left instanceof MemberExpression)
+                    && !(left instanceof ArrayExpression)
+                    && !(left instanceof ObjectExpression)
+                    && !(left instanceof CallExpression)) {
+                throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
+            }
+
             TokenType op = currentToken.type();
             location = getLocation();
             advance();
