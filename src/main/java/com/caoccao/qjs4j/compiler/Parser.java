@@ -39,6 +39,7 @@ import java.util.List;
  * Uses operator precedence climbing for expression parsing.
  */
 public final class Parser {
+    private final boolean isEval; // true if parsing eval code
     private final Lexer lexer;
     private final boolean moduleMode;
     private int asyncFunctionNesting;
@@ -54,12 +55,17 @@ public final class Parser {
     }
 
     public Parser(Lexer lexer, boolean moduleMode) {
-        this(lexer, moduleMode, 0, 0);
+        this(lexer, moduleMode, false);
     }
 
-    private Parser(Lexer lexer, boolean moduleMode, int functionNesting, int asyncFunctionNesting) {
+    public Parser(Lexer lexer, boolean moduleMode, boolean isEval) {
+        this(lexer, moduleMode, isEval, 0, 0);
+    }
+
+    private Parser(Lexer lexer, boolean moduleMode, boolean isEval, int functionNesting, int asyncFunctionNesting) {
         this.lexer = lexer;
         this.moduleMode = moduleMode;
+        this.isEval = isEval;
         this.functionNesting = functionNesting;
         this.asyncFunctionNesting = asyncFunctionNesting;
         this.currentToken = lexer.nextToken();
@@ -2313,6 +2319,10 @@ public final class Parser {
 
     private Statement parseReturnStatement() {
         SourceLocation location = getLocation();
+        // QuickJS: "return not in a function" error when return is in eval code at top level
+        if (isEval && functionNesting == 0) {
+            throw new JSSyntaxErrorException("return not in a function");
+        }
         expect(TokenType.RETURN);
 
         Expression argument = null;
@@ -2463,6 +2473,7 @@ public final class Parser {
         Parser expressionParser = new Parser(
                 expressionLexer,
                 moduleMode,
+                isEval,
                 functionNesting,
                 asyncFunctionNesting);
         Expression expression = expressionParser.parseExpression();

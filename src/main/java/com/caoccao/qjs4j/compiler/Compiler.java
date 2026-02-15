@@ -30,6 +30,7 @@ import com.caoccao.qjs4j.vm.Bytecode;
 public final class Compiler {
     private final String fileName;
     private final String source;
+    private boolean isEval; // true if compiling eval code
 
     public Compiler(String source, String fileName) {
         if (source == null) {
@@ -37,6 +38,7 @@ public final class Compiler {
         }
         this.source = source;
         this.fileName = fileName;
+        this.isEval = false;
     }
 
     /**
@@ -75,8 +77,20 @@ public final class Compiler {
      */
     public Program parse(boolean isModule) {
         Lexer lexer = new Lexer(source);
-        Parser parser = new Parser(lexer, isModule);
+        Parser parser = new Parser(lexer, isModule, isEval);
         return parser.parse();
+    }
+
+    /**
+     * Set whether this is compiling eval code.
+     * Per QuickJS, return statements at top level of eval code throw SyntaxError.
+     *
+     * @param isEval true if compiling eval code
+     * @return this compiler for chaining
+     */
+    public Compiler setEval(boolean isEval) {
+        this.isEval = isEval;
+        return this;
     }
 
     public record CompileResult(JSBytecodeFunction function, Program ast) {

@@ -563,6 +563,10 @@ public final class JSContext implements AutoCloseable {
         }
 
         Compiler compiler = new Compiler(code, filename);
+        // Per QuickJS, eval code has is_eval=true which prevents top-level return
+        if (isDirectEval) {
+            compiler.setEval(true);
+        }
         try {
             // Phase 1-3: Lexer → Parser → Compiler (compile to bytecode)
             JSBytecodeFunction func;
