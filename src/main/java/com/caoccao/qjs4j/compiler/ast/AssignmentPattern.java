@@ -17,8 +17,16 @@
 package com.caoccao.qjs4j.compiler.ast;
 
 /**
- * Base interface for destructuring patterns.
- * Patterns can be used in variable declarations and assignment expressions.
+ * Represents a destructuring pattern with a default value.
+ * Example: [x = defaultVal] or { y = defaultVal }
+ * <p>
+ * In the ES spec, this corresponds to SingleNameBinding with Initializer:
+ * BindingElement : SingleNameBinding
+ * SingleNameBinding : BindingIdentifier Initializer[opt]
  */
-public sealed interface Pattern permits Identifier, ObjectPattern, ArrayPattern, RestElement, AssignmentPattern {
+public record AssignmentPattern(
+        Pattern left,
+        Expression right,
+        SourceLocation location
+) implements Pattern {
 }

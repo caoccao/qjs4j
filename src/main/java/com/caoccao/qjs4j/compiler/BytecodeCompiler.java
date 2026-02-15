@@ -121,6 +121,8 @@ public final class BytecodeCompiler {
             for (ObjectPattern.Property prop : objPattern.properties()) {
                 collectPatternBindingNames(prop.value(), names);
             }
+        } else if (pattern instanceof AssignmentPattern assignPattern) {
+            collectPatternBindingNames(assignPattern.left(), names);
         } else if (pattern instanceof RestElement restElement) {
             collectPatternBindingNames(restElement.argument(), names);
         }
@@ -2838,6 +2840,20 @@ public final class BytecodeCompiler {
                 // Drop the original array
                 emitter.emitOpcode(Opcode.DROP);
             }
+        } else if (pattern instanceof AssignmentPattern assignPattern) {
+            // Destructuring with default value: [x = defaultVal] or { y = defaultVal }
+            // Stack: [value]
+            // If value is undefined, use the default value instead
+            emitter.emitOpcode(Opcode.DUP);
+            emitter.emitOpcode(Opcode.IS_UNDEFINED);
+            int jumpNotUndefined = emitter.emitJump(Opcode.IF_FALSE);
+            // Value is undefined: drop it and use default
+            emitter.emitOpcode(Opcode.DROP);
+            compileExpression(assignPattern.right());
+            // Patch jump target
+            emitter.patchJump(jumpNotUndefined, emitter.currentOffset());
+            // Now the stack has the resolved value; assign to the inner pattern
+            compilePatternAssignment(assignPattern.left());
         } else if (pattern instanceof RestElement) {
             // RestElement should only appear inside ArrayPattern, shouldn't reach here
             throw new RuntimeException("RestElement can only appear inside ArrayPattern");
@@ -4019,6 +4035,9 @@ public final class BytecodeCompiler {
             for (ObjectPattern.Property prop : objPattern.properties()) {
                 declarePatternVariables(prop.value());
             }
+        } else if (pattern instanceof AssignmentPattern assignPattern) {
+            // Default value pattern: declare the left-hand side
+            declarePatternVariables(assignPattern.left());
         } else if (pattern instanceof RestElement restElement) {
             // Rest element at top level (shouldn't normally happen, but handle it)
             declarePatternVariables(restElement.argument());

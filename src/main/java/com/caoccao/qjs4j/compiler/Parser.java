@@ -481,7 +481,15 @@ public final class Parser {
                 }
                 break;
             } else {
-                elements.add(parsePattern());
+                Pattern element = parsePattern();
+                // Check for default value: [x = defaultVal]
+                if (match(TokenType.ASSIGN)) {
+                    SourceLocation assignLoc = getLocation();
+                    advance(); // consume '='
+                    Expression defaultValue = parseAssignmentExpression();
+                    element = new AssignmentPattern(element, defaultValue, assignLoc);
+                }
+                elements.add(element);
             }
         }
 
@@ -1880,10 +1888,24 @@ public final class Parser {
             if (match(TokenType.COLON)) {
                 advance();
                 value = parsePattern();
+                // Check for default value: { x: y = defaultVal }
+                if (match(TokenType.ASSIGN)) {
+                    SourceLocation assignLoc = getLocation();
+                    advance(); // consume '='
+                    Expression defaultValue = parseAssignmentExpression();
+                    value = new AssignmentPattern(value, defaultValue, assignLoc);
+                }
             } else {
                 // Shorthand: { x } means { x: x }
                 value = key;
                 shorthand = true;
+                // Check for default value: { x = defaultVal }
+                if (match(TokenType.ASSIGN)) {
+                    SourceLocation assignLoc = getLocation();
+                    advance(); // consume '='
+                    Expression defaultValue = parseAssignmentExpression();
+                    value = new AssignmentPattern(value, defaultValue, assignLoc);
+                }
             }
 
             properties.add(new ObjectPattern.Property(key, value, shorthand));
