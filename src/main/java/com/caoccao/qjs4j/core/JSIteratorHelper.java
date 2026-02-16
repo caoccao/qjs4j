@@ -39,32 +39,68 @@ public final class JSIteratorHelper {
         }
 
         // Iterate until done
-        while (true) {
-            JSObject result = iteratorNext(iterator, context);
-            if (result == null) {
-                break;
-            }
+        boolean normalCompletion = false;
+        try {
+            while (true) {
+                JSObject result = iteratorNext(iterator, context);
+                if (result == null) {
+                    break;
+                }
 
-            // Check if done (pass context to invoke getters)
-            JSValue doneValue = result.get(PropertyKey.DONE, context);
-            if (context.hasPendingException()) {
-                break;
-            }
-            boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
+                // Check if done (pass context to invoke getters)
+                JSValue doneValue = result.get(PropertyKey.DONE, context);
+                if (context.hasPendingException()) {
+                    break;
+                }
+                boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
 
-            if (done) {
-                break;
-            }
+                if (done) {
+                    normalCompletion = true;
+                    break;
+                }
 
-            // Get the value and call the callback (pass context to invoke getters)
-            JSValue value = result.get(PropertyKey.VALUE, context);
-            if (context.hasPendingException()) {
-                break;
+                // Get the value and call the callback (pass context to invoke getters)
+                JSValue value = result.get(PropertyKey.VALUE, context);
+                if (context.hasPendingException()) {
+                    break;
+                }
+                if (!callback.iterate(value)) {
+                    // Callback returned false, break early
+                    break;
+                }
             }
-            if (!callback.iterate(value)) {
-                // Callback returned false, break early
-                break;
+        } finally {
+            // IteratorClose: call iterator.return() on abnormal completion (ES2024 7.4.6)
+            // Per spec, if the original completion was a throw, the original error takes
+            // precedence over any error from return(). We save/restore the pending exception
+            // to ensure iterator.return() can execute even when an exception is pending.
+            if (!normalCompletion) {
+                JSValue savedException = context.getPendingException();
+                if (savedException != null) {
+                    context.clearPendingException();
+                }
+                closeIterator(context, iterator);
+                if (savedException != null) {
+                    context.setPendingException(savedException);
+                }
             }
+        }
+    }
+
+    /**
+     * IteratorClose (ES2024 7.4.6).
+     * Calls the iterator's return() method if it exists to signal early termination.
+     *
+     * @param context  The execution context
+     * @param iterator The iterator to close
+     */
+    public static void closeIterator(JSContext context, JSValue iterator) {
+        if (!(iterator instanceof JSObject iteratorObj)) {
+            return;
+        }
+        JSValue returnMethod = iteratorObj.get(PropertyKey.RETURN, context);
+        if (returnMethod instanceof JSFunction returnFunc) {
+            returnFunc.call(context, iterator, new JSValue[0]);
         }
     }
 
