@@ -45,16 +45,22 @@ public final class JSIteratorHelper {
                 break;
             }
 
-            // Check if done
-            JSValue doneValue = result.get("done");
+            // Check if done (pass context to invoke getters)
+            JSValue doneValue = result.get(PropertyKey.DONE, context);
+            if (context.hasPendingException()) {
+                break;
+            }
             boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
 
             if (done) {
                 break;
             }
 
-            // Get the value and call the callback
-            JSValue value = result.get("value");
+            // Get the value and call the callback (pass context to invoke getters)
+            JSValue value = result.get(PropertyKey.VALUE, context);
+            if (context.hasPendingException()) {
+                break;
+            }
             if (!callback.iterate(value)) {
                 // Callback returned false, break early
                 break;
@@ -81,7 +87,10 @@ public final class JSIteratorHelper {
         }
 
         // Get the [Symbol.iterator] method
-        JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
+        JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR, context);
+        if (context.hasPendingException()) {
+            return null;
+        }
 
         if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
             return null;
@@ -89,10 +98,16 @@ public final class JSIteratorHelper {
 
         // Call the iterator method to get the iterator
         JSValue iterator = iteratorFunc.call(context, iterable, new JSValue[0]);
+        if (context.hasPendingException()) {
+            return null;
+        }
 
         // Verify it's an object with a next method
         if (iterator instanceof JSObject iteratorObj) {
-            JSValue nextMethod = iteratorObj.get("next");
+            JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT, context);
+            if (context.hasPendingException()) {
+                return null;
+            }
             if (nextMethod instanceof JSFunction) {
                 return iterator;
             }
@@ -144,7 +159,10 @@ public final class JSIteratorHelper {
         }
 
         // Generic iterator protocol: call the next() method
-        JSValue nextMethod = iteratorObj.get("next");
+        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT, context);
+        if (context.hasPendingException()) {
+            return null;
+        }
         if (!(nextMethod instanceof JSFunction nextFunc)) {
             return null;
         }

@@ -3273,10 +3273,7 @@ public final class VirtualMachine {
 
         // Get the done property
         JSValue doneValue = resultObj.get(PropertyKey.DONE);
-        boolean done = false;
-        if (doneValue instanceof JSBoolean boolVal) {
-            done = boolVal.isBooleanTrue();
-        }
+        boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
 
         // Push catch_offset back, then restore temp values, then push value and done
         valueStack.push(catchOffset);
