@@ -28,6 +28,33 @@ import java.util.Objects;
  * - Integer indices (for array-like objects)
  */
 public final class PropertyKey {
+    public static final PropertyKey ARRAY = fromString("Array");
+    public static final PropertyKey CALLEE = fromString("callee");
+    public static final PropertyKey CONFIGURABLE = fromString("configurable");
+    public static final PropertyKey CONSTRUCTOR = fromString("constructor");
+    public static final PropertyKey DONE = fromString("done");
+    public static final PropertyKey ENUMERABLE = fromString("enumerable");
+    public static final PropertyKey GET = fromString("get");
+    public static final PropertyKey HAS = fromString("has");
+    public static final PropertyKey HOME_OBJECT = fromString("[[HomeObject]]");
+    public static final PropertyKey ITERATOR = fromString("iterator");
+    public static final PropertyKey ITERATOR_CAP = fromString("Iterator");
+    public static final PropertyKey KEYS = fromString("keys");
+    public static final PropertyKey LAST_INDEX = fromString("lastIndex");
+    public static final PropertyKey LENGTH = fromString("length");
+    public static final PropertyKey MESSAGE = fromString("message");
+    public static final PropertyKey NAME = fromString("name");
+    public static final PropertyKey NEXT = fromString("next");
+    public static final PropertyKey PROTO = fromString("__proto__");
+    public static final PropertyKey PROTOTYPE = fromString("prototype");
+    public static final PropertyKey RETURN = fromString("return");
+    public static final PropertyKey SET = fromString("set");
+    public static final PropertyKey SIZE = fromString("size");
+    public static final PropertyKey SYMBOL = fromString("Symbol");
+    public static final PropertyKey THROW = fromString("throw");
+    public static final PropertyKey TO_ISO_STRING = fromString("toISOString");
+    public static final PropertyKey VALUE = fromString("value");
+    public static final PropertyKey WRITABLE = fromString("writable");
     private final int atomIndex; // -1 if not interned
     private final Object value; // String, Integer, or JSSymbol
 

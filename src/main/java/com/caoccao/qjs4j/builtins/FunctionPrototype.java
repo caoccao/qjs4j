@@ -91,7 +91,7 @@ public final class FunctionPrototype {
             return null;
         }
 
-        JSValue lengthValue = arrayLike.get(PropertyKey.fromString("length"), context);
+        JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH, context);
         if (context.hasPendingException()) {
             return null;
         }

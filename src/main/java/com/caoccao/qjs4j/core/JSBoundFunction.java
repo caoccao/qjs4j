@@ -35,7 +35,7 @@ public final class JSBoundFunction extends JSFunction {
         // with attributes: { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
         // Following QuickJS implementation: use defineProperty with only configurable=true
         this.defineProperty(
-                PropertyKey.fromString("name"),
+                PropertyKey.NAME,
                 PropertyDescriptor.dataDescriptor(
                         new JSString(getName()),
                         false, // writable
@@ -45,7 +45,7 @@ public final class JSBoundFunction extends JSFunction {
         );
 
         this.defineProperty(
-                PropertyKey.fromString("length"),
+                PropertyKey.LENGTH,
                 PropertyDescriptor.dataDescriptor(
                         JSNumber.of(getLength()),
                         false, // writable

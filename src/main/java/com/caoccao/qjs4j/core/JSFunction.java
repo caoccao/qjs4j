@@ -68,7 +68,7 @@ public abstract sealed class JSFunction extends JSObject
                     if (genProto instanceof JSObject genProtoObj) {
                         JSObject funcPrototype = new JSObject();
                         funcPrototype.setPrototype(genProtoObj);
-                        this.defineProperty(PropertyKey.fromString("prototype"),
+                        this.defineProperty(PropertyKey.PROTOTYPE,
                                 PropertyDescriptor.dataDescriptor(funcPrototype, true, false, false));
                     }
                     return;

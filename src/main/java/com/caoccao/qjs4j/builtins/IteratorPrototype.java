@@ -85,7 +85,7 @@ public final class IteratorPrototype {
     }
 
     private static JSValue closeIterator(JSContext context, JSObject iteratorObject) {
-        JSValue returnMethod = iteratorObject.get(PropertyKey.fromString("return"), context);
+        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -158,7 +158,7 @@ public final class IteratorPrototype {
                             return childContext.throwTypeError("not an object");
                         }
                         currentIterator[0] = iteratorObject;
-                        currentNextMethod[0] = iteratorObject.get(PropertyKey.fromString("next"), childContext);
+                        currentNextMethod[0] = iteratorObject.get(PropertyKey.NEXT, childContext);
                         if (childContext.hasPendingException()) {
                             done[0] = true;
                             return childContext.getPendingException();
@@ -193,7 +193,7 @@ public final class IteratorPrototype {
             if (currentIterator[0] == null) {
                 return JSUndefined.INSTANCE;
             }
-            JSValue returnMethod = currentIterator[0].get(PropertyKey.fromString("return"), childContext);
+            JSValue returnMethod = currentIterator[0].get(PropertyKey.RETURN, childContext);
             currentNextMethod[0] = JSUndefined.INSTANCE;
             JSObject iter = currentIterator[0];
             currentIterator[0] = null;
@@ -222,7 +222,7 @@ public final class IteratorPrototype {
                 return childContext.throwTypeError("cannot invoke a running iterator");
             }
             done[0] = true;
-            JSValue returnMethod = iteratorObject.get(PropertyKey.fromString("return"), childContext);
+            JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN, childContext);
             if (childContext.hasPendingException()) {
                 return childContext.getPendingException();
             }
@@ -280,7 +280,7 @@ public final class IteratorPrototype {
 
         JSNativeFunction returnFunction = new JSNativeFunction("return", 0, (childContext, childThisArg, childArgs) -> {
             done[0] = true;
-            JSValue returnMethod = wrappedIterator.get(PropertyKey.fromString("return"), childContext);
+            JSValue returnMethod = wrappedIterator.get(PropertyKey.RETURN, childContext);
             if (childContext.hasPendingException()) {
                 return childContext.getPendingException();
             }
@@ -311,7 +311,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.fromString("next"), context);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -373,7 +373,7 @@ public final class IteratorPrototype {
         if (predicate == null) {
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.fromString("next"), context);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -416,7 +416,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.fromString("next"), context);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -481,7 +481,7 @@ public final class IteratorPrototype {
         if (predicate == null) {
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.fromString("next"), context);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -524,7 +524,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.fromString("next"), context);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -617,7 +617,7 @@ public final class IteratorPrototype {
                     }
 
                     innerIterator[0] = mappedIteratorObject;
-                    innerNextMethod[0] = mappedIteratorObject.get(PropertyKey.fromString("next"), childContext);
+                    innerNextMethod[0] = mappedIteratorObject.get(PropertyKey.NEXT, childContext);
                     if (childContext.hasPendingException()) {
                         done[0] = true;
                         closeIteratorIgnoringResult(childContext, iteratorObject);
@@ -639,7 +639,7 @@ public final class IteratorPrototype {
                 innerIterator[0] = null;
                 innerNextMethod[0] = JSUndefined.INSTANCE;
             }
-            JSValue returnMethod = iteratorObject.get(PropertyKey.fromString("return"), childContext);
+            JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN, childContext);
             if (childContext.hasPendingException()) {
                 return childContext.getPendingException();
             }
@@ -672,7 +672,7 @@ public final class IteratorPrototype {
         if (callback == null) {
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.fromString("next"), context);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -726,7 +726,7 @@ public final class IteratorPrototype {
             iteratorObject = jsObject;
         }
 
-        JSValue nextMethod = iteratorObject.get(PropertyKey.fromString("next"), context);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -739,11 +739,11 @@ public final class IteratorPrototype {
     }
 
     private static boolean isIteratorInstance(JSContext context, JSObject object) {
-        JSValue iteratorConstructorValue = context.getGlobalObject().get(PropertyKey.fromString("Iterator"), context);
+        JSValue iteratorConstructorValue = context.getGlobalObject().get(PropertyKey.ITERATOR_CAP, context);
         if (context.hasPendingException() || !(iteratorConstructorValue instanceof JSObject iteratorConstructorObject)) {
             return false;
         }
-        JSValue iteratorPrototypeValue = iteratorConstructorObject.get(PropertyKey.fromString("prototype"), context);
+        JSValue iteratorPrototypeValue = iteratorConstructorObject.get(PropertyKey.PROTOTYPE, context);
         if (context.hasPendingException() || !(iteratorPrototypeValue instanceof JSObject iteratorPrototypeObject)) {
             return false;
         }
@@ -777,11 +777,11 @@ public final class IteratorPrototype {
             context.throwTypeError("not an object");
             return null;
         }
-        JSValue doneValue = resultObject.get(PropertyKey.fromString("done"), context);
+        JSValue doneValue = resultObject.get(PropertyKey.DONE, context);
         if (context.hasPendingException()) {
             return null;
         }
-        JSValue value = resultObject.get(PropertyKey.fromString("value"), context);
+        JSValue value = resultObject.get(PropertyKey.VALUE, context);
         if (context.hasPendingException()) {
             return null;
         }
@@ -805,7 +805,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.fromString("next"), context);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -912,7 +912,7 @@ public final class IteratorPrototype {
         if (reducer == null) {
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.fromString("next"), context);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1015,7 +1015,7 @@ public final class IteratorPrototype {
         if (predicate == null) {
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.fromString("next"), context);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1077,7 +1077,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.fromString("next"), context);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1129,7 +1129,7 @@ public final class IteratorPrototype {
         if (iteratorObject == null) {
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.fromString("next"), context);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }

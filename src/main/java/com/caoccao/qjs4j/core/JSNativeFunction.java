@@ -49,7 +49,7 @@ public final class JSNativeFunction extends JSFunction {
         // Per ECMAScript spec, the "name" property has attributes:
         // { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
         this.defineProperty(
-                PropertyKey.fromString("name"),
+                PropertyKey.NAME,
                 PropertyDescriptor.dataDescriptor(
                         new JSString(this.name != null ? this.name : ""),
                         false, // writable
@@ -61,7 +61,7 @@ public final class JSNativeFunction extends JSFunction {
         // Per ECMAScript spec, the "length" property has attributes:
         // { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
         this.defineProperty(
-                PropertyKey.fromString("length"),
+                PropertyKey.LENGTH,
                 PropertyDescriptor.dataDescriptor(
                         JSNumber.of(this.length),
                         false, // writable

@@ -77,7 +77,7 @@ public final class RegExpPrototype {
 
         // Spec step 12: Perform ? Set(obj, "lastIndex", 0, true).
         // The 'true' means throw TypeError if the property is non-writable.
-        PropertyDescriptor lastIndexDesc = regexp.getOwnPropertyDescriptor(PropertyKey.fromString("lastIndex"));
+        PropertyDescriptor lastIndexDesc = regexp.getOwnPropertyDescriptor(PropertyKey.LAST_INDEX);
         if (lastIndexDesc != null && !lastIndexDesc.isWritable()) {
             return context.throwTypeError("Cannot assign to read only property 'lastIndex'");
         }

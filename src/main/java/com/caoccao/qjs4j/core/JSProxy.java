@@ -290,30 +290,30 @@ public final class JSProxy extends JSObject {
         JSObject obj = new JSObject();
 
         if (desc.hasValue()) {
-            obj.set(PropertyKey.fromString("value"), desc.getValue());
+            obj.set(PropertyKey.VALUE, desc.getValue());
         }
 
         if (desc.hasWritable()) {
-            obj.set(PropertyKey.fromString("writable"),
+            obj.set(PropertyKey.WRITABLE,
                     desc.isWritable() ? JSBoolean.TRUE : JSBoolean.FALSE);
         }
 
         if (desc.hasEnumerable()) {
-            obj.set(PropertyKey.fromString("enumerable"),
+            obj.set(PropertyKey.ENUMERABLE,
                     desc.isEnumerable() ? JSBoolean.TRUE : JSBoolean.FALSE);
         }
 
         if (desc.hasConfigurable()) {
-            obj.set(PropertyKey.fromString("configurable"),
+            obj.set(PropertyKey.CONFIGURABLE,
                     desc.isConfigurable() ? JSBoolean.TRUE : JSBoolean.FALSE);
         }
 
         if (desc.hasGetter()) {
-            obj.set(PropertyKey.fromString("get"), desc.getGetter());
+            obj.set(PropertyKey.GET, desc.getGetter());
         }
 
         if (desc.hasSetter()) {
-            obj.set(PropertyKey.fromString("set"), desc.getSetter());
+            obj.set(PropertyKey.SET, desc.getSetter());
         }
 
         return obj;
@@ -373,7 +373,7 @@ public final class JSProxy extends JSObject {
         }
 
         // Check if handler has 'get' trap
-        JSValue getTrap = handler.get(PropertyKey.fromString("get"));
+        JSValue getTrap = handler.get(PropertyKey.GET);
         if (getTrap != null && !(getTrap instanceof JSUndefined) && !(getTrap instanceof JSNull)) {
             if (getTrap instanceof JSFunction getTrapFunc) {
                 // Call the trap: handler.get(target, property, receiver)

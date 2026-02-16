@@ -93,7 +93,7 @@ public final class JSArguments extends JSObject {
                     false,    // non-enumerable
                     false     // non-configurable
             );
-            defineProperty(PropertyKey.fromString("callee"), calleeDesc);
+            defineProperty(PropertyKey.CALLEE, calleeDesc);
 
             // Note: arguments.caller is NOT defined in strict mode (returns undefined when accessed)
             // This matches V8 behavior where arguments.caller is always undefined
@@ -110,14 +110,14 @@ public final class JSArguments extends JSObject {
         // Add Symbol.iterator property (points to Array.prototype[Symbol.iterator])
         // This enables for-of iteration over arguments
         try {
-            JSValue symbolCtor = context.getGlobalObject().get(PropertyKey.fromString("Symbol"));
+            JSValue symbolCtor = context.getGlobalObject().get(PropertyKey.SYMBOL);
             if (symbolCtor instanceof JSObject symbolObj) {
-                JSValue iteratorSymbol = symbolObj.get(PropertyKey.fromString("iterator"));
+                JSValue iteratorSymbol = symbolObj.get(PropertyKey.ITERATOR);
                 if (iteratorSymbol instanceof JSSymbol sym) {
                     // Get Array.prototype
-                    JSValue arrayCtor = context.getGlobalObject().get(PropertyKey.fromString("Array"));
+                    JSValue arrayCtor = context.getGlobalObject().get(PropertyKey.ARRAY);
                     if (arrayCtor instanceof JSObject arrayCtorObj) {
-                        JSValue arrayProto = arrayCtorObj.get(PropertyKey.fromString("prototype"));
+                        JSValue arrayProto = arrayCtorObj.get(PropertyKey.PROTOTYPE);
                         if (arrayProto instanceof JSObject arrayProtoObj) {
                             JSValue arrayIterator = arrayProtoObj.get(PropertyKey.fromSymbol(sym));
                             if (arrayIterator != null && !(arrayIterator instanceof JSUndefined)) {

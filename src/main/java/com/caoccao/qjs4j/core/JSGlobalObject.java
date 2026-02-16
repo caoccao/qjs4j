@@ -963,9 +963,9 @@ public final class JSGlobalObject {
         // Use null name so toString() shows "function () {}" not "function anonymous() {}"
         JSNativeFunction functionPrototype = new JSNativeFunction(null, 0, (ctx, thisObj, args) -> JSUndefined.INSTANCE);
         // Remove the auto-created properties - Function.prototype has custom property descriptors
-        functionPrototype.delete(PropertyKey.fromString("length"));
-        functionPrototype.delete(PropertyKey.fromString("name"));
-        functionPrototype.delete(PropertyKey.fromString("prototype"));
+        functionPrototype.delete(PropertyKey.LENGTH);
+        functionPrototype.delete(PropertyKey.NAME);
+        functionPrototype.delete(PropertyKey.PROTOTYPE);
 
         functionPrototype.definePropertyWritableConfigurable("apply", new JSNativeFunction("apply", 2, FunctionPrototype::apply));
         functionPrototype.definePropertyWritableConfigurable("bind", new JSNativeFunction("bind", 1, FunctionPrototype::bind));
@@ -1219,14 +1219,14 @@ public final class JSGlobalObject {
                     return childContext.throwTypeError("not an object");
                 }
                 thisObject.defineProperty(
-                        PropertyKey.fromString("constructor"),
+                        PropertyKey.CONSTRUCTOR,
                         PropertyDescriptor.dataDescriptor(valueObject, true, false, true));
                 return JSUndefined.INSTANCE;
             }
             return iteratorConstructor;
         });
         iteratorPrototype.defineProperty(
-                PropertyKey.fromString("constructor"),
+                PropertyKey.CONSTRUCTOR,
                 PropertyDescriptor.accessorDescriptor(constructorAccessor, constructorAccessor, false, true));
 
         JSNativeFunction toStringTagGetter = new JSNativeFunction(
@@ -1440,7 +1440,7 @@ public final class JSGlobalObject {
                 false,
                 true
         );
-        objectPrototype.defineProperty(PropertyKey.fromString("__proto__"), protoDesc);
+        objectPrototype.defineProperty(PropertyKey.PROTO, protoDesc);
 
         // Create Object constructor
         JSNativeFunction objectConstructor = new JSNativeFunction("Object", 1, ObjectConstructor::call, true);
@@ -1518,7 +1518,7 @@ public final class JSGlobalObject {
         context.transferPrototype(proxyConstructor, JSFunction.NAME);
 
         // Proxy has no "prototype" own property per QuickJS / spec.
-        proxyConstructor.delete(PropertyKey.fromString("prototype"));
+        proxyConstructor.delete(PropertyKey.PROTOTYPE);
 
         // Add static methods.
         proxyConstructor.definePropertyWritableConfigurable("revocable", new JSNativeFunction("revocable", 2, ProxyConstructor::revocable));

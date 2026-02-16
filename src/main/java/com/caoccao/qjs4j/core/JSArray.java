@@ -408,7 +408,7 @@ public final class JSArray extends JSObject {
                 false, // not enumerable
                 false  // not configurable
         );
-        super.defineProperty(PropertyKey.fromString("length"), lengthDesc);
+        super.defineProperty(PropertyKey.LENGTH, lengthDesc);
     }
 
     /**
@@ -429,7 +429,7 @@ public final class JSArray extends JSObject {
     }
 
     private boolean isLengthWritable() {
-        PropertyDescriptor descriptor = shape.getDescriptor(PropertyKey.fromString("length"));
+        PropertyDescriptor descriptor = shape.getDescriptor(PropertyKey.LENGTH);
         return descriptor == null || descriptor.isWritable();
     }
 
@@ -808,7 +808,7 @@ public final class JSArray extends JSObject {
      * Update the length property value.
      */
     private void updateLengthProperty() {
-        int offset = shape.getPropertyOffset(PropertyKey.fromString("length"));
+        int offset = shape.getPropertyOffset(PropertyKey.LENGTH);
         if (offset >= 0) {
             propertyValues[offset] = JSNumber.of(length);
         }

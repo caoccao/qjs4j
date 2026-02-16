@@ -501,7 +501,7 @@ public final class DatePrototype {
             return JSNull.INSTANCE;
         }
 
-        JSValue method = obj.get(PropertyKey.fromString("toISOString"), context);
+        JSValue method = obj.get(PropertyKey.TO_ISO_STRING, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
