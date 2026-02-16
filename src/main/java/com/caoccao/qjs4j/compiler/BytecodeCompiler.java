@@ -2260,13 +2260,24 @@ public final class BytecodeCompiler {
             functionCompiler.emitter.emitOpcode(Opcode.INITIAL_YIELD);
         }
 
+        // Phase 1: Hoist top-level function declarations (ES spec requires function
+        // declarations to be initialized before any code executes).
+        for (Statement stmt : funcDecl.body().body()) {
+            if (stmt instanceof FunctionDeclaration innerFuncDecl) {
+                functionCompiler.compileFunctionDeclaration(innerFuncDecl);
+            }
+        }
+
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
         Set<String> declParamNames = buildParameterNames(funcDecl.params(), funcDecl.body().body());
         functionCompiler.hoistFunctionBodyAnnexBDeclarations(funcDecl.body().body(), declParamNames);
 
-        // Compile function body statements
+        // Phase 2: Compile non-FunctionDeclaration statements in source order
         for (Statement stmt : funcDecl.body().body()) {
+            if (stmt instanceof FunctionDeclaration) {
+                continue; // Already hoisted in Phase 1
+            }
             functionCompiler.compileStatement(stmt);
         }
 
@@ -2434,14 +2445,25 @@ public final class BytecodeCompiler {
             functionCompiler.emitter.emitOpcode(Opcode.INITIAL_YIELD);
         }
 
+        // Phase 1: Hoist top-level function declarations (ES spec requires function
+        // declarations to be initialized before any code executes).
+        for (Statement stmt : funcExpr.body().body()) {
+            if (stmt instanceof FunctionDeclaration funcDecl) {
+                functionCompiler.compileFunctionDeclaration(funcDecl);
+            }
+        }
+
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
         // Build parameterNames set (BoundNames of argumentsList + "arguments" binding)
         Set<String> exprParamNames = buildParameterNames(funcExpr.params(), funcExpr.body().body());
         functionCompiler.hoistFunctionBodyAnnexBDeclarations(funcExpr.body().body(), exprParamNames);
 
-        // Compile function body statements (don't call compileBlockStatement as it would create a new scope)
+        // Phase 2: Compile non-FunctionDeclaration statements in source order
         for (Statement stmt : funcExpr.body().body()) {
+            if (stmt instanceof FunctionDeclaration) {
+                continue; // Already hoisted in Phase 1
+            }
             functionCompiler.compileStatement(stmt);
         }
 
