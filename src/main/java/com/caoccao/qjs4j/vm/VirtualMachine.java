@@ -424,7 +424,7 @@ public final class VirtualMachine {
                         // Safely convert exception to string without calling JavaScript methods
                         // to avoid issues when already in exception state
                         String exceptionMessage = safeExceptionToString(context, exception);
-                        throw new JSVirtualMachineException("Unhandled exception: " + exceptionMessage);
+                        throw new JSVirtualMachineException("Unhandled exception: " + exceptionMessage, exception);
                     }
 
                     // Continue execution at catch handler
@@ -2646,6 +2646,21 @@ public final class VirtualMachine {
                     pendingException = e.getErrorValue();
                     context.clearPendingException();
                     valueStack.push(JSUndefined.INSTANCE);
+                } catch (JSVirtualMachineException e) {
+                    // Native function internally called a bytecode function that threw
+                    // (e.g. ToPrimitive calling user's toString/valueOf)
+                    if (e.getJsValue() != null) {
+                        pendingException = e.getJsValue();
+                    } else if (e.getJsError() != null) {
+                        pendingException = e.getJsError();
+                    } else if (context.hasPendingException()) {
+                        pendingException = context.getPendingException();
+                    } else {
+                        pendingException = context.throwError("Error",
+                                e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                    }
+                    context.clearPendingException();
+                    valueStack.push(JSUndefined.INSTANCE);
                 }
             } else if (function instanceof JSBytecodeFunction bytecodeFunc) {
                 try {
@@ -2658,7 +2673,9 @@ public final class VirtualMachine {
                         valueStack.push(result);
                     }
                 } catch (JSVirtualMachineException e) {
-                    if (e.getJsError() != null) {
+                    if (e.getJsValue() != null) {
+                        pendingException = e.getJsValue();
+                    } else if (e.getJsError() != null) {
                         pendingException = e.getJsError();
                     } else if (context.hasPendingException()) {
                         pendingException = context.getPendingException();
@@ -2666,6 +2683,7 @@ public final class VirtualMachine {
                         pendingException = context.throwError("Error",
                                 e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                     }
+                    context.clearPendingException();
                     valueStack.push(JSUndefined.INSTANCE);
                 }
             } else if (function instanceof JSBoundFunction boundFunc) {
@@ -2680,7 +2698,9 @@ public final class VirtualMachine {
                         valueStack.push(result);
                     }
                 } catch (JSVirtualMachineException e) {
-                    if (e.getJsError() != null) {
+                    if (e.getJsValue() != null) {
+                        pendingException = e.getJsValue();
+                    } else if (e.getJsError() != null) {
                         pendingException = e.getJsError();
                     } else if (context.hasPendingException()) {
                         pendingException = context.getPendingException();
@@ -2688,6 +2708,7 @@ public final class VirtualMachine {
                         pendingException = context.throwError("Error",
                                 e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                     }
+                    context.clearPendingException();
                     valueStack.push(JSUndefined.INSTANCE);
                 }
             } else {

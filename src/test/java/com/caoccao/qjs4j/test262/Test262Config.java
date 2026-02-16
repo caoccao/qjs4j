@@ -46,7 +46,7 @@ public class Test262Config {
     public static Test262Config forQuickTest() {
         Test262Config config = loadDefault();
         // Run a subset of tests for quick validation
-        config.maxTests = 1100;
+        config.maxTests = 1200;
         return config;
     }
 

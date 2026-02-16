@@ -988,6 +988,9 @@ public final class JSGlobalObject {
         functionPrototype.definePropertyConfigurable("length", new JSNumber(0));
         functionPrototype.definePropertyConfigurable("name", new JSString(""));
 
+        // Per ECMAScript spec, Function.prototype's [[Prototype]] is Object.prototype
+        context.transferPrototype(functionPrototype, JSObject.NAME);
+
         // Function constructor should be a function, not a plain object
         JSNativeFunction functionConstructor = new JSNativeFunction(JSFunction.NAME, 1, FunctionConstructor::call, true);
         functionConstructor.definePropertyReadonlyNonConfigurable("prototype", functionPrototype);

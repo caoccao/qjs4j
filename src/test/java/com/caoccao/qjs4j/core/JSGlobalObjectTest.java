@@ -12,6 +12,271 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 public class JSGlobalObjectTest extends BaseJavetTest {
     @Test
+    public void testDecodeURIBasicAscii() {
+        // Basic ASCII percent-decoding
+        assertStringWithJavet(
+                "decodeURIComponent('%41')",        // A
+                "decodeURIComponent('%61')",        // a
+                "decodeURIComponent('%30')",        // 0
+                "decodeURIComponent('%20')",        // space
+                "decodeURIComponent('%7E')",        // ~
+                "decodeURIComponent('%21')",        // !
+                "decodeURIComponent('%2A')",        // *
+                "decodeURIComponent('%28')",        // (
+                "decodeURIComponent('%29')",        // )
+                "decodeURIComponent('%27')",        // '
+                "decodeURIComponent('%2D')",        // -
+                "decodeURIComponent('%5F')",        // _
+                "decodeURIComponent('%2E')",        // .
+                "decodeURIComponent('%7e')",        // ~ (lowercase hex)
+                "decodeURIComponent('%2f')",        // / (lowercase hex)
+                "decodeURIComponent('%25')");       // %
+    }
+
+    @Test
+    public void testDecodeURIComponentReservedChars() {
+        // decodeURIComponent decodes ALL percent-encoded chars including reserved ones
+        assertStringWithJavet(
+                "decodeURIComponent('%3B')",        // ;
+                "decodeURIComponent('%2F')",        // /
+                "decodeURIComponent('%3F')",        // ?
+                "decodeURIComponent('%3A')",        // :
+                "decodeURIComponent('%40')",        // @
+                "decodeURIComponent('%26')",        // &
+                "decodeURIComponent('%3D')",        // =
+                "decodeURIComponent('%2B')",        // +
+                "decodeURIComponent('%24')",        // $
+                "decodeURIComponent('%2C')",        // ,
+                "decodeURIComponent('%23')");       // #
+    }
+
+    @Test
+    public void testDecodeURIDecodesUnreservedChars() {
+        // decodeURI DOES decode unreserved chars (not in reserved set)
+        assertStringWithJavet(
+                "decodeURI('%20')",         // space - not reserved, decoded
+                "decodeURI('%41')",         // A - not reserved, decoded
+                "decodeURI('%61')",         // a - not reserved, decoded
+                "decodeURI('%25')",         // % - not reserved, decoded
+                "decodeURI('%5B')",         // [ - not reserved, decoded
+                "decodeURI('%5D')",         // ] - not reserved, decoded
+                "decodeURI('%7B')",         // { - not reserved, decoded
+                "decodeURI('%7D')");        // } - not reserved, decoded
+    }
+
+    @Test
+    public void testDecodeURIErrorCodepointTooLarge() {
+        // Codepoint > U+10FFFF
+        assertStringWithJavet(
+                "(() => { try { decodeURIComponent('%F4%90%80%80'); return 'no error'; } catch (e) { return e.name; } })()");
+    }
+
+    @Test
+    public void testDecodeURIErrorIncompletePercent() {
+        // Incomplete percent sequences
+        assertStringWithJavet(
+                "(() => { try { decodeURIComponent('%'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { decodeURIComponent('%0'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { decodeURIComponent('abc%'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { decodeURIComponent('abc%2'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { decodeURI('%'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { decodeURI('%G'); return 'no error'; } catch (e) { return e.name; } })()");
+    }
+
+    @Test
+    public void testDecodeURIErrorInvalidContinuationByte() {
+        // Invalid continuation bytes
+        assertStringWithJavet(
+                // Lone continuation byte
+                "(() => { try { decodeURIComponent('%80'); return 'no error'; } catch (e) { return e.name; } })()",
+                // Start of 2-byte seq followed by non-continuation
+                "(() => { try { decodeURIComponent('%C3%00'); return 'no error'; } catch (e) { return e.name; } })()",
+                // 0xFE - invalid start byte
+                "(() => { try { decodeURIComponent('%FE'); return 'no error'; } catch (e) { return e.name; } })()",
+                // 0xFF - invalid start byte
+                "(() => { try { decodeURIComponent('%FF'); return 'no error'; } catch (e) { return e.name; } })()");
+    }
+
+    @Test
+    public void testDecodeURIErrorInvalidHex() {
+        // Invalid hex characters after %
+        assertStringWithJavet(
+                "(() => { try { decodeURIComponent('%GG'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { decodeURIComponent('%ZZ'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { decodeURIComponent('%0G'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { decodeURIComponent('%G0'); return 'no error'; } catch (e) { return e.name; } })()");
+    }
+
+    @Test
+    public void testDecodeURIErrorOverlongEncoding() {
+        // Overlong UTF-8 encodings (must be rejected)
+        assertStringWithJavet(
+                // 2-byte overlong for U+002F (should be 1 byte)
+                "(() => { try { decodeURIComponent('%C0%AF'); return 'no error'; } catch (e) { return e.name; } })()",
+                // 2-byte overlong for U+0000
+                "(() => { try { decodeURIComponent('%C0%80'); return 'no error'; } catch (e) { return e.name; } })()",
+                // 3-byte overlong for U+002F
+                "(() => { try { decodeURIComponent('%E0%80%AF'); return 'no error'; } catch (e) { return e.name; } })()",
+                // 4-byte overlong for U+002F
+                "(() => { try { decodeURIComponent('%F0%80%80%AF'); return 'no error'; } catch (e) { return e.name; } })()");
+    }
+
+    @Test
+    public void testDecodeURIErrorSurrogateCodepoints() {
+        // Surrogate codepoints (U+D800 to U+DFFF) must be rejected
+        assertStringWithJavet(
+                // U+D800 (high surrogate start)
+                "(() => { try { decodeURIComponent('%ED%A0%80'); return 'no error'; } catch (e) { return e.name; } })()",
+                // U+DBFF (high surrogate end)
+                "(() => { try { decodeURIComponent('%ED%AF%BF'); return 'no error'; } catch (e) { return e.name; } })()",
+                // U+DC00 (low surrogate start)
+                "(() => { try { decodeURIComponent('%ED%B0%80'); return 'no error'; } catch (e) { return e.name; } })()",
+                // U+DFFF (low surrogate end)
+                "(() => { try { decodeURIComponent('%ED%BF%BF'); return 'no error'; } catch (e) { return e.name; } })()");
+    }
+
+    @Test
+    public void testDecodeURIErrorTruncatedMultibyte() {
+        // Truncated multi-byte UTF-8 sequences
+        assertStringWithJavet(
+                // 2-byte sequence missing continuation
+                "(() => { try { decodeURIComponent('%C3'); return 'no error'; } catch (e) { return e.name; } })()",
+                // 3-byte sequence missing last continuation
+                "(() => { try { decodeURIComponent('%E4%B8'); return 'no error'; } catch (e) { return e.name; } })()",
+                // 4-byte sequence missing continuations
+                "(() => { try { decodeURIComponent('%F0%9F'); return 'no error'; } catch (e) { return e.name; } })()",
+                "(() => { try { decodeURIComponent('%F0%9F%98'); return 'no error'; } catch (e) { return e.name; } })()");
+    }
+
+    @Test
+    public void testDecodeURIFunctionProperties() {
+        // Function name and length properties
+        assertStringWithJavet(
+                "decodeURIComponent.name",
+                "decodeURI.name");
+        assertBooleanWithJavet(
+                "decodeURIComponent.length === 1",
+                "decodeURI.length === 1",
+                "typeof decodeURIComponent === 'function'",
+                "typeof decodeURI === 'function'");
+    }
+
+    @Test
+    public void testDecodeURIMixedContent() {
+        // Mixed encoded and plain text
+        assertStringWithJavet(
+                "decodeURIComponent('Hello%20World')",
+                "decodeURIComponent('a%2Bb%20c')",
+                "decodeURIComponent('%E4%BD%A0%E5%A5%BDworld')",
+                "decodeURIComponent('test%3Dvalue%26key%3Dother')",
+                "decodeURIComponent('100%25%20correct')",
+                "decodeURIComponent('path%2Fto%2Ffile')",
+                "decodeURI('https://example.com/a%20b?x=1&y=2#hash')",
+                "decodeURI('%E4%BD%A0%E5%A5%BD')");
+    }
+
+    @Test
+    public void testDecodeURIPassthrough() {
+        // Strings without percent encoding pass through unchanged
+        assertStringWithJavet(
+                "decodeURIComponent('hello')",
+                "decodeURIComponent('abc123')",
+                "decodeURIComponent('')",
+                "decodeURIComponent('no-encoding-here')",
+                "decodeURIComponent('ABCxyz')",
+                "decodeURI('hello')",
+                "decodeURI('')");
+    }
+
+    @Test
+    public void testDecodeURIPreservesReservedChars() {
+        // decodeURI does NOT decode reserved chars and # - they stay percent-encoded
+        assertStringWithJavet(
+                "decodeURI('%3B')",         // ; - reserved, stays encoded
+                "decodeURI('%2F')",         // / - reserved, stays encoded
+                "decodeURI('%3F')",         // ? - reserved, stays encoded
+                "decodeURI('%3A')",         // : - reserved, stays encoded
+                "decodeURI('%40')",         // @ - reserved, stays encoded
+                "decodeURI('%26')",         // & - reserved, stays encoded
+                "decodeURI('%3D')",         // = - reserved, stays encoded
+                "decodeURI('%2B')",         // + - reserved, stays encoded
+                "decodeURI('%24')",         // $ - reserved, stays encoded
+                "decodeURI('%2C')",         // , - reserved, stays encoded
+                "decodeURI('%23')");        // # - reserved, stays encoded
+    }
+
+    @Test
+    public void testDecodeURIRoundTrip() {
+        // Round-trip: encode then decode should return original
+        assertBooleanWithJavet(
+                "decodeURIComponent(encodeURIComponent('Hello World')) === 'Hello World'",
+                "decodeURIComponent(encodeURIComponent(';/?:@&=+$,#')) === ';/?:@&=+$,#'",
+                "decodeURIComponent(encodeURIComponent('\\u4F60\\u597D')) === '\\u4F60\\u597D'",
+                "decodeURIComponent(encodeURIComponent('\\uD83D\\uDE00')) === '\\uD83D\\uDE00'",
+                "decodeURIComponent(encodeURIComponent('')) === ''",
+                "decodeURI(encodeURI('https://example.com/path?q=hello world#frag')) === 'https://example.com/path?q=hello world#frag'");
+    }
+
+    @Test
+    public void testDecodeURITypeCoercion() {
+        // Non-string inputs are converted to string first
+        assertStringWithJavet(
+                "decodeURIComponent(42)",
+                "decodeURIComponent(true)",
+                "decodeURIComponent(false)",
+                "decodeURIComponent(null)",
+                "decodeURI(42)",
+                "decodeURI(null)");
+    }
+
+    @Test
+    public void testDecodeURIUndefinedInput() {
+        // undefined input - should return "undefined"
+        assertStringWithJavet(
+                "decodeURIComponent()",
+                "decodeURIComponent(undefined)",
+                "decodeURI()",
+                "decodeURI(undefined)");
+    }
+
+    @Test
+    public void testDecodeURIUtf8FourByte() {
+        // UTF-8 4-byte sequences (U+10000 to U+10FFFF)
+        assertStringWithJavet(
+                "decodeURIComponent('%F0%9F%98%80')",  // 😀 (U+1F600)
+                "decodeURIComponent('%F0%9F%8E%89')",  // 🎉 (U+1F389)
+                "decodeURIComponent('%F0%90%80%80')",  // 𐀀 (U+10000, lowest 4-byte)
+                "decodeURIComponent('%F0%9F%92%A9')",  // 💩 (U+1F4A9)
+                "decodeURIComponent('%F4%8F%BF%BF')"); // U+10FFFF (highest valid)
+    }
+
+    @Test
+    public void testDecodeURIUtf8ThreeByte() {
+        // UTF-8 3-byte sequences (U+0800 to U+FFFF, excluding surrogates)
+        assertStringWithJavet(
+                "decodeURIComponent('%E4%B8%AD')",     // 中 (U+4E2D)
+                "decodeURIComponent('%E2%82%AC')",     // € (U+20AC)
+                "decodeURIComponent('%E2%9C%93')",     // ✓ (U+2713)
+                "decodeURIComponent('%E0%A0%80')",     // U+0800 (lowest 3-byte)
+                "decodeURIComponent('%EF%BF%BD')",     // U+FFFD (replacement char)
+                "decodeURIComponent('%EF%BF%BF')");    // U+FFFF (highest 3-byte)
+    }
+
+    @Test
+    public void testDecodeURIUtf8TwoByte() {
+        // UTF-8 2-byte sequences (U+0080 to U+07FF)
+        assertStringWithJavet(
+                "decodeURIComponent('%C2%A2')",        // ¢ (U+00A2)
+                "decodeURIComponent('%C3%A9')",        // é (U+00E9)
+                "decodeURIComponent('%C3%BC')",        // ü (U+00FC)
+                "decodeURIComponent('%C3%B1')",        // ñ (U+00F1)
+                "decodeURIComponent('%C2%A9')",        // © (U+00A9)
+                "decodeURIComponent('%C2%AE')",        // ® (U+00AE)
+                "decodeURIComponent('%C2%80')",        // U+0080 (lowest 2-byte)
+                "decodeURIComponent('%DF%BF')");       // U+07FF (highest 2-byte)
+    }
+
+    @Test
     public void testEscape() {
         assertStringWithJavet(
                 // Test basic ASCII characters that should not be escaped

@@ -123,6 +123,7 @@ public class Test262Runner {
                 }
 
                 // Execute test
+                System.out.println("  test " + testCount + "/" + testFiles.size() + ": " + testFile);
                 TestResult result = executor.execute(testCase);
                 reporter.recordResult(result);
 

@@ -384,6 +384,14 @@ public non-sealed class JSObject implements JSValue {
             }
         }
 
+        // String primitive wrapper: return character at numeric index
+        if (primitiveValue instanceof JSString str && arrayIndex >= 0) {
+            String s = str.value();
+            if (arrayIndex < s.length()) {
+                return new JSString(String.valueOf(s.charAt((int) arrayIndex)));
+            }
+        }
+
         // Look in own properties
         PropertyKey shapeKey = getOwnShapeKey(key);
         int offset = shapeKey != null ? shape.getPropertyOffset(shapeKey) : -1;
