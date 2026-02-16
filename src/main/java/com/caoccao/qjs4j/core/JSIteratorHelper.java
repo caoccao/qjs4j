@@ -81,7 +81,7 @@ public final class JSIteratorHelper {
         }
 
         // Get the [Symbol.iterator] method
-        JSValue iteratorMethod = iterableObj.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR));
+        JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
 
         if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
             return null;
@@ -117,7 +117,7 @@ public final class JSIteratorHelper {
             return false;
         }
 
-        JSValue iteratorMethod = obj.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR));
+        JSValue iteratorMethod = obj.get(PropertyKey.SYMBOL_ITERATOR);
         return iteratorMethod instanceof JSFunction;
     }
 

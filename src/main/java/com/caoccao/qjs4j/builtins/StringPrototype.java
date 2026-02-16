@@ -389,7 +389,7 @@ public final class StringPrototype {
         if (!(value instanceof JSObject obj)) {
             return 0;
         }
-        JSValue matcher = obj.get(PropertyKey.fromSymbol(JSSymbol.MATCH), context);
+        JSValue matcher = obj.get(PropertyKey.SYMBOL_MATCH, context);
         if (context.hasPendingException()) {
             return -1;
         }
@@ -493,7 +493,7 @@ public final class StringPrototype {
 
         JSValue regexpArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (regexpArg instanceof JSObject regexpObj) {
-            JSValue matcher = regexpObj.get(PropertyKey.fromSymbol(JSSymbol.MATCH), context);
+            JSValue matcher = regexpObj.get(PropertyKey.SYMBOL_MATCH, context);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -582,7 +582,7 @@ public final class StringPrototype {
             return context.throwTypeError("String.prototype.matchAll called with a non-global RegExp argument");
         }
         if (regexpArg instanceof JSObject regexpObj) {
-            JSValue matcher = regexpObj.get(PropertyKey.fromSymbol(JSSymbol.MATCH_ALL), context);
+            JSValue matcher = regexpObj.get(PropertyKey.SYMBOL_MATCH_ALL, context);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -795,7 +795,7 @@ public final class StringPrototype {
         JSValue searchValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue replaceValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         if (searchValue instanceof JSObject searchValueObject) {
-            JSValue replacer = searchValueObject.get(PropertyKey.fromSymbol(JSSymbol.REPLACE), context);
+            JSValue replacer = searchValueObject.get(PropertyKey.SYMBOL_REPLACE, context);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -877,7 +877,7 @@ public final class StringPrototype {
             return context.throwTypeError("String.prototype.replaceAll called with a non-global RegExp argument");
         }
         if (searchValue instanceof JSObject searchValueObject) {
-            JSValue replacer = searchValueObject.get(PropertyKey.fromSymbol(JSSymbol.REPLACE), context);
+            JSValue replacer = searchValueObject.get(PropertyKey.SYMBOL_REPLACE, context);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -987,7 +987,7 @@ public final class StringPrototype {
 
         JSValue regexpArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (regexpArg instanceof JSObject regexpObj) {
-            JSValue searcher = regexpObj.get(PropertyKey.fromSymbol(JSSymbol.SEARCH), context);
+            JSValue searcher = regexpObj.get(PropertyKey.SYMBOL_SEARCH, context);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1087,7 +1087,7 @@ public final class StringPrototype {
         JSValue separatorArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue limitArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         if (separatorArg instanceof JSObject separatorObject) {
-            JSValue splitter = separatorObject.get(PropertyKey.fromSymbol(JSSymbol.SPLIT), context);
+            JSValue splitter = separatorObject.get(PropertyKey.SYMBOL_SPLIT, context);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

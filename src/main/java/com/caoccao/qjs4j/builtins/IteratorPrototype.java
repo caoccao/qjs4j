@@ -120,7 +120,7 @@ public final class IteratorPrototype {
             if (!(arg instanceof JSObject sourceObject)) {
                 return context.throwTypeError("not an object");
             }
-            JSValue iteratorMethod = sourceObject.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR), context);
+            JSValue iteratorMethod = sourceObject.get(PropertyKey.SYMBOL_ITERATOR, context);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -253,7 +253,7 @@ public final class IteratorPrototype {
         }
         if (toStringTag != null) {
             iteratorObject.defineProperty(
-                    PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                    PropertyKey.SYMBOL_TO_STRING_TAG,
                     PropertyDescriptor.dataDescriptor(new JSString(toStringTag), false, false, true));
         }
         return iteratorObject;
@@ -588,7 +588,7 @@ public final class IteratorPrototype {
                         return childContext.throwTypeError("not an object");
                     }
 
-                    JSValue iteratorMethod = mappedObject.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR), childContext);
+                    JSValue iteratorMethod = mappedObject.get(PropertyKey.SYMBOL_ITERATOR, childContext);
                     if (childContext.hasPendingException()) {
                         done[0] = true;
                         closeIteratorIgnoringResult(childContext, iteratorObject);
@@ -708,7 +708,7 @@ public final class IteratorPrototype {
         }
 
         JSObject iteratorObject = sourceObject;
-        JSValue iteratorMethod = sourceObject.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR), context);
+        JSValue iteratorMethod = sourceObject.get(PropertyKey.SYMBOL_ITERATOR, context);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }

@@ -69,7 +69,7 @@ public final class JSAsyncIteratorHelper {
         }
 
         // First, try Symbol.asyncIterator
-        PropertyKey asyncIteratorKey = PropertyKey.fromSymbol(JSSymbol.ASYNC_ITERATOR);
+        PropertyKey asyncIteratorKey = PropertyKey.SYMBOL_ASYNC_ITERATOR;
         JSValue asyncIteratorMethod = obj.get(asyncIteratorKey);
 
         if (asyncIteratorMethod instanceof JSFunction asyncIterFunc) {
@@ -81,7 +81,7 @@ public final class JSAsyncIteratorHelper {
         }
 
         // Fall back to Symbol.iterator (sync iterator)
-        PropertyKey iteratorKey = PropertyKey.fromSymbol(JSSymbol.ITERATOR);
+        PropertyKey iteratorKey = PropertyKey.SYMBOL_ITERATOR;
         JSValue iteratorMethod = obj.get(iteratorKey);
 
         if (iteratorMethod instanceof JSFunction iterFunc) {
@@ -108,14 +108,14 @@ public final class JSAsyncIteratorHelper {
         }
 
         // Check for Symbol.asyncIterator
-        PropertyKey asyncIteratorKey = PropertyKey.fromSymbol(JSSymbol.ASYNC_ITERATOR);
+        PropertyKey asyncIteratorKey = PropertyKey.SYMBOL_ASYNC_ITERATOR;
         JSValue asyncIteratorMethod = obj.get(asyncIteratorKey);
         if (asyncIteratorMethod instanceof JSFunction) {
             return true;
         }
 
         // Check for Symbol.iterator (can be converted to async)
-        PropertyKey iteratorKey = PropertyKey.fromSymbol(JSSymbol.ITERATOR);
+        PropertyKey iteratorKey = PropertyKey.SYMBOL_ITERATOR;
         JSValue iteratorMethod = obj.get(iteratorKey);
         return iteratorMethod instanceof JSFunction;
     }

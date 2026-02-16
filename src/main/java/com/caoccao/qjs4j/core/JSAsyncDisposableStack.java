@@ -185,12 +185,12 @@ public final class JSAsyncDisposableStack extends JSObject {
             return context.throwTypeError("AsyncDisposableStack.use requires an object or null/undefined");
         }
 
-        JSValue disposeMethodValue = objectValue.get(PropertyKey.fromSymbol(JSSymbol.ASYNC_DISPOSE), context);
+        JSValue disposeMethodValue = objectValue.get(PropertyKey.SYMBOL_ASYNC_DISPOSE, context);
         JSFunction disposeMethod;
         if (disposeMethodValue instanceof JSFunction asyncDisposeMethod) {
             disposeMethod = asyncDisposeMethod;
         } else {
-            disposeMethodValue = objectValue.get(PropertyKey.fromSymbol(JSSymbol.DISPOSE), context);
+            disposeMethodValue = objectValue.get(PropertyKey.SYMBOL_DISPOSE, context);
             if (!(disposeMethodValue instanceof JSFunction syncDisposeMethod)) {
                 return context.throwTypeError("Object is not async disposable");
             }

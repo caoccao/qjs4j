@@ -3139,7 +3139,7 @@ public final class VirtualMachine {
         }
 
         // First, try Symbol.asyncIterator
-        JSValue asyncIteratorMethod = iterableObj.get(PropertyKey.fromSymbol(JSSymbol.ASYNC_ITERATOR));
+        JSValue asyncIteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ASYNC_ITERATOR);
         JSValue iteratorMethod = null;
 
         if (asyncIteratorMethod instanceof JSFunction) {
@@ -3150,7 +3150,7 @@ public final class VirtualMachine {
             return;
         } else {
             // Fall back to Symbol.iterator (sync iterator that will be auto-wrapped)
-            iteratorMethod = iterableObj.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR));
+            iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
 
             if (!(iteratorMethod instanceof JSFunction)) {
                 pendingException = context.throwTypeError("object is not async iterable");
@@ -3305,7 +3305,7 @@ public final class VirtualMachine {
         }
 
         // Get Symbol.iterator method
-        JSValue iteratorMethod = iterableObj.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR));
+        JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
 
         if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
             throw new JSVirtualMachineException("Object is not iterable");
@@ -3413,7 +3413,7 @@ public final class VirtualMachine {
             throw new JSVirtualMachineException("Right-hand side of instanceof is not an object");
         }
 
-        JSValue hasInstanceMethod = constructor.get(PropertyKey.fromSymbol(JSSymbol.HAS_INSTANCE), context);
+        JSValue hasInstanceMethod = constructor.get(PropertyKey.SYMBOL_HAS_INSTANCE, context);
         if (context.hasPendingException()) {
             JSValue pendingException = context.getPendingException();
             if (pendingException instanceof JSError jsError) {
@@ -3746,7 +3746,7 @@ public final class VirtualMachine {
         }
 
         // Get Symbol.iterator method
-        JSValue iteratorMethod = iterableObj.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR));
+        JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
         if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
             throw new JSVirtualMachineException("Object is not iterable");
         }

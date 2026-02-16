@@ -1345,7 +1345,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         context.transferPrototype(arr, JSArray.NAME);
 
         // Get Symbol.iterator
-        PropertyKey iteratorKey = PropertyKey.fromSymbol(JSSymbol.ITERATOR);
+        PropertyKey iteratorKey = PropertyKey.SYMBOL_ITERATOR;
         JSValue iteratorFn = arr.get(iteratorKey);
         assertThat(iteratorFn).isNotNull();
         assertThat(iteratorFn.isFunction()).isTrue();

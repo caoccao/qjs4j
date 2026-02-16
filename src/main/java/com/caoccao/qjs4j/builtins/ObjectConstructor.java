@@ -427,7 +427,7 @@ public final class ObjectConstructor {
         // Get the iterator method
         JSValue iteratorMethod = null;
         if (iterable instanceof JSObject obj) {
-            PropertyKey iteratorKey = PropertyKey.fromSymbol(JSSymbol.ITERATOR);
+            PropertyKey iteratorKey = PropertyKey.SYMBOL_ITERATOR;
             iteratorMethod = obj.get(iteratorKey);
         }
 

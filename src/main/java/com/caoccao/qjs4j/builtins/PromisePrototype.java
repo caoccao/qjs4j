@@ -98,7 +98,7 @@ public final class PromisePrototype {
     private static JSValue getPromiseConstructor(JSContext context, JSPromise promise) {
         JSValue constructor = promise.get("constructor");
         if (constructor instanceof JSObject constructorObject) {
-            JSValue species = constructorObject.get(PropertyKey.fromSymbol(JSSymbol.SPECIES));
+            JSValue species = constructorObject.get(PropertyKey.SYMBOL_SPECIES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

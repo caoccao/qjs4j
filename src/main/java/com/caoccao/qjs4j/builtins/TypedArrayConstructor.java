@@ -53,7 +53,7 @@ public final class TypedArrayConstructor {
                 && !(items instanceof JSIterator)
                 && !(items instanceof JSTypedArray)
                 && !(items instanceof JSArrayBufferable)) {
-            JSValue iteratorMethod = itemsObj.get(PropertyKey.fromSymbol(JSSymbol.ITERATOR));
+            JSValue iteratorMethod = itemsObj.get(PropertyKey.SYMBOL_ITERATOR);
             if (iteratorMethod instanceof JSFunction iteratorFunc) {
                 JSValue iterator = iteratorFunc.call(context, items, new JSValue[0]);
                 if (context.hasPendingException()) {

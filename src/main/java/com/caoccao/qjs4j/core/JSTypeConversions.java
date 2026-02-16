@@ -423,7 +423,7 @@ public final class JSTypeConversions {
                 return primitiveValue;
             }
 
-            JSValue toPrimitiveMethod = obj.get(PropertyKey.fromSymbol(JSSymbol.TO_PRIMITIVE), context);
+            JSValue toPrimitiveMethod = obj.get(PropertyKey.SYMBOL_TO_PRIMITIVE, context);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

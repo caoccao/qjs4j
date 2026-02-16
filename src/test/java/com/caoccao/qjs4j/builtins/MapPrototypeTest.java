@@ -1164,7 +1164,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         iterator.set("return", returnFunction);
 
         JSObject iterable = context.createJSObject();
-        iterable.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
+        iterable.set(PropertyKey.SYMBOL_ITERATOR,
                 new JSNativeFunction("[Symbol.iterator]", 0, (childContext, thisArg, args) -> iterator));
 
         JSObject mapConstructor = context.getGlobalObject().get("Map").asObject().orElseThrow();

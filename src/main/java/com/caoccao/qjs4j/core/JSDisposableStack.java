@@ -160,7 +160,7 @@ public final class JSDisposableStack extends JSObject {
             return context.throwTypeError("DisposableStack.use requires an object or null/undefined");
         }
 
-        JSValue disposeMethodValue = objectValue.get(PropertyKey.fromSymbol(JSSymbol.DISPOSE), context);
+        JSValue disposeMethodValue = objectValue.get(PropertyKey.SYMBOL_DISPOSE, context);
         if (!(disposeMethodValue instanceof JSFunction disposeMethod)) {
             return context.throwTypeError("Object is not disposable");
         }

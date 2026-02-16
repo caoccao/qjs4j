@@ -39,7 +39,7 @@ public class ArrayBufferConstructorTest extends BaseJavetTest {
         assertThat(result).isSameAs(arrayBufferConstructor);
 
         // Verify it also works via Symbol.species property
-        PropertyKey speciesKey = PropertyKey.fromSymbol(JSSymbol.SPECIES);
+        PropertyKey speciesKey = PropertyKey.SYMBOL_SPECIES;
         JSValue speciesGetter = arrayBufferConstructor.get(speciesKey);
         assertThat(speciesGetter).isNotNull();
         assertThat(speciesGetter.isFunction()).isFalse();

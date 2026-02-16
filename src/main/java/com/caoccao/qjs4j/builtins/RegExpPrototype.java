@@ -345,7 +345,7 @@ public final class RegExpPrototype {
         // Step 10: Construct splitter = Construct(C, « rx, newFlags »)
         // Per spec, this calls RegExp(rx, newFlags) which calls IsRegExp(rx),
         // accessing rx[Symbol.match] and triggering any getter side effects.
-        rx.get(PropertyKey.fromSymbol(JSSymbol.MATCH), context);
+        rx.get(PropertyKey.SYMBOL_MATCH, context);
         // After the getter may have mutated rx via compile(), read the pattern.
         JSRegExp splitter;
         try {

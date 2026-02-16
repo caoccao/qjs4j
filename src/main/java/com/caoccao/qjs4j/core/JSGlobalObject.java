@@ -610,7 +610,7 @@ public final class JSGlobalObject {
         arrayPrototype.definePropertyReadonlyNonConfigurable("length", JSNumber.of(0));
 
         // Array.prototype[Symbol.*]
-        arrayPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction);
+        arrayPrototype.set(PropertyKey.SYMBOL_ITERATOR, valuesFunction);
         arrayPrototype.defineGetterConfigurable(JSSymbol.UNSCOPABLES, ArrayPrototype::getSymbolUnscopables);
 
         // Create Array constructor as a function
@@ -642,7 +642,7 @@ public final class JSGlobalObject {
         asyncDisposableStackPrototype.set("disposeAsync", disposeAsyncFunction);
         asyncDisposableStackPrototype.set("move", new JSNativeFunction("move", 0, AsyncDisposableStackPrototype::move));
         asyncDisposableStackPrototype.set("use", new JSNativeFunction("use", 1, AsyncDisposableStackPrototype::use));
-        asyncDisposableStackPrototype.set(PropertyKey.fromSymbol(JSSymbol.ASYNC_DISPOSE), disposeAsyncFunction);
+        asyncDisposableStackPrototype.set(PropertyKey.SYMBOL_ASYNC_DISPOSE, disposeAsyncFunction);
 
         asyncDisposableStackPrototype.defineGetterConfigurable("disposed", AsyncDisposableStackPrototype::getDisposed);
         asyncDisposableStackPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, (childContext, thisObj, args) -> {
@@ -908,7 +908,7 @@ public final class JSGlobalObject {
         disposableStackPrototype.set("dispose", disposeFunction);
         disposableStackPrototype.set("move", new JSNativeFunction("move", 0, DisposableStackPrototype::move));
         disposableStackPrototype.set("use", new JSNativeFunction("use", 1, DisposableStackPrototype::use));
-        disposableStackPrototype.set(PropertyKey.fromSymbol(JSSymbol.DISPOSE), disposeFunction);
+        disposableStackPrototype.set(PropertyKey.SYMBOL_DISPOSE, disposeFunction);
 
         disposableStackPrototype.defineGetterConfigurable("disposed", DisposableStackPrototype::getDisposed);
         disposableStackPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, (childContext, thisObj, args) -> {
@@ -1245,7 +1245,7 @@ public final class JSGlobalObject {
                         return childContext.throwTypeError("Cannot assign to read only property");
                     }
                     JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                    PropertyKey toStringTagKey = PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG);
+                    PropertyKey toStringTagKey = PropertyKey.SYMBOL_TO_STRING_TAG;
                     PropertyDescriptor descriptor = thisObject.getOwnPropertyDescriptor(toStringTagKey);
                     if (descriptor != null) {
                         thisObject.set(toStringTagKey, value, childContext);
@@ -1258,7 +1258,7 @@ public final class JSGlobalObject {
                 },
                 false);
         iteratorPrototype.defineProperty(
-                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                PropertyKey.SYMBOL_TO_STRING_TAG,
                 PropertyDescriptor.accessorDescriptor(toStringTagGetter, toStringTagSetter, false, true));
 
         global.definePropertyWritableConfigurable(JSIterator.NAME, iteratorConstructor);
@@ -1559,7 +1559,7 @@ public final class JSGlobalObject {
         regexpPrototype.set("exec", new JSNativeFunction("exec", 1, RegExpPrototype::exec));
         regexpPrototype.definePropertyWritableConfigurable("compile", new JSNativeFunction("compile", 2, RegExpPrototype::compile));
         regexpPrototype.set("toString", new JSNativeFunction("toString", 0, RegExpPrototype::toStringMethod));
-        regexpPrototype.set(PropertyKey.fromSymbol(JSSymbol.SPLIT), new JSNativeFunction("[Symbol.split]", 2, RegExpPrototype::symbolSplit));
+        regexpPrototype.set(PropertyKey.SYMBOL_SPLIT, new JSNativeFunction("[Symbol.split]", 2, RegExpPrototype::symbolSplit));
 
         // Accessor properties
         regexpPrototype.defineGetterConfigurable("dotAll", RegExpPrototype::getDotAll);
