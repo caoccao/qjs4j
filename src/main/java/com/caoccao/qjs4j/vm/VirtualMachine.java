@@ -29,8 +29,8 @@ import java.util.*;
  * Executes compiled bytecode using a stack-based architecture.
  */
 public final class VirtualMachine {
-    private static final JSObject UNINITIALIZED_MARKER = new JSObject();
     private static final int INTERRUPT_CHECK_INTERVAL = 0xFFFF; // Check every ~65K opcodes
+    private static final JSObject UNINITIALIZED_MARKER = new JSObject();
     private final JSContext context;
     private final Set<JSObject> initializedConstantObjects;
     private final StringBuilder propertyAccessChain;  // Track last property access for better error messages
@@ -2532,16 +2532,6 @@ public final class VirtualMachine {
     }
 
     /**
-     * Set an execution deadline for the VM.
-     * After this time, the VM will throw an interrupt exception.
-     * Set to 0 to clear the deadline.
-     */
-    public void setExecutionDeadline(long deadlineMs) {
-        this.executionDeadline = deadlineMs;
-        this.interruptCounter = INTERRUPT_CHECK_INTERVAL;
-    }
-
-    /**
      * Get the last yield result from generator execution.
      * Used to check if the yield was a yield* (delegation).
      */
@@ -3915,6 +3905,16 @@ public final class VirtualMachine {
         }
         // Keep local mirror in sync for argument slots copied into locals.
         setLocalValue(index, value);
+    }
+
+    /**
+     * Set an execution deadline for the VM.
+     * After this time, the VM will throw an interrupt exception.
+     * Set to 0 to clear the deadline.
+     */
+    public void setExecutionDeadline(long deadlineMs) {
+        this.executionDeadline = deadlineMs;
+        this.interruptCounter = INTERRUPT_CHECK_INTERVAL;
     }
 
     private void setLocalValue(int index, JSValue value) {

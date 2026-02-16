@@ -23,10 +23,9 @@ import com.caoccao.qjs4j.utils.DtoaConverter;
  */
 public record JSNumber(double value) implements JSValue {
     public static final String NAME = "number";
-
+    private static final int CACHE_HIGH = 256;
     // Cache for small integers [-1, 256] to reduce allocation in hot loops
     private static final int CACHE_LOW = -1;
-    private static final int CACHE_HIGH = 256;
     private static final JSNumber[] CACHE = new JSNumber[CACHE_HIGH - CACHE_LOW + 1];
 
     static {
