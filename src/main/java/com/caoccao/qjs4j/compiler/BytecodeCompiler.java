@@ -88,6 +88,43 @@ public final class BytecodeCompiler {
     }
 
     /**
+     * Build the set of parameter names for Annex B.3.3.1 checking.
+     * Includes all formal parameter names plus "arguments" (when the function has
+     * an implicit arguments binding, i.e., no explicit parameter or var named "arguments").
+     * Per ES2024 10.2.11 step 22f: if argumentsObjectNeeded, append "arguments" to parameterNames.
+     */
+    private static Set<String> buildParameterNames(List<Identifier> params, List<Statement> body) {
+        Set<String> paramNames = new HashSet<>();
+        for (Identifier param : params) {
+            paramNames.add(param.name());
+        }
+        // Per ES2024 step 22f, "arguments" is in parameterNames when argumentsObjectNeeded is true.
+        // argumentsObjectNeeded is true unless "arguments" is already a parameter name or
+        // there's a lexical "arguments" binding. For simplicity and matching QuickJS
+        // (has_arguments_binding check), always include "arguments" unless it's already
+        // explicitly declared as a parameter or var.
+        if (!paramNames.contains("arguments")) {
+            // Check if body has "var arguments" which would suppress the implicit binding
+            boolean hasVarArguments = false;
+            for (Statement stmt : body) {
+                if (stmt instanceof VariableDeclaration vd && vd.kind() == VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                        if (d.id() instanceof Identifier id && "arguments".equals(id.name())) {
+                            hasVarArguments = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasVarArguments) break;
+            }
+            if (!hasVarArguments) {
+                paramNames.add("arguments");
+            }
+        }
+        return paramNames;
+    }
+
+    /**
      * Check if a list of statements contains a {@code var arguments} declaration.
      * Recurses into nested control structures (since var hoists) but NOT into
      * nested functions (which have their own scope).
@@ -2375,9 +2412,14 @@ public final class BytecodeCompiler {
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
 
         // Store the function in a variable with its name
+        // Per B.3.3.1: the Annex B runtime hook only fires if no enclosing block
+        // scope has a lexical binding for the same name (otherwise replacing this
+        // function with var F would produce an Early Error).
+        boolean isAnnexB = annexBFunctionNames.contains(functionName)
+                && !hasEnclosingBlockScopeLocal(functionName);
         Integer localIndex = findLocalInScopes(functionName);
         if (localIndex != null) {
-            if (annexBFunctionNames.contains(functionName)) {
+            if (isAnnexB) {
                 // Annex B.3.3 runtime hook: store in both block scope and var scope
                 emitter.emitOpcode(Opcode.DUP);
                 emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
@@ -2393,7 +2435,7 @@ public final class BytecodeCompiler {
             } else {
                 // Declare it as a local
                 localIndex = currentScope().declareLocal(functionName);
-                if (annexBFunctionNames.contains(functionName)) {
+                if (isAnnexB) {
                     // Annex B.3.3 runtime hook: store in both block scope and var scope
                     emitter.emitOpcode(Opcode.DUP);
                     emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
@@ -3955,7 +3997,9 @@ public final class BytecodeCompiler {
                 Pattern catchParam = handler.param();
                 if (catchParam instanceof Identifier id) {
                     // Simple catch parameter: catch (e)
+                    // Per B.3.5, simple catch parameters do not block Annex B var hoisting
                     int localIndex = currentScope().declareLocal(id.name());
+                    currentScope().markSimpleCatchParam(id.name());
                     emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
                 } else {
                     // Destructuring catch parameter: catch ({ f }) or catch ([a, b])
@@ -4604,15 +4648,6 @@ public final class BytecodeCompiler {
         }
     }
 
-    private void emitCapturedValues(BytecodeCompiler nestedCompiler) {
-        if (nestedCompiler.captureResolver.getCapturedBindingCount() == 0) {
-            return;
-        }
-        for (CaptureBinding binding : nestedCompiler.captureResolver.getCapturedBindings()) {
-            emitCaptureBindingLoad(binding.source);
-        }
-    }
-
     /**
      * Emit a conditional var initialization: only create the binding with undefined
      * if the property doesn't already exist on the global object.
@@ -4632,41 +4667,14 @@ public final class BytecodeCompiler {
      *   skip:
      * </pre>
      */
-    /**
-     * Build the set of parameter names for Annex B.3.3.1 checking.
-     * Includes all formal parameter names plus "arguments" (when the function has
-     * an implicit arguments binding, i.e., no explicit parameter or var named "arguments").
-     * Per ES2024 10.2.11 step 22f: if argumentsObjectNeeded, append "arguments" to parameterNames.
-     */
-    private static Set<String> buildParameterNames(List<Identifier> params, List<Statement> body) {
-        Set<String> paramNames = new HashSet<>();
-        for (Identifier param : params) {
-            paramNames.add(param.name());
+
+    private void emitCapturedValues(BytecodeCompiler nestedCompiler) {
+        if (nestedCompiler.captureResolver.getCapturedBindingCount() == 0) {
+            return;
         }
-        // Per ES2024 step 22f, "arguments" is in parameterNames when argumentsObjectNeeded is true.
-        // argumentsObjectNeeded is true unless "arguments" is already a parameter name or
-        // there's a lexical "arguments" binding. For simplicity and matching QuickJS
-        // (has_arguments_binding check), always include "arguments" unless it's already
-        // explicitly declared as a parameter or var.
-        if (!paramNames.contains("arguments")) {
-            // Check if body has "var arguments" which would suppress the implicit binding
-            boolean hasVarArguments = false;
-            for (Statement stmt : body) {
-                if (stmt instanceof VariableDeclaration vd && vd.kind() == VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                        if (d.id() instanceof Identifier id && "arguments".equals(id.name())) {
-                            hasVarArguments = true;
-                            break;
-                        }
-                    }
-                }
-                if (hasVarArguments) break;
-            }
-            if (!hasVarArguments) {
-                paramNames.add("arguments");
-            }
+        for (CaptureBinding binding : nestedCompiler.captureResolver.getCapturedBindings()) {
+            emitCaptureBindingLoad(binding.source);
         }
-        return paramNames;
     }
 
     private void emitConditionalVarInit(String name) {
@@ -4904,6 +4912,32 @@ public final class BytecodeCompiler {
     }
 
     /**
+     * Check if any intermediate block scope (between the current scope and the
+     * function body scope) has a local with the given name. Used by Annex B.3.3.1
+     * to prevent the runtime hook from firing when a lexical binding for the same
+     * name exists in an enclosing block (replacing the function with var would
+     * produce an Early Error due to the lexical/var conflict).
+     */
+    private boolean hasEnclosingBlockScopeLocal(String name) {
+        Iterator<Scope> it = scopes.iterator();
+        if (!it.hasNext()) return false;
+        it.next(); // skip current scope (innermost)
+        while (it.hasNext()) {
+            Scope scope = it.next();
+            if (!it.hasNext()) {
+                // This is the function body scope (outermost) - skip it
+                break;
+            }
+            // Per B.3.5, simple catch parameters do not block Annex B hoisting.
+            // Only lexical bindings (let/const/block-scoped functions) are blockers.
+            if (scope.hasLexicalLocal(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Check if a block statement has a "use strict" directive as its first statement.
      * Following ECMAScript specification section 10.2.1 (Directive Prologues).
      */
@@ -5060,13 +5094,23 @@ public final class BytecodeCompiler {
     private void scanAnnexBBlock(List<Statement> body, Set<String> parentLexicals, Set<String> result) {
         Set<String> blockLexicals = new HashSet<>(parentLexicals);
         collectLexicalBindings(body, blockLexicals);
+        // Per B.3.3.1: block-scoped function declarations create lexical bindings.
+        // Include them so nested blocks see them as lexical conflicts (replacing a
+        // nested function with var F would clash with the enclosing lexical F).
+        // Use a separate set for nested checks so same-level declarations are not blocked.
+        Set<String> blockLexicalsWithFuncs = new HashSet<>(blockLexicals);
+        for (Statement s : body) {
+            if (s instanceof FunctionDeclaration fd && fd.id() != null) {
+                blockLexicalsWithFuncs.add(fd.id().name());
+            }
+        }
         for (Statement s : body) {
             if (s instanceof FunctionDeclaration fd && fd.id() != null) {
                 if (!blockLexicals.contains(fd.id().name())) {
                     result.add(fd.id().name());
                 }
             }
-            scanAnnexBStatement(s, blockLexicals, result);
+            scanAnnexBStatement(s, blockLexicalsWithFuncs, result);
         }
     }
 
@@ -5325,6 +5369,7 @@ public final class BytecodeCompiler {
     private static class Scope {
         private final Map<String, Integer> locals = new HashMap<>();
         private final int scopeDepth;
+        private final Set<String> simpleCatchParams = new HashSet<>();
         private int nextLocalIndex;
         private boolean usingStackAsync;
         private Integer usingStackLocalIndex;
@@ -5365,8 +5410,16 @@ public final class BytecodeCompiler {
             return usingStackLocalIndex;
         }
 
+        boolean hasLexicalLocal(String name) {
+            return locals.containsKey(name) && !simpleCatchParams.contains(name);
+        }
+
         boolean isUsingStackAsync() {
             return usingStackAsync;
+        }
+
+        void markSimpleCatchParam(String name) {
+            simpleCatchParams.add(name);
         }
 
         void setLocalCount(int count) {
