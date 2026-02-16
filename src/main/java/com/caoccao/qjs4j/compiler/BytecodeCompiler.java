@@ -32,6 +32,7 @@ import java.util.*;
  */
 public final class BytecodeCompiler {
     private final Set<String> annexBFunctionNames;
+    private final Map<String, Integer> annexBFunctionScopeLocals;
     private final CaptureResolver captureResolver;
     private final BytecodeEmitter emitter;
     private final Deque<LoopContext> loopStack;
@@ -67,6 +68,7 @@ public final class BytecodeCompiler {
 
     private BytecodeCompiler(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver) {
         this.annexBFunctionNames = new HashSet<>();
+        this.annexBFunctionScopeLocals = new HashMap<>();
         this.emitter = new BytecodeEmitter();
         this.scopes = new ArrayDeque<>();
         this.loopStack = new ArrayDeque<>();
@@ -2253,6 +2255,10 @@ public final class BytecodeCompiler {
             functionCompiler.emitter.emitOpcode(Opcode.INITIAL_YIELD);
         }
 
+        // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
+        // to the function scope as var bindings (initialized to undefined).
+        functionCompiler.hoistFunctionBodyAnnexBDeclarations(funcDecl.body().body());
+
         // Compile function body statements
         for (Statement stmt : funcDecl.body().body()) {
             functionCompiler.compileStatement(stmt);
@@ -2345,10 +2351,10 @@ public final class BytecodeCompiler {
         Integer localIndex = findLocalInScopes(functionName);
         if (localIndex != null) {
             if (annexBFunctionNames.contains(functionName)) {
-                // Annex B.3.3.3 runtime hook: store in both block scope and global scope
+                // Annex B.3.3 runtime hook: store in both block scope and var scope
                 emitter.emitOpcode(Opcode.DUP);
                 emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
-                emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
+                emitAnnexBVarStore(functionName);
             } else {
                 emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
             }
@@ -2361,10 +2367,10 @@ public final class BytecodeCompiler {
                 // Declare it as a local
                 localIndex = currentScope().declareLocal(functionName);
                 if (annexBFunctionNames.contains(functionName)) {
-                    // Annex B.3.3.3 runtime hook: store in both block scope and global scope
+                    // Annex B.3.3 runtime hook: store in both block scope and var scope
                     emitter.emitOpcode(Opcode.DUP);
                     emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
-                    emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
+                    emitAnnexBVarStore(functionName);
                 } else {
                     emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
                 }
@@ -2421,6 +2427,10 @@ public final class BytecodeCompiler {
         if (funcExpr.isGenerator()) {
             functionCompiler.emitter.emitOpcode(Opcode.INITIAL_YIELD);
         }
+
+        // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
+        // to the function scope as var bindings (initialized to undefined).
+        functionCompiler.hoistFunctionBodyAnnexBDeclarations(funcExpr.body().body());
 
         // Compile function body statements (don't call compileBlockStatement as it would create a new scope)
         for (Statement stmt : funcExpr.body().body()) {
@@ -4470,6 +4480,26 @@ public final class BytecodeCompiler {
         }
     }
 
+    /**
+     * Emit the Annex B.3.3 var-scope store for a function declaration.
+     * In global scope, uses PUT_VAR (global object property).
+     * In function scope, uses PUT_LOCAL to the function-scope local
+     * (bypassing the block-scoped lexical binding).
+     */
+    private void emitAnnexBVarStore(String functionName) {
+        if (inGlobalScope) {
+            emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
+        } else {
+            Integer funcScopeLocal = annexBFunctionScopeLocals.get(functionName);
+            if (funcScopeLocal != null) {
+                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, funcScopeLocal);
+            } else {
+                // Fallback: store as global var (shouldn't normally happen)
+                emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
+            }
+        }
+    }
+
     private void emitArgumentsArrayWithSpread(List<Expression> arguments) {
         emitter.emitOpcode(Opcode.ARRAY_NEW);
 
@@ -4821,6 +4851,61 @@ public final class BytecodeCompiler {
         return "use strict".equals(value);
     }
 
+    /**
+     * Scan the program body for Annex B.3.3.3 eligible function declarations.
+     * These are function declarations nested inside blocks, if-statements, catch clauses,
+     * switch cases, etc. (not top-level in the program body).
+     * <p>
+     * For each eligible name not already in declaredFuncVarNames, a var binding
+     * initialized to undefined is created, and the name is recorded for the runtime
+     * hook (copying the block-scoped value to the var-scoped value when evaluated).
+     */
+    private void hoistFunctionBodyAnnexBDeclarations(List<Statement> body) {
+        if (strictMode) {
+            return; // Annex B does not apply in strict mode
+        }
+
+        // Collect top-level lexical bindings (let/const) from the function body.
+        Set<String> topLevelLexicals = new HashSet<>();
+        collectLexicalBindings(body, topLevelLexicals);
+
+        // Scan for Annex B candidates in the function body
+        Set<String> candidates = new HashSet<>();
+        for (Statement stmt : body) {
+            scanAnnexBStatement(stmt, topLevelLexicals, candidates);
+        }
+
+        if (candidates.isEmpty()) {
+            return;
+        }
+
+        // Collect names that are already declared (parameters, explicit var, top-level functions)
+        // to avoid creating duplicate bindings.
+        Set<String> alreadyDeclared = new HashSet<>();
+        for (Statement stmt : body) {
+            if (stmt instanceof FunctionDeclaration fd && fd.id() != null) {
+                alreadyDeclared.add(fd.id().name());
+            } else {
+                collectVarNamesFromStatement(stmt, alreadyDeclared);
+            }
+        }
+
+        for (String name : candidates) {
+            annexBFunctionNames.add(name);
+            Integer existingLocal = findLocalInScopes(name);
+            if (existingLocal != null) {
+                // Already exists (e.g., parameter or explicit var declaration)
+                annexBFunctionScopeLocals.put(name, existingLocal);
+            } else if (!alreadyDeclared.contains(name)) {
+                // Create new local in function scope, initialized to undefined
+                int localIndex = currentScope().declareLocal(name);
+                annexBFunctionScopeLocals.put(name, localIndex);
+                emitter.emitOpcode(Opcode.UNDEFINED);
+                emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+            }
+        }
+    }
+
     private void installPrivateStaticMethods(
             Map<String, JSBytecodeFunction> privateStaticMethodFunctions,
             Map<String, JSSymbol> privateSymbols) {
@@ -4893,15 +4978,6 @@ public final class BytecodeCompiler {
         }
     }
 
-    /**
-     * Scan the program body for Annex B.3.3.3 eligible function declarations.
-     * These are function declarations nested inside blocks, if-statements, catch clauses,
-     * switch cases, etc. (not top-level in the program body).
-     * <p>
-     * For each eligible name not already in declaredFuncVarNames, a var binding
-     * initialized to undefined is created, and the name is recorded for the runtime
-     * hook (copying the block-scoped value to the var-scoped value when evaluated).
-     */
     private void scanAnnexBFunctions(List<Statement> programBody, Set<String> declaredFuncVarNames) {
         if (strictMode) {
             return; // Annex B does not apply in strict mode

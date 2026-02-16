@@ -113,7 +113,7 @@ public final class ModuleLoader implements JSModule.ModuleResolver {
 
         // Resolve to absolute path
         Path modulePath = resolveModulePath(specifier);
-        String absoluteUrl = modulePath.toAbsolutePath().toString();
+        String absoluteUrl = modulePath.toAbsolutePath().normalize().toString();
 
         // Check if already cached by absolute path
         cached = moduleCache.get(absoluteUrl);

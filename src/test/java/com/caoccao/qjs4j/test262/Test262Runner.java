@@ -87,14 +87,14 @@ public class Test262Runner {
 
     public void run() throws IOException {
         System.out.println("Test262 Runner for qjs4j");
-        System.out.println("Test262 root: " + test262Root.toAbsolutePath());
+        System.out.println("Test262 root: " + test262Root.toAbsolutePath().normalize());
         System.out.println();
 
         Path testsDir = test262Root.resolve("test");
 
         if (!Files.exists(testsDir)) {
             System.err.println("Error: Test262 test directory not found at " + testsDir);
-            System.err.println("Please ensure test262 is cloned at " + test262Root.toAbsolutePath());
+            System.err.println("Please ensure test262 is cloned at " + test262Root.toAbsolutePath().normalize());
             return;
         }
 

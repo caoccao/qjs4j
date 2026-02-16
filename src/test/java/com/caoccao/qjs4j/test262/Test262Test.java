@@ -69,7 +69,7 @@ public class Test262Test {
     @TestFactory
     Collection<DynamicTest> test262Suite() throws IOException {
         if (!Files.exists(TEST262_ROOT)) {
-            System.err.println("Warning: test262 not found at " + TEST262_ROOT.toAbsolutePath());
+            System.err.println("Warning: test262 not found at " + TEST262_ROOT.toAbsolutePath().normalize());
             System.err.println("Skipping test262 tests. To run them, clone test262:");
             System.err.println("  cd .. && git clone https://github.com/tc39/test262.git");
             return List.of();
