@@ -178,6 +178,99 @@ public final class JSIteratorHelper {
     }
 
     /**
+     * IterableToList ( items ) — ES2024 7.4.7
+     * Strictly follows the spec: calls GetIterator, then repeatedly calls
+     * IteratorStep/IteratorValue, propagating abrupt completions at every step.
+     *
+     * @param context  The execution context
+     * @param items    The iterable value
+     * @return A JSArray of the iterated values, or null if an exception was set
+     */
+    public static JSArray iterableToList(JSContext context, JSValue items) {
+        // Handle string primitives — strings are iterable
+        if (items instanceof JSString jsString) {
+            JSArray result = context.createJSArray();
+            String s = jsString.value();
+            for (int i = 0; i < s.length(); i++) {
+                result.push(new JSString(String.valueOf(s.charAt(i))));
+            }
+            return result;
+        }
+
+        // Step 1-2: GetIterator(items, sync)
+        if (!(items instanceof JSObject itemsObj)) {
+            context.throwTypeError("Value is not iterable");
+            return null;
+        }
+
+        // GetMethod(items, @@iterator) — get the Symbol.iterator property
+        JSValue iteratorMethod = itemsObj.get(PropertyKey.SYMBOL_ITERATOR, context);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
+        if (iteratorMethod == null || iteratorMethod instanceof JSUndefined || iteratorMethod instanceof JSNull) {
+            context.throwTypeError("object is not iterable");
+            return null;
+        }
+        if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
+            context.throwTypeError("object is not iterable");
+            return null;
+        }
+
+        // Call(method, items) to get the iterator
+        JSValue iterator = iteratorFunc.call(context, items, new JSValue[0]);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (!(iterator instanceof JSObject iteratorObj)) {
+            context.throwTypeError("iterator must return an object");
+            return null;
+        }
+
+        // GetV(iterator, "next")
+        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT, context);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            context.throwTypeError("iterator next is not a function");
+            return null;
+        }
+
+        // Iterate
+        JSArray result = context.createJSArray();
+        while (true) {
+            // IteratorStep: Call iterator.next()
+            JSValue nextResult = nextFunc.call(context, iterator, new JSValue[0]);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (!(nextResult instanceof JSObject nextResultObj)) {
+                context.throwTypeError("iterator result is not an object");
+                return null;
+            }
+
+            // IteratorComplete: Get "done"
+            JSValue doneValue = nextResultObj.get(PropertyKey.DONE, context);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
+                break;
+            }
+
+            // IteratorValue: Get "value"
+            JSValue value = nextResultObj.get(PropertyKey.VALUE, context);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            result.push(value);
+        }
+        return result;
+    }
+
+    /**
      * Convert an iterable to an array.
      *
      * @param iterable The iterable to convert

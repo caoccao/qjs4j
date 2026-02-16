@@ -48,13 +48,17 @@ public final class JSAggregateError extends JSError {
 
     public static JSObject create(JSContext context, JSValue... args) {
         // AggregateError: new AggregateError(errors, message)
-        JSValue errors = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue errorsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         String message = "";
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
             message = JSTypeConversions.toString(context, args[1]).value();
         }
+        JSArray errorsList = JSIteratorHelper.iterableToList(context, errorsArg);
+        if (context.hasPendingException()) {
+            return (JSObject) context.getPendingException();
+        }
         JSObject jsObject = new JSAggregateError(context, message);
-        jsObject.set("errors", errors);
+        jsObject.set("errors", errorsList);
         context.transferPrototype(jsObject, NAME);
         return jsObject;
     }
@@ -84,12 +88,19 @@ public final class JSAggregateError extends JSError {
                     obj.set("name", new JSString(NAME));
 
                     // AggregateError: new AggregateError(errors, message, options)
-                    JSValue errors = childArgs.length > 0 ? childArgs[0] : JSUndefined.INSTANCE;
+                    JSValue errorsArg = childArgs.length > 0 ? childArgs[0] : JSUndefined.INSTANCE;
                     String message = "";
                     if (childArgs.length > 1 && !(childArgs[1] instanceof JSUndefined)) {
                         message = JSTypeConversions.toString(childContext, childArgs[1]).value();
                     }
-                    obj.set("errors", errors);
+
+                    // Step 3: Let errorsList be ? IterableToList(errors).
+                    JSArray errorsList = JSIteratorHelper.iterableToList(childContext, errorsArg);
+                    if (childContext.hasPendingException()) {
+                        return childContext.getPendingException();
+                    }
+
+                    obj.set("errors", errorsList);
                     obj.set("message", new JSString(message));
 
                     // InstallErrorCause(O, options)
