@@ -283,10 +283,15 @@ public final class ArrayConstructor {
         if (arrayLike instanceof JSObject obj) {
             JSValue lengthValue = obj.get("length");
             if (lengthValue instanceof JSNumber num) {
-                int length = (int) num.value();
+                long length = JSTypeConversions.toLength(context, num);
+                if (length > 0xFFFFFFFFL) {
+                    // ArrayCreate: length > 2^32 - 1 throws RangeError
+                    resultPromise.reject(context.throwRangeError("Invalid array length"));
+                    return resultPromise;
+                }
                 JSArray result = context.createJSArray();
-                for (int i = 0; i < length; i++) {
-                    JSValue value = obj.get(i);
+                for (long i = 0; i < length; i++) {
+                    JSValue value = obj.get(PropertyKey.fromIndex((int) i), context);
                     if (mapFn instanceof JSFunction mappingFunc) {
                         JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
                         value = mappingFunc.call(context, mapThisArg, mapArgs);

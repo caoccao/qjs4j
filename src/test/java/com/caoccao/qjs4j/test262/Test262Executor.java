@@ -21,9 +21,7 @@ import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.test262.harness.HarnessLoader;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -68,14 +66,20 @@ public class Test262Executor {
              JSContext context = runtime.createContext()) {
             install262Object(context, realmRuntimes);
 
-            // Load harness files unless 'raw' flag is present
+            // Load harness files unless 'raw' flag is present.
+            // Default includes (assert.js, sta.js) must load first since other
+            // harness files (e.g., asyncHelpers.js) depend on them.
             if (!test.hasFlag("raw")) {
-                Set<String> includes = new HashSet<>(HarnessLoader.getDefaultIncludes());
-                includes.addAll(test.getIncludes());
+                List<String> includes = new ArrayList<>(HarnessLoader.getDefaultIncludes());
+                for (String include : test.getIncludes()) {
+                    if (!includes.contains(include)) {
+                        includes.add(include);
+                    }
+                }
                 harnessLoader.loadIntoContext(context, includes);
             } else if (!test.getIncludes().isEmpty()) {
                 // Load only explicitly included files for raw tests
-                harnessLoader.loadIntoContext(context, test.getIncludes());
+                harnessLoader.loadIntoContext(context, new ArrayList<>(test.getIncludes()));
             }
 
             // Prepare code with strict mode if needed

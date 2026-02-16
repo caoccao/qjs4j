@@ -23,6 +23,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,8 +45,8 @@ public class HarnessLoader {
      *
      * @return Set of default harness file names
      */
-    public static Set<String> getDefaultIncludes() {
-        return Set.of("assert.js", "sta.js");
+    public static List<String> getDefaultIncludes() {
+        return List.of("assert.js", "sta.js");
     }
 
     /**
@@ -81,7 +83,7 @@ public class HarnessLoader {
      * @param includes The harness files to load
      * @throws JSException If a harness file cannot be evaluated
      */
-    public void loadIntoContext(JSContext context, Set<String> includes) throws JSException {
+    public void loadIntoContext(JSContext context, Collection<String> includes) throws JSException {
         for (String include : includes) {
             String code = loadHarness(include);
             context.eval(code, include, false);
