@@ -1661,12 +1661,7 @@ public final class Parser {
                 if (match(TokenType.DOT)) {
                     advance();
                     SourceLocation memberLocation = getLocation();
-                    if (!match(TokenType.IDENTIFIER)) {
-                        throw new RuntimeException("Expected property name after '.' at line " +
-                                currentToken.line() + ", column " + currentToken.column());
-                    }
-                    Expression property = new Identifier(currentToken.value(), memberLocation);
-                    advance();
+                    Expression property = parsePropertyName();
                     callee = new MemberExpression(callee, property, false, memberLocation);
                 } else if (match(TokenType.LBRACKET)) {
                     advance();
