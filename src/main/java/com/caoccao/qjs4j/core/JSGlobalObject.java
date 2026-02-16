@@ -673,11 +673,11 @@ public final class JSGlobalObject {
         arrayConstructor.setConstructorType(JSConstructorType.ARRAY);
         arrayPrototype.set("constructor", arrayConstructor);
 
-        // Array static methods
-        arrayConstructor.set("from", new JSNativeFunction("from", 1, ArrayConstructor::from));
-        arrayConstructor.set("fromAsync", new JSNativeFunction("fromAsync", 1, ArrayConstructor::fromAsync));
-        arrayConstructor.set("isArray", new JSNativeFunction("isArray", 1, ArrayConstructor::isArray));
-        arrayConstructor.set("of", new JSNativeFunction("of", 0, ArrayConstructor::of));
+        // Array static methods (writable, non-enumerable, configurable per spec)
+        arrayConstructor.definePropertyWritableConfigurable("from", new JSNativeFunction("from", 1, ArrayConstructor::from));
+        arrayConstructor.definePropertyWritableConfigurable("fromAsync", new JSNativeFunction("fromAsync", 1, ArrayConstructor::fromAsync));
+        arrayConstructor.definePropertyWritableConfigurable("isArray", new JSNativeFunction("isArray", 1, ArrayConstructor::isArray));
+        arrayConstructor.definePropertyWritableConfigurable("of", new JSNativeFunction("of", 0, ArrayConstructor::of));
 
         // Symbol.species getter
         arrayConstructor.defineGetterConfigurable(JSSymbol.SPECIES, ArrayConstructor::getSpecies);
