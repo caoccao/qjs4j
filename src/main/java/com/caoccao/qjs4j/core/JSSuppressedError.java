@@ -94,13 +94,15 @@ public final class JSSuppressedError extends JSError {
                     // SuppressedError: new SuppressedError(error, suppressed, message, options)
                     JSValue error = childArgs.length > 0 ? childArgs[0] : JSUndefined.INSTANCE;
                     JSValue suppressed = childArgs.length > 1 ? childArgs[1] : JSUndefined.INSTANCE;
-                    String message = "";
-                    if (childArgs.length > 2 && !(childArgs[2] instanceof JSUndefined)) {
-                        message = JSTypeConversions.toString(childContext, childArgs[2]).value();
-                    }
                     obj.set("error", error);
                     obj.set("suppressed", suppressed);
-                    obj.set("message", new JSString(message));
+
+                    // If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
+                    if (childArgs.length > 2 && !(childArgs[2] instanceof JSUndefined)) {
+                        String message = JSTypeConversions.toString(childContext, childArgs[2]).value();
+                        obj.defineProperty(PropertyKey.MESSAGE,
+                                PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
+                    }
 
                     // InstallErrorCause(O, options)
                     if (childArgs.length > 3) {

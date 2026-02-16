@@ -89,10 +89,6 @@ public final class JSAggregateError extends JSError {
 
                     // AggregateError: new AggregateError(errors, message, options)
                     JSValue errorsArg = childArgs.length > 0 ? childArgs[0] : JSUndefined.INSTANCE;
-                    String message = "";
-                    if (childArgs.length > 1 && !(childArgs[1] instanceof JSUndefined)) {
-                        message = JSTypeConversions.toString(childContext, childArgs[1]).value();
-                    }
 
                     // Step 3: Let errorsList be ? IterableToList(errors).
                     JSArray errorsList = JSIteratorHelper.iterableToList(childContext, errorsArg);
@@ -101,7 +97,13 @@ public final class JSAggregateError extends JSError {
                     }
 
                     obj.set("errors", errorsList);
-                    obj.set("message", new JSString(message));
+
+                    // Step 5: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
+                    if (childArgs.length > 1 && !(childArgs[1] instanceof JSUndefined)) {
+                        String message = JSTypeConversions.toString(childContext, childArgs[1]).value();
+                        obj.defineProperty(PropertyKey.MESSAGE,
+                                PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
+                    }
 
                     // InstallErrorCause(O, options)
                     if (childArgs.length > 2) {

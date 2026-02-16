@@ -72,9 +72,9 @@ public final class JSTypeError extends JSError {
 
                     // Standard error: new Error(message, options)
                     if (childArgs.length > 0 && !(childArgs[0] instanceof JSUndefined)) {
-                        obj.set("message", childArgs[0]);
-                    } else {
-                        obj.set("message", new JSString(""));
+                        String message = JSTypeConversions.toString(childContext, childArgs[0]).value();
+                        obj.defineProperty(PropertyKey.MESSAGE,
+                                PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
                     }
 
                     // InstallErrorCause(O, options)

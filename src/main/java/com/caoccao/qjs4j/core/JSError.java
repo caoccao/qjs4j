@@ -86,10 +86,11 @@ public sealed class JSError extends JSObject permits
                     obj.set("name", new JSString(NAME));
 
                     // Standard error: new Error(message, options)
+                    // Step 3: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
                     if (childArgs.length > 0 && !(childArgs[0] instanceof JSUndefined)) {
-                        obj.set("message", childArgs[0]);
-                    } else {
-                        obj.set("message", new JSString(""));
+                        String message = JSTypeConversions.toString(childContext, childArgs[0]).value();
+                        obj.defineProperty(PropertyKey.MESSAGE,
+                                PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
                     }
 
                     // InstallErrorCause(O, options)
