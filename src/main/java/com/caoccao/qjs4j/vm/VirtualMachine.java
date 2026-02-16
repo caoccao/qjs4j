@@ -29,14 +29,29 @@ import java.util.*;
  * Executes compiled bytecode using a stack-based architecture.
  */
 public final class VirtualMachine {
+    private static final JSValue[] EMPTY_ARGS = new JSValue[0];
     private static final int INTERRUPT_CHECK_INTERVAL = 0xFFFF; // Check every ~65K opcodes
+    private static final PropertyKey KEY_CONSTRUCTOR = PropertyKey.fromString("constructor");
+    private static final PropertyKey KEY_DONE = PropertyKey.fromString("done");
+    private static final PropertyKey KEY_HOME_OBJECT = PropertyKey.fromString("[[HomeObject]]");
+    private static final PropertyKey KEY_LENGTH = PropertyKey.fromString("length");
+    private static final PropertyKey KEY_MESSAGE = PropertyKey.fromString("message");
+    private static final PropertyKey KEY_NAME = PropertyKey.fromString("name");
+    private static final PropertyKey KEY_NEXT = PropertyKey.fromString("next");
+    private static final PropertyKey KEY_PROTOTYPE = PropertyKey.fromString("prototype");
+    private static final PropertyKey KEY_RETURN = PropertyKey.fromString("return");
+    private static final PropertyKey KEY_THROW = PropertyKey.fromString("throw");
+    private static final PropertyKey KEY_VALUE = PropertyKey.fromString("value");
     private static final JSObject UNINITIALIZED_MARKER = new JSObject();
     private final JSContext context;
     private final Set<JSObject> initializedConstantObjects;
     private final StringBuilder propertyAccessChain;  // Track last property access for better error messages
+    private final boolean trackPropertyAccess;
     private final CallStack valueStack;
     private StackFrame currentFrame;
     private long executionDeadline;  // 0 = no deadline
+    private long executionDeadlineNanos; // 0 = no deadline
+    private JSValue[] forOfTempValues;
     private int generatorResumeIndex;
     private List<JSGeneratorState.ResumeRecord> generatorResumeRecords;
     private int interruptCounter;
@@ -54,23 +69,26 @@ public final class VirtualMachine {
         this.generatorResumeIndex = 0;
         this.pendingException = null;
         this.propertyAccessChain = new StringBuilder();
+        this.trackPropertyAccess = !"false".equalsIgnoreCase(System.getProperty("qjs4j.vm.trackPropertyAccess", "true"));
         this.propertyAccessLock = false;
         this.yieldResult = null;
         this.yieldSkipCount = 0;
         this.executionDeadline = 0;
+        this.executionDeadlineNanos = 0;
         this.interruptCounter = 0;
+        this.forOfTempValues = EMPTY_ARGS;
     }
 
     private JSValue[] buildApplyArguments(JSValue argsArrayValue, boolean allowNullOrUndefined) {
         if (allowNullOrUndefined && (argsArrayValue.isUndefined() || argsArrayValue.isNull())) {
-            return new JSValue[0];
+            return EMPTY_ARGS;
         }
         if (!(argsArrayValue instanceof JSObject arrayLike)) {
             context.throwTypeError("CreateListFromArrayLike called on non-object");
             return null;
         }
 
-        JSValue lengthValue = arrayLike.get(PropertyKey.fromString("length"), context);
+        JSValue lengthValue = arrayLike.get(KEY_LENGTH, context);
         if (context.hasPendingException()) {
             return null;
         }
@@ -86,15 +104,9 @@ public final class VirtualMachine {
 
         JSValue[] args = new JSValue[(int) length];
         for (int i = 0; i < args.length; i++) {
-            JSValue argValue = arrayLike.get(PropertyKey.fromString(String.valueOf(i)), context);
+            JSValue argValue = arrayLike.get(PropertyKey.fromIndex(i), context);
             if (context.hasPendingException()) {
                 return null;
-            }
-            if (argValue instanceof JSUndefined) {
-                argValue = arrayLike.get(PropertyKey.fromIndex(i), context);
-                if (context.hasPendingException()) {
-                    return null;
-                }
             }
             args[i] = argValue;
         }
@@ -215,23 +227,26 @@ public final class VirtualMachine {
             return;
         }
 
-        Set<PropertyKey> excludedKeys = new HashSet<>();
+        Set<PropertyKey> excludedKeys = null;
         if (excludeListValue instanceof JSArray excludeArray) {
+            excludedKeys = new HashSet<>();
             for (int i = 0; i < excludeArray.getLength(); i++) {
                 excludedKeys.add(PropertyKey.fromValue(context, excludeArray.get(i)));
             }
         } else if (excludeListValue instanceof JSObject excludeObject) {
+            excludedKeys = new HashSet<>();
             for (PropertyKey key : excludeObject.ownPropertyKeys()) {
                 JSValue excludedValue = excludeObject.get(key, context);
                 excludedKeys.add(PropertyKey.fromValue(context, excludedValue));
             }
         } else if (excludeListValue != null && !excludeListValue.isUndefined() && !excludeListValue.isNull()) {
+            excludedKeys = new HashSet<>();
             excludedKeys.add(PropertyKey.fromValue(context, excludeListValue));
         }
 
         for (PropertyKey key : sourceObject.ownPropertyKeys()) {
             PropertyDescriptor descriptor = sourceObject.getOwnPropertyDescriptor(key);
-            if (descriptor == null || !descriptor.isEnumerable() || excludedKeys.contains(key)) {
+            if (descriptor == null || !descriptor.isEnumerable() || (excludedKeys != null && excludedKeys.contains(key))) {
                 continue;
             }
             JSValue propertyValue = sourceObject.get(key, context);
@@ -397,6 +412,8 @@ public final class VirtualMachine {
         try {
             Bytecode bytecode = function.getBytecode();
             byte[] ins = bytecode.getInstructions();
+            Opcode[] decodedOpcodes = bytecode.getDecodedOpcodes();
+            byte[] opcodeRebaseOffsets = bytecode.getOpcodeRebaseOffsets();
             JSValue[] locals = frame.getLocals();
             JSStackValue[] stack = valueStack.stack;
             int sp = valueStack.stackTop;
@@ -440,23 +457,27 @@ public final class VirtualMachine {
                 // Periodic interrupt check (every ~65K opcodes)
                 if (executionDeadline != 0 && --interruptCounter <= 0) {
                     interruptCounter = INTERRUPT_CHECK_INTERVAL;
-                    if (System.currentTimeMillis() >= executionDeadline) {
+                    if (System.nanoTime() >= executionDeadlineNanos) {
                         throw new JSVirtualMachineException("execution timeout");
                     }
                 }
 
-                int opcode = ins[pc] & 0xFF;
-                Opcode op = Opcode.fromInt(opcode);
-                if (op == Opcode.INVALID && pc + 1 < ins.length) {
-                    // Extended opcode encoding: 0x00 prefix + low-byte payload for enum codes >= 256.
-                    int extendedOpcode = 0x100 + (ins[pc + 1] & 0xFF);
-                    Opcode extendedOp = Opcode.fromInt(extendedOpcode);
-                    if (extendedOp != Opcode.INVALID) {
-                        op = extendedOp;
-                        // Rebase PC to the second opcode byte so existing `pc + 1` operand reads
-                        // and `pc += op.getSize()` increments continue to work unchanged.
-                        pc += 1;
+                Opcode op = decodedOpcodes[pc];
+                int rebase = opcodeRebaseOffsets[pc];
+                if (op == null) {
+                    int opcode = ins[pc] & 0xFF;
+                    op = Opcode.fromInt(opcode);
+                    if (op == Opcode.INVALID && pc + 1 < ins.length) {
+                        int extendedOpcode = 0x100 + (ins[pc + 1] & 0xFF);
+                        Opcode extendedOp = Opcode.fromInt(extendedOpcode);
+                        if (extendedOp != Opcode.INVALID) {
+                            op = extendedOp;
+                            rebase = 1;
+                        }
                     }
+                }
+                if (rebase != 0) {
+                    pc += rebase;
                 }
 
                 switch (op) {
@@ -1152,7 +1173,7 @@ public final class VirtualMachine {
                         } else {
                             JSValue varValue = globalObject.get(key);
                             // Start tracking property access from variable name (unless locked)
-                            if (!propertyAccessLock) {
+                            if (trackPropertyAccess && !propertyAccessLock) {
                                 resetPropertyAccessTracking();
                                 propertyAccessChain.append(getVarName);
                             }
@@ -1514,7 +1535,7 @@ public final class VirtualMachine {
                                 stack[sp++] = JSUndefined.INSTANCE;
                             } else {
                                 // Track property access for better error messages (unless locked)
-                                if (!propertyAccessLock) {
+                                if (trackPropertyAccess && !propertyAccessLock) {
                                     if (!propertyAccessChain.isEmpty()) {
                                         propertyAccessChain.append('.');
                                     }
@@ -1532,7 +1553,7 @@ public final class VirtualMachine {
                         JSValue objectValue = (JSValue) stack[--sp];
                         JSObject targetObject = toObject(objectValue);
                         if (targetObject != null) {
-                            JSValue result = targetObject.get(PropertyKey.fromString("length"), context);
+                            JSValue result = targetObject.get(KEY_LENGTH, context);
                             if (context.hasPendingException()) {
                                 pendingException = context.getPendingException();
                                 context.clearPendingException();
@@ -1604,7 +1625,7 @@ public final class VirtualMachine {
                                 context.clearPendingException();
                                 stack[sp - 1] = JSUndefined.INSTANCE;
                             } else {
-                                if (!propertyAccessLock) {
+                                if (trackPropertyAccess && !propertyAccessLock) {
                                     if (gaelIdx instanceof JSString jsString) {
                                         String propertyName = jsString.value();
                                         if (!propertyAccessChain.isEmpty()) {
@@ -2099,7 +2120,7 @@ public final class VirtualMachine {
                         JSValue homeObjectValue = (JSValue) stack[sp - 2];
                         JSValue methodValue = (JSValue) stack[sp - 1];
                         if (methodValue instanceof JSObject methodObject && homeObjectValue instanceof JSObject homeObject) {
-                            methodObject.set(PropertyKey.fromString("[[HomeObject]]"), homeObject);
+                            methodObject.set(KEY_HOME_OBJECT, homeObject);
                         }
                         pc += op.getSize();
                     }
@@ -2151,11 +2172,11 @@ public final class VirtualMachine {
                         }
                         // Set constructor.prototype = prototype
                         if (constructorFunc instanceof JSObject) {
-                            constructorFunc.set(PropertyKey.fromString("prototype"), prototype);
+                            constructorFunc.set(KEY_PROTOTYPE, prototype);
                         }
 
                         // Set prototype.constructor = constructor
-                        prototype.set(PropertyKey.fromString("constructor"), constructor);
+                        prototype.set(KEY_CONSTRUCTOR, constructor);
                         setObjectName(constructor, new JSString(className));
 
                         // Push prototype and constructor onto stack
@@ -2189,8 +2210,8 @@ public final class VirtualMachine {
                             }
                         }
 
-                        constructorFunc.set(PropertyKey.fromString("prototype"), prototype);
-                        prototype.set(PropertyKey.fromString("constructor"), constructor);
+                        constructorFunc.set(KEY_PROTOTYPE, prototype);
+                        prototype.set(KEY_CONSTRUCTOR, constructor);
                         JSString computedClassName = getComputedNameString(computedClassNameValue);
                         if (computedClassName.value().isEmpty()) {
                             computedClassName = new JSString(className);
@@ -2230,7 +2251,7 @@ public final class VirtualMachine {
                             PropertyKey key = PropertyKey.fromValue(context, propertyValue);
                             JSString computedName = getComputedNameString(propertyValue);
                             if (methodValue instanceof JSObject methodObject) {
-                                methodObject.set(PropertyKey.fromString("[[HomeObject]]"), jsObj);
+                                methodObject.set(KEY_HOME_OBJECT, jsObj);
                                 String namePrefix = switch (methodKind) {
                                     case 1 -> "get ";
                                     case 2 -> "set ";
@@ -2453,8 +2474,8 @@ public final class VirtualMachine {
                             throw new JSVirtualMachineException(context.throwTypeError("iterator must return an object"));
                         }
 
-                        JSValue doneValue = iteratorResultObject.get(PropertyKey.fromString("done"));
-                        JSValue value = iteratorResultObject.get(PropertyKey.fromString("value"));
+                        JSValue doneValue = iteratorResultObject.get(KEY_DONE);
+                        JSValue value = iteratorResultObject.get(KEY_VALUE);
                         if (value == null) {
                             value = JSUndefined.INSTANCE;
                         }
@@ -2470,9 +2491,9 @@ public final class VirtualMachine {
                         sp--; // next method
                         JSValue iteratorValue = (JSValue) stack[--sp];
                         if (iteratorValue instanceof JSObject iteratorObject && !iteratorValue.isUndefined()) {
-                            JSValue returnMethodValue = iteratorObject.get(PropertyKey.fromString("return"));
+                            JSValue returnMethodValue = iteratorObject.get(KEY_RETURN);
                             if (returnMethodValue instanceof JSFunction returnMethod) {
-                                JSValue closeResult = returnMethod.call(context, iteratorObject, new JSValue[0]);
+                                JSValue closeResult = returnMethod.call(context, iteratorObject, EMPTY_ARGS);
                                 if (context.hasPendingException()) {
                                     pendingException = context.getPendingException();
                                     context.clearPendingException();
@@ -2515,14 +2536,16 @@ public final class VirtualMachine {
                         }
 
                         String methodName = (flags & 1) != 0 ? "throw" : "return";
-                        JSValue methodValue = iteratorObject.get(PropertyKey.fromString(methodName));
+                        JSValue methodValue = (flags & 1) != 0
+                                ? iteratorObject.get(KEY_THROW)
+                                : iteratorObject.get(KEY_RETURN);
                         boolean noMethod = methodValue.isUndefined() || methodValue.isNull();
                         if (!noMethod) {
                             if (!(methodValue instanceof JSFunction method)) {
                                 throw new JSVirtualMachineException(context.throwTypeError("iterator " + methodName + " is not a function"));
                             }
                             JSValue callResult = (flags & 2) != 0
-                                    ? method.call(context, iteratorObject, new JSValue[0])
+                                    ? method.call(context, iteratorObject, EMPTY_ARGS)
                                     : method.call(context, iteratorObject, new JSValue[]{argumentValue});
                             stack[sp - 1] = callResult;
                         }
@@ -2838,7 +2861,7 @@ public final class VirtualMachine {
     private void handleCall(int argCount) {
         // Stack layout (bottom to top): method, receiver, arg1, arg2, ...
         // Pop arguments from stack
-        JSValue[] args = new JSValue[argCount];
+        JSValue[] args = argCount == 0 ? EMPTY_ARGS : new JSValue[argCount];
         for (int i = argCount - 1; i >= 0; i--) {
             args[i] = valueStack.pop();
         }
@@ -3004,7 +3027,7 @@ public final class VirtualMachine {
 
     private void handleCallConstructor(int argCount) {
         // Pop arguments
-        JSValue[] args = new JSValue[argCount];
+        JSValue[] args = argCount == 0 ? EMPTY_ARGS : new JSValue[argCount];
         for (int i = argCount - 1; i >= 0; i--) {
             args[i] = valueStack.pop();
         }
@@ -3102,7 +3125,7 @@ public final class VirtualMachine {
             throw new JSVirtualMachineException("Next method must be a function");
         }
 
-        JSValue result = nextFunc.call(context, iterator, new JSValue[0]);
+        JSValue result = nextFunc.call(context, iterator, EMPTY_ARGS);
 
         // Restore catch_offset and push the result
         valueStack.push(catchOffset);  // Restore catch_offset
@@ -3147,7 +3170,7 @@ public final class VirtualMachine {
         }
 
         // Call the iterator method to get an iterator
-        JSValue iterator = ((JSFunction) iteratorMethod).call(context, iterable, new JSValue[0]);
+        JSValue iterator = ((JSFunction) iteratorMethod).call(context, iterable, EMPTY_ARGS);
         if (context.hasPendingException()) {
             pendingException = context.getPendingException();
             return;
@@ -3159,7 +3182,7 @@ public final class VirtualMachine {
         }
 
         // Get the next() method from the iterator
-        JSValue nextMethod = iteratorObj.get(PropertyKey.fromString("next"));
+        JSValue nextMethod = iteratorObj.get(KEY_NEXT);
 
         if (!(nextMethod instanceof JSFunction)) {
             pendingException = context.throwTypeError("iterator must have a next method");
@@ -3220,9 +3243,11 @@ public final class VirtualMachine {
         // iter is at sp[offset] = sp[-3-depth], next is at sp[offset+1] = sp[-2-depth]
 
         // Pop depth values temporarily
-        List<JSValue> tempValues = new ArrayList<>(depth);
+        if (forOfTempValues.length < depth) {
+            forOfTempValues = new JSValue[Math.max(depth, forOfTempValues.length * 2)];
+        }
         for (int i = 0; i < depth; i++) {
-            tempValues.add(valueStack.pop());
+            forOfTempValues[i] = valueStack.pop();
         }
         // Now top of stack is catch_offset
         JSValue catchOffset = valueStack.pop();
@@ -3241,7 +3266,7 @@ public final class VirtualMachine {
             );
         }
 
-        JSValue result = nextFunc.call(context, iterator, new JSValue[0]);
+        JSValue result = nextFunc.call(context, iterator, EMPTY_ARGS);
 
         // For sync iterators, extract value and done from the result object
         // QuickJS FOR_OF_NEXT pushes: iter, next, catch_offset, value, done
@@ -3252,13 +3277,13 @@ public final class VirtualMachine {
         }
 
         // Get the value property
-        JSValue value = resultObj.get("value");
+        JSValue value = resultObj.get(KEY_VALUE);
         if (value == null) {
             value = JSUndefined.INSTANCE;
         }
 
         // Get the done property
-        JSValue doneValue = resultObj.get("done");
+        JSValue doneValue = resultObj.get(KEY_DONE);
         boolean done = false;
         if (doneValue instanceof JSBoolean boolVal) {
             done = boolVal.isBooleanTrue();
@@ -3266,8 +3291,9 @@ public final class VirtualMachine {
 
         // Push catch_offset back, then restore temp values, then push value and done
         valueStack.push(catchOffset);
-        for (int i = tempValues.size() - 1; i >= 0; i--) {
-            valueStack.push(tempValues.get(i));
+        for (int i = depth - 1; i >= 0; i--) {
+            valueStack.push(forOfTempValues[i]);
+            forOfTempValues[i] = null;
         }
         valueStack.push(value);
         valueStack.push(done ? JSBoolean.TRUE : JSBoolean.FALSE);
@@ -3298,14 +3324,14 @@ public final class VirtualMachine {
 
         // Call the Symbol.iterator method to get an iterator
         // Use the original iterable value for the 'this' binding, not the boxed version
-        JSValue iterator = iteratorFunc.call(context, iterable, new JSValue[0]);
+        JSValue iterator = iteratorFunc.call(context, iterable, EMPTY_ARGS);
 
         if (!(iterator instanceof JSObject iteratorObj)) {
             throw new JSVirtualMachineException("Iterator method must return an object");
         }
 
         // Get the next() method from the iterator
-        JSValue nextMethod = iteratorObj.get(PropertyKey.fromString("next"));
+        JSValue nextMethod = iteratorObj.get(KEY_NEXT);
 
         if (!(nextMethod instanceof JSFunction)) {
             String actualType = nextMethod == null ? "null" : nextMethod.getClass().getSimpleName();
@@ -3737,7 +3763,7 @@ public final class VirtualMachine {
         }
 
         // Call Symbol.iterator to get the iterator
-        JSValue iterator = iteratorFunc.call(context, iterable, new JSValue[0]);
+        JSValue iterator = iteratorFunc.call(context, iterable, EMPTY_ARGS);
         if (!(iterator instanceof JSObject iteratorObj)) {
             throw new JSVirtualMachineException("Iterator method must return an object");
         }
@@ -3755,7 +3781,7 @@ public final class VirtualMachine {
             JSValue returnValue = resumeRecord.value();
 
             // Get "return" method from iterator
-            JSValue returnMethodValue = iteratorObj.get(PropertyKey.fromString("return"));
+            JSValue returnMethodValue = iteratorObj.get(KEY_RETURN);
             boolean noReturnMethod = returnMethodValue.isUndefined() || returnMethodValue.isNull();
 
             if (noReturnMethod) {
@@ -3777,10 +3803,10 @@ public final class VirtualMachine {
             }
 
             // Check done flag
-            JSValue doneValue = ((JSObject) result).get(PropertyKey.fromString("done"));
+            JSValue doneValue = ((JSObject) result).get(KEY_DONE);
             if (JSTypeConversions.toBoolean(doneValue).value()) {
                 // Done - push value and complete (don't yield)
-                JSValue value = ((JSObject) result).get(PropertyKey.fromString("value"));
+                JSValue value = ((JSObject) result).get(KEY_VALUE);
                 valueStack.push(value);
                 return;
             } else {
@@ -3796,14 +3822,14 @@ public final class VirtualMachine {
             JSValue throwValue = resumeRecord.value();
 
             // Get "throw" method from iterator
-            JSValue throwMethodValue = iteratorObj.get(PropertyKey.fromString("throw"));
+            JSValue throwMethodValue = iteratorObj.get(KEY_THROW);
             boolean noThrowMethod = throwMethodValue.isUndefined() || throwMethodValue.isNull();
 
             if (noThrowMethod) {
                 // No throw method - close iterator and throw TypeError
-                JSValue closeMethod = iteratorObj.get(PropertyKey.fromString("return"));
+                JSValue closeMethod = iteratorObj.get(KEY_RETURN);
                 if (closeMethod instanceof JSFunction closeFunc) {
-                    closeFunc.call(context, iteratorObj, new JSValue[0]);
+                    closeFunc.call(context, iteratorObj, EMPTY_ARGS);
                 }
                 throw new JSVirtualMachineException(context.throwTypeError(
                         "iterator does not have a throw method"));
@@ -3822,10 +3848,10 @@ public final class VirtualMachine {
             }
 
             // Check done flag
-            JSValue doneValue = ((JSObject) result).get(PropertyKey.fromString("done"));
+            JSValue doneValue = ((JSObject) result).get(KEY_DONE);
             if (JSTypeConversions.toBoolean(doneValue).value()) {
                 // Done - push value and complete the yield* expression
-                JSValue value = ((JSObject) result).get(PropertyKey.fromString("value"));
+                JSValue value = ((JSObject) result).get(KEY_VALUE);
                 valueStack.push(value);
                 return;
             } else {
@@ -3837,12 +3863,12 @@ public final class VirtualMachine {
         }
 
         // Default: NEXT protocol - call iterator.next()
-        JSValue nextMethod = iteratorObj.get(PropertyKey.fromString("next"));
+        JSValue nextMethod = iteratorObj.get(KEY_NEXT);
         if (!(nextMethod instanceof JSFunction nextFunc)) {
             throw new JSVirtualMachineException("Iterator must have a next method");
         }
 
-        JSValue result = nextFunc.call(context, iterator, new JSValue[0]);
+        JSValue result = nextFunc.call(context, iterator, EMPTY_ARGS);
 
         // The result should be an object (the iterator result)
         if (!(result instanceof JSObject)) {
@@ -3850,10 +3876,10 @@ public final class VirtualMachine {
         }
 
         // Check if the inner iterator is done
-        JSValue doneValue = ((JSObject) result).get(PropertyKey.fromString("done"));
+        JSValue doneValue = ((JSObject) result).get(KEY_DONE);
         if (JSTypeConversions.toBoolean(doneValue).value()) {
             // Inner iterator done - yield* expression value is the final value
-            JSValue value = ((JSObject) result).get(PropertyKey.fromString("value"));
+            JSValue value = ((JSObject) result).get(KEY_VALUE);
             valueStack.push(value);
             // Don't set yieldResult - the yield* expression completes
             return;
@@ -3882,7 +3908,7 @@ public final class VirtualMachine {
             return false;
         }
 
-        JSValue prototypeValue = constructorObject.get(PropertyKey.fromString("prototype"), context);
+        JSValue prototypeValue = constructorObject.get(KEY_PROTOTYPE, context);
         if (context.hasPendingException()) {
             JSValue pendingException = context.getPendingException();
             if (pendingException instanceof JSError jsError) {
@@ -4058,7 +4084,9 @@ public final class VirtualMachine {
     }
 
     private void resetPropertyAccessTracking() {
-        this.propertyAccessChain.setLength(0);
+        if (trackPropertyAccess) {
+            this.propertyAccessChain.setLength(0);
+        }
         this.propertyAccessLock = false;
     }
 
@@ -4079,7 +4107,7 @@ public final class VirtualMachine {
         // Try to get the message property directly (without calling getters or toString)
         // This avoids calling JavaScript code which might fail in exception state
         try {
-            JSValue messageValue = exceptionObj.get(PropertyKey.fromString("message"), null);
+            JSValue messageValue = exceptionObj.get(KEY_MESSAGE, null);
             if (messageValue instanceof JSString msgStr) {
                 return msgStr.value();
             } else if (messageValue != null && !(messageValue instanceof JSUndefined)) {
@@ -4091,7 +4119,7 @@ public final class VirtualMachine {
 
         // Try to get the name property
         try {
-            JSValue nameValue = exceptionObj.get(PropertyKey.fromString("name"), null);
+            JSValue nameValue = exceptionObj.get(KEY_NAME, null);
             if (nameValue instanceof JSString nameStr) {
                 return nameStr.value();
             }
@@ -4119,6 +4147,13 @@ public final class VirtualMachine {
      */
     public void setExecutionDeadline(long deadlineMs) {
         this.executionDeadline = deadlineMs;
+        if (deadlineMs == 0) {
+            this.executionDeadlineNanos = 0;
+        } else {
+            long nowMs = System.currentTimeMillis();
+            long remainingMs = Math.max(0, deadlineMs - nowMs);
+            this.executionDeadlineNanos = System.nanoTime() + remainingMs * 1_000_000L;
+        }
         this.interruptCounter = INTERRUPT_CHECK_INTERVAL;
     }
 
@@ -4151,13 +4186,14 @@ public final class VirtualMachine {
             return null;
         }
 
+        JSObject global = context.getGlobalObject();
+
         // Auto-box primitives
         if (value instanceof JSString str) {
             // Get String.prototype from global object
-            JSObject global = context.getGlobalObject();
             JSValue stringCtor = global.get("String");
             if (stringCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get("prototype");
+                JSValue prototype = ctorObj.get(KEY_PROTOTYPE);
                 if (prototype instanceof JSObject protoObj) {
                     // Create a temporary wrapper object with String.prototype
                     JSObject wrapper = new JSObject();
@@ -4174,10 +4210,9 @@ public final class VirtualMachine {
 
         if (value instanceof JSNumber num) {
             // Get Number.prototype from global object
-            JSObject global = context.getGlobalObject();
             JSValue numberCtor = global.get("Number");
             if (numberCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get("prototype");
+                JSValue prototype = ctorObj.get(KEY_PROTOTYPE);
                 if (prototype instanceof JSObject protoObj) {
                     JSObject wrapper = new JSObject();
                     wrapper.setPrototype(protoObj);
@@ -4189,10 +4224,9 @@ public final class VirtualMachine {
 
         if (value instanceof JSBoolean bool) {
             // Get Boolean.prototype from global object
-            JSObject global = context.getGlobalObject();
             JSValue booleanCtor = global.get("Boolean");
             if (booleanCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get("prototype");
+                JSValue prototype = ctorObj.get(KEY_PROTOTYPE);
                 if (prototype instanceof JSObject protoObj) {
                     JSObject wrapper = new JSObject();
                     wrapper.setPrototype(protoObj);
@@ -4204,10 +4238,9 @@ public final class VirtualMachine {
 
         if (value instanceof JSBigInt bigInt) {
             // Get BigInt.prototype from global object
-            JSObject global = context.getGlobalObject();
             JSValue bigIntCtor = global.get("BigInt");
             if (bigIntCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get("prototype");
+                JSValue prototype = ctorObj.get(KEY_PROTOTYPE);
                 if (prototype instanceof JSObject protoObj) {
                     JSBigIntObject wrapper = new JSBigIntObject(bigInt);
                     wrapper.setPrototype(protoObj);
@@ -4218,10 +4251,9 @@ public final class VirtualMachine {
 
         if (value instanceof JSSymbol sym) {
             // Get Symbol.prototype from global object
-            JSObject global = context.getGlobalObject();
             JSValue symbolCtor = global.get("Symbol");
             if (symbolCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get("prototype");
+                JSValue prototype = ctorObj.get(KEY_PROTOTYPE);
                 if (prototype instanceof JSObject protoObj) {
                     // Create a Symbol object wrapper (not a generic JSObject)
                     JSSymbolObject wrapper = new JSSymbolObject(sym);

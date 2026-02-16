@@ -27,6 +27,8 @@ public final class Bytecode {
     private final byte[] instructions;
     private final int localCount;
     private final String[] localVarNames;
+    private volatile Opcode[] decodedOpcodes;
+    private volatile byte[] opcodeRebaseOffsets;
 
     public Bytecode(byte[] instructions, JSValue[] constantPool, String[] atomPool, int localCount) {
         this(instructions, constantPool, atomPool, localCount, null);
@@ -38,6 +40,38 @@ public final class Bytecode {
         this.atomPool = atomPool;
         this.localCount = localCount;
         this.localVarNames = localVarNames;
+    }
+
+    private void ensureDecodedOpcodes() {
+        if (decodedOpcodes != null && opcodeRebaseOffsets != null) {
+            return;
+        }
+        synchronized (this) {
+            if (decodedOpcodes != null && opcodeRebaseOffsets != null) {
+                return;
+            }
+            Opcode[] decoded = new Opcode[instructions.length];
+            byte[] rebases = new byte[instructions.length];
+            int pc = 0;
+            while (pc < instructions.length) {
+                int opcode = instructions[pc] & 0xFF;
+                Opcode op = Opcode.fromInt(opcode);
+                int rebase = 0;
+                if (op == Opcode.INVALID && pc + 1 < instructions.length) {
+                    int extendedOpcode = 0x100 + (instructions[pc + 1] & 0xFF);
+                    Opcode extendedOp = Opcode.fromInt(extendedOpcode);
+                    if (extendedOp != Opcode.INVALID) {
+                        op = extendedOp;
+                        rebase = 1;
+                    }
+                }
+                decoded[pc] = op;
+                rebases[pc] = (byte) rebase;
+                pc += op.getSize() + rebase;
+            }
+            decodedOpcodes = decoded;
+            opcodeRebaseOffsets = rebases;
+        }
     }
 
     public String getAtom(int index) {
@@ -56,6 +90,11 @@ public final class Bytecode {
         return constantPool;
     }
 
+    public Opcode[] getDecodedOpcodes() {
+        ensureDecodedOpcodes();
+        return decodedOpcodes;
+    }
+
     public byte[] getInstructions() {
         return instructions;
     }
@@ -70,6 +109,11 @@ public final class Bytecode {
 
     public String[] getLocalVarNames() {
         return localVarNames;
+    }
+
+    public byte[] getOpcodeRebaseOffsets() {
+        ensureDecodedOpcodes();
+        return opcodeRebaseOffsets;
     }
 
     public int readI32(int offset) {
