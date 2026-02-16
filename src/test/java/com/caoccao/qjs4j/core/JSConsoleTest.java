@@ -30,16 +30,24 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Uses custom PrintStreams to capture and verify output.
  */
 public class JSConsoleTest extends BaseJavetTest {
+    private static final String LINE_SEPARATOR = System.lineSeparator();
     private ByteArrayOutputStream errStream;
     private JSConsole jsConsole;
     private ByteArrayOutputStream outStream;
 
     private String err() {
-        return errStream.toString();
+        return normalizeLineEndings(errStream.toString());
+    }
+
+    private String normalizeLineEndings(String value) {
+        if ("\n".equals(LINE_SEPARATOR)) {
+            return value;
+        }
+        return value.replace(LINE_SEPARATOR, "\n");
     }
 
     private String out() {
-        return outStream.toString();
+        return normalizeLineEndings(outStream.toString());
     }
 
     @BeforeEach
