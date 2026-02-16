@@ -47,21 +47,12 @@ public final class JSAggregateError extends JSError {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        JSValue errorsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-
-        // Step 3: Let errorsList be ? IterableToList(errors).
-        JSArray errorsList = JSIteratorHelper.iterableToList(context, errorsArg);
-        if (context.hasPendingException()) {
-            return (JSObject) context.getPendingException();
-        }
-
         // Step 2: OrdinaryCreateFromConstructor(newTarget, "%AggregateError.prototype%")
         JSObject obj = new JSObject();
         context.transferPrototype(obj, NAME);
         obj.set("name", new JSString(NAME));
-        obj.set("errors", errorsList);
 
-        // Step 5: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
+        // Step 3: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
             String message = JSTypeConversions.toString(context, args[1]).value();
             obj.defineProperty(PropertyKey.MESSAGE,
@@ -72,6 +63,14 @@ public final class JSAggregateError extends JSError {
         if (args.length > 2) {
             JSError.installErrorCause(obj, args[2]);
         }
+
+        // Step 5: Let errorsList be ? IterableToList(errors).
+        JSValue errorsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSArray errorsList = JSIteratorHelper.iterableToList(context, errorsArg);
+        if (context.hasPendingException()) {
+            return (JSObject) context.getPendingException();
+        }
+        obj.set("errors", errorsList);
 
         return obj;
     }
@@ -104,25 +103,25 @@ public final class JSAggregateError extends JSError {
 
                     obj.set("name", new JSString(NAME));
 
-                    // Step 3: Let errorsList be ? IterableToList(errors).
-                    JSValue errorsArg = childArgs.length > 0 ? childArgs[0] : JSUndefined.INSTANCE;
-                    JSArray errorsList = JSIteratorHelper.iterableToList(childContext, errorsArg);
-                    if (childContext.hasPendingException()) {
-                        return childContext.getPendingException();
-                    }
-                    obj.set("errors", errorsList);
-
-                    // Step 5: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
+                    // Step 3: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
                     if (childArgs.length > 1 && !(childArgs[1] instanceof JSUndefined)) {
                         String message = JSTypeConversions.toString(childContext, childArgs[1]).value();
                         obj.defineProperty(PropertyKey.MESSAGE,
                                 PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
                     }
 
-                    // InstallErrorCause(O, options)
+                    // Step 4: InstallErrorCause(O, options)
                     if (childArgs.length > 2) {
                         JSError.installErrorCause(obj, childArgs[2]);
                     }
+
+                    // Step 5: Let errorsList be ? IterableToList(errors).
+                    JSValue errorsArg = childArgs.length > 0 ? childArgs[0] : JSUndefined.INSTANCE;
+                    JSArray errorsList = JSIteratorHelper.iterableToList(childContext, errorsArg);
+                    if (childContext.hasPendingException()) {
+                        return childContext.getPendingException();
+                    }
+                    obj.set("errors", errorsList);
 
                     return obj;
                 },
