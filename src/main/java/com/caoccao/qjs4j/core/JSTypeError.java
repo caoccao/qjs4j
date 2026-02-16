@@ -49,6 +49,8 @@ public final class JSTypeError extends JSError {
     public static JSObject createPrototype(JSContext context, JSValue... args) {
         // Create Error prototype using the proper error class
         JSError errorPrototype = new JSTypeError(context);
+        // TypeError.prototype.[[Prototype]] = Error.prototype (ES2024 20.5.5.1)
+        context.transferPrototype(errorPrototype, JSError.NAME);
 
         errorPrototype.set("toString", new JSNativeFunction("toString", 0, JSError::errorToString));
 
