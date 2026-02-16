@@ -60,6 +60,7 @@ public class Test262Config {
         config.unsupportedFeatures.add("top-level-await");
         config.unsupportedFeatures.add("import.meta");
         config.unsupportedFeatures.add("hashbang");
+        config.unsupportedFeatures.add("Temporal");
 
         // Default: run all tests
         config.includePatterns = new HashSet<>();
