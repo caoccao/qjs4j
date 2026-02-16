@@ -91,7 +91,7 @@ public final class JSSuppressedError extends JSError {
                     // Set name property
                     obj.set("name", new JSString(NAME));
 
-                    // SuppressedError: new SuppressedError(error, suppressed, message)
+                    // SuppressedError: new SuppressedError(error, suppressed, message, options)
                     JSValue error = childArgs.length > 0 ? childArgs[0] : JSUndefined.INSTANCE;
                     JSValue suppressed = childArgs.length > 1 ? childArgs[1] : JSUndefined.INSTANCE;
                     String message = "";
@@ -101,6 +101,11 @@ public final class JSSuppressedError extends JSError {
                     obj.set("error", error);
                     obj.set("suppressed", suppressed);
                     obj.set("message", new JSString(message));
+
+                    // InstallErrorCause(O, options)
+                    if (childArgs.length > 3) {
+                        JSError.installErrorCause(obj, childArgs[3]);
+                    }
 
                     // Return undefined to use the thisObj created by the VM
                     return JSUndefined.INSTANCE;

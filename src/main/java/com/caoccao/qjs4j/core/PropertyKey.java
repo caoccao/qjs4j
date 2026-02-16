@@ -30,6 +30,7 @@ import java.util.Objects;
 public final class PropertyKey {
     public static final PropertyKey ARRAY = fromString("Array");
     public static final PropertyKey CALLEE = fromString("callee");
+    public static final PropertyKey CAUSE = fromString("cause");
     public static final PropertyKey CONFIGURABLE = fromString("configurable");
     public static final PropertyKey CONSTRUCTOR = fromString("constructor");
     public static final PropertyKey DONE = fromString("done");

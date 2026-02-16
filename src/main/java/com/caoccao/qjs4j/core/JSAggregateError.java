@@ -83,7 +83,7 @@ public final class JSAggregateError extends JSError {
                     // Set name property
                     obj.set("name", new JSString(NAME));
 
-                    // AggregateError: new AggregateError(errors, message)
+                    // AggregateError: new AggregateError(errors, message, options)
                     JSValue errors = childArgs.length > 0 ? childArgs[0] : JSUndefined.INSTANCE;
                     String message = "";
                     if (childArgs.length > 1 && !(childArgs[1] instanceof JSUndefined)) {
@@ -91,6 +91,11 @@ public final class JSAggregateError extends JSError {
                     }
                     obj.set("errors", errors);
                     obj.set("message", new JSString(message));
+
+                    // InstallErrorCause(O, options)
+                    if (childArgs.length > 2) {
+                        JSError.installErrorCause(obj, childArgs[2]);
+                    }
 
                     // Return undefined to use the thisObj created by the VM
                     return JSUndefined.INSTANCE;

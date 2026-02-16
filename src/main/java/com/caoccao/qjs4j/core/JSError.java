@@ -85,11 +85,16 @@ public sealed class JSError extends JSObject permits
                     // Set name property
                     obj.set("name", new JSString(NAME));
 
-                    // Standard error: new Error(message)
+                    // Standard error: new Error(message, options)
                     if (childArgs.length > 0 && !(childArgs[0] instanceof JSUndefined)) {
                         obj.set("message", childArgs[0]);
                     } else {
                         obj.set("message", new JSString(""));
+                    }
+
+                    // InstallErrorCause(O, options)
+                    if (childArgs.length > 1) {
+                        installErrorCause(obj, childArgs[1]);
                     }
 
                     // Return undefined to use the thisObj created by the VM
@@ -106,6 +111,21 @@ public sealed class JSError extends JSObject permits
         errorPrototype.set("constructor", errorConstructor);
 
         return errorConstructor;
+    }
+
+    /**
+     * InstallErrorCause ( O, options )
+     * ES2022: If options is an object with a "cause" property, install it as a
+     * non-enumerable, writable, configurable own property on the error object.
+     */
+    public static void installErrorCause(JSObject obj, JSValue options) {
+        if (options instanceof JSObject optionsObj) {
+            if (optionsObj.has("cause")) {
+                JSValue cause = optionsObj.get("cause");
+                obj.defineProperty(PropertyKey.CAUSE,
+                        PropertyDescriptor.dataDescriptor(cause, true, false, true));
+            }
+        }
     }
 
     public static JSValue errorToString(JSContext context, JSValue thisArg, JSValue[] args) {

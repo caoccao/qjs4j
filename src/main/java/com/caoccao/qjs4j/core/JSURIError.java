@@ -71,11 +71,16 @@ public final class JSURIError extends JSError {
                     // Set name property
                     obj.set("name", new JSString(NAME));
 
-                    // Standard error: new Error(message)
+                    // Standard error: new Error(message, options)
                     if (childArgs.length > 0 && !(childArgs[0] instanceof JSUndefined)) {
                         obj.set("message", childArgs[0]);
                     } else {
                         obj.set("message", new JSString(""));
+                    }
+
+                    // InstallErrorCause(O, options)
+                    if (childArgs.length > 1) {
+                        JSError.installErrorCause(obj, childArgs[1]);
                     }
 
                     // Return undefined to use the thisObj created by the VM
