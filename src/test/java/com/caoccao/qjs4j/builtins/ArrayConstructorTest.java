@@ -98,9 +98,10 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertTypeError(ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{}));
         assertPendingException(context);
 
-        // Edge case: non-iterable
-        assertTypeError(ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)}));
-        assertPendingException(context);
+        // Edge case: non-iterable number → empty array (per spec, ToObject(123) has no length)
+        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)});
+        arr = result.asArray().orElseThrow();
+        assertThat(arr.getLength()).isEqualTo(0);
 
         // Edge case: invalid mapFn
         assertTypeError(ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr, new JSString("not a function")}));

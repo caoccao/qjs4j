@@ -34,101 +34,154 @@ public final class ArrayConstructor {
     }
 
     /**
-     * Array.from(arrayLike, mapFn, thisArg)
-     * ES2020 22.1.2.1
+     * Array.from(items, mapFn, thisArg)
+     * ES2024 23.1.2.1
      * Creates a new Array instance from an array-like or iterable object.
      */
     public static JSValue from(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("undefined is not iterable");
-        }
+        // Step 1: Let C be the this value.
+        JSValue C = thisArg;
 
-        JSValue arrayLike = args[0];
-        JSValue mapFn = args.length > 1 ? args[1] : null;
+        // Step 2: Let items
+        JSValue items = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+
+        // Step 3-4: mapfn handling
+        JSFunction mapFn = null;
+        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+            if (!(args[1] instanceof JSFunction)) {
+                return context.throwTypeError("Array.from: when provided, the second argument must be a function");
+            }
+            mapFn = (JSFunction) args[1];
+        }
         JSValue mapThisArg = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
 
-        // Check if mapFn is callable
-        if (mapFn != null && !(mapFn instanceof JSUndefined) && !(mapFn instanceof JSFunction)) {
-            return context.throwTypeError("Array.from: when provided, the second argument must be a function");
-        }
-
-        JSArray result = context.createJSArray();
-
-        // Handle JSArray input
-        if (arrayLike instanceof JSArray sourceArray) {
-            long length = sourceArray.getLength();
-            for (long i = 0; i < length; i++) {
-                JSValue value = sourceArray.get((int) i);
-
-                // Apply mapping function if provided
-                if (mapFn instanceof JSFunction mappingFunc) {
-                    JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
-                    value = mappingFunc.call(context, mapThisArg, mapArgs);
-                }
-
-                result.push(value);
+        // Step 5: Let usingIterator be ? GetMethod(items, @@iterator).
+        boolean hasIterator = false;
+        if (items instanceof JSObject itemsObj) {
+            JSValue iterMethod = itemsObj.get(PropertyKey.SYMBOL_ITERATOR, context);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
             }
-            return result;
+            if (iterMethod != null && !(iterMethod instanceof JSUndefined) && !(iterMethod instanceof JSNull)) {
+                hasIterator = true;
+            }
+        } else if (items instanceof JSString) {
+            // Strings are iterable (have @@iterator)
+            hasIterator = true;
         }
 
-        // Handle object with length property
-        if (arrayLike instanceof JSObject obj) {
-            JSValue lengthValue = obj.get("length");
-            if (lengthValue instanceof JSNumber num) {
-                int length = (int) num.value();
+        // Step 6: If usingIterator is not undefined, then
+        if (hasIterator) {
+            // Step 6.a: If IsConstructor(C), let A be Construct(C, « »), else let A be ArrayCreate(0).
+            JSObject A;
+            if (JSTypeChecking.isConstructor(C)) {
+                JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[0]);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                A = (JSObject) constructed;
+            } else {
+                A = context.createJSArray();
+            }
 
-                for (int i = 0; i < length; i++) {
-                    JSValue value = obj.get(i);
-
-                    // Apply mapping function if provided
-                    if (mapFn instanceof JSFunction mappingFunc) {
-                        JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
-                        value = mappingFunc.call(context, mapThisArg, mapArgs);
+            // Step 6.d: iterate
+            final int[] k = {0};
+            final JSFunction mapping = mapFn;
+            final JSObject target = A;
+            final boolean[] error = {false};
+            JSIteratorHelper.forOf(context, items, (value) -> {
+                if (context.hasPendingException()) {
+                    error[0] = true;
+                    return false;
+                }
+                JSValue mappedValue = value;
+                if (mapping != null) {
+                    mappedValue = mapping.call(context, mapThisArg, new JSValue[]{value, JSNumber.of(k[0])});
+                    if (context.hasPendingException()) {
+                        error[0] = true;
+                        return false;
                     }
-
-                    result.push(value);
                 }
-                return result;
-            }
-        }
-
-        // Handle string (iterable)
-        if (arrayLike instanceof JSString str) {
-            String value = str.value();
-            for (int i = 0; i < value.length(); i++) {
-                JSValue charValue = new JSString(String.valueOf(value.charAt(i)));
-
-                // Apply mapping function if provided
-                if (mapFn instanceof JSFunction mappingFunc) {
-                    JSValue[] mapArgs = new JSValue[]{charValue, JSNumber.of(i)};
-                    charValue = mappingFunc.call(context, mapThisArg, mapArgs);
-                }
-
-                result.push(charValue);
-            }
-            return result;
-        }
-
-        // Try to use Symbol.iterator for general iterables
-        if (JSIteratorHelper.isIterable(arrayLike)) {
-            final int[] index = {0};
-            JSIteratorHelper.forOf(context, arrayLike, (value) -> {
-                JSValue itemValue = value;
-
-                // Apply mapping function if provided
-                if (mapFn instanceof JSFunction mappingFunc) {
-                    JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(index[0])};
-                    itemValue = mappingFunc.call(context, mapThisArg, mapArgs);
-                }
-
-                result.push(itemValue);
-                index[0]++;
+                target.set(PropertyKey.fromIndex(k[0]), mappedValue);
+                k[0]++;
                 return true;
             });
-            return result;
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+
+            // Step 6.e: Set A.length
+            A.set(PropertyKey.LENGTH, JSNumber.of(k[0]), context);
+            return A;
         }
 
-        return context.throwTypeError("object is not iterable");
+        // Step 7-8: Array-like path
+        // Let arrayLike be ! ToObject(items).
+        JSObject arrayLike;
+        if (items instanceof JSObject obj) {
+            arrayLike = obj;
+        } else if (items instanceof JSUndefined || items instanceof JSNull) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        } else {
+            // Non-iterable primitives (numbers, booleans, bigints, symbols).
+            // When boxed via ToObject, these have no "length" property,
+            // so LengthOfArrayLike returns 0, resulting in an empty array.
+            long len = 0;
+            JSObject A;
+            if (JSTypeChecking.isConstructor(C)) {
+                JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[]{JSNumber.of(len)});
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                A = (JSObject) constructed;
+            } else {
+                A = context.createJSArray();
+            }
+            A.set(PropertyKey.LENGTH, JSNumber.of(len), context);
+            return A;
+        }
+
+        // Step 9: Let len be ? LengthOfArrayLike(arrayLike).
+        JSValue lenValue = arrayLike.get(PropertyKey.LENGTH, context);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        long len = JSTypeConversions.toLength(context, lenValue);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        // Step 10-11: If IsConstructor(C), let A be Construct(C, «len»), else ArrayCreate(len).
+        JSObject A;
+        if (JSTypeChecking.isConstructor(C)) {
+            JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[]{JSNumber.of(len)});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            A = (JSObject) constructed;
+        } else {
+            A = context.createJSArray();
+        }
+
+        // Step 12-15: Loop
+        for (long k = 0; k < len; k++) {
+            JSValue kValue = arrayLike.get(PropertyKey.fromIndex((int) k), context);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            JSValue mappedValue = kValue;
+            if (mapFn != null) {
+                mappedValue = mapFn.call(context, mapThisArg, new JSValue[]{kValue, JSNumber.of(k)});
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+            A.set(PropertyKey.fromIndex((int) k), mappedValue);
+        }
+
+        // Step 16: Set A.length
+        A.set(PropertyKey.LENGTH, JSNumber.of(len), context);
+        return A;
     }
 
     /**
