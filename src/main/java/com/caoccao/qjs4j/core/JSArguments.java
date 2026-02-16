@@ -61,7 +61,7 @@ public final class JSArguments extends JSObject {
         this.isStrict = isStrict;
 
         // Set length property (writable, non-enumerable, configurable per ES spec)
-        definePropertyWritableConfigurable("length", new JSNumber(argumentValues.length));
+        definePropertyWritableConfigurable("length", JSNumber.of(argumentValues.length));
 
         // Set indexed properties for each argument
         for (int i = 0; i < argumentValues.length; i++) {

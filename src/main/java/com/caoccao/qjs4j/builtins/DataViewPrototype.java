@@ -92,7 +92,7 @@ public final class DataViewPrototype {
         if (dataView.isOutOfBounds()) {
             return context.throwTypeError("DataView is out of bounds");
         }
-        return new JSNumber(dataView.getByteLength());
+        return JSNumber.of(dataView.getByteLength());
     }
 
     /**
@@ -106,7 +106,7 @@ public final class DataViewPrototype {
         if (dataView.isOutOfBounds()) {
             return context.throwTypeError("DataView is out of bounds");
         }
-        return new JSNumber(dataView.getByteOffset());
+        return JSNumber.of(dataView.getByteOffset());
     }
 
     public static JSValue getFloat16(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -120,7 +120,7 @@ public final class DataViewPrototype {
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
         try {
-            return new JSNumber(dataView.getFloat16(byteOffset, littleEndian));
+            return JSNumber.of(dataView.getFloat16(byteOffset, littleEndian));
         } catch (RuntimeException e) {
             return convertDataViewException(context, e);
         }
@@ -138,7 +138,7 @@ public final class DataViewPrototype {
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
         try {
-            return new JSNumber(dataView.getFloat32(byteOffset, littleEndian));
+            return JSNumber.of(dataView.getFloat32(byteOffset, littleEndian));
         } catch (RuntimeException e) {
             return convertDataViewException(context, e);
         }
@@ -156,7 +156,7 @@ public final class DataViewPrototype {
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
         try {
-            return new JSNumber(dataView.getFloat64(byteOffset, littleEndian));
+            return JSNumber.of(dataView.getFloat64(byteOffset, littleEndian));
         } catch (RuntimeException e) {
             return convertDataViewException(context, e);
         }
@@ -174,7 +174,7 @@ public final class DataViewPrototype {
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
         try {
-            return new JSNumber(dataView.getInt16(byteOffset, littleEndian));
+            return JSNumber.of(dataView.getInt16(byteOffset, littleEndian));
         } catch (RuntimeException e) {
             return convertDataViewException(context, e);
         }
@@ -192,7 +192,7 @@ public final class DataViewPrototype {
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
         try {
-            return new JSNumber(dataView.getInt32(byteOffset, littleEndian));
+            return JSNumber.of(dataView.getInt32(byteOffset, littleEndian));
         } catch (RuntimeException e) {
             return convertDataViewException(context, e);
         }
@@ -209,7 +209,7 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         try {
-            return new JSNumber(dataView.getInt8(byteOffset));
+            return JSNumber.of(dataView.getInt8(byteOffset));
         } catch (RuntimeException e) {
             return convertDataViewException(context, e);
         }
@@ -226,7 +226,7 @@ public final class DataViewPrototype {
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
         try {
-            return new JSNumber(dataView.getUint16(byteOffset, littleEndian));
+            return JSNumber.of(dataView.getUint16(byteOffset, littleEndian));
         } catch (RuntimeException e) {
             return convertDataViewException(context, e);
         }
@@ -243,7 +243,7 @@ public final class DataViewPrototype {
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
         try {
-            return new JSNumber(dataView.getUint32(byteOffset, littleEndian));
+            return JSNumber.of(dataView.getUint32(byteOffset, littleEndian));
         } catch (RuntimeException e) {
             return convertDataViewException(context, e);
         }
@@ -260,7 +260,7 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         try {
-            return new JSNumber(dataView.getUint8(byteOffset));
+            return JSNumber.of(dataView.getUint8(byteOffset));
         } catch (RuntimeException e) {
             return convertDataViewException(context, e);
         }

@@ -91,8 +91,8 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
         JSArray range = new JSArray();
-        range.push(new JSNumber(pair[0]));
-        range.push(new JSNumber(pair[1]));
+        range.push(JSNumber.of(pair[0]));
+        range.push(JSNumber.of(pair[1]));
         return range;
     }
 
@@ -177,7 +177,7 @@ public final class RegExpPrototype {
             // Set properties
             int[][] indices = result.indices();
             if (indices != null && indices.length > 0) {
-                array.set("index", new JSNumber(indices[0][0]));
+                array.set("index", JSNumber.of(indices[0][0]));
             }
             array.set("input", new JSString(str));
             array.set("groups", createNamedGroupsValue(captures, regexp.getBytecode().groupNames()));

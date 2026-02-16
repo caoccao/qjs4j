@@ -63,7 +63,7 @@ public final class JSNativeFunction extends JSFunction {
         this.defineProperty(
                 PropertyKey.fromString("length"),
                 PropertyDescriptor.dataDescriptor(
-                        new JSNumber(this.length),
+                        JSNumber.of(this.length),
                         false, // writable
                         false, // enumerable
                         true   // configurable

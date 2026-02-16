@@ -137,7 +137,7 @@ public final class JSBytecodeFunction extends JSFunction {
         // Set up function properties on the object
         // Functions are objects in JavaScript and have these standard properties
         this.set("name", new JSString(this.name));
-        this.set("length", new JSNumber(this.length));
+        this.set("length", JSNumber.of(this.length));
 
         // Every function (except arrow functions) has a prototype property
         if (prototype != null) {

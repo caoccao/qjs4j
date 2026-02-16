@@ -34,7 +34,7 @@ public final class SharedArrayBufferPrototype {
             return context.throwTypeError("SharedArrayBuffer.prototype.byteLength called on non-SharedArrayBuffer");
         }
 
-        return new JSNumber(buffer.getByteLength());
+        return JSNumber.of(buffer.getByteLength());
     }
 
     /**
@@ -58,7 +58,7 @@ public final class SharedArrayBufferPrototype {
             return context.throwTypeError("SharedArrayBuffer.prototype.maxByteLength called on non-SharedArrayBuffer");
         }
 
-        return new JSNumber(buffer.getMaxByteLength());
+        return JSNumber.of(buffer.getMaxByteLength());
     }
 
     /**

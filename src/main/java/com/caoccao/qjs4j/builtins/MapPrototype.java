@@ -170,7 +170,7 @@ public final class MapPrototype {
             return context.throwTypeError("get Map.prototype.size called on non-Map");
         }
 
-        return new JSNumber(map.size());
+        return JSNumber.of(map.size());
     }
 
     public static JSValue getToStringTag(JSContext context, JSValue thisArg, JSValue[] args) {

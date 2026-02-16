@@ -50,7 +50,7 @@ public final class JSRegExp extends JSObject {
         }
 
         // Per spec, lastIndex is an own data property.
-        this.set("lastIndex", new JSNumber(0));
+        this.set("lastIndex", JSNumber.of(0));
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -202,7 +202,7 @@ public final class JSRegExp extends JSObject {
      * Set lastIndex property.
      */
     public void setLastIndex(int index) {
-        set("lastIndex", new JSNumber(index));
+        set("lastIndex", JSNumber.of(index));
     }
 
     @Override

@@ -30,13 +30,16 @@ import java.util.*;
  */
 public final class VirtualMachine {
     private static final JSObject UNINITIALIZED_MARKER = new JSObject();
+    private static final int INTERRUPT_CHECK_INTERVAL = 0xFFFF; // Check every ~65K opcodes
     private final JSContext context;
     private final Set<JSObject> initializedConstantObjects;
     private final StringBuilder propertyAccessChain;  // Track last property access for better error messages
     private final CallStack valueStack;
     private StackFrame currentFrame;
+    private long executionDeadline;  // 0 = no deadline
     private int generatorResumeIndex;
     private List<JSGeneratorState.ResumeRecord> generatorResumeRecords;
+    private int interruptCounter;
     private JSValue pendingException;
     private boolean propertyAccessLock;  // When true, don't update lastPropertyAccess (during argument evaluation)
     private YieldResult yieldResult;  // Set when generator yields
@@ -54,6 +57,8 @@ public final class VirtualMachine {
         this.propertyAccessLock = false;
         this.yieldResult = null;
         this.yieldSkipCount = 0;
+        this.executionDeadline = 0;
+        this.interruptCounter = 0;
     }
 
     private JSValue[] buildApplyArguments(JSValue argsArrayValue, boolean allowNullOrUndefined) {
@@ -431,6 +436,14 @@ public final class VirtualMachine {
                     continue;
                 }
 
+                // Periodic interrupt check (every ~65K opcodes)
+                if (executionDeadline != 0 && --interruptCounter <= 0) {
+                    interruptCounter = INTERRUPT_CHECK_INTERVAL;
+                    if (System.currentTimeMillis() >= executionDeadline) {
+                        throw new JSVirtualMachineException("execution timeout");
+                    }
+                }
+
                 int opcode = bytecode.readOpcode(pc);
                 Opcode op = Opcode.fromInt(opcode);
                 if (op == Opcode.INVALID && pc + 1 < bytecode.getLength()) {
@@ -449,7 +462,7 @@ public final class VirtualMachine {
                     // ==================== Constants and Literals ====================
                     case INVALID -> throw new JSVirtualMachineException("Invalid opcode at PC " + pc);
                     case PUSH_I32 -> {
-                        valueStack.push(new JSNumber(bytecode.readI32(pc + 1)));
+                        valueStack.push(JSNumber.of(bytecode.readI32(pc + 1)));
                         pc += op.getSize();
                     }
                     case PUSH_BIGINT_I32 -> {
@@ -469,17 +482,17 @@ public final class VirtualMachine {
                             case PUSH_7 -> 7;
                             default -> throw new IllegalStateException("Unexpected short push opcode: " + op);
                         };
-                        valueStack.push(new JSNumber(value));
+                        valueStack.push(JSNumber.of(value));
                         pc += op.getSize();
                     }
                     case PUSH_I8 -> {
                         int value = (byte) bytecode.readU8(pc + 1);
-                        valueStack.push(new JSNumber(value));
+                        valueStack.push(JSNumber.of(value));
                         pc += op.getSize();
                     }
                     case PUSH_I16 -> {
                         int value = (short) bytecode.readU16(pc + 1);
-                        valueStack.push(new JSNumber(value));
+                        valueStack.push(JSNumber.of(value));
                         pc += op.getSize();
                     }
                     case PUSH_CONST -> {
@@ -789,15 +802,24 @@ public final class VirtualMachine {
                     case INC_LOC -> {
                         int localIndex = bytecode.readU8(pc + 1);
                         JSValue localValue = getLocalValue(localIndex);
-                        double result = JSTypeConversions.toNumber(context, localValue).value() + 1;
-                        setLocalValue(localIndex, new JSNumber(result));
+                        // Fast path for numbers (avoids toNumber overhead)
+                        if (localValue instanceof JSNumber num) {
+                            setLocalValue(localIndex, JSNumber.of(num.value() + 1));
+                        } else {
+                            double result = JSTypeConversions.toNumber(context, localValue).value() + 1;
+                            setLocalValue(localIndex, JSNumber.of(result));
+                        }
                         pc += op.getSize();
                     }
                     case DEC_LOC -> {
                         int localIndex = bytecode.readU8(pc + 1);
                         JSValue localValue = getLocalValue(localIndex);
-                        double result = JSTypeConversions.toNumber(context, localValue).value() - 1;
-                        setLocalValue(localIndex, new JSNumber(result));
+                        if (localValue instanceof JSNumber num) {
+                            setLocalValue(localIndex, JSNumber.of(num.value() - 1));
+                        } else {
+                            double result = JSTypeConversions.toNumber(context, localValue).value() - 1;
+                            setLocalValue(localIndex, JSNumber.of(result));
+                        }
                         pc += op.getSize();
                     }
                     case ADD_LOC -> {
@@ -805,14 +827,17 @@ public final class VirtualMachine {
                         JSValue right = valueStack.pop();
                         JSValue left = getLocalValue(localIndex);
                         JSValue result;
-                        if (left instanceof JSString || right instanceof JSString) {
+                        // Fast path for number addition
+                        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+                            result = JSNumber.of(leftNum.value() + rightNum.value());
+                        } else if (left instanceof JSString || right instanceof JSString) {
                             String leftStr = JSTypeConversions.toString(context, left).value();
                             String rightStr = JSTypeConversions.toString(context, right).value();
                             result = new JSString(leftStr + rightStr);
                         } else {
                             double leftNum = JSTypeConversions.toNumber(context, left).value();
                             double rightNum = JSTypeConversions.toNumber(context, right).value();
-                            result = new JSNumber(leftNum + rightNum);
+                            result = JSNumber.of(leftNum + rightNum);
                         }
                         setLocalValue(localIndex, result);
                         pc += op.getSize();
@@ -1429,6 +1454,17 @@ public final class VirtualMachine {
                         JSValue index = valueStack.pop();
                         JSValue arrayObj = valueStack.pop();
 
+                        // Fast path: string character access (avoids boxing to JSStringObject)
+                        if (arrayObj instanceof JSString str && index instanceof JSNumber num) {
+                            double d = num.value();
+                            int idx = (int) d;
+                            if (idx == d && idx >= 0 && idx < str.value().length()) {
+                                valueStack.push(new JSString(String.valueOf(str.value().charAt(idx))));
+                                pc += op.getSize();
+                                break;
+                            }
+                        }
+
                         // Auto-box primitives to access their prototype methods
                         JSObject targetObj = toObject(arrayObj);
                         if (targetObj != null) {
@@ -1469,6 +1505,17 @@ public final class VirtualMachine {
                     case GET_ARRAY_EL2 -> {
                         JSValue index = valueStack.pop();
                         JSValue arrayObj = valueStack.peek(0);
+
+                        // Fast path: string character access
+                        if (arrayObj instanceof JSString str && index instanceof JSNumber num) {
+                            double d = num.value();
+                            int idx = (int) d;
+                            if (idx == d && idx >= 0 && idx < str.value().length()) {
+                                valueStack.push(new JSString(String.valueOf(str.value().charAt(idx))));
+                                pc += op.getSize();
+                                break;
+                            }
+                        }
 
                         JSObject targetObj = toObject(arrayObj);
                         if (targetObj != null) {
@@ -1812,7 +1859,7 @@ public final class VirtualMachine {
 
                             // Push array and updated position back onto stack
                             valueStack.push(array);
-                            valueStack.push(new JSNumber(pos));
+                            valueStack.push(JSNumber.of(pos));
 
                         } catch (Exception e) {
                             throw new JSVirtualMachineException("APPEND: error iterating: " + e.getMessage(), e);
@@ -2236,7 +2283,7 @@ public final class VirtualMachine {
                         boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
 
                         valueStack.set(0, value);
-                        valueStack.set(1, new JSNumber(0));
+                        valueStack.set(1, JSNumber.of(0));
                         valueStack.push(JSBoolean.valueOf(done));
                         pc += op.getSize();
                     }
@@ -2485,6 +2532,16 @@ public final class VirtualMachine {
     }
 
     /**
+     * Set an execution deadline for the VM.
+     * After this time, the VM will throw an interrupt exception.
+     * Set to 0 to clear the deadline.
+     */
+    public void setExecutionDeadline(long deadlineMs) {
+        this.executionDeadline = deadlineMs;
+        this.interruptCounter = INTERRUPT_CHECK_INTERVAL;
+    }
+
+    /**
      * Get the last yield result from generator execution.
      * Used to check if the yield was a yield* (delegation).
      */
@@ -2505,6 +2562,12 @@ public final class VirtualMachine {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
 
+        // Fast path for number addition (avoids toNumber overhead)
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSNumber.of(leftNum.value() + rightNum.value()));
+            return;
+        }
+
         // String concatenation or numeric addition
         if (left instanceof JSString || right instanceof JSString) {
             String leftStr = JSTypeConversions.toString(context, left).value();
@@ -2513,15 +2576,20 @@ public final class VirtualMachine {
         } else {
             double leftNum = JSTypeConversions.toNumber(context, left).value();
             double rightNum = JSTypeConversions.toNumber(context, right).value();
-            valueStack.push(new JSNumber(leftNum + rightNum));
+            valueStack.push(JSNumber.of(leftNum + rightNum));
         }
     }
 
     private void handleAnd() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
+        // Fast path for number AND (avoids toInt32 overhead)
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSNumber.of((int) leftNum.value() & (int) rightNum.value()));
+            return;
+        }
         int result = JSTypeConversions.toInt32(context, left) & JSTypeConversions.toInt32(context, right);
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handleAsyncYieldStar() {
@@ -2783,8 +2851,12 @@ public final class VirtualMachine {
 
     private void handleDec() {
         JSValue operand = valueStack.pop();
+        if (operand instanceof JSNumber num) {
+            valueStack.push(JSNumber.of(num.value() - 1));
+            return;
+        }
         double result = JSTypeConversions.toNumber(context, operand).value() - 1;
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handleDelete() {
@@ -2802,7 +2874,7 @@ public final class VirtualMachine {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
         double result = JSTypeConversions.toNumber(context, left).value() / JSTypeConversions.toNumber(context, right).value();
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handleEq() {
@@ -2816,7 +2888,7 @@ public final class VirtualMachine {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
         double result = Math.pow(JSTypeConversions.toNumber(context, left).value(), JSTypeConversions.toNumber(context, right).value());
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handleForAwaitOfNext() {
@@ -2902,7 +2974,7 @@ public final class VirtualMachine {
         // Push iterator, next method, and catch offset (0) onto the stack
         valueStack.push(iterator);         // Iterator object
         valueStack.push(nextMethod);       // next() method
-        valueStack.push(new JSNumber(0));  // Catch offset (placeholder)
+        valueStack.push(JSNumber.of(0));  // Catch offset (placeholder)
     }
 
     private void handleForInEnd() {
@@ -3050,12 +3122,17 @@ public final class VirtualMachine {
         // Push iterator, next method, and catch offset (0) onto the stack
         valueStack.push(iterator);         // Iterator object
         valueStack.push(nextMethod);       // next() method
-        valueStack.push(new JSNumber(0));  // Catch offset (placeholder)
+        valueStack.push(JSNumber.of(0));  // Catch offset (placeholder)
     }
 
     private void handleGt() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
+        // Fast path for number comparison
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSBoolean.valueOf(leftNum.value() > rightNum.value()));
+            return;
+        }
         boolean result = JSTypeConversions.lessThan(context, right, left);
         valueStack.push(JSBoolean.valueOf(result));
     }
@@ -3063,6 +3140,11 @@ public final class VirtualMachine {
     private void handleGte() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
+        // Fast path for number comparison
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSBoolean.valueOf(leftNum.value() >= rightNum.value()));
+            return;
+        }
         boolean result = JSTypeConversions.lessThan(context, right, left) ||
                 JSTypeConversions.abstractEquals(context, left, right);
         valueStack.push(JSBoolean.valueOf(result));
@@ -3082,8 +3164,12 @@ public final class VirtualMachine {
 
     private void handleInc() {
         JSValue operand = valueStack.pop();
+        if (operand instanceof JSNumber num) {
+            valueStack.push(JSNumber.of(num.value() + 1));
+            return;
+        }
         double result = JSTypeConversions.toNumber(context, operand).value() + 1;
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handleInitCtor() {
@@ -3189,6 +3275,11 @@ public final class VirtualMachine {
     private void handleLt() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
+        // Fast path for number comparison (avoids toPrimitive/toNumber overhead)
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSBoolean.valueOf(leftNum.value() < rightNum.value()));
+            return;
+        }
         boolean result = JSTypeConversions.lessThan(context, left, right);
         valueStack.push(JSBoolean.valueOf(result));
     }
@@ -3196,6 +3287,11 @@ public final class VirtualMachine {
     private void handleLte() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
+        // Fast path for number comparison (avoids double type conversion)
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSBoolean.valueOf(leftNum.value() <= rightNum.value()));
+            return;
+        }
         boolean result = JSTypeConversions.lessThan(context, left, right) ||
                 JSTypeConversions.abstractEquals(context, left, right);
         valueStack.push(JSBoolean.valueOf(result));
@@ -3205,20 +3301,24 @@ public final class VirtualMachine {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
         double result = JSTypeConversions.toNumber(context, left).value() % JSTypeConversions.toNumber(context, right).value();
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handleMul() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSNumber.of(leftNum.value() * rightNum.value()));
+            return;
+        }
         double result = JSTypeConversions.toNumber(context, left).value() * JSTypeConversions.toNumber(context, right).value();
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handleNeg() {
         JSValue operand = valueStack.pop();
         double result = -JSTypeConversions.toNumber(context, operand).value();
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handleNeq() {
@@ -3231,7 +3331,7 @@ public final class VirtualMachine {
     private void handleNot() {
         JSValue operand = valueStack.pop();
         int result = ~JSTypeConversions.toInt32(context, operand);
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handleNullishCoalesce() {
@@ -3248,34 +3348,50 @@ public final class VirtualMachine {
     private void handleOr() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSNumber.of((int) leftNum.value() | (int) rightNum.value()));
+            return;
+        }
         int result = JSTypeConversions.toInt32(context, left) | JSTypeConversions.toInt32(context, right);
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handlePlus() {
         JSValue operand = valueStack.pop();
         double result = JSTypeConversions.toNumber(context, operand).value();
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handlePostDec() {
         // POST_DEC: [value] -> [old_value, new_value]
         // Takes value on top, pushes old value then new value
         JSValue operand = valueStack.pop();
+        if (operand instanceof JSNumber num) {
+            double oldValue = num.value();
+            valueStack.push(num);
+            valueStack.push(JSNumber.of(oldValue - 1));
+            return;
+        }
         double oldValue = JSTypeConversions.toNumber(context, operand).value();
         double newValue = oldValue - 1;
-        valueStack.push(new JSNumber(oldValue));
-        valueStack.push(new JSNumber(newValue));
+        valueStack.push(JSNumber.of(oldValue));
+        valueStack.push(JSNumber.of(newValue));
     }
 
     private void handlePostInc() {
         // POST_INC: [value] -> [old_value, new_value]
         // Takes value on top, pushes old value then new value
         JSValue operand = valueStack.pop();
+        if (operand instanceof JSNumber num) {
+            double oldValue = num.value();
+            valueStack.push(num);
+            valueStack.push(JSNumber.of(oldValue + 1));
+            return;
+        }
         double oldValue = JSTypeConversions.toNumber(context, operand).value();
         double newValue = oldValue + 1;
-        valueStack.push(new JSNumber(oldValue));
-        valueStack.push(new JSNumber(newValue));
+        valueStack.push(JSNumber.of(oldValue));
+        valueStack.push(JSNumber.of(newValue));
     }
 
     private void handlePrivateIn() {
@@ -3297,25 +3413,37 @@ public final class VirtualMachine {
     private void handleSar() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSNumber.of((int) leftNum.value() >> ((int) rightNum.value() & 0x1F)));
+            return;
+        }
         int leftInt = JSTypeConversions.toInt32(context, left);
         int rightInt = JSTypeConversions.toInt32(context, right);
-        valueStack.push(new JSNumber(leftInt >> (rightInt & 0x1F)));
+        valueStack.push(JSNumber.of(leftInt >> (rightInt & 0x1F)));
     }
 
     private void handleShl() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSNumber.of((int) leftNum.value() << ((int) rightNum.value() & 0x1F)));
+            return;
+        }
         int leftInt = JSTypeConversions.toInt32(context, left);
         int rightInt = JSTypeConversions.toInt32(context, right);
-        valueStack.push(new JSNumber(leftInt << (rightInt & 0x1F)));
+        valueStack.push(JSNumber.of(leftInt << (rightInt & 0x1F)));
     }
 
     private void handleShr() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSNumber.of(((int) leftNum.value() >>> ((int) rightNum.value() & 0x1F)) & 0xFFFFFFFFL));
+            return;
+        }
         int leftInt = JSTypeConversions.toInt32(context, left);
         int rightInt = JSTypeConversions.toInt32(context, right);
-        valueStack.push(new JSNumber((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
+        valueStack.push(JSNumber.of((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
     }
 
     private void handleStrictEq() {
@@ -3335,8 +3463,12 @@ public final class VirtualMachine {
     private void handleSub() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSNumber.of(leftNum.value() - rightNum.value()));
+            return;
+        }
         double result = JSTypeConversions.toNumber(context, left).value() - JSTypeConversions.toNumber(context, right).value();
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handleTypeof() {
@@ -3348,8 +3480,12 @@ public final class VirtualMachine {
     private void handleXor() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            valueStack.push(JSNumber.of((int) leftNum.value() ^ (int) rightNum.value()));
+            return;
+        }
         int result = JSTypeConversions.toInt32(context, left) ^ JSTypeConversions.toInt32(context, right);
-        valueStack.push(new JSNumber(result));
+        valueStack.push(JSNumber.of(result));
     }
 
     private void handleYield() {
@@ -3825,7 +3961,7 @@ public final class VirtualMachine {
                     wrapper.setPrimitiveValue(str);
                     // Add length property as own property (shadows prototype's length)
                     // This is a data property with the actual string length
-                    wrapper.definePropertyReadonlyNonConfigurable("length", new JSNumber(str.value().length()));
+                    wrapper.definePropertyReadonlyNonConfigurable("length", JSNumber.of(str.value().length()));
                     return wrapper;
                 }
             }
@@ -3902,7 +4038,7 @@ public final class VirtualMachine {
             return key.asSymbol();
         }
         if (key.isIndex()) {
-            return new JSNumber(key.asIndex());
+            return JSNumber.of(key.asIndex());
         }
         String keyString = key.asString();
         return new JSString(keyString != null ? keyString : key.toPropertyString());

@@ -28,13 +28,15 @@ import java.util.Map;
  * Represents a call frame (activation record) on the call stack.
  */
 public final class StackFrame {
+    private static final JSValue[] EMPTY_VALUES = new JSValue[0];
+
     private final JSValue[] arguments;  // Original arguments passed to function
     private final StackFrame caller;
-    private final Map<Integer, LocalReference> closedLocals;
     private final JSValue[] closureVars;
     private final JSFunction function;
     private final JSValue[] locals;
     private final JSValue thisArg;
+    private Map<Integer, LocalReference> closedLocals;
     private int programCounter;
 
     public StackFrame(JSFunction function, JSValue thisArg, JSValue[] args, StackFrame caller) {
@@ -66,9 +68,8 @@ public final class StackFrame {
         if (function instanceof JSBytecodeFunction bytecodeFunc && bytecodeFunc.getClosureVars() != null) {
             this.closureVars = bytecodeFunc.getClosureVars();
         } else {
-            this.closureVars = new JSValue[0];
+            this.closureVars = EMPTY_VALUES;
         }
-        this.closedLocals = new HashMap<>();
         this.programCounter = 0;
         this.caller = caller;
     }
@@ -76,6 +77,9 @@ public final class StackFrame {
     public void closeLocal(int index) {
         if (index < 0 || index >= locals.length) {
             return;
+        }
+        if (closedLocals == null) {
+            closedLocals = new HashMap<>();
         }
         closedLocals.put(index, new LocalReference(locals, index));
     }
@@ -105,9 +109,11 @@ public final class StackFrame {
     }
 
     public JSValue getVarRef(int index) {
-        LocalReference localReference = closedLocals.get(index);
-        if (localReference != null) {
-            return localReference.get();
+        if (closedLocals != null) {
+            LocalReference localReference = closedLocals.get(index);
+            if (localReference != null) {
+                return localReference.get();
+            }
         }
         if (index >= 0 && index < closureVars.length) {
             JSValue value = closureVars[index];
@@ -121,10 +127,12 @@ public final class StackFrame {
     }
 
     public void setVarRef(int index, JSValue value) {
-        LocalReference localReference = closedLocals.get(index);
-        if (localReference != null) {
-            localReference.set(value);
-            return;
+        if (closedLocals != null) {
+            LocalReference localReference = closedLocals.get(index);
+            if (localReference != null) {
+                localReference.set(value);
+                return;
+            }
         }
         if (index >= 0 && index < closureVars.length) {
             closureVars[index] = value;

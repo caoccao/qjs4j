@@ -53,7 +53,7 @@ public final class JSIntlObject {
         }
         String left = args.length > 0 ? JSTypeConversions.toString(context, args[0]).value() : "undefined";
         String right = args.length > 1 ? JSTypeConversions.toString(context, args[1]).value() : "undefined";
-        return new JSNumber(collator.compare(left, right));
+        return JSNumber.of(collator.compare(left, right));
     }
 
     public static JSValue collatorResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {

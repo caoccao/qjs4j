@@ -142,7 +142,7 @@ public final class AsyncGeneratorPrototype {
      * <pre>
      * JSAsyncGenerator gen = AsyncGeneratorPrototype.createFromValues(
      *     context,
-     *     new JSValue[]{new JSNumber(1), new JSNumber(2), new JSNumber(3)}
+     *     new JSValue[]{JSNumber.of(1), JSNumber.of(2), JSNumber.of(3)}
      * );
      * </pre>
      *

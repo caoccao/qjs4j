@@ -2763,7 +2763,7 @@ public final class BytecodeCompiler {
                 }
             }
             // Otherwise emit as constant
-            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(num.doubleValue()));
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(num.doubleValue()));
         } else if (value instanceof RegExpLiteralValue regExpLiteralValue) {
             String source = regExpLiteralValue.source();
             int lastSlash = source.lastIndexOf('/');
@@ -4126,7 +4126,7 @@ public final class BytecodeCompiler {
                         emitter.emitOpcode(Opcode.DUP2);
                         emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                         emitter.emitOpcode(Opcode.PLUS); // ToNumber conversion
-                        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
+                        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
                         emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
                         // Stack: [obj, prop, new_val] -> need [new_val, obj, prop]
                         emitter.emitOpcode(Opcode.ROT3R);
@@ -4137,7 +4137,7 @@ public final class BytecodeCompiler {
                         emitter.emitOpcode(Opcode.GET_ARRAY_EL); // obj prop old_val
                         emitter.emitOpcode(Opcode.PLUS); // obj prop old_numeric (ToNumber conversion)
                         emitter.emitOpcode(Opcode.DUP); // obj prop old_numeric old_numeric
-                        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
+                        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
                         emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj prop old_val new_val
                         // SWAP2 to rearrange: [obj, prop, old_val, new_val] -> [old_val, new_val, obj, prop]
                         emitter.emitOpcode(Opcode.SWAP2); // old_val new_val obj prop
@@ -4154,7 +4154,7 @@ public final class BytecodeCompiler {
                             emitter.emitOpcode(Opcode.DUP);
                             emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
                             emitter.emitOpcode(Opcode.PLUS); // ToNumber conversion
-                            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
+                            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
                             emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
                             // Stack: [obj, new_val] -> need [new_val, obj] for PUT_FIELD
                             emitter.emitOpcode(Opcode.SWAP);
@@ -4166,7 +4166,7 @@ public final class BytecodeCompiler {
                             emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name()); // obj old_val
                             emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
                             emitter.emitOpcode(Opcode.DUP); // obj old_numeric old_numeric
-                            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
+                            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
                             emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj old_val new_val
                             // Stack: [obj, old_val, new_val] - need [old_val, new_val, obj] for PUT_FIELD
                             // ROT3L: [old_val, new_val, obj]
@@ -4191,7 +4191,7 @@ public final class BytecodeCompiler {
                             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                             emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
                             emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
-                            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
+                            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
                             emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj new_val
                             emitter.emitOpcode(Opcode.DUP); // obj new_val new_val
                             emitter.emitOpcode(Opcode.ROT3R); // new_val obj new_val
@@ -4205,7 +4205,7 @@ public final class BytecodeCompiler {
                             emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
                             emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
                             emitter.emitOpcode(Opcode.DUP); // obj old_numeric old_numeric
-                            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(1));
+                            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
                             emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj old_val new_val
                             emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
                             emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // old_val new_val obj symbol
@@ -4505,8 +4505,8 @@ public final class BytecodeCompiler {
         }
 
         // QuickJS/spec attributes for template objects.
-        rawArray.definePropertyReadonlyNonConfigurable("length", new JSNumber(segmentCount));
-        templateObject.definePropertyReadonlyNonConfigurable("length", new JSNumber(segmentCount));
+        rawArray.definePropertyReadonlyNonConfigurable("length", JSNumber.of(segmentCount));
+        templateObject.definePropertyReadonlyNonConfigurable("length", JSNumber.of(segmentCount));
         templateObject.definePropertyReadonlyNonConfigurable("raw", rawArray);
 
         rawArray.freeze();
@@ -4772,7 +4772,7 @@ public final class BytecodeCompiler {
             } else if (value instanceof BigInteger bigInt) {
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSBigInt(bigInt));
             } else if (value instanceof Number num) {
-                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(num.doubleValue()));
+                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(num.doubleValue()));
             } else if (value instanceof String str) {
                 emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
             } else {

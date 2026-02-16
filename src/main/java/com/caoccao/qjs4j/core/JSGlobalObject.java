@@ -448,8 +448,8 @@ public final class JSGlobalObject {
      */
     public void initialize(JSContext context, JSObject global) {
         // Global value properties (non-writable, non-enumerable, non-configurable)
-        global.definePropertyReadonlyNonConfigurable("Infinity", new JSNumber(Double.POSITIVE_INFINITY));
-        global.definePropertyReadonlyNonConfigurable("NaN", new JSNumber(Double.NaN));
+        global.definePropertyReadonlyNonConfigurable("Infinity", JSNumber.of(Double.POSITIVE_INFINITY));
+        global.definePropertyReadonlyNonConfigurable("NaN", JSNumber.of(Double.NaN));
         global.definePropertyReadonlyNonConfigurable("undefined", JSUndefined.INSTANCE);
 
         // Global function properties
@@ -607,7 +607,7 @@ public final class JSGlobalObject {
         arrayPrototype.set("with", new JSNativeFunction("with", 2, ArrayPrototype::with));
 
         // Array.prototype.length is a data property with value 0 (not writable, not enumerable, not configurable)
-        arrayPrototype.definePropertyReadonlyNonConfigurable("length", new JSNumber(0));
+        arrayPrototype.definePropertyReadonlyNonConfigurable("length", JSNumber.of(0));
 
         // Array.prototype[Symbol.*]
         arrayPrototype.set(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction);
@@ -985,7 +985,7 @@ public final class JSGlobalObject {
         functionPrototype.defineGetterSetterConfigurable("caller", throwTypeError, throwTypeError);
 
         // Add 'length' and 'name' data properties
-        functionPrototype.definePropertyConfigurable("length", new JSNumber(0));
+        functionPrototype.definePropertyConfigurable("length", JSNumber.of(0));
         functionPrototype.definePropertyConfigurable("name", new JSString(""));
 
         // Per ECMAScript spec, Function.prototype's [[Prototype]] is Object.prototype
@@ -1322,14 +1322,14 @@ public final class JSGlobalObject {
         JSObject math = context.createJSObject();
 
         // Math constants
-        math.definePropertyReadonlyNonConfigurable("E", new JSNumber(MathObject.E));
-        math.definePropertyReadonlyNonConfigurable("LN10", new JSNumber(MathObject.LN10));
-        math.definePropertyReadonlyNonConfigurable("LN2", new JSNumber(MathObject.LN2));
-        math.definePropertyReadonlyNonConfigurable("LOG10E", new JSNumber(MathObject.LOG10E));
-        math.definePropertyReadonlyNonConfigurable("LOG2E", new JSNumber(MathObject.LOG2E));
-        math.definePropertyReadonlyNonConfigurable("PI", new JSNumber(MathObject.PI));
-        math.definePropertyReadonlyNonConfigurable("SQRT1_2", new JSNumber(MathObject.SQRT1_2));
-        math.definePropertyReadonlyNonConfigurable("SQRT2", new JSNumber(MathObject.SQRT2));
+        math.definePropertyReadonlyNonConfigurable("E", JSNumber.of(MathObject.E));
+        math.definePropertyReadonlyNonConfigurable("LN10", JSNumber.of(MathObject.LN10));
+        math.definePropertyReadonlyNonConfigurable("LN2", JSNumber.of(MathObject.LN2));
+        math.definePropertyReadonlyNonConfigurable("LOG10E", JSNumber.of(MathObject.LOG10E));
+        math.definePropertyReadonlyNonConfigurable("LOG2E", JSNumber.of(MathObject.LOG2E));
+        math.definePropertyReadonlyNonConfigurable("PI", JSNumber.of(MathObject.PI));
+        math.definePropertyReadonlyNonConfigurable("SQRT1_2", JSNumber.of(MathObject.SQRT1_2));
+        math.definePropertyReadonlyNonConfigurable("SQRT2", JSNumber.of(MathObject.SQRT2));
 
         // Math methods
         math.definePropertyWritableConfigurable("abs", new JSNativeFunction("abs", 1, MathObject::abs));
@@ -1402,14 +1402,14 @@ public final class JSGlobalObject {
         // QuickJS compatibility: Number.parseInt/parseFloat are aliases of global parseInt/parseFloat.
         JSValue globalParseInt = global.get("parseInt");
         JSValue globalParseFloat = global.get("parseFloat");
-        numberConstructor.definePropertyReadonlyNonConfigurable("EPSILON", new JSNumber(Math.ulp(1.0)));
-        numberConstructor.definePropertyReadonlyNonConfigurable("MAX_SAFE_INTEGER", new JSNumber(9007199254740991d));
-        numberConstructor.definePropertyReadonlyNonConfigurable("MAX_VALUE", new JSNumber(Double.MAX_VALUE));
-        numberConstructor.definePropertyReadonlyNonConfigurable("MIN_SAFE_INTEGER", new JSNumber(-9007199254740991d));
-        numberConstructor.definePropertyReadonlyNonConfigurable("MIN_VALUE", new JSNumber(Double.MIN_VALUE));
-        numberConstructor.definePropertyReadonlyNonConfigurable("NEGATIVE_INFINITY", new JSNumber(Double.NEGATIVE_INFINITY));
-        numberConstructor.definePropertyReadonlyNonConfigurable("NaN", new JSNumber(Double.NaN));
-        numberConstructor.definePropertyReadonlyNonConfigurable("POSITIVE_INFINITY", new JSNumber(Double.POSITIVE_INFINITY));
+        numberConstructor.definePropertyReadonlyNonConfigurable("EPSILON", JSNumber.of(Math.ulp(1.0)));
+        numberConstructor.definePropertyReadonlyNonConfigurable("MAX_SAFE_INTEGER", JSNumber.of(9007199254740991d));
+        numberConstructor.definePropertyReadonlyNonConfigurable("MAX_VALUE", JSNumber.of(Double.MAX_VALUE));
+        numberConstructor.definePropertyReadonlyNonConfigurable("MIN_SAFE_INTEGER", JSNumber.of(-9007199254740991d));
+        numberConstructor.definePropertyReadonlyNonConfigurable("MIN_VALUE", JSNumber.of(Double.MIN_VALUE));
+        numberConstructor.definePropertyReadonlyNonConfigurable("NEGATIVE_INFINITY", JSNumber.of(Double.NEGATIVE_INFINITY));
+        numberConstructor.definePropertyReadonlyNonConfigurable("NaN", JSNumber.of(Double.NaN));
+        numberConstructor.definePropertyReadonlyNonConfigurable("POSITIVE_INFINITY", JSNumber.of(Double.POSITIVE_INFINITY));
         numberConstructor.definePropertyWritableConfigurable("parseFloat", globalParseFloat);
         numberConstructor.definePropertyWritableConfigurable("parseInt", globalParseInt);
 
@@ -1744,7 +1744,7 @@ public final class JSGlobalObject {
                 new JSNativeFunction("[Symbol.iterator]", 0, IteratorPrototype::stringIterator));
 
         // String.prototype.length is a data property with value 0 (not writable, not enumerable, not configurable)
-        stringPrototype.definePropertyReadonlyNonConfigurable("length", new JSNumber(0));
+        stringPrototype.definePropertyReadonlyNonConfigurable("length", JSNumber.of(0));
 
         // Create String constructor
         JSNativeFunction stringConstructor = new JSNativeFunction("String", 1, StringConstructor::call, true);
@@ -1870,12 +1870,12 @@ public final class JSGlobalObject {
             prototype.defineGetterConfigurable("byteOffset", TypedArrayPrototype::getByteOffset);
             prototype.defineGetterConfigurable("length", TypedArrayPrototype::getLength);
             prototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, TypedArrayPrototype::getToStringTag);
-            prototype.definePropertyReadonlyNonConfigurable("BYTES_PER_ELEMENT", new JSNumber(def.bytesPerElement));
+            prototype.definePropertyReadonlyNonConfigurable("BYTES_PER_ELEMENT", JSNumber.of(def.bytesPerElement));
 
             JSNativeFunction constructor = new JSNativeFunction(def.name, 3, def.callback, true, true);
             constructor.definePropertyReadonlyNonConfigurable("prototype", prototype);
             constructor.setConstructorType(def.type);
-            constructor.definePropertyReadonlyNonConfigurable("BYTES_PER_ELEMENT", new JSNumber(def.bytesPerElement));
+            constructor.definePropertyReadonlyNonConfigurable("BYTES_PER_ELEMENT", JSNumber.of(def.bytesPerElement));
             constructor.definePropertyWritableConfigurable("from", new JSNativeFunction("from", 1, TypedArrayConstructor::from));
             constructor.definePropertyWritableConfigurable("of", new JSNativeFunction("of", 0, TypedArrayConstructor::of));
             constructor.defineGetterConfigurable(JSSymbol.SPECIES, TypedArrayConstructor::getSpecies);
@@ -2046,7 +2046,7 @@ public final class JSGlobalObject {
         String inputString = JSTypeConversions.toString(context, input).value();
         int index = skipLeadingWhitespace(inputString);
         if (index >= inputString.length()) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
 
         int signIndex = index;
@@ -2055,7 +2055,7 @@ public final class JSGlobalObject {
         }
         if (isInfinityPrefix(inputString, index)) {
             boolean isNegative = inputString.charAt(signIndex) == '-';
-            return new JSNumber(isNegative ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY);
+            return JSNumber.of(isNegative ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY);
         }
 
         int i = index;
@@ -2075,7 +2075,7 @@ public final class JSGlobalObject {
         }
 
         if (!hasLeadingDigits && !hasFractionDigits) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
 
         if (i < inputString.length() && (inputString.charAt(i) == 'e' || inputString.charAt(i) == 'E')) {
@@ -2095,9 +2095,9 @@ public final class JSGlobalObject {
 
         String validNumber = inputString.substring(signIndex, i);
         try {
-            return new JSNumber(Double.parseDouble(validNumber));
+            return JSNumber.of(Double.parseDouble(validNumber));
         } catch (NumberFormatException ignored) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
     }
 
@@ -2112,7 +2112,7 @@ public final class JSGlobalObject {
         String inputString = JSTypeConversions.toString(context, input).value();
         int index = skipLeadingWhitespace(inputString);
         if (index >= inputString.length()) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
 
         int sign = 1;
@@ -2136,7 +2136,7 @@ public final class JSGlobalObject {
         }
 
         if (radix != 0 && (radix < 2 || radix > 36)) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
 
         boolean stripPrefix = radix == 0 || radix == 16;
@@ -2164,10 +2164,10 @@ public final class JSGlobalObject {
         }
 
         if (!foundDigit) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
 
-        return new JSNumber(sign * result);
+        return JSNumber.of(sign * result);
     }
 
     private int skipLeadingWhitespace(String str) {

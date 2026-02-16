@@ -458,7 +458,7 @@ public final class JSConsole {
             if (Double.isFinite(element) && element == Math.rint(element)) {
                 items.add(Long.toString((long) element));
             } else {
-                items.add(new JSNumber(element).toString());
+                items.add(JSNumber.of(element).toString());
             }
         }
         if (length > max) {

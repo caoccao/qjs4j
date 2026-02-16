@@ -833,7 +833,7 @@ public final class JSContext implements AutoCloseable {
     /**
      * Get the virtual machine for this context.
      */
-    public com.caoccao.qjs4j.vm.VirtualMachine getVirtualMachine() {
+    public VirtualMachine getVirtualMachine() {
         return virtualMachine;
     }
 

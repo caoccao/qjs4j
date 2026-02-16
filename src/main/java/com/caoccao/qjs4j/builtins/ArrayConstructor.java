@@ -62,7 +62,7 @@ public final class ArrayConstructor {
 
                 // Apply mapping function if provided
                 if (mapFn instanceof JSFunction mappingFunc) {
-                    JSValue[] mapArgs = new JSValue[]{value, new JSNumber(i)};
+                    JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
                     value = mappingFunc.call(context, mapThisArg, mapArgs);
                 }
 
@@ -82,7 +82,7 @@ public final class ArrayConstructor {
 
                     // Apply mapping function if provided
                     if (mapFn instanceof JSFunction mappingFunc) {
-                        JSValue[] mapArgs = new JSValue[]{value, new JSNumber(i)};
+                        JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
                         value = mappingFunc.call(context, mapThisArg, mapArgs);
                     }
 
@@ -100,7 +100,7 @@ public final class ArrayConstructor {
 
                 // Apply mapping function if provided
                 if (mapFn instanceof JSFunction mappingFunc) {
-                    JSValue[] mapArgs = new JSValue[]{charValue, new JSNumber(i)};
+                    JSValue[] mapArgs = new JSValue[]{charValue, JSNumber.of(i)};
                     charValue = mappingFunc.call(context, mapThisArg, mapArgs);
                 }
 
@@ -117,7 +117,7 @@ public final class ArrayConstructor {
 
                 // Apply mapping function if provided
                 if (mapFn instanceof JSFunction mappingFunc) {
-                    JSValue[] mapArgs = new JSValue[]{value, new JSNumber(index[0])};
+                    JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(index[0])};
                     itemValue = mappingFunc.call(context, mapThisArg, mapArgs);
                 }
 
@@ -177,7 +177,7 @@ public final class ArrayConstructor {
                                     JSArray mappedArray = context.createJSArray();
                                     for (int i = 0; i < collectedArray.getLength(); i++) {
                                         JSValue value = collectedArray.get(i);
-                                        JSValue[] mapArgs = new JSValue[]{value, new JSNumber(i)};
+                                        JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
                                         JSValue mappedValue = mappingFunc.call(context, mapThisArg, mapArgs);
                                         mappedArray.push(mappedValue);
                                     }
@@ -210,7 +210,7 @@ public final class ArrayConstructor {
             for (int i = 0; i < sourceArray.getLength(); i++) {
                 JSValue value = sourceArray.get(i);
                 if (mapFn instanceof JSFunction mappingFunc) {
-                    JSValue[] mapArgs = new JSValue[]{value, new JSNumber(i)};
+                    JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
                     value = mappingFunc.call(context, mapThisArg, mapArgs);
                 }
                 result.push(value);
@@ -228,7 +228,7 @@ public final class ArrayConstructor {
                 for (int i = 0; i < length; i++) {
                     JSValue value = obj.get(i);
                     if (mapFn instanceof JSFunction mappingFunc) {
-                        JSValue[] mapArgs = new JSValue[]{value, new JSNumber(i)};
+                        JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
                         value = mappingFunc.call(context, mapThisArg, mapArgs);
                     }
                     result.push(value);
@@ -245,7 +245,7 @@ public final class ArrayConstructor {
             for (int i = 0; i < value.length(); i++) {
                 JSValue charValue = new JSString(String.valueOf(value.charAt(i)));
                 if (mapFn instanceof JSFunction mappingFunc) {
-                    JSValue[] mapArgs = new JSValue[]{charValue, new JSNumber(i)};
+                    JSValue[] mapArgs = new JSValue[]{charValue, JSNumber.of(i)};
                     charValue = mappingFunc.call(context, mapThisArg, mapArgs);
                 }
                 result.push(charValue);
@@ -261,7 +261,7 @@ public final class ArrayConstructor {
             JSIteratorHelper.forOf(context, arrayLike, (value) -> {
                 JSValue itemValue = value;
                 if (mapFn instanceof JSFunction mappingFunc) {
-                    JSValue[] mapArgs = new JSValue[]{value, new JSNumber(index[0])};
+                    JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(index[0])};
                     itemValue = mappingFunc.call(context, mapThisArg, mapArgs);
                 }
                 result.push(itemValue);

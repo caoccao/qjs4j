@@ -35,7 +35,7 @@ public final class TypedArrayPrototype {
         if (index < 0 || index >= typedArray.getLength()) {
             return JSUndefined.INSTANCE;
         }
-        return new JSNumber(typedArray.getElement(index));
+        return JSNumber.of(typedArray.getElement(index));
     }
 
     public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -49,8 +49,8 @@ public final class TypedArrayPrototype {
                 return JSIterator.IteratorResult.done(context);
             }
             JSArray pair = context.createJSArray();
-            pair.push(new JSNumber(index[0]));
-            pair.push(new JSNumber(typedArray.getElement(index[0])));
+            pair.push(JSNumber.of(index[0]));
+            pair.push(JSNumber.of(typedArray.getElement(index[0])));
             index[0]++;
             return JSIterator.IteratorResult.of(context, pair);
         }, "Array Iterator");
@@ -73,7 +73,7 @@ public final class TypedArrayPrototype {
         if (typedArray == null) {
             return context.getPendingException();
         }
-        return new JSNumber(typedArray.getByteLength());
+        return JSNumber.of(typedArray.getByteLength());
     }
 
     public static JSValue getByteOffset(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -81,7 +81,7 @@ public final class TypedArrayPrototype {
         if (typedArray == null) {
             return context.getPendingException();
         }
-        return new JSNumber(typedArray.getByteOffset());
+        return JSNumber.of(typedArray.getByteOffset());
     }
 
     public static JSValue getLength(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -89,7 +89,7 @@ public final class TypedArrayPrototype {
         if (typedArray == null) {
             return context.getPendingException();
         }
-        return new JSNumber(typedArray.getLength());
+        return JSNumber.of(typedArray.getLength());
     }
 
     public static JSValue getToStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -128,7 +128,7 @@ public final class TypedArrayPrototype {
             if (i > 0) {
                 sb.append(separator);
             }
-            JSValue value = new JSNumber(typedArray.getElement(i));
+            JSValue value = JSNumber.of(typedArray.getElement(i));
             sb.append(JSTypeConversions.toString(context, value).value());
         }
         return new JSString(sb.toString());
@@ -144,7 +144,7 @@ public final class TypedArrayPrototype {
             if (index[0] >= typedArray.getLength()) {
                 return JSIterator.IteratorResult.done(context);
             }
-            return JSIterator.IteratorResult.of(context, new JSNumber(index[0]++));
+            return JSIterator.IteratorResult.of(context, JSNumber.of(index[0]++));
         }, "Array Iterator");
     }
 
@@ -208,7 +208,7 @@ public final class TypedArrayPrototype {
             if (index[0] >= typedArray.getLength()) {
                 return JSIterator.IteratorResult.done(context);
             }
-            return JSIterator.IteratorResult.of(context, new JSNumber(typedArray.getElement(index[0]++)));
+            return JSIterator.IteratorResult.of(context, JSNumber.of(typedArray.getElement(index[0]++)));
         }, "Array Iterator");
     }
 }

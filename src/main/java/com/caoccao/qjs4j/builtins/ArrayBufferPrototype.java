@@ -34,7 +34,7 @@ public final class ArrayBufferPrototype {
             return context.throwTypeError("get ArrayBuffer.prototype.byteLength called on non-ArrayBuffer");
         }
 
-        return new JSNumber(buffer.getByteLength());
+        return JSNumber.of(buffer.getByteLength());
     }
 
     /**
@@ -60,7 +60,7 @@ public final class ArrayBufferPrototype {
             return context.throwTypeError("get ArrayBuffer.prototype.maxByteLength called on non-ArrayBuffer");
         }
 
-        return new JSNumber(buffer.getMaxByteLength());
+        return JSNumber.of(buffer.getMaxByteLength());
     }
 
     /**

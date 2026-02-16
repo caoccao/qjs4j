@@ -45,7 +45,7 @@ public final class IteratorPrototype {
         return new JSIterator(context, () -> {
             if (index[0] < array.getLength()) {
                 JSArray pair = context.createJSArray();
-                pair.push(new JSNumber(index[0]));
+                pair.push(JSNumber.of(index[0]));
                 pair.push(array.get(index[0]));
                 index[0]++;
                 return JSIterator.IteratorResult.of(context, pair);
@@ -66,7 +66,7 @@ public final class IteratorPrototype {
         final int[] index = {0};
         return new JSIterator(context, () -> {
             if (index[0] < array.getLength()) {
-                return JSIterator.IteratorResult.of(context, new JSNumber(index[0]++));
+                return JSIterator.IteratorResult.of(context, JSNumber.of(index[0]++));
             }
             return JSIterator.IteratorResult.done(context);
         });
@@ -387,7 +387,7 @@ public final class IteratorPrototype {
             if (step.done()) {
                 return JSBoolean.TRUE;
             }
-            JSValue result = predicate.call(context, JSUndefined.INSTANCE, new JSValue[]{step.value(), new JSNumber(index++)});
+            JSValue result = predicate.call(context, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
             if (context.hasPendingException()) {
                 closeIteratorIgnoringResult(context, iteratorObject);
                 return context.getPendingException();
@@ -447,7 +447,7 @@ public final class IteratorPrototype {
                     JSValue selected = predicate.call(
                             childContext,
                             JSUndefined.INSTANCE,
-                            new JSValue[]{step.value(), new JSNumber(index[0]++)});
+                            new JSValue[]{step.value(), JSNumber.of(index[0]++)});
                     if (childContext.hasPendingException()) {
                         done[0] = true;
                         closeIteratorIgnoringResult(childContext, iteratorObject);
@@ -495,7 +495,7 @@ public final class IteratorPrototype {
             if (step.done()) {
                 return JSUndefined.INSTANCE;
             }
-            JSValue selected = predicate.call(context, JSUndefined.INSTANCE, new JSValue[]{step.value(), new JSNumber(index++)});
+            JSValue selected = predicate.call(context, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
             if (context.hasPendingException()) {
                 closeIteratorIgnoringResult(context, iteratorObject);
                 return context.getPendingException();
@@ -576,7 +576,7 @@ public final class IteratorPrototype {
                     JSValue mapped = mapper.call(
                             childContext,
                             JSUndefined.INSTANCE,
-                            new JSValue[]{step.value(), new JSNumber(index[0]++)});
+                            new JSValue[]{step.value(), JSNumber.of(index[0]++)});
                     if (childContext.hasPendingException()) {
                         done[0] = true;
                         closeIteratorIgnoringResult(childContext, iteratorObject);
@@ -686,7 +686,7 @@ public final class IteratorPrototype {
             if (step.done()) {
                 return JSUndefined.INSTANCE;
             }
-            callback.call(context, JSUndefined.INSTANCE, new JSValue[]{step.value(), new JSNumber(index++)});
+            callback.call(context, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
             if (context.hasPendingException()) {
                 closeIteratorIgnoringResult(context, iteratorObject);
                 return context.getPendingException();
@@ -835,7 +835,7 @@ public final class IteratorPrototype {
                 JSValue mapped = mapper.call(
                         childContext,
                         JSUndefined.INSTANCE,
-                        new JSValue[]{step.value(), new JSNumber(index[0]++)});
+                        new JSValue[]{step.value(), JSNumber.of(index[0]++)});
                 if (childContext.hasPendingException()) {
                     done[0] = true;
                     closeIteratorIgnoringResult(childContext, iteratorObject);
@@ -945,7 +945,7 @@ public final class IteratorPrototype {
             JSValue reduced = reducer.call(context, JSUndefined.INSTANCE, new JSValue[]{
                     accumulator,
                     step.value(),
-                    new JSNumber(index++),
+                    JSNumber.of(index++),
             });
             if (context.hasPendingException()) {
                 closeIteratorIgnoringResult(context, iteratorObject);
@@ -1029,7 +1029,7 @@ public final class IteratorPrototype {
             if (step.done()) {
                 return JSBoolean.FALSE;
             }
-            JSValue result = predicate.call(context, JSUndefined.INSTANCE, new JSValue[]{step.value(), new JSNumber(index++)});
+            JSValue result = predicate.call(context, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
             if (context.hasPendingException()) {
                 closeIteratorIgnoringResult(context, iteratorObject);
                 return context.getPendingException();
@@ -1161,7 +1161,7 @@ public final class IteratorPrototype {
             }
             return MAX_SAFE_INTEGER;
         }
-        long limit = (long) JSTypeConversions.toInteger(context, new JSNumber(number));
+        long limit = (long) JSTypeConversions.toInteger(context, JSNumber.of(number));
         if (limit < 0) {
             context.throwRangeError("must be positive");
             return null;

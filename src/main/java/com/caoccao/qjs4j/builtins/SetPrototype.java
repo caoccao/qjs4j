@@ -285,7 +285,7 @@ public final class SetPrototype {
             return context.throwTypeError("get Set.prototype.size called on non-Set");
         }
 
-        return new JSNumber(set.size());
+        return JSNumber.of(set.size());
     }
 
     /**

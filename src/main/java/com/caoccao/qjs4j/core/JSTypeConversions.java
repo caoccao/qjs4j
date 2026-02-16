@@ -175,33 +175,33 @@ public final class JSTypeConversions {
         str = str.strip();
 
         if (str.isEmpty()) {
-            return new JSNumber(0.0);
+            return JSNumber.of(0.0);
         }
 
         // Handle special values
         if (str.equals("Infinity") || str.equals("+Infinity")) {
-            return new JSNumber(Double.POSITIVE_INFINITY);
+            return JSNumber.of(Double.POSITIVE_INFINITY);
         }
         if (str.equals("-Infinity")) {
-            return new JSNumber(Double.NEGATIVE_INFINITY);
+            return JSNumber.of(Double.NEGATIVE_INFINITY);
         }
 
         // Try to parse as number
         try {
             // Handle hex numbers
             if (str.startsWith("0x") || str.startsWith("0X")) {
-                return new JSNumber(Long.parseLong(str.substring(2), 16));
+                return JSNumber.of(Long.parseLong(str.substring(2), 16));
             }
 
             // Handle octal (legacy)
             if (str.startsWith("0") && str.length() > 1 && str.matches("0[0-7]+")) {
-                return new JSNumber(Long.parseLong(str, 8));
+                return JSNumber.of(Long.parseLong(str, 8));
             }
 
             // Parse as decimal
-            return new JSNumber(Double.parseDouble(str));
+            return JSNumber.of(Double.parseDouble(str));
         } catch (NumberFormatException e) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
     }
 
@@ -345,13 +345,13 @@ public final class JSTypeConversions {
      */
     public static JSNumber toNumber(JSContext context, JSValue value) {
         if (value instanceof JSUndefined) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         if (value instanceof JSNull) {
-            return new JSNumber(0.0);
+            return JSNumber.of(0.0);
         }
         if (value instanceof JSBoolean b) {
-            return new JSNumber(b.value() ? 1.0 : 0.0);
+            return JSNumber.of(b.value() ? 1.0 : 0.0);
         }
         if (value instanceof JSNumber n) {
             return n;
@@ -363,14 +363,14 @@ public final class JSTypeConversions {
             // BigInt cannot be converted to number without loss of precision
             // In full implementation, this would throw a TypeError
             try {
-                return new JSNumber(b.value().doubleValue());
+                return JSNumber.of(b.value().doubleValue());
             } catch (Exception e) {
-                return new JSNumber(Double.NaN);
+                return JSNumber.of(Double.NaN);
             }
         }
         if (value instanceof JSSymbol) {
             context.throwTypeError("cannot convert symbol to number");
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
 
         // Handle wrapper objects (String, Number, Boolean, BigInt objects)
@@ -381,13 +381,13 @@ public final class JSTypeConversions {
             } else if (primitiveValue instanceof JSString str) {
                 return stringToNumber(str.value());
             } else if (primitiveValue instanceof JSBoolean bool) {
-                return new JSNumber(bool.value() ? 1.0 : 0.0);
+                return JSNumber.of(bool.value() ? 1.0 : 0.0);
             } else if (primitiveValue instanceof JSBigInt bigInt) {
                 // BigInt cannot be converted to number without loss of precision
                 try {
-                    return new JSNumber(bigInt.value().doubleValue());
+                    return JSNumber.of(bigInt.value().doubleValue());
                 } catch (Exception e) {
-                    return new JSNumber(Double.NaN);
+                    return JSNumber.of(Double.NaN);
                 }
             }
         }
@@ -395,7 +395,7 @@ public final class JSTypeConversions {
         // For objects, call ToPrimitive with NUMBER hint
         JSValue primitive = toPrimitive(context, value, PreferredType.NUMBER);
         if (primitive == value) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         return toNumber(context, primitive);
     }

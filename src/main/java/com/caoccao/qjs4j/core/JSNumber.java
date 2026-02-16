@@ -24,6 +24,55 @@ import com.caoccao.qjs4j.utils.DtoaConverter;
 public record JSNumber(double value) implements JSValue {
     public static final String NAME = "number";
 
+    // Cache for small integers [-1, 256] to reduce allocation in hot loops
+    private static final int CACHE_LOW = -1;
+    private static final int CACHE_HIGH = 256;
+    private static final JSNumber[] CACHE = new JSNumber[CACHE_HIGH - CACHE_LOW + 1];
+
+    static {
+        for (int i = CACHE_LOW; i <= CACHE_HIGH; i++) {
+            CACHE[i - CACHE_LOW] = new JSNumber(i);
+        }
+    }
+
+    /**
+     * Returns a JSNumber for the given double value.
+     * Uses a cache for small integer values to reduce allocation.
+     */
+    public static JSNumber of(double value) {
+        int intVal = (int) value;
+        if (intVal == value && intVal >= CACHE_LOW && intVal <= CACHE_HIGH) {
+            // Exclude -0.0 which must remain distinct from +0.0
+            if (intVal == 0 && Double.doubleToRawLongBits(value) != 0L) {
+                return new JSNumber(value);
+            }
+            return CACHE[intVal - CACHE_LOW];
+        }
+        return new JSNumber(value);
+    }
+
+    /**
+     * Returns a JSNumber for the given int value.
+     * Uses a cache for small integer values to reduce allocation.
+     */
+    public static JSNumber of(int value) {
+        if (value >= CACHE_LOW && value <= CACHE_HIGH) {
+            return CACHE[value - CACHE_LOW];
+        }
+        return new JSNumber(value);
+    }
+
+    /**
+     * Returns a JSNumber for the given long value.
+     * Uses a cache for small integer values to reduce allocation.
+     */
+    public static JSNumber of(long value) {
+        if (value >= CACHE_LOW && value <= CACHE_HIGH) {
+            return CACHE[(int) value - CACHE_LOW];
+        }
+        return new JSNumber(value);
+    }
+
     @Override
     public Object toJavaObject() {
         return value;

@@ -107,7 +107,7 @@ public final class TypedArrayConstructor {
         int length = (int) sourceArray.getLength();
         JSArray mappedArray = context.createJSArray(length, length);
         for (int i = 0; i < length; i++) {
-            JSValue mappedValue = mapFn.call(context, thisArgValue, new JSValue[]{sourceArray.get(i), new JSNumber(i)});
+            JSValue mappedValue = mapFn.call(context, thisArgValue, new JSValue[]{sourceArray.get(i), JSNumber.of(i)});
             mappedArray.set(i, mappedValue);
         }
         JSObject result = constructorType.create(context, mappedArray);

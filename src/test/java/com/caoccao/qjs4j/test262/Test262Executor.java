@@ -34,14 +34,20 @@ import java.util.concurrent.atomic.AtomicReference;
 public class Test262Executor {
     private final long asyncTimeoutMs;
     private final HarnessLoader harnessLoader;
+    private final long syncTimeoutMs;
 
     public Test262Executor(HarnessLoader harnessLoader) {
         this(harnessLoader, 5000);
     }
 
     public Test262Executor(HarnessLoader harnessLoader, long asyncTimeoutMs) {
+        this(harnessLoader, asyncTimeoutMs, 60000);
+    }
+
+    public Test262Executor(HarnessLoader harnessLoader, long asyncTimeoutMs, long syncTimeoutMs) {
         this.harnessLoader = harnessLoader;
         this.asyncTimeoutMs = asyncTimeoutMs;
+        this.syncTimeoutMs = syncTimeoutMs;
     }
 
     private TestResult checkNegativeResult(String errorMessage, Test262TestCase test) {
@@ -179,6 +185,11 @@ public class Test262Executor {
     private TestResult executeScript(JSContext context, JSRuntime runtime,
                                      String code, Test262TestCase test) {
         try {
+            // Set execution deadline for sync tests to prevent hangs
+            if (syncTimeoutMs > 0) {
+                context.getVirtualMachine().setExecutionDeadline(
+                        System.currentTimeMillis() + syncTimeoutMs);
+            }
             context.eval(code, test.getPath().toString(), false);
             runtime.runJobs();
 
@@ -190,7 +201,13 @@ public class Test262Executor {
         } catch (JSException e) {
             return handleException(e, test);
         } catch (Exception e) {
+            if (e.getMessage() != null && e.getMessage().contains("execution timeout")) {
+                return TestResult.timeout(test);
+            }
             return handleException(e, test);
+        } finally {
+            // Clear the deadline after execution
+            context.getVirtualMachine().setExecutionDeadline(0);
         }
     }
 

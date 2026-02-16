@@ -168,7 +168,7 @@ public final class ArrayPrototype {
 
         for (long i = 0; i < length; i++) {
             JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i), arr};
+            JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.FALSE) {
@@ -239,7 +239,7 @@ public final class ArrayPrototype {
 
         for (long i = 0; i < length; i++) {
             JSValue element = jsArray.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i), jsArray};
+            JSValue[] callbackArgs = {element, JSNumber.of(i), jsArray};
             JSValue keep = callback.call(context, callbackThis, callbackArgs);
 
             if (JSTypeConversions.toBoolean(keep) == JSBoolean.TRUE) {
@@ -268,7 +268,7 @@ public final class ArrayPrototype {
 
         for (long i = 0; i < length; i++) {
             JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i), arr};
+            JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
@@ -297,15 +297,15 @@ public final class ArrayPrototype {
 
         for (long i = 0; i < length; i++) {
             JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i), arr};
+            JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
-                return new JSNumber(i);
+                return JSNumber.of(i);
             }
         }
 
-        return new JSNumber(-1);
+        return JSNumber.of(-1);
     }
 
     /**
@@ -328,7 +328,7 @@ public final class ArrayPrototype {
         // Iterate backwards
         for (long i = length - 1; i >= 0; i--) {
             JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i), arr};
+            JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
@@ -359,15 +359,15 @@ public final class ArrayPrototype {
         // Iterate backwards
         for (long i = length - 1; i >= 0; i--) {
             JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i), arr};
+            JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
-                return new JSNumber(i);
+                return JSNumber.of(i);
             }
         }
 
-        return new JSNumber(-1);
+        return JSNumber.of(-1);
     }
 
     /**
@@ -407,7 +407,7 @@ public final class ArrayPrototype {
             // Call the callback with (element, index, array)
             JSValue[] callbackArgs = new JSValue[]{
                     element,
-                    new JSNumber(i),
+                    JSNumber.of(i),
                     jsArray
             };
             JSValue mapped = callback.call(context, callbackThisArg, callbackArgs);
@@ -443,7 +443,7 @@ public final class ArrayPrototype {
 
         for (long i = 0; i < length; i++) {
             JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i), arr};
+            JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             callback.call(context, callbackThis, callbackArgs);
         }
 
@@ -460,7 +460,7 @@ public final class ArrayPrototype {
         if (thisArg instanceof JSArray jsArray) {
             length = jsArray.getLength();
         }
-        return new JSNumber(length);
+        return JSNumber.of(length);
     }
 
     /**
@@ -543,7 +543,7 @@ public final class ArrayPrototype {
         }
 
         if (args.length == 0) {
-            return new JSNumber(-1);
+            return JSNumber.of(-1);
         }
 
         JSValue searchElement = args[0];
@@ -556,11 +556,11 @@ public final class ArrayPrototype {
 
         for (long i = fromIndex; i < length; i++) {
             if (JSTypeConversions.strictEquals(arr.get(i), searchElement)) {
-                return new JSNumber(i);
+                return JSNumber.of(i);
             }
         }
 
-        return new JSNumber(-1);
+        return JSNumber.of(-1);
     }
 
     private static JSArray internalFlattenArray(JSContext context, JSArray jsArray, int depth) {
@@ -633,7 +633,7 @@ public final class ArrayPrototype {
         }
 
         if (args.length == 0) {
-            return new JSNumber(-1);
+            return JSNumber.of(-1);
         }
 
         JSValue searchElement = args[0];
@@ -648,11 +648,11 @@ public final class ArrayPrototype {
 
         for (long i = fromIndex; i >= 0; i--) {
             if (JSTypeConversions.strictEquals(arr.get(i), searchElement)) {
-                return new JSNumber(i);
+                return JSNumber.of(i);
             }
         }
 
-        return new JSNumber(-1);
+        return JSNumber.of(-1);
     }
 
     /**
@@ -674,7 +674,7 @@ public final class ArrayPrototype {
 
         for (long i = 0; i < length; i++) {
             JSValue element = jsArray.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i), jsArray};
+            JSValue[] callbackArgs = {element, JSNumber.of(i), jsArray};
             JSValue mapped = callback.call(context, callbackThis, callbackArgs);
             result.push(mapped);
         }
@@ -709,7 +709,7 @@ public final class ArrayPrototype {
             arr.push(arg, context);
         }
 
-        return new JSNumber(arr.getLength());
+        return JSNumber.of(arr.getLength());
     }
 
     /**
@@ -742,7 +742,7 @@ public final class ArrayPrototype {
 
         for (long i = startIndex; i < length; i++) {
             JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {accumulator, element, new JSNumber(i), arr};
+            JSValue[] callbackArgs = {accumulator, element, JSNumber.of(i), arr};
             accumulator = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
         }
 
@@ -779,7 +779,7 @@ public final class ArrayPrototype {
 
         for (long i = startIndex; i >= 0; i--) {
             JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {accumulator, element, new JSNumber(i), arr};
+            JSValue[] callbackArgs = {accumulator, element, JSNumber.of(i), arr};
             accumulator = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
         }
 
@@ -874,7 +874,7 @@ public final class ArrayPrototype {
 
         for (long i = 0; i < length; i++) {
             JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i), arr};
+            JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
@@ -1154,7 +1154,7 @@ public final class ArrayPrototype {
             arr.unshift(args[i]);
         }
 
-        return new JSNumber(arr.getLength());
+        return JSNumber.of(arr.getLength());
     }
 
     /**

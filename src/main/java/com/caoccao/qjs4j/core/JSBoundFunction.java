@@ -47,7 +47,7 @@ public final class JSBoundFunction extends JSFunction {
         this.defineProperty(
                 PropertyKey.fromString("length"),
                 PropertyDescriptor.dataDescriptor(
-                        new JSNumber(getLength()),
+                        JSNumber.of(getLength()),
                         false, // writable
                         false, // enumerable
                         true   // configurable

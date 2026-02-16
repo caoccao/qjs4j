@@ -142,10 +142,10 @@ public final class StringPrototype {
         long pos = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
 
         if (pos < 0 || pos >= s.length()) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
 
-        return new JSNumber(s.charAt((int) pos));
+        return JSNumber.of(s.charAt((int) pos));
     }
 
     /**
@@ -161,7 +161,7 @@ public final class StringPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        return new JSNumber(s.codePointAt((int) pos));
+        return JSNumber.of(s.codePointAt((int) pos));
     }
 
     /**
@@ -336,7 +336,7 @@ public final class StringPrototype {
                 length = jsString.value().length();
             }
         }
-        return new JSNumber(length);
+        return JSNumber.of(length);
     }
 
     /**
@@ -374,7 +374,7 @@ public final class StringPrototype {
         String s = str.value();
 
         if (args.length == 0) {
-            return new JSNumber(-1);
+            return JSNumber.of(-1);
         }
 
         String searchStr = JSTypeConversions.toString(context, args[0]).value();
@@ -382,7 +382,7 @@ public final class StringPrototype {
         position = Math.max(0, Math.min(position, s.length()));
 
         int index = s.indexOf(searchStr, (int) position);
-        return new JSNumber(index);
+        return JSNumber.of(index);
     }
 
     private static int isRegExp(JSContext context, JSValue value) {
@@ -426,7 +426,7 @@ public final class StringPrototype {
         String s = str.value();
 
         if (args.length == 0) {
-            return new JSNumber(-1);
+            return JSNumber.of(-1);
         }
 
         String searchStr = JSTypeConversions.toString(context, args[0]).value();
@@ -436,7 +436,7 @@ public final class StringPrototype {
         position = Math.max(0, Math.min(position, s.length()));
 
         int index = s.lastIndexOf(searchStr, (int) position);
-        return new JSNumber(index);
+        return JSNumber.of(index);
     }
 
     /**
@@ -478,7 +478,7 @@ public final class StringPrototype {
 
         Collator collator = Collator.getInstance(locale);
         int result = Integer.signum(collator.compare(thisStr, that));
-        return new JSNumber(result);
+        return JSNumber.of(result);
     }
 
     /**
@@ -636,7 +636,7 @@ public final class StringPrototype {
             // Add 'index' property and update lastIndex
             int[][] indices = result.indices();
             if (indices != null && indices.length > 0) {
-                matchArray.set("index", new JSNumber(indices[0][0]));
+                matchArray.set("index", JSNumber.of(indices[0][0]));
                 lastIndex = indices[0][1];
                 if (lastIndex == indices[0][0]) {
                     lastIndex++; // Prevent infinite loop on zero-width matches
@@ -1021,16 +1021,16 @@ public final class StringPrototype {
         RegExpEngine.MatchResult result = engine.exec(s, 0);
 
         if (result == null || !result.matched()) {
-            return new JSNumber(-1);
+            return JSNumber.of(-1);
         }
 
         // Return the starting index of the match
         int[][] indices = result.indices();
         if (indices != null && indices.length > 0) {
-            return new JSNumber(indices[0][0]);
+            return JSNumber.of(indices[0][0]);
         }
 
-        return new JSNumber(-1);
+        return JSNumber.of(-1);
     }
 
     /**

@@ -665,7 +665,7 @@ public final class ObjectConstructor {
         long length = arr.getLength();
         for (long i = 0; i < length; i++) {
             JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, new JSNumber(i)};
+            JSValue[] callbackArgs = {element, JSNumber.of(i)};
             JSValue keyValue = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
 
             // Convert key to string

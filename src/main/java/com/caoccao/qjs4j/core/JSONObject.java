@@ -385,7 +385,7 @@ public final class JSONObject {
         }
 
         String numStr = ctx.text.substring(start, i);
-        return new ParseResult(new JSNumber(Double.parseDouble(numStr)), i);
+        return new ParseResult(JSNumber.of(Double.parseDouble(numStr)), i);
     }
 
     private static ParseResult parseObject(JSContext context, ParseContext parseContext, int start) {

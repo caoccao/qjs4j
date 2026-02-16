@@ -37,7 +37,7 @@ public final class NumberConstructor {
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2020: If no argument is passed, return +0
         if (args.length == 0) {
-            return new JSNumber(0.0);
+            return JSNumber.of(0.0);
         }
 
         // Get the value to convert to number

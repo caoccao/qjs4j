@@ -169,7 +169,7 @@ public final class FunctionPrototype {
             return context.throwTypeError("Function.prototype.length called on non-function");
         }
 
-        return new JSNumber(func.getLength());
+        return JSNumber.of(func.getLength());
     }
 
     /**

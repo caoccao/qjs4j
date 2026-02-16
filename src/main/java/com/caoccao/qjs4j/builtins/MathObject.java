@@ -45,10 +45,10 @@ public final class MathObject {
      */
     public static JSValue abs(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.abs(x));
+        return JSNumber.of(Math.abs(x));
     }
 
     /**
@@ -57,10 +57,10 @@ public final class MathObject {
      */
     public static JSValue acos(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.acos(x));
+        return JSNumber.of(Math.acos(x));
     }
 
     /**
@@ -69,11 +69,11 @@ public final class MathObject {
      */
     public static JSValue acosh(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
         // acosh(x) = ln(x + sqrt(x*x - 1))
-        return new JSNumber(Math.log(x + Math.sqrt(x * x - 1)));
+        return JSNumber.of(Math.log(x + Math.sqrt(x * x - 1)));
     }
 
     /**
@@ -82,10 +82,10 @@ public final class MathObject {
      */
     public static JSValue asin(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.asin(x));
+        return JSNumber.of(Math.asin(x));
     }
 
     /**
@@ -94,11 +94,11 @@ public final class MathObject {
      */
     public static JSValue asinh(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
         // asinh(x) = ln(x + sqrt(x*x + 1))
-        return new JSNumber(Math.log(x + Math.sqrt(x * x + 1)));
+        return JSNumber.of(Math.log(x + Math.sqrt(x * x + 1)));
     }
 
     /**
@@ -107,10 +107,10 @@ public final class MathObject {
      */
     public static JSValue atan(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.atan(x));
+        return JSNumber.of(Math.atan(x));
     }
 
     /**
@@ -120,7 +120,7 @@ public final class MathObject {
     public static JSValue atan2(JSContext context, JSValue thisArg, JSValue[] args) {
         double y = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : Double.NaN;
         double x = args.length > 1 ? JSTypeConversions.toNumber(context, args[1]).value() : Double.NaN;
-        return new JSNumber(Math.atan2(y, x));
+        return JSNumber.of(Math.atan2(y, x));
     }
 
     /**
@@ -129,11 +129,11 @@ public final class MathObject {
      */
     public static JSValue atanh(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
         // atanh(x) = 0.5 * ln((1+x)/(1-x))
-        return new JSNumber(0.5 * Math.log((1 + x) / (1 - x)));
+        return JSNumber.of(0.5 * Math.log((1 + x) / (1 - x)));
     }
 
     /**
@@ -142,10 +142,10 @@ public final class MathObject {
      */
     public static JSValue cbrt(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.cbrt(x));
+        return JSNumber.of(Math.cbrt(x));
     }
 
     /**
@@ -154,10 +154,10 @@ public final class MathObject {
      */
     public static JSValue ceil(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.ceil(x));
+        return JSNumber.of(Math.ceil(x));
     }
 
     private static void closeIterator(JSContext context, JSObject iterator) {
@@ -181,10 +181,10 @@ public final class MathObject {
      */
     public static JSValue clz32(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(32);
+            return JSNumber.of(32);
         }
         int n = JSTypeConversions.toInt32(context, args[0]);
-        return new JSNumber(Integer.numberOfLeadingZeros(n));
+        return JSNumber.of(Integer.numberOfLeadingZeros(n));
     }
 
     /**
@@ -193,10 +193,10 @@ public final class MathObject {
      */
     public static JSValue cos(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.cos(x));
+        return JSNumber.of(Math.cos(x));
     }
 
     /**
@@ -205,10 +205,10 @@ public final class MathObject {
      */
     public static JSValue cosh(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.cosh(x));
+        return JSNumber.of(Math.cosh(x));
     }
 
     /**
@@ -217,10 +217,10 @@ public final class MathObject {
      */
     public static JSValue exp(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.exp(x));
+        return JSNumber.of(Math.exp(x));
     }
 
     /**
@@ -230,10 +230,10 @@ public final class MathObject {
      */
     public static JSValue expm1(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.expm1(x));
+        return JSNumber.of(Math.expm1(x));
     }
 
     /**
@@ -242,11 +242,11 @@ public final class MathObject {
      */
     public static JSValue f16round(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
         short half = Float16.toHalf((float) x);
-        return new JSNumber(Float16.toFloat(half));
+        return JSNumber.of(Float16.toFloat(half));
     }
 
     /**
@@ -255,10 +255,10 @@ public final class MathObject {
      */
     public static JSValue floor(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.floor(x));
+        return JSNumber.of(Math.floor(x));
     }
 
     /**
@@ -268,10 +268,10 @@ public final class MathObject {
      */
     public static JSValue fround(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber((float) x);
+        return JSNumber.of((float) x);
     }
 
     /**
@@ -292,7 +292,7 @@ public final class MathObject {
                 }
             }
         }
-        return new JSNumber(result);
+        return JSNumber.of(result);
     }
 
     /**
@@ -303,7 +303,7 @@ public final class MathObject {
     public static JSValue imul(JSContext context, JSValue thisArg, JSValue[] args) {
         int a = args.length > 0 ? JSTypeConversions.toInt32(context, args[0]) : 0;
         int b = args.length > 1 ? JSTypeConversions.toInt32(context, args[1]) : 0;
-        return new JSNumber(a * b);
+        return JSNumber.of(a * b);
     }
 
     /**
@@ -312,10 +312,10 @@ public final class MathObject {
      */
     public static JSValue log(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.log(x));
+        return JSNumber.of(Math.log(x));
     }
 
     /**
@@ -324,10 +324,10 @@ public final class MathObject {
      */
     public static JSValue log10(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.log10(x));
+        return JSNumber.of(Math.log10(x));
     }
 
     /**
@@ -337,10 +337,10 @@ public final class MathObject {
      */
     public static JSValue log1p(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.log1p(x));
+        return JSNumber.of(Math.log1p(x));
     }
 
     /**
@@ -349,10 +349,10 @@ public final class MathObject {
      */
     public static JSValue log2(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.log(x) / Math.log(2));
+        return JSNumber.of(Math.log(x) / Math.log(2));
     }
 
     /**
@@ -361,18 +361,18 @@ public final class MathObject {
      */
     public static JSValue max(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NEGATIVE_INFINITY);
+            return JSNumber.of(Double.NEGATIVE_INFINITY);
         }
 
         double max = Double.NEGATIVE_INFINITY;
         for (JSValue arg : args) {
             double x = JSTypeConversions.toNumber(context, arg).value();
             if (Double.isNaN(x)) {
-                return new JSNumber(Double.NaN);
+                return JSNumber.of(Double.NaN);
             }
             max = Math.max(max, x);
         }
-        return new JSNumber(max);
+        return JSNumber.of(max);
     }
 
     /**
@@ -381,18 +381,18 @@ public final class MathObject {
      */
     public static JSValue min(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.POSITIVE_INFINITY);
+            return JSNumber.of(Double.POSITIVE_INFINITY);
         }
 
         double min = Double.POSITIVE_INFINITY;
         for (JSValue arg : args) {
             double x = JSTypeConversions.toNumber(context, arg).value();
             if (Double.isNaN(x)) {
-                return new JSNumber(Double.NaN);
+                return JSNumber.of(Double.NaN);
             }
             min = Math.min(min, x);
         }
-        return new JSNumber(min);
+        return JSNumber.of(min);
     }
 
     /**
@@ -402,7 +402,7 @@ public final class MathObject {
     public static JSValue pow(JSContext context, JSValue thisArg, JSValue[] args) {
         double base = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : Double.NaN;
         double exp = args.length > 1 ? JSTypeConversions.toNumber(context, args[1]).value() : Double.NaN;
-        return new JSNumber(Math.pow(base, exp));
+        return JSNumber.of(Math.pow(base, exp));
     }
 
     /**
@@ -410,7 +410,7 @@ public final class MathObject {
      * ES2020 20.2.2.27
      */
     public static JSValue random(JSContext context, JSValue thisArg, JSValue[] args) {
-        return new JSNumber(Math.random());
+        return JSNumber.of(Math.random());
     }
 
     /**
@@ -419,16 +419,16 @@ public final class MathObject {
      */
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
         if (Double.isNaN(x) || x == 0.0 || Double.isInfinite(x)) {
-            return new JSNumber(x);
+            return JSNumber.of(x);
         }
         if (x >= -0.5 && x < 0) {
-            return new JSNumber(-0.0);
+            return JSNumber.of(-0.0);
         }
-        return new JSNumber(Math.floor(x + 0.5));
+        return JSNumber.of(Math.floor(x + 0.5));
     }
 
     /**
@@ -437,10 +437,10 @@ public final class MathObject {
      */
     public static JSValue sign(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.signum(x));
+        return JSNumber.of(Math.signum(x));
     }
 
     /**
@@ -449,10 +449,10 @@ public final class MathObject {
      */
     public static JSValue sin(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.sin(x));
+        return JSNumber.of(Math.sin(x));
     }
 
     /**
@@ -461,10 +461,10 @@ public final class MathObject {
      */
     public static JSValue sinh(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.sinh(x));
+        return JSNumber.of(Math.sinh(x));
     }
 
     /**
@@ -473,10 +473,10 @@ public final class MathObject {
      */
     public static JSValue sqrt(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.sqrt(x));
+        return JSNumber.of(Math.sqrt(x));
     }
 
     /**
@@ -512,7 +512,7 @@ public final class MathObject {
             }
             state.add(number.value());
         }
-        return new JSNumber(state.getResult());
+        return JSNumber.of(state.getResult());
     }
 
     /**
@@ -521,10 +521,10 @@ public final class MathObject {
      */
     public static JSValue tan(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.tan(x));
+        return JSNumber.of(Math.tan(x));
     }
 
     /**
@@ -533,10 +533,10 @@ public final class MathObject {
      */
     public static JSValue tanh(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return new JSNumber(Math.tanh(x));
+        return JSNumber.of(Math.tanh(x));
     }
 
     /**
@@ -545,13 +545,13 @@ public final class MathObject {
      */
     public static JSValue trunc(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
         if (Double.isNaN(x) || Double.isInfinite(x) || x == 0.0) {
-            return new JSNumber(x);
+            return JSNumber.of(x);
         }
-        return new JSNumber(x > 0 ? Math.floor(x) : Math.ceil(x));
+        return JSNumber.of(x > 0 ? Math.floor(x) : Math.ceil(x));
     }
 
     private enum SumPreciseStateType {

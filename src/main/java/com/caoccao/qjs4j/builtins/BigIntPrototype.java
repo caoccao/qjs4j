@@ -31,7 +31,7 @@ public final class BigIntPrototype {
      */
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
         // For now, just delegate to toString with radix 10
-        return toString(context, thisArg, new JSValue[]{new JSNumber(10)});
+        return toString(context, thisArg, new JSValue[]{JSNumber.of(10)});
     }
 
     /**

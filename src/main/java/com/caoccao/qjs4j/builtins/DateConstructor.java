@@ -25,14 +25,14 @@ public final class DateConstructor {
 
     public static JSValue UTC(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         double[] fields = {0, 0, 1, 0, 0, 0, 0};
         int n = Math.min(args.length, 7);
         for (int i = 0; i < n; i++) {
             fields[i] = JSTypeConversions.toNumber(context, args[i]).value();
         }
-        return new JSNumber(JSDate.setDateFieldsChecked(fields, false));
+        return JSNumber.of(JSDate.setDateFieldsChecked(fields, false));
     }
 
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -41,14 +41,14 @@ public final class DateConstructor {
     }
 
     public static JSValue now(JSContext context, JSValue thisArg, JSValue[] args) {
-        return new JSNumber(JSDate.dateNow());
+        return JSNumber.of(JSDate.dateNow());
     }
 
     public static JSValue parse(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
         JSString dateString = JSTypeConversions.toString(context, args[0]);
-        return new JSNumber(JSDate.parseDateString(dateString.value()));
+        return JSNumber.of(JSDate.parseDateString(dateString.value()));
     }
 }

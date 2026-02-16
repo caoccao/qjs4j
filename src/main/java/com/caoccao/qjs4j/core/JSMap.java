@@ -228,7 +228,7 @@ public final class JSMap extends JSObject {
 
     private JSValue normalizeKey(JSValue key) {
         if (key instanceof JSNumber number && number.value() == 0.0) {
-            return new JSNumber(0.0);
+            return JSNumber.of(0.0);
         }
         return key;
     }

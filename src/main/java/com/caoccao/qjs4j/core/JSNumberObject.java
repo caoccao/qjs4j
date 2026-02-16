@@ -52,7 +52,7 @@ public final class JSNumberObject extends JSObject {
      * @param value the primitive number value to wrap
      */
     public JSNumberObject(double value) {
-        this(new JSNumber(value));
+        this(JSNumber.of(value));
     }
 
     /**
@@ -69,7 +69,7 @@ public final class JSNumberObject extends JSObject {
     public static JSObject create(JSContext context, JSValue... args) {
         JSNumber numValue;
         if (args.length == 0) {
-            numValue = new JSNumber(0.0);
+            numValue = JSNumber.of(0.0);
         } else {
             numValue = JSTypeConversions.toNumber(context, args[0]);
         }

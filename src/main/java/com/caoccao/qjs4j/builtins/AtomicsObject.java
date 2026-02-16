@@ -77,7 +77,7 @@ public final class AtomicsObject {
         synchronized (buffer) {
             int oldValue = buffer.getInt(byteOffset);
             buffer.putInt(byteOffset, oldValue + value);
-            return new JSNumber(oldValue);
+            return JSNumber.of(oldValue);
         }
     }
 
@@ -116,7 +116,7 @@ public final class AtomicsObject {
         synchronized (buffer) {
             int oldValue = buffer.getInt(byteOffset);
             buffer.putInt(byteOffset, oldValue & value);
-            return new JSNumber(oldValue);
+            return JSNumber.of(oldValue);
         }
     }
 
@@ -158,7 +158,7 @@ public final class AtomicsObject {
             if (oldValue == expectedValue) {
                 buffer.putInt(byteOffset, replacementValue);
             }
-            return new JSNumber(oldValue);
+            return JSNumber.of(oldValue);
         }
     }
 
@@ -197,7 +197,7 @@ public final class AtomicsObject {
         synchronized (buffer) {
             int oldValue = buffer.getInt(byteOffset);
             buffer.putInt(byteOffset, value);
-            return new JSNumber(oldValue);
+            return JSNumber.of(oldValue);
         }
     }
 
@@ -256,7 +256,7 @@ public final class AtomicsObject {
 
         synchronized (buffer) {
             int value = buffer.getInt(byteOffset);
-            return new JSNumber(value);
+            return JSNumber.of(value);
         }
     }
 
@@ -296,11 +296,11 @@ public final class AtomicsObject {
 
         WaitList waitList = waitLists.get(waitKey);
         if (waitList == null) {
-            return new JSNumber(0);
+            return JSNumber.of(0);
         }
 
         int notified = waitList.notifyWaiters(count);
-        return new JSNumber(notified);
+        return JSNumber.of(notified);
     }
 
     /**
@@ -338,7 +338,7 @@ public final class AtomicsObject {
         synchronized (buffer) {
             int oldValue = buffer.getInt(byteOffset);
             buffer.putInt(byteOffset, oldValue | value);
-            return new JSNumber(oldValue);
+            return JSNumber.of(oldValue);
         }
     }
 
@@ -388,7 +388,7 @@ public final class AtomicsObject {
 
         synchronized (buffer) {
             buffer.putInt(byteOffset, value);
-            return new JSNumber(value);
+            return JSNumber.of(value);
         }
     }
 
@@ -427,7 +427,7 @@ public final class AtomicsObject {
         synchronized (buffer) {
             int oldValue = buffer.getInt(byteOffset);
             buffer.putInt(byteOffset, oldValue - value);
-            return new JSNumber(oldValue);
+            return JSNumber.of(oldValue);
         }
     }
 
@@ -583,7 +583,7 @@ public final class AtomicsObject {
         synchronized (buffer) {
             int oldValue = buffer.getInt(byteOffset);
             buffer.putInt(byteOffset, oldValue ^ value);
-            return new JSNumber(oldValue);
+            return JSNumber.of(oldValue);
         }
     }
 

@@ -74,14 +74,14 @@ public final class DatePrototype {
         double[] fields = new double[9];
         int result = JSDate.getDateFields(date.getTimeValue(), fields, isLocal, false);
         if (result == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
 
         double value = fields[fieldIndex];
         if (getYearLegacy) {
             value -= 1900;
         }
-        return new JSNumber(value);
+        return JSNumber.of(value);
     }
 
     private static JSValue getDateString(JSContext context, JSValue thisArg, int format, int part) {
@@ -226,7 +226,7 @@ public final class DatePrototype {
         if (date == null) {
             return context.getPendingException();
         }
-        return new JSNumber(date.getTimeValue());
+        return JSNumber.of(date.getTimeValue());
     }
 
     public static JSValue getTimezoneOffset(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -236,9 +236,9 @@ public final class DatePrototype {
         }
         double value = date.getTimeValue();
         if (Double.isNaN(value)) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
-        return new JSNumber(JSDate.getTimezoneOffset((long) JSDate.trunc(value)));
+        return JSNumber.of(JSDate.getTimezoneOffset((long) JSDate.trunc(value)));
     }
 
     public static JSValue getUTCDate(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -356,7 +356,7 @@ public final class DatePrototype {
         }
 
         if (initialResult == 0) {
-            return new JSNumber(Double.NaN);
+            return JSNumber.of(Double.NaN);
         }
 
         double newTime = Double.NaN;
@@ -364,7 +364,7 @@ public final class DatePrototype {
             newTime = JSDate.setDateFields(fields, isLocal);
         }
         date.setTimeValue(newTime);
-        return new JSNumber(newTime);
+        return JSNumber.of(newTime);
     }
 
     public static JSValue setFullYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -404,7 +404,7 @@ public final class DatePrototype {
         double value = number.value();
         double clipped = JSDate.timeClip(value);
         date.setTimeValue(clipped);
-        return new JSNumber(clipped);
+        return JSNumber.of(clipped);
     }
 
     public static JSValue setUTCDate(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -452,7 +452,7 @@ public final class DatePrototype {
                 year += 1900;
             }
         }
-        return setDateField(context, date, new JSValue[]{new JSNumber(year)}, FIELD_YEAR, FIELD_MONTH, true);
+        return setDateField(context, date, new JSValue[]{JSNumber.of(year)}, FIELD_YEAR, FIELD_MONTH, true);
     }
 
     public static JSValue symbolToPrimitive(JSContext context, JSValue thisArg, JSValue[] args) {

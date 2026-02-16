@@ -403,7 +403,7 @@ public final class JSArray extends JSObject {
     private void initializeLengthProperty() {
         // The length property is special - it's writable but not enumerable or configurable
         PropertyDescriptor lengthDesc = PropertyDescriptor.dataDescriptor(
-                new JSNumber(length),
+                JSNumber.of(length),
                 true,  // writable
                 false, // not enumerable
                 false  // not configurable
@@ -810,7 +810,7 @@ public final class JSArray extends JSObject {
     private void updateLengthProperty() {
         int offset = shape.getPropertyOffset(PropertyKey.fromString("length"));
         if (offset >= 0) {
-            propertyValues[offset] = new JSNumber(length);
+            propertyValues[offset] = JSNumber.of(length);
         }
     }
 }
