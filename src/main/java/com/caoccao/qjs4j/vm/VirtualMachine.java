@@ -398,43 +398,42 @@ public final class VirtualMachine {
             Bytecode bytecode = function.getBytecode();
             byte[] ins = bytecode.getInstructions();
             JSValue[] locals = frame.getLocals();
+            JSStackValue[] stack = valueStack.stack;
+            int sp = valueStack.stackTop;
             int pc = 0;
 
             // Main execution loop
             while (true) {
+                // Sync local sp to valueStack at top of each iteration.
+                // This ensures cold opcodes (which use valueStack directly) see the correct stackTop.
+                valueStack.stackTop = sp;
+
                 if (pendingException != null) {
-                    // QuickJS-style exception handling: unwind stack looking for catch offset
                     JSValue exception = pendingException;
                     pendingException = null;
 
-                    // Unwind the stack looking for a CatchOffset marker
-                    // Only unwind within the current function's stack frame (QuickJS: while (sp > stack_buf))
                     boolean foundHandler = false;
-                    while (valueStack.getStackTop() > savedStackTop) {
-                        JSStackValue val = valueStack.popStackValue();
+                    while (valueStack.stackTop > savedStackTop) {
+                        JSStackValue val = stack[--valueStack.stackTop];
                         if (val instanceof JSCatchOffset catchOffset) {
-                            // Found catch handler - push exception and jump to it
-                            valueStack.push(exception);
+                            stack[valueStack.stackTop++] = exception;
                             pc = catchOffset.offset();
                             foundHandler = true;
                             context.clearPendingException();
                             break;
                         }
                     }
+                    sp = valueStack.stackTop;
 
                     if (!foundHandler) {
-                        // No handler found - propagate exception
                         currentFrame = previousFrame;
                         if (exception instanceof JSError jsError) {
                             throw new JSVirtualMachineException(jsError);
                         }
-                        // Safely convert exception to string without calling JavaScript methods
-                        // to avoid issues when already in exception state
                         String exceptionMessage = safeExceptionToString(context, exception);
                         throw new JSVirtualMachineException("Unhandled exception: " + exceptionMessage, exception);
                     }
 
-                    // Continue execution at catch handler
                     continue;
                 }
 
@@ -466,29 +465,55 @@ public final class VirtualMachine {
                     case PUSH_I32 -> {
                         int i32val = ((ins[pc + 1] & 0xFF) << 24) | ((ins[pc + 2] & 0xFF) << 16) |
                                 ((ins[pc + 3] & 0xFF) << 8) | (ins[pc + 4] & 0xFF);
-                        valueStack.push(JSNumber.of(i32val));
+                        stack[sp++] = JSNumber.of(i32val);
                         pc += 5;
                     }
                     case PUSH_BIGINT_I32 -> {
-                        valueStack.push(new JSBigInt(bytecode.readI32(pc + 1)));
+                        stack[sp++] = new JSBigInt(bytecode.readI32(pc + 1));
                         pc += op.getSize();
                     }
-                    case PUSH_MINUS1 -> { valueStack.push(JSNumber.of(-1)); pc += 1; }
-                    case PUSH_0 -> { valueStack.push(JSNumber.of(0)); pc += 1; }
-                    case PUSH_1 -> { valueStack.push(JSNumber.of(1)); pc += 1; }
-                    case PUSH_2 -> { valueStack.push(JSNumber.of(2)); pc += 1; }
-                    case PUSH_3 -> { valueStack.push(JSNumber.of(3)); pc += 1; }
-                    case PUSH_4 -> { valueStack.push(JSNumber.of(4)); pc += 1; }
-                    case PUSH_5 -> { valueStack.push(JSNumber.of(5)); pc += 1; }
-                    case PUSH_6 -> { valueStack.push(JSNumber.of(6)); pc += 1; }
-                    case PUSH_7 -> { valueStack.push(JSNumber.of(7)); pc += 1; }
+                    case PUSH_MINUS1 -> {
+                        stack[sp++] = JSNumber.of(-1);
+                        pc += 1;
+                    }
+                    case PUSH_0 -> {
+                        stack[sp++] = JSNumber.of(0);
+                        pc += 1;
+                    }
+                    case PUSH_1 -> {
+                        stack[sp++] = JSNumber.of(1);
+                        pc += 1;
+                    }
+                    case PUSH_2 -> {
+                        stack[sp++] = JSNumber.of(2);
+                        pc += 1;
+                    }
+                    case PUSH_3 -> {
+                        stack[sp++] = JSNumber.of(3);
+                        pc += 1;
+                    }
+                    case PUSH_4 -> {
+                        stack[sp++] = JSNumber.of(4);
+                        pc += 1;
+                    }
+                    case PUSH_5 -> {
+                        stack[sp++] = JSNumber.of(5);
+                        pc += 1;
+                    }
+                    case PUSH_6 -> {
+                        stack[sp++] = JSNumber.of(6);
+                        pc += 1;
+                    }
+                    case PUSH_7 -> {
+                        stack[sp++] = JSNumber.of(7);
+                        pc += 1;
+                    }
                     case PUSH_I8 -> {
-                        valueStack.push(JSNumber.of((byte) ins[pc + 1]));
+                        stack[sp++] = JSNumber.of(ins[pc + 1]);
                         pc += 2;
                     }
                     case PUSH_I16 -> {
-                        int i16val = (short) (((ins[pc + 1] & 0xFF) << 8) | (ins[pc + 2] & 0xFF));
-                        valueStack.push(JSNumber.of(i16val));
+                        stack[sp++] = JSNumber.of((short) (((ins[pc + 1] & 0xFF) << 8) | (ins[pc + 2] & 0xFF)));
                         pc += 3;
                     }
                     case PUSH_CONST -> {
@@ -502,7 +527,7 @@ public final class VirtualMachine {
                             ensureConstantObjectPrototype(jsObject);
                         }
 
-                        valueStack.push(constValue);
+                        stack[sp++] = constValue;
                         pc += 5;
                     }
                     case PUSH_CONST8 -> {
@@ -512,14 +537,13 @@ public final class VirtualMachine {
                         } else if (constValue8 instanceof JSObject jsObject) {
                             ensureConstantObjectPrototype(jsObject);
                         }
-                        valueStack.push(constValue8);
+                        stack[sp++] = constValue8;
                         pc += 2;
                     }
                     case PUSH_ATOM_VALUE -> {
                         int atomIndex = ((ins[pc + 1] & 0xFF) << 24) | ((ins[pc + 2] & 0xFF) << 16) |
                                 ((ins[pc + 3] & 0xFF) << 8) | (ins[pc + 4] & 0xFF);
-                        String atomStr = bytecode.getAtoms()[atomIndex];
-                        valueStack.push(new JSString(atomStr));
+                        stack[sp++] = new JSString(bytecode.getAtoms()[atomIndex]);
                         pc += 5;
                     }
                     case PRIVATE_SYMBOL -> {
@@ -533,7 +557,7 @@ public final class VirtualMachine {
                         // Each private field gets its own unique symbol
                         JSSymbol privateSymbol = new JSSymbol(fieldName);
 
-                        valueStack.push(privateSymbol);
+                        stack[sp++] = privateSymbol;
                         pc += op.getSize();
                     }
                     case FCLOSURE -> {
@@ -544,7 +568,7 @@ public final class VirtualMachine {
                             int closureCount = templateFunction.getClosureVars().length;
                             JSValue[] capturedClosureVars = new JSValue[closureCount];
                             for (int i = closureCount - 1; i >= 0; i--) {
-                                capturedClosureVars[i] = valueStack.pop();
+                                capturedClosureVars[i] = (JSValue) stack[--sp];
                             }
                             JSBytecodeFunction closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
                             // Patch closure self-reference if needed.
@@ -556,13 +580,13 @@ public final class VirtualMachine {
                                 capturedClosureVars[selfIdx] = closureFunction;
                             }
                             closureFunction.initializePrototypeChain(context);
-                            valueStack.push(closureFunction);
+                            stack[sp++] = closureFunction;
                         } else {
                             // Initialize the function's prototype chain to inherit from Function.prototype
                             if (funcValue instanceof JSFunction func) {
                                 func.initializePrototypeChain(context);
                             }
-                            valueStack.push(funcValue);
+                            stack[sp++] = funcValue;
                         }
                         pc += op.getSize();
                     }
@@ -573,41 +597,41 @@ public final class VirtualMachine {
                             int closureCount = templateFunction.getClosureVars().length;
                             JSValue[] capturedClosureVars = new JSValue[closureCount];
                             for (int i = closureCount - 1; i >= 0; i--) {
-                                capturedClosureVars[i] = valueStack.pop();
+                                capturedClosureVars[i] = (JSValue) stack[--sp];
                             }
                             JSBytecodeFunction closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
                             closureFunction.initializePrototypeChain(context);
-                            valueStack.push(closureFunction);
+                            stack[sp++] = closureFunction;
                         } else {
                             if (funcValue instanceof JSFunction func) {
                                 func.initializePrototypeChain(context);
                             }
-                            valueStack.push(funcValue);
+                            stack[sp++] = funcValue;
                         }
                         pc += op.getSize();
                     }
                     case PUSH_EMPTY_STRING -> {
-                        valueStack.push(new JSString(""));
+                        stack[sp++] = new JSString("");
                         pc += 1;
                     }
                     case UNDEFINED -> {
-                        valueStack.push(JSUndefined.INSTANCE);
+                        stack[sp++] = JSUndefined.INSTANCE;
                         pc += 1;
                     }
                     case NULL -> {
-                        valueStack.push(JSNull.INSTANCE);
+                        stack[sp++] = JSNull.INSTANCE;
                         pc += 1;
                     }
                     case PUSH_THIS -> {
-                        valueStack.push(currentFrame.getThisArg());
+                        stack[sp++] = currentFrame.getThisArg();
                         pc += 1;
                     }
                     case PUSH_FALSE -> {
-                        valueStack.push(JSBoolean.FALSE);
+                        stack[sp++] = JSBoolean.FALSE;
                         pc += 1;
                     }
                     case PUSH_TRUE -> {
-                        valueStack.push(JSBoolean.TRUE);
+                        stack[sp++] = JSBoolean.TRUE;
                         pc += 1;
                     }
                     case SPECIAL_OBJECT -> {
@@ -615,7 +639,7 @@ public final class VirtualMachine {
                         // Opcode format: SPECIAL_OBJECT type (1 byte for opcode + 1 byte for type)
                         int objectType = bytecode.readU8(pc + 1);
                         JSValue specialObj = createSpecialObject(objectType, currentFrame);
-                        valueStack.push(specialObj);
+                        stack[sp++] = specialObj;
                         pc += op.getSize();
                     }
                     case REST -> {
@@ -637,151 +661,182 @@ public final class VirtualMachine {
                         System.arraycopy(funcArgs, restStart, restArgs, 0, restCount);
 
                         JSArray restArray = context.createJSArray(restArgs);
-                        valueStack.push(restArray);
+                        stack[sp++] = restArray;
                         pc += op.getSize();
                     }
 
                     // ==================== Stack Manipulation ====================
                     case DROP -> {
-                        valueStack.pop();
+                        sp--;
                         pc += 1;
                     }
                     case NIP -> {
-                        JSValue top = valueStack.pop();
-                        valueStack.pop();
-                        valueStack.push(top);
+                        stack[sp - 2] = stack[sp - 1];
+                        sp--;
                         pc += 1;
                     }
                     case DUP -> {
-                        valueStack.push(valueStack.peek(0));
+                        stack[sp] = stack[sp - 1];
+                        sp++;
                         pc += 1;
                     }
                     case DUP1 -> {
-                        // a b -> a a b (duplicate the value at offset 1)
-                        valueStack.push(valueStack.peek(1));
+                        stack[sp] = stack[sp - 2];
+                        sp++;
                         pc += 1;
                     }
                     case DUP2 -> {
-                        valueStack.push(valueStack.peek(1));
-                        valueStack.push(valueStack.peek(1));
+                        stack[sp] = stack[sp - 2];
+                        stack[sp + 1] = stack[sp - 1];
+                        sp += 2;
                         pc += 1;
                     }
                     case INSERT2 -> {
-                        JSValue top = valueStack.peek(0);
-                        JSValue second = valueStack.peek(1);
-                        valueStack.pop();
-                        valueStack.pop();
-                        valueStack.push(top);
-                        valueStack.push(second);
-                        valueStack.push(top);
+                        // [a, b] -> [b, a, b]
+                        JSStackValue i2top = stack[sp - 1];
+                        stack[sp] = i2top;
+                        stack[sp - 1] = stack[sp - 2];
+                        stack[sp - 2] = i2top;
+                        sp++;
                         pc += 1;
                     }
                     case INSERT3 -> {
-                        JSValue top = valueStack.peek(0);
-                        JSValue second = valueStack.peek(1);
-                        JSValue third = valueStack.peek(2);
-                        valueStack.pop();
-                        valueStack.pop();
-                        valueStack.pop();
-                        valueStack.push(top);
-                        valueStack.push(third);
-                        valueStack.push(second);
-                        valueStack.push(top);
+                        // [a, b, c] -> [c, a, b, c]
+                        JSStackValue i3top = stack[sp - 1];
+                        stack[sp] = i3top;
+                        stack[sp - 1] = stack[sp - 2];
+                        stack[sp - 2] = stack[sp - 3];
+                        stack[sp - 3] = i3top;
+                        sp++;
                         pc += 1;
                     }
                     case INSERT4 -> {
-                        JSValue top = valueStack.peek(0);
-                        JSValue second = valueStack.peek(1);
-                        JSValue third = valueStack.peek(2);
-                        JSValue fourth = valueStack.peek(3);
-                        valueStack.pop();
-                        valueStack.pop();
-                        valueStack.pop();
-                        valueStack.pop();
-                        valueStack.push(top);
-                        valueStack.push(fourth);
-                        valueStack.push(third);
-                        valueStack.push(second);
-                        valueStack.push(top);
+                        // [a, b, c, d] -> [d, a, b, c, d]
+                        JSStackValue i4top = stack[sp - 1];
+                        stack[sp] = i4top;
+                        stack[sp - 1] = stack[sp - 2];
+                        stack[sp - 2] = stack[sp - 3];
+                        stack[sp - 3] = stack[sp - 4];
+                        stack[sp - 4] = i4top;
+                        sp++;
                         pc += 1;
                     }
                     case SWAP -> {
-                        JSValue v1 = valueStack.pop();
-                        JSValue v2 = valueStack.pop();
-                        valueStack.push(v1);
-                        valueStack.push(v2);
+                        JSStackValue swapTmp = stack[sp - 1];
+                        stack[sp - 1] = stack[sp - 2];
+                        stack[sp - 2] = swapTmp;
                         propertyAccessLock = true;
                         pc += 1;
                     }
                     case ROT3L -> {
-                        JSValue a = valueStack.pop();
-                        JSValue b = valueStack.pop();
-                        JSValue c = valueStack.pop();
-                        valueStack.push(b);
-                        valueStack.push(a);
-                        valueStack.push(c);
+                        JSStackValue rot3a = stack[sp - 3];
+                        stack[sp - 3] = stack[sp - 2];
+                        stack[sp - 2] = stack[sp - 1];
+                        stack[sp - 1] = rot3a;
                         pc += 1;
                     }
                     case ROT3R -> {
-                        JSValue a = valueStack.pop();
-                        JSValue b = valueStack.pop();
-                        JSValue c = valueStack.pop();
-                        valueStack.push(a);
-                        valueStack.push(c);
-                        valueStack.push(b);
+                        JSStackValue rot3c = stack[sp - 1];
+                        stack[sp - 1] = stack[sp - 2];
+                        stack[sp - 2] = stack[sp - 3];
+                        stack[sp - 3] = rot3c;
                         pc += 1;
                     }
                     case SWAP2 -> {
-                        JSValue d = valueStack.pop();
-                        JSValue c = valueStack.pop();
-                        JSValue b = valueStack.pop();
-                        JSValue a = valueStack.pop();
-                        valueStack.push(c);
-                        valueStack.push(d);
-                        valueStack.push(a);
-                        valueStack.push(b);
+                        JSStackValue s2a = stack[sp - 4], s2b = stack[sp - 3];
+                        stack[sp - 4] = stack[sp - 2];
+                        stack[sp - 3] = stack[sp - 1];
+                        stack[sp - 2] = s2a;
+                        stack[sp - 1] = s2b;
                         pc += 1;
                     }
 
                     // ==================== Arithmetic Operations ====================
                     case ADD -> {
-                        handleAdd();
+                        // Inline number fast path to avoid sync overhead
+                        JSValue addR = (JSValue) stack[sp - 1];
+                        JSValue addL = (JSValue) stack[sp - 2];
+                        if (addL instanceof JSNumber addLN && addR instanceof JSNumber addRN) {
+                            stack[sp - 2] = JSNumber.of(addLN.value() + addRN.value());
+                            sp--;
+                        } else if (addL instanceof JSString || addR instanceof JSString) {
+                            stack[sp - 2] = new JSString(
+                                    JSTypeConversions.toString(context, addL).value() +
+                                            JSTypeConversions.toString(context, addR).value());
+                            sp--;
+                        } else {
+                            valueStack.stackTop = sp;
+                            handleAdd();
+                            sp = valueStack.stackTop;
+                        }
                         pc += 1;
                     }
                     case SUB -> {
-                        handleSub();
+                        JSValue subR = (JSValue) stack[sp - 1];
+                        JSValue subL = (JSValue) stack[sp - 2];
+                        if (subL instanceof JSNumber subLN && subR instanceof JSNumber subRN) {
+                            stack[sp - 2] = JSNumber.of(subLN.value() - subRN.value());
+                            sp--;
+                        } else {
+                            valueStack.stackTop = sp;
+                            handleSub();
+                            sp = valueStack.stackTop;
+                        }
                         pc += 1;
                     }
                     case MUL -> {
-                        handleMul();
+                        JSValue mulR = (JSValue) stack[sp - 1];
+                        JSValue mulL = (JSValue) stack[sp - 2];
+                        if (mulL instanceof JSNumber mulLN && mulR instanceof JSNumber mulRN) {
+                            stack[sp - 2] = JSNumber.of(mulLN.value() * mulRN.value());
+                            sp--;
+                        } else {
+                            valueStack.stackTop = sp;
+                            handleMul();
+                            sp = valueStack.stackTop;
+                        }
                         pc += 1;
                     }
                     case DIV -> {
+                        valueStack.stackTop = sp;
                         handleDiv();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case MOD -> {
+                        valueStack.stackTop = sp;
                         handleMod();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case EXP, POW -> {
+                        valueStack.stackTop = sp;
                         handleExp();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case PLUS -> {
+                        valueStack.stackTop = sp;
                         handlePlus();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case NEG -> {
+                        valueStack.stackTop = sp;
                         handleNeg();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case INC -> {
+                        valueStack.stackTop = sp;
                         handleInc();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case DEC -> {
+                        valueStack.stackTop = sp;
                         handleDec();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case INC_LOC -> {
@@ -808,7 +863,7 @@ public final class VirtualMachine {
                     }
                     case ADD_LOC -> {
                         int addLocIdx = ins[pc + 1] & 0xFF;
-                        JSValue addRight = valueStack.pop();
+                        JSValue addRight = (JSValue) stack[--sp];
                         JSValue addLeft = locals[addLocIdx];
                         if (addLeft == null) addLeft = JSUndefined.INSTANCE;
                         if (addLeft instanceof JSNumber addLeftNum && addRight instanceof JSNumber addRightNum) {
@@ -816,169 +871,246 @@ public final class VirtualMachine {
                         } else if (addLeft instanceof JSString || addRight instanceof JSString) {
                             locals[addLocIdx] = new JSString(
                                     JSTypeConversions.toString(context, addLeft).value() +
-                                    JSTypeConversions.toString(context, addRight).value());
+                                            JSTypeConversions.toString(context, addRight).value());
                         } else {
                             locals[addLocIdx] = JSNumber.of(
                                     JSTypeConversions.toNumber(context, addLeft).value() +
-                                    JSTypeConversions.toNumber(context, addRight).value());
+                                            JSTypeConversions.toNumber(context, addRight).value());
                         }
                         pc += 2;
                     }
                     case POST_INC -> {
+                        valueStack.stackTop = sp;
                         handlePostInc();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case POST_DEC -> {
+                        valueStack.stackTop = sp;
                         handlePostDec();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case PERM3 -> {
-                        JSValue c = valueStack.pop();
-                        JSValue b = valueStack.pop();
-                        JSValue a = valueStack.pop();
-                        valueStack.push(b);
-                        valueStack.push(a);
-                        valueStack.push(c);
+                        // [a, b, c] -> [b, a, c]
+                        JSStackValue p3tmp = stack[sp - 3];
+                        stack[sp - 3] = stack[sp - 2];
+                        stack[sp - 2] = p3tmp;
                         pc += 1;
                     }
                     case PERM4 -> {
-                        JSValue d = valueStack.pop();
-                        JSValue c = valueStack.pop();
-                        JSValue b = valueStack.pop();
-                        JSValue a = valueStack.pop();
-                        valueStack.push(c);
-                        valueStack.push(a);
-                        valueStack.push(b);
-                        valueStack.push(d);
+                        // [a, b, c, d] -> [c, a, b, d]
+                        JSStackValue p4a = stack[sp - 4];
+                        stack[sp - 4] = stack[sp - 2];
+                        stack[sp - 2] = stack[sp - 3];
+                        stack[sp - 3] = p4a;
                         pc += 1;
                     }
                     case PERM5 -> {
-                        JSValue e = valueStack.pop();
-                        JSValue d = valueStack.pop();
-                        JSValue c = valueStack.pop();
-                        JSValue b = valueStack.pop();
-                        JSValue a = valueStack.pop();
-                        valueStack.push(d);
-                        valueStack.push(a);
-                        valueStack.push(b);
-                        valueStack.push(c);
-                        valueStack.push(e);
+                        // [a, b, c, d, e] -> [d, a, b, c, e]
+                        JSStackValue p5a = stack[sp - 5];
+                        stack[sp - 5] = stack[sp - 2];
+                        stack[sp - 2] = stack[sp - 3];
+                        stack[sp - 3] = stack[sp - 4];
+                        stack[sp - 4] = p5a;
                         pc += 1;
                     }
 
                     // ==================== Bitwise Operations ====================
                     case SHL -> {
-                        handleShl();
+                        JSValue shlR = (JSValue) stack[sp - 1], shlL = (JSValue) stack[sp - 2];
+                        if (shlL instanceof JSNumber shlLN && shlR instanceof JSNumber shlRN) {
+                            stack[sp - 2] = JSNumber.of(((int) shlLN.value()) << (((int) shlRN.value()) & 0x1F));
+                            sp--;
+                        } else {
+                            valueStack.stackTop = sp;
+                            handleShl();
+                            sp = valueStack.stackTop;
+                        }
                         pc += 1;
                     }
                     case SAR -> {
-                        handleSar();
+                        JSValue sarR = (JSValue) stack[sp - 1], sarL = (JSValue) stack[sp - 2];
+                        if (sarL instanceof JSNumber sarLN && sarR instanceof JSNumber sarRN) {
+                            stack[sp - 2] = JSNumber.of(((int) sarLN.value()) >> (((int) sarRN.value()) & 0x1F));
+                            sp--;
+                        } else {
+                            valueStack.stackTop = sp;
+                            handleSar();
+                            sp = valueStack.stackTop;
+                        }
                         pc += 1;
                     }
                     case SHR -> {
+                        valueStack.stackTop = sp;
                         handleShr();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case AND -> {
-                        handleAnd();
+                        JSValue andR = (JSValue) stack[sp - 1], andL = (JSValue) stack[sp - 2];
+                        if (andL instanceof JSNumber andLN && andR instanceof JSNumber andRN) {
+                            stack[sp - 2] = JSNumber.of(((int) andLN.value()) & ((int) andRN.value()));
+                            sp--;
+                        } else {
+                            valueStack.stackTop = sp;
+                            handleAnd();
+                            sp = valueStack.stackTop;
+                        }
                         pc += 1;
                     }
                     case OR -> {
+                        valueStack.stackTop = sp;
                         handleOr();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case XOR -> {
+                        valueStack.stackTop = sp;
                         handleXor();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case NOT -> {
+                        valueStack.stackTop = sp;
                         handleNot();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
 
                     // ==================== Comparison Operations ====================
                     case EQ -> {
+                        valueStack.stackTop = sp;
                         handleEq();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case NEQ -> {
+                        valueStack.stackTop = sp;
                         handleNeq();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case STRICT_EQ -> {
-                        JSValue seqRight = valueStack.pop();
-                        JSValue seqLeft = valueStack.pop();
-                        valueStack.push(JSBoolean.valueOf(JSTypeConversions.strictEquals(seqLeft, seqRight)));
+                        stack[sp - 2] = JSBoolean.valueOf(JSTypeConversions.strictEquals(
+                                (JSValue) stack[sp - 2], (JSValue) stack[sp - 1]));
+                        sp--;
                         pc += 1;
                     }
                     case STRICT_NEQ -> {
-                        JSValue sneqRight = valueStack.pop();
-                        JSValue sneqLeft = valueStack.pop();
-                        valueStack.push(JSBoolean.valueOf(!JSTypeConversions.strictEquals(sneqLeft, sneqRight)));
+                        stack[sp - 2] = JSBoolean.valueOf(!JSTypeConversions.strictEquals(
+                                (JSValue) stack[sp - 2], (JSValue) stack[sp - 1]));
+                        sp--;
                         pc += 1;
                     }
                     case LT -> {
-                        handleLt();
+                        JSValue ltR = (JSValue) stack[sp - 1], ltL = (JSValue) stack[sp - 2];
+                        if (ltL instanceof JSNumber ltLN && ltR instanceof JSNumber ltRN) {
+                            stack[sp - 2] = JSBoolean.valueOf(ltLN.value() < ltRN.value());
+                            sp--;
+                        } else {
+                            valueStack.stackTop = sp;
+                            handleLt();
+                            sp = valueStack.stackTop;
+                        }
                         pc += 1;
                     }
                     case LTE -> {
-                        handleLte();
+                        JSValue lteR = (JSValue) stack[sp - 1], lteL = (JSValue) stack[sp - 2];
+                        if (lteL instanceof JSNumber lteLN && lteR instanceof JSNumber lteRN) {
+                            stack[sp - 2] = JSBoolean.valueOf(lteLN.value() <= lteRN.value());
+                            sp--;
+                        } else {
+                            valueStack.stackTop = sp;
+                            handleLte();
+                            sp = valueStack.stackTop;
+                        }
                         pc += 1;
                     }
                     case GT -> {
-                        handleGt();
+                        JSValue gtR = (JSValue) stack[sp - 1], gtL = (JSValue) stack[sp - 2];
+                        if (gtL instanceof JSNumber gtLN && gtR instanceof JSNumber gtRN) {
+                            stack[sp - 2] = JSBoolean.valueOf(gtLN.value() > gtRN.value());
+                            sp--;
+                        } else {
+                            valueStack.stackTop = sp;
+                            handleGt();
+                            sp = valueStack.stackTop;
+                        }
                         pc += 1;
                     }
                     case GTE -> {
-                        handleGte();
+                        JSValue gteR = (JSValue) stack[sp - 1], gteL = (JSValue) stack[sp - 2];
+                        if (gteL instanceof JSNumber gteLN && gteR instanceof JSNumber gteRN) {
+                            stack[sp - 2] = JSBoolean.valueOf(gteLN.value() >= gteRN.value());
+                            sp--;
+                        } else {
+                            valueStack.stackTop = sp;
+                            handleGte();
+                            sp = valueStack.stackTop;
+                        }
                         pc += 1;
                     }
                     case INSTANCEOF -> {
+                        valueStack.stackTop = sp;
                         handleInstanceof();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case IN -> {
+                        valueStack.stackTop = sp;
                         handleIn();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case PRIVATE_IN -> {
+                        valueStack.stackTop = sp;
                         handlePrivateIn();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
 
                     // ==================== Logical Operations ====================
                     case LOGICAL_NOT, LNOT -> {
+                        valueStack.stackTop = sp;
                         handleLogicalNot();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case LOGICAL_AND -> {
+                        valueStack.stackTop = sp;
                         handleLogicalAnd();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case LOGICAL_OR -> {
+                        valueStack.stackTop = sp;
                         handleLogicalOr();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
                     case NULLISH_COALESCE -> {
+                        valueStack.stackTop = sp;
                         handleNullishCoalesce();
+                        sp = valueStack.stackTop;
                         pc += 1;
                     }
 
                     // ==================== Variable Access ====================
                     case GET_VAR_UNDEF -> {
                         int getVarRefIndex = bytecode.readU16(pc + 1);
-                        valueStack.push(currentFrame.getVarRef(getVarRefIndex));
+                        stack[sp++] = currentFrame.getVarRef(getVarRefIndex);
                         pc += op.getSize();
                     }
                     case GET_REF_VALUE -> {
-                        JSValue propertyValue = valueStack.peek(0);
-                        JSValue objectValue = valueStack.peek(1);
+                        JSValue propertyValue = (JSValue) stack[sp - 1];
+                        JSValue objectValue = (JSValue) stack[sp - 2];
                         PropertyKey key = PropertyKey.fromValue(context, propertyValue);
 
                         if (objectValue.isUndefined()) {
                             String name = key != null ? key.toPropertyString() : "variable";
                             pendingException = context.throwReferenceError(name + " is not defined");
-                            valueStack.push(JSUndefined.INSTANCE);
+                            stack[sp++] = JSUndefined.INSTANCE;
                             pc += op.getSize();
                             break;
                         }
@@ -986,7 +1118,7 @@ public final class VirtualMachine {
                         JSObject targetObject = toObject(objectValue);
                         if (targetObject == null) {
                             pendingException = context.throwTypeError("value has no property");
-                            valueStack.push(JSUndefined.INSTANCE);
+                            stack[sp++] = JSUndefined.INSTANCE;
                             pc += op.getSize();
                             break;
                         }
@@ -996,7 +1128,7 @@ public final class VirtualMachine {
                             if (context.isStrictMode()) {
                                 String name = key != null ? key.toPropertyString() : "variable";
                                 pendingException = context.throwReferenceError(name + " is not defined");
-                                valueStack.push(JSUndefined.INSTANCE);
+                                stack[sp++] = JSUndefined.INSTANCE;
                                 pc += op.getSize();
                                 break;
                             }
@@ -1004,7 +1136,7 @@ public final class VirtualMachine {
                         } else {
                             value = targetObject.get(key, context);
                         }
-                        valueStack.push(value);
+                        stack[sp++] = value;
                         pc += op.getSize();
                     }
                     case GET_VAR -> {
@@ -1016,7 +1148,7 @@ public final class VirtualMachine {
                             // Set pendingException instead of throwing directly so the
                             // VM's exception handler can unwind to JavaScript try-catch.
                             pendingException = context.throwReferenceError(getVarName + " is not defined");
-                            valueStack.push(JSUndefined.INSTANCE);
+                            stack[sp++] = JSUndefined.INSTANCE;
                         } else {
                             JSValue varValue = globalObject.get(key);
                             // Start tracking property access from variable name (unless locked)
@@ -1024,20 +1156,20 @@ public final class VirtualMachine {
                                 resetPropertyAccessTracking();
                                 propertyAccessChain.append(getVarName);
                             }
-                            valueStack.push(varValue);
+                            stack[sp++] = varValue;
                         }
                         pc += op.getSize();
                     }
                     case PUT_VAR_INIT -> {
                         int putVarRefIndex = bytecode.readU16(pc + 1);
-                        JSValue putValue = valueStack.pop();
+                        JSValue putValue = (JSValue) stack[--sp];
                         currentFrame.setVarRef(putVarRefIndex, putValue);
                         pc += op.getSize();
                     }
                     case PUT_REF_VALUE -> {
-                        JSValue setValue = valueStack.pop();
-                        JSValue propertyValue = valueStack.pop();
-                        JSValue objectValue = valueStack.pop();
+                        JSValue setValue = (JSValue) stack[--sp];
+                        JSValue propertyValue = (JSValue) stack[--sp];
+                        JSValue objectValue = (JSValue) stack[--sp];
                         PropertyKey key = PropertyKey.fromValue(context, propertyValue);
 
                         if (objectValue.isUndefined()) {
@@ -1074,14 +1206,14 @@ public final class VirtualMachine {
                     case PUT_VAR -> {
                         int putVarAtom = bytecode.readU32(pc + 1);
                         String putVarName = bytecode.getAtoms()[putVarAtom];
-                        JSValue putValue = valueStack.pop();
+                        JSValue putValue = (JSValue) stack[--sp];
                         context.getGlobalObject().set(PropertyKey.fromString(putVarName), putValue);
                         pc += op.getSize();
                     }
                     case SET_VAR -> {
                         int setVarAtom = bytecode.readU32(pc + 1);
                         String setVarName = bytecode.getAtoms()[setVarAtom];
-                        JSValue setValue = valueStack.peek(0);
+                        JSValue setValue = (JSValue) stack[sp - 1];
                         PropertyKey setVarKey = PropertyKey.fromString(setVarName);
                         JSObject setVarGlobal = context.getGlobalObject();
                         // Per ES spec, in strict mode assigning to an undeclared variable
@@ -1097,71 +1229,91 @@ public final class VirtualMachine {
                         int deleteVarAtom = bytecode.readU32(pc + 1);
                         String deleteVarName = bytecode.getAtoms()[deleteVarAtom];
                         boolean deleted = context.getGlobalObject().delete(PropertyKey.fromString(deleteVarName), context);
-                        valueStack.push(JSBoolean.valueOf(deleted));
+                        stack[sp++] = JSBoolean.valueOf(deleted);
                         pc += op.getSize();
                     }
                     case GET_LOCAL, GET_LOC -> {
-                        int getLocalIndex = ((ins[pc + 1] & 0xFF) << 8) | (ins[pc + 2] & 0xFF);
-                        JSValue val = locals[getLocalIndex];
-                        valueStack.push(val != null ? val : JSUndefined.INSTANCE);
-                        pc += op.getSize();
+                        int gli = ((ins[pc + 1] & 0xFF) << 8) | (ins[pc + 2] & 0xFF);
+                        JSValue glv = locals[gli];
+                        stack[sp++] = glv != null ? glv : JSUndefined.INSTANCE;
+                        pc += 3;
                     }
                     case GET_LOC8 -> {
-                        int getLocalIndex = ins[pc + 1] & 0xFF;
-                        JSValue val = locals[getLocalIndex];
-                        valueStack.push(val != null ? val : JSUndefined.INSTANCE);
+                        JSValue gl8v = locals[ins[pc + 1] & 0xFF];
+                        stack[sp++] = gl8v != null ? gl8v : JSUndefined.INSTANCE;
                         pc += 2;
                     }
                     case GET_LOC0 -> {
-                        JSValue val = locals[0];
-                        valueStack.push(val != null ? val : JSUndefined.INSTANCE);
+                        JSValue gl0 = locals[0];
+                        stack[sp++] = gl0 != null ? gl0 : JSUndefined.INSTANCE;
                         pc += 1;
                     }
                     case GET_LOC1 -> {
-                        JSValue val = locals[1];
-                        valueStack.push(val != null ? val : JSUndefined.INSTANCE);
+                        JSValue gl1 = locals[1];
+                        stack[sp++] = gl1 != null ? gl1 : JSUndefined.INSTANCE;
                         pc += 1;
                     }
                     case GET_LOC2 -> {
-                        JSValue val = locals[2];
-                        valueStack.push(val != null ? val : JSUndefined.INSTANCE);
+                        JSValue gl2 = locals[2];
+                        stack[sp++] = gl2 != null ? gl2 : JSUndefined.INSTANCE;
                         pc += 1;
                     }
                     case GET_LOC3 -> {
-                        JSValue val = locals[3];
-                        valueStack.push(val != null ? val : JSUndefined.INSTANCE);
+                        JSValue gl3 = locals[3];
+                        stack[sp++] = gl3 != null ? gl3 : JSUndefined.INSTANCE;
                         pc += 1;
                     }
                     case PUT_LOCAL, PUT_LOC -> {
-                        int putLocalIndex = ((ins[pc + 1] & 0xFF) << 8) | (ins[pc + 2] & 0xFF);
-                        locals[putLocalIndex] = valueStack.pop();
-                        pc += op.getSize();
+                        locals[((ins[pc + 1] & 0xFF) << 8) | (ins[pc + 2] & 0xFF)] = (JSValue) stack[--sp];
+                        pc += 3;
                     }
                     case PUT_LOC8 -> {
-                        int putLocalIndex = ins[pc + 1] & 0xFF;
-                        locals[putLocalIndex] = valueStack.pop();
+                        locals[ins[pc + 1] & 0xFF] = (JSValue) stack[--sp];
                         pc += 2;
                     }
-                    case PUT_LOC0 -> { locals[0] = valueStack.pop(); pc += 1; }
-                    case PUT_LOC1 -> { locals[1] = valueStack.pop(); pc += 1; }
-                    case PUT_LOC2 -> { locals[2] = valueStack.pop(); pc += 1; }
-                    case PUT_LOC3 -> { locals[3] = valueStack.pop(); pc += 1; }
+                    case PUT_LOC0 -> {
+                        locals[0] = (JSValue) stack[--sp];
+                        pc += 1;
+                    }
+                    case PUT_LOC1 -> {
+                        locals[1] = (JSValue) stack[--sp];
+                        pc += 1;
+                    }
+                    case PUT_LOC2 -> {
+                        locals[2] = (JSValue) stack[--sp];
+                        pc += 1;
+                    }
+                    case PUT_LOC3 -> {
+                        locals[3] = (JSValue) stack[--sp];
+                        pc += 1;
+                    }
                     case SET_LOCAL, SET_LOC -> {
-                        int setLocIdx = ((ins[pc + 1] & 0xFF) << 8) | (ins[pc + 2] & 0xFF);
-                        locals[setLocIdx] = valueStack.peek(0);
+                        locals[((ins[pc + 1] & 0xFF) << 8) | (ins[pc + 2] & 0xFF)] = (JSValue) stack[sp - 1];
                         pc += 3;
                     }
                     case SET_LOC8 -> {
-                        locals[ins[pc + 1] & 0xFF] = valueStack.peek(0);
+                        locals[ins[pc + 1] & 0xFF] = (JSValue) stack[sp - 1];
                         pc += 2;
                     }
-                    case SET_LOC0 -> { locals[0] = valueStack.peek(0); pc += 1; }
-                    case SET_LOC1 -> { locals[1] = valueStack.peek(0); pc += 1; }
-                    case SET_LOC2 -> { locals[2] = valueStack.peek(0); pc += 1; }
-                    case SET_LOC3 -> { locals[3] = valueStack.peek(0); pc += 1; }
+                    case SET_LOC0 -> {
+                        locals[0] = (JSValue) stack[sp - 1];
+                        pc += 1;
+                    }
+                    case SET_LOC1 -> {
+                        locals[1] = (JSValue) stack[sp - 1];
+                        pc += 1;
+                    }
+                    case SET_LOC2 -> {
+                        locals[2] = (JSValue) stack[sp - 1];
+                        pc += 1;
+                    }
+                    case SET_LOC3 -> {
+                        locals[3] = (JSValue) stack[sp - 1];
+                        pc += 1;
+                    }
                     case GET_ARG -> {
                         int argIndex = bytecode.readU16(pc + 1);
-                        valueStack.push(getArgumentValue(argIndex));
+                        stack[sp++] = getArgumentValue(argIndex);
                         pc += op.getSize();
                     }
                     case GET_ARG0, GET_ARG1, GET_ARG2, GET_ARG3 -> {
@@ -1172,12 +1324,12 @@ public final class VirtualMachine {
                             case GET_ARG3 -> 3;
                             default -> throw new IllegalStateException("Unexpected short get arg opcode: " + op);
                         };
-                        valueStack.push(getArgumentValue(argIndex));
+                        stack[sp++] = getArgumentValue(argIndex);
                         pc += op.getSize();
                     }
                     case PUT_ARG -> {
                         int argIndex = bytecode.readU16(pc + 1);
-                        JSValue value = valueStack.pop();
+                        JSValue value = (JSValue) stack[--sp];
                         setArgumentValue(argIndex, value);
                         pc += op.getSize();
                     }
@@ -1189,13 +1341,13 @@ public final class VirtualMachine {
                             case PUT_ARG3 -> 3;
                             default -> throw new IllegalStateException("Unexpected short put arg opcode: " + op);
                         };
-                        JSValue value = valueStack.pop();
+                        JSValue value = (JSValue) stack[--sp];
                         setArgumentValue(argIndex, value);
                         pc += op.getSize();
                     }
                     case SET_ARG -> {
                         int argIndex = bytecode.readU16(pc + 1);
-                        setArgumentValue(argIndex, valueStack.peek(0));
+                        setArgumentValue(argIndex, (JSValue) stack[sp - 1]);
                         pc += op.getSize();
                     }
                     case SET_ARG0, SET_ARG1, SET_ARG2, SET_ARG3 -> {
@@ -1206,12 +1358,12 @@ public final class VirtualMachine {
                             case SET_ARG3 -> 3;
                             default -> throw new IllegalStateException("Unexpected short set arg opcode: " + op);
                         };
-                        setArgumentValue(argIndex, valueStack.peek(0));
+                        setArgumentValue(argIndex, (JSValue) stack[sp - 1]);
                         pc += op.getSize();
                     }
                     case GET_VAR_REF -> {
                         int getVarRefIndex = bytecode.readU16(pc + 1);
-                        valueStack.push(currentFrame.getVarRef(getVarRefIndex));
+                        stack[sp++] = currentFrame.getVarRef(getVarRefIndex);
                         pc += op.getSize();
                     }
                     case GET_VAR_REF0, GET_VAR_REF1, GET_VAR_REF2, GET_VAR_REF3 -> {
@@ -1222,12 +1374,12 @@ public final class VirtualMachine {
                             case GET_VAR_REF3 -> 3;
                             default -> throw new IllegalStateException("Unexpected short get var ref opcode: " + op);
                         };
-                        valueStack.push(currentFrame.getVarRef(getVarRefIndex));
+                        stack[sp++] = currentFrame.getVarRef(getVarRefIndex);
                         pc += op.getSize();
                     }
                     case PUT_VAR_REF -> {
                         int putVarRefIndex = bytecode.readU16(pc + 1);
-                        JSValue value = valueStack.pop();
+                        JSValue value = (JSValue) stack[--sp];
                         currentFrame.setVarRef(putVarRefIndex, value);
                         pc += op.getSize();
                     }
@@ -1239,13 +1391,13 @@ public final class VirtualMachine {
                             case PUT_VAR_REF3 -> 3;
                             default -> throw new IllegalStateException("Unexpected short put var ref opcode: " + op);
                         };
-                        JSValue value = valueStack.pop();
+                        JSValue value = (JSValue) stack[--sp];
                         currentFrame.setVarRef(putVarRefIndex, value);
                         pc += op.getSize();
                     }
                     case SET_VAR_REF -> {
                         int setVarRefIndex = bytecode.readU16(pc + 1);
-                        currentFrame.setVarRef(setVarRefIndex, valueStack.peek(0));
+                        currentFrame.setVarRef(setVarRefIndex, (JSValue) stack[sp - 1]);
                         pc += op.getSize();
                     }
                     case SET_VAR_REF0, SET_VAR_REF1, SET_VAR_REF2, SET_VAR_REF3 -> {
@@ -1256,7 +1408,7 @@ public final class VirtualMachine {
                             case SET_VAR_REF3 -> 3;
                             default -> throw new IllegalStateException("Unexpected short set var ref opcode: " + op);
                         };
-                        currentFrame.setVarRef(setVarRefIndex, valueStack.peek(0));
+                        currentFrame.setVarRef(setVarRefIndex, (JSValue) stack[sp - 1]);
                         pc += op.getSize();
                     }
                     case CLOSE_LOC -> {
@@ -1275,7 +1427,7 @@ public final class VirtualMachine {
                         if (isUninitialized(localValue)) {
                             throw new JSVirtualMachineException(context.throwReferenceError("variable is uninitialized"));
                         }
-                        valueStack.push(localValue);
+                        stack[sp++] = localValue;
                         pc += op.getSize();
                     }
                     case PUT_LOC_CHECK -> {
@@ -1283,7 +1435,7 @@ public final class VirtualMachine {
                         if (isUninitialized(currentFrame.getLocals()[index])) {
                             throw new JSVirtualMachineException(context.throwReferenceError("variable is uninitialized"));
                         }
-                        currentFrame.getLocals()[index] = valueStack.pop();
+                        currentFrame.getLocals()[index] = (JSValue) stack[--sp];
                         pc += op.getSize();
                     }
                     case SET_LOC_CHECK -> {
@@ -1291,7 +1443,7 @@ public final class VirtualMachine {
                         if (isUninitialized(currentFrame.getLocals()[index])) {
                             throw new JSVirtualMachineException(context.throwReferenceError("variable is uninitialized"));
                         }
-                        currentFrame.getLocals()[index] = valueStack.peek(0);
+                        currentFrame.getLocals()[index] = (JSValue) stack[sp - 1];
                         pc += op.getSize();
                     }
                     case PUT_LOC_CHECK_INIT -> {
@@ -1299,7 +1451,7 @@ public final class VirtualMachine {
                         if (!isUninitialized(currentFrame.getLocals()[index])) {
                             throw new JSVirtualMachineException(context.throwReferenceError("'this' can be initialized only once"));
                         }
-                        currentFrame.getLocals()[index] = valueStack.pop();
+                        currentFrame.getLocals()[index] = (JSValue) stack[--sp];
                         pc += op.getSize();
                     }
                     case GET_VAR_REF_CHECK -> {
@@ -1308,7 +1460,7 @@ public final class VirtualMachine {
                         if (isUninitialized(value)) {
                             throw new JSVirtualMachineException(context.throwReferenceError("variable is uninitialized"));
                         }
-                        valueStack.push(value);
+                        stack[sp++] = value;
                         pc += op.getSize();
                     }
                     case PUT_VAR_REF_CHECK -> {
@@ -1316,7 +1468,7 @@ public final class VirtualMachine {
                         if (isUninitialized(currentFrame.getVarRef(index))) {
                             throw new JSVirtualMachineException(context.throwReferenceError("variable is uninitialized"));
                         }
-                        currentFrame.setVarRef(index, valueStack.pop());
+                        currentFrame.setVarRef(index, (JSValue) stack[--sp]);
                         pc += op.getSize();
                     }
                     case PUT_VAR_REF_CHECK_INIT -> {
@@ -1324,7 +1476,7 @@ public final class VirtualMachine {
                         if (!isUninitialized(currentFrame.getVarRef(index))) {
                             throw new JSVirtualMachineException(context.throwReferenceError("variable is already initialized"));
                         }
-                        currentFrame.setVarRef(index, valueStack.pop());
+                        currentFrame.setVarRef(index, (JSValue) stack[--sp]);
                         pc += op.getSize();
                     }
                     case MAKE_LOC_REF, MAKE_ARG_REF, MAKE_VAR_REF_REF -> {
@@ -1333,15 +1485,15 @@ public final class VirtualMachine {
                         String atomName = bytecode.getAtoms()[atomIndex];
 
                         JSObject referenceObject = createReferenceObject(op, refIndex, atomName);
-                        valueStack.push(referenceObject);
-                        valueStack.push(new JSString(atomName));
+                        stack[sp++] = referenceObject;
+                        stack[sp++] = new JSString(atomName);
                         pc += op.getSize();
                     }
                     case MAKE_VAR_REF -> {
                         int atomIndex = bytecode.readU32(pc + 1);
                         String atomName = bytecode.getAtoms()[atomIndex];
-                        valueStack.push(context.getGlobalObject());
-                        valueStack.push(new JSString(atomName));
+                        stack[sp++] = context.getGlobalObject();
+                        stack[sp++] = new JSString(atomName);
                         pc += op.getSize();
                     }
 
@@ -1349,7 +1501,7 @@ public final class VirtualMachine {
                     case GET_FIELD -> {
                         int getFieldAtom = bytecode.readU32(pc + 1);
                         String fieldName = bytecode.getAtoms()[getFieldAtom];
-                        JSValue obj = valueStack.pop();
+                        JSValue obj = (JSValue) stack[--sp];
 
                         // Auto-box primitives to access their prototype methods
                         JSObject targetObj = toObject(obj);
@@ -1359,7 +1511,7 @@ public final class VirtualMachine {
                             if (context.hasPendingException()) {
                                 pendingException = context.getPendingException();
                                 context.clearPendingException();
-                                valueStack.push(JSUndefined.INSTANCE);
+                                stack[sp++] = JSUndefined.INSTANCE;
                             } else {
                                 // Track property access for better error messages (unless locked)
                                 if (!propertyAccessLock) {
@@ -1368,37 +1520,37 @@ public final class VirtualMachine {
                                     }
                                     propertyAccessChain.append(fieldName);
                                 }
-                                valueStack.push(result);
+                                stack[sp++] = result;
                             }
                         } else {
                             resetPropertyAccessTracking();
-                            valueStack.push(JSUndefined.INSTANCE);
+                            stack[sp++] = JSUndefined.INSTANCE;
                         }
                         pc += op.getSize();
                     }
                     case GET_LENGTH -> {
-                        JSValue objectValue = valueStack.pop();
+                        JSValue objectValue = (JSValue) stack[--sp];
                         JSObject targetObject = toObject(objectValue);
                         if (targetObject != null) {
                             JSValue result = targetObject.get(PropertyKey.fromString("length"), context);
                             if (context.hasPendingException()) {
                                 pendingException = context.getPendingException();
                                 context.clearPendingException();
-                                valueStack.push(JSUndefined.INSTANCE);
+                                stack[sp++] = JSUndefined.INSTANCE;
                             } else {
-                                valueStack.push(result);
+                                stack[sp++] = result;
                             }
                         } else {
-                            valueStack.push(JSUndefined.INSTANCE);
+                            stack[sp++] = JSUndefined.INSTANCE;
                         }
                         pc += op.getSize();
                     }
                     case PUT_FIELD -> {
                         int putFieldAtom = bytecode.readU32(pc + 1);
                         String putFieldName = bytecode.getAtoms()[putFieldAtom];
-                        JSValue putFieldObj = valueStack.pop();
+                        JSValue putFieldObj = (JSValue) stack[--sp];
                         // The value should be on top of the stack.
-                        JSValue putFieldValue = valueStack.peek(0);
+                        JSValue putFieldValue = (JSValue) stack[sp - 1];
                         if (putFieldObj instanceof JSObject jsObj) {
                             jsObj.set(PropertyKey.fromString(putFieldName), putFieldValue, context);
                             // Check if setter threw an exception
@@ -1427,65 +1579,67 @@ public final class VirtualMachine {
                         pc += op.getSize();
                     }
                     case GET_ARRAY_EL -> {
-                        JSValue index = valueStack.pop();
-                        JSValue arrayObj = valueStack.pop();
+                        JSValue gaelIdx = (JSValue) stack[--sp];
+                        JSValue gaelObj = (JSValue) stack[sp - 1];
 
                         // Fast path: string character access (avoids boxing to JSStringObject)
-                        if (arrayObj instanceof JSString str && index instanceof JSNumber num) {
+                        if (gaelObj instanceof JSString str && gaelIdx instanceof JSNumber num) {
                             double d = num.value();
                             int idx = (int) d;
                             if (idx == d && idx >= 0 && idx < str.value().length()) {
-                                valueStack.push(new JSString(String.valueOf(str.value().charAt(idx))));
+                                stack[sp - 1] = new JSString(String.valueOf(str.value().charAt(idx)));
                                 pc += 1;
                                 break;
                             }
                         }
 
-                        // Auto-box primitives to access their prototype methods
-                        JSObject targetObj = toObject(arrayObj);
+                        // Slow path: sync sp and use valueStack
+                        valueStack.stackTop = sp - 1; // pop both, we'll push result
+                        JSObject targetObj = toObject(gaelObj);
                         if (targetObj != null) {
-                            PropertyKey key = PropertyKey.fromValue(context, index);
+                            PropertyKey key = PropertyKey.fromValue(context, gaelIdx);
                             JSValue result = targetObj.get(key, context);
                             if (context.hasPendingException()) {
                                 pendingException = context.getPendingException();
                                 context.clearPendingException();
-                                valueStack.push(JSUndefined.INSTANCE);
+                                stack[sp - 1] = JSUndefined.INSTANCE;
                             } else {
                                 if (!propertyAccessLock) {
-                                    if (index instanceof JSString jsString) {
+                                    if (gaelIdx instanceof JSString jsString) {
                                         String propertyName = jsString.value();
                                         if (!propertyAccessChain.isEmpty()) {
                                             propertyAccessChain.append('.');
                                         }
                                         propertyAccessChain.append(propertyName);
-                                    } else if (index instanceof JSNumber jsNumber) {
+                                    } else if (gaelIdx instanceof JSNumber jsNumber) {
                                         String propertyName = JSTypeConversions.toString(context, jsNumber).value();
                                         if (!propertyAccessChain.isEmpty()) {
                                             propertyAccessChain.append('.');
                                         }
                                         propertyAccessChain.append(propertyName);
-                                    } else if (index instanceof JSSymbol jsSymbol) {
+                                    } else if (gaelIdx instanceof JSSymbol jsSymbol) {
                                         propertyAccessChain.append("[Symbol.").append(jsSymbol.getDescription()).append("]");
                                     }
                                 }
-                                valueStack.push(result);
+                                stack[sp - 1] = result;
                             }
                         } else {
                             resetPropertyAccessTracking();
-                            valueStack.push(JSUndefined.INSTANCE);
+                            stack[sp - 1] = JSUndefined.INSTANCE;
                         }
+                        valueStack.stackTop = sp;
                         pc += 1;
                     }
                     case GET_ARRAY_EL2 -> {
-                        JSValue index = valueStack.pop();
-                        JSValue arrayObj = valueStack.peek(0);
+                        JSValue index = (JSValue) stack[--sp];
+                        JSValue arrayObj = (JSValue) stack[sp - 1];
 
                         // Fast path: string character access
                         if (arrayObj instanceof JSString str && index instanceof JSNumber num) {
                             double d = num.value();
                             int idx = (int) d;
                             if (idx == d && idx >= 0 && idx < str.value().length()) {
-                                valueStack.push(new JSString(String.valueOf(str.value().charAt(idx))));
+                                stack[sp++] = new JSString(String.valueOf(str.value().charAt(idx)));
                                 pc += 1;
                                 break;
                             }
@@ -1498,25 +1652,25 @@ public final class VirtualMachine {
                             if (context.hasPendingException()) {
                                 pendingException = context.getPendingException();
                                 context.clearPendingException();
-                                valueStack.push(JSUndefined.INSTANCE);
+                                stack[sp++] = JSUndefined.INSTANCE;
                             } else {
-                                valueStack.push(result);
+                                stack[sp++] = result;
                             }
                         } else {
-                            valueStack.push(JSUndefined.INSTANCE);
+                            stack[sp++] = JSUndefined.INSTANCE;
                         }
                         pc += 1;
                     }
                     case GET_ARRAY_EL3 -> {
-                        JSValue index = valueStack.peek(0);
-                        JSValue arrayObj = valueStack.peek(1);
+                        JSValue index = (JSValue) stack[sp - 1];
+                        JSValue arrayObj = (JSValue) stack[sp - 2];
 
                         if (!(index instanceof JSNumber || index instanceof JSString || index instanceof JSSymbol)) {
                             if (arrayObj.isUndefined() || arrayObj.isNull()) {
                                 throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
                             }
                             JSValue convertedIndex = toPropertyKeyValue(index);
-                            valueStack.set(0, convertedIndex);
+                            stack[sp - 1] = convertedIndex;
                             index = convertedIndex;
                         }
 
@@ -1530,17 +1684,17 @@ public final class VirtualMachine {
                         if (context.hasPendingException()) {
                             pendingException = context.getPendingException();
                             context.clearPendingException();
-                            valueStack.push(JSUndefined.INSTANCE);
+                            stack[sp++] = JSUndefined.INSTANCE;
                         } else {
-                            valueStack.push(result);
+                            stack[sp++] = result;
                         }
                         pc += op.getSize();
                     }
                     case PUT_ARRAY_EL -> {
                         // Stack layout: [value, object, property] (property on top)
-                        JSValue putElIndex = valueStack.pop();   // Pop property
-                        JSValue putElObj = valueStack.pop();     // Pop object
-                        JSValue putElValue = valueStack.pop();   // Pop value
+                        JSValue putElIndex = (JSValue) stack[--sp];   // Pop property
+                        JSValue putElObj = (JSValue) stack[--sp];     // Pop object
+                        JSValue putElValue = (JSValue) stack[--sp];   // Pop value
                         if (putElObj instanceof JSObject jsObj) {
                             PropertyKey key = PropertyKey.fromValue(context, putElIndex);
                             jsObj.set(key, putElValue, context);
@@ -1568,26 +1722,25 @@ public final class VirtualMachine {
                             }
                         }
                         // Assignment expressions return the assigned value
-                        valueStack.push(putElValue);
+                        stack[sp++] = putElValue;
                         pc += op.getSize();
                     }
                     case TO_PROPKEY -> {
-                        JSValue rawKey = valueStack.pop();
-                        valueStack.push(toPropertyKeyValue(rawKey));
+                        JSValue rawKey = (JSValue) stack[--sp];
+                        stack[sp++] = toPropertyKeyValue(rawKey);
                         pc += op.getSize();
                     }
                     case TO_PROPKEY2 -> {
-                        JSValue rawKey = valueStack.pop();
-                        JSValue baseObject = valueStack.pop();
-                        valueStack.push(baseObject);
-                        valueStack.push(toPropertyKeyValue(rawKey));
+                        JSValue rawKey = (JSValue) stack[--sp];
+                        JSValue baseObject = (JSValue) stack[--sp];
+                        stack[sp++] = baseObject;
+                        stack[sp++] = toPropertyKeyValue(rawKey);
                         pc += op.getSize();
                     }
 
                     // ==================== Control Flow ====================
                     case IF_FALSE -> {
-                        JSValue ifFalseCond = valueStack.pop();
-                        // Fast path: avoid toBoolean call for common types
+                        JSValue ifFalseCond = (JSValue) stack[--sp];
                         boolean ifFalseIsFalsy;
                         if (ifFalseCond instanceof JSBoolean bv) {
                             ifFalseIsFalsy = !bv.value();
@@ -1598,15 +1751,14 @@ public final class VirtualMachine {
                             ifFalseIsFalsy = JSTypeConversions.toBoolean(ifFalseCond) == JSBoolean.FALSE;
                         }
                         if (ifFalseIsFalsy) {
-                            int ifFalseOffset = ((ins[pc + 1] & 0xFF) << 24) | ((ins[pc + 2] & 0xFF) << 16) |
-                                    ((ins[pc + 3] & 0xFF) << 8) | (ins[pc + 4] & 0xFF);
-                            pc += 5 + ifFalseOffset;
+                            pc += 5 + (((ins[pc + 1] & 0xFF) << 24) | ((ins[pc + 2] & 0xFF) << 16) |
+                                    ((ins[pc + 3] & 0xFF) << 8) | (ins[pc + 4] & 0xFF));
                         } else {
                             pc += 5;
                         }
                     }
                     case IF_TRUE -> {
-                        JSValue ifTrueCond = valueStack.pop();
+                        JSValue ifTrueCond = (JSValue) stack[--sp];
                         boolean ifTrueIsTruthy;
                         if (ifTrueCond instanceof JSBoolean bv) {
                             ifTrueIsTruthy = bv.value();
@@ -1617,15 +1769,14 @@ public final class VirtualMachine {
                             ifTrueIsTruthy = JSTypeConversions.toBoolean(ifTrueCond) == JSBoolean.TRUE;
                         }
                         if (ifTrueIsTruthy) {
-                            int ifTrueOffset = ((ins[pc + 1] & 0xFF) << 24) | ((ins[pc + 2] & 0xFF) << 16) |
-                                    ((ins[pc + 3] & 0xFF) << 8) | (ins[pc + 4] & 0xFF);
-                            pc += 5 + ifTrueOffset;
+                            pc += 5 + (((ins[pc + 1] & 0xFF) << 24) | ((ins[pc + 2] & 0xFF) << 16) |
+                                    ((ins[pc + 3] & 0xFF) << 8) | (ins[pc + 4] & 0xFF));
                         } else {
                             pc += 5;
                         }
                     }
                     case IF_TRUE8 -> {
-                        JSValue ifTrue8Cond = valueStack.pop();
+                        JSValue ifTrue8Cond = (JSValue) stack[--sp];
                         boolean ifTrue8IsTruthy;
                         if (ifTrue8Cond instanceof JSBoolean bv) {
                             ifTrue8IsTruthy = bv.value();
@@ -1636,13 +1787,13 @@ public final class VirtualMachine {
                             ifTrue8IsTruthy = JSTypeConversions.toBoolean(ifTrue8Cond) == JSBoolean.TRUE;
                         }
                         if (ifTrue8IsTruthy) {
-                            pc += 2 + (byte) ins[pc + 1];
+                            pc += 2 + ins[pc + 1];
                         } else {
                             pc += 2;
                         }
                     }
                     case IF_FALSE8 -> {
-                        JSValue ifFalse8Cond = valueStack.pop();
+                        JSValue ifFalse8Cond = (JSValue) stack[--sp];
                         boolean ifFalse8IsFalsy;
                         if (ifFalse8Cond instanceof JSBoolean bv) {
                             ifFalse8IsFalsy = !bv.value();
@@ -1653,7 +1804,7 @@ public final class VirtualMachine {
                             ifFalse8IsFalsy = JSTypeConversions.toBoolean(ifFalse8Cond) == JSBoolean.FALSE;
                         }
                         if (ifFalse8IsFalsy) {
-                            pc += 2 + (byte) ins[pc + 1];
+                            pc += 2 + ins[pc + 1];
                         } else {
                             pc += 2;
                         }
@@ -1664,16 +1815,15 @@ public final class VirtualMachine {
                         pc += 5 + gotoOff;
                     }
                     case GOTO8 -> {
-                        pc += 2 + (byte) ins[pc + 1];
+                        pc += 2 + ins[pc + 1];
                     }
                     case GOTO16 -> {
                         int goto16Off = (short) (((ins[pc + 1] & 0xFF) << 8) | (ins[pc + 2] & 0xFF));
                         pc += 3 + goto16Off;
                     }
                     case RETURN -> {
-                        JSValue returnValue = valueStack.pop();
-                        // Restore stack and strict mode before returning
-                        valueStack.setStackTop(savedStackTop);
+                        JSValue returnValue = (JSValue) stack[--sp];
+                        valueStack.stackTop = savedStackTop;
                         currentFrame = previousFrame;
                         if (savedStrictMode) {
                             context.enterStrictMode();
@@ -1683,8 +1833,7 @@ public final class VirtualMachine {
                         return returnValue;
                     }
                     case RETURN_UNDEF -> {
-                        // Restore stack and strict mode before returning
-                        valueStack.setStackTop(savedStackTop);
+                        valueStack.stackTop = savedStackTop;
                         currentFrame = previousFrame;
                         if (savedStrictMode) {
                             context.enterStrictMode();
@@ -1694,11 +1843,8 @@ public final class VirtualMachine {
                         return JSUndefined.INSTANCE;
                     }
                     case RETURN_ASYNC -> {
-                        // Return from async function - pops value from stack
-                        // The wrapping in a promise is handled by JSBytecodeFunction.call()
-                        JSValue returnValue = valueStack.pop();
-                        // Restore stack and strict mode before returning
-                        valueStack.setStackTop(savedStackTop);
+                        JSValue returnValue = (JSValue) stack[--sp];
+                        valueStack.stackTop = savedStackTop;
                         currentFrame = previousFrame;
                         if (savedStrictMode) {
                             context.enterStrictMode();
@@ -1710,32 +1856,58 @@ public final class VirtualMachine {
 
                     // ==================== Function Calls ====================
                     case INIT_CTOR -> {
+                        valueStack.stackTop = sp;
                         handleInitCtor();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
                     case CALL -> {
                         int callArgCount = ((ins[pc + 1] & 0xFF) << 8) | (ins[pc + 2] & 0xFF);
+                        valueStack.stackTop = sp;
                         handleCall(callArgCount);
+                        sp = valueStack.stackTop;
                         pc += 3;
                     }
-                    case CALL0 -> { handleCall(0); pc += 1; }
-                    case CALL1 -> { handleCall(1); pc += 1; }
-                    case CALL2 -> { handleCall(2); pc += 1; }
-                    case CALL3 -> { handleCall(3); pc += 1; }
+                    case CALL0 -> {
+                        valueStack.stackTop = sp;
+                        handleCall(0);
+                        sp = valueStack.stackTop;
+                        pc += 1;
+                    }
+                    case CALL1 -> {
+                        valueStack.stackTop = sp;
+                        handleCall(1);
+                        sp = valueStack.stackTop;
+                        pc += 1;
+                    }
+                    case CALL2 -> {
+                        valueStack.stackTop = sp;
+                        handleCall(2);
+                        sp = valueStack.stackTop;
+                        pc += 1;
+                    }
+                    case CALL3 -> {
+                        valueStack.stackTop = sp;
+                        handleCall(3);
+                        sp = valueStack.stackTop;
+                        pc += 1;
+                    }
                     case CALL_CONSTRUCTOR -> {
                         int ctorArgCount = ((ins[pc + 1] & 0xFF) << 8) | (ins[pc + 2] & 0xFF);
+                        valueStack.stackTop = sp;
                         handleCallConstructor(ctorArgCount);
+                        sp = valueStack.stackTop;
                         pc += 3;
                     }
 
                     // ==================== Object/Array Creation ====================
                     case OBJECT, OBJECT_NEW -> {
-                        valueStack.push(context.createJSObject());
+                        stack[sp++] = context.createJSObject();
                         pc += 1;
                     }
                     case ARRAY_NEW -> {
                         JSArray array = context.createJSArray();
-                        valueStack.push(array);
+                        stack[sp++] = array;
                         pc += 1;
                     }
                     case ARRAY_FROM -> {
@@ -1747,13 +1919,13 @@ public final class VirtualMachine {
                         // Pop elements in reverse order and add to array
                         JSValue[] elements = new JSValue[count];
                         for (int i = count - 1; i >= 0; i--) {
-                            elements[i] = valueStack.pop();
+                            elements[i] = (JSValue) stack[--sp];
                         }
                         for (JSValue element : elements) {
                             array.push(element);
                         }
 
-                        valueStack.push(array);
+                        stack[sp++] = array;
                         pc += op.getSize();
                     }
                     case APPLY -> {
@@ -1762,9 +1934,9 @@ public final class VirtualMachine {
                         // Parameter: isConstructorCall (0=regular, 1=constructor)
                         int isConstructorCall = bytecode.readU16(pc + 1);
 
-                        JSValue argsArrayValue = valueStack.pop();
-                        JSValue functionValue = valueStack.pop();
-                        JSValue thisArgValue = valueStack.pop();
+                        JSValue argsArrayValue = (JSValue) stack[--sp];
+                        JSValue functionValue = (JSValue) stack[--sp];
+                        JSValue thisArgValue = (JSValue) stack[--sp];
 
                         JSValue result;
                         if (isConstructorCall != 0) {
@@ -1782,7 +1954,7 @@ public final class VirtualMachine {
                             JSValue[] applyArgs = buildApplyArguments(argsArrayValue, true);
                             if (applyArgs == null) {
                                 pendingException = context.getPendingException();
-                                valueStack.push(JSUndefined.INSTANCE);
+                                stack[sp++] = JSUndefined.INSTANCE;
                                 pc += op.getSize();
                                 break;
                             }
@@ -1796,15 +1968,15 @@ public final class VirtualMachine {
                         }
                         if (context.hasPendingException()) {
                             pendingException = context.getPendingException();
-                            valueStack.push(JSUndefined.INSTANCE);
+                            stack[sp++] = JSUndefined.INSTANCE;
                         } else {
-                            valueStack.push(result);
+                            stack[sp++] = result;
                         }
                         pc += op.getSize();
                     }
                     case PUSH_ARRAY -> {
-                        JSValue element = valueStack.pop();
-                        JSValue array = valueStack.peek(0);
+                        JSValue element = (JSValue) stack[--sp];
+                        JSValue array = (JSValue) stack[sp - 1];
                         if (array instanceof JSArray jsArray) {
                             jsArray.push(element);
                         }
@@ -1814,9 +1986,9 @@ public final class VirtualMachine {
                         // Append enumerated object elements to array
                         // Stack: array pos enumobj -> array pos
                         // Based on QuickJS OP_append (quickjs.c js_append_enumerate)
-                        JSValue enumobj = valueStack.pop();
-                        JSValue posValue = valueStack.pop();
-                        JSValue arrayValue = valueStack.pop();
+                        JSValue enumobj = (JSValue) stack[--sp];
+                        JSValue posValue = (JSValue) stack[--sp];
+                        JSValue arrayValue = (JSValue) stack[--sp];
 
                         if (!(arrayValue instanceof JSArray array)) {
                             throw new JSVirtualMachineException("APPEND: first argument must be an array");
@@ -1858,8 +2030,8 @@ public final class VirtualMachine {
                             }
 
                             // Push array and updated position back onto stack
-                            valueStack.push(array);
-                            valueStack.push(JSNumber.of(pos));
+                            stack[sp++] = array;
+                            stack[sp++] = JSNumber.of(pos);
 
                         } catch (Exception e) {
                             throw new JSVirtualMachineException("APPEND: error iterating: " + e.getMessage(), e);
@@ -1871,9 +2043,9 @@ public final class VirtualMachine {
                         // Define array element
                         // Stack: array idx val -> array idx
                         // Based on QuickJS OP_define_array_el
-                        JSValue value = valueStack.pop();
-                        JSValue idxValue = valueStack.peek(0);  // Keep idx on stack
-                        JSValue arrayValue = valueStack.peek(1); // Keep array on stack
+                        JSValue value = (JSValue) stack[--sp];
+                        JSValue idxValue = (JSValue) stack[sp - 1];  // Keep idx on stack
+                        JSValue arrayValue = (JSValue) stack[sp - 2]; // Keep array on stack
 
                         if (!(arrayValue instanceof JSArray array)) {
                             throw new JSVirtualMachineException("DEFINE_ARRAY_EL: first argument must be an array");
@@ -1891,9 +2063,9 @@ public final class VirtualMachine {
                         pc += op.getSize();
                     }
                     case DEFINE_PROP -> {
-                        JSValue propValue = valueStack.pop();
-                        JSValue propKey = valueStack.pop();
-                        JSValue propObj = valueStack.peek(0);
+                        JSValue propValue = (JSValue) stack[--sp];
+                        JSValue propKey = (JSValue) stack[--sp];
+                        JSValue propObj = (JSValue) stack[sp - 1];
                         if (propObj instanceof JSObject jsObj) {
                             PropertyKey key = PropertyKey.fromValue(context, propKey);
                             jsObj.set(key, propValue);
@@ -1903,17 +2075,17 @@ public final class VirtualMachine {
                     case SET_NAME -> {
                         int nameAtom = bytecode.readU32(pc + 1);
                         String name = bytecode.getAtoms()[nameAtom];
-                        setObjectName(valueStack.peek(0), new JSString(name));
+                        setObjectName((JSValue) stack[sp - 1], new JSString(name));
                         pc += op.getSize();
                     }
                     case SET_NAME_COMPUTED -> {
-                        JSValue nameValue = valueStack.peek(1);
-                        setObjectName(valueStack.peek(0), getComputedNameString(nameValue));
+                        JSValue nameValue = (JSValue) stack[sp - 2];
+                        setObjectName((JSValue) stack[sp - 1], getComputedNameString(nameValue));
                         pc += op.getSize();
                     }
                     case SET_PROTO -> {
-                        JSValue protoValue = valueStack.pop();
-                        JSValue objectValue = valueStack.peek(0);
+                        JSValue protoValue = (JSValue) stack[--sp];
+                        JSValue objectValue = (JSValue) stack[sp - 1];
                         if (objectValue instanceof JSObject object) {
                             if (protoValue instanceof JSObject prototypeObject) {
                                 object.setPrototype(prototypeObject);
@@ -1924,8 +2096,8 @@ public final class VirtualMachine {
                         pc += op.getSize();
                     }
                     case SET_HOME_OBJECT -> {
-                        JSValue homeObjectValue = valueStack.peek(1);
-                        JSValue methodValue = valueStack.peek(0);
+                        JSValue homeObjectValue = (JSValue) stack[sp - 2];
+                        JSValue methodValue = (JSValue) stack[sp - 1];
                         if (methodValue instanceof JSObject methodObject && homeObjectValue instanceof JSObject homeObject) {
                             methodObject.set(PropertyKey.fromString("[[HomeObject]]"), homeObject);
                         }
@@ -1933,9 +2105,9 @@ public final class VirtualMachine {
                     }
                     case COPY_DATA_PROPERTIES -> {
                         int mask = bytecode.readU8(pc + 1);
-                        JSValue targetValue = valueStack.peek(mask & 3);
-                        JSValue sourceValue = valueStack.peek((mask >> 2) & 7);
-                        JSValue excludeListValue = valueStack.peek((mask >> 5) & 7);
+                        JSValue targetValue = (JSValue) stack[sp - 1 - (mask & 3)];
+                        JSValue sourceValue = (JSValue) stack[sp - 1 - ((mask >> 2) & 7)];
+                        JSValue excludeListValue = (JSValue) stack[sp - 1 - ((mask >> 5) & 7)];
                         copyDataProperties(targetValue, sourceValue, excludeListValue);
                         pc += op.getSize();
                     }
@@ -1945,8 +2117,8 @@ public final class VirtualMachine {
                         // Result: proto constructor (pushes prototype object)
                         int classNameAtom = bytecode.readU32(pc + 1);
                         String className = bytecode.getAtoms()[classNameAtom];
-                        JSValue constructor = valueStack.pop();
-                        JSValue superClass = valueStack.pop();
+                        JSValue constructor = (JSValue) stack[--sp];
+                        JSValue superClass = (JSValue) stack[--sp];
 
                         if (!(constructor instanceof JSFunction constructorFunc)) {
                             throw new JSVirtualMachineException("DEFINE_CLASS: constructor must be a function");
@@ -1964,8 +2136,8 @@ public final class VirtualMachine {
                             if (!JSTypeChecking.isConstructor(superClass)) {
                                 context.throwTypeError("parent class must be constructor");
                                 pendingException = context.getPendingException();
-                                valueStack.push(JSUndefined.INSTANCE);
-                                valueStack.push(JSUndefined.INSTANCE);
+                                stack[sp++] = JSUndefined.INSTANCE;
+                                stack[sp++] = JSUndefined.INSTANCE;
                                 pc += op.getSize();
                                 break;
                             }
@@ -1987,17 +2159,17 @@ public final class VirtualMachine {
                         setObjectName(constructor, new JSString(className));
 
                         // Push prototype and constructor onto stack
-                        valueStack.push(prototype);
-                        valueStack.push(constructor);
+                        stack[sp++] = prototype;
+                        stack[sp++] = constructor;
                         pc += op.getSize();
                     }
                     case DEFINE_CLASS_COMPUTED -> {
                         int classNameAtom = bytecode.readU32(pc + 1);
                         int classFlags = bytecode.readU8(pc + 5);
                         String className = bytecode.getAtoms()[classNameAtom];
-                        JSValue constructor = valueStack.pop();
-                        JSValue superClass = valueStack.pop();
-                        JSValue computedClassNameValue = valueStack.peek(0);
+                        JSValue constructor = (JSValue) stack[--sp];
+                        JSValue superClass = (JSValue) stack[--sp];
+                        JSValue computedClassNameValue = (JSValue) stack[sp - 1];
 
                         if (!(constructor instanceof JSFunction constructorFunc)) {
                             throw new JSVirtualMachineException("DEFINE_CLASS_COMPUTED: constructor must be a function");
@@ -2025,8 +2197,8 @@ public final class VirtualMachine {
                         }
                         setObjectName(constructor, computedClassName);
 
-                        valueStack.push(prototype);
-                        valueStack.push(constructor);
+                        stack[sp++] = prototype;
+                        stack[sp++] = constructor;
                         pc += op.getSize();
                     }
                     case DEFINE_METHOD -> {
@@ -2035,14 +2207,14 @@ public final class VirtualMachine {
                         // Result: obj (pops both, adds method to obj, pushes obj back)
                         int methodNameAtom = bytecode.readU32(pc + 1);
                         String methodName = bytecode.getAtoms()[methodNameAtom];
-                        JSValue method = valueStack.pop();  // Pop method
-                        JSValue obj = valueStack.pop();     // Pop obj
+                        JSValue method = (JSValue) stack[--sp];  // Pop method
+                        JSValue obj = (JSValue) stack[--sp];     // Pop obj
 
                         if (obj instanceof JSObject jsObj) {
                             jsObj.set(PropertyKey.fromString(methodName), method);
                         }
 
-                        valueStack.push(obj);  // Push obj back
+                        stack[sp++] = obj;  // Push obj back
                         pc += op.getSize();
                     }
                     case DEFINE_METHOD_COMPUTED -> {
@@ -2050,9 +2222,9 @@ public final class VirtualMachine {
                         boolean enumerable = (methodFlags & 4) != 0;
                         int methodKind = methodFlags & 3;
 
-                        JSValue methodValue = valueStack.pop();
-                        JSValue propertyValue = valueStack.pop();
-                        JSValue objectValue = valueStack.peek(0);
+                        JSValue methodValue = (JSValue) stack[--sp];
+                        JSValue propertyValue = (JSValue) stack[--sp];
+                        JSValue objectValue = (JSValue) stack[sp - 1];
 
                         if (objectValue instanceof JSObject jsObj) {
                             PropertyKey key = PropertyKey.fromValue(context, propertyValue);
@@ -2106,65 +2278,65 @@ public final class VirtualMachine {
                         // Result: obj (pops both, adds field to obj, pushes obj back)
                         int fieldNameAtom = bytecode.readU32(pc + 1);
                         String fieldName = bytecode.getAtoms()[fieldNameAtom];
-                        JSValue value = valueStack.pop();   // Pop value
-                        JSValue obj = valueStack.pop();     // Pop obj
+                        JSValue value = (JSValue) stack[--sp];   // Pop value
+                        JSValue obj = (JSValue) stack[--sp];     // Pop obj
 
                         if (obj instanceof JSObject jsObj) {
                             jsObj.set(PropertyKey.fromString(fieldName), value);
                         }
 
-                        valueStack.push(obj);  // Push obj back
+                        stack[sp++] = obj;  // Push obj back
                         pc += op.getSize();
                     }
                     case DEFINE_PRIVATE_FIELD -> {
                         // Stack: obj privateSymbol value
                         // Result: obj (pops privateSymbol and value, adds private field to obj, pushes obj back)
-                        JSValue value = valueStack.pop();           // Pop value
-                        JSValue privateSymbol = valueStack.pop();   // Pop private symbol
-                        JSValue obj = valueStack.pop();             // Pop obj
+                        JSValue value = (JSValue) stack[--sp];           // Pop value
+                        JSValue privateSymbol = (JSValue) stack[--sp];   // Pop private symbol
+                        JSValue obj = (JSValue) stack[--sp];             // Pop obj
 
                         if (obj instanceof JSObject jsObj && privateSymbol instanceof JSSymbol symbol) {
                             // Set the private field using the symbol as the key
                             jsObj.set(PropertyKey.fromSymbol(symbol), value);
                         }
 
-                        valueStack.push(obj);  // Push obj back
+                        stack[sp++] = obj;  // Push obj back
                         pc += op.getSize();
                     }
                     case GET_PRIVATE_FIELD -> {
                         // Stack: obj privateSymbol
                         // Result: value (pops both, gets value from obj using privateSymbol)
-                        JSValue privateSymbol = valueStack.pop();  // Pop private symbol
-                        JSValue obj = valueStack.pop();            // Pop obj
+                        JSValue privateSymbol = (JSValue) stack[--sp];  // Pop private symbol
+                        JSValue obj = (JSValue) stack[--sp];            // Pop obj
 
                         JSValue value = JSUndefined.INSTANCE;
                         if (obj instanceof JSObject jsObj && privateSymbol instanceof JSSymbol symbol) {
                             value = jsObj.get(PropertyKey.fromSymbol(symbol));
                         }
 
-                        valueStack.push(value);
+                        stack[sp++] = value;
                         pc += op.getSize();
                     }
                     case PUT_PRIVATE_FIELD -> {
                         // Stack: obj value privateSymbol
                         // Result: value (pops obj and privateSymbol, leaves value as assignment result)
-                        JSValue privateSymbol = valueStack.pop();  // Pop private symbol
-                        JSValue value = valueStack.pop();          // Pop value
-                        JSValue obj = valueStack.pop();            // Pop obj
+                        JSValue privateSymbol = (JSValue) stack[--sp];  // Pop private symbol
+                        JSValue value = (JSValue) stack[--sp];          // Pop value
+                        JSValue obj = (JSValue) stack[--sp];            // Pop obj
 
                         if (obj instanceof JSObject jsObj && privateSymbol instanceof JSSymbol symbol) {
                             jsObj.set(PropertyKey.fromSymbol(symbol), value);
                         }
 
                         // Push value back to stack (assignment expressions return the assigned value)
-                        valueStack.push(value);
+                        stack[sp++] = value;
 
                         pc += op.getSize();
                     }
 
                     // ==================== Exception Handling ====================
                     case THROW -> {
-                        JSValue exception = valueStack.pop();
+                        JSValue exception = (JSValue) stack[--sp];
                         pendingException = exception;
                         context.setPendingException(exception);
                         // Don't throw immediately - let the exception handling loop unwind the stack
@@ -2200,14 +2372,14 @@ public final class VirtualMachine {
                         // This marker is used during exception unwinding to find the catch handler
                         int catchOffset = bytecode.readI32(pc + 1);
                         int catchHandlerPC = pc + op.getSize() + catchOffset;
-                        valueStack.pushStackValue(new JSCatchOffset(catchHandlerPC));
+                        stack[sp++] = new JSCatchOffset(catchHandlerPC);
                         pc += op.getSize();
                     }
                     case NIP_CATCH -> {
-                        JSValue returnValue = valueStack.pop();
+                        JSValue returnValue = (JSValue) stack[--sp];
                         boolean foundCatchMarker = false;
-                        while (valueStack.getStackTop() > savedStackTop) {
-                            JSStackValue stackValue = valueStack.popStackValue();
+                        while (sp > savedStackTop) {
+                            JSStackValue stackValue = stack[--sp];
                             if (stackValue instanceof JSCatchOffset) {
                                 foundCatchMarker = true;
                                 break;
@@ -2216,61 +2388,67 @@ public final class VirtualMachine {
                         if (!foundCatchMarker) {
                             throw new JSVirtualMachineException(context.throwError("nip_catch"));
                         }
-                        valueStack.push(returnValue);
+                        stack[sp++] = returnValue;
                         pc += op.getSize();
                     }
 
                     // ==================== Type Operations ====================
                     case TO_STRING -> {
-                        JSValue value = valueStack.peek(0);
+                        JSValue value = (JSValue) stack[sp - 1];
                         if (!(value instanceof JSString)) {
-                            valueStack.set(0, JSTypeConversions.toString(context, value));
+                            stack[sp - 1] = JSTypeConversions.toString(context, value);
                         }
                         pc += op.getSize();
                     }
                     case TYPEOF -> {
+                        valueStack.stackTop = sp;
                         handleTypeof();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
                     case DELETE -> {
+                        valueStack.stackTop = sp;
                         handleDelete();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
                     case IS_UNDEFINED_OR_NULL -> {
+                        valueStack.stackTop = sp;
                         handleIsUndefinedOrNull();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
                     case IS_UNDEFINED -> {
-                        JSValue value = valueStack.peek(0);
-                        valueStack.set(0, JSBoolean.valueOf(value.isUndefined()));
+                        JSValue value = (JSValue) stack[sp - 1];
+                        stack[sp - 1] = JSBoolean.valueOf(value.isUndefined());
                         pc += op.getSize();
                     }
                     case IS_NULL -> {
-                        JSValue value = valueStack.peek(0);
-                        valueStack.set(0, JSBoolean.valueOf(value.isNull()));
+                        JSValue value = (JSValue) stack[sp - 1];
+                        stack[sp - 1] = JSBoolean.valueOf(value.isNull());
                         pc += op.getSize();
                     }
                     case TYPEOF_IS_UNDEFINED -> {
-                        JSValue value = valueStack.peek(0);
-                        valueStack.set(0, JSBoolean.valueOf("undefined".equals(JSTypeChecking.typeof(value))));
+                        JSValue value = (JSValue) stack[sp - 1];
+                        stack[sp - 1] = JSBoolean.valueOf("undefined".equals(JSTypeChecking.typeof(value)));
                         pc += op.getSize();
                     }
                     case TYPEOF_IS_FUNCTION -> {
-                        JSValue value = valueStack.peek(0);
-                        valueStack.set(0, JSBoolean.valueOf("function".equals(JSTypeChecking.typeof(value))));
+                        JSValue value = (JSValue) stack[sp - 1];
+                        stack[sp - 1] = JSBoolean.valueOf("function".equals(JSTypeChecking.typeof(value)));
                         pc += op.getSize();
                     }
 
                     // ==================== Async Operations ====================
                     case ITERATOR_CHECK_OBJECT -> {
-                        JSValue iteratorResult = valueStack.peek(0);
+                        JSValue iteratorResult = (JSValue) stack[sp - 1];
                         if (!(iteratorResult instanceof JSObject)) {
                             throw new JSVirtualMachineException(context.throwTypeError("iterator must return an object"));
                         }
                         pc += op.getSize();
                     }
                     case ITERATOR_GET_VALUE_DONE -> {
-                        JSValue iteratorResult = valueStack.peek(0);
+                        JSValue iteratorResult = (JSValue) stack[sp - 1];
                         if (!(iteratorResult instanceof JSObject iteratorResultObject)) {
                             throw new JSVirtualMachineException(context.throwTypeError("iterator must return an object"));
                         }
@@ -2282,15 +2460,15 @@ public final class VirtualMachine {
                         }
                         boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
 
-                        valueStack.set(0, value);
-                        valueStack.set(1, JSNumber.of(0));
-                        valueStack.push(JSBoolean.valueOf(done));
+                        stack[sp - 1] = value;
+                        stack[sp - 2] = JSNumber.of(0);
+                        stack[sp++] = JSBoolean.valueOf(done);
                         pc += op.getSize();
                     }
                     case ITERATOR_CLOSE -> {
-                        valueStack.pop(); // catch_offset
-                        valueStack.pop(); // next method
-                        JSValue iteratorValue = valueStack.pop();
+                        sp--; // catch_offset
+                        sp--; // next method
+                        JSValue iteratorValue = (JSValue) stack[--sp];
                         if (iteratorValue instanceof JSObject iteratorObject && !iteratorValue.isUndefined()) {
                             JSValue returnMethodValue = iteratorObject.get(PropertyKey.fromString("return"));
                             if (returnMethodValue instanceof JSFunction returnMethod) {
@@ -2316,22 +2494,22 @@ public final class VirtualMachine {
                         pc += op.getSize();
                     }
                     case ITERATOR_NEXT -> {
-                        JSValue argumentValue = valueStack.peek(0);
-                        JSValue catchOffset = valueStack.peek(1);
-                        JSValue nextMethodValue = valueStack.peek(2);
-                        JSValue iteratorValue = valueStack.peek(3);
+                        JSValue argumentValue = (JSValue) stack[sp - 1];
+                        JSValue catchOffset = (JSValue) stack[sp - 2];
+                        JSValue nextMethodValue = (JSValue) stack[sp - 3];
+                        JSValue iteratorValue = (JSValue) stack[sp - 4];
                         if (!(nextMethodValue instanceof JSFunction nextMethod)) {
                             throw new JSVirtualMachineException(context.throwTypeError("iterator next is not a function"));
                         }
                         JSValue nextResult = nextMethod.call(context, iteratorValue, new JSValue[]{argumentValue});
-                        valueStack.set(0, nextResult);
-                        valueStack.set(1, catchOffset);
+                        stack[sp - 1] = nextResult;
+                        stack[sp - 2] = catchOffset;
                         pc += op.getSize();
                     }
                     case ITERATOR_CALL -> {
                         int flags = bytecode.readU8(pc + 1);
-                        JSValue argumentValue = valueStack.peek(0);
-                        JSValue iteratorValue = valueStack.peek(3);
+                        JSValue argumentValue = (JSValue) stack[sp - 1];
+                        JSValue iteratorValue = (JSValue) stack[sp - 4];
                         if (!(iteratorValue instanceof JSObject iteratorObject)) {
                             throw new JSVirtualMachineException(context.throwTypeError("iterator call target must be an object"));
                         }
@@ -2346,53 +2524,72 @@ public final class VirtualMachine {
                             JSValue callResult = (flags & 2) != 0
                                     ? method.call(context, iteratorObject, new JSValue[0])
                                     : method.call(context, iteratorObject, new JSValue[]{argumentValue});
-                            valueStack.set(0, callResult);
+                            stack[sp - 1] = callResult;
                         }
-                        valueStack.push(JSBoolean.valueOf(noMethod));
+                        stack[sp++] = JSBoolean.valueOf(noMethod);
                         pc += op.getSize();
                     }
                     case AWAIT -> {
+                        valueStack.stackTop = sp;
                         handleAwait();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
                     case FOR_AWAIT_OF_START -> {
+                        valueStack.stackTop = sp;
                         handleForAwaitOfStart();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
                     case FOR_AWAIT_OF_NEXT -> {
+                        valueStack.stackTop = sp;
                         handleForAwaitOfNext();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
                     case FOR_OF_START -> {
+                        valueStack.stackTop = sp;
                         handleForOfStart();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
                     case FOR_OF_NEXT -> {
                         int depth = bytecode.readU8(pc + 1);  // Read the depth parameter
+                        valueStack.stackTop = sp;
                         handleForOfNext(depth);
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
                     case FOR_IN_START -> {
+                        valueStack.stackTop = sp;
                         handleForInStart();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
                     case FOR_IN_NEXT -> {
+                        valueStack.stackTop = sp;
                         handleForInNext();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
                     case FOR_IN_END -> {
+                        valueStack.stackTop = sp;
                         handleForInEnd();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
 
                     // ==================== Generator Operations ====================
                     case INITIAL_YIELD -> {
+                        valueStack.stackTop = sp;
                         handleInitialYield();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                         // Check if we should suspend (initial yield during generator creation)
                         if (yieldResult != null) {
                             // Return undefined - execution will resume from here on first .next()
-                            valueStack.setStackTop(savedStackTop);
+                            sp = savedStackTop;
+                            valueStack.stackTop = sp;
                             currentFrame = previousFrame;
                             if (savedStrictMode) {
                                 context.enterStrictMode();
@@ -2403,13 +2600,16 @@ public final class VirtualMachine {
                         }
                     }
                     case YIELD -> {
+                        valueStack.stackTop = sp;
                         handleYield();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                         // Check if we should suspend (generator yielded)
                         if (yieldResult != null) {
                             // Return the yielded value - execution will resume here on next()
-                            JSValue returnValue = valueStack.pop();
-                            valueStack.setStackTop(savedStackTop);
+                            JSValue returnValue = (JSValue) stack[--sp];
+                            sp = savedStackTop;
+                            valueStack.stackTop = sp;
                             currentFrame = previousFrame;
                             if (savedStrictMode) {
                                 context.enterStrictMode();
@@ -2420,12 +2620,15 @@ public final class VirtualMachine {
                         }
                     }
                     case YIELD_STAR -> {
+                        valueStack.stackTop = sp;
                         handleYieldStar();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                         // Check if we should suspend
                         if (yieldResult != null) {
-                            JSValue returnValue = valueStack.pop();
-                            valueStack.setStackTop(savedStackTop);
+                            JSValue returnValue = (JSValue) stack[--sp];
+                            sp = savedStackTop;
+                            valueStack.stackTop = sp;
                             currentFrame = previousFrame;
                             if (savedStrictMode) {
                                 context.enterStrictMode();
@@ -2436,7 +2639,9 @@ public final class VirtualMachine {
                         }
                     }
                     case ASYNC_YIELD_STAR -> {
+                        valueStack.stackTop = sp;
                         handleAsyncYieldStar();
+                        sp = valueStack.stackTop;
                         pc += op.getSize();
                     }
                     case NOP -> pc += op.getSize();

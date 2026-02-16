@@ -25,8 +25,8 @@ import com.caoccao.qjs4j.core.JSValue;
  * Can store both JSValue and internal markers like CatchOffset.
  */
 public final class CallStack {
-    private final JSStackValue[] stack;
-    private int stackTop;
+    final JSStackValue[] stack;  // package-private for direct access from VirtualMachine
+    int stackTop;                // package-private for direct access from VirtualMachine
 
     public CallStack() {
         this.stack = new JSStackValue[1024];
