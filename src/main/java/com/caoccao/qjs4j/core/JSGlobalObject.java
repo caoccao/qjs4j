@@ -521,6 +521,10 @@ public final class JSGlobalObject {
 
         // Initialize function prototype chains after all built-ins are set up
         initializeFunctionPrototypeChains(context, global, new HashSet<>());
+
+        // Set the global object's prototype to Object.prototype so inherited
+        // methods like propertyIsEnumerable, hasOwnProperty, toString are available.
+        context.transferPrototype(global, JSObject.NAME);
     }
 
     /**
