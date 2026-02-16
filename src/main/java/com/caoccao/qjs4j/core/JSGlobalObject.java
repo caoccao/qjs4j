@@ -38,8 +38,31 @@ import java.util.stream.Stream;
  */
 public final class JSGlobalObject {
     private static final char[] HEX_CHARS = "0123456789ABCDEF".toCharArray();
-    private static final String URI_RESERVED = ";/?:@&=+$,#";
+    private static final boolean[] URI_RESERVED_TABLE = new boolean[128];
+    private static final boolean[] URI_UNESCAPED_COMPONENT_TABLE = new boolean[128];
+    private static final boolean[] URI_UNESCAPED_TABLE = new boolean[128];
     private final JSConsole console;
+
+    static {
+        for (char c = 'a'; c <= 'z'; c++) {
+            URI_UNESCAPED_COMPONENT_TABLE[c] = true;
+        }
+        for (char c = 'A'; c <= 'Z'; c++) {
+            URI_UNESCAPED_COMPONENT_TABLE[c] = true;
+        }
+        for (char c = '0'; c <= '9'; c++) {
+            URI_UNESCAPED_COMPONENT_TABLE[c] = true;
+        }
+        for (char c : "-_.!~*'()".toCharArray()) {
+            URI_UNESCAPED_COMPONENT_TABLE[c] = true;
+        }
+        for (char c : ";/?:@&=+$,#".toCharArray()) {
+            URI_RESERVED_TABLE[c] = true;
+        }
+        for (int i = 0; i < URI_UNESCAPED_TABLE.length; i++) {
+            URI_UNESCAPED_TABLE[i] = URI_UNESCAPED_COMPONENT_TABLE[i] || URI_RESERVED_TABLE[i];
+        }
+    }
 
     public JSGlobalObject() {
         this.console = new JSConsole();
@@ -219,26 +242,36 @@ public final class JSGlobalObject {
     }
 
     private JSValue encodeURIImpl(JSContext context, String inputString, boolean isComponent) {
-        StringBuilder result = new StringBuilder(inputString.length());
+        int length = inputString.length();
+        StringBuilder result = null;
         int k = 0;
-        while (k < inputString.length()) {
-            int c = inputString.charAt(k++);
+        while (k < length) {
+            char ch = inputString.charAt(k);
+            int c = ch;
             if (isURIUnescaped(c, isComponent)) {
-                result.append((char) c);
+                if (result != null) {
+                    result.append(ch);
+                }
+                k++;
                 continue;
             }
-            if (Character.isLowSurrogate((char) c)) {
+            if (result == null) {
+                result = new StringBuilder(length + 16);
+                result.append(inputString, 0, k);
+            }
+            if (ch >= Character.MIN_LOW_SURROGATE && ch <= Character.MAX_LOW_SURROGATE) {
                 return context.throwURIError("invalid character");
             }
-            if (Character.isHighSurrogate((char) c)) {
-                if (k >= inputString.length()) {
+            k++;
+            if (ch >= Character.MIN_HIGH_SURROGATE && ch <= Character.MAX_HIGH_SURROGATE) {
+                if (k >= length) {
                     return context.throwURIError("expecting surrogate pair");
                 }
                 char c1 = inputString.charAt(k++);
-                if (!Character.isLowSurrogate(c1)) {
+                if (c1 < Character.MIN_LOW_SURROGATE || c1 > Character.MAX_LOW_SURROGATE) {
                     return context.throwURIError("expecting surrogate pair");
                 }
-                c = Character.toCodePoint((char) c, c1);
+                c = Character.toCodePoint(ch, c1);
             }
 
             if (c < 0x80) {
@@ -256,6 +289,9 @@ public final class JSGlobalObject {
                 appendPercentHex(result, ((c >> 6) & 0x3F) | 0x80);
                 appendPercentHex(result, (c & 0x3F) | 0x80);
             }
+        }
+        if (result == null) {
+            return new JSString(inputString);
         }
         return new JSString(result.toString());
     }
@@ -2029,16 +2065,14 @@ public final class JSGlobalObject {
     }
 
     private boolean isURIReserved(int c) {
-        return c < 0x100 && URI_RESERVED.indexOf(c) >= 0;
+        return c < URI_RESERVED_TABLE.length && URI_RESERVED_TABLE[c];
     }
 
     private boolean isURIUnescaped(int c, boolean isComponent) {
-        return c < 0x100
-                && ((c >= 'a' && c <= 'z')
-                || (c >= 'A' && c <= 'Z')
-                || (c >= '0' && c <= '9')
-                || "-_.!~*'()".indexOf(c) >= 0
-                || (!isComponent && isURIReserved(c)));
+        if (c >= URI_UNESCAPED_TABLE.length) {
+            return false;
+        }
+        return isComponent ? URI_UNESCAPED_COMPONENT_TABLE[c] : URI_UNESCAPED_TABLE[c];
     }
 
     /**
