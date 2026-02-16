@@ -133,7 +133,8 @@ public final class JSReflectObject {
             JSObject thisObject = new JSObject();
             if (newTarget instanceof JSObject newTargetObject) {
                 if (!context.transferPrototype(thisObject, newTargetObject)) {
-                    context.transferPrototype(thisObject, JSObject.NAME);
+                    // GetPrototypeFromConstructor fallback: use target function's prototype
+                    context.transferPrototype(thisObject, function);
                 }
             } else {
                 context.transferPrototype(thisObject, function);
