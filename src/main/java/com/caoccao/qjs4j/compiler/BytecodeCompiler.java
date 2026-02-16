@@ -870,7 +870,17 @@ public final class BytecodeCompiler {
         boolean savedGlobalScope = inGlobalScope;
         enterScope();
         inGlobalScope = false;
+        // Hoist function declarations to top of block (ES2015+ block-scoped functions
+        // are initialized before any statements in the block execute).
         for (Statement stmt : block.body()) {
+            if (stmt instanceof FunctionDeclaration funcDecl) {
+                compileFunctionDeclaration(funcDecl);
+            }
+        }
+        for (Statement stmt : block.body()) {
+            if (stmt instanceof FunctionDeclaration) {
+                continue; // Already hoisted
+            }
             compileStatement(stmt);
         }
         emitCurrentScopeUsingDisposal();

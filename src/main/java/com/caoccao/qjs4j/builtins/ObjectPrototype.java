@@ -572,6 +572,9 @@ public final class ObjectPrototype {
             }
 
             // Determine built-in type
+            if (thisArg instanceof JSArguments) {
+                return new JSString("[object Arguments]");
+            }
             if (thisArg instanceof JSArray) {
                 return new JSString("[object Array]");
             }
