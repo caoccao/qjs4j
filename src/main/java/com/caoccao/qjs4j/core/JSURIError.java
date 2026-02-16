@@ -91,10 +91,6 @@ public final class JSURIError extends JSError {
                 true);
         errorConstructor.set("prototype", errorPrototype);
 
-        // Don't set constructor type - let the JSNativeFunction lambda handle construction
-        // Store error name for potential future use
-        errorConstructor.set("[[ErrorName]]", new JSString(NAME));
-
         // Set constructor property on prototype
         errorPrototype.set("constructor", errorConstructor);
 

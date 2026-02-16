@@ -24,6 +24,7 @@ public abstract sealed class JSFunction extends JSObject
         permits JSBytecodeFunction, JSNativeFunction, JSBoundFunction, JSClass {
     public static final String NAME = "Function";
     private JSContext homeContext;
+    private JSObject homeObject;
 
     /**
      * Call this function with the given context, this value, and arguments.
@@ -32,6 +33,14 @@ public abstract sealed class JSFunction extends JSObject
 
     protected JSContext getHomeContext() {
         return homeContext;
+    }
+
+    public JSObject getHomeObject() {
+        return homeObject;
+    }
+
+    public void setHomeObject(JSObject homeObject) {
+        this.homeObject = homeObject;
     }
 
     /**

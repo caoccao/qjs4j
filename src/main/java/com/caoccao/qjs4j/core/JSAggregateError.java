@@ -139,10 +139,6 @@ public final class JSAggregateError extends JSError {
             errorConstructor.setPrototype(errorCtorObj);
         }
 
-        // Don't set constructor type - let the JSNativeFunction lambda handle construction
-        // Store error name for potential future use
-        errorConstructor.set("[[ErrorName]]", new JSString(NAME));
-
         // Set constructor property on prototype (non-enumerable per spec)
         errorPrototype.defineProperty(PropertyKey.CONSTRUCTOR,
                 PropertyDescriptor.dataDescriptor(errorConstructor, true, false, true));

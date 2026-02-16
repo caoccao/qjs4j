@@ -44,6 +44,7 @@ public non-sealed class JSObject implements JSValue {
     protected boolean sealed = false;
     protected JSShape shape;
     protected Map<Integer, JSValue> sparseProperties; // For array indices
+    private boolean superConstructorCalled; // Tracks whether super() has been called in derived constructor
 
     /**
      * Create an empty object with no prototype.
@@ -677,6 +678,14 @@ public non-sealed class JSObject implements JSValue {
      */
     public boolean isExtensible() {
         return extensible;
+    }
+
+    public boolean isSuperConstructorCalled() {
+        return superConstructorCalled;
+    }
+
+    public void markSuperConstructorCalled() {
+        this.superConstructorCalled = true;
     }
 
     /**

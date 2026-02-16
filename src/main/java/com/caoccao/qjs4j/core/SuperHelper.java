@@ -107,40 +107,4 @@ public final class SuperHelper {
         return method != null ? method : JSUndefined.INSTANCE;
     }
 
-    /**
-     * Check if super constructor has been called.
-     * In ES6, 'this' cannot be accessed in a derived class constructor until super() is called.
-     *
-     * @param instance The instance being constructed
-     * @return True if super constructor has been called
-     */
-    public static boolean isSuperConstructorCalled(JSObject instance) {
-        // Check for a marker that indicates super() has been called
-        JSValue marker = instance.get("[[SuperConstructorCalled]]");
-        return marker instanceof JSBoolean && ((JSBoolean) marker).value();
-    }
-
-    /**
-     * Mark super constructor as called.
-     *
-     * @param instance The instance being constructed
-     */
-    public static void markSuperConstructorCalled(JSObject instance) {
-        instance.set("[[SuperConstructorCalled]]", JSBoolean.TRUE);
-    }
-
-    /**
-     * Validate that super constructor has been called before accessing 'this'.
-     *
-     * @param context              The execution context
-     * @param instance             The instance being constructed
-     * @param inDerivedConstructor Whether we're in a derived class constructor
-     * @return The instance if valid, or throws an error
-     */
-    public static JSValue validateThisAccess(JSContext context, JSObject instance, boolean inDerivedConstructor) {
-        if (inDerivedConstructor && !isSuperConstructorCalled(instance)) {
-            return context.throwReferenceError("Must call super constructor in derived class before accessing 'this'");
-        }
-        return instance;
-    }
 }

@@ -171,12 +171,11 @@ public class HighPriorityOpcodeTest extends BaseTest {
         homeObjectEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, homeObject);
         homeObjectEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, method);
         homeObjectEmitter.emitOpcode(Opcode.SET_HOME_OBJECT);
-        homeObjectEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "[[HomeObject]]");
         homeObjectEmitter.emitOpcode(Opcode.NIP);
         homeObjectEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue storedHomeObject = execute(homeObjectEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
-        assertThat(storedHomeObject).isSameAs(homeObject);
+        execute(homeObjectEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        assertThat(method.getHomeObject()).isSameAs(homeObject);
     }
 
     @Test

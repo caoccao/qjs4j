@@ -37,7 +37,6 @@ public final class PropertyKey {
     public static final PropertyKey ENUMERABLE = fromString("enumerable");
     public static final PropertyKey GET = fromString("get");
     public static final PropertyKey HAS = fromString("has");
-    public static final PropertyKey HOME_OBJECT = fromString("[[HomeObject]]");
     public static final PropertyKey ITERATOR = fromString("iterator");
     public static final PropertyKey ITERATOR_CAP = fromString("Iterator");
     public static final PropertyKey KEYS = fromString("keys");

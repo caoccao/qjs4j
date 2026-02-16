@@ -2108,8 +2108,8 @@ public final class VirtualMachine {
                     case SET_HOME_OBJECT -> {
                         JSValue homeObjectValue = (JSValue) stack[sp - 2];
                         JSValue methodValue = (JSValue) stack[sp - 1];
-                        if (methodValue instanceof JSObject methodObject && homeObjectValue instanceof JSObject homeObject) {
-                            methodObject.set(PropertyKey.HOME_OBJECT, homeObject);
+                        if (methodValue instanceof JSFunction methodFunc && homeObjectValue instanceof JSObject homeObject) {
+                            methodFunc.setHomeObject(homeObject);
                         }
                         pc += op.getSize();
                     }
@@ -2239,14 +2239,14 @@ public final class VirtualMachine {
                         if (objectValue instanceof JSObject jsObj) {
                             PropertyKey key = PropertyKey.fromValue(context, propertyValue);
                             JSString computedName = getComputedNameString(propertyValue);
-                            if (methodValue instanceof JSObject methodObject) {
-                                methodObject.set(PropertyKey.HOME_OBJECT, jsObj);
+                            if (methodValue instanceof JSFunction methodFunc) {
+                                methodFunc.setHomeObject(jsObj);
                                 String namePrefix = switch (methodKind) {
                                     case 1 -> "get ";
                                     case 2 -> "set ";
                                     default -> "";
                                 };
-                                setObjectName(methodObject, new JSString(namePrefix + computedName.value()));
+                                setObjectName(methodFunc, new JSString(namePrefix + computedName.value()));
                             }
 
                             switch (methodKind) {

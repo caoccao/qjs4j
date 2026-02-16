@@ -170,7 +170,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         assertThat(methodDescriptor).isNotNull();
         assertThat(methodDescriptor.isEnumerable()).isTrue();
         assertThat(target.get("m")).isSameAs(method);
-        assertThat(method.get("[[HomeObject]]")).isSameAs(target);
+        assertThat(((JSFunction) method).getHomeObject()).isSameAs(target);
         assertThat(((JSString) method.get("name")).value()).isEqualTo("m");
 
         PropertyDescriptor accessorDescriptor = target.getOwnPropertyDescriptor(PropertyKey.fromString("x"));
