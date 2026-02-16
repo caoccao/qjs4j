@@ -102,7 +102,11 @@ public final class ArrayConstructor {
                         return false;
                     }
                 }
-                target.set(PropertyKey.fromIndex(k[0]), mappedValue);
+                // Step 6.g.ix: CreateDataPropertyOrThrow(A, Pk, mappedValue)
+                if (!target.createDataProperty(PropertyKey.fromIndex(k[0]), mappedValue)) {
+                    context.throwTypeError("Cannot define property " + k[0] + " on result object");
+                    return false;
+                }
                 k[0]++;
                 return true;
             });
@@ -176,7 +180,10 @@ public final class ArrayConstructor {
                     return context.getPendingException();
                 }
             }
-            A.set(PropertyKey.fromIndex((int) k), mappedValue);
+            // Step 15.viii: CreateDataPropertyOrThrow(A, Pk, mappedValue)
+            if (!A.createDataProperty(PropertyKey.fromIndex((int) k), mappedValue)) {
+                return context.throwTypeError("Cannot define property " + k + " on result object");
+            }
         }
 
         // Step 16: Set A.length

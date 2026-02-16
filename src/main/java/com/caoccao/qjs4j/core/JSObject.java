@@ -153,11 +153,12 @@ public non-sealed class JSObject implements JSValue {
      * Define a new property with a descriptor.
      */
     public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
-        // Check if property already exists
-        int offset = shape.getPropertyOffset(key);
-        if (offset >= 0) {
+        // Use getOwnShapeKey to handle integer/string key equivalence (e.g., 0 vs "0")
+        PropertyKey shapeKey = getOwnShapeKey(key);
+        if (shapeKey != null) {
+            int offset = shape.getPropertyOffset(shapeKey);
             // Property exists, update descriptor and value
-            shape.addProperty(key, descriptor);
+            shape.addProperty(shapeKey, descriptor);
             if (descriptor.hasValue()) {
                 propertyValues[offset] = descriptor.getValue();
             }
@@ -179,6 +180,27 @@ public non-sealed class JSObject implements JSValue {
         }
 
         this.propertyValues = newValues;
+    }
+
+    /**
+     * CreateDataProperty (ES2024 7.3.6).
+     * Defines a data property with {writable: true, enumerable: true, configurable: true}.
+     * Returns false if the property cannot be defined (e.g., existing non-configurable property
+     * with incompatible attributes, or non-extensible object for new properties).
+     */
+    public boolean createDataProperty(PropertyKey key, JSValue value) {
+        PropertyDescriptor current = getOwnPropertyDescriptor(key);
+        if (current != null) {
+            if (!current.isConfigurable()) {
+                // Non-configurable property exists — can't redefine as configurable
+                return false;
+            }
+        } else if (!isExtensible()) {
+            // Property doesn't exist and object is not extensible
+            return false;
+        }
+        defineProperty(key, PropertyDescriptor.dataDescriptor(value, true, true, true));
+        return true;
     }
 
     public void definePropertyConfigurable(JSSymbol jsSymbol, JSValue value) {
