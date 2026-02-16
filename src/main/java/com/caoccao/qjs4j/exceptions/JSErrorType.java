@@ -19,9 +19,9 @@ package com.caoccao.qjs4j.exceptions;
 import com.caoccao.qjs4j.core.*;
 
 public enum JSErrorType {
+    Error(JSError::createPrototype),
     AggregateError(JSAggregateError::createPrototype),
     EvalError(JSEvalError::createPrototype),
-    Error(JSError::createPrototype),
     RangeError(JSRangeError::createPrototype),
     ReferenceError(JSReferenceError::createPrototype),
     SuppressedError(JSSuppressedError::createPrototype),

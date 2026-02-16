@@ -76,9 +76,11 @@ public final class JSAggregateError extends JSError {
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        // Create Error prototype using the proper error class
-        JSError errorPrototype = new JSAggregateError(context);
-
+        // Create AggregateError.prototype (not an error instance per spec)
+        JSObject errorPrototype = new JSObject();
+        context.transferPrototype(errorPrototype, JSError.NAME);
+        errorPrototype.set("name", new JSString(NAME));
+        errorPrototype.set("message", new JSString(""));
         errorPrototype.set("toString", new JSNativeFunction("toString", 0, JSError::errorToString));
 
         // AggregateError(errors, message)
@@ -128,12 +130,19 @@ public final class JSAggregateError extends JSError {
                 true);
         errorConstructor.set("prototype", errorPrototype);
 
+        // AggregateError.[[Prototype]] = Error (the constructor inherits from Error)
+        JSValue errorCtor = context.getGlobalObject().get(JSError.NAME);
+        if (errorCtor instanceof JSObject errorCtorObj) {
+            errorConstructor.setPrototype(errorCtorObj);
+        }
+
         // Don't set constructor type - let the JSNativeFunction lambda handle construction
         // Store error name for potential future use
         errorConstructor.set("[[ErrorName]]", new JSString(NAME));
 
-        // Set constructor property on prototype
-        errorPrototype.set("constructor", errorConstructor);
+        // Set constructor property on prototype (non-enumerable per spec)
+        errorPrototype.defineProperty(PropertyKey.CONSTRUCTOR,
+                PropertyDescriptor.dataDescriptor(errorConstructor, true, false, true));
 
         return errorConstructor;
     }

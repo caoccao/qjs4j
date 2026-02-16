@@ -62,6 +62,7 @@ public class Test262Config {
         config.unsupportedFeatures.add("hashbang");
         config.unsupportedFeatures.add("Temporal");
         config.unsupportedFeatures.add("source-phase-imports");
+        config.unsupportedFeatures.add("cross-realm");
 
         // Default: run all tests
         config.includePatterns = new HashSet<>();
