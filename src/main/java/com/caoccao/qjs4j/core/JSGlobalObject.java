@@ -107,69 +107,87 @@ public final class JSGlobalObject {
     }
 
     private JSValue decodeURIImpl(JSContext context, String encodedString, boolean isComponent) {
-        StringBuilder result = new StringBuilder(encodedString.length());
+        if (encodedString.indexOf('%') < 0) {
+            return new JSString(encodedString);
+        }
+
+        int length = encodedString.length();
+        StringBuilder result = new StringBuilder(length);
         int k = 0;
-        while (k < encodedString.length()) {
+        while (k < length) {
             int c = encodedString.charAt(k);
-            if (c == '%') {
-                int decodedByte = decodeHexByte(context, encodedString, k);
-                if (decodedByte < 0) {
-                    return context.throwURIError("expecting hex digit");
-                }
-                k += 3;
-                if (decodedByte < 0x80) {
-                    if (!isComponent && isURIReserved(decodedByte)) {
-                        result.append('%');
-                        k -= 2;
-                    } else {
-                        result.append((char) decodedByte);
-                    }
-                    continue;
-                }
-
-                int continuationCount;
-                int minCodePoint;
-                int codePoint;
-                if (decodedByte >= 0xC0 && decodedByte <= 0xDF) {
-                    continuationCount = 1;
-                    minCodePoint = 0x80;
-                    codePoint = decodedByte & 0x1F;
-                } else if (decodedByte >= 0xE0 && decodedByte <= 0xEF) {
-                    continuationCount = 2;
-                    minCodePoint = 0x800;
-                    codePoint = decodedByte & 0x0F;
-                } else if (decodedByte >= 0xF0 && decodedByte <= 0xF7) {
-                    continuationCount = 3;
-                    minCodePoint = 0x10000;
-                    codePoint = decodedByte & 0x07;
-                } else {
-                    continuationCount = 0;
-                    minCodePoint = 1;
-                    codePoint = 0;
-                }
-
-                while (continuationCount-- > 0) {
-                    int continuationByte = decodeHexByte(context, encodedString, k);
-                    if (continuationByte < 0) {
-                        return context.throwURIError("expecting hex digit");
-                    }
-                    k += 3;
-                    if ((continuationByte & 0xC0) != 0x80) {
-                        codePoint = 0;
-                        break;
-                    }
-                    codePoint = (codePoint << 6) | (continuationByte & 0x3F);
-                }
-                if (codePoint < minCodePoint
-                        || codePoint > Character.MAX_CODE_POINT
-                        || (codePoint >= Character.MIN_SURROGATE && codePoint <= Character.MAX_SURROGATE)) {
-                    return context.throwURIError("malformed UTF-8");
-                }
-                result.appendCodePoint(codePoint);
-            } else {
+            if (c != '%') {
                 result.append((char) c);
                 k++;
+                continue;
             }
+
+            if (k + 2 >= length) {
+                return context.throwURIError("expecting hex digit");
+            }
+            int high = fromHex(encodedString.charAt(k + 1));
+            int low = fromHex(encodedString.charAt(k + 2));
+            if (high < 0 || low < 0) {
+                return context.throwURIError("expecting hex digit");
+            }
+
+            int decodedByte = (high << 4) | low;
+            int percentIndex = k;
+            k += 3;
+
+            if (decodedByte < 0x80) {
+                if (!isComponent && isURIReserved(decodedByte)) {
+                    result.append('%')
+                            .append(encodedString.charAt(percentIndex + 1))
+                            .append(encodedString.charAt(percentIndex + 2));
+                } else {
+                    result.append((char) decodedByte);
+                }
+                continue;
+            }
+
+            int continuationCount;
+            int minCodePoint;
+            int codePoint;
+            if (decodedByte >= 0xC0 && decodedByte <= 0xDF) {
+                continuationCount = 1;
+                minCodePoint = 0x80;
+                codePoint = decodedByte & 0x1F;
+            } else if (decodedByte >= 0xE0 && decodedByte <= 0xEF) {
+                continuationCount = 2;
+                minCodePoint = 0x800;
+                codePoint = decodedByte & 0x0F;
+            } else if (decodedByte >= 0xF0 && decodedByte <= 0xF7) {
+                continuationCount = 3;
+                minCodePoint = 0x10000;
+                codePoint = decodedByte & 0x07;
+            } else {
+                return context.throwURIError("malformed UTF-8");
+            }
+
+            for (int i = 0; i < continuationCount; i++) {
+                if (k + 2 >= length || encodedString.charAt(k) != '%') {
+                    return context.throwURIError("expecting %");
+                }
+                int contHigh = fromHex(encodedString.charAt(k + 1));
+                int contLow = fromHex(encodedString.charAt(k + 2));
+                if (contHigh < 0 || contLow < 0) {
+                    return context.throwURIError("expecting hex digit");
+                }
+                int continuationByte = (contHigh << 4) | contLow;
+                k += 3;
+                if ((continuationByte & 0xC0) != 0x80) {
+                    return context.throwURIError("malformed UTF-8");
+                }
+                codePoint = (codePoint << 6) | (continuationByte & 0x3F);
+            }
+
+            if (codePoint < minCodePoint
+                    || codePoint > Character.MAX_CODE_POINT
+                    || (codePoint >= Character.MIN_SURROGATE && codePoint <= Character.MAX_SURROGATE)) {
+                return context.throwURIError("malformed UTF-8");
+            }
+            result.appendCodePoint(codePoint);
         }
         return new JSString(result.toString());
     }
