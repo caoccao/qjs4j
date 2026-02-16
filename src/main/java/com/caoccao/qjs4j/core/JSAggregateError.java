@@ -90,9 +90,42 @@ public final class JSAggregateError extends JSError {
         JSNativeFunction errorConstructor = new JSNativeFunction(
                 NAME,
                 length,
-                (childContext, thisObj, childArgs) ->
-                    // Delegate to create() which works for both 'new AggregateError()' and 'AggregateError()'
-                    JSAggregateError.create(childContext, childArgs),
+                (childContext, thisObj, childArgs) -> {
+                    // When called with 'new' or Reflect.construct, thisObj is a JSObject
+                    // with the correct prototype already set by constructFunction.
+                    // When called without 'new', thisObj is undefined — create a new object.
+                    JSObject obj;
+                    if (thisObj instanceof JSObject o) {
+                        obj = o;
+                    } else {
+                        obj = new JSObject();
+                        childContext.transferPrototype(obj, NAME);
+                    }
+
+                    obj.set("name", new JSString(NAME));
+
+                    // Step 3: Let errorsList be ? IterableToList(errors).
+                    JSValue errorsArg = childArgs.length > 0 ? childArgs[0] : JSUndefined.INSTANCE;
+                    JSArray errorsList = JSIteratorHelper.iterableToList(childContext, errorsArg);
+                    if (childContext.hasPendingException()) {
+                        return childContext.getPendingException();
+                    }
+                    obj.set("errors", errorsList);
+
+                    // Step 5: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
+                    if (childArgs.length > 1 && !(childArgs[1] instanceof JSUndefined)) {
+                        String message = JSTypeConversions.toString(childContext, childArgs[1]).value();
+                        obj.defineProperty(PropertyKey.MESSAGE,
+                                PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
+                    }
+
+                    // InstallErrorCause(O, options)
+                    if (childArgs.length > 2) {
+                        JSError.installErrorCause(obj, childArgs[2]);
+                    }
+
+                    return obj;
+                },
                 true);
         errorConstructor.set("prototype", errorPrototype);
 
