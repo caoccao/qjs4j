@@ -2201,9 +2201,14 @@ public final class BytecodeCompiler {
         // Pre-declare function name as a local in the current scope (if non-global and not
         // already declared). This must happen BEFORE creating the child compiler so the
         // function body can capture the name via closure for self-reference.
+        // Per QuickJS: function declarations inside blocks/switch cases create a lexical
+        // binding in the current scope, even if a parent scope has the same name (e.g.,
+        // a parameter). This prevents the function object from overwriting the parent binding.
         String functionName = funcDecl.id().name();
-        if (!inGlobalScope && findLocalInScopes(functionName) == null) {
-            currentScope().declareLocal(functionName);
+        if (!inGlobalScope) {
+            if (currentScope().getLocal(functionName) == null) {
+                currentScope().declareLocal(functionName);
+            }
         }
 
         // Create a new compiler for the function body
@@ -2257,7 +2262,8 @@ public final class BytecodeCompiler {
 
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
-        functionCompiler.hoistFunctionBodyAnnexBDeclarations(funcDecl.body().body());
+        Set<String> declParamNames = buildParameterNames(funcDecl.params(), funcDecl.body().body());
+        functionCompiler.hoistFunctionBodyAnnexBDeclarations(funcDecl.body().body(), declParamNames);
 
         // Compile function body statements
         for (Statement stmt : funcDecl.body().body()) {
@@ -2430,7 +2436,9 @@ public final class BytecodeCompiler {
 
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
-        functionCompiler.hoistFunctionBodyAnnexBDeclarations(funcExpr.body().body());
+        // Build parameterNames set (BoundNames of argumentsList + "arguments" binding)
+        Set<String> exprParamNames = buildParameterNames(funcExpr.params(), funcExpr.body().body());
+        functionCompiler.hoistFunctionBodyAnnexBDeclarations(funcExpr.body().body(), exprParamNames);
 
         // Compile function body statements (don't call compileBlockStatement as it would create a new scope)
         for (Statement stmt : funcExpr.body().body()) {
@@ -4592,6 +4600,43 @@ public final class BytecodeCompiler {
      *   skip:
      * </pre>
      */
+    /**
+     * Build the set of parameter names for Annex B.3.3.1 checking.
+     * Includes all formal parameter names plus "arguments" (when the function has
+     * an implicit arguments binding, i.e., no explicit parameter or var named "arguments").
+     * Per ES2024 10.2.11 step 22f: if argumentsObjectNeeded, append "arguments" to parameterNames.
+     */
+    private static Set<String> buildParameterNames(List<Identifier> params, List<Statement> body) {
+        Set<String> paramNames = new HashSet<>();
+        for (Identifier param : params) {
+            paramNames.add(param.name());
+        }
+        // Per ES2024 step 22f, "arguments" is in parameterNames when argumentsObjectNeeded is true.
+        // argumentsObjectNeeded is true unless "arguments" is already a parameter name or
+        // there's a lexical "arguments" binding. For simplicity and matching QuickJS
+        // (has_arguments_binding check), always include "arguments" unless it's already
+        // explicitly declared as a parameter or var.
+        if (!paramNames.contains("arguments")) {
+            // Check if body has "var arguments" which would suppress the implicit binding
+            boolean hasVarArguments = false;
+            for (Statement stmt : body) {
+                if (stmt instanceof VariableDeclaration vd && vd.kind() == VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                        if (d.id() instanceof Identifier id && "arguments".equals(id.name())) {
+                            hasVarArguments = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasVarArguments) break;
+            }
+            if (!hasVarArguments) {
+                paramNames.add("arguments");
+            }
+        }
+        return paramNames;
+    }
+
     private void emitConditionalVarInit(String name) {
         emitter.emitOpcodeAtom(Opcode.PUSH_ATOM_VALUE, name);
         emitter.emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
@@ -4860,7 +4905,15 @@ public final class BytecodeCompiler {
      * initialized to undefined is created, and the name is recorded for the runtime
      * hook (copying the block-scoped value to the var-scoped value when evaluated).
      */
-    private void hoistFunctionBodyAnnexBDeclarations(List<Statement> body) {
+    /**
+     * Annex B.3.3.1: Hoist eligible function declarations from blocks/if-statements
+     * to the function scope as var bindings (initialized to undefined).
+     *
+     * @param body           the function body statements
+     * @param parameterNames the set of parameter names (BoundNames of argumentsList),
+     *                       including "arguments" when the function has an implicit arguments binding
+     */
+    private void hoistFunctionBodyAnnexBDeclarations(List<Statement> body, Set<String> parameterNames) {
         if (strictMode) {
             return; // Annex B does not apply in strict mode
         }
@@ -4879,7 +4932,7 @@ public final class BytecodeCompiler {
             return;
         }
 
-        // Collect names that are already declared (parameters, explicit var, top-level functions)
+        // Collect names that are already declared (explicit var, top-level functions)
         // to avoid creating duplicate bindings.
         Set<String> alreadyDeclared = new HashSet<>();
         for (Statement stmt : body) {
@@ -4891,10 +4944,17 @@ public final class BytecodeCompiler {
         }
 
         for (String name : candidates) {
+            // Per B.3.3.1 step ii: skip if F is an element of BoundNames of argumentsList
+            // (including the implicit "arguments" binding).
+            // QuickJS: !((func_idx = find_var(fd, func_name)) >= 0 && (func_idx & ARGUMENT_VAR_OFFSET))
+            //       && !(func_name == JS_ATOM_arguments && fd->has_arguments_binding)
+            if (parameterNames.contains(name)) {
+                continue;
+            }
             annexBFunctionNames.add(name);
             Integer existingLocal = findLocalInScopes(name);
             if (existingLocal != null) {
-                // Already exists (e.g., parameter or explicit var declaration)
+                // Already exists (e.g., explicit var declaration)
                 annexBFunctionScopeLocals.put(name, existingLocal);
             } else if (!alreadyDeclared.contains(name)) {
                 // Create new local in function scope, initialized to undefined
