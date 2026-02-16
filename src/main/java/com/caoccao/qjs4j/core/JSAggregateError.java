@@ -47,20 +47,33 @@ public final class JSAggregateError extends JSError {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        // AggregateError: new AggregateError(errors, message)
         JSValue errorsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String message = "";
-        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            message = JSTypeConversions.toString(context, args[1]).value();
-        }
+
+        // Step 3: Let errorsList be ? IterableToList(errors).
         JSArray errorsList = JSIteratorHelper.iterableToList(context, errorsArg);
         if (context.hasPendingException()) {
             return (JSObject) context.getPendingException();
         }
-        JSObject jsObject = new JSAggregateError(context, message);
-        jsObject.set("errors", errorsList);
-        context.transferPrototype(jsObject, NAME);
-        return jsObject;
+
+        // Step 2: OrdinaryCreateFromConstructor(newTarget, "%AggregateError.prototype%")
+        JSObject obj = new JSObject();
+        context.transferPrototype(obj, NAME);
+        obj.set("name", new JSString(NAME));
+        obj.set("errors", errorsList);
+
+        // Step 5: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
+        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+            String message = JSTypeConversions.toString(context, args[1]).value();
+            obj.defineProperty(PropertyKey.MESSAGE,
+                    PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
+        }
+
+        // Step 4: InstallErrorCause(O, options)
+        if (args.length > 2) {
+            JSError.installErrorCause(obj, args[2]);
+        }
+
+        return obj;
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
@@ -77,42 +90,9 @@ public final class JSAggregateError extends JSError {
         JSNativeFunction errorConstructor = new JSNativeFunction(
                 NAME,
                 length,
-                (childContext, thisObj, childArgs) -> {
-                    // The VM has already created thisObj with the correct prototype
-                    // We just need to initialize the error properties on thisObj
-                    if (!(thisObj instanceof JSObject obj)) {
-                        return JSUndefined.INSTANCE;
-                    }
-
-                    // Set name property
-                    obj.set("name", new JSString(NAME));
-
-                    // AggregateError: new AggregateError(errors, message, options)
-                    JSValue errorsArg = childArgs.length > 0 ? childArgs[0] : JSUndefined.INSTANCE;
-
-                    // Step 3: Let errorsList be ? IterableToList(errors).
-                    JSArray errorsList = JSIteratorHelper.iterableToList(childContext, errorsArg);
-                    if (childContext.hasPendingException()) {
-                        return childContext.getPendingException();
-                    }
-
-                    obj.set("errors", errorsList);
-
-                    // Step 5: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
-                    if (childArgs.length > 1 && !(childArgs[1] instanceof JSUndefined)) {
-                        String message = JSTypeConversions.toString(childContext, childArgs[1]).value();
-                        obj.defineProperty(PropertyKey.MESSAGE,
-                                PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
-                    }
-
-                    // InstallErrorCause(O, options)
-                    if (childArgs.length > 2) {
-                        JSError.installErrorCause(obj, childArgs[2]);
-                    }
-
-                    // Return undefined to use the thisObj created by the VM
-                    return JSUndefined.INSTANCE;
-                },
+                (childContext, thisObj, childArgs) ->
+                    // Delegate to create() which works for both 'new AggregateError()' and 'AggregateError()'
+                    JSAggregateError.create(childContext, childArgs),
                 true);
         errorConstructor.set("prototype", errorPrototype);
 
