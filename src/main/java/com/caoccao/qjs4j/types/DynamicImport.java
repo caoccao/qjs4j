@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.types;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.JSPromise;
 
 /**
  * Implementation of dynamic import() for ES6 modules.
@@ -60,7 +61,7 @@ public final class DynamicImport {
      * @return A promise that resolves to the module namespace object
      */
     public static JSPromise import_(JSContext context, String specifier, ModuleLoader loader) {
-        JSPromise promise = new JSPromise();
+        JSPromise promise = context.createJSPromise();
 
         // Queue module loading as a microtask
         context.enqueueMicrotask(() -> {

@@ -2857,7 +2857,7 @@ public final class VirtualMachine {
             promise = (JSPromise) value;
         } else {
             // Create a new promise and immediately fulfill it
-            promise = new JSPromise();
+            promise = context.createJSPromise();
             promise.fulfill(value);
         }
 

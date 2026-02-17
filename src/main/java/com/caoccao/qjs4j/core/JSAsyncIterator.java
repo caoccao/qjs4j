@@ -221,7 +221,7 @@ public class JSAsyncIterator extends JSObject {
                 consumed = true;
 
                 // Return a promise that waits for the input promise
-                JSPromise resultPromise = new JSPromise();
+                JSPromise resultPromise = context.createJSPromise();
                 promise.addReactions(
                         new JSPromise.ReactionRecord(
                                 new JSNativeFunction("onFulfilled", 1, (childContext, thisArg, args) -> {

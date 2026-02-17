@@ -355,7 +355,7 @@ public final class ArrayConstructor {
             if (mapFn instanceof JSFunction mappingFunc) {
                 JSValue mappedValue = mappingFunc.call(context, mapThisArg, new JSValue[]{value, JSNumber.of(index[0])});
                 JSPromise awaitPromise = resolveThenable(context, mappedValue);
-                JSPromise processingPromise = new JSPromise();
+                JSPromise processingPromise = context.createJSPromise();
                 awaitPromise.addReactions(
                         new JSPromise.ReactionRecord(
                                 new JSNativeFunction("onResolve", 1, (ctx2, t2, a2) -> {
@@ -382,7 +382,7 @@ public final class ArrayConstructor {
                 // No mapFn: use value directly, no Await
                 result.push(value);
                 index[0]++;
-                JSPromise resolved = new JSPromise();
+                JSPromise resolved = context.createJSPromise();
                 resolved.fulfill(JSUndefined.INSTANCE);
                 return resolved;
             }
@@ -503,7 +503,7 @@ public final class ArrayConstructor {
         if (value instanceof JSObject obj) {
             JSValue thenMethod = obj.get("then");
             if (thenMethod instanceof JSFunction thenFunc) {
-                JSPromise promise = new JSPromise();
+                JSPromise promise = context.createJSPromise();
                 thenFunc.call(context, value, new JSValue[]{
                         new JSNativeFunction("resolve", 1, (ctx, thisArg, args) -> {
                             promise.fulfill(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
@@ -517,7 +517,7 @@ public final class ArrayConstructor {
                 return promise;
             }
         }
-        JSPromise promise = new JSPromise();
+        JSPromise promise = context.createJSPromise();
         promise.fulfill(value);
         return promise;
     }

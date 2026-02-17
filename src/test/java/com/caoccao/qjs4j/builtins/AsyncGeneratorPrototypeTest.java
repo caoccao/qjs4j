@@ -41,10 +41,10 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
     @Test
     public void testCreateFromPromises() {
         // Create some promises
-        JSPromise promise1 = new JSPromise();
+        JSPromise promise1 = context.createJSPromise();
         promise1.fulfill(new JSNumber(10));
 
-        JSPromise promise2 = new JSPromise();
+        JSPromise promise2 = context.createJSPromise();
         promise2.fulfill(new JSNumber(20));
 
         JSPromise[] promises = {promise1, promise2};

@@ -40,7 +40,7 @@ public final class AsyncGeneratorPrototype {
             final int[] index = {0};
 
             if (isThrow) {
-                JSPromise promise = new JSPromise();
+                JSPromise promise = context.createJSPromise();
                 promise.reject(inputValue);
                 return promise;
             }
@@ -57,7 +57,7 @@ public final class AsyncGeneratorPrototype {
             }
 
             // Create a promise that resolves with the value
-            JSPromise promise = new JSPromise();
+            JSPromise promise = context.createJSPromise();
 
             // In a real implementation, this would use setTimeout or similar
             // For now, we enqueue as a microtask to simulate async behavior

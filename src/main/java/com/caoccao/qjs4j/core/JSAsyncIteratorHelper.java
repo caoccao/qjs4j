@@ -37,7 +37,7 @@ public final class JSAsyncIteratorHelper {
      * @return A promise that resolves when iteration is complete
      */
     public static JSPromise forAwaitOf(JSContext context, JSValue iterable, AsyncIterationCallback callback) {
-        JSPromise completionPromise = new JSPromise();
+        JSPromise completionPromise = context.createJSPromise();
 
         // Get async iterator
         JSAsyncIterator iterator = getAsyncIterator(iterable, context);
@@ -59,7 +59,7 @@ public final class JSAsyncIteratorHelper {
      * Execute a for-await-of loop using an already-obtained async iterator.
      */
     public static JSPromise forAwaitOfIterator(JSContext context, JSAsyncIterator iterator, AsyncIterationCallback callback) {
-        JSPromise completionPromise = new JSPromise();
+        JSPromise completionPromise = context.createJSPromise();
         iterateNext(iterator, callback, context, completionPromise);
         return completionPromise;
     }
@@ -125,7 +125,7 @@ public final class JSAsyncIteratorHelper {
                 return promise;
             }
             // If next() doesn't return a promise, wrap the result
-            JSPromise promise = new JSPromise();
+            JSPromise promise = context.createJSPromise();
             promise.fulfill(result);
             return promise;
         }, context);
@@ -148,7 +148,7 @@ public final class JSAsyncIteratorHelper {
                 // Per ES spec CreateAsyncFromSyncIterator: resolve promise values
                 return JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
             }
-            JSPromise promise = new JSPromise();
+            JSPromise promise = context.createJSPromise();
             promise.reject(new JSString("Iterator result is not an object"));
             return promise;
         }, context);
@@ -265,14 +265,14 @@ public final class JSAsyncIteratorHelper {
      * @return A promise that resolves to an array of all values
      */
     public static JSPromise toArray(JSContext context, JSValue iterable) {
-        JSPromise resultPromise = new JSPromise();
+        JSPromise resultPromise = context.createJSPromise();
         JSArray array = context.createJSArray();
 
         // Use for-await-of to collect all values
         forAwaitOf(context, iterable, (value) -> {
             array.push(value);
             // Return immediately resolved promise
-            JSPromise resolved = new JSPromise();
+            JSPromise resolved = context.createJSPromise();
             resolved.fulfill(JSUndefined.INSTANCE);
             return resolved;
         }).addReactions(
