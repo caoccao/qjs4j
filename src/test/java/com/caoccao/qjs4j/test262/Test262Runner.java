@@ -52,14 +52,13 @@ public class Test262Runner {
                     : Paths.get("../test262");
 
             // Determine config based on arguments
-            Test262Config config;
-            if (args.length > 1 && args[1].equals("--quick")) {
-                config = Test262Config.forQuickTest();
-            } else if (args.length > 1 && args[1].equals("--language")) {
-                config = Test262Config.forLanguageTests();
-            } else {
-                config = Test262Config.loadDefault();
-            }
+            String mode = args.length > 1 ? args[1] : "";
+            Test262Config config = switch (mode) {
+                case "--quick" -> Test262Config.forQuickTest();
+                case "--language" -> Test262Config.forLanguageTests();
+                case "--long-running" -> Test262Config.forLongRunningTest();
+                default -> Test262Config.loadDefault();
+            };
 
             Test262Runner runner = new Test262Runner(test262Root, config);
             runner.run();

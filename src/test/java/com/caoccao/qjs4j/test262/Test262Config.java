@@ -20,25 +20,37 @@ import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * Configuration for test262 test execution.
  */
 public class Test262Config {
+    private final Set<Pattern> excludePatterns;
+    private final Set<Pattern> includePatterns;
+    private final Set<String> unsupportedFeatures;
     private long asyncTimeoutMs;
-    private Set<Pattern> excludePatterns;
-    private Set<Pattern> includePatterns;
     private int maxTests;
-    private Set<String> unsupportedFeatures;
 
     private Test262Config() {
+        excludePatterns = new HashSet<>();
+        includePatterns = new HashSet<>();
+        unsupportedFeatures = new HashSet<>();
+    }
+
+    public static Test262Config forLongRunningTest() {
+        Test262Config config = loadDefault();
+        config.includePatterns.clear();
+        config.addIncludePatterns(
+                Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
+                Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$") );
+        return config;
     }
 
     public static Test262Config forLanguageTests() {
         Test262Config config = loadDefault();
-        // Only run language tests
         config.includePatterns.clear();
-        config.includePatterns.add(Pattern.compile(".*/test/language/.*\\.js$"));
+        config.addIncludePatterns(Pattern.compile(".*/test/language/.*\\.js$"));
         config.maxTests = 200;
         return config;
     }
@@ -46,7 +58,8 @@ public class Test262Config {
     public static Test262Config forQuickTest() {
         Test262Config config = loadDefault();
         // Run a subset of tests for quick validation
-        config.maxTests = 1200;
+        config.addExcludePatterns(Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"));
+        config.maxTests = 2200;
         return config;
     }
 
@@ -54,23 +67,20 @@ public class Test262Config {
         Test262Config config = new Test262Config();
 
         // Define unsupported features
-        config.unsupportedFeatures = new HashSet<>();
-        config.unsupportedFeatures.add("Intl.Segmenter");
-        config.unsupportedFeatures.add("Intl.DisplayNames");
-        config.unsupportedFeatures.add("top-level-await");
-        config.unsupportedFeatures.add("import.meta");
-        config.unsupportedFeatures.add("hashbang");
-        config.unsupportedFeatures.add("Temporal");
-        config.unsupportedFeatures.add("source-phase-imports");
-        config.unsupportedFeatures.add("cross-realm");
+        config.addUnsupportedFeatures("Intl.Segmenter",
+                "Intl.DisplayNames",
+                "top-level-await",
+                "import.meta",
+                "hashbang",
+                "Temporal",
+                "source-phase-imports",
+                "cross-realm");
 
         // Default: run all tests
-        config.includePatterns = new HashSet<>();
-        config.includePatterns.add(Pattern.compile(".*\\.js$"));
+        config.addIncludePatterns(Pattern.compile(".*\\.js$"));
 
         // Exclude fixture files
-        config.excludePatterns = new HashSet<>();
-        config.excludePatterns.add(Pattern.compile(".*_FIXTURE\\.js$"));
+        config.addExcludePatterns(Pattern.compile(".*_FIXTURE\\.js$"));
 
         // 5 second timeout for async tests
         config.asyncTimeoutMs = 5000;
@@ -81,16 +91,16 @@ public class Test262Config {
         return config;
     }
 
-    public void addExcludePattern(String pattern) {
-        excludePatterns.add(Pattern.compile(pattern));
+    public void addExcludePatterns(Pattern... patterns) {
+        Stream.of(patterns).forEach(excludePatterns::add);
     }
 
-    public void addIncludePattern(String pattern) {
-        includePatterns.add(Pattern.compile(pattern));
+    public void addIncludePatterns(Pattern... patterns) {
+        Stream.of(patterns).forEach(includePatterns::add);
     }
 
-    public void addUnsupportedFeature(String feature) {
-        unsupportedFeatures.add(feature);
+    public void addUnsupportedFeatures(String... features) {
+        Stream.of(features).forEach(unsupportedFeatures::add);
     }
 
     public long getAsyncTimeoutMs() {

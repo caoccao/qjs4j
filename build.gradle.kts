@@ -174,6 +174,19 @@ tasks.register<JavaExec>("test262Quick") {
     jvmArgs = listOf("-Xmx1g")
 }
 
+// Long-running tests (e.g. decodeURI heavy loops)
+tasks.register<JavaExec>("test262LongRunning") {
+    group = "verification"
+    description = "Run long-running Test262 tests"
+
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
+
+    args = listOf("../test262", "--long-running")
+
+    jvmArgs = listOf("-Xmx1g")
+}
+
 // Language tests only
 tasks.register<JavaExec>("test262Language") {
     group = "verification"
