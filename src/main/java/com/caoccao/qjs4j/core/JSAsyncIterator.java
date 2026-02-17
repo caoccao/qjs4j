@@ -78,8 +78,8 @@ public class JSAsyncIterator extends JSObject {
                             new JSNativeFunction("onResolve", 1, (ctx, thisArg, args) -> {
                                 JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                 JSObject result = context.createJSObject();
-                                result.set("value", resolved);
-                                result.set("done", JSBoolean.valueOf(done));
+                                result.set(PropertyKey.VALUE, resolved);
+                                result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
                                 resultPromise.fulfill(result);
                                 return JSUndefined.INSTANCE;
                             }),
@@ -105,8 +105,8 @@ public class JSAsyncIterator extends JSObject {
                         new JSNativeFunction("resolve", 1, (ctx, thisArg, args) -> {
                             JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                             JSObject result = context.createJSObject();
-                            result.set("value", resolved);
-                            result.set("done", JSBoolean.valueOf(done));
+                            result.set(PropertyKey.VALUE, resolved);
+                            result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
                             resultPromise.fulfill(result);
                             return JSUndefined.INSTANCE;
                         }),
@@ -133,8 +133,8 @@ public class JSAsyncIterator extends JSObject {
     public static JSPromise createIteratorResultPromise(JSContext context, JSValue value, boolean done) {
         JSPromise promise = context.createJSPromise();
         JSObject result = context.createJSObject();
-        result.set("value", value);
-        result.set("done", JSBoolean.valueOf(done));
+        result.set(PropertyKey.VALUE, value);
+        result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
         promise.fulfill(result);
         return promise;
     }
@@ -227,8 +227,8 @@ public class JSAsyncIterator extends JSObject {
                                 new JSNativeFunction("onFulfilled", 1, (childContext, thisArg, args) -> {
                                     JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                     JSObject result = childContext.createJSObject();
-                                    result.set("value", value);
-                                    result.set("done", JSBoolean.FALSE);
+                                    result.set(PropertyKey.VALUE, value);
+                                    result.set(PropertyKey.DONE, JSBoolean.FALSE);
                                     resultPromise.fulfill(result);
                                     return JSUndefined.INSTANCE;
                                 }),

@@ -182,8 +182,8 @@ public final class JSBytecodeFunction extends JSFunction {
                 // Check if generator is completed
                 if (generatorState.isCompleted()) {
                     JSObject result = context.createJSObject();
-                    result.set("value", JSUndefined.INSTANCE);
-                    result.set("done", JSBoolean.TRUE);
+                    result.set(PropertyKey.VALUE, JSUndefined.INSTANCE);
+                    result.set(PropertyKey.DONE, JSBoolean.TRUE);
                     promise.fulfill(result);
                     return promise;
                 }
@@ -196,10 +196,8 @@ public final class JSBytecodeFunction extends JSFunction {
                     // Check if this was a yield or completion
                     if (generatorState.isCompleted()) {
                         // Generator completed - return final value with done: true
-                        JSObject iterResult = context.createJSObject();
-                        iterResult.set("value", result);
-                        iterResult.set("done", JSBoolean.TRUE);
-                        promise.fulfill(iterResult);
+                        // Per ES spec, also await the return value
+                        fulfillAsyncYield(context, promise, result, true);
                     } else {
                         // Generator yielded - check if yield* (already has {value, done})
                         YieldResult lastYield = context.getVirtualMachine().getLastYieldResult();
@@ -207,10 +205,8 @@ public final class JSBytecodeFunction extends JSFunction {
                             // yield* returns raw iterator result - don't wrap again
                             promise.fulfill(result);
                         } else {
-                            JSObject iterResult = context.createJSObject();
-                            iterResult.set("value", result);
-                            iterResult.set("done", JSBoolean.FALSE);
-                            promise.fulfill(iterResult);
+                            // Per ES spec AsyncGeneratorYield step 8: Await the yielded value
+                            fulfillAsyncYield(context, promise, result, false);
                         }
                     }
                 } catch (Exception e) {
@@ -308,6 +304,75 @@ public final class JSBytecodeFunction extends JSFunction {
 
         // For non-async functions, execute normally and let exceptions propagate
         return executionContext.getVirtualMachine().execute(this, thisArg, args);
+    }
+
+    /**
+     * Per ES spec AsyncGeneratorYield/AsyncGeneratorResolve: Await the yielded/returned value
+     * before placing it in the iterator result. If the value is a promise or thenable,
+     * resolve it first; otherwise use it directly.
+     */
+    private static void fulfillAsyncYield(JSContext context, JSPromise promise, JSValue value, boolean done) {
+        if (value instanceof JSPromise yieldedPromise) {
+            // If already settled, use result directly
+            if (yieldedPromise.getState() == JSPromise.PromiseState.FULFILLED) {
+                JSObject iterResult = context.createJSObject();
+                iterResult.set(PropertyKey.VALUE, yieldedPromise.getResult());
+                iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+                promise.fulfill(iterResult);
+                return;
+            }
+            if (yieldedPromise.getState() == JSPromise.PromiseState.REJECTED) {
+                promise.reject(yieldedPromise.getResult());
+                return;
+            }
+            // Pending: chain reactions
+            yieldedPromise.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onResolve", 1, (ctx, thisArg, args) -> {
+                                JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                JSObject iterResult = context.createJSObject();
+                                iterResult.set(PropertyKey.VALUE, resolved);
+                                iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+                                promise.fulfill(iterResult);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null, context
+                    ),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onReject", 1, (ctx, thisArg, args) -> {
+                                promise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null, context
+                    )
+            );
+            return;
+        }
+        if (value instanceof JSObject obj) {
+            JSValue thenMethod = obj.get("then");
+            if (thenMethod instanceof JSFunction thenFunc) {
+                thenFunc.call(context, value, new JSValue[]{
+                        new JSNativeFunction("resolve", 1, (ctx, thisArg, args) -> {
+                            JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            JSObject iterResult = context.createJSObject();
+                            iterResult.set(PropertyKey.VALUE, resolved);
+                            iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+                            promise.fulfill(iterResult);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        new JSNativeFunction("reject", 1, (ctx, thisArg, args) -> {
+                            promise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                            return JSUndefined.INSTANCE;
+                        })
+                });
+                return;
+            }
+        }
+        // Non-thenable: use directly
+        JSObject iterResult = context.createJSObject();
+        iterResult.set(PropertyKey.VALUE, value);
+        iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+        promise.fulfill(iterResult);
     }
 
     public JSBytecodeFunction copyWithClosureVars(JSValue[] capturedClosureVars) {

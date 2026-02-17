@@ -759,8 +759,8 @@ public final class IteratorPrototype {
 
     private static JSObject iteratorResult(JSContext context, JSValue value, boolean done) {
         JSObject result = context.createJSObject();
-        result.set("value", value != null ? value : JSUndefined.INSTANCE);
-        result.set("done", JSBoolean.valueOf(done));
+        result.set(PropertyKey.VALUE, value != null ? value : JSUndefined.INSTANCE);
+        result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
         return result;
     }
 

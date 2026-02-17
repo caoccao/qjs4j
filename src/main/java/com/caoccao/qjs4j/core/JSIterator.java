@@ -233,8 +233,8 @@ public class JSIterator extends JSObject {
 
         public JSObject toObject() {
             JSObject obj = context.createJSObject();
-            obj.set("value", value);
-            obj.set("done", JSBoolean.valueOf(done));
+            obj.set(PropertyKey.VALUE, value);
+            obj.set(PropertyKey.DONE, JSBoolean.valueOf(done));
             return obj;
         }
     }

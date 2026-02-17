@@ -50,8 +50,8 @@ public final class AsyncGeneratorPrototype {
             if (currentIndex >= values.length) {
                 JSPromise promise = context.createJSPromise();
                 JSObject result = context.createJSObject();
-                result.set("value", JSUndefined.INSTANCE);
-                result.set("done", JSBoolean.TRUE);
+                result.set(PropertyKey.VALUE, JSUndefined.INSTANCE);
+                result.set(PropertyKey.DONE, JSBoolean.TRUE);
                 promise.fulfill(result);
                 return promise;
             }
@@ -63,8 +63,8 @@ public final class AsyncGeneratorPrototype {
             // For now, we enqueue as a microtask to simulate async behavior
             context.enqueueMicrotask(() -> {
                 JSObject result = context.createJSObject();
-                result.set("value", values[currentIndex]);
-                result.set("done", JSBoolean.FALSE);
+                result.set(PropertyKey.VALUE, values[currentIndex]);
+                result.set(PropertyKey.DONE, JSBoolean.FALSE);
                 promise.fulfill(result);
             });
 
@@ -97,8 +97,8 @@ public final class AsyncGeneratorPrototype {
                 // All promises processed
                 JSPromise promise = context.createJSPromise();
                 JSObject result = context.createJSObject();
-                result.set("value", JSUndefined.INSTANCE);
-                result.set("done", JSBoolean.TRUE);
+                result.set(PropertyKey.VALUE, JSUndefined.INSTANCE);
+                result.set(PropertyKey.DONE, JSBoolean.TRUE);
                 promise.fulfill(result);
                 return promise;
             }
@@ -112,8 +112,8 @@ public final class AsyncGeneratorPrototype {
                             new JSNativeFunction("onFulfilled", 1, (childContext, thisArg, args) -> {
                                 JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                 JSObject result = context.createJSObject();
-                                result.set("value", value);
-                                result.set("done", JSBoolean.FALSE);
+                                result.set(PropertyKey.VALUE, value);
+                                result.set(PropertyKey.DONE, JSBoolean.FALSE);
                                 resultPromise.fulfill(result);
                                 return JSUndefined.INSTANCE;
                             }),
@@ -161,8 +161,8 @@ public final class AsyncGeneratorPrototype {
                 // All values yielded
                 JSPromise promise = context.createJSPromise();
                 JSObject result = context.createJSObject();
-                result.set("value", JSUndefined.INSTANCE);
-                result.set("done", JSBoolean.TRUE);
+                result.set(PropertyKey.VALUE, JSUndefined.INSTANCE);
+                result.set(PropertyKey.DONE, JSBoolean.TRUE);
                 promise.fulfill(result);
                 return promise;
             }
@@ -170,8 +170,8 @@ public final class AsyncGeneratorPrototype {
             // Yield next value
             JSPromise promise = context.createJSPromise();
             JSObject result = context.createJSObject();
-            result.set("value", values[currentIndex]);
-            result.set("done", JSBoolean.FALSE);
+            result.set(PropertyKey.VALUE, values[currentIndex]);
+            result.set(PropertyKey.DONE, JSBoolean.FALSE);
             promise.fulfill(result);
             return promise;
         }, context);

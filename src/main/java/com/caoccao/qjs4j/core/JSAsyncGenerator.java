@@ -106,8 +106,8 @@ public final class JSAsyncGenerator extends JSObject {
     private JSPromise createIteratorResultPromise(JSValue value, boolean done) {
         JSPromise promise = context.createJSPromise();
         JSObject result = context.createJSObject();
-        result.set("value", value);
-        result.set("done", JSBoolean.valueOf(done));
+        result.set(PropertyKey.VALUE, value);
+        result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
         promise.fulfill(result);
         return promise;
     }
