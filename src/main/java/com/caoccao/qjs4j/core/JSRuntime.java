@@ -181,7 +181,7 @@ public final class JSRuntime implements AutoCloseable {
      */
     public JSSymbol getOrCreateGlobalSymbol(String key) {
         synchronized (globalSymbolRegistry) {
-            return globalSymbolRegistry.computeIfAbsent(key, JSSymbol::new);
+            return globalSymbolRegistry.computeIfAbsent(key, k -> new JSSymbol(k, true));
         }
     }
 

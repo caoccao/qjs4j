@@ -63,7 +63,9 @@ public final class JSWeakRef extends JSObject {
     }
 
     public static boolean isWeakRefTarget(JSValue value) {
-        return value instanceof JSObject || value instanceof JSSymbol;
+        if (value instanceof JSObject) return true;
+        if (value instanceof JSSymbol s) return !s.isRegistered();
+        return false;
     }
 
     /**

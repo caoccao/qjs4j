@@ -128,7 +128,9 @@ public final class JSWeakSet extends JSObject {
     }
 
     public static boolean isWeakSetValue(JSValue value) {
-        return value instanceof JSObject || value instanceof JSSymbol;
+        if (value instanceof JSObject) return true;
+        if (value instanceof JSSymbol s) return !s.isRegistered();
+        return false;
     }
 
     @Override

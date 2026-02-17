@@ -46,15 +46,24 @@ public final class JSSymbol implements JSValue {
     private static final AtomicInteger nextId = new AtomicInteger(0);
     private final String description;
     private final int id;
+    private final boolean registered;
 
     public JSSymbol(String description) {
         this.id = nextId.getAndIncrement();
         this.description = description;
+        this.registered = false;
+    }
+
+    public JSSymbol(String description, boolean registered) {
+        this.id = nextId.getAndIncrement();
+        this.description = description;
+        this.registered = registered;
     }
 
     private JSSymbol(String description, int id) {
         this.id = id;
         this.description = description;
+        this.registered = false;
     }
 
     /**
@@ -90,6 +99,10 @@ public final class JSSymbol implements JSValue {
 
     public int getId() {
         return id;
+    }
+
+    public boolean isRegistered() {
+        return registered;
     }
 
     @Override
