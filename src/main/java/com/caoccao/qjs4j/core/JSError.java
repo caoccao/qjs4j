@@ -112,21 +112,6 @@ public sealed class JSError extends JSObject permits
         return errorConstructor;
     }
 
-    /**
-     * InstallErrorCause ( O, options )
-     * ES2022: If options is an object with a "cause" property, install it as a
-     * non-enumerable, writable, configurable own property on the error object.
-     */
-    public static void installErrorCause(JSObject obj, JSValue options) {
-        if (options instanceof JSObject optionsObj) {
-            if (optionsObj.has("cause")) {
-                JSValue cause = optionsObj.get("cause");
-                obj.defineProperty(PropertyKey.CAUSE,
-                        PropertyDescriptor.dataDescriptor(cause, true, false, true));
-            }
-        }
-    }
-
     public static JSValue errorToString(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject error)) {
             return new JSString("[object Object]");
@@ -143,6 +128,21 @@ public sealed class JSError extends JSObject permits
         }
 
         return new JSString(name + ": " + message);
+    }
+
+    /**
+     * InstallErrorCause ( O, options )
+     * ES2022: If options is an object with a "cause" property, install it as a
+     * non-enumerable, writable, configurable own property on the error object.
+     */
+    public static void installErrorCause(JSObject obj, JSValue options) {
+        if (options instanceof JSObject optionsObj) {
+            if (optionsObj.has("cause")) {
+                JSValue cause = optionsObj.get("cause");
+                obj.defineProperty(PropertyKey.CAUSE,
+                        PropertyDescriptor.dataDescriptor(cause, true, false, true));
+            }
+        }
     }
 
     @Override

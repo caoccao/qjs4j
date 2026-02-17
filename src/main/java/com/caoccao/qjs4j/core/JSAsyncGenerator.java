@@ -67,7 +67,7 @@ public final class JSAsyncGenerator extends JSObject {
         }));
 
         // Make this an async iterable via Symbol.asyncIterator
-            this.set(PropertyKey.SYMBOL_ASYNC_ITERATOR,
+        this.set(PropertyKey.SYMBOL_ASYNC_ITERATOR,
                 new JSNativeFunction("[Symbol.asyncIterator]", 0, (childContext, thisArg, args) -> thisArg));
     }
 

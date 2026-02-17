@@ -107,14 +107,6 @@ public final class JSReflectObject {
         return constructFunction(context, args[0], constructorArgs, newTarget);
     }
 
-    /**
-     * Construct a value using the given target as both constructor and newTarget.
-     * Equivalent to `new target(...args)`.
-     */
-    public static JSValue constructSimple(JSContext context, JSValue target, JSValue[] args) {
-        return constructFunction(context, target, args, target);
-    }
-
     private static JSValue constructFunction(JSContext context, JSValue target, JSValue[] args, JSValue newTarget) {
         if (target instanceof JSProxy proxy) {
             return proxy.construct(context, args, newTarget);
@@ -177,6 +169,14 @@ public final class JSReflectObject {
             }
         }
         return result != null ? result : JSUndefined.INSTANCE;
+    }
+
+    /**
+     * Construct a value using the given target as both constructor and newTarget.
+     * Equivalent to `new target(...args)`.
+     */
+    public static JSValue constructSimple(JSContext context, JSValue target, JSValue[] args) {
+        return constructFunction(context, target, args, target);
     }
 
     /**

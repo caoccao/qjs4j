@@ -45,6 +45,7 @@ public final class PropertyKey {
     public static final PropertyKey MESSAGE = fromString("message");
     public static final PropertyKey NAME = fromString("name");
     public static final PropertyKey NEXT = fromString("next");
+    public static final PropertyKey ONE = fromString("1");
     public static final PropertyKey PROTO = fromString("__proto__");
     public static final PropertyKey PROTOTYPE = fromString("prototype");
     public static final PropertyKey RETURN = fromString("return");
@@ -70,6 +71,7 @@ public final class PropertyKey {
     public static final PropertyKey TO_ISO_STRING = fromString("toISOString");
     public static final PropertyKey VALUE = fromString("value");
     public static final PropertyKey WRITABLE = fromString("writable");
+    public static final PropertyKey ZERO = fromString("0");
     private final int atomIndex; // -1 if not interned
     private final Object value; // String, Integer, or JSSymbol
 

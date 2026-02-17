@@ -3042,7 +3042,27 @@ public final class VirtualMachine {
                 valueStack.push(JSUndefined.INSTANCE);
                 return;
             }
-            JSValue result = constructFunction(jsFunction, args);
+            JSValue result;
+            try {
+                result = constructFunction(jsFunction, args);
+            } catch (JSVirtualMachineException e) {
+                // Constructor internally called a bytecode function that threw
+                // (e.g., getter in iterable item). Convert to pendingException so
+                // the main loop can route it to JavaScript catch handlers.
+                if (e.getJsValue() != null) {
+                    pendingException = e.getJsValue();
+                } else if (e.getJsError() != null) {
+                    pendingException = e.getJsError();
+                } else if (context.hasPendingException()) {
+                    pendingException = context.getPendingException();
+                } else {
+                    pendingException = context.throwError("Error",
+                            e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                }
+                context.clearPendingException();
+                valueStack.push(JSUndefined.INSTANCE);
+                return;
+            }
             if (context.hasPendingException()) {
                 pendingException = context.getPendingException();
                 valueStack.push(JSUndefined.INSTANCE);

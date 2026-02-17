@@ -23,6 +23,23 @@ package com.caoccao.qjs4j.core;
 public final class JSIteratorHelper {
 
     /**
+     * IteratorClose (ES2024 7.4.6).
+     * Calls the iterator's return() method if it exists to signal early termination.
+     *
+     * @param context  The execution context
+     * @param iterator The iterator to close
+     */
+    public static void closeIterator(JSContext context, JSValue iterator) {
+        if (!(iterator instanceof JSObject iteratorObj)) {
+            return;
+        }
+        JSValue returnMethod = iteratorObj.get(PropertyKey.RETURN, context);
+        if (returnMethod instanceof JSFunction returnFunc) {
+            returnFunc.call(context, iterator, new JSValue[0]);
+        }
+    }
+
+    /**
      * Execute a for...of loop over an iterable.
      * This is a helper for bytecode that implements for...of loops.
      *
@@ -84,23 +101,6 @@ public final class JSIteratorHelper {
                     context.setPendingException(savedException);
                 }
             }
-        }
-    }
-
-    /**
-     * IteratorClose (ES2024 7.4.6).
-     * Calls the iterator's return() method if it exists to signal early termination.
-     *
-     * @param context  The execution context
-     * @param iterator The iterator to close
-     */
-    public static void closeIterator(JSContext context, JSValue iterator) {
-        if (!(iterator instanceof JSObject iteratorObj)) {
-            return;
-        }
-        JSValue returnMethod = iteratorObj.get(PropertyKey.RETURN, context);
-        if (returnMethod instanceof JSFunction returnFunc) {
-            returnFunc.call(context, iterator, new JSValue[0]);
         }
     }
 
@@ -173,53 +173,12 @@ public final class JSIteratorHelper {
     }
 
     /**
-     * Call next() on an iterator and return the result.
-     *
-     * @param iterator The iterator object
-     * @param context  The execution context
-     * @return The iterator result object with {value, done}
-     */
-    public static JSObject iteratorNext(JSValue iterator, JSContext context) {
-        if (!(iterator instanceof JSObject iteratorObj)) {
-            return null;
-        }
-
-        // Handle JSIterator instances directly
-        if (iterator instanceof JSIterator jsIterator) {
-            return jsIterator.next();
-        }
-
-        // Handle JSGenerator instances directly
-        if (iterator instanceof JSGenerator jsGenerator) {
-            return jsGenerator.next(JSUndefined.INSTANCE);
-        }
-
-        // Generic iterator protocol: call the next() method
-        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT, context);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (!(nextMethod instanceof JSFunction nextFunc)) {
-            return null;
-        }
-
-        JSValue result = nextFunc.call(context, iterator, new JSValue[0]);
-
-        // Result should be an object with value and done properties
-        if (result instanceof JSObject resultObj) {
-            return resultObj;
-        }
-
-        return null;
-    }
-
-    /**
      * IterableToList ( items ) — ES2024 7.4.7
      * Strictly follows the spec: calls GetIterator, then repeatedly calls
      * IteratorStep/IteratorValue, propagating abrupt completions at every step.
      *
-     * @param context  The execution context
-     * @param items    The iterable value
+     * @param context The execution context
+     * @param items   The iterable value
      * @return A JSArray of the iterated values, or null if an exception was set
      */
     public static JSArray iterableToList(JSContext context, JSValue items) {
@@ -304,6 +263,47 @@ public final class JSIteratorHelper {
             result.push(value);
         }
         return result;
+    }
+
+    /**
+     * Call next() on an iterator and return the result.
+     *
+     * @param iterator The iterator object
+     * @param context  The execution context
+     * @return The iterator result object with {value, done}
+     */
+    public static JSObject iteratorNext(JSValue iterator, JSContext context) {
+        if (!(iterator instanceof JSObject iteratorObj)) {
+            return null;
+        }
+
+        // Handle JSIterator instances directly
+        if (iterator instanceof JSIterator jsIterator) {
+            return jsIterator.next();
+        }
+
+        // Handle JSGenerator instances directly
+        if (iterator instanceof JSGenerator jsGenerator) {
+            return jsGenerator.next(JSUndefined.INSTANCE);
+        }
+
+        // Generic iterator protocol: call the next() method
+        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT, context);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            return null;
+        }
+
+        JSValue result = nextFunc.call(context, iterator, new JSValue[0]);
+
+        // Result should be an object with value and done properties
+        if (result instanceof JSObject resultObj) {
+            return resultObj;
+        }
+
+        return null;
     }
 
     /**

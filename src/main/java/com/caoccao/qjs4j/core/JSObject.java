@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
+
 import java.util.*;
 
 /**
@@ -94,6 +96,27 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
+     * CreateDataProperty (ES2024 7.3.6).
+     * Defines a data property with {writable: true, enumerable: true, configurable: true}.
+     * Returns false if the property cannot be defined (e.g., existing non-configurable property
+     * with incompatible attributes, or non-extensible object for new properties).
+     */
+    public boolean createDataProperty(PropertyKey key, JSValue value) {
+        PropertyDescriptor current = getOwnPropertyDescriptor(key);
+        if (current != null) {
+            if (!current.isConfigurable()) {
+                // Non-configurable property exists — can't redefine as configurable
+                return false;
+            }
+        } else if (!isExtensible()) {
+            // Property doesn't exist and object is not extensible
+            return false;
+        }
+        defineProperty(key, PropertyDescriptor.dataDescriptor(value, true, true, true));
+        return true;
+    }
+
+    /**
      * Define a non-enumerable, configurable getter accessor property.
      */
     public void defineGetterConfigurable(String name, JSNativeFunction.NativeCallback callback) {
@@ -141,18 +164,27 @@ public non-sealed class JSObject implements JSValue {
                 PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
     }
 
+    // Property operations
+
     public void defineGetterSetterConfigurable(String name, JSNativeFunction getter, JSNativeFunction setter) {
         defineProperty(
                 PropertyKey.fromString(name),
                 PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
     }
 
-    // Property operations
-
     /**
      * Define a new property with a descriptor.
      */
     public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
+        // When defining a property (especially accessor), remove any sparse entry
+        // so the shape-based property takes precedence in get().
+        if (sparseProperties != null) {
+            long arrayIndex = getCanonicalArrayIndex(key);
+            if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE) {
+                sparseProperties.remove((int) arrayIndex);
+            }
+        }
+
         // Use getOwnShapeKey to handle integer/string key equivalence (e.g., 0 vs "0")
         PropertyKey shapeKey = getOwnShapeKey(key);
         if (shapeKey != null) {
@@ -180,27 +212,6 @@ public non-sealed class JSObject implements JSValue {
         }
 
         this.propertyValues = newValues;
-    }
-
-    /**
-     * CreateDataProperty (ES2024 7.3.6).
-     * Defines a data property with {writable: true, enumerable: true, configurable: true}.
-     * Returns false if the property cannot be defined (e.g., existing non-configurable property
-     * with incompatible attributes, or non-extensible object for new properties).
-     */
-    public boolean createDataProperty(PropertyKey key, JSValue value) {
-        PropertyDescriptor current = getOwnPropertyDescriptor(key);
-        if (current != null) {
-            if (!current.isConfigurable()) {
-                // Non-configurable property exists — can't redefine as configurable
-                return false;
-            }
-        } else if (!isExtensible()) {
-            // Property doesn't exist and object is not extensible
-            return false;
-        }
-        defineProperty(key, PropertyDescriptor.dataDescriptor(value, true, true, true));
-        return true;
     }
 
     public void definePropertyConfigurable(JSSymbol jsSymbol, JSValue value) {
@@ -424,13 +435,22 @@ public non-sealed class JSObject implements JSValue {
             if (desc != null && desc.hasGetter()) {
                 JSFunction getter = desc.getGetter();
                 if (getter != null && context != null) {
-                    // Call the getter with the ORIGINAL receiver as 'this', not the prototype
-                    JSValue result = getter.call(context, receiver, new JSValue[0]);
-                    // Check if getter threw an exception - return the error value or undefined
-                    if (context.hasPendingException()) {
-                        return result != null ? result : context.getPendingException();
+                    try {
+                        // Call the getter with the ORIGINAL receiver as 'this', not the prototype
+                        JSValue result = getter.call(context, receiver, new JSValue[0]);
+                        // Check if getter threw an exception - return the error value or undefined
+                        if (context.hasPendingException()) {
+                            return result != null ? result : context.getPendingException();
+                        }
+                        return result;
+                    } catch (JSVirtualMachineException e) {
+                        // Getter threw - convert to pending exception so callers can handle it
+                        JSValue exception = e.getJsError() != null ? e.getJsError()
+                                : e.getJsValue() != null ? e.getJsValue()
+                                : context.throwError("Error", e.getMessage());
+                        context.setPendingException(exception);
+                        return JSUndefined.INSTANCE;
                     }
-                    return result;
                 }
                 // Getter is explicitly undefined or no context available
                 return JSUndefined.INSTANCE;
@@ -702,14 +722,6 @@ public non-sealed class JSObject implements JSValue {
         return extensible;
     }
 
-    public boolean isSuperConstructorCalled() {
-        return superConstructorCalled;
-    }
-
-    public void markSuperConstructorCalled() {
-        this.superConstructorCalled = true;
-    }
-
     /**
      * Check if this object is frozen.
      */
@@ -729,6 +741,14 @@ public non-sealed class JSObject implements JSValue {
      */
     public boolean isSealed() {
         return sealed;
+    }
+
+    public boolean isSuperConstructorCalled() {
+        return superConstructorCalled;
+    }
+
+    public void markSuperConstructorCalled() {
+        this.superConstructorCalled = true;
     }
 
     /**

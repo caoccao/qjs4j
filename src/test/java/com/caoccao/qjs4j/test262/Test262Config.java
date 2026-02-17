@@ -38,20 +38,20 @@ public class Test262Config {
         unsupportedFeatures = new HashSet<>();
     }
 
-    public static Test262Config forLongRunningTest() {
-        Test262Config config = loadDefault();
-        config.includePatterns.clear();
-        config.addIncludePatterns(
-                Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
-                Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$") );
-        return config;
-    }
-
     public static Test262Config forLanguageTests() {
         Test262Config config = loadDefault();
         config.includePatterns.clear();
         config.addIncludePatterns(Pattern.compile(".*/test/language/.*\\.js$"));
         config.maxTests = 200;
+        return config;
+    }
+
+    public static Test262Config forLongRunningTest() {
+        Test262Config config = loadDefault();
+        config.includePatterns.clear();
+        config.addIncludePatterns(
+                Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
+                Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"));
         return config;
     }
 

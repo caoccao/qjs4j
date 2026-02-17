@@ -39,10 +39,6 @@ public abstract sealed class JSFunction extends JSObject
         return homeObject;
     }
 
-    public void setHomeObject(JSObject homeObject) {
-        this.homeObject = homeObject;
-    }
-
     /**
      * Get the number of formal parameters.
      */
@@ -100,6 +96,10 @@ public abstract sealed class JSFunction extends JSObject
                 context.transferPrototype(protoObj, JSObject.NAME);
             }
         }
+    }
+
+    public void setHomeObject(JSObject homeObject) {
+        this.homeObject = homeObject;
     }
 
     @Override

@@ -107,8 +107,16 @@ public final class JSWeakMap extends JSObject {
                     return context.throwTypeError("Iterator value must be an object");
                 }
 
-                JSValue key = entryObj.get(0);
-                JSValue value = entryObj.get(1);
+                JSValue key = entryObj.get(PropertyKey.ZERO, context);
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    return weakMapObj;
+                }
+                JSValue value = entryObj.get(PropertyKey.ONE, context);
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    return weakMapObj;
+                }
                 JSValue adderResult;
                 try {
                     adderResult = adderFunction.call(context, weakMapObj, new JSValue[]{key, value});

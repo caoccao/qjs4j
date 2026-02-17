@@ -41,7 +41,6 @@ public final class JSGlobalObject {
     private static final boolean[] URI_RESERVED_TABLE = new boolean[128];
     private static final boolean[] URI_UNESCAPED_COMPONENT_TABLE = new boolean[128];
     private static final boolean[] URI_UNESCAPED_TABLE = new boolean[128];
-    private final JSConsole console;
 
     static {
         for (char c = 'a'; c <= 'z'; c++) {
@@ -63,6 +62,8 @@ public final class JSGlobalObject {
             URI_UNESCAPED_TABLE[i] = URI_UNESCAPED_COMPONENT_TABLE[i] || URI_RESERVED_TABLE[i];
         }
     }
+
+    private final JSConsole console;
 
     public JSGlobalObject() {
         this.console = new JSConsole();

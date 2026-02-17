@@ -163,6 +163,19 @@ public final class JSArray extends JSObject {
     }
 
     @Override
+    public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
+        long index = getArrayIndex(key);
+        if (index >= 0 && index <= Integer.MAX_VALUE) {
+            int intIndex = (int) index;
+            // Clear dense array entry so shape-based property takes precedence
+            if (intIndex < denseArray.length) {
+                denseArray[intIndex] = null;
+            }
+        }
+        super.defineProperty(key, descriptor);
+    }
+
+    @Override
     public boolean delete(PropertyKey key, JSContext context) {
         long index = getArrayIndex(key);
         if (index < 0) {
@@ -264,6 +277,11 @@ public final class JSArray extends JSObject {
     public JSValue get(PropertyKey key, JSContext context) {
         long index = getArrayIndex(key);
         if (index >= 0) {
+            // Check shape for accessor properties first (e.g., Object.defineProperty with getter)
+            PropertyDescriptor desc = super.getOwnPropertyDescriptor(key);
+            if (desc != null && desc.hasGetter()) {
+                return super.get(key, context);
+            }
             return get(index);
         }
 
