@@ -40,6 +40,16 @@ public final class StringConstructor {
         // Get the value to convert to string
         JSValue value = args[0];
 
+        // ES2020 21.1.1.1: When called as a function and the argument is a Symbol,
+        // return SymbolDescriptiveString(sym) instead of calling ToString (which would throw)
+        if (value instanceof JSSymbol sym) {
+            String desc = sym.getDescription();
+            if (desc == null) {
+                return new JSString("Symbol()");
+            }
+            return new JSString("Symbol(" + desc + ")");
+        }
+
         // Convert to string using ToString
         JSString strValue = JSTypeConversions.toString(context, value);
 
