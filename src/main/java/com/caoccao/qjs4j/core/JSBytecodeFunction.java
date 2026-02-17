@@ -171,7 +171,7 @@ public final class JSBytecodeFunction extends JSFunction {
             executionContext.getVirtualMachine().executeGenerator(generatorState, executionContext);
 
             return new JSAsyncGenerator((inputValue, isThrow) -> {
-                JSPromise promise = new JSPromise();
+                JSPromise promise = context.createJSPromise();
 
                 // Check if generator is completed
                 if (generatorState.isCompleted()) {

@@ -82,12 +82,18 @@ public final class JSAsyncGenerator extends JSObject {
         return new JSAsyncGenerator((inputValue, isThrow) -> {
             if (isThrow) {
                 // If throwing, reject the promise
-                JSPromise promise = new JSPromise();
+                JSPromise promise = context.createJSPromise();
                 promise.reject(inputValue);
                 return promise;
             }
             return yielder.yieldNext(inputValue);
         }, context);
+    }
+
+    private JSPromise createIteratorResultFromResult(JSValue result) {
+        JSPromise promise = context.createJSPromise();
+        promise.fulfill(result);
+        return promise;
     }
 
     /**
@@ -128,7 +134,6 @@ public final class JSAsyncGenerator extends JSObject {
 
         if (state == AsyncGeneratorState.EXECUTING) {
             // Generator is already running - queue this request
-            // In a full implementation, this would queue the request
             JSPromise promise = context.createJSPromise();
             JSObject error = context.createJSObject();
             error.set("name", new JSString("TypeError"));
@@ -143,27 +148,28 @@ public final class JSAsyncGenerator extends JSObject {
             // Execute the generator function
             JSPromise resultPromise = generatorFunction.executeNext(value, false);
 
-            // Create a new promise for the final result
-            JSPromise finalPromise = new JSPromise();
+            // If the result promise is already fulfilled (synchronous generator execution),
+            // process the result immediately to update generator state before returning.
+            if (resultPromise.getState() == JSPromise.PromiseState.FULFILLED) {
+                JSValue result = resultPromise.getResult();
+                processResult(result);
+                return createIteratorResultFromResult(result);
+            }
 
-            // When the generator execution completes
+            if (resultPromise.getState() == JSPromise.PromiseState.REJECTED) {
+                state = AsyncGeneratorState.COMPLETED;
+                JSPromise errorPromise = context.createJSPromise();
+                errorPromise.reject(resultPromise.getResult());
+                return errorPromise;
+            }
+
+            // Pending promise — chain reactions for async resolution
+            JSPromise finalPromise = context.createJSPromise();
             resultPromise.addReactions(
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onFulfilled", 1, (childContext, thisArg, args) -> {
                                 JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-
-                                if (result instanceof JSObject resultObj) {
-                                    JSValue doneValue = resultObj.get("done");
-                                    boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
-
-                                    if (done) {
-                                        state = AsyncGeneratorState.COMPLETED;
-                                        returnValue = resultObj.get("value");
-                                    } else {
-                                        state = AsyncGeneratorState.SUSPENDED_YIELD;
-                                    }
-                                }
-
+                                processResult(result);
                                 finalPromise.fulfill(result);
                                 return JSUndefined.INSTANCE;
                             }),
@@ -185,9 +191,22 @@ public final class JSAsyncGenerator extends JSObject {
             return finalPromise;
         } catch (Exception e) {
             state = AsyncGeneratorState.COMPLETED;
-            JSPromise errorPromise = new JSPromise();
+            JSPromise errorPromise = context.createJSPromise();
             errorPromise.reject(new JSString("Async generator error: " + e.getMessage()));
             return errorPromise;
+        }
+    }
+
+    private void processResult(JSValue result) {
+        if (result instanceof JSObject resultObj) {
+            JSValue doneValue = resultObj.get("done");
+            boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
+            if (done) {
+                state = AsyncGeneratorState.COMPLETED;
+                returnValue = resultObj.get("value");
+            } else {
+                state = AsyncGeneratorState.SUSPENDED_YIELD;
+            }
         }
     }
 
@@ -222,7 +241,7 @@ public final class JSAsyncGenerator extends JSObject {
     public JSPromise throw_(JSValue exception) {
         if (state == AsyncGeneratorState.COMPLETED) {
             // Generator is completed, reject immediately
-            JSPromise promise = new JSPromise();
+            JSPromise promise = context.createJSPromise();
             promise.reject(exception);
             return promise;
         }
@@ -234,24 +253,27 @@ public final class JSAsyncGenerator extends JSObject {
             // Execute the generator with the thrown value
             JSPromise resultPromise = generatorFunction.executeNext(exception, true);
 
-            JSPromise finalPromise = new JSPromise();
+            // If already resolved synchronously, process immediately
+            if (resultPromise.getState() == JSPromise.PromiseState.FULFILLED) {
+                JSValue result = resultPromise.getResult();
+                processResult(result);
+                return createIteratorResultFromResult(result);
+            }
 
+            if (resultPromise.getState() == JSPromise.PromiseState.REJECTED) {
+                state = AsyncGeneratorState.COMPLETED;
+                JSPromise errorPromise = context.createJSPromise();
+                errorPromise.reject(resultPromise.getResult());
+                return errorPromise;
+            }
+
+            // Pending promise — chain reactions for async resolution
+            JSPromise finalPromise = context.createJSPromise();
             resultPromise.addReactions(
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onFulfilled", 1, (childContext, thisArg, args) -> {
                                 JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-
-                                if (result instanceof JSObject resultObj) {
-                                    JSValue doneValue = resultObj.get("done");
-                                    boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
-
-                                    if (done) {
-                                        state = AsyncGeneratorState.COMPLETED;
-                                    } else {
-                                        state = AsyncGeneratorState.SUSPENDED_YIELD;
-                                    }
-                                }
-
+                                processResult(result);
                                 finalPromise.fulfill(result);
                                 return JSUndefined.INSTANCE;
                             }),
@@ -273,7 +295,7 @@ public final class JSAsyncGenerator extends JSObject {
             return finalPromise;
         } catch (Exception e) {
             state = AsyncGeneratorState.COMPLETED;
-            JSPromise errorPromise = new JSPromise();
+            JSPromise errorPromise = context.createJSPromise();
             errorPromise.reject(exception);
             return errorPromise;
         }
