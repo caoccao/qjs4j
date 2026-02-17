@@ -61,7 +61,25 @@ public abstract sealed class JSFunction extends JSObject
             homeContext = context;
         }
         if (this instanceof JSBytecodeFunction bytecodeFunc) {
-            // For generator functions (sync or async), use GeneratorFunction.prototype
+            // For async generator functions, use AsyncGeneratorFunction.prototype
+            if (bytecodeFunc.isGenerator() && bytecodeFunc.isAsync()) {
+                JSObject agfp = context.getAsyncGeneratorFunctionPrototype();
+                if (agfp != null) {
+                    this.setPrototype(agfp);
+                    // Set up the function's own "prototype" property:
+                    // Each async generator function gets a prototype object
+                    // that inherits from AsyncGenerator.prototype (writable, not configurable)
+                    JSValue asyncGenProto = agfp.get("prototype");
+                    if (asyncGenProto instanceof JSObject asyncGenProtoObj) {
+                        JSObject funcPrototype = new JSObject();
+                        funcPrototype.setPrototype(asyncGenProtoObj);
+                        this.defineProperty(PropertyKey.PROTOTYPE,
+                                PropertyDescriptor.dataDescriptor(funcPrototype, true, false, false));
+                    }
+                    return;
+                }
+            }
+            // For sync generator functions, use GeneratorFunction.prototype
             if (bytecodeFunc.isGenerator() && !bytecodeFunc.isAsync()) {
                 JSObject gfp = context.getGeneratorFunctionPrototype();
                 if (gfp != null) {
@@ -79,7 +97,7 @@ public abstract sealed class JSFunction extends JSObject
                     return;
                 }
             }
-            // For async functions, use AsyncFunction.prototype if available
+            // For async (non-generator) functions, use AsyncFunction.prototype if available
             if (bytecodeFunc.isAsync()) {
                 if (context.transferPrototype(this, context.getAsyncFunctionConstructor())) {
                     return;

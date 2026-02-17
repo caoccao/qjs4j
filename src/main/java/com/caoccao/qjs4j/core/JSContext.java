@@ -58,6 +58,8 @@ public final class JSContext implements AutoCloseable {
     private final VirtualMachine virtualMachine;
     // Internal constructor references (not exposed in global scope)
     private JSObject asyncFunctionConstructor;
+    // Async generator prototype chain (not exposed in global scope)
+    private JSObject asyncGeneratorFunctionPrototype;
     private JSValue currentThis;
     // Generator prototype chain (not exposed in global scope)
     private JSObject generatorFunctionPrototype;
@@ -746,6 +748,10 @@ public final class JSContext implements AutoCloseable {
         return asyncFunctionConstructor;
     }
 
+    public JSObject getAsyncGeneratorFunctionPrototype() {
+        return asyncGeneratorFunctionPrototype;
+    }
+
     /**
      * Get the full call stack.
      */
@@ -933,6 +939,10 @@ public final class JSContext implements AutoCloseable {
      */
     public void setAsyncFunctionConstructor(JSObject asyncFunctionConstructor) {
         this.asyncFunctionConstructor = asyncFunctionConstructor;
+    }
+
+    public void setAsyncGeneratorFunctionPrototype(JSObject asyncGeneratorFunctionPrototype) {
+        this.asyncGeneratorFunctionPrototype = asyncGeneratorFunctionPrototype;
     }
 
     /**

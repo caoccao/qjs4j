@@ -563,6 +563,7 @@ public final class JSGlobalObject {
         initializeAsyncDisposableStackConstructor(context, global);
         initializeIteratorConstructor(context, global);
         initializeGeneratorPrototype(context, global);
+        initializeAsyncGeneratorPrototype(context, global);
 
         // Binary data constructors
         initializeArrayBufferConstructor(context, global);
@@ -1131,6 +1132,98 @@ public final class JSGlobalObject {
 
         // Store in context for generator function prototype chain setup
         context.setGeneratorFunctionPrototype(generatorFunctionPrototype);
+    }
+
+    /**
+     * Initialize AsyncGenerator and AsyncGeneratorFunction prototypes.
+     * Based on QuickJS JS_AddIntrinsicPromise (AsyncGeneratorFunction section).
+     * <p>
+     * Prototype chain:
+     * - AsyncGenerator.prototype inherits from AsyncIteratorPrototype
+     * - AsyncGeneratorFunction.prototype inherits from Function.prototype
+     * - AsyncGeneratorFunction.prototype.prototype = AsyncGenerator.prototype (configurable)
+     * - AsyncGenerator.prototype.constructor = AsyncGeneratorFunction.prototype (configurable)
+     */
+    private void initializeAsyncGeneratorPrototype(JSContext context, JSObject global) {
+        // Create AsyncIteratorPrototype (has Symbol.asyncIterator)
+        JSObject asyncIteratorPrototype = context.createJSObject();
+        asyncIteratorPrototype.defineProperty(
+                PropertyKey.fromSymbol(JSSymbol.ASYNC_ITERATOR),
+                PropertyDescriptor.dataDescriptor(
+                        new JSNativeFunction("[Symbol.asyncIterator]", 0,
+                                (ctx, thisArg, args) -> thisArg),
+                        true, false, true));
+
+        // Create AsyncGenerator.prototype inheriting from AsyncIteratorPrototype
+        JSObject asyncGeneratorPrototype = context.createJSObject();
+        asyncGeneratorPrototype.setPrototype(asyncIteratorPrototype);
+
+        // AsyncGenerator.prototype methods are set up on individual JSAsyncGenerator instances
+        // but we need next/return/throw on the prototype too for spec compliance
+        asyncGeneratorPrototype.definePropertyWritableConfigurable("next",
+                new JSNativeFunction("next", 1, AsyncGeneratorPrototype::next));
+        asyncGeneratorPrototype.definePropertyWritableConfigurable("return",
+                new JSNativeFunction("return", 1, AsyncGeneratorPrototype::return_));
+        asyncGeneratorPrototype.definePropertyWritableConfigurable("throw",
+                new JSNativeFunction("throw", 1, AsyncGeneratorPrototype::throw_));
+
+        // AsyncGenerator.prototype[Symbol.toStringTag] = "AsyncGenerator" (configurable)
+        asyncGeneratorPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("AsyncGenerator"));
+
+        // Create AsyncGeneratorFunction.prototype (not exposed in global scope)
+        // All async generator function objects (async function*) inherit from this
+        JSObject asyncGeneratorFunctionPrototype = context.createJSObject();
+        context.transferPrototype(asyncGeneratorFunctionPrototype, JSFunction.NAME);
+
+        // AsyncGeneratorFunction.prototype[Symbol.toStringTag] = "AsyncGeneratorFunction" (configurable)
+        asyncGeneratorFunctionPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("AsyncGeneratorFunction"));
+
+        // Link: AsyncGeneratorFunction.prototype.prototype = AsyncGenerator.prototype (configurable)
+        asyncGeneratorFunctionPrototype.definePropertyConfigurable("prototype", asyncGeneratorPrototype);
+
+        // Link: AsyncGenerator.prototype.constructor = AsyncGeneratorFunction.prototype (configurable)
+        asyncGeneratorPrototype.definePropertyConfigurable("constructor", asyncGeneratorFunctionPrototype);
+
+        // Create AsyncGeneratorFunction constructor (uses dynamic function construction)
+        JSNativeFunction asyncGeneratorFunctionConstructor = new JSNativeFunction(
+                "AsyncGeneratorFunction", 1,
+                (ctx, thisArg, args) -> {
+                    // Build source: (async function* anonymous(...) { ... })
+                    StringBuilder src = new StringBuilder("(async function* anonymous(");
+                    String body = "";
+                    if (args.length == 0) {
+                        // no args
+                    } else if (args.length == 1) {
+                        body = JSTypeConversions.toString(ctx, args[0]).value();
+                    } else {
+                        for (int i = 0; i < args.length - 1; i++) {
+                            if (i > 0) src.append(",");
+                            src.append(JSTypeConversions.toString(ctx, args[i]).value());
+                        }
+                        body = JSTypeConversions.toString(ctx, args[args.length - 1]).value();
+                    }
+                    src.append("\n) {\n").append(body).append("\n})");
+                    try {
+                        JSBytecodeFunction wrapper = new com.caoccao.qjs4j.compiler.Compiler(
+                                src.toString(), "<AsyncGeneratorFunction>").compile(false).function();
+                        wrapper.initializePrototypeChain(ctx);
+                        return ctx.getVirtualMachine().execute(wrapper, ctx.getGlobalObject(), new JSValue[0]);
+                    } catch (com.caoccao.qjs4j.exceptions.JSCompilerException e) {
+                        return ctx.throwSyntaxError(e.getMessage());
+                    } catch (com.caoccao.qjs4j.exceptions.JSSyntaxErrorException e) {
+                        return ctx.throwSyntaxError(e.getMessage());
+                    } catch (com.caoccao.qjs4j.exceptions.JSException e) {
+                        return e.getErrorValue();
+                    } catch (Exception e) {
+                        return ctx.throwError("Failed to create async generator function: " + e.getMessage());
+                    }
+                },
+                true);
+        asyncGeneratorFunctionConstructor.definePropertyReadonlyNonConfigurable("prototype", asyncGeneratorFunctionPrototype);
+        asyncGeneratorFunctionPrototype.definePropertyWritableConfigurable("constructor", asyncGeneratorFunctionConstructor);
+
+        // Store in context for async generator function prototype chain setup
+        context.setAsyncGeneratorFunctionPrototype(asyncGeneratorFunctionPrototype);
     }
 
     /**
