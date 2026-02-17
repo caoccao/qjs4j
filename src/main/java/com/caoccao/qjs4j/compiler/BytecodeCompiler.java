@@ -2394,13 +2394,15 @@ public final class BytecodeCompiler {
 
         // Create JSBytecodeFunction
         int definedArgCount = computeDefinedArgCount(funcDecl.params(), funcDecl.defaults(), funcDecl.restParameter() != null);
+        // Per ES spec FunctionAllocate: async functions and async generators are NOT constructable
+        boolean isFuncConstructor = !funcDecl.isAsync();
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
                 functionName,
                 definedArgCount,
                 new JSValue[functionCompiler.captureResolver.getCapturedBindingCount()],
                 null,            // prototype - will be set by VM
-                true,            // isConstructor - regular functions can be constructors
+                isFuncConstructor,
                 funcDecl.isAsync(),
                 funcDecl.isGenerator(),
                 false,           // isArrow - regular function, not arrow
@@ -2553,13 +2555,15 @@ public final class BytecodeCompiler {
 
         // Create JSBytecodeFunction
         int definedArgCount = computeDefinedArgCount(funcExpr.params(), funcExpr.defaults(), funcExpr.restParameter() != null);
+        // Per ES spec FunctionAllocate: async functions and async generators are NOT constructable
+        boolean isFuncConstructor = !funcExpr.isAsync();
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
                 functionName,
                 definedArgCount,
                 new JSValue[functionCompiler.captureResolver.getCapturedBindingCount()],
                 null,            // prototype - will be set by VM
-                true,            // isConstructor - regular functions can be constructors
+                isFuncConstructor,
                 funcExpr.isAsync(),
                 funcExpr.isGenerator(),
                 false,           // isArrow - regular function, not arrow

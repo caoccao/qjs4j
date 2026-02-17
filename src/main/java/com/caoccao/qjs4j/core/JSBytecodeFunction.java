@@ -135,9 +135,11 @@ public final class JSBytecodeFunction extends JSFunction {
         this.selfCaptureIndex = selfCaptureIndex;
 
         // Set up function properties on the object
-        // Functions are objects in JavaScript and have these standard properties
-        this.set("name", new JSString(this.name));
-        this.set("length", JSNumber.of(this.length));
+        // Per ES spec, name and length are {writable: false, enumerable: false, configurable: true}
+        this.defineProperty(PropertyKey.NAME,
+                PropertyDescriptor.dataDescriptor(new JSString(this.name), false, false, true));
+        this.defineProperty(PropertyKey.LENGTH,
+                PropertyDescriptor.dataDescriptor(JSNumber.of(this.length), false, false, true));
 
         // Every function (except arrow functions) has a prototype property
         if (prototype != null) {
@@ -202,10 +204,17 @@ public final class JSBytecodeFunction extends JSFunction {
                         promise.fulfill(iterResult);
                     }
                 } catch (Exception e) {
-                    String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
-                    JSObject errorObj = context.createJSObject();
-                    errorObj.set("message", new JSString(errorMessage));
-                    promise.reject(errorObj);
+                    // Preserve the actual JS error object from pending exception
+                    if (context.hasPendingException()) {
+                        JSValue exception = context.getPendingException();
+                        context.clearAllPendingExceptions();
+                        promise.reject(exception);
+                    } else {
+                        String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
+                        JSObject errorObj = context.createJSObject();
+                        errorObj.set("message", new JSString(errorMessage));
+                        promise.reject(errorObj);
+                    }
                 }
 
                 return promise;

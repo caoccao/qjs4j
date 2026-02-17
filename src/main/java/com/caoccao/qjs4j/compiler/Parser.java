@@ -45,6 +45,7 @@ public final class Parser {
     private int asyncFunctionNesting;
     private Token currentToken;
     private int functionNesting;
+    private boolean inFunctionBody = true; // false during formal parameter parsing (prevents yield/await as expressions)
     private boolean inOperatorAllowed = true; // false inside for-loop initializer (ES spec [~In])
     private Token nextToken; // Lookahead token
     private int previousTokenLine; // Line of previous token (for ASI checks)
@@ -529,8 +530,10 @@ public final class Parser {
             // Line terminator after 'async' means it's an identifier, not async keyword
             if (!hasNewlineBefore()) {
                 // Async function expression: async function (...) {}
+                // Continue with member/call chain so e.g. `async function*() {}.prototype` works.
                 if (match(TokenType.FUNCTION)) {
-                    return parseFunctionExpression(true, asyncLocation);
+                    Expression asyncFunc = parseFunctionExpression(true, asyncLocation);
+                    return parsePostPrimaryExpression(asyncFunc, location);
                 }
 
                 // Async arrow function with single identifier parameter: async x => x
@@ -1443,8 +1446,17 @@ public final class Parser {
         try {
             Identifier id = parseIdentifier();
 
+            // Per QuickJS: in_function_body == FALSE prevents yield/await during
+            // the parsing of the arguments in generator/async functions.
+            boolean savedInFunctionBody = inFunctionBody;
+            if (isAsync || isGenerator) {
+                inFunctionBody = false;
+            }
+
             expect(TokenType.LPAREN);
             FunctionParams funcParams = parseFunctionParameters();
+
+            inFunctionBody = savedInFunctionBody;
 
             BlockStatement body = parseBlockStatement();
 
@@ -1485,8 +1497,17 @@ public final class Parser {
                 id = parseIdentifier();
             }
 
+            // Per QuickJS: in_function_body == FALSE prevents yield/await during
+            // the parsing of the arguments in generator/async functions.
+            boolean savedInFunctionBody = inFunctionBody;
+            if (isAsync || isGenerator) {
+                inFunctionBody = false;
+            }
+
             expect(TokenType.LPAREN);
             FunctionParams funcParams = parseFunctionParameters();
+
+            inFunctionBody = savedInFunctionBody;
 
             BlockStatement body = parseBlockStatement();
 
@@ -1755,8 +1776,6 @@ public final class Parser {
         return new ClassDeclaration.MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
     }
 
-    // Utility methods
-
     private Expression parseMultiplicativeExpression() {
         Expression left = parseExponentiationExpression();
 
@@ -1775,6 +1794,8 @@ public final class Parser {
 
         return left;
     }
+
+    // Utility methods
 
     private Expression parseObjectExpression() {
         SourceLocation location = getLocation();
@@ -1945,6 +1966,88 @@ public final class Parser {
         } else {
             return parseIdentifier();
         }
+    }
+
+    /**
+     * Continue parsing an expression that was already parsed as a primary expression.
+     * Handles member access (.prop, [expr]), call expressions, postfix operators,
+     * and assignment operators. Used when async function expressions are parsed
+     * directly in parseAssignmentExpression, bypassing the normal chain.
+     */
+    private Expression parsePostPrimaryExpression(Expression expr, SourceLocation location) {
+        // Member/call chain (same as parseCallExpression's while loop)
+        while (true) {
+            if (match(TokenType.TEMPLATE)) {
+                SourceLocation loc = getLocation();
+                TemplateLiteral template = parseTemplateLiteral(true);
+                expr = new TaggedTemplateExpression(expr, template, loc);
+            } else if (match(TokenType.LPAREN)) {
+                SourceLocation loc = getLocation();
+                advance();
+                List<Expression> args = new ArrayList<>();
+                if (!match(TokenType.RPAREN)) {
+                    do {
+                        if (match(TokenType.COMMA)) {
+                            advance();
+                            if (match(TokenType.RPAREN)) break;
+                        }
+                        if (match(TokenType.ELLIPSIS)) {
+                            SourceLocation spreadLoc = getLocation();
+                            advance();
+                            Expression argument = parseAssignmentExpression();
+                            args.add(new SpreadElement(argument, spreadLoc));
+                        } else {
+                            args.add(parseAssignmentExpression());
+                        }
+                    } while (match(TokenType.COMMA));
+                }
+                expect(TokenType.RPAREN);
+                expr = new CallExpression(expr, args, loc);
+            } else if (match(TokenType.DOT)) {
+                SourceLocation loc = getLocation();
+                advance();
+                Expression property = parsePropertyName();
+                expr = new MemberExpression(expr, property, false, loc);
+            } else if (match(TokenType.LBRACKET)) {
+                SourceLocation loc = getLocation();
+                advance();
+                Expression property = parseAssignmentExpression();
+                expect(TokenType.RBRACKET);
+                expr = new MemberExpression(expr, property, true, loc);
+            } else {
+                break;
+            }
+        }
+
+        // Assignment check
+        if (isAssignmentOperator(currentToken.type())) {
+            TokenType op = currentToken.type();
+            SourceLocation loc = getLocation();
+            advance();
+            Expression right = parseAssignmentExpression();
+            AssignmentExpression.AssignmentOperator operator = switch (op) {
+                case ASSIGN -> AssignmentExpression.AssignmentOperator.ASSIGN;
+                case AND_ASSIGN -> AssignmentExpression.AssignmentOperator.AND_ASSIGN;
+                case DIV_ASSIGN -> AssignmentExpression.AssignmentOperator.DIV_ASSIGN;
+                case EXP_ASSIGN -> AssignmentExpression.AssignmentOperator.EXP_ASSIGN;
+                case LOGICAL_AND_ASSIGN -> AssignmentExpression.AssignmentOperator.LOGICAL_AND_ASSIGN;
+                case LOGICAL_OR_ASSIGN -> AssignmentExpression.AssignmentOperator.LOGICAL_OR_ASSIGN;
+                case LSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.LSHIFT_ASSIGN;
+                case MINUS_ASSIGN -> AssignmentExpression.AssignmentOperator.MINUS_ASSIGN;
+                case MOD_ASSIGN -> AssignmentExpression.AssignmentOperator.MOD_ASSIGN;
+                case MUL_ASSIGN -> AssignmentExpression.AssignmentOperator.MUL_ASSIGN;
+                case NULLISH_ASSIGN -> AssignmentExpression.AssignmentOperator.NULLISH_ASSIGN;
+                case OR_ASSIGN -> AssignmentExpression.AssignmentOperator.OR_ASSIGN;
+                case PLUS_ASSIGN -> AssignmentExpression.AssignmentOperator.PLUS_ASSIGN;
+                case RSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.RSHIFT_ASSIGN;
+                case URSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.URSHIFT_ASSIGN;
+                case XOR_ASSIGN -> AssignmentExpression.AssignmentOperator.XOR_ASSIGN;
+                default -> AssignmentExpression.AssignmentOperator.ASSIGN;
+            };
+            return new AssignmentExpression(expr, operator, right, loc);
+        }
+
+        return expr;
     }
 
     private Expression parsePostfixExpression() {
@@ -2538,6 +2641,11 @@ public final class Parser {
     private Expression parseUnaryExpression() {
         // Handle await expressions
         if (match(TokenType.AWAIT)) {
+            // Per QuickJS: in_function_body == FALSE prevents await during parameter parsing
+            // in async functions. Treat as identifier when not in function body.
+            if (!inFunctionBody && isAwaitExpressionAllowed()) {
+                throw new JSSyntaxErrorException("'await' expression not allowed in formal parameters of an async function");
+            }
             if (!isAwaitExpressionAllowed()) {
                 if (isAwaitIdentifierAllowed() && isValidContinuationAfterAwaitIdentifier()) {
                     return parsePostfixExpression();
@@ -2552,6 +2660,11 @@ public final class Parser {
 
         // Handle yield expressions
         if (match(TokenType.YIELD)) {
+            // Per QuickJS: in_function_body == FALSE prevents yield during parameter parsing
+            // in generator functions. It's a SyntaxError to use yield in parameters.
+            if (!inFunctionBody) {
+                throw new JSSyntaxErrorException("'yield' expression not allowed in formal parameters of a generator function");
+            }
             SourceLocation location = getLocation();
             advance();
 

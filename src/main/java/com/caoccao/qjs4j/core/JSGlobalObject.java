@@ -823,7 +823,7 @@ public final class JSGlobalObject {
                 },
                 true);
         asyncGeneratorFunctionConstructor.definePropertyReadonlyNonConfigurable("prototype", asyncGeneratorFunctionPrototype);
-        asyncGeneratorFunctionPrototype.definePropertyWritableConfigurable("constructor", asyncGeneratorFunctionConstructor);
+        asyncGeneratorFunctionPrototype.definePropertyConfigurable("constructor", asyncGeneratorFunctionConstructor);
 
         // Store in context for async generator function prototype chain setup
         context.setAsyncGeneratorFunctionPrototype(asyncGeneratorFunctionPrototype);
@@ -1175,6 +1175,13 @@ public final class JSGlobalObject {
                 // Recursively process nested objects
                 initializeFunctionPrototypeChains(context, subObj, visitedObjectSet);
             }
+        }
+
+        // Also walk the [[Prototype]] chain to reach functions on non-global intrinsics
+        // (e.g., %TypedArray% which is the prototype of typed array constructors)
+        JSObject proto = obj.getPrototype();
+        if (proto != null) {
+            initializeFunctionPrototypeChains(context, proto, visitedObjectSet);
         }
     }
 
@@ -1968,6 +1975,8 @@ public final class JSGlobalObject {
 
     /**
      * Initialize all TypedArray constructors.
+     * Per ES spec, creates the %TypedArray% intrinsic (shared parent) and
+     * individual typed array constructors that inherit from it.
      */
     private void initializeTypedArrayConstructors(JSContext context, JSObject global) {
         record TypedArrayDef(String name, JSNativeFunction.NativeCallback callback, JSConstructorType type,
@@ -1981,6 +1990,44 @@ public final class JSGlobalObject {
                 arrayToString = arrayPrototype.get("toString");
             }
         }
+
+        // Create %TypedArray%.prototype — the shared prototype for all typed array prototypes
+        JSObject typedArrayPrototype = context.createJSObject();
+
+        JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, TypedArrayPrototype::values);
+        typedArrayPrototype.definePropertyWritableConfigurable("at", new JSNativeFunction("at", 1, TypedArrayPrototype::at));
+        typedArrayPrototype.definePropertyWritableConfigurable("entries", new JSNativeFunction("entries", 0, TypedArrayPrototype::entries));
+        typedArrayPrototype.definePropertyWritableConfigurable("join", new JSNativeFunction("join", 1, TypedArrayPrototype::join));
+        typedArrayPrototype.definePropertyWritableConfigurable("keys", new JSNativeFunction("keys", 0, TypedArrayPrototype::keys));
+        typedArrayPrototype.definePropertyWritableConfigurable("set", new JSNativeFunction("set", 1, TypedArrayPrototype::set));
+        typedArrayPrototype.definePropertyWritableConfigurable("subarray", new JSNativeFunction("subarray", 2, TypedArrayPrototype::subarray));
+        if (arrayToString instanceof JSFunction) {
+            typedArrayPrototype.definePropertyWritableConfigurable("toString", arrayToString);
+        } else {
+            typedArrayPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
+        }
+        typedArrayPrototype.definePropertyWritableConfigurable("values", valuesFunction);
+        typedArrayPrototype.definePropertyWritableConfigurable(JSSymbol.ITERATOR, valuesFunction);
+
+        typedArrayPrototype.defineGetterConfigurable("buffer", TypedArrayPrototype::getBuffer);
+        typedArrayPrototype.defineGetterConfigurable("byteLength", TypedArrayPrototype::getByteLength);
+        typedArrayPrototype.defineGetterConfigurable("byteOffset", TypedArrayPrototype::getByteOffset);
+        typedArrayPrototype.defineGetterConfigurable("length", TypedArrayPrototype::getLength);
+        typedArrayPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, TypedArrayPrototype::getToStringTag);
+
+        // Create %TypedArray% constructor — abstract, throws if called directly
+        // Per spec: %TypedArray% is not exposed as a global but is the [[Prototype]] of all typed array constructors
+        JSNativeFunction typedArrayConstructor = new JSNativeFunction("TypedArray", 0,
+                (ctx, thisArg, args) -> ctx.throwTypeError("Abstract class TypedArray not directly constructable"),
+                true, true);
+        context.transferPrototype(typedArrayConstructor, JSFunction.NAME);
+        typedArrayConstructor.definePropertyReadonlyNonConfigurable("prototype", typedArrayPrototype);
+        typedArrayPrototype.definePropertyWritableConfigurable("constructor", typedArrayConstructor);
+
+        // Add static methods to %TypedArray%
+        typedArrayConstructor.definePropertyWritableConfigurable("from", new JSNativeFunction("from", 1, TypedArrayConstructor::from));
+        typedArrayConstructor.definePropertyWritableConfigurable("of", new JSNativeFunction("of", 0, TypedArrayConstructor::of));
+        typedArrayConstructor.defineGetterConfigurable(JSSymbol.SPECIES, TypedArrayConstructor::getSpecies);
 
         for (TypedArrayDef def : List.of(
                 new TypedArrayDef(JSInt8Array.NAME, Int8ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_INT8, JSInt8Array.BYTES_PER_ELEMENT),
@@ -1996,37 +2043,17 @@ public final class JSGlobalObject {
                 new TypedArrayDef(JSBigInt64Array.NAME, BigInt64ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_BIGINT64, JSBigInt64Array.BYTES_PER_ELEMENT),
                 new TypedArrayDef(JSBigUint64Array.NAME, BigUint64ArrayConstructor::call, JSConstructorType.TYPED_ARRAY_BIGUINT64, JSBigUint64Array.BYTES_PER_ELEMENT)
         )) {
+            // Each concrete typed array prototype inherits from %TypedArray%.prototype
             JSObject prototype = context.createJSObject();
-
-            JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, TypedArrayPrototype::values);
-            prototype.definePropertyWritableConfigurable("at", new JSNativeFunction("at", 1, TypedArrayPrototype::at));
-            prototype.definePropertyWritableConfigurable("entries", new JSNativeFunction("entries", 0, TypedArrayPrototype::entries));
-            prototype.definePropertyWritableConfigurable("join", new JSNativeFunction("join", 1, TypedArrayPrototype::join));
-            prototype.definePropertyWritableConfigurable("keys", new JSNativeFunction("keys", 0, TypedArrayPrototype::keys));
-            prototype.definePropertyWritableConfigurable("set", new JSNativeFunction("set", 1, TypedArrayPrototype::set));
-            prototype.definePropertyWritableConfigurable("subarray", new JSNativeFunction("subarray", 2, TypedArrayPrototype::subarray));
-            if (arrayToString instanceof JSFunction) {
-                prototype.definePropertyWritableConfigurable("toString", arrayToString);
-            } else {
-                prototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, TypedArrayPrototype::toString));
-            }
-            prototype.definePropertyWritableConfigurable("values", valuesFunction);
-            prototype.definePropertyWritableConfigurable(JSSymbol.ITERATOR, valuesFunction);
-
-            prototype.defineGetterConfigurable("buffer", TypedArrayPrototype::getBuffer);
-            prototype.defineGetterConfigurable("byteLength", TypedArrayPrototype::getByteLength);
-            prototype.defineGetterConfigurable("byteOffset", TypedArrayPrototype::getByteOffset);
-            prototype.defineGetterConfigurable("length", TypedArrayPrototype::getLength);
-            prototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, TypedArrayPrototype::getToStringTag);
+            prototype.setPrototype(typedArrayPrototype);
             prototype.definePropertyReadonlyNonConfigurable("BYTES_PER_ELEMENT", JSNumber.of(def.bytesPerElement));
 
+            // Each concrete constructor inherits from %TypedArray%
             JSNativeFunction constructor = new JSNativeFunction(def.name, 3, def.callback, true, true);
+            constructor.setPrototype(typedArrayConstructor);
             constructor.definePropertyReadonlyNonConfigurable("prototype", prototype);
             constructor.setConstructorType(def.type);
             constructor.definePropertyReadonlyNonConfigurable("BYTES_PER_ELEMENT", JSNumber.of(def.bytesPerElement));
-            constructor.definePropertyWritableConfigurable("from", new JSNativeFunction("from", 1, TypedArrayConstructor::from));
-            constructor.definePropertyWritableConfigurable("of", new JSNativeFunction("of", 0, TypedArrayConstructor::of));
-            constructor.defineGetterConfigurable(JSSymbol.SPECIES, TypedArrayConstructor::getSpecies);
 
             prototype.definePropertyWritableConfigurable("constructor", constructor);
             global.definePropertyWritableConfigurable(def.name, constructor);
