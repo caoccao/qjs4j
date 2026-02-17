@@ -142,12 +142,12 @@ public final class MapPrototype {
         if (!(thisArg instanceof JSMap map)) {
             return context.throwTypeError("Map.prototype.getOrInsertComputed called on non-Map");
         }
+        if (args.length < 2 || !(args[1] instanceof JSFunction callback)) {
+            return context.throwTypeError("not a function");
+        }
         JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (map.mapHas(key)) {
             return map.mapGet(key);
-        }
-        if (args.length < 2 || !(args[1] instanceof JSFunction callback)) {
-            return context.throwTypeError("not a function");
         }
 
         JSValue value = callback.call(context, JSUndefined.INSTANCE, new JSValue[]{key});

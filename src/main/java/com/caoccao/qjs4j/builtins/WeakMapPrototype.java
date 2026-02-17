@@ -84,15 +84,15 @@ public final class WeakMapPrototype {
         if (!(thisArg instanceof JSWeakMap jsWeakMap)) {
             return context.throwTypeError("WeakMap.prototype.getOrInsertComputed called on non-WeakMap");
         }
+        if (args.length < 2 || !(args[1] instanceof JSFunction callback)) {
+            return context.throwTypeError("not a function");
+        }
         JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (!JSWeakMap.isWeakMapKey(key)) {
             return context.throwTypeError("Invalid value used as weak map key");
         }
         if (jsWeakMap.weakMapHas(key)) {
             return jsWeakMap.weakMapGet(key);
-        }
-        if (args.length < 2 || !(args[1] instanceof JSFunction callback)) {
-            return context.throwTypeError("not a function");
         }
 
         JSValue value = callback.call(context, JSUndefined.INSTANCE, new JSValue[]{key});
