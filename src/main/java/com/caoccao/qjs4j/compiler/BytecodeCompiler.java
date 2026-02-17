@@ -2191,6 +2191,9 @@ public final class BytecodeCompiler {
             } else if (forStmt.init() instanceof Expression expr) {
                 compileExpression(expr);
                 emitter.emitOpcode(Opcode.DROP);
+            } else if (forStmt.init() instanceof ExpressionStatement exprStmt) {
+                compileExpression(exprStmt.expression());
+                emitter.emitOpcode(Opcode.DROP);
             }
         }
 
