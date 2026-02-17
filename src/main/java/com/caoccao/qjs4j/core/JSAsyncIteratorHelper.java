@@ -69,31 +69,79 @@ public final class JSAsyncIteratorHelper {
         }
 
         // First, try Symbol.asyncIterator
-        PropertyKey asyncIteratorKey = PropertyKey.SYMBOL_ASYNC_ITERATOR;
-        JSValue asyncIteratorMethod = obj.get(asyncIteratorKey);
+        JSValue asyncIteratorMethod = obj.get(PropertyKey.SYMBOL_ASYNC_ITERATOR);
 
         if (asyncIteratorMethod instanceof JSFunction asyncIterFunc) {
-            // Call the async iterator method
             JSValue result = asyncIterFunc.call(context, iterable, new JSValue[0]);
             if (result instanceof JSAsyncIterator asyncIter) {
                 return asyncIter;
             }
+            // Accept any JSObject with next() as an async iterator (e.g., JSAsyncGenerator)
+            if (result instanceof JSObject iterObj) {
+                JSAsyncIterator wrapped = wrapAsAsyncIterator(iterObj, context);
+                if (wrapped != null) return wrapped;
+            }
         }
 
         // Fall back to Symbol.iterator (sync iterator)
-        PropertyKey iteratorKey = PropertyKey.SYMBOL_ITERATOR;
-        JSValue iteratorMethod = obj.get(iteratorKey);
+        JSValue iteratorMethod = obj.get(PropertyKey.SYMBOL_ITERATOR);
 
         if (iteratorMethod instanceof JSFunction iterFunc) {
-            // Call the iterator method
             JSValue result = iterFunc.call(context, iterable, new JSValue[0]);
             if (result instanceof JSIterator syncIter) {
-                // Convert sync iterator to async
                 return JSAsyncIterator.fromIterator(syncIter, context);
+            }
+            // Accept any JSObject with next() as a sync iterator, wrap as async
+            if (result instanceof JSObject iterObj) {
+                JSAsyncIterator wrapped = wrapSyncAsAsyncIterator(iterObj, context);
+                if (wrapped != null) return wrapped;
             }
         }
 
         return null;
+    }
+
+    /**
+     * Wrap any JSObject that has a next() method as an async iterator.
+     * The next() method is expected to return a Promise that resolves to {value, done}.
+     */
+    private static JSAsyncIterator wrapAsAsyncIterator(JSObject iterObj, JSContext context) {
+        JSValue nextMethod = iterObj.get("next");
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            return null;
+        }
+        return new JSAsyncIterator(() -> {
+            JSValue result = nextFunc.call(context, iterObj, new JSValue[0]);
+            if (result instanceof JSPromise promise) {
+                return promise;
+            }
+            // If next() doesn't return a promise, wrap the result
+            JSPromise promise = new JSPromise();
+            promise.fulfill(result);
+            return promise;
+        }, context);
+    }
+
+    /**
+     * Wrap a sync iterator JSObject (has next() returning {value, done}) as an async iterator.
+     */
+    private static JSAsyncIterator wrapSyncAsAsyncIterator(JSObject iterObj, JSContext context) {
+        JSValue nextMethod = iterObj.get("next");
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            return null;
+        }
+        return new JSAsyncIterator(() -> {
+            JSValue result = nextFunc.call(context, iterObj, new JSValue[0]);
+            if (result instanceof JSObject resultObj) {
+                JSValue value = resultObj.get("value");
+                JSValue doneValue = resultObj.get("done");
+                boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
+                return JSAsyncIterator.createIteratorResultPromise(context, value, done);
+            }
+            JSPromise promise = new JSPromise();
+            promise.reject(new JSString("Iterator result is not an object"));
+            return promise;
+        }, context);
     }
 
     /**

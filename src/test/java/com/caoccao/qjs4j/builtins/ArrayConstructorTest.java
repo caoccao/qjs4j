@@ -193,11 +193,11 @@ public class ArrayConstructorTest extends BaseJavetTest {
         awaitPromise(promise);
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
 
-        // Edge case: non-iterable
+        // Edge case: number input treated as array-like with length 0 (per ES2024 spec)
         result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)});
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
-        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
+        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
 
         // Edge case: invalid mapFn
         result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr, new JSString("not a function")});

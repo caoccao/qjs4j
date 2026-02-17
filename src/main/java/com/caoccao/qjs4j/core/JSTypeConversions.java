@@ -576,6 +576,82 @@ public final class JSTypeConversions {
     }
 
     /**
+     * ToObject(argument)
+     * ES2024 7.1.18
+     * Converts a value to an Object by auto-boxing primitives.
+     * Returns null for null/undefined.
+     */
+    public static JSObject toObject(JSContext context, JSValue value) {
+        if (value instanceof JSObject jsObj) {
+            return jsObj;
+        }
+        if (value instanceof JSNull || value instanceof JSUndefined) {
+            return null;
+        }
+        JSObject global = context.getGlobalObject();
+        if (value instanceof JSString str) {
+            JSValue stringCtor = global.get("String");
+            if (stringCtor instanceof JSObject ctorObj) {
+                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
+                if (prototype instanceof JSObject protoObj) {
+                    JSObject wrapper = new JSObject();
+                    wrapper.setPrototype(protoObj);
+                    wrapper.setPrimitiveValue(str);
+                    wrapper.definePropertyReadonlyNonConfigurable("length", JSNumber.of(str.value().length()));
+                    return wrapper;
+                }
+            }
+        }
+        if (value instanceof JSNumber num) {
+            JSValue numberCtor = global.get("Number");
+            if (numberCtor instanceof JSObject ctorObj) {
+                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
+                if (prototype instanceof JSObject protoObj) {
+                    JSObject wrapper = new JSObject();
+                    wrapper.setPrototype(protoObj);
+                    wrapper.setPrimitiveValue(num);
+                    return wrapper;
+                }
+            }
+        }
+        if (value instanceof JSBoolean bool) {
+            JSValue booleanCtor = global.get("Boolean");
+            if (booleanCtor instanceof JSObject ctorObj) {
+                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
+                if (prototype instanceof JSObject protoObj) {
+                    JSObject wrapper = new JSObject();
+                    wrapper.setPrototype(protoObj);
+                    wrapper.setPrimitiveValue(bool);
+                    return wrapper;
+                }
+            }
+        }
+        if (value instanceof JSBigInt bigInt) {
+            JSValue bigIntCtor = global.get("BigInt");
+            if (bigIntCtor instanceof JSObject ctorObj) {
+                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
+                if (prototype instanceof JSObject protoObj) {
+                    JSBigIntObject wrapper = new JSBigIntObject(bigInt);
+                    wrapper.setPrototype(protoObj);
+                    return wrapper;
+                }
+            }
+        }
+        if (value instanceof JSSymbol sym) {
+            JSValue symbolCtor = global.get("Symbol");
+            if (symbolCtor instanceof JSObject ctorObj) {
+                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
+                if (prototype instanceof JSObject protoObj) {
+                    JSSymbolObject wrapper = new JSSymbolObject(sym);
+                    wrapper.setPrototype(protoObj);
+                    return wrapper;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Preferred type for ToPrimitive operation.
      */
     public enum PreferredType {

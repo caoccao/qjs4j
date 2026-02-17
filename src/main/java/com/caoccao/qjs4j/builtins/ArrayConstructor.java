@@ -264,81 +264,44 @@ public final class ArrayConstructor {
             return resultPromise;
         }
 
-        // Handle JSArray input (sync fallback)
-        if (arrayLike instanceof JSArray sourceArray) {
-            JSArray result = context.createJSArray();
-            for (int i = 0; i < sourceArray.getLength(); i++) {
-                JSValue value = sourceArray.get(i);
-                if (mapFn instanceof JSFunction mappingFunc) {
-                    JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
-                    value = mappingFunc.call(context, mapThisArg, mapArgs);
-                }
-                result.push(value);
-            }
-            resultPromise.fulfill(result);
+        // Array-like path: no async or sync iterator found
+        // Step g.i: asyncItems is neither AsyncIterable nor Iterable
+        // Step g.ii: Let arrayLike be ! ToObject(asyncItems)
+        if (arrayLike instanceof JSNull || arrayLike instanceof JSUndefined) {
+            resultPromise.reject(context.throwTypeError("Cannot convert undefined or null to object"));
             return resultPromise;
         }
 
-        // Handle object with length property (sync fallback)
+        JSObject arrayLikeObj;
         if (arrayLike instanceof JSObject obj) {
-            JSValue lengthValue = obj.get("length");
-            if (lengthValue instanceof JSNumber num) {
-                long length = JSTypeConversions.toLength(context, num);
-                if (length > 0xFFFFFFFFL) {
-                    // ArrayCreate: length > 2^32 - 1 throws RangeError
-                    resultPromise.reject(context.throwRangeError("Invalid array length"));
-                    return resultPromise;
-                }
-                JSArray result = context.createJSArray();
-                for (long i = 0; i < length; i++) {
-                    JSValue value = obj.get(PropertyKey.fromIndex((int) i), context);
-                    if (mapFn instanceof JSFunction mappingFunc) {
-                        JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
-                        value = mappingFunc.call(context, mapThisArg, mapArgs);
-                    }
-                    result.push(value);
-                }
-                resultPromise.fulfill(result);
+            arrayLikeObj = obj;
+        } else {
+            // Box primitives to access prototype properties (e.g., Number.prototype.length)
+            arrayLikeObj = JSTypeConversions.toObject(context, arrayLike);
+            if (arrayLikeObj == null) {
+                resultPromise.reject(context.throwTypeError("Cannot convert to object"));
                 return resultPromise;
             }
         }
 
-        // Handle string (sync fallback)
-        if (arrayLike instanceof JSString str) {
-            String value = str.value();
-            JSArray result = context.createJSArray();
-            for (int i = 0; i < value.length(); i++) {
-                JSValue charValue = new JSString(String.valueOf(value.charAt(i)));
-                if (mapFn instanceof JSFunction mappingFunc) {
-                    JSValue[] mapArgs = new JSValue[]{charValue, JSNumber.of(i)};
-                    charValue = mappingFunc.call(context, mapThisArg, mapArgs);
-                }
-                result.push(charValue);
+        // Step g.iii: Let len be ? LengthOfArrayLike(arrayLike)
+        JSValue lenValue = arrayLikeObj.get(PropertyKey.LENGTH, context);
+        long length = JSTypeConversions.toLength(context, lenValue);
+        if (length > 0xFFFFFFFFL) {
+            resultPromise.reject(context.throwRangeError("Invalid array length"));
+            return resultPromise;
+        }
+
+        JSArray result = context.createJSArray();
+        for (long i = 0; i < length; i++) {
+            JSValue value = arrayLikeObj.get(PropertyKey.fromIndex((int) i), context);
+            if (mapFn instanceof JSFunction mappingFunc) {
+                JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
+                value = mappingFunc.call(context, mapThisArg, mapArgs);
             }
-            resultPromise.fulfill(result);
-            return resultPromise;
+            result.push(value);
         }
-
-        // Try to use Symbol.iterator for general iterables (sync fallback)
-        if (JSIteratorHelper.isIterable(arrayLike)) {
-            JSArray result = context.createJSArray();
-            final int[] index = {0};
-            JSIteratorHelper.forOf(context, arrayLike, (value) -> {
-                JSValue itemValue = value;
-                if (mapFn instanceof JSFunction mappingFunc) {
-                    JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(index[0])};
-                    itemValue = mappingFunc.call(context, mapThisArg, mapArgs);
-                }
-                result.push(itemValue);
-                index[0]++;
-                return true;
-            });
-            resultPromise.fulfill(result);
-            return resultPromise;
-        }
-
-        // Not iterable
-        resultPromise.reject(context.throwTypeError("object is not iterable"));
+        resultPromise.fulfill(result);
         return resultPromise;
     }
 

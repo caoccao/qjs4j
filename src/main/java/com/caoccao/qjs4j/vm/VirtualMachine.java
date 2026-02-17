@@ -2655,6 +2655,19 @@ public final class VirtualMachine {
                         handleAsyncYieldStar();
                         sp = valueStack.stackTop;
                         pc += op.getSize();
+                        // Check if we should suspend (same as YIELD_STAR)
+                        if (yieldResult != null) {
+                            JSValue returnValue = (JSValue) stack[--sp];
+                            sp = savedStackTop;
+                            valueStack.stackTop = sp;
+                            currentFrame = previousFrame;
+                            if (savedStrictMode) {
+                                context.enterStrictMode();
+                            } else {
+                                context.exitStrictMode();
+                            }
+                            return returnValue;
+                        }
                     }
                     case NOP -> pc += op.getSize();
 
@@ -3872,6 +3885,24 @@ public final class VirtualMachine {
         JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
         if (!(nextMethod instanceof JSFunction nextFunc)) {
             throw new JSVirtualMachineException("Iterator must have a next method");
+        }
+
+        // Skip past previously-yielded values during generator replay.
+        // Each yield* value counts as one yield, so we consume yieldSkipCount
+        // values from the inner iterator to reach the correct position.
+        while (yieldSkipCount > 0) {
+            JSValue skipResult = nextFunc.call(context, iterator, EMPTY_ARGS);
+            if (!(skipResult instanceof JSObject)) {
+                throw new JSVirtualMachineException("Iterator result must be an object");
+            }
+            JSValue skipDone = ((JSObject) skipResult).get(PropertyKey.DONE);
+            if (JSTypeConversions.toBoolean(skipDone).value()) {
+                // Inner iterator exhausted during skip — yield* expression is done
+                JSValue value = ((JSObject) skipResult).get(PropertyKey.VALUE);
+                valueStack.push(value);
+                return;
+            }
+            yieldSkipCount--;
         }
 
         JSValue result = nextFunc.call(context, iterator, EMPTY_ARGS);
