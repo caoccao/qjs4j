@@ -331,6 +331,38 @@ public final class BytecodeCompiler {
     }
 
     /**
+     * Pre-declare all variable names as locals in the given compiler's current scope.
+     * This ensures bindings are visible during Phase 1 (function declaration hoisting),
+     * so nested function declarations can properly capture outer variables via VarRef.
+     * <p>
+     * Handles:
+     * - var declarations: function-scoped, recurse into blocks (they hoist)
+     * - let/const declarations: block-scoped, only top-level of function body
+     *   (they don't hoist into nested blocks but ARE in scope at function level)
+     */
+    private static void hoistVarDeclarationsAsLocals(BytecodeCompiler compiler, List<Statement> body) {
+        Set<String> varNames = new HashSet<>();
+        for (Statement stmt : body) {
+            if (stmt instanceof FunctionDeclaration) {
+                continue;
+            }
+            // Collect var names (recurses into blocks since var is function-scoped)
+            compiler.collectVarNamesFromStatement(stmt, varNames);
+            // Collect top-level let/const names (don't recurse — they're block-scoped)
+            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                    compiler.collectPatternBindingNames(d.id(), varNames);
+                }
+            }
+        }
+        for (String varName : varNames) {
+            if (compiler.currentScope().getLocal(varName) == null) {
+                compiler.currentScope().declareLocal(varName);
+            }
+        }
+    }
+
+    /**
      * Compile an AST node into bytecode.
      */
     public Bytecode compile(ASTNode ast) {
@@ -590,7 +622,7 @@ public final class BytecodeCompiler {
                 functionBytecode,
                 functionName,
                 definedArgCount,
-                new JSValue[functionCompiler.captureResolver.getCapturedBindingCount()],
+                new JSValue[0],
                 null,            // prototype - arrow functions don't have prototype
                 false,           // isConstructor - arrow functions cannot be constructors
                 arrowExpr.isAsync(),
@@ -604,7 +636,7 @@ public final class BytecodeCompiler {
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
 
-        emitCapturedValues(functionCompiler);
+        emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
     }
@@ -980,6 +1012,18 @@ public final class BytecodeCompiler {
     }
 
     private void compileCallExpressionRegular(CallExpression callExpr) {
+        // Check for super() call in derived constructor
+        if (callExpr.callee() instanceof Identifier calleeId && "super".equals(calleeId.name())) {
+            // super(args) — call parent constructor
+            // Stack layout: superConstructor, this, args...
+            emitter.emitOpcode(Opcode.GET_SUPER);  // Push super class constructor
+            emitter.emitOpcode(Opcode.PUSH_THIS);   // Push 'this' as receiver
+            for (Expression arg : callExpr.arguments()) {
+                compileExpression(arg);
+            }
+            emitter.emitOpcodeU16(Opcode.CALL, callExpr.arguments().size());
+            return;
+        }
         // Check if this is a method call (callee is a member expression)
         if (callExpr.callee() instanceof MemberExpression memberExpr) {
             // For method calls: obj.method()
@@ -1053,6 +1097,15 @@ public final class BytecodeCompiler {
         // Strategy: Build an arguments array and use APPLY
 
         // Determine thisArg and function
+        if (callExpr.callee() instanceof Identifier calleeId && "super".equals(calleeId.name())) {
+            // super(...args) — call parent constructor with spread
+            // Stack layout for APPLY: thisArg function argsArray
+            emitter.emitOpcode(Opcode.PUSH_THIS);   // Push 'this' as receiver
+            emitter.emitOpcode(Opcode.GET_SUPER);    // Push super class constructor
+            emitArgumentsArrayWithSpread(callExpr.arguments());
+            emitter.emitOpcodeU16(Opcode.APPLY, 0);
+            return;
+        }
         if (callExpr.callee() instanceof MemberExpression memberExpr) {
             // Method call: obj.method(...args)
             // Stack should be: thisArg function argsArray
@@ -1904,6 +1957,11 @@ public final class BytecodeCompiler {
         // Compile loop body
         compileStatement(forInStmt.body());
 
+        // Emit CLOSE_LOC for let/const loop variables (per-iteration binding)
+        if (!isExpressionBased && varDecl != null && varDecl.kind() != VariableKind.VAR && varIndex != null) {
+            emitter.emitOpcodeU16(Opcode.CLOSE_LOC, varIndex);
+        }
+
         // Jump back to loop start
         emitter.emitOpcode(Opcode.GOTO);
         int backJumpPos = emitter.currentOffset();
@@ -2043,6 +2101,11 @@ public final class BytecodeCompiler {
 
         // Compile loop body
         compileStatement(forOfStmt.body());
+
+        // Emit CLOSE_LOC for let/const loop variables (per-iteration binding)
+        if (!isVar) {
+            emitCloseLocForPattern(pattern);
+        }
 
         // Jump back to loop start
         emitter.emitOpcode(Opcode.GOTO);
@@ -2211,6 +2274,14 @@ public final class BytecodeCompiler {
         // Compile body
         compileStatement(forStmt.body());
 
+        // Emit CLOSE_LOC for let/const loop variables to support per-iteration binding.
+        // Following QuickJS close_var_refs: detaches any VarRefs created during this
+        // iteration so each closure captures its own frozen copy of the loop variable.
+        if (forStmt.init() instanceof VariableDeclaration varDeclForClose
+                && varDeclForClose.kind() != VariableKind.VAR) {
+            emitCloseLocForPattern(varDeclForClose);
+        }
+
         // Update position for continue statements
         int updateStart = emitter.currentOffset();
 
@@ -2310,6 +2381,13 @@ public final class BytecodeCompiler {
             functionCompiler.emitter.emitOpcode(Opcode.INITIAL_YIELD);
         }
 
+        // Phase 0: Pre-declare all var bindings as locals before function hoisting.
+        // var declarations are function-scoped and must be visible to nested function
+        // declarations that may capture them. Without this, Phase 1 function hoisting
+        // would fail to resolve captured var references (e.g., inner functions referencing
+        // outer var variables would emit GET_VAR instead of GET_VAR_REF).
+        hoistVarDeclarationsAsLocals(functionCompiler, funcDecl.body().body());
+
         // Phase 1: Hoist top-level function declarations (ES spec requires function
         // declarations to be initialized before any code executes).
         for (Statement stmt : funcDecl.body().body()) {
@@ -2400,7 +2478,7 @@ public final class BytecodeCompiler {
                 functionBytecode,
                 functionName,
                 definedArgCount,
-                new JSValue[functionCompiler.captureResolver.getCapturedBindingCount()],
+                new JSValue[0],
                 null,            // prototype - will be set by VM
                 isFuncConstructor,
                 funcDecl.isAsync(),
@@ -2412,7 +2490,7 @@ public final class BytecodeCompiler {
         );
         function.setHasParameterExpressions(hasNonSimpleParameters(funcDecl.defaults(), funcDecl.restParameter()));
 
-        emitCapturedValues(functionCompiler);
+        emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
 
@@ -2502,6 +2580,13 @@ public final class BytecodeCompiler {
             functionCompiler.emitter.emitOpcode(Opcode.INITIAL_YIELD);
         }
 
+        // Phase 0: Pre-declare all var bindings as locals before function hoisting.
+        // var declarations are function-scoped and must be visible to nested function
+        // declarations that may capture them. Without this, Phase 1 function hoisting
+        // would fail to resolve captured var references (e.g., inner functions referencing
+        // outer var variables would emit GET_VAR instead of GET_VAR_REF).
+        hoistVarDeclarationsAsLocals(functionCompiler, funcExpr.body().body());
+
         // Phase 1: Hoist top-level function declarations (ES spec requires function
         // declarations to be initialized before any code executes).
         for (Statement stmt : funcExpr.body().body()) {
@@ -2561,7 +2646,7 @@ public final class BytecodeCompiler {
                 functionBytecode,
                 functionName,
                 definedArgCount,
-                new JSValue[functionCompiler.captureResolver.getCapturedBindingCount()],
+                new JSValue[0],
                 null,            // prototype - will be set by VM
                 isFuncConstructor,
                 funcExpr.isAsync(),
@@ -2575,7 +2660,7 @@ public final class BytecodeCompiler {
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
 
-        emitCapturedValues(functionCompiler);
+        emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool
         emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
     }
@@ -4647,14 +4732,6 @@ public final class BytecodeCompiler {
      * PUT_LOCAL idx  (store into the local variable slot)
      */
 
-    private void emitCaptureBindingLoad(CaptureSource captureSource) {
-        if (captureSource.type == CaptureSourceType.LOCAL) {
-            emitter.emitOpcodeU16(Opcode.GET_LOCAL, captureSource.index);
-        } else {
-            emitter.emitOpcodeU16(Opcode.GET_VAR_REF, captureSource.index);
-        }
-    }
-
     /**
      * Emit a conditional var initialization: only create the binding with undefined
      * if the property doesn't already exist on the global object.
@@ -4675,13 +4752,55 @@ public final class BytecodeCompiler {
      * </pre>
      */
 
-    private void emitCapturedValues(BytecodeCompiler nestedCompiler) {
-        if (nestedCompiler.captureResolver.getCapturedBindingCount() == 0) {
+    /**
+     * Emit CLOSE_LOC opcodes for variables declared in a VariableDeclaration.
+     * Used at the end of for-loop iteration bodies to freeze VarRefs for per-iteration binding.
+     */
+    private void emitCloseLocForPattern(VariableDeclaration varDecl) {
+        for (VariableDeclaration.VariableDeclarator decl : varDecl.declarations()) {
+            emitCloseLocForPattern(decl.id());
+        }
+    }
+
+    /**
+     * Emit CLOSE_LOC opcodes for variables in a pattern.
+     * Handles Identifier patterns and can be extended for destructuring.
+     */
+    private void emitCloseLocForPattern(Pattern pattern) {
+        if (pattern instanceof Identifier id) {
+            Integer localIdx = findLocalInScopes(id.name());
+            if (localIdx != null) {
+                emitter.emitOpcodeU16(Opcode.CLOSE_LOC, localIdx);
+            }
+        }
+        // Destructuring patterns would need recursive handling here
+    }
+
+    /**
+     * Build capture source info and set it on the template function.
+     * Instead of emitting GET_LOCAL/GET_VAR_REF opcodes to push values onto the stack,
+     * we store the capture source information in the template function so FCLOSURE
+     * can create VarRef objects directly from the parent frame at runtime.
+     * This enables reference-based closure capture (mutations visible across closures).
+     */
+    private void emitCapturedValues(BytecodeCompiler nestedCompiler, JSBytecodeFunction templateFunction) {
+        int captureCount = nestedCompiler.captureResolver.getCapturedBindingCount();
+        if (captureCount == 0) {
             return;
         }
+        int[] captureSourceInfos = new int[captureCount];
+        int i = 0;
         for (CaptureBinding binding : nestedCompiler.captureResolver.getCapturedBindings()) {
-            emitCaptureBindingLoad(binding.source);
+            if (binding.source.type == CaptureSourceType.LOCAL) {
+                // Positive value = LOCAL capture at this index
+                captureSourceInfos[i] = binding.source.index;
+            } else {
+                // Negative value = VAR_REF capture, encoded as -(index + 1)
+                captureSourceInfos[i] = -(binding.source.index + 1);
+            }
+            i++;
         }
+        templateFunction.setCaptureSourceInfos(captureSourceInfos);
     }
 
     private void emitConditionalVarInit(String name) {

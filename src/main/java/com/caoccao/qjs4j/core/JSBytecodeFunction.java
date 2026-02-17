@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.vm.Bytecode;
+import com.caoccao.qjs4j.vm.VarRef;
+import com.caoccao.qjs4j.vm.YieldResult;
 
 /**
  * Represents a JavaScript function compiled to bytecode.
@@ -47,8 +49,10 @@ public final class JSBytecodeFunction extends JSFunction {
     private final JSObject prototype;
     private final int selfCaptureIndex;
     private final boolean strict;
+    private int[] captureSourceInfos;
     private boolean hasParameterExpressions;
     private String sourceCode;
+    private VarRef[] varRefs;
 
     /**
      * Create a bytecode function.
@@ -197,11 +201,17 @@ public final class JSBytecodeFunction extends JSFunction {
                         iterResult.set("done", JSBoolean.TRUE);
                         promise.fulfill(iterResult);
                     } else {
-                        // Generator yielded - return value with done: false  
-                        JSObject iterResult = context.createJSObject();
-                        iterResult.set("value", result);
-                        iterResult.set("done", JSBoolean.FALSE);
-                        promise.fulfill(iterResult);
+                        // Generator yielded - check if yield* (already has {value, done})
+                        YieldResult lastYield = context.getVirtualMachine().getLastYieldResult();
+                        if (lastYield != null && lastYield.isYieldStar() && result instanceof JSObject) {
+                            // yield* returns raw iterator result - don't wrap again
+                            promise.fulfill(result);
+                        } else {
+                            JSObject iterResult = context.createJSObject();
+                            iterResult.set("value", result);
+                            iterResult.set("done", JSBoolean.FALSE);
+                            promise.fulfill(iterResult);
+                        }
                     }
                 } catch (Exception e) {
                     // Preserve the actual JS error object from pending exception
@@ -321,10 +331,45 @@ public final class JSBytecodeFunction extends JSFunction {
     }
 
     /**
+     * Create a copy of this function with the given VarRef array for closure variables.
+     * Used by FCLOSURE when creating closures with reference-based capture.
+     */
+    public JSBytecodeFunction copyWithVarRefs(VarRef[] capturedVarRefs) {
+        JSBytecodeFunction copiedFunction = new JSBytecodeFunction(
+                bytecode,
+                name,
+                length,
+                new JSValue[0],
+                prototype,
+                isConstructor,
+                isAsync,
+                isGenerator,
+                isArrow,
+                strict,
+                sourceCode,
+                selfCaptureIndex
+        );
+        copiedFunction.varRefs = capturedVarRefs;
+        copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
+        return copiedFunction;
+    }
+
+    /**
      * Get the bytecode for this function.
      */
     public Bytecode getBytecode() {
         return bytecode;
+    }
+
+    /**
+     * Get the capture source info array for template functions.
+     * Each entry encodes the source of a closure capture:
+     * - value >= 0: LOCAL capture at that local slot index
+     * - value < 0: VAR_REF capture at -(value + 1)
+     * Returns null for non-template (instantiated) functions.
+     */
+    public int[] getCaptureSourceInfos() {
+        return captureSourceInfos;
     }
 
     /**
@@ -360,6 +405,14 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public int getSelfCaptureIndex() {
         return selfCaptureIndex;
+    }
+
+    /**
+     * Get the VarRef array for closure variables (reference-based capture).
+     * Returns null if this function uses value-based closureVars instead.
+     */
+    public VarRef[] getVarRefs() {
+        return varRefs;
     }
 
     /**
@@ -405,6 +458,14 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public boolean isStrict() {
         return strict;
+    }
+
+    /**
+     * Set the capture source info array for this template function.
+     * Called by the compiler to record where each closure variable comes from.
+     */
+    public void setCaptureSourceInfos(int[] captureSourceInfos) {
+        this.captureSourceInfos = captureSourceInfos;
     }
 
     /**

@@ -216,6 +216,28 @@ public class ArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testFromAsyncWithAsyncGenerator() {
+        assertStringWithJavet("""
+                async function test() {
+                  async function* gen() { yield* [0, 1, 2]; }
+                  var result = await Array.fromAsync(gen());
+                  return JSON.stringify(result);
+                }
+                test()""");
+    }
+
+    @Test
+    public void testFromAsyncWithMapping() {
+        assertStringWithJavet("""
+                async function test() {
+                  async function* gen() { yield* [1, 2, 3]; }
+                  var result = await Array.fromAsync(gen(), function(v) { return v * 2; });
+                  return JSON.stringify(result);
+                }
+                test()""");
+    }
+
+    @Test
     public void testFromWithNativeIterables() {
         assertStringWithJavet("JSON.stringify(Array.from(new Set([1, 2, 2, 3])))");
         assertStringWithJavet("JSON.stringify(Array.from(new Map([['a', 1], ['b', 2]])))");

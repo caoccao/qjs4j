@@ -45,6 +45,8 @@ public final class Parser {
     private int asyncFunctionNesting;
     private Token currentToken;
     private int functionNesting;
+    private boolean inDerivedConstructor; // true when parsing a derived class constructor body (super() allowed)
+    private boolean parsingClassWithSuper; // true when parsing a class body that has 'extends'
     private boolean inFunctionBody = true; // false during formal parameter parsing (prevents yield/await as expressions)
     private boolean inOperatorAllowed = true; // false inside for-loop initializer (ES spec [~In])
     private Token nextToken; // Lookahead token
@@ -914,6 +916,8 @@ public final class Parser {
         // Parse class body
         expect(TokenType.LBRACE);
         List<ClassDeclaration.ClassElement> body = new ArrayList<>();
+        boolean savedParsingClassWithSuper = parsingClassWithSuper;
+        parsingClassWithSuper = superClass != null;
 
         while (!match(TokenType.RBRACE) && !match(TokenType.EOF)) {
             // Skip empty semicolons
@@ -927,6 +931,8 @@ public final class Parser {
                 body.add(element);
             }
         }
+
+        parsingClassWithSuper = savedParsingClassWithSuper;
 
         // Capture the end position before advancing past the closing brace
         int endOffset = currentToken.offset() + currentToken.value().length();
@@ -1080,6 +1086,8 @@ public final class Parser {
         // Parse class body
         expect(TokenType.LBRACE);
         List<ClassDeclaration.ClassElement> body = new ArrayList<>();
+        boolean savedParsingClassWithSuper2 = parsingClassWithSuper;
+        parsingClassWithSuper = superClass != null;
 
         while (!match(TokenType.RBRACE) && !match(TokenType.EOF)) {
             // Skip empty semicolons
@@ -1093,6 +1101,8 @@ public final class Parser {
                 body.add(element);
             }
         }
+
+        parsingClassWithSuper = savedParsingClassWithSuper2;
 
         // Capture the end position before advancing past the closing brace
         int endOffset = currentToken.offset() + currentToken.value().length();
@@ -1772,7 +1782,14 @@ public final class Parser {
         }
 
         // Otherwise, it's a method
+        // If this is a constructor in a derived class, enable super() calls
+        boolean isConstructorMethod = !isStatic && key instanceof Identifier keyId && "constructor".equals(keyId.name());
+        boolean savedInDerivedConstructor = inDerivedConstructor;
+        if (isConstructorMethod && parsingClassWithSuper) {
+            inDerivedConstructor = true;
+        }
         FunctionExpression method = parseMethod("method");
+        inDerivedConstructor = savedInDerivedConstructor;
         return new ClassDeclaration.MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
     }
 
@@ -2310,10 +2327,13 @@ public final class Parser {
             case CLASS -> parseClassExpression(); // Class expressions
             case SUPER -> {
                 // Per ES spec, 'super' is only valid in specific contexts:
-                // - super.property / super[expr] in methods (super_allowed)
                 // - super() in derived class constructors (super_call_allowed)
-                // Following QuickJS: check next token to give specific error messages
+                // - super.property / super[expr] in methods (TODO: not yet supported)
                 advance(); // consume 'super'
+                if (inDerivedConstructor) {
+                    // Parse as Identifier("super") — the compiler will handle it
+                    yield new Identifier("super", location);
+                }
                 throw new JSSyntaxErrorException("'super' keyword unexpected here");
             }
             default -> {

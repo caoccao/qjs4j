@@ -359,17 +359,17 @@ public final class JSTypeConversions {
         if (value instanceof JSString s) {
             return stringToNumber(s.value());
         }
-        if (value instanceof JSBigInt b) {
-            // BigInt cannot be converted to number without loss of precision
-            // In full implementation, this would throw a TypeError
-            try {
-                return JSNumber.of(b.value().doubleValue());
-            } catch (Exception e) {
-                return JSNumber.of(Double.NaN);
+        if (value instanceof JSBigInt) {
+            // Per ES spec, ToNumber(BigInt) throws TypeError
+            if (context != null) {
+                context.throwTypeError("Cannot convert a BigInt value to a number");
             }
+            return JSNumber.of(Double.NaN);
         }
         if (value instanceof JSSymbol) {
-            context.throwTypeError("cannot convert symbol to number");
+            if (context != null) {
+                context.throwTypeError("cannot convert symbol to number");
+            }
             return JSNumber.of(Double.NaN);
         }
 
@@ -382,13 +382,12 @@ public final class JSTypeConversions {
                 return stringToNumber(str.value());
             } else if (primitiveValue instanceof JSBoolean bool) {
                 return JSNumber.of(bool.value() ? 1.0 : 0.0);
-            } else if (primitiveValue instanceof JSBigInt bigInt) {
-                // BigInt cannot be converted to number without loss of precision
-                try {
-                    return JSNumber.of(bigInt.value().doubleValue());
-                } catch (Exception e) {
-                    return JSNumber.of(Double.NaN);
+            } else if (primitiveValue instanceof JSBigInt) {
+                // Per ES spec, ToNumber(BigInt) throws TypeError
+                if (context != null) {
+                    context.throwTypeError("Cannot convert a BigInt value to a number");
                 }
+                return JSNumber.of(Double.NaN);
             }
         }
 

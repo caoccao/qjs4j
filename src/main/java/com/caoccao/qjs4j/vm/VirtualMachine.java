@@ -575,19 +575,29 @@ public final class VirtualMachine {
                         int funcIndex = bytecode.readU32(pc + 1);
                         JSValue funcValue = bytecode.getConstants()[funcIndex];
                         if (funcValue instanceof JSBytecodeFunction templateFunction) {
-                            int closureCount = templateFunction.getClosureVars().length;
-                            JSValue[] capturedClosureVars = new JSValue[closureCount];
-                            for (int i = closureCount - 1; i >= 0; i--) {
-                                capturedClosureVars[i] = (JSValue) stack[--sp];
-                            }
-                            JSBytecodeFunction closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
-                            // Patch closure self-reference if needed.
-                            // Following QuickJS var_refs pattern: when a function captures its own name
-                            // from a block scope, the capture happens before the function is stored,
-                            // resulting in undefined. We patch it here after creation.
-                            int selfIdx = templateFunction.getSelfCaptureIndex();
-                            if (selfIdx >= 0 && selfIdx < capturedClosureVars.length) {
-                                capturedClosureVars[selfIdx] = closureFunction;
+                            int[] captureInfos = templateFunction.getCaptureSourceInfos();
+                            JSBytecodeFunction closureFunction;
+                            if (captureInfos != null) {
+                                // Reference-based capture: create VarRef[] from parent frame
+                                VarRef[] capturedVarRefs = createVarRefsFromCaptures(captureInfos, currentFrame);
+                                closureFunction = templateFunction.copyWithVarRefs(capturedVarRefs);
+                                // Patch closure self-reference if needed
+                                int selfIdx = templateFunction.getSelfCaptureIndex();
+                                if (selfIdx >= 0 && selfIdx < capturedVarRefs.length) {
+                                    capturedVarRefs[selfIdx].set(closureFunction);
+                                }
+                            } else {
+                                // Legacy value-based capture: pop from stack
+                                int closureCount = templateFunction.getClosureVars().length;
+                                JSValue[] capturedClosureVars = new JSValue[closureCount];
+                                for (int i = closureCount - 1; i >= 0; i--) {
+                                    capturedClosureVars[i] = (JSValue) stack[--sp];
+                                }
+                                closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
+                                int selfIdx = templateFunction.getSelfCaptureIndex();
+                                if (selfIdx >= 0 && selfIdx < capturedClosureVars.length) {
+                                    capturedClosureVars[selfIdx] = closureFunction;
+                                }
                             }
                             closureFunction.initializePrototypeChain(context);
                             stack[sp++] = closureFunction;
@@ -604,12 +614,21 @@ public final class VirtualMachine {
                         int funcIndex = bytecode.readU8(pc + 1);
                         JSValue funcValue = bytecode.getConstants()[funcIndex];
                         if (funcValue instanceof JSBytecodeFunction templateFunction) {
-                            int closureCount = templateFunction.getClosureVars().length;
-                            JSValue[] capturedClosureVars = new JSValue[closureCount];
-                            for (int i = closureCount - 1; i >= 0; i--) {
-                                capturedClosureVars[i] = (JSValue) stack[--sp];
+                            int[] captureInfos = templateFunction.getCaptureSourceInfos();
+                            JSBytecodeFunction closureFunction;
+                            if (captureInfos != null) {
+                                // Reference-based capture: create VarRef[] from parent frame
+                                VarRef[] capturedVarRefs = createVarRefsFromCaptures(captureInfos, currentFrame);
+                                closureFunction = templateFunction.copyWithVarRefs(capturedVarRefs);
+                            } else {
+                                // Legacy value-based capture: pop from stack
+                                int closureCount = templateFunction.getClosureVars().length;
+                                JSValue[] capturedClosureVars = new JSValue[closureCount];
+                                for (int i = closureCount - 1; i >= 0; i--) {
+                                    capturedClosureVars[i] = (JSValue) stack[--sp];
+                                }
+                                closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
                             }
-                            JSBytecodeFunction closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
                             closureFunction.initializePrototypeChain(context);
                             stack[sp++] = closureFunction;
                         } else {
@@ -2671,6 +2690,16 @@ public final class VirtualMachine {
                     }
                     case NOP -> pc += op.getSize();
 
+                    case GET_SUPER -> {
+                        // Push the super class constructor onto the stack.
+                        // In a derived class constructor, the constructor's [[Prototype]]
+                        // is the parent class constructor (set by DEFINE_CLASS).
+                        JSFunction currentFunc = currentFrame.getFunction();
+                        JSObject superConstructor = currentFunc.getPrototype();
+                        stack[sp++] = superConstructor != null ? superConstructor : JSUndefined.INSTANCE;
+                        pc += op.getSize();
+                    }
+
                     // ==================== Other Operations ====================
                     default -> throw new JSVirtualMachineException("Unimplemented opcode: " + op + " at PC " + pc);
                 }
@@ -3557,6 +3586,11 @@ public final class VirtualMachine {
 
     private void handleNeg() {
         JSValue operand = valueStack.pop();
+        // Per ES spec, unary minus on BigInt produces negated BigInt
+        if (operand instanceof JSBigInt bigInt) {
+            valueStack.push(new JSBigInt(bigInt.value().negate()));
+            return;
+        }
         double result = -JSTypeConversions.toNumber(context, operand).value();
         valueStack.push(JSNumber.of(result));
     }
@@ -4166,6 +4200,33 @@ public final class VirtualMachine {
 
         // Fall back to Java toString
         return exceptionObj.toString();
+    }
+
+    /**
+     * Create VarRef array from capture source info during FCLOSURE.
+     * For LOCAL sources, creates/reuses a VarRef pointing to the parent's local slot.
+     * For VAR_REF sources, shares the parent's existing VarRef.
+     */
+    private static VarRef[] createVarRefsFromCaptures(int[] captureInfos, StackFrame parentFrame) {
+        VarRef[] varRefs = new VarRef[captureInfos.length];
+        for (int i = 0; i < captureInfos.length; i++) {
+            int info = captureInfos[i];
+            if (info >= 0) {
+                // LOCAL capture: create/reuse VarRef pointing to parent's local slot
+                varRefs[i] = parentFrame.getOrCreateLocalVarRef(info);
+            } else {
+                // VAR_REF capture: share parent's existing VarRef
+                int varRefIndex = -(info + 1);
+                VarRef parentRef = parentFrame.getVarRefCell(varRefIndex);
+                if (parentRef != null) {
+                    varRefs[i] = parentRef;
+                } else {
+                    // Fallback: create standalone VarRef with current value
+                    varRefs[i] = new VarRef(parentFrame.getVarRef(varRefIndex));
+                }
+            }
+        }
+        return varRefs;
     }
 
     private void setArgumentValue(int index, JSValue value) {

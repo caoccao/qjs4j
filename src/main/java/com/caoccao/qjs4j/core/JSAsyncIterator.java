@@ -59,6 +59,70 @@ public class JSAsyncIterator extends JSObject {
     }
 
     /**
+     * Create an async-from-sync iterator result promise.
+     * Per ES spec AsyncFromSyncIteratorContinuation: resolves the value
+     * via PromiseResolve before placing it in the iterator result.
+     * This means if value is a promise/thenable, it gets awaited.
+     *
+     * @param context The execution context
+     * @param value   The iterator value (may be a promise/thenable)
+     * @param done    Whether iteration is complete
+     * @return A promise that resolves to the iterator result (with resolved value)
+     */
+    public static JSPromise createAsyncFromSyncResultPromise(JSContext context, JSValue value, boolean done) {
+        // Check if value is a promise/thenable that needs resolution
+        if (value instanceof JSPromise promiseValue) {
+            JSPromise resultPromise = context.createJSPromise();
+            promiseValue.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onResolve", 1, (ctx, thisArg, args) -> {
+                                JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                JSObject result = context.createJSObject();
+                                result.set("value", resolved);
+                                result.set("done", JSBoolean.valueOf(done));
+                                resultPromise.fulfill(result);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context
+                    ),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onReject", 1, (ctx, thisArg, args) -> {
+                                resultPromise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context
+                    )
+            );
+            return resultPromise;
+        }
+        if (value instanceof JSObject obj) {
+            JSValue thenMethod = obj.get("then");
+            if (thenMethod instanceof JSFunction thenFunc) {
+                JSPromise resultPromise = context.createJSPromise();
+                thenFunc.call(context, value, new JSValue[]{
+                        new JSNativeFunction("resolve", 1, (ctx, thisArg, args) -> {
+                            JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            JSObject result = context.createJSObject();
+                            result.set("value", resolved);
+                            result.set("done", JSBoolean.valueOf(done));
+                            resultPromise.fulfill(result);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        new JSNativeFunction("reject", 1, (ctx, thisArg, args) -> {
+                            resultPromise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                            return JSUndefined.INSTANCE;
+                        })
+                });
+                return resultPromise;
+            }
+        }
+        // Non-thenable: use directly
+        return createIteratorResultPromise(context, value, done);
+    }
+
+    /**
      * Create an IteratorResult object that resolves in a promise.
      *
      * @param context The execution context
@@ -119,7 +183,9 @@ public class JSAsyncIterator extends JSObject {
 
     /**
      * Create an async iterator from a regular iterator.
-     * Each iteration returns a promise that immediately resolves.
+     * Per ES spec CreateAsyncFromSyncIterator: values from the sync iterator
+     * are resolved via PromiseResolve before being placed in the iterator result.
+     * This means promise values are awaited/unwrapped.
      *
      * @param iterator The synchronous iterator
      * @param context  The execution context
@@ -131,7 +197,7 @@ public class JSAsyncIterator extends JSObject {
             JSValue value = result.get("value");
             JSValue doneValue = result.get("done");
             boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
-            return createIteratorResultPromise(context, value, done);
+            return createAsyncFromSyncResultPromise(context, value, done);
         }, context);
     }
 

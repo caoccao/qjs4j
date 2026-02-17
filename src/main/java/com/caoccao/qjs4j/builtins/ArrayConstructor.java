@@ -198,111 +198,275 @@ public final class ArrayConstructor {
      * Returns a Promise that resolves to the created array.
      */
     public static JSValue fromAsync(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            JSPromise promise = new JSPromise();
-            promise.reject(context.throwTypeError("undefined is not iterable"));
-            return promise;
-        }
-
-        JSValue arrayLike = args[0];
+        JSValue arrayLike = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue mapFn = args.length > 1 ? args[1] : null;
         JSValue mapThisArg = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
 
-        // Check if mapFn is callable
+        // Per spec, Array.fromAsync NEVER throws synchronously — all errors reject the promise.
+        // Must use createJSPromise() to get proper prototype chain (with .then method).
+        JSPromise resultPromise = context.createJSPromise();
+
+        // Step 2: mapfn callable check
         if (mapFn != null && !(mapFn instanceof JSUndefined) && !(mapFn instanceof JSFunction)) {
-            JSPromise promise = new JSPromise();
-            promise.reject(context.throwTypeError("Array.fromAsync: when provided, the second argument must be a function"));
-            return promise;
-        }
-
-        JSPromise resultPromise = new JSPromise();
-
-        // Try to get async iterator first
-        JSAsyncIterator asyncIterator = JSAsyncIteratorHelper.getAsyncIterator(arrayLike, context);
-        if (asyncIterator != null) {
-            // Use async iteration
-            JSPromise arrayPromise = JSAsyncIteratorHelper.toArray(context, arrayLike);
-
-            arrayPromise.addReactions(
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
-                                JSValue arrayValue = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                                if (!(arrayValue instanceof JSArray collectedArray)) {
-                                    resultPromise.reject(context.throwTypeError("Failed to collect array from async iterable"));
-                                    return JSUndefined.INSTANCE;
-                                }
-
-                                // Apply mapping function if provided
-                                if (mapFn instanceof JSFunction mappingFunc) {
-                                    JSArray mappedArray = context.createJSArray();
-                                    for (int i = 0; i < collectedArray.getLength(); i++) {
-                                        JSValue value = collectedArray.get(i);
-                                        JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
-                                        JSValue mappedValue = mappingFunc.call(context, mapThisArg, mapArgs);
-                                        mappedArray.push(mappedValue);
-                                    }
-                                    resultPromise.fulfill(mappedArray);
-                                } else {
-                                    resultPromise.fulfill(collectedArray);
-                                }
-                                return JSUndefined.INSTANCE;
-                            }),
-                            resultPromise,
-                            context
-                    ),
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
-                                JSValue error = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                                resultPromise.reject(error);
-                                return JSUndefined.INSTANCE;
-                            }),
-                            resultPromise,
-                            context
-                    )
-            );
-
+            rejectWithError(resultPromise, context, "TypeError", "Array.fromAsync: when provided, the second argument must be a function");
             return resultPromise;
         }
 
-        // Array-like path: no async or sync iterator found
-        // Step g.i: asyncItems is neither AsyncIterable nor Iterable
-        // Step g.ii: Let arrayLike be ! ToObject(asyncItems)
-        if (arrayLike instanceof JSNull || arrayLike instanceof JSUndefined) {
-            resultPromise.reject(context.throwTypeError("Cannot convert undefined or null to object"));
-            return resultPromise;
-        }
+        try {
+            // Step 4: GetMethod(asyncItems, @@asyncIterator)
+            // Per ES spec GetMethod: get property, return undefined if null/undefined,
+            // throw TypeError if not callable
+            JSValue usingAsyncIterator = JSUndefined.INSTANCE;
+            JSValue usingSyncIterator = JSUndefined.INSTANCE;
 
-        JSObject arrayLikeObj;
-        if (arrayLike instanceof JSObject obj) {
-            arrayLikeObj = obj;
-        } else {
-            // Box primitives to access prototype properties (e.g., Number.prototype.length)
-            arrayLikeObj = JSTypeConversions.toObject(context, arrayLike);
-            if (arrayLikeObj == null) {
-                resultPromise.reject(context.throwTypeError("Cannot convert to object"));
+            if (arrayLike instanceof JSObject obj) {
+                // Pass context so getter functions execute properly
+                JSValue asyncIterMethod = obj.get(PropertyKey.SYMBOL_ASYNC_ITERATOR, context);
+                if (context.hasPendingException()) {
+                    JSValue ex = context.getPendingException();
+                    context.clearAllPendingExceptions();
+                    resultPromise.reject(ex);
+                    return resultPromise;
+                }
+                if (asyncIterMethod != null && !(asyncIterMethod instanceof JSUndefined) && !(asyncIterMethod instanceof JSNull)) {
+                    if (!(asyncIterMethod instanceof JSFunction)) {
+                        rejectWithError(resultPromise, context, "TypeError", "Symbol.asyncIterator is not a function");
+                        return resultPromise;
+                    }
+                    usingAsyncIterator = asyncIterMethod;
+                }
+
+                // Step 5: if usingAsyncIterator is undefined, get @@iterator
+                if (usingAsyncIterator instanceof JSUndefined) {
+                    JSValue syncIterMethod = obj.get(PropertyKey.SYMBOL_ITERATOR, context);
+                    if (context.hasPendingException()) {
+                        JSValue ex = context.getPendingException();
+                        context.clearAllPendingExceptions();
+                        resultPromise.reject(ex);
+                        return resultPromise;
+                    }
+                    if (syncIterMethod != null && !(syncIterMethod instanceof JSUndefined) && !(syncIterMethod instanceof JSNull)) {
+                        if (!(syncIterMethod instanceof JSFunction)) {
+                            rejectWithError(resultPromise, context, "TypeError", "Symbol.iterator is not a function");
+                            return resultPromise;
+                        }
+                        usingSyncIterator = syncIterMethod;
+                    }
+                }
+            }
+
+            // Async iterable path
+            if (usingAsyncIterator instanceof JSFunction asyncIterFunc) {
+                JSValue iterResult = asyncIterFunc.call(context, arrayLike, new JSValue[0]);
+                JSAsyncIterator asyncIterator = null;
+                if (iterResult instanceof JSAsyncIterator ai) {
+                    asyncIterator = ai;
+                } else if (iterResult instanceof JSObject iterObj) {
+                    asyncIterator = JSAsyncIteratorHelper.wrapAsAsyncIterator(iterObj, context);
+                }
+                if (asyncIterator == null) {
+                    rejectWithError(resultPromise, context, "TypeError", "Result of Symbol.asyncIterator is not an async iterator");
+                    return resultPromise;
+                }
+                return fromAsyncIterablePath(context, resultPromise, asyncIterator, arrayLike, mapFn, mapThisArg);
+            }
+
+            // Sync iterable path (wrap as async)
+            if (usingSyncIterator instanceof JSFunction syncIterFunc) {
+                JSValue iterResult = syncIterFunc.call(context, arrayLike, new JSValue[0]);
+                JSAsyncIterator asyncIterator = null;
+                if (iterResult instanceof JSIterator syncIter) {
+                    asyncIterator = JSAsyncIterator.fromIterator(syncIter, context);
+                } else if (iterResult instanceof JSObject iterObj) {
+                    asyncIterator = JSAsyncIteratorHelper.wrapSyncAsAsyncIterator(iterObj, context);
+                }
+                if (asyncIterator == null) {
+                    rejectWithError(resultPromise, context, "TypeError", "Result of Symbol.iterator is not an iterator");
+                    return resultPromise;
+                }
+                return fromAsyncIterablePath(context, resultPromise, asyncIterator, arrayLike, mapFn, mapThisArg);
+            }
+
+            // Array-like path: no iterators found
+            if (arrayLike instanceof JSNull || arrayLike instanceof JSUndefined) {
+                rejectWithError(resultPromise, context, "TypeError", "Cannot convert undefined or null to object");
                 return resultPromise;
             }
-        }
 
-        // Step g.iii: Let len be ? LengthOfArrayLike(arrayLike)
-        JSValue lenValue = arrayLikeObj.get(PropertyKey.LENGTH, context);
-        long length = JSTypeConversions.toLength(context, lenValue);
-        if (length > 0xFFFFFFFFL) {
-            resultPromise.reject(context.throwRangeError("Invalid array length"));
-            return resultPromise;
-        }
-
-        JSArray result = context.createJSArray();
-        for (long i = 0; i < length; i++) {
-            JSValue value = arrayLikeObj.get(PropertyKey.fromIndex((int) i), context);
-            if (mapFn instanceof JSFunction mappingFunc) {
-                JSValue[] mapArgs = new JSValue[]{value, JSNumber.of(i)};
-                value = mappingFunc.call(context, mapThisArg, mapArgs);
+            JSObject arrayLikeObj;
+            if (arrayLike instanceof JSObject obj) {
+                arrayLikeObj = obj;
+            } else {
+                arrayLikeObj = JSTypeConversions.toObject(context, arrayLike);
+                if (arrayLikeObj == null) {
+                    rejectWithError(resultPromise, context, "TypeError", "Cannot convert to object");
+                    return resultPromise;
+                }
             }
-            result.push(value);
+
+            // LengthOfArrayLike — getter may throw
+            JSValue lenValue = arrayLikeObj.get(PropertyKey.LENGTH, context);
+            if (context.hasPendingException()) {
+                JSValue ex = context.getPendingException();
+                context.clearAllPendingExceptions();
+                resultPromise.reject(ex);
+                return resultPromise;
+            }
+            long length = JSTypeConversions.toLength(context, lenValue);
+            if (context.hasPendingException()) {
+                JSValue ex = context.getPendingException();
+                context.clearAllPendingExceptions();
+                resultPromise.reject(ex);
+                return resultPromise;
+            }
+            if (length > 0xFFFFFFFFL) {
+                rejectWithError(resultPromise, context, "RangeError", "Invalid array length");
+                return resultPromise;
+            }
+
+            // Array-like iteration: get each element, await it, then push
+            JSArray result = context.createJSArray();
+            fromAsyncArrayLikeStep(context, resultPromise, result, arrayLikeObj, 0, (int) length, mapFn, mapThisArg);
+        } catch (Exception e) {
+            // Any synchronous error in the async body → reject the promise
+            if (context.hasPendingException()) {
+                JSValue ex = context.getPendingException();
+                context.clearAllPendingExceptions();
+                resultPromise.reject(ex);
+            } else {
+                String msg = e.getMessage() != null ? e.getMessage() : e.toString();
+                rejectWithError(resultPromise, context, "Error", msg);
+            }
         }
-        resultPromise.fulfill(result);
         return resultPromise;
+    }
+
+    private static JSPromise fromAsyncIterablePath(
+            JSContext context, JSPromise resultPromise,
+            JSAsyncIterator asyncIterator, JSValue arrayLike,
+            JSValue mapFn, JSValue mapThisArg) {
+        JSArray result = context.createJSArray();
+        final int[] index = {0};
+
+        JSPromise iterationPromise = JSAsyncIteratorHelper.forAwaitOfIterator(context, asyncIterator, (value) -> {
+            // Per ES2024 23.1.2.1: async iterable path
+            // - Without mapFn: mappedValue = nextValue (no Await)
+            // - With mapFn: mappedValue = Await(mapFn(value, k))
+            if (mapFn instanceof JSFunction mappingFunc) {
+                JSValue mappedValue = mappingFunc.call(context, mapThisArg, new JSValue[]{value, JSNumber.of(index[0])});
+                JSPromise awaitPromise = resolveThenable(context, mappedValue);
+                JSPromise processingPromise = new JSPromise();
+                awaitPromise.addReactions(
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onResolve", 1, (ctx2, t2, a2) -> {
+                                    JSValue resolved = a2.length > 0 ? a2[0] : JSUndefined.INSTANCE;
+                                    result.push(resolved);
+                                    index[0]++;
+                                    processingPromise.fulfill(JSUndefined.INSTANCE);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                null,
+                                context
+                        ),
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onReject", 1, (ctx2, t2, a2) -> {
+                                    processingPromise.reject(a2.length > 0 ? a2[0] : JSUndefined.INSTANCE);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                null,
+                                context
+                        )
+                );
+                return processingPromise;
+            } else {
+                // No mapFn: use value directly, no Await
+                result.push(value);
+                index[0]++;
+                JSPromise resolved = new JSPromise();
+                resolved.fulfill(JSUndefined.INSTANCE);
+                return resolved;
+            }
+        });
+
+        iterationPromise.addReactions(
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onComplete", 1, (ctx2, t2, a2) -> {
+                            resultPromise.fulfill(result);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        resultPromise,
+                        context
+                ),
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onError", 1, (ctx2, t2, a2) -> {
+                            resultPromise.reject(a2.length > 0 ? a2[0] : JSUndefined.INSTANCE);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        resultPromise,
+                        context
+                )
+        );
+
+        return resultPromise;
+    }
+
+    private static void rejectWithError(JSPromise promise, JSContext context, String errorType, String message) {
+        // Clear any pending exception that was set as a side-effect
+        if (context.hasPendingException()) {
+            context.clearAllPendingExceptions();
+        }
+        JSError error = switch (errorType) {
+            case "TypeError" -> new JSTypeError(context, message);
+            case "RangeError" -> new JSRangeError(context, message);
+            default -> new JSError(context, message);
+        };
+        context.transferPrototype(error, errorType);
+        promise.reject(error);
+    }
+
+    /**
+     * Process one element of an array-like in fromAsync.
+     * Gets element at index, awaits it (if promise/thenable), pushes to result, recurses.
+     */
+    private static void fromAsyncArrayLikeStep(
+            JSContext context, JSPromise resultPromise, JSArray result,
+            JSObject arrayLikeObj, int index, int length,
+            JSValue mapFn, JSValue mapThisArg) {
+        if (index >= length) {
+            resultPromise.fulfill(result);
+            return;
+        }
+
+        JSValue value = arrayLikeObj.get(PropertyKey.fromIndex(index), context);
+        if (mapFn instanceof JSFunction mappingFunc) {
+            value = mappingFunc.call(context, mapThisArg, new JSValue[]{value, JSNumber.of(index)});
+        }
+
+        // Await the value (resolve promises/thenables)
+        JSPromise awaitPromise = resolveThenable(context, value);
+        // Pass null as reaction promise to prevent triggerReaction from resolving resultPromise
+        // with the handler's return value. We control resultPromise fulfillment explicitly.
+        awaitPromise.addReactions(
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onResolve", 1, (ctx2, t2, a2) -> {
+                            JSValue resolved = a2.length > 0 ? a2[0] : JSUndefined.INSTANCE;
+                            result.push(resolved);
+                            // Continue to next element
+                            fromAsyncArrayLikeStep(context, resultPromise, result, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                ),
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onReject", 1, (ctx2, t2, a2) -> {
+                            resultPromise.reject(a2.length > 0 ? a2[0] : JSUndefined.INSTANCE);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                )
+        );
     }
 
     /**
@@ -325,6 +489,37 @@ public final class ArrayConstructor {
         }
 
         return JSBoolean.valueOf(args[0] instanceof JSArray);
+    }
+
+    /**
+     * Resolve a value that may be a Promise or thenable into a Promise.
+     * If already a Promise, return it. If a thenable (has .then method), wrap it.
+     * Otherwise, return an immediately fulfilled Promise.
+     */
+    private static JSPromise resolveThenable(JSContext context, JSValue value) {
+        if (value instanceof JSPromise p) {
+            return p;
+        }
+        if (value instanceof JSObject obj) {
+            JSValue thenMethod = obj.get("then");
+            if (thenMethod instanceof JSFunction thenFunc) {
+                JSPromise promise = new JSPromise();
+                thenFunc.call(context, value, new JSValue[]{
+                        new JSNativeFunction("resolve", 1, (ctx, thisArg, args) -> {
+                            promise.fulfill(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        new JSNativeFunction("reject", 1, (ctx, thisArg, args) -> {
+                            promise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                            return JSUndefined.INSTANCE;
+                        })
+                });
+                return promise;
+            }
+        }
+        JSPromise promise = new JSPromise();
+        promise.fulfill(value);
+        return promise;
     }
 
     /**
