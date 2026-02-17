@@ -61,7 +61,10 @@ public final class JSWeakMap extends JSObject {
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
 
-            JSValue adder = weakMapObj.get("set");
+            JSValue adder = weakMapObj.get(PropertyKey.SET, context);
+            if (context.hasPendingException()) {
+                return weakMapObj;
+            }
             if (!(adder instanceof JSFunction adderFunction)) {
                 return context.throwTypeError("set/add is not a function");
             }
