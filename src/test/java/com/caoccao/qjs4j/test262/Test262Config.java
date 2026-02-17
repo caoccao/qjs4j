@@ -58,8 +58,10 @@ public class Test262Config {
     public static Test262Config forQuickTest() {
         Test262Config config = loadDefault();
         // Run a subset of tests for quick validation
-        config.addExcludePatterns(Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"));
-        config.maxTests = 2200;
+        config.addExcludePatterns(
+                Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
+                Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"));
+        config.maxTests = 5900;
         return config;
     }
 
