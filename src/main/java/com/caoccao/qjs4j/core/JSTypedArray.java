@@ -33,6 +33,7 @@ public abstract class JSTypedArray extends JSObject {
     protected final int byteOffset;
     protected final int bytesPerElement;
     protected final int length;
+    protected final boolean trackRab;
 
     /**
      * Create a TypedArray with a new buffer of the given length.
@@ -50,6 +51,7 @@ public abstract class JSTypedArray extends JSObject {
         this.byteLength = length * bytesPerElement;
         this.byteOffset = 0;
         this.buffer = new JSArrayBuffer(this.byteLength);
+        this.trackRab = false;
     }
 
     /**
@@ -77,13 +79,17 @@ public abstract class JSTypedArray extends JSObject {
 
         // Calculate length if not specified
         if (length < 0) {
+            // Track resizable array buffer length when no explicit length given
+            boolean resizable = buffer instanceof JSArrayBuffer ab && ab.isResizable();
+            this.trackRab = resizable;
             int remainingBytes = buffer.getByteLength() - byteOffset;
-            if (remainingBytes % bytesPerElement != 0) {
+            if (!resizable && remainingBytes % bytesPerElement != 0) {
                 throw new JSRangeErrorException("Buffer byte length must be a multiple of element size");
             }
             this.length = remainingBytes / bytesPerElement;
             this.byteLength = remainingBytes;
         } else {
+            this.trackRab = false;
             this.length = length;
             if (length > Integer.MAX_VALUE / bytesPerElement) {
                 throw new JSRangeErrorException("invalid length");
@@ -235,9 +241,28 @@ public abstract class JSTypedArray extends JSObject {
         if (buffer.isDetached()) {
             throw new IllegalStateException("TypedArray buffer is detached");
         }
-        if (index < 0 || index >= length) {
+        if (index < 0 || index >= getLength()) {
             throw new JSRangeErrorException("TypedArray index out of range: " + index);
         }
+    }
+
+    /**
+     * Check if this TypedArray is out of bounds due to buffer resize or detach.
+     * Following QuickJS typed_array_is_oob semantics.
+     */
+    public boolean isOutOfBounds() {
+        if (buffer.isDetached()) {
+            return true;
+        }
+        int currentByteLength = buffer.getByteLength();
+        if (byteOffset > currentByteLength) {
+            return true;
+        }
+        if (trackRab) {
+            return false;
+        }
+        // Fixed length: check if the view exceeds the current buffer size
+        return (long) byteOffset + byteLength > currentByteLength;
     }
 
     protected String formatElement(double value) {
@@ -261,7 +286,7 @@ public abstract class JSTypedArray extends JSObject {
     protected JSValue get(PropertyKey key, JSContext context, JSObject receiver) {
         int index = toTypedArrayIndex(key);
         if (index >= 0) {
-            if (index < length && !buffer.isDetached()) {
+            if (index < getLength() && !buffer.isDetached()) {
                 return getJSElement(index);
             }
             return JSUndefined.INSTANCE;
@@ -285,14 +310,25 @@ public abstract class JSTypedArray extends JSObject {
         }
         ByteBuffer buf = buffer.getBuffer().duplicate();
         buf.position(byteOffset);
-        buf.limit(byteOffset + byteLength);
+        buf.limit(byteOffset + getByteLength());
         return buf.slice();
     }
 
     /**
      * Get the byte length of this view.
+     * For length-tracking typed arrays on resizable buffers, returns the current effective byte length.
      */
     public int getByteLength() {
+        if (trackRab) {
+            if (buffer.isDetached()) {
+                return 0;
+            }
+            int currentByteLength = buffer.getByteLength();
+            if (byteOffset > currentByteLength) {
+                return 0;
+            }
+            return currentByteLength - byteOffset;
+        }
         return byteLength;
     }
 
@@ -325,8 +361,19 @@ public abstract class JSTypedArray extends JSObject {
 
     /**
      * Get the number of elements.
+     * For length-tracking typed arrays on resizable buffers, returns the current effective length.
      */
     public int getLength() {
+        if (trackRab) {
+            if (buffer.isDetached()) {
+                return 0;
+            }
+            int currentByteLength = buffer.getByteLength();
+            if (byteOffset > currentByteLength) {
+                return 0;
+            }
+            return (currentByteLength - byteOffset) / bytesPerElement;
+        }
         return length;
     }
 
@@ -334,7 +381,7 @@ public abstract class JSTypedArray extends JSObject {
     public boolean has(PropertyKey key) {
         int index = toTypedArrayIndex(key);
         if (index >= 0) {
-            return index < length && !buffer.isDetached();
+            return index < getLength() && !buffer.isDetached();
         }
         return super.has(key);
     }
@@ -343,7 +390,7 @@ public abstract class JSTypedArray extends JSObject {
     public void set(PropertyKey key, JSValue value, JSContext context) {
         int index = toTypedArrayIndex(key);
         if (index >= 0) {
-            if (index < length && !buffer.isDetached()) {
+            if (index < getLength() && !buffer.isDetached()) {
                 setJSElement(index, value, context);
             }
             return;
@@ -356,13 +403,14 @@ public abstract class JSTypedArray extends JSObject {
      * Copy values from array into this TypedArray.
      */
     public void setArray(JSContext context, JSValue source, int offset) {
-        if (offset < 0 || offset > length) {
+        int currentLength = getLength();
+        if (offset < 0 || offset > currentLength) {
             throw new JSRangeErrorException("TypedArray offset out of range");
         }
 
         if (source instanceof JSArray srcArray) {
             int srcLength = toArrayLikeLength(context, JSNumber.of(srcArray.getLength()));
-            if (offset + srcLength > length) {
+            if (offset + srcLength > currentLength) {
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
@@ -377,7 +425,7 @@ public abstract class JSTypedArray extends JSObject {
             }
         } else if (source instanceof JSTypedArray srcTyped) {
             int srcLength = srcTyped.getLength();
-            if (offset + srcLength > length) {
+            if (offset + srcLength > currentLength) {
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
@@ -401,7 +449,7 @@ public abstract class JSTypedArray extends JSObject {
             if (context != null && context.hasPendingException()) {
                 return;
             }
-            if (offset + srcLength > length) {
+            if (offset + srcLength > currentLength) {
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
@@ -438,11 +486,12 @@ public abstract class JSTypedArray extends JSObject {
 
     @Override
     public String toString() {
-        if (length == 0) {
+        int currentLength = getLength();
+        if (currentLength == 0) {
             return "";
         }
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < length; i++) {
+        for (int i = 0; i < currentLength; i++) {
             if (i > 0) {
                 sb.append(',');
             }

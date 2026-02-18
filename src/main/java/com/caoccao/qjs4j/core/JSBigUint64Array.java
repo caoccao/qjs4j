@@ -68,10 +68,12 @@ public final class JSBigUint64Array extends JSTypedArray {
                         return context.createJSBigUint64Array(jsArrayBufferable, byteOffset, length);
                     }
                 }
-                validateTypedArrayBufferNotDetached(jsArrayBufferable);
-                length = toTypedArrayBufferDefaultLength(jsArrayBufferable, byteOffset, BYTES_PER_ELEMENT);
-                return context.createJSBigUint64Array(jsArrayBufferable, byteOffset, length);
+                return context.createJSBigUint64Array(jsArrayBufferable, byteOffset, -1);
             } else if (firstArg instanceof JSTypedArray jsTypedArray) {
+                if (jsTypedArray.isOutOfBounds()) {
+                    context.throwTypeError("source TypedArray is out of bounds");
+                    return null;
+                }
                 length = jsTypedArray.getLength();
                 JSTypedArray newTypedArray = context.createJSBigUint64Array(length);
                 newTypedArray.setArray(context, jsTypedArray, 0);
@@ -144,11 +146,12 @@ public final class JSBigUint64Array extends JSTypedArray {
     @Override
     public JSTypedArray subarray(int begin, int end) {
         // Normalize indices
-        if (begin < 0) begin = Math.max(length + begin, 0);
-        else begin = Math.min(begin, length);
+        int currentLength = getLength();
+        if (begin < 0) begin = Math.max(currentLength + begin, 0);
+        else begin = Math.min(begin, currentLength);
 
-        if (end < 0) end = Math.max(length + end, 0);
-        else end = Math.min(end, length);
+        if (end < 0) end = Math.max(currentLength + end, 0);
+        else end = Math.min(end, currentLength);
 
         int newLength = Math.max(end - begin, 0);
         int newByteOffset = byteOffset + begin * BYTES_PER_ELEMENT;

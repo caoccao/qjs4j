@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.builtins;
 
+import com.caoccao.qjs4j.core.JSBigInt;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSNumber;
 import com.caoccao.qjs4j.core.JSTypeConversions;
@@ -43,7 +44,13 @@ public final class NumberConstructor {
         // Get the value to convert to number
         JSValue value = args[0];
 
-        // Convert to number using ToNumber
+        // ES2020 20.1.1.1: Let n be ? ToNumeric(value).
+        // If Type(n) is BigInt, let n be 𝔽(ℝ(n)).
+        if (value instanceof JSBigInt bigInt) {
+            return JSNumber.of(bigInt.value().doubleValue());
+        }
+
+        // Otherwise, let n be ? ToNumber(value).
         JSNumber numValue = JSTypeConversions.toNumber(context, value);
 
         // When called as a function (not via new), return primitive number
