@@ -223,9 +223,9 @@ public final class ArrayConstructor {
                 // Pass context so getter functions execute properly
                 JSValue asyncIterMethod = obj.get(PropertyKey.SYMBOL_ASYNC_ITERATOR, context);
                 if (context.hasPendingException()) {
-                    JSValue ex = context.getPendingException();
+                    JSValue pendingException = context.getPendingException();
                     context.clearAllPendingExceptions();
-                    resultPromise.reject(ex);
+                    resultPromise.reject(pendingException);
                     return resultPromise;
                 }
                 if (asyncIterMethod != null && !(asyncIterMethod instanceof JSUndefined) && !(asyncIterMethod instanceof JSNull)) {
@@ -240,9 +240,9 @@ public final class ArrayConstructor {
                 if (usingAsyncIterator instanceof JSUndefined) {
                     JSValue syncIterMethod = obj.get(PropertyKey.SYMBOL_ITERATOR, context);
                     if (context.hasPendingException()) {
-                        JSValue ex = context.getPendingException();
+                        JSValue pendingException = context.getPendingException();
                         context.clearAllPendingExceptions();
-                        resultPromise.reject(ex);
+                        resultPromise.reject(pendingException);
                         return resultPromise;
                     }
                     if (syncIterMethod != null && !(syncIterMethod instanceof JSUndefined) && !(syncIterMethod instanceof JSNull)) {
@@ -307,16 +307,16 @@ public final class ArrayConstructor {
             // LengthOfArrayLike — getter may throw
             JSValue lenValue = arrayLikeObj.get(PropertyKey.LENGTH, context);
             if (context.hasPendingException()) {
-                JSValue ex = context.getPendingException();
+                JSValue pendingException = context.getPendingException();
                 context.clearAllPendingExceptions();
-                resultPromise.reject(ex);
+                resultPromise.reject(pendingException);
                 return resultPromise;
             }
             long length = JSTypeConversions.toLength(context, lenValue);
             if (context.hasPendingException()) {
-                JSValue ex = context.getPendingException();
+                JSValue pendingException = context.getPendingException();
                 context.clearAllPendingExceptions();
-                resultPromise.reject(ex);
+                resultPromise.reject(pendingException);
                 return resultPromise;
             }
             if (length > 0xFFFFFFFFL) {
@@ -330,9 +330,9 @@ public final class ArrayConstructor {
         } catch (Exception e) {
             // Any synchronous error in the async body → reject the promise
             if (context.hasPendingException()) {
-                JSValue ex = context.getPendingException();
+                JSValue pendingException = context.getPendingException();
                 context.clearAllPendingExceptions();
-                resultPromise.reject(ex);
+                resultPromise.reject(pendingException);
             } else {
                 String msg = e.getMessage() != null ? e.getMessage() : e.toString();
                 rejectWithError(resultPromise, context, "Error", msg);
@@ -359,8 +359,8 @@ public final class ArrayConstructor {
         JSPromise awaitValue = resolveThenable(context, value);
         awaitValue.addReactions(
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onValueResolve", 1, (ctx2, t2, a2) -> {
-                            JSValue awaitedValue = a2.length > 0 ? a2[0] : JSUndefined.INSTANCE;
+                        new JSNativeFunction("onValueResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            JSValue awaitedValue = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
 
                             // Step 2: If mapping, call mapFn on awaited value, then await result
                             if (mapFn instanceof JSFunction mappingFunc) {
@@ -368,8 +368,8 @@ public final class ArrayConstructor {
                                 JSPromise awaitMapped = resolveThenable(context, mapped);
                                 awaitMapped.addReactions(
                                         new JSPromise.ReactionRecord(
-                                                new JSNativeFunction("onMapResolve", 1, (ctx3, t3, a3) -> {
-                                                    JSValue finalValue = a3.length > 0 ? a3[0] : JSUndefined.INSTANCE;
+                                                new JSNativeFunction("onMapResolve", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                                    JSValue finalValue = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
                                                     result.push(finalValue);
                                                     fromAsyncArrayLikeStep(context, resultPromise, result, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
                                                     return JSUndefined.INSTANCE;
@@ -377,8 +377,8 @@ public final class ArrayConstructor {
                                                 null, context
                                         ),
                                         new JSPromise.ReactionRecord(
-                                                new JSNativeFunction("onMapReject", 1, (ctx3, t3, a3) -> {
-                                                    resultPromise.reject(a3.length > 0 ? a3[0] : JSUndefined.INSTANCE);
+                                                new JSNativeFunction("onMapReject", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                                    resultPromise.reject(innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE);
                                                     return JSUndefined.INSTANCE;
                                                 }),
                                                 null, context
@@ -394,8 +394,8 @@ public final class ArrayConstructor {
                         null, context
                 ),
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onValueReject", 1, (ctx2, t2, a2) -> {
-                            resultPromise.reject(a2.length > 0 ? a2[0] : JSUndefined.INSTANCE);
+                        new JSNativeFunction("onValueReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            resultPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         }),
                         null, context
@@ -412,9 +412,9 @@ public final class ArrayConstructor {
         if (JSTypeChecking.isConstructor(C)) {
             JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[0]);
             if (context.hasPendingException()) {
-                JSValue ex = context.getPendingException();
+                JSValue pendingException = context.getPendingException();
                 context.clearAllPendingExceptions();
-                resultPromise.reject(ex);
+                resultPromise.reject(pendingException);
                 return resultPromise;
             }
             A = (JSObject) constructed;
@@ -448,8 +448,8 @@ public final class ArrayConstructor {
                 JSPromise processingPromise = context.createJSPromise();
                 awaitPromise.addReactions(
                         new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onResolve", 1, (ctx2, t2, a2) -> {
-                                    JSValue resolved = a2.length > 0 ? a2[0] : JSUndefined.INSTANCE;
+                                new JSNativeFunction("onResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                                    JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
                                     // CreateDataPropertyOrThrow
                                     if (isArray) {
                                         ((JSArray) target).push(resolved);
@@ -470,10 +470,10 @@ public final class ArrayConstructor {
                         ),
                         new JSPromise.ReactionRecord(
                                 // IfAbruptCloseAsyncIterator: async mapFn rejection
-                                new JSNativeFunction("onReject", 1, (ctx2, t2, a2) -> {
+                                new JSNativeFunction("onReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                                     asyncIterator.close();
                                     context.processMicrotasks();
-                                    processingPromise.reject(a2.length > 0 ? a2[0] : JSUndefined.INSTANCE);
+                                    processingPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                                     return JSUndefined.INSTANCE;
                                 }),
                                 null,
@@ -504,7 +504,7 @@ public final class ArrayConstructor {
 
         iterationPromise.addReactions(
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onComplete", 1, (ctx2, t2, a2) -> {
+                        new JSNativeFunction("onComplete", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                             if (!isArray) {
                                 target.set(PropertyKey.LENGTH, JSNumber.of(index[0]));
                             }
@@ -515,8 +515,8 @@ public final class ArrayConstructor {
                         context
                 ),
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onError", 1, (ctx2, t2, a2) -> {
-                            resultPromise.reject(a2.length > 0 ? a2[0] : JSUndefined.INSTANCE);
+                        new JSNativeFunction("onError", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            resultPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         }),
                         null,
@@ -586,9 +586,9 @@ public final class ArrayConstructor {
     }
 
     private static JSValue consumePendingException(JSContext context) {
-        JSValue ex = context.getPendingException();
+        JSValue pendingException = context.getPendingException();
         context.clearAllPendingExceptions();
-        return ex;
+        return pendingException;
     }
 
     private static JSValue consumePendingExceptionOrCreateStringError(JSContext context, Exception e) {
@@ -605,20 +605,20 @@ public final class ArrayConstructor {
      * Otherwise, return an immediately fulfilled Promise.
      */
     private static JSPromise resolveThenable(JSContext context, JSValue value) {
-        if (value instanceof JSPromise p) {
-            return p;
+        if (value instanceof JSPromise promise) {
+            return promise;
         }
         if (value instanceof JSObject obj) {
             JSValue thenMethod = obj.get("then");
             if (thenMethod instanceof JSFunction thenFunc) {
                 JSPromise promise = context.createJSPromise();
                 thenFunc.call(context, value, new JSValue[]{
-                        new JSNativeFunction("resolve", 1, (ctx, thisArg, args) -> {
-                            promise.fulfill(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                        new JSNativeFunction("resolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            promise.fulfill(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         }),
-                        new JSNativeFunction("reject", 1, (ctx, thisArg, args) -> {
-                            promise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                        new JSNativeFunction("reject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            promise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         })
                 });

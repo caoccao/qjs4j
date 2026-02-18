@@ -35,6 +35,7 @@ public final class PropertyKey {
     public static final PropertyKey CONSTRUCTOR = fromString("constructor");
     public static final PropertyKey DONE = fromString("done");
     public static final PropertyKey ENUMERABLE = fromString("enumerable");
+    public static final PropertyKey ERROR = fromString("error");
     public static final PropertyKey GET = fromString("get");
     public static final PropertyKey HAS = fromString("has");
     public static final PropertyKey ITERATOR = fromString("iterator");
@@ -51,6 +52,7 @@ public final class PropertyKey {
     public static final PropertyKey RETURN = fromString("return");
     public static final PropertyKey SET = fromString("set");
     public static final PropertyKey SIZE = fromString("size");
+    public static final PropertyKey SUPPRESSED = fromString("suppressed");
     public static final PropertyKey SYMBOL = fromString("Symbol");
     public static final PropertyKey SYMBOL_ASYNC_DISPOSE = fromSymbol(JSSymbol.ASYNC_DISPOSE);
     public static final PropertyKey SYMBOL_ASYNC_ITERATOR = fromSymbol(JSSymbol.ASYNC_ITERATOR);
@@ -69,6 +71,7 @@ public final class PropertyKey {
     public static final PropertyKey SYMBOL_UNSCOPABLES = fromSymbol(JSSymbol.UNSCOPABLES);
     public static final PropertyKey THROW = fromString("throw");
     public static final PropertyKey TO_ISO_STRING = fromString("toISOString");
+    public static final PropertyKey TO_STRING = fromString("toString");
     public static final PropertyKey VALUE = fromString("value");
     public static final PropertyKey WRITABLE = fromString("writable");
     public static final PropertyKey ZERO = fromString("0");

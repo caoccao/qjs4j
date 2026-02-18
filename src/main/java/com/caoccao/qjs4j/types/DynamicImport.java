@@ -74,8 +74,8 @@ public final class DynamicImport {
             } catch (JSModule.ModuleLinkingException e) {
                 // Reject with a TypeError for linking errors
                 JSObject error = context.createJSObject();
-                error.set("name", new JSString("TypeError"));
-                error.set("message", new JSString("Cannot import module: " + e.getMessage()));
+                error.set(PropertyKey.NAME, new JSString("TypeError"));
+                error.set(PropertyKey.MESSAGE, new JSString("Cannot import module: " + e.getMessage()));
                 promise.reject(error);
             } catch (JSModule.ModuleEvaluationException e) {
                 // Reject with the JS exception if available
@@ -84,15 +84,15 @@ public final class DynamicImport {
                     promise.reject(jsException);
                 } else {
                     JSObject error = context.createJSObject();
-                    error.set("name", new JSString("Error"));
-                    error.set("message", new JSString("Module evaluation failed: " + e.getMessage()));
+                    error.set(PropertyKey.NAME, new JSString("Error"));
+                    error.set(PropertyKey.MESSAGE, new JSString("Module evaluation failed: " + e.getMessage()));
                     promise.reject(error);
                 }
             } catch (Exception e) {
                 // Reject with a generic error
                 JSObject error = context.createJSObject();
-                error.set("name", new JSString("Error"));
-                error.set("message", new JSString("Import failed: " + e.getMessage()));
+                error.set(PropertyKey.NAME, new JSString("Error"));
+                error.set(PropertyKey.MESSAGE, new JSString("Import failed: " + e.getMessage()));
                 promise.reject(error);
             }
         });

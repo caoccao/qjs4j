@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.exceptions;
 import com.caoccao.qjs4j.core.JSObject;
 import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.PropertyKey;
 
 /**
  * Exception thrown when JavaScript code throws an error.
@@ -34,8 +35,8 @@ public class JSException extends RuntimeException {
     public JSException(String name, String message, Throwable cause) {
         super(name + ": " + message, cause);
         JSObject errorObject = new JSObject();
-        errorObject.set("name", new JSString(name));
-        errorObject.set("message", new JSString(message));
+        errorObject.set(PropertyKey.NAME, new JSString(name));
+        errorObject.set(PropertyKey.MESSAGE, new JSString(message));
         errorValue = errorObject;
     }
 
@@ -53,8 +54,8 @@ public class JSException extends RuntimeException {
      */
     private static String formatErrorMessage(JSValue error) {
         if (error instanceof JSObject errorObj) {
-            JSValue nameValue = errorObj.get("name");
-            JSValue messageValue = errorObj.get("message");
+            JSValue nameValue = errorObj.get(PropertyKey.NAME);
+            JSValue messageValue = errorObj.get(PropertyKey.MESSAGE);
 
             String name = nameValue instanceof JSString ? ((JSString) nameValue).value() : "Error";
             String message = messageValue instanceof JSString ? ((JSString) messageValue).value() : "";

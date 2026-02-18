@@ -147,11 +147,11 @@ public final class JSBytecodeFunction extends JSFunction {
 
         // Every function (except arrow functions) has a prototype property
         if (prototype != null) {
-            this.set("prototype", prototype);
+            this.set(PropertyKey.PROTOTYPE, prototype);
         } else if (isConstructor) {
             JSObject funcPrototype = new JSObject();
-            funcPrototype.set("constructor", this);
-            this.set("prototype", funcPrototype);
+            funcPrototype.set(PropertyKey.CONSTRUCTOR, this);
+            this.set(PropertyKey.PROTOTYPE, funcPrototype);
         }
     }
 
@@ -177,8 +177,8 @@ public final class JSBytecodeFunction extends JSFunction {
             // Pending: chain reactions
             yieldedPromise.addReactions(
                     new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onResolve", 1, (ctx, thisArg, args) -> {
-                                JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            new JSNativeFunction("onResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                                JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
                                 JSObject iterResult = context.createJSObject();
                                 iterResult.set(PropertyKey.VALUE, resolved);
                                 iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
@@ -188,8 +188,8 @@ public final class JSBytecodeFunction extends JSFunction {
                             null, context
                     ),
                     new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onReject", 1, (ctx, thisArg, args) -> {
-                                promise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                            new JSNativeFunction("onReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                                promise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                                 return JSUndefined.INSTANCE;
                             }),
                             null, context
@@ -201,16 +201,16 @@ public final class JSBytecodeFunction extends JSFunction {
             JSValue thenMethod = obj.get("then");
             if (thenMethod instanceof JSFunction thenFunc) {
                 thenFunc.call(context, value, new JSValue[]{
-                        new JSNativeFunction("resolve", 1, (ctx, thisArg, args) -> {
-                            JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        new JSNativeFunction("resolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
                             JSObject iterResult = context.createJSObject();
                             iterResult.set(PropertyKey.VALUE, resolved);
                             iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
                             promise.fulfill(iterResult);
                             return JSUndefined.INSTANCE;
                         }),
-                        new JSNativeFunction("reject", 1, (ctx, thisArg, args) -> {
-                            promise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                        new JSNativeFunction("reject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            promise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         })
                 });
@@ -287,7 +287,7 @@ public final class JSBytecodeFunction extends JSFunction {
                     } else {
                         String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
                         JSObject errorObj = context.createJSObject();
-                        errorObj.set("message", new JSString(errorMessage));
+                        errorObj.set(PropertyKey.MESSAGE, new JSString(errorMessage));
                         promise.reject(errorObj);
                     }
                 }
@@ -315,14 +315,14 @@ public final class JSBytecodeFunction extends JSFunction {
             JSGenerator generatorObj = new JSGenerator(context, generatorState);
 
             // Set prototype: use this function's prototype property (which inherits from Generator.prototype)
-            JSValue funcPrototype = this.get("prototype");
+            JSValue funcPrototype = this.get(PropertyKey.PROTOTYPE);
             if (funcPrototype instanceof JSObject protoObj) {
                 generatorObj.setPrototype(protoObj);
             } else {
                 // Fallback: use Generator.prototype from context
-                JSObject gfp = context.getGeneratorFunctionPrototype();
-                if (gfp != null) {
-                    JSValue genProto = gfp.get("prototype");
+                JSObject generatorFunctionPrototype = context.getGeneratorFunctionPrototype();
+                if (generatorFunctionPrototype != null) {
+                    JSValue genProto = generatorFunctionPrototype.get(PropertyKey.PROTOTYPE);
                     if (genProto instanceof JSObject genProtoObj) {
                         generatorObj.setPrototype(genProtoObj);
                     }
@@ -357,7 +357,7 @@ public final class JSBytecodeFunction extends JSFunction {
                     // Create error object from exception message
                     String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
                     JSObject errorObj = context.createJSObject();
-                    errorObj.set("message", new JSString(errorMessage));
+                    errorObj.set(PropertyKey.MESSAGE, new JSString(errorMessage));
                     promise.reject(errorObj);
                 }
             } catch (Exception e) {
@@ -365,7 +365,7 @@ public final class JSBytecodeFunction extends JSFunction {
                 // and wrapped in a rejected promise
                 String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
                 JSObject errorObj = context.createJSObject();
-                errorObj.set("message", new JSString(errorMessage));
+                errorObj.set(PropertyKey.MESSAGE, new JSString(errorMessage));
                 promise.reject(errorObj);
             }
             return promise;

@@ -43,8 +43,8 @@ public final class JSAsyncIteratorHelper {
         JSAsyncIterator iterator = getAsyncIterator(iterable, context);
         if (iterator == null) {
             JSObject error = context.createJSObject();
-            error.set("name", new JSString("TypeError"));
-            error.set("message", new JSString("Object is not async iterable"));
+            error.set(PropertyKey.NAME, new JSString("TypeError"));
+            error.set(PropertyKey.MESSAGE, new JSString("Object is not async iterable"));
             completionPromise.reject(error);
             return completionPromise;
         }
@@ -174,7 +174,7 @@ public final class JSAsyncIteratorHelper {
                             // When processing completes, continue to next iteration
                             processingPromise.addReactions(
                                     new JSPromise.ReactionRecord(
-                                            new JSNativeFunction("onProcessed", 1, (innerContext, thisArg2, args2) -> {
+                                            new JSNativeFunction("onProcessed", 1, (innerContext, innerThisArg, innerArgs) -> {
                                                 // Continue iteration
                                                 iterateNext(iterator, callback, childContext, completionPromise);
                                                 return JSUndefined.INSTANCE;
@@ -183,9 +183,9 @@ public final class JSAsyncIteratorHelper {
                                             childContext
                                     ),
                                     new JSPromise.ReactionRecord(
-                                            new JSNativeFunction("onProcessError", 1, (innerContext, thisArg2, args2) -> {
+                                            new JSNativeFunction("onProcessError", 1, (innerContext, innerThisArg, innerArgs) -> {
                                                 // If processing fails, reject completion promise
-                                                JSValue error = args2.length > 0 ? args2[0] : JSUndefined.INSTANCE;
+                                                JSValue error = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
                                                 completionPromise.reject(error);
                                                 return JSUndefined.INSTANCE;
                                             }),

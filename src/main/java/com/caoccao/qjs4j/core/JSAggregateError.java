@@ -50,7 +50,7 @@ public final class JSAggregateError extends JSError {
         // Step 2: OrdinaryCreateFromConstructor(newTarget, "%AggregateError.prototype%")
         JSObject obj = new JSObject();
         context.transferPrototype(obj, NAME);
-        obj.set("name", new JSString(NAME));
+        obj.set(PropertyKey.NAME, new JSString(NAME));
 
         // Step 3: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
@@ -106,7 +106,7 @@ public final class JSAggregateError extends JSError {
                         childContext.transferPrototype(obj, NAME);
                     }
 
-                    obj.set("name", new JSString(NAME));
+                    obj.set(PropertyKey.NAME, new JSString(NAME));
 
                     // Step 3: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
                     if (childArgs.length > 1 && !(childArgs[1] instanceof JSUndefined)) {

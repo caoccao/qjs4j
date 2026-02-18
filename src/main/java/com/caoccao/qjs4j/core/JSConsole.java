@@ -223,8 +223,8 @@ public final class JSConsole {
 
     private String formatError(JSObject error) {
         JSValue stackValue = error.get("stack");
-        JSValue nameValue = error.get("name");
-        JSValue messageValue = error.get("message");
+        JSValue nameValue = error.get(PropertyKey.NAME);
+        JSValue messageValue = error.get(PropertyKey.MESSAGE);
         String name = nameValue instanceof JSString s ? s.value() : "Error";
         String message = messageValue instanceof JSString s ? s.value() : "";
         StringBuilder stringBuilder = new StringBuilder();

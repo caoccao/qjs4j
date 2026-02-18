@@ -1148,7 +1148,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     public boolean transferPrototype(JSObject receiver, JSObject constructor) {
-        JSValue prototype = constructor.get("prototype");
+        JSValue prototype = constructor.get(PropertyKey.PROTOTYPE);
         if (prototype instanceof JSObject) {
             receiver.setPrototype((JSObject) prototype);
             return true;

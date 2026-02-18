@@ -534,7 +534,7 @@ public final class ObjectPrototype {
             return context.throwTypeError("Object.prototype.toLocaleString called on null or undefined");
         }
 
-        JSValue toStringMethod = obj.get("toString");
+        JSValue toStringMethod = obj.get(PropertyKey.TO_STRING);
         if (toStringMethod instanceof JSFunction func) {
             return func.call(context, thisArg, new JSValue[]{});
         }

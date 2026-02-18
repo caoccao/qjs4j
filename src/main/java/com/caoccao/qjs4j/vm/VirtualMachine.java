@@ -170,7 +170,7 @@ public final class VirtualMachine {
                     JSValue exception = context.getPendingException();
                     String errorMessage = "Unhandled exception in constructor";
                     if (exception instanceof JSObject errorObj) {
-                        JSValue messageValue = errorObj.get("message");
+                        JSValue messageValue = errorObj.get(PropertyKey.MESSAGE);
                         if (messageValue instanceof JSString messageString) {
                             errorMessage = messageString.value();
                         }

@@ -261,7 +261,7 @@ public final class PromiseConstructor {
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
         if (value instanceof JSPromise jsPromise) {
-            JSValue constructor = jsPromise.get("constructor");
+            JSValue constructor = jsPromise.get(PropertyKey.CONSTRUCTOR);
             if (constructor == thisArg) {
                 return jsPromise;
             }

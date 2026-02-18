@@ -552,7 +552,7 @@ public non-sealed class JSObject implements JSValue {
         // Get constructor name if available
         JSValue constructor = get("constructor");
         if (constructor instanceof JSFunction constructorFunc) {
-            JSValue name = constructorFunc.get("name");
+            JSValue name = constructorFunc.get(PropertyKey.NAME);
             if (name instanceof JSString nameStr && !nameStr.value().isEmpty()) {
                 return prefix + "#<" + nameStr.value() + ">" + suffix;
             }

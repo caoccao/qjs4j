@@ -46,7 +46,7 @@ public final class RegExpPrototype {
             return context.throwTypeError("RegExp.prototype.compile called on non-RegExp");
         }
         JSValue realmRegExpConstructor = context.getGlobalObject().get("RegExp");
-        JSValue receiverConstructor = regexp.get("constructor");
+        JSValue receiverConstructor = regexp.get(PropertyKey.CONSTRUCTOR);
         if (realmRegExpConstructor != receiverConstructor) {
             return context.throwTypeError("RegExp.prototype.compile called on incompatible receiver");
         }

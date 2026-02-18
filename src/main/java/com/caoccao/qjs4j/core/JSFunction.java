@@ -63,13 +63,13 @@ public abstract sealed class JSFunction extends JSObject
         if (this instanceof JSBytecodeFunction bytecodeFunc) {
             // For async generator functions, use AsyncGeneratorFunction.prototype
             if (bytecodeFunc.isGenerator() && bytecodeFunc.isAsync()) {
-                JSObject agfp = context.getAsyncGeneratorFunctionPrototype();
-                if (agfp != null) {
-                    this.setPrototype(agfp);
+                JSObject asyncGeneratorFunctionPrototype = context.getAsyncGeneratorFunctionPrototype();
+                if (asyncGeneratorFunctionPrototype != null) {
+                    this.setPrototype(asyncGeneratorFunctionPrototype);
                     // Set up the function's own "prototype" property:
                     // Each async generator function gets a prototype object
                     // that inherits from AsyncGenerator.prototype (writable, not configurable)
-                    JSValue asyncGenProto = agfp.get("prototype");
+                    JSValue asyncGenProto = asyncGeneratorFunctionPrototype.get(PropertyKey.PROTOTYPE);
                     if (asyncGenProto instanceof JSObject asyncGenProtoObj) {
                         JSObject funcPrototype = new JSObject();
                         funcPrototype.setPrototype(asyncGenProtoObj);
@@ -81,13 +81,13 @@ public abstract sealed class JSFunction extends JSObject
             }
             // For sync generator functions, use GeneratorFunction.prototype
             if (bytecodeFunc.isGenerator() && !bytecodeFunc.isAsync()) {
-                JSObject gfp = context.getGeneratorFunctionPrototype();
-                if (gfp != null) {
-                    this.setPrototype(gfp);
+                JSObject generatorFunctionPrototype = context.getGeneratorFunctionPrototype();
+                if (generatorFunctionPrototype != null) {
+                    this.setPrototype(generatorFunctionPrototype);
                     // Set up the function's own "prototype" property:
                     // In QuickJS, each generator function gets a prototype object
                     // that inherits from Generator.prototype (writable, not configurable)
-                    JSValue genProto = gfp.get("prototype");
+                    JSValue genProto = generatorFunctionPrototype.get(PropertyKey.PROTOTYPE);
                     if (genProto instanceof JSObject genProtoObj) {
                         JSObject funcPrototype = new JSObject();
                         funcPrototype.setPrototype(genProtoObj);
@@ -109,7 +109,7 @@ public abstract sealed class JSFunction extends JSObject
         // JSBytecodeFunction creates .prototype with new JSObject() which has [[Prototype]] = null,
         // because the context is not available at construction time.
         if (this instanceof JSBytecodeFunction) {
-            JSValue protoVal = this.get("prototype");
+            JSValue protoVal = this.get(PropertyKey.PROTOTYPE);
             if (protoVal instanceof JSObject protoObj && protoObj.getPrototype() == null) {
                 context.transferPrototype(protoObj, JSObject.NAME);
             }

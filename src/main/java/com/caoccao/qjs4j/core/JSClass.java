@@ -67,10 +67,10 @@ public final class JSClass extends JSFunction {
         }
 
         // Set constructor property on prototype
-        this.prototype.set("constructor", this);
+        this.prototype.set(PropertyKey.CONSTRUCTOR, this);
 
         // Set prototype property on class
-        this.set("prototype", prototype);
+        this.set(PropertyKey.PROTOTYPE, prototype);
     }
 
     /**

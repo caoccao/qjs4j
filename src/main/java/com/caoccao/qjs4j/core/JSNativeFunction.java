@@ -73,8 +73,8 @@ public final class JSNativeFunction extends JSFunction {
         // Native functions have a prototype property only if they are constructors
         if (isConstructor) {
             JSObject funcPrototype = new JSObject();
-            funcPrototype.set("constructor", this);
-            this.set("prototype", funcPrototype);
+            funcPrototype.set(PropertyKey.CONSTRUCTOR, this);
+            this.set(PropertyKey.PROTOTYPE, funcPrototype);
         }
     }
 

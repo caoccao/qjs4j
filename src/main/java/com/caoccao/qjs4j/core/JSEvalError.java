@@ -53,7 +53,7 @@ public final class JSEvalError extends JSError {
         // EvalError.prototype.[[Prototype]] = Error.prototype (ES2024 20.5.5.1)
         context.transferPrototype(errorPrototype, JSError.NAME);
 
-        errorPrototype.set("toString", new JSNativeFunction("toString", 0, JSError::errorToString));
+        errorPrototype.set(PropertyKey.TO_STRING, new JSNativeFunction("toString", 0, JSError::errorToString));
 
         // Standard Error(message)
         int length = 1;
@@ -71,7 +71,7 @@ public final class JSEvalError extends JSError {
                     }
 
                     // Set name property
-                    obj.set("name", new JSString(NAME));
+                    obj.set(PropertyKey.NAME, new JSString(NAME));
 
                     // Standard error: new Error(message, options)
                     if (childArgs.length > 0 && !(childArgs[0] instanceof JSUndefined)) {
@@ -89,10 +89,10 @@ public final class JSEvalError extends JSError {
                     return JSUndefined.INSTANCE;
                 },
                 true);
-        errorConstructor.set("prototype", errorPrototype);
+        errorConstructor.set(PropertyKey.PROTOTYPE, errorPrototype);
 
         // Set constructor property on prototype
-        errorPrototype.set("constructor", errorConstructor);
+        errorPrototype.set(PropertyKey.CONSTRUCTOR, errorConstructor);
 
         return errorConstructor;
     }

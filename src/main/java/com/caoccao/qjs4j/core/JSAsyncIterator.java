@@ -83,12 +83,12 @@ public class JSAsyncIterator extends JSObject {
             return null;
         }
         JSValue result = returnFunc.call(context, iter, new JSValue[0]);
-        if (result instanceof JSPromise p) {
-            return p;
+        if (result instanceof JSPromise promise) {
+            return promise;
         }
-        JSPromise p = context.createJSPromise();
-        p.fulfill(result != null ? result : JSUndefined.INSTANCE);
-        return p;
+        JSPromise promise = context.createJSPromise();
+        promise.fulfill(result != null ? result : JSUndefined.INSTANCE);
+        return promise;
     }
 
     /**
@@ -108,8 +108,8 @@ public class JSAsyncIterator extends JSObject {
             JSPromise resultPromise = context.createJSPromise();
             promiseValue.addReactions(
                     new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onResolve", 1, (ctx, thisArg, args) -> {
-                                JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            new JSNativeFunction("onResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                                JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
                                 JSObject result = context.createJSObject();
                                 result.set(PropertyKey.VALUE, resolved);
                                 result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
@@ -120,8 +120,8 @@ public class JSAsyncIterator extends JSObject {
                             context
                     ),
                     new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onReject", 1, (ctx, thisArg, args) -> {
-                                resultPromise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                            new JSNativeFunction("onReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                                resultPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                                 return JSUndefined.INSTANCE;
                             }),
                             null,
@@ -135,16 +135,16 @@ public class JSAsyncIterator extends JSObject {
             if (thenMethod instanceof JSFunction thenFunc) {
                 JSPromise resultPromise = context.createJSPromise();
                 thenFunc.call(context, value, new JSValue[]{
-                        new JSNativeFunction("resolve", 1, (ctx, thisArg, args) -> {
-                            JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        new JSNativeFunction("resolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
                             JSObject result = context.createJSObject();
                             result.set(PropertyKey.VALUE, resolved);
                             result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
                             resultPromise.fulfill(result);
                             return JSUndefined.INSTANCE;
                         }),
-                        new JSNativeFunction("reject", 1, (ctx, thisArg, args) -> {
-                            resultPromise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                        new JSNativeFunction("reject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            resultPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         })
                 });

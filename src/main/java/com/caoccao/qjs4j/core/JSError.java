@@ -47,8 +47,8 @@ public sealed class JSError extends JSObject permits
     public JSError(JSContext context, String name, String message) {
         super();
         this.context = context;
-        set("name", new JSString(name));
-        set("message", new JSString(message));
+        set(PropertyKey.NAME, new JSString(name));
+        set(PropertyKey.MESSAGE, new JSString(message));
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -65,7 +65,7 @@ public sealed class JSError extends JSObject permits
         // Error.prototype.[[Prototype]] = Object.prototype (ES2024 20.5.3)
         context.transferPrototype(errorPrototype, JSObject.NAME);
 
-        errorPrototype.set("toString", new JSNativeFunction("toString", 0, JSError::errorToString));
+        errorPrototype.set(PropertyKey.TO_STRING, new JSNativeFunction("toString", 0, JSError::errorToString));
 
         // Standard Error(message)
         int length = 1;
@@ -83,7 +83,7 @@ public sealed class JSError extends JSObject permits
                     }
 
                     // Set name property
-                    obj.set("name", new JSString(NAME));
+                    obj.set(PropertyKey.NAME, new JSString(NAME));
 
                     // Standard error: new Error(message, options)
                     // Step 3: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
@@ -102,10 +102,10 @@ public sealed class JSError extends JSObject permits
                     return JSUndefined.INSTANCE;
                 },
                 true);
-        errorConstructor.set("prototype", errorPrototype);
+        errorConstructor.set(PropertyKey.PROTOTYPE, errorPrototype);
 
         // Set constructor property on prototype
-        errorPrototype.set("constructor", errorConstructor);
+        errorPrototype.set(PropertyKey.CONSTRUCTOR, errorConstructor);
 
         return errorConstructor;
     }
@@ -115,8 +115,8 @@ public sealed class JSError extends JSObject permits
             return new JSString("[object Object]");
         }
 
-        JSValue nameValue = error.get("name");
-        JSValue messageValue = error.get("message");
+        JSValue nameValue = error.get(PropertyKey.NAME);
+        JSValue messageValue = error.get(PropertyKey.MESSAGE);
 
         String name = nameValue instanceof JSString ? ((JSString) nameValue).value() : "Error";
         String message = messageValue instanceof JSString ? ((JSString) messageValue).value() : "";
@@ -155,14 +155,14 @@ public sealed class JSError extends JSObject permits
      * Get the error message.
      */
     public JSString getMessage() {
-        return JSTypeConversions.toString(context, get("message"));
+        return JSTypeConversions.toString(context, get(PropertyKey.MESSAGE));
     }
 
     /**
      * Get the error name.
      */
     public JSString getName() {
-        return JSTypeConversions.toString(context, get("name"));
+        return JSTypeConversions.toString(context, get(PropertyKey.NAME));
     }
 
     @Override

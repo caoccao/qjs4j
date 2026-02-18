@@ -136,8 +136,8 @@ public final class JSAsyncGenerator extends JSObject {
             // Generator is already running - queue this request
             JSPromise promise = context.createJSPromise();
             JSObject error = context.createJSObject();
-            error.set("name", new JSString("TypeError"));
-            error.set("message", new JSString("Generator is already executing"));
+            error.set(PropertyKey.NAME, new JSString("TypeError"));
+            error.set(PropertyKey.MESSAGE, new JSString("Generator is already executing"));
             promise.reject(error);
             return promise;
         }

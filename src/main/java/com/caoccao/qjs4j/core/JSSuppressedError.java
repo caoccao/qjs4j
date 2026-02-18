@@ -49,8 +49,8 @@ public final class JSSuppressedError extends JSError {
      */
     public JSSuppressedError(JSContext context, JSValue error, JSValue suppressed, String message) {
         super(context, NAME, message);
-        set("error", error);
-        set("suppressed", suppressed);
+        set(PropertyKey.ERROR, error);
+        set(PropertyKey.SUPPRESSED, suppressed);
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -71,7 +71,7 @@ public final class JSSuppressedError extends JSError {
         // SuppressedError.prototype.[[Prototype]] = Error.prototype (ES2024 20.5.5.1)
         context.transferPrototype(errorPrototype, JSError.NAME);
 
-        errorPrototype.set("toString", new JSNativeFunction("toString", 0, JSError::errorToString));
+        errorPrototype.set(PropertyKey.TO_STRING, new JSNativeFunction("toString", 0, JSError::errorToString));
 
         // SuppressedError(error, suppressed, message)
         int length = 3;
@@ -89,13 +89,13 @@ public final class JSSuppressedError extends JSError {
                     }
 
                     // Set name property
-                    obj.set("name", new JSString(NAME));
+                    obj.set(PropertyKey.NAME, new JSString(NAME));
 
                     // SuppressedError: new SuppressedError(error, suppressed, message, options)
                     JSValue error = childArgs.length > 0 ? childArgs[0] : JSUndefined.INSTANCE;
                     JSValue suppressed = childArgs.length > 1 ? childArgs[1] : JSUndefined.INSTANCE;
-                    obj.set("error", error);
-                    obj.set("suppressed", suppressed);
+                    obj.set(PropertyKey.ERROR, error);
+                    obj.set(PropertyKey.SUPPRESSED, suppressed);
 
                     // If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
                     if (childArgs.length > 2 && !(childArgs[2] instanceof JSUndefined)) {
@@ -113,10 +113,10 @@ public final class JSSuppressedError extends JSError {
                     return JSUndefined.INSTANCE;
                 },
                 true);
-        errorConstructor.set("prototype", errorPrototype);
+        errorConstructor.set(PropertyKey.PROTOTYPE, errorPrototype);
 
         // Set constructor property on prototype
-        errorPrototype.set("constructor", errorConstructor);
+        errorPrototype.set(PropertyKey.CONSTRUCTOR, errorConstructor);
 
         return errorConstructor;
     }
@@ -125,13 +125,13 @@ public final class JSSuppressedError extends JSError {
      * Get the main error.
      */
     public JSValue getError() {
-        return get("error");
+        return get(PropertyKey.ERROR);
     }
 
     /**
      * Get the suppressed error.
      */
     public JSValue getSuppressed() {
-        return get("suppressed");
+        return get(PropertyKey.SUPPRESSED);
     }
 }
