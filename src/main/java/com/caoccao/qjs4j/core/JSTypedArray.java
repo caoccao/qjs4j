@@ -136,28 +136,28 @@ public abstract class JSTypedArray extends JSObject {
         return (int) length;
     }
 
-    protected static int toTypedArrayIndex(JSContext context, JSValue value, int bytesPerElement) {
+    protected static int toTypedArrayBufferDefaultLength(JSArrayBufferable buffer, int byteOffset, int bytesPerElement) {
+        int remainingBytes = buffer.getByteLength() - byteOffset;
+        if (remainingBytes < 0 || remainingBytes % bytesPerElement != 0) {
+            throw new JSRangeErrorException("invalid length");
+        }
+        return remainingBytes / bytesPerElement;
+    }
+
+    protected static int toTypedArrayBufferLength(JSContext context, JSValue value, int bytesPerElement) {
         return toTypedArrayLengthChecked(JSTypeConversions.toIndex(context, value), bytesPerElement);
     }
 
-    protected static int toTypedArrayLength(JSContext context, JSValue value, int bytesPerElement) {
-        return toTypedArrayLengthChecked(
-                JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, value)),
-                bytesPerElement);
+    protected static int toTypedArrayByteOffset(JSContext context, JSValue value) {
+        long offset = JSTypeConversions.toIndex(context, value);
+        if (offset > Integer.MAX_VALUE) {
+            throw new JSRangeErrorException("invalid offset");
+        }
+        return (int) offset;
     }
 
-    protected static int toTypedArrayLength(long length, int bytesPerElement) {
-        return toTypedArrayLengthChecked(length, bytesPerElement);
-    }
-
-    private static int toTypedArrayLengthChecked(long length, int bytesPerElement) {
-        if (length < 0 || length > Integer.MAX_VALUE) {
-            throw new JSRangeErrorException("invalid length");
-        }
-        if (length > Integer.MAX_VALUE / (long) bytesPerElement) {
-            throw new JSRangeErrorException("invalid array buffer length");
-        }
-        return (int) length;
+    protected static int toTypedArrayIndex(JSContext context, JSValue value, int bytesPerElement) {
+        return toTypedArrayLengthChecked(JSTypeConversions.toIndex(context, value), bytesPerElement);
     }
 
     /**
@@ -194,6 +194,26 @@ public abstract class JSTypedArray extends JSObject {
             // not a valid index
         }
         return -1;
+    }
+
+    protected static int toTypedArrayLength(JSContext context, JSValue value, int bytesPerElement) {
+        return toTypedArrayLengthChecked(
+                JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, value)),
+                bytesPerElement);
+    }
+
+    protected static int toTypedArrayLength(long length, int bytesPerElement) {
+        return toTypedArrayLengthChecked(length, bytesPerElement);
+    }
+
+    private static int toTypedArrayLengthChecked(long length, int bytesPerElement) {
+        if (length < 0 || length > Integer.MAX_VALUE) {
+            throw new JSRangeErrorException("invalid length");
+        }
+        if (length > Integer.MAX_VALUE / (long) bytesPerElement) {
+            throw new JSRangeErrorException("invalid array buffer length");
+        }
+        return (int) length;
     }
 
     /**

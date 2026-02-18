@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 
@@ -51,15 +53,21 @@ public final class JSBigUint64Array extends JSTypedArray {
             if (firstArg instanceof JSNumber lengthNum) {
                 length = toTypedArrayIndex(context, lengthNum, BYTES_PER_ELEMENT);
             } else if (firstArg instanceof JSArrayBufferable jsArrayBufferable) {
-                length = -1;
                 int byteOffset = 0;
                 if (args.length >= 2) {
-                    byteOffset = (int) JSTypeConversions.toInteger(context, args[1]);
+                    byteOffset = toTypedArrayByteOffset(context, args[1]);
+                }
+                if (byteOffset % BYTES_PER_ELEMENT != 0 || byteOffset > jsArrayBufferable.getByteLength()) {
+                    throw new JSRangeErrorException("invalid offset");
                 }
                 if (args.length >= 3) {
-                    length = toTypedArrayLength(context, args[2], BYTES_PER_ELEMENT);
+                    if (!(args[2] instanceof JSUndefined)) {
+                        length = toTypedArrayBufferLength(context, args[2], BYTES_PER_ELEMENT);
+                        return context.createJSBigUint64Array(jsArrayBufferable, byteOffset, length);
+                    }
                 }
-                return context.createJSBigUint64Array(jsArrayBufferable, byteOffset, length >= 0 ? length : jsArrayBufferable.getByteLength() / BYTES_PER_ELEMENT);
+                length = toTypedArrayBufferDefaultLength(jsArrayBufferable, byteOffset, BYTES_PER_ELEMENT);
+                return context.createJSBigUint64Array(jsArrayBufferable, byteOffset, length);
             } else if (firstArg instanceof JSTypedArray jsTypedArray) {
                 length = jsTypedArray.getLength();
                 JSTypedArray newTypedArray = context.createJSBigUint64Array(length);
