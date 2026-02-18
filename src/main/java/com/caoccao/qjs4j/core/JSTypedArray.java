@@ -261,9 +261,14 @@ public abstract class JSTypedArray extends JSObject {
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
-                JSValue value = srcArray.get(i);
-                double numVal = JSTypeConversions.toNumber(context, value).value();
-                setElement(offset + i, numVal);
+                JSValue value = srcArray.get(PropertyKey.fromIndex(i), context);
+                if (context != null && context.hasPendingException()) {
+                    return;
+                }
+                setJSElement(offset + i, value, context);
+                if (context != null && context.hasPendingException()) {
+                    return;
+                }
             }
         } else if (source instanceof JSTypedArray srcTyped) {
             int srcLength = srcTyped.getLength();
@@ -271,22 +276,38 @@ public abstract class JSTypedArray extends JSObject {
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
-                setElement(offset + i, srcTyped.getElement(i));
+                setJSElement(offset + i, srcTyped.getJSElement(i), context);
+                if (context != null && context.hasPendingException()) {
+                    return;
+                }
             }
         } else if (source instanceof JSIterator jsIterator) {
             JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
+            if (context != null && context.hasPendingException()) {
+                return;
+            }
             setArray(context, jsArray, offset);
         } else if (source instanceof JSObject srcObject) {
-            int srcLength = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, srcObject.get("length")));
+            JSValue lengthValue = srcObject.get(PropertyKey.LENGTH, context);
+            if (context != null && context.hasPendingException()) {
+                return;
+            }
+            int srcLength = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, lengthValue));
+            if (context != null && context.hasPendingException()) {
+                return;
+            }
             if (offset + srcLength > length) {
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
-                JSValue value = srcObject.get(i);
-                if (value.isUndefined()) {
-                    value = srcObject.get(String.valueOf(i));
+                JSValue value = srcObject.get(PropertyKey.fromIndex(i), context);
+                if (context != null && context.hasPendingException()) {
+                    return;
                 }
-                setElement(offset + i, JSTypeConversions.toNumber(context, value).value());
+                setJSElement(offset + i, value, context);
+                if (context != null && context.hasPendingException()) {
+                    return;
+                }
             }
         }
     }

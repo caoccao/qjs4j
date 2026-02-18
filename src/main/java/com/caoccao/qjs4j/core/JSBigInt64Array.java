@@ -74,11 +74,10 @@ public final class JSBigInt64Array extends JSTypedArray {
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSObject jsObject) {
-                length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, jsObject.get("length")));
+                JSValue lengthValue = jsObject.get(PropertyKey.LENGTH, context);
+                length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, lengthValue));
                 JSTypedArray jsTypedArray = new JSBigInt64Array(length);
-                for (int i = 0; i < length; i++) {
-                    jsTypedArray.setElement(i, JSTypeConversions.toNumber(context, jsObject.get(i)).value());
-                }
+                jsTypedArray.setArray(context, jsObject, 0);
                 return jsTypedArray;
             } else {
                 length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, firstArg));
