@@ -157,20 +157,6 @@ public final class JSReflectObject {
             return result instanceof JSObject ? result : thisObject;
         }
 
-        // Per ES spec, GetPrototypeFromConstructor(newTarget) must happen BEFORE
-        // creating the object. This ensures prototype getter side-effects (including
-        // throws) occur at the right time. (QuickJS: js_create_from_ctor)
-        JSObject resolvedPrototype = null;
-        if (newTarget instanceof JSObject newTargetObject) {
-            JSValue proto = newTargetObject.get(PropertyKey.PROTOTYPE, context);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (proto instanceof JSObject protoObj) {
-                resolvedPrototype = protoObj;
-            }
-        }
-
         JSObject result;
         try {
             result = constructorType.create(context, args);
@@ -180,7 +166,22 @@ public final class JSReflectObject {
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
+
+        // Per ES spec and QuickJS (js_create_from_ctor), resolve the prototype
+        // from newTarget AFTER argument processing so that argument errors
+        // (e.g. ToIndex(Symbol) → TypeError) are thrown before accessing
+        // newTarget.prototype.
         if (result != null && !result.isError() && !result.isProxy()) {
+            JSObject resolvedPrototype = null;
+            if (newTarget instanceof JSObject newTargetObject) {
+                JSValue proto = newTargetObject.get(PropertyKey.PROTOTYPE, context);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (proto instanceof JSObject protoObj) {
+                    resolvedPrototype = protoObj;
+                }
+            }
             if (resolvedPrototype != null) {
                 result.setPrototype(resolvedPrototype);
             } else {

@@ -189,18 +189,6 @@ public final class VirtualMachine {
             return thisObject;
         }
 
-        JSObject resolvedPrototype = null;
-        if (newTarget instanceof JSObject newTargetObject) {
-            JSValue proto = newTargetObject.get(PropertyKey.PROTOTYPE, context);
-            if (context.hasPendingException()) {
-                throw new JSVirtualMachineException(context.getPendingException().toString(),
-                        context.getPendingException());
-            }
-            if (proto instanceof JSObject protoObj) {
-                resolvedPrototype = protoObj;
-            }
-        }
-
         JSObject result = null;
         switch (constructorType) {
             case AGGREGATE_ERROR,
@@ -251,7 +239,23 @@ public final class VirtualMachine {
                 }
             }
         }
+
+        // Per ES spec and QuickJS (js_create_from_ctor), resolve the prototype
+        // from newTarget AFTER argument processing so that argument errors
+        // (e.g. ToIndex(Symbol) → TypeError) are thrown before accessing
+        // newTarget.prototype.
         if (result != null && !result.isError() && !result.isProxy()) {
+            JSObject resolvedPrototype = null;
+            if (newTarget instanceof JSObject newTargetObject) {
+                JSValue proto = newTargetObject.get(PropertyKey.PROTOTYPE, context);
+                if (context.hasPendingException()) {
+                    throw new JSVirtualMachineException(context.getPendingException().toString(),
+                            context.getPendingException());
+                }
+                if (proto instanceof JSObject protoObj) {
+                    resolvedPrototype = protoObj;
+                }
+            }
             if (resolvedPrototype != null) {
                 result.setPrototype(resolvedPrototype);
             } else {
