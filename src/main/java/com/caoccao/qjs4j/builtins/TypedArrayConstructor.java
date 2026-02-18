@@ -65,10 +65,22 @@ public final class TypedArrayConstructor {
                 sourceArray = context.createJSArray();
                 while (true) {
                     JSObject result = JSIteratorHelper.iteratorNext(iterator, context);
-                    if (result == null) break;
-                    JSValue doneValue = result.get("done");
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
+                    if (result == null) {
+                        break;
+                    }
+                    JSValue doneValue = result.get(PropertyKey.DONE, context);
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
                     if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) break;
-                    sourceArray.push(result.get("value"));
+                    JSValue value = result.get(PropertyKey.VALUE, context);
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
+                    sourceArray.push(value);
                 }
             } else if (iteratorMethod != null
                     && !(iteratorMethod instanceof JSUndefined)

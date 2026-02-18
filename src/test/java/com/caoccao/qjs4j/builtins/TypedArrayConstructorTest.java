@@ -20,13 +20,42 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testBigIntTypedArrayFromIteratorValueAccessorError() {
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                        function Test262Error() {}
+                        let count = 0;
+                        const iter = {
+                          [Symbol.iterator]() {
+                            return {
+                              next() {
+                                count++;
+                                if (count > 1) { return { done: true }; }
+                                const result = { done: false };
+                                Object.defineProperty(result, 'value', {
+                                  get() { throw new Test262Error(); }
+                                });
+                                return result;
+                              }
+                            };
+                          }
+                        };
+                        try { BigInt64Array.from(iter); return false; } catch (e) { if (!(e instanceof Test262Error)) return false; }
+                        count = 0;
+                        try { BigUint64Array.from(iter); return false; } catch (e) { return e instanceof Test262Error; }
+                        })()""");
+    }
+
+    @Test
     public void testBigIntTypedArrayIterableAbruptCompletion() {
         assertBooleanWithJavet(
-                "(() => {" +
-                        "function Test262Error(message) { this.message = message || ''; }" +
-                        "var obj = (function*() { yield 0; throw new Test262Error('boom'); })();" +
-                        "try { new BigInt64Array(obj); return false; } catch (e) { return e instanceof Test262Error; }" +
-                        "})()");
+                """
+                        (() => {
+                        function Test262Error(message) { this.message = message || ''; }
+                        var obj = (function*() { yield 0; throw new Test262Error('boom'); })();
+                        try { new BigInt64Array(obj); return false; } catch (e) { return e instanceof Test262Error; }
+                        })()""");
     }
 
     @Test
@@ -61,11 +90,12 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
     @Test
     public void testDescriptorsAndAliases() {
         assertStringWithJavet(
-                "(() => {" +
-                        "const c = Object.getOwnPropertyDescriptor(Uint8Array, 'BYTES_PER_ELEMENT');" +
-                        "const p = Object.getOwnPropertyDescriptor(Uint8Array.prototype, 'BYTES_PER_ELEMENT');" +
-                        "return [c.value, c.writable, c.enumerable, c.configurable, p.value, p.writable, p.enumerable, p.configurable].join(',');" +
-                        "})()",
+                """
+                        (() => {
+                        const c = Object.getOwnPropertyDescriptor(Uint8Array, 'BYTES_PER_ELEMENT');
+                        const p = Object.getOwnPropertyDescriptor(Uint8Array.prototype, 'BYTES_PER_ELEMENT');
+                        return [c.value, c.writable, c.enumerable, c.configurable, p.value, p.writable, p.enumerable, p.configurable].join(',');
+                        })()""",
                 "(() => Uint8Array.prototype.toString === Array.prototype.toString)().toString()",
                 "(() => Uint8Array.prototype[Symbol.iterator] === Uint8Array.prototype.values)().toString()");
     }
