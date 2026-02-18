@@ -123,7 +123,10 @@ public final class JSBigUint64Array extends JSTypedArray {
     @Override
     protected void setJSElement(int index, JSValue value, JSContext context) {
         long longVal = JSTypeConversions.toBigInt64(context, value);
-        setElement(index, longVal);
+        checkIndex(index);
+        ByteBuffer buf = getByteBuffer();
+        // Write raw 64-bit modulo value directly to avoid precision loss via double.
+        buf.putLong(index * BYTES_PER_ELEMENT, longVal);
     }
 
     @Override

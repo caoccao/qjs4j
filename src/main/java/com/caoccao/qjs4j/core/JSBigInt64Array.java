@@ -112,7 +112,10 @@ public final class JSBigInt64Array extends JSTypedArray {
     @Override
     protected void setJSElement(int index, JSValue value, JSContext context) {
         long longVal = JSTypeConversions.toBigInt64(context, value);
-        setElement(index, longVal);
+        checkIndex(index);
+        ByteBuffer buf = getByteBuffer();
+        // Write raw signed 64-bit value directly to avoid precision loss via double.
+        buf.putLong(index * BYTES_PER_ELEMENT, longVal);
     }
 
     @Override
