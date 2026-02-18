@@ -62,9 +62,7 @@ public final class JSSuppressedError extends JSError {
             JSString messageStr = JSTypeConversions.toString(context, args[2]);
             message = messageStr.value();
         }
-        JSObject jsObject = new JSSuppressedError(context, error, suppressed, message);
-        context.transferPrototype(jsObject, NAME);
-        return jsObject;
+        return context.createJSSuppressedError(error, suppressed, message);
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {

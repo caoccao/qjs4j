@@ -102,9 +102,7 @@ public final class JSDate extends JSObject {
             }
             timeValue = setDateFieldsChecked(fields, true);
         }
-        JSDate jsDate = new JSDate(timeValue);
-        context.transferPrototype(jsDate, NAME);
-        return jsDate;
+        return context.createJSDate(timeValue);
     }
 
     public static long dateNow() {

@@ -50,7 +50,7 @@ public final class JSPromise extends JSObject {
             return context.throwTypeError("Promise constructor requires an executor function");
         }
         // Create Promise object
-        JSPromise jsPromise = new JSPromise();
+        JSPromise jsPromise = context.createJSPromise();
         final ResolveState resolveState = new ResolveState();
         // Create resolve and reject functions
         JSNativeFunction resolveFunc = new JSNativeFunction("resolve", 1,

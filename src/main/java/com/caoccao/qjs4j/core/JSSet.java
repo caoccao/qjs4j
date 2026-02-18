@@ -56,8 +56,7 @@ public final class JSSet extends JSObject {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        JSSet setObj = new JSSet();
-        context.transferPrototype(setObj, NAME);
+        JSSet setObj = context.createJSSet();
 
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];

@@ -123,9 +123,7 @@ public final class JSDataView extends JSObject {
             return context.throwRangeError("byteOffset + byteLength out of range");
         }
 
-        JSObject jsObject = new JSDataView(buffer, byteOffset, byteLength);
-        context.transferPrototype(jsObject, NAME);
-        return jsObject;
+        return context.createJSDataView(buffer, byteOffset, byteLength);
     }
 
     private static JSObject getPendingExceptionAsObject(JSContext context) {

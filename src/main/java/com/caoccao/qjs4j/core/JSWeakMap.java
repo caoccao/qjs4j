@@ -55,8 +55,7 @@ public final class JSWeakMap extends JSObject {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        JSWeakMap weakMapObj = new JSWeakMap();
-        context.transferPrototype(weakMapObj, NAME);
+        JSWeakMap weakMapObj = context.createJSWeakMap();
 
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];

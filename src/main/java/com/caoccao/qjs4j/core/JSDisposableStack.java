@@ -40,9 +40,7 @@ public final class JSDisposableStack extends JSObject {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        JSDisposableStack stack = new JSDisposableStack();
-        context.transferPrototype(stack, NAME);
-        return stack;
+        return context.createJSDisposableStack();
     }
 
     public JSValue adopt(JSContext context, JSValue value, JSValue onDispose) {

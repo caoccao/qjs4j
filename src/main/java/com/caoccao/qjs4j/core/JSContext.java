@@ -288,7 +288,7 @@ public final class JSContext implements AutoCloseable {
      */
     public JSDataView createJSDataView(JSArrayBuffer buffer, int byteOffset, int byteLength) {
         JSDataView jsDataView = new JSDataView(buffer, byteOffset, byteLength);
-        transferPrototype(jsDataView, "DataView");
+        transferPrototype(jsDataView, JSDataView.NAME);
         return jsDataView;
     }
 
@@ -300,8 +300,20 @@ public final class JSContext implements AutoCloseable {
      */
     public JSDate createJSDate(double timeValue) {
         JSDate jsDate = new JSDate(timeValue);
-        transferPrototype(jsDate, "Date");
+        transferPrototype(jsDate, JSDate.NAME);
         return jsDate;
+    }
+
+    public JSDisposableStack createJSDisposableStack() {
+        JSDisposableStack stack = new JSDisposableStack();
+        transferPrototype(stack, JSDisposableStack.NAME);
+        return stack;
+    }
+
+    public JSError createJSError(String message) {
+        JSError jsError = new JSError(this, message);
+        transferPrototype(jsError, JSError.NAME);
+        return jsError;
     }
 
     /**
@@ -468,6 +480,12 @@ public final class JSContext implements AutoCloseable {
         JSSet jsSet = new JSSet();
         transferPrototype(jsSet, JSSet.NAME);
         return jsSet;
+    }
+
+    public JSSuppressedError createJSSuppressedError(JSValue error, JSValue suppressed, String message) {
+        JSSuppressedError jsError = new JSSuppressedError(this, error, suppressed, message);
+        transferPrototype(jsError, JSSuppressedError.NAME);
+        return jsError;
     }
 
     /**

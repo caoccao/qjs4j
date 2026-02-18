@@ -56,8 +56,7 @@ public final class JSMap extends JSObject {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        JSMap mapObj = new JSMap();
-        context.transferPrototype(mapObj, NAME);
+        JSMap mapObj = context.createJSMap();
 
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];

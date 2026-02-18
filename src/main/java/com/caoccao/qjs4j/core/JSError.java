@@ -56,9 +56,7 @@ public sealed class JSError extends JSObject permits
         if (args.length > 0 && !args[0].isUndefined()) {
             message = JSTypeConversions.toString(context, args[0]).value();
         }
-        JSObject jsObject = new JSError(context, message);
-        context.transferPrototype(jsObject, NAME);
-        return jsObject;
+        return context.createJSError(message);
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {

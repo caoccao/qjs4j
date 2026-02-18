@@ -57,8 +57,7 @@ public final class JSWeakSet extends JSObject {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        JSWeakSet weakSetObj = new JSWeakSet();
-        context.transferPrototype(weakSetObj, NAME);
+        JSWeakSet weakSetObj = context.createJSWeakSet();
 
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];

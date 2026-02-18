@@ -36,7 +36,7 @@ public final class DateConstructor {
     }
 
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDate date = new JSDate(JSDate.dateNow());
+        JSDate date = context.createJSDate(JSDate.dateNow());
         return DatePrototype.toStringMethod(context, date, args);
     }
 
