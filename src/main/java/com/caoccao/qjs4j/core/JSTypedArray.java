@@ -88,6 +88,42 @@ public abstract class JSTypedArray extends JSObject {
     }
 
     /**
+     * Try to interpret a PropertyKey as a typed array integer index.
+     * Returns the index if it's a valid canonical numeric index string, or -1 otherwise.
+     */
+    private static int toTypedArrayIndex(PropertyKey key) {
+        if (key.isSymbol()) {
+            return -1;
+        }
+        String str = key.toPropertyString();
+        if (str.isEmpty()) {
+            return -1;
+        }
+        // Fast path: single digit
+        char c = str.charAt(0);
+        if (str.length() == 1 && c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        // Must start with a digit (not '-' or '+')
+        if (c < '0' || c > '9') {
+            return -1;
+        }
+        // No leading zeros (except "0" itself, handled above)
+        if (c == '0') {
+            return -1;
+        }
+        try {
+            long val = Long.parseLong(str);
+            if (val >= 0 && val <= Integer.MAX_VALUE) {
+                return (int) val;
+            }
+        } catch (NumberFormatException e) {
+            // not a valid index
+        }
+        return -1;
+    }
+
+    /**
      * Check if an index is valid.
      */
     protected void checkIndex(int index) {
@@ -114,6 +150,18 @@ public abstract class JSTypedArray extends JSObject {
             return Long.toString(asLong);
         }
         return Double.toString(value);
+    }
+
+    @Override
+    protected JSValue get(PropertyKey key, JSContext context, JSObject receiver) {
+        int index = toTypedArrayIndex(key);
+        if (index >= 0) {
+            if (index < length && !buffer.isDetached()) {
+                return getJSElement(index);
+            }
+            return JSUndefined.INSTANCE;
+        }
+        return super.get(key, context, receiver);
     }
 
     /**
@@ -163,10 +211,39 @@ public abstract class JSTypedArray extends JSObject {
     public abstract double getElement(int index);
 
     /**
+     * Get an element as the appropriate JSValue type.
+     * Regular typed arrays return JSNumber, BigInt typed arrays override to return JSBigInt.
+     */
+    public JSValue getJSElement(int index) {
+        return JSNumber.of(getElement(index));
+    }
+
+    /**
      * Get the number of elements.
      */
     public int getLength() {
         return length;
+    }
+
+    @Override
+    public boolean has(PropertyKey key) {
+        int index = toTypedArrayIndex(key);
+        if (index >= 0) {
+            return index < length && !buffer.isDetached();
+        }
+        return super.has(key);
+    }
+
+    @Override
+    public void set(PropertyKey key, JSValue value, JSContext context) {
+        int index = toTypedArrayIndex(key);
+        if (index >= 0) {
+            if (index < length && !buffer.isDetached()) {
+                setJSElement(index, value, context);
+            }
+            return;
+        }
+        super.set(key, value, context);
     }
 
     /**
@@ -218,6 +295,14 @@ public abstract class JSTypedArray extends JSObject {
      * Set an element from a number.
      */
     public abstract void setElement(int index, double value);
+
+    /**
+     * Set an element from a JSValue, performing the appropriate type conversion.
+     * Regular typed arrays convert to Number, BigInt typed arrays override to convert to BigInt.
+     */
+    protected void setJSElement(int index, JSValue value, JSContext context) {
+        setElement(index, JSTypeConversions.toNumber(context, value).value());
+    }
 
     /**
      * TypedArray.prototype.subarray(begin, end)

@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 
 /**
@@ -100,12 +101,30 @@ public final class JSBigUint64Array extends JSTypedArray {
     }
 
     @Override
+    public JSValue getJSElement(int index) {
+        checkIndex(index);
+        ByteBuffer buf = getByteBuffer();
+        long value = buf.getLong(index * BYTES_PER_ELEMENT);
+        // Convert unsigned long to unsigned BigInteger
+        BigInteger unsigned = value >= 0
+                ? BigInteger.valueOf(value)
+                : BigInteger.valueOf(value).add(BigInteger.ONE.shiftLeft(64));
+        return new JSBigInt(unsigned);
+    }
+
+    @Override
     public void setElement(int index, double value) {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
         // Convert double to unsigned long
         long longValue = (long) value;
         buf.putLong(index * BYTES_PER_ELEMENT, longValue);
+    }
+
+    @Override
+    protected void setJSElement(int index, JSValue value, JSContext context) {
+        long longVal = JSTypeConversions.toBigInt64(context, value);
+        setElement(index, longVal);
     }
 
     @Override

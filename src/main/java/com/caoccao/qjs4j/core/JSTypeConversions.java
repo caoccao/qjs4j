@@ -17,6 +17,8 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 import java.math.BigInteger;
 
@@ -205,6 +207,47 @@ public final class JSTypeConversions {
         } catch (NumberFormatException e) {
             return JSNumber.of(Double.NaN);
         }
+    }
+
+    /**
+     * ToBigInt(value)
+     * ES2020 7.1.13
+     * Converts a value to a BigInt.
+     */
+    public static JSBigInt toBigInt(JSContext context, JSValue value) {
+        if (value instanceof JSBigInt bigInt) {
+            return bigInt;
+        }
+        if (value instanceof JSBigIntObject bigIntObject) {
+            return bigIntObject.getValue();
+        }
+        if (value instanceof JSBoolean booleanValue) {
+            return new JSBigInt(booleanValue.value() ? 1L : 0L);
+        }
+        if (value instanceof JSString stringValue) {
+            try {
+                return new JSBigInt(new BigInteger(stringValue.value().trim()));
+            } catch (NumberFormatException e) {
+                throw new JSSyntaxErrorException(
+                        "Cannot convert " + stringValue.value() + " to a BigInt");
+            }
+        }
+        if (value instanceof JSObject objectValue) {
+            JSValue primitive = toPrimitive(context, objectValue, PreferredType.NUMBER);
+            return toBigInt(context, primitive);
+        }
+        throw new JSTypeErrorException(
+                "Cannot convert " + value + " to a BigInt");
+    }
+
+    /**
+     * ToBigInt64(value)
+     * Converts a value to BigInt, then truncates to int64 (mod 2^64).
+     * Following QuickJS JS_ToBigInt64Free.
+     */
+    public static long toBigInt64(JSContext context, JSValue value) {
+        JSBigInt bigInt = toBigInt(context, value);
+        return bigInt.value().longValue(); // longValue() gives the low 64 bits
     }
 
     /**
