@@ -354,34 +354,51 @@ public final class ArrayConstructor {
             return;
         }
 
+        // Step 1: Get element value and await it
         JSValue value = arrayLikeObj.get(PropertyKey.fromIndex(index), context);
-        if (mapFn instanceof JSFunction mappingFunc) {
-            value = mappingFunc.call(context, mapThisArg, new JSValue[]{value, JSNumber.of(index)});
-        }
-
-        // Await the value (resolve promises/thenables)
-        JSPromise awaitPromise = resolveThenable(context, value);
-        // Pass null as reaction promise to prevent triggerReaction from resolving resultPromise
-        // with the handler's return value. We control resultPromise fulfillment explicitly.
-        awaitPromise.addReactions(
+        JSPromise awaitValue = resolveThenable(context, value);
+        awaitValue.addReactions(
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onResolve", 1, (ctx2, t2, a2) -> {
-                            JSValue resolved = a2.length > 0 ? a2[0] : JSUndefined.INSTANCE;
-                            result.push(resolved);
-                            // Continue to next element
-                            fromAsyncArrayLikeStep(context, resultPromise, result, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
+                        new JSNativeFunction("onValueResolve", 1, (ctx2, t2, a2) -> {
+                            JSValue awaitedValue = a2.length > 0 ? a2[0] : JSUndefined.INSTANCE;
+
+                            // Step 2: If mapping, call mapFn on awaited value, then await result
+                            if (mapFn instanceof JSFunction mappingFunc) {
+                                JSValue mapped = mappingFunc.call(context, mapThisArg, new JSValue[]{awaitedValue, JSNumber.of(index)});
+                                JSPromise awaitMapped = resolveThenable(context, mapped);
+                                awaitMapped.addReactions(
+                                        new JSPromise.ReactionRecord(
+                                                new JSNativeFunction("onMapResolve", 1, (ctx3, t3, a3) -> {
+                                                    JSValue finalValue = a3.length > 0 ? a3[0] : JSUndefined.INSTANCE;
+                                                    result.push(finalValue);
+                                                    fromAsyncArrayLikeStep(context, resultPromise, result, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
+                                                    return JSUndefined.INSTANCE;
+                                                }),
+                                                null, context
+                                        ),
+                                        new JSPromise.ReactionRecord(
+                                                new JSNativeFunction("onMapReject", 1, (ctx3, t3, a3) -> {
+                                                    resultPromise.reject(a3.length > 0 ? a3[0] : JSUndefined.INSTANCE);
+                                                    return JSUndefined.INSTANCE;
+                                                }),
+                                                null, context
+                                        )
+                                );
+                            } else {
+                                // No mapFn: use awaited value directly
+                                result.push(awaitedValue);
+                                fromAsyncArrayLikeStep(context, resultPromise, result, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
+                            }
                             return JSUndefined.INSTANCE;
                         }),
-                        null,
-                        context
+                        null, context
                 ),
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onReject", 1, (ctx2, t2, a2) -> {
+                        new JSNativeFunction("onValueReject", 1, (ctx2, t2, a2) -> {
                             resultPromise.reject(a2.length > 0 ? a2[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         }),
-                        null,
-                        context
+                        null, context
                 )
         );
     }

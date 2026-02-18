@@ -78,7 +78,7 @@ public class JSAsyncIterator extends JSObject {
         if (iter == null) {
             return null;
         }
-        JSValue returnMethod = iter.get("return");
+        JSValue returnMethod = iter.get(PropertyKey.RETURN);
         if (!(returnMethod instanceof JSFunction returnFunc)) {
             return null;
         }

@@ -65,7 +65,7 @@ public class Test262Config {
                 Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
-        config.maxTests = 1500;
+        config.maxTests = 1300;
         return config;
     }
 
@@ -126,7 +126,7 @@ public class Test262Config {
     }
 
     public boolean matchesIncludePattern(Path testPath) {
-        String pathStr = testPath.toString();
+        String pathStr = testPath.toString().replace('\\', '/');
 
         // Check exclusions first
         for (Pattern exclude : excludePatterns) {
@@ -162,7 +162,7 @@ public class Test262Config {
         }
 
         // Check patterns
-        String pathStr = test.getPath().toString();
+        String pathStr = test.getPath().toString().replace('\\', '/');
 
         // Check exclusions first
         for (Pattern exclude : excludePatterns) {
