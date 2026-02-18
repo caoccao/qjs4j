@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 import java.nio.ByteBuffer;
 
@@ -142,6 +143,12 @@ public abstract class JSTypedArray extends JSObject {
             throw new JSRangeErrorException("invalid length");
         }
         return remainingBytes / bytesPerElement;
+    }
+
+    protected static void validateTypedArrayBufferNotDetached(JSArrayBufferable buffer) {
+        if (buffer.isDetached()) {
+            throw new JSTypeErrorException("ArrayBuffer is detached");
+        }
     }
 
     protected static int toTypedArrayBufferLength(JSContext context, JSValue value, int bytesPerElement) {

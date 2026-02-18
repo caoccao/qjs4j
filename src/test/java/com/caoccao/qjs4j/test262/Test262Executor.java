@@ -292,6 +292,14 @@ public class Test262Executor {
                     return context.eval(script, "<test262-evalScript>", false);
                 }));
 
+        host262.set("detachArrayBuffer", new JSNativeFunction("detachArrayBuffer", 1,
+                (ctx, thisArg, args) -> {
+                    if (args.length > 0 && args[0] instanceof JSArrayBuffer jsArrayBuffer) {
+                        jsArrayBuffer.detach();
+                    }
+                    return JSUndefined.INSTANCE;
+                }));
+
         host262.set("createRealm", new JSNativeFunction("createRealm", 0,
                 (ctx, thisArg, args) -> {
                     JSRuntime realmRuntime = new JSRuntime();

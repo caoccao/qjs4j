@@ -57,15 +57,18 @@ public final class JSBigInt64Array extends JSTypedArray {
                 if (args.length >= 2) {
                     byteOffset = toTypedArrayByteOffset(context, args[1]);
                 }
+                validateTypedArrayBufferNotDetached(jsArrayBufferable);
                 if (byteOffset % BYTES_PER_ELEMENT != 0 || byteOffset > jsArrayBufferable.getByteLength()) {
                     throw new JSRangeErrorException("invalid offset");
                 }
                 if (args.length >= 3) {
                     if (!(args[2] instanceof JSUndefined)) {
                         length = toTypedArrayBufferLength(context, args[2], BYTES_PER_ELEMENT);
+                        validateTypedArrayBufferNotDetached(jsArrayBufferable);
                         return context.createJSBigInt64Array(jsArrayBufferable, byteOffset, length);
                     }
                 }
+                validateTypedArrayBufferNotDetached(jsArrayBufferable);
                 length = toTypedArrayBufferDefaultLength(jsArrayBufferable, byteOffset, BYTES_PER_ELEMENT);
                 return context.createJSBigInt64Array(jsArrayBufferable, byteOffset, length);
             } else if (firstArg instanceof JSTypedArray jsTypedArray) {
