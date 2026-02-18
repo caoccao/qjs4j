@@ -251,12 +251,14 @@ public final class JSContext implements AutoCloseable {
     public JSBigInt64Array createJSBigInt64Array(int length) {
         JSBigInt64Array jsBigInt64Array = new JSBigInt64Array(length);
         transferPrototype(jsBigInt64Array, JSBigInt64Array.NAME);
+        ensureArrayBufferPrototype(jsBigInt64Array.getBuffer());
         return jsBigInt64Array;
     }
 
     public JSBigInt64Array createJSBigInt64Array(JSArrayBufferable buffer, int byteOffset, int length) {
         JSBigInt64Array jsBigInt64Array = new JSBigInt64Array(buffer, byteOffset, length);
         transferPrototype(jsBigInt64Array, JSBigInt64Array.NAME);
+        ensureArrayBufferPrototype(jsBigInt64Array.getBuffer());
         return jsBigInt64Array;
     }
 
@@ -269,12 +271,14 @@ public final class JSContext implements AutoCloseable {
     public JSBigUint64Array createJSBigUint64Array(int length) {
         JSBigUint64Array jsBigUint64Array = new JSBigUint64Array(length);
         transferPrototype(jsBigUint64Array, JSBigUint64Array.NAME);
+        ensureArrayBufferPrototype(jsBigUint64Array.getBuffer());
         return jsBigUint64Array;
     }
 
     public JSBigUint64Array createJSBigUint64Array(JSArrayBufferable buffer, int byteOffset, int length) {
         JSBigUint64Array jsBigUint64Array = new JSBigUint64Array(buffer, byteOffset, length);
         transferPrototype(jsBigUint64Array, JSBigUint64Array.NAME);
+        ensureArrayBufferPrototype(jsBigUint64Array.getBuffer());
         return jsBigUint64Array;
     }
 
@@ -1171,6 +1175,12 @@ public final class JSContext implements AutoCloseable {
      */
     public JSError throwURIError(String message) {
         return throwError(JSURIError.NAME, message);
+    }
+
+    private void ensureArrayBufferPrototype(JSArrayBufferable buffer) {
+        if (buffer instanceof JSObject jsObject && jsObject.getPrototype() == null) {
+            transferPrototype(jsObject, buffer.isShared() ? JSSharedArrayBuffer.NAME : JSArrayBuffer.NAME);
+        }
     }
 
     public boolean transferPrototype(JSObject receiver, String constructorName) {

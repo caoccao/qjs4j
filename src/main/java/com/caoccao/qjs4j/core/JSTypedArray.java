@@ -145,12 +145,6 @@ public abstract class JSTypedArray extends JSObject {
         return remainingBytes / bytesPerElement;
     }
 
-    protected static void validateTypedArrayBufferNotDetached(JSArrayBufferable buffer) {
-        if (buffer.isDetached()) {
-            throw new JSTypeErrorException("ArrayBuffer is detached");
-        }
-    }
-
     protected static int toTypedArrayBufferLength(JSContext context, JSValue value, int bytesPerElement) {
         return toTypedArrayLengthChecked(JSTypeConversions.toIndex(context, value), bytesPerElement);
     }
@@ -221,6 +215,12 @@ public abstract class JSTypedArray extends JSObject {
             throw new JSRangeErrorException("invalid array buffer length");
         }
         return (int) length;
+    }
+
+    protected static void validateTypedArrayBufferNotDetached(JSArrayBufferable buffer) {
+        if (buffer.isDetached()) {
+            throw new JSTypeErrorException("ArrayBuffer is detached");
+        }
     }
 
     /**
