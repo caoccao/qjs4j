@@ -100,7 +100,7 @@ public final class JSInt32Array extends JSTypedArray {
     public void setElement(int index, double value) {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
-        buf.putInt(index * BYTES_PER_ELEMENT, (int) value);
+        buf.putInt(index * BYTES_PER_ELEMENT, JSTypeConversions.toInt32(value));
     }
 
     @Override

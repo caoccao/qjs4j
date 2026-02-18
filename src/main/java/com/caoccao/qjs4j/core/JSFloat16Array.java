@@ -103,7 +103,7 @@ public final class JSFloat16Array extends JSTypedArray {
     public void setElement(int index, double value) {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
-        short halfFloat = Float16.toHalf((float) value);
+        short halfFloat = Float16.toHalf(value);
         buf.putShort(index * BYTES_PER_ELEMENT, halfFloat);
     }
 

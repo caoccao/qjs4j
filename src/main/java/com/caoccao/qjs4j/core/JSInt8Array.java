@@ -100,7 +100,7 @@ public final class JSInt8Array extends JSTypedArray {
     public void setElement(int index, double value) {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
-        buf.put(index, (byte) ((int) value));
+        buf.put(index, (byte) JSTypeConversions.toInt32(value));
     }
 
     @Override

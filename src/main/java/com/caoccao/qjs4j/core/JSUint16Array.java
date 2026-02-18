@@ -99,7 +99,7 @@ public final class JSUint16Array extends JSTypedArray {
     public void setElement(int index, double value) {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
-        buf.putShort(index * BYTES_PER_ELEMENT, (short) ((int) value));
+        buf.putShort(index * BYTES_PER_ELEMENT, (short) JSTypeConversions.toInt32(value));
     }
 
     @Override

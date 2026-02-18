@@ -101,20 +101,7 @@ public final class JSUint8ClampedArray extends JSTypedArray {
     public void setElement(int index, double value) {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
-
-        // Clamp value to [0, 255] range
-        int clampedValue;
-        if (Double.isNaN(value)) {
-            clampedValue = 0;
-        } else if (value < 0) {
-            clampedValue = 0;
-        } else if (value > 255) {
-            clampedValue = 255;
-        } else {
-            // Round to nearest integer
-            clampedValue = (int) Math.round(value);
-        }
-
+        int clampedValue = JSTypeConversions.toUint8Clamp(value);
         buf.put(index, (byte) clampedValue);
     }
 

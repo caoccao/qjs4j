@@ -601,6 +601,44 @@ public final class Float16 {
     }
 
     /**
+     * Converts a double value to half-precision using round-to-nearest-even.
+     * <p>
+     * We first compute the float-based conversion, then correct with adjacent
+     * half candidates using the original double value. This preserves
+     * double-precision tie behavior required by TypedArray conversions.
+     */
+    public static short toHalf(double d) {
+        long a = Double.doubleToRawLongBits(d);
+        int sign = (int) (a >>> 63);
+        a &= 0x7fffffffffffffffL;
+
+        int value;
+        if (a > 0x7ff0000000000000L) {
+            // NaN
+            value = 0x7c01;
+        } else if (a < 0x3f10000000000000L) {
+            // Subnormal fp16 or zero.
+            if (a <= 0x3e60000000000000L) {
+                value = 0x0000;
+            } else {
+                int shift = 1051 - (int) (a >>> 52);
+                a = (1L << 52) | (a & ((1L << 52) - 1));
+                long addend = ((a >>> shift) & 1L) + ((1L << (shift - 1)) - 1);
+                value = (int) ((a + addend) >>> shift);
+            }
+        } else {
+            // Normal fp16 or infinity.
+            a -= 0x3f00000000000000L;
+            long addend = ((a >>> (52 - 10)) & 1L) + ((1L << (52 - 11)) - 1);
+            value = (int) ((a + addend) >>> (52 - 10));
+            if (value > 0x7c00) {
+                value = 0x7c00;
+            }
+        }
+        return (short) (value | (sign << 15));
+    }
+
+    /**
      * <p>Returns a hexadecimal string representation of the specified half-precision
      * float value. If the value is a NaN, the result is <code>"NaN"</code>,
      * otherwise the result follows this format:</p>

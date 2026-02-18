@@ -396,19 +396,30 @@ public final class JSTypeConversions {
      */
     public static int toInt32(JSContext context, JSValue value) {
         JSNumber number = toNumber(context, value);
-        double d = number.value();
+        return toInt32(number.value());
+    }
 
-        // Handle special cases
-        if (Double.isNaN(d) || Double.isInfinite(d) || d == 0.0) {
-            return 0;
-        }
+    /**
+     * ToInt32 for a primitive double value.
+     * Mirrors QuickJS JS_ToInt32Free() bit-level conversion semantics.
+     */
+    public static int toInt32(double d) {
+        long bits = Double.doubleToRawLongBits(d);
+        int e = (int) ((bits >>> 52) & 0x7ff);
 
-        // ToInt32 uses modulo 2^32
-        long int32bit = (long) d % 0x100000000L;
-        if (int32bit >= 0x80000000L) {
-            return (int) (int32bit - 0x100000000L);
+        if (e <= (1023 + 30)) {
+            return (int) d;
+        } else if (e <= (1023 + 30 + 53)) {
+            long v = (bits & ((1L << 52) - 1)) | (1L << 52);
+            v = v << ((e - 1023) - 52 + 32);
+            int result = (int) (v >>> 32);
+            if ((bits >>> 63) != 0) {
+                result = -result;
+            }
+            return result;
         }
-        return (int) int32bit;
+        // Includes NaN and infinities.
+        return 0;
     }
 
     /**
@@ -416,20 +427,7 @@ public final class JSTypeConversions {
      * ES2020 7.1.9
      */
     public static byte toInt8(JSContext context, JSValue value) {
-        JSNumber number = toNumber(context, value);
-        double d = number.value();
-
-        // Handle special cases
-        if (Double.isNaN(d) || Double.isInfinite(d) || d == 0.0) {
-            return 0;
-        }
-
-        // ToInt8 uses modulo 2^8
-        int int8bit = (int) ((long) d % 0x100L);
-        if (int8bit >= 0x80) {
-            return (byte) (int8bit - 0x100);
-        }
-        return (byte) int8bit;
+        return (byte) toInt32(context, value);
     }
 
     /**
@@ -733,16 +731,7 @@ public final class JSTypeConversions {
      * ES2020 7.1.8
      */
     public static int toUint16(JSContext context, JSValue value) {
-        JSNumber number = toNumber(context, value);
-        double d = number.value();
-
-        // Handle special cases
-        if (Double.isNaN(d) || Double.isInfinite(d) || d == 0.0) {
-            return 0;
-        }
-
-        // ToUint16 uses modulo 2^16
-        return (int) ((long) d % 0x10000L);
+        return toInt32(context, value) & 0xFFFF;
     }
 
     /**
@@ -750,16 +739,7 @@ public final class JSTypeConversions {
      * ES2020 7.1.7
      */
     public static long toUint32(JSContext context, JSValue value) {
-        JSNumber number = toNumber(context, value);
-        double d = number.value();
-
-        // Handle special cases
-        if (Double.isNaN(d) || Double.isInfinite(d) || d == 0.0) {
-            return 0;
-        }
-
-        // ToUint32 uses modulo 2^32
-        return (long) d % 0x100000000L;
+        return Integer.toUnsignedLong(toInt32(context, value));
     }
 
     /**
@@ -767,16 +747,32 @@ public final class JSTypeConversions {
      * ES2020 7.1.10
      */
     public static short toUint8(JSContext context, JSValue value) {
-        JSNumber number = toNumber(context, value);
-        double d = number.value();
+        return (short) (toInt32(context, value) & 0xFF);
+    }
 
-        // Handle special cases
-        if (Double.isNaN(d) || Double.isInfinite(d) || d == 0.0) {
+    /**
+     * ToUint8Clamp for a primitive double value.
+     * Mirrors QuickJS JS_ToUint8ClampFree() semantics (ties-to-even).
+     */
+    public static int toUint8Clamp(double d) {
+        if (Double.isNaN(d)) {
             return 0;
         }
+        if (d <= 0) {
+            return 0;
+        }
+        if (d >= 255) {
+            return 255;
+        }
+        return (int) Math.rint(d);
+    }
 
-        // ToUint8 uses modulo 2^8
-        return (short) ((long) d % 0x100L);
+    /**
+     * ToUint8Clamp(value)
+     * ES operation used by Uint8ClampedArray element writes.
+     */
+    public static int toUint8Clamp(JSContext context, JSValue value) {
+        return toUint8Clamp(toNumber(context, value).value());
     }
 
     /**
