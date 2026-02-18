@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSErrorException;
+
 /**
  * Implementation of Reflect object static methods.
  * Based on ES2020 Reflect specification.
@@ -155,15 +157,32 @@ public final class JSReflectObject {
             return result instanceof JSObject ? result : thisObject;
         }
 
-        JSObject result = constructorType.create(context, args);
+        // Per ES spec, GetPrototypeFromConstructor(newTarget) must happen BEFORE
+        // creating the object. This ensures prototype getter side-effects (including
+        // throws) occur at the right time. (QuickJS: js_create_from_ctor)
+        JSObject resolvedPrototype = null;
+        if (newTarget instanceof JSObject newTargetObject) {
+            JSValue proto = newTargetObject.get(PropertyKey.PROTOTYPE, context);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (proto instanceof JSObject protoObj) {
+                resolvedPrototype = protoObj;
+            }
+        }
+
+        JSObject result;
+        try {
+            result = constructorType.create(context, args);
+        } catch (JSErrorException e) {
+            return context.throwError(e.getErrorType().name(), e.getMessage());
+        }
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
         if (result != null && !result.isError() && !result.isProxy()) {
-            if (newTarget instanceof JSObject newTargetObject) {
-                if (!context.transferPrototype(result, newTargetObject)) {
-                    context.transferPrototype(result, function);
-                }
+            if (resolvedPrototype != null) {
+                result.setPrototype(resolvedPrototype);
             } else {
                 context.transferPrototype(result, function);
             }
