@@ -140,6 +140,9 @@ public abstract class JSTypedArray extends JSObject {
     }
 
     protected static int toTypedArrayBufferDefaultLength(JSArrayBufferable buffer, int byteOffset, int bytesPerElement) {
+        // QuickJS / spec order: detached buffer check must happen before range/alignment checks.
+        // This ensures abrupt detachment during byteOffset conversion throws TypeError, not RangeError.
+        validateTypedArrayBufferNotDetached(buffer);
         int remainingBytes = buffer.getByteLength() - byteOffset;
         if (remainingBytes < 0 || remainingBytes % bytesPerElement != 0) {
             throw new JSRangeErrorException("invalid length");

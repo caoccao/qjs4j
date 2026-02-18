@@ -66,6 +66,24 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testByteOffsetToNumberDetachBufferThrowsTypeError() {
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                        const offset = Uint16Array.BYTES_PER_ELEMENT;
+                        const buffer = new ArrayBuffer(3 * offset);
+                        const byteOffset = {
+                          valueOf() {
+                            ArrayBuffer.prototype.transfer.call(buffer, 0);
+                            return offset;
+                          }
+                        };
+                        try { new Uint16Array(buffer, byteOffset); return false; }
+                        catch (e) { return e instanceof TypeError; }
+                        })()""");
+    }
+
+    @Test
     public void testConstructor() {
         assertErrorWithJavet(
                 "BigInt64Array(1)",
