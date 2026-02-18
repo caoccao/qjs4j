@@ -73,9 +73,7 @@ public final class JSRegExp extends JSObject {
             }
         }
         try {
-            JSObject jsObject = new JSRegExp(pattern, flags);
-            context.transferPrototype(jsObject, NAME);
-            return jsObject;
+            return context.createJSRegExp(pattern, flags);
         } catch (Exception e) {
             return context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
         }

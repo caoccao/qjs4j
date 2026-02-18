@@ -58,26 +58,26 @@ public final class JSInt16Array extends JSTypedArray {
                 if (args.length >= 3) {
                     length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, args[2]));
                 }
-                return new JSInt16Array(jsArrayBufferable, byteOffset, length >= 0 ? length : jsArrayBufferable.getByteLength() / BYTES_PER_ELEMENT);
+                return context.createJSInt16Array(jsArrayBufferable, byteOffset, length >= 0 ? length : jsArrayBufferable.getByteLength() / BYTES_PER_ELEMENT);
             } else if (firstArg instanceof JSTypedArray jsTypedArray) {
                 length = jsTypedArray.getLength();
-                JSTypedArray newTypedArray = new JSInt16Array(length);
+                JSTypedArray newTypedArray = context.createJSInt16Array(length);
                 newTypedArray.setArray(context, jsTypedArray, 0);
                 return newTypedArray;
             } else if (firstArg instanceof JSArray jsArray) {
                 length = (int) jsArray.getLength();
-                JSTypedArray jsTypedArray = new JSInt16Array(length);
+                JSTypedArray jsTypedArray = context.createJSInt16Array(length);
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSIterator jsIterator) {
                 JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
                 length = (int) jsArray.getLength();
-                JSTypedArray jsTypedArray = new JSInt16Array(length);
+                JSTypedArray jsTypedArray = context.createJSInt16Array(length);
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSObject jsObject) {
                 length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, jsObject.get("length")));
-                JSTypedArray jsTypedArray = new JSInt16Array(length);
+                JSTypedArray jsTypedArray = context.createJSInt16Array(length);
                 for (int i = 0; i < length; i++) {
                     jsTypedArray.setElement(i, JSTypeConversions.toNumber(context, jsObject.get(i)).value());
                 }
@@ -86,9 +86,7 @@ public final class JSInt16Array extends JSTypedArray {
                 length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, firstArg));
             }
         }
-        JSObject jsObject = new JSInt16Array(length);
-        context.transferPrototype(jsObject, NAME);
-        return jsObject;
+        return context.createJSInt16Array(length);
     }
 
 

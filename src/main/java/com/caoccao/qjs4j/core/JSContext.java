@@ -254,6 +254,12 @@ public final class JSContext implements AutoCloseable {
         return jsBigInt64Array;
     }
 
+    public JSBigInt64Array createJSBigInt64Array(JSArrayBufferable buffer, int byteOffset, int length) {
+        JSBigInt64Array jsBigInt64Array = new JSBigInt64Array(buffer, byteOffset, length);
+        transferPrototype(jsBigInt64Array, JSBigInt64Array.NAME);
+        return jsBigInt64Array;
+    }
+
     /**
      * Create a new JSBigUint64Array with proper prototype chain.
      *
@@ -262,7 +268,13 @@ public final class JSContext implements AutoCloseable {
      */
     public JSBigUint64Array createJSBigUint64Array(int length) {
         JSBigUint64Array jsBigUint64Array = new JSBigUint64Array(length);
-        transferPrototype(jsBigUint64Array, "BigUint64Array");
+        transferPrototype(jsBigUint64Array, JSBigUint64Array.NAME);
+        return jsBigUint64Array;
+    }
+
+    public JSBigUint64Array createJSBigUint64Array(JSArrayBufferable buffer, int byteOffset, int length) {
+        JSBigUint64Array jsBigUint64Array = new JSBigUint64Array(buffer, byteOffset, length);
+        transferPrototype(jsBigUint64Array, JSBigUint64Array.NAME);
         return jsBigUint64Array;
     }
 
@@ -300,7 +312,13 @@ public final class JSContext implements AutoCloseable {
      */
     public JSFloat16Array createJSFloat16Array(int length) {
         JSFloat16Array jsFloat16Array = new JSFloat16Array(length);
-        transferPrototype(jsFloat16Array, "Float16Array");
+        transferPrototype(jsFloat16Array, JSFloat16Array.NAME);
+        return jsFloat16Array;
+    }
+
+    public JSFloat16Array createJSFloat16Array(JSArrayBufferable buffer, int byteOffset, int length) {
+        JSFloat16Array jsFloat16Array = new JSFloat16Array(buffer, byteOffset, length);
+        transferPrototype(jsFloat16Array, JSFloat16Array.NAME);
         return jsFloat16Array;
     }
 
@@ -312,7 +330,13 @@ public final class JSContext implements AutoCloseable {
      */
     public JSFloat32Array createJSFloat32Array(int length) {
         JSFloat32Array jsFloat32Array = new JSFloat32Array(length);
-        transferPrototype(jsFloat32Array, "Float32Array");
+        transferPrototype(jsFloat32Array, JSFloat32Array.NAME);
+        return jsFloat32Array;
+    }
+
+    public JSFloat32Array createJSFloat32Array(JSArrayBufferable buffer, int byteOffset, int length) {
+        JSFloat32Array jsFloat32Array = new JSFloat32Array(buffer, byteOffset, length);
+        transferPrototype(jsFloat32Array, JSFloat32Array.NAME);
         return jsFloat32Array;
     }
 
@@ -324,7 +348,13 @@ public final class JSContext implements AutoCloseable {
      */
     public JSFloat64Array createJSFloat64Array(int length) {
         JSFloat64Array jsFloat64Array = new JSFloat64Array(length);
-        transferPrototype(jsFloat64Array, "Float64Array");
+        transferPrototype(jsFloat64Array, JSFloat64Array.NAME);
+        return jsFloat64Array;
+    }
+
+    public JSFloat64Array createJSFloat64Array(JSArrayBufferable buffer, int byteOffset, int length) {
+        JSFloat64Array jsFloat64Array = new JSFloat64Array(buffer, byteOffset, length);
+        transferPrototype(jsFloat64Array, JSFloat64Array.NAME);
         return jsFloat64Array;
     }
 
@@ -336,7 +366,13 @@ public final class JSContext implements AutoCloseable {
      */
     public JSInt16Array createJSInt16Array(int length) {
         JSInt16Array jsInt16Array = new JSInt16Array(length);
-        transferPrototype(jsInt16Array, "Int16Array");
+        transferPrototype(jsInt16Array, JSInt16Array.NAME);
+        return jsInt16Array;
+    }
+
+    public JSInt16Array createJSInt16Array(JSArrayBufferable buffer, int byteOffset, int length) {
+        JSInt16Array jsInt16Array = new JSInt16Array(buffer, byteOffset, length);
+        transferPrototype(jsInt16Array, JSInt16Array.NAME);
         return jsInt16Array;
     }
 
@@ -348,7 +384,13 @@ public final class JSContext implements AutoCloseable {
      */
     public JSInt32Array createJSInt32Array(int length) {
         JSInt32Array jsInt32Array = new JSInt32Array(length);
-        transferPrototype(jsInt32Array, "Int32Array");
+        transferPrototype(jsInt32Array, JSInt32Array.NAME);
+        return jsInt32Array;
+    }
+
+    public JSInt32Array createJSInt32Array(JSArrayBufferable buffer, int byteOffset, int length) {
+        JSInt32Array jsInt32Array = new JSInt32Array(buffer, byteOffset, length);
+        transferPrototype(jsInt32Array, JSInt32Array.NAME);
         return jsInt32Array;
     }
 
@@ -360,6 +402,12 @@ public final class JSContext implements AutoCloseable {
      */
     public JSInt8Array createJSInt8Array(int length) {
         JSInt8Array jsInt8Array = new JSInt8Array(length);
+        transferPrototype(jsInt8Array, JSInt8Array.NAME);
+        return jsInt8Array;
+    }
+
+    public JSInt8Array createJSInt8Array(JSArrayBufferable buffer, int byteOffset, int length) {
+        JSInt8Array jsInt8Array = new JSInt8Array(buffer, byteOffset, length);
         transferPrototype(jsInt8Array, JSInt8Array.NAME);
         return jsInt8Array;
     }
@@ -434,6 +482,12 @@ public final class JSContext implements AutoCloseable {
         return jsUint16Array;
     }
 
+    public JSUint16Array createJSUint16Array(JSArrayBufferable buffer, int byteOffset, int length) {
+        JSUint16Array jsUint16Array = new JSUint16Array(buffer, byteOffset, length);
+        transferPrototype(jsUint16Array, JSUint16Array.NAME);
+        return jsUint16Array;
+    }
+
     /**
      * Create a new JSUint32Array with proper prototype chain.
      *
@@ -442,6 +496,12 @@ public final class JSContext implements AutoCloseable {
      */
     public JSUint32Array createJSUint32Array(int length) {
         JSUint32Array jsUint32Array = new JSUint32Array(length);
+        transferPrototype(jsUint32Array, JSUint32Array.NAME);
+        return jsUint32Array;
+    }
+
+    public JSUint32Array createJSUint32Array(JSArrayBufferable buffer, int byteOffset, int length) {
+        JSUint32Array jsUint32Array = new JSUint32Array(buffer, byteOffset, length);
         transferPrototype(jsUint32Array, JSUint32Array.NAME);
         return jsUint32Array;
     }
@@ -458,6 +518,12 @@ public final class JSContext implements AutoCloseable {
         return jsUint8Array;
     }
 
+    public JSUint8Array createJSUint8Array(JSArrayBufferable buffer, int byteOffset, int length) {
+        JSUint8Array jsUint8Array = new JSUint8Array(buffer, byteOffset, length);
+        transferPrototype(jsUint8Array, JSUint8Array.NAME);
+        return jsUint8Array;
+    }
+
     /**
      * Create a new JSUint8ClampedArray with proper prototype chain.
      *
@@ -466,6 +532,12 @@ public final class JSContext implements AutoCloseable {
      */
     public JSUint8ClampedArray createJSUint8ClampedArray(int length) {
         JSUint8ClampedArray jsUint8ClampedArray = new JSUint8ClampedArray(length);
+        transferPrototype(jsUint8ClampedArray, JSUint8ClampedArray.NAME);
+        return jsUint8ClampedArray;
+    }
+
+    public JSUint8ClampedArray createJSUint8ClampedArray(JSArrayBufferable buffer, int byteOffset, int length) {
+        JSUint8ClampedArray jsUint8ClampedArray = new JSUint8ClampedArray(buffer, byteOffset, length);
         transferPrototype(jsUint8ClampedArray, JSUint8ClampedArray.NAME);
         return jsUint8ClampedArray;
     }

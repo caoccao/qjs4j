@@ -513,13 +513,13 @@ public final class StringPrototype {
         if (regexpArg instanceof JSRegExp) {
             regexp = (JSRegExp) regexpArg;
         } else if (regexpArg instanceof JSUndefined) {
-            regexp = new JSRegExp("", "");
+            regexp = context.createJSRegExp("", "");
         } else if (regexpArg instanceof JSString regexpStr) {
-            regexp = new JSRegExp(regexpStr.value(), "");
+            regexp = context.createJSRegExp(regexpStr.value(), "");
         } else {
             // Convert to string and create RegExp
             String pattern = JSTypeConversions.toString(context, regexpArg).value();
-            regexp = new JSRegExp(pattern, "");
+            regexp = context.createJSRegExp(pattern, "");
         }
 
         // Check if global flag is set
@@ -600,15 +600,15 @@ public final class StringPrototype {
         // Convert to RegExp if not already
         JSRegExp regexp;
         if (regexpArg instanceof JSRegExp inputRegExp) {
-            regexp = new JSRegExp(inputRegExp.getPattern(), "g");
+            regexp = context.createJSRegExp(inputRegExp.getPattern(), "g");
         } else if (regexpArg instanceof JSUndefined) {
-            regexp = new JSRegExp("", "g");
+            regexp = context.createJSRegExp("", "g");
         } else if (regexpArg instanceof JSString regexpStr) {
-            regexp = new JSRegExp(regexpStr.value(), "g");
+            regexp = context.createJSRegExp(regexpStr.value(), "g");
         } else {
             // Convert to string and create RegExp with 'g' flag
             String pattern = JSTypeConversions.toString(context, regexpArg).value();
-            regexp = new JSRegExp(pattern, "g");
+            regexp = context.createJSRegExp(pattern, "g");
         }
 
         // Collect all matches into an array and return an iterator
@@ -1007,13 +1007,13 @@ public final class StringPrototype {
         if (regexpArg instanceof JSRegExp) {
             regexp = (JSRegExp) regexpArg;
         } else if (regexpArg instanceof JSUndefined) {
-            regexp = new JSRegExp("", "");
+            regexp = context.createJSRegExp("", "");
         } else if (regexpArg instanceof JSString regexpStr) {
-            regexp = new JSRegExp(regexpStr.value(), "");
+            regexp = context.createJSRegExp(regexpStr.value(), "");
         } else {
             // Convert to string and create RegExp
             String pattern = JSTypeConversions.toString(context, regexpArg).value();
-            regexp = new JSRegExp(pattern, "");
+            regexp = context.createJSRegExp(pattern, "");
         }
 
         // Use QuickJS engine to find match

@@ -349,8 +349,7 @@ public final class RegExpPrototype {
         // After the getter may have mutated rx via compile(), read the pattern.
         JSRegExp splitter;
         try {
-            splitter = new JSRegExp(rx.getPattern(), newFlags);
-            context.transferPrototype(splitter, JSRegExp.NAME);
+            splitter = context.createJSRegExp(rx.getPattern(), newFlags);
         } catch (Exception e) {
             return context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
         }
