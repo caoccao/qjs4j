@@ -431,7 +431,19 @@ public final class ArrayConstructor {
             // - Without mapFn: mappedValue = nextValue (no Await)
             // - With mapFn: mappedValue = Await(mapFn(value, k))
             if (mapFn instanceof JSFunction mappingFunc) {
-                JSValue mappedValue = mappingFunc.call(context, mapThisArg, new JSValue[]{value, JSNumber.of(index[0])});
+                // IfAbruptCloseAsyncIterator: sync mapFn throw
+                JSValue mappedValue;
+                try {
+                    mappedValue = mappingFunc.call(context, mapThisArg, new JSValue[]{value, JSNumber.of(index[0])});
+                } catch (Exception e) {
+                    return closeIteratorAndReject(
+                            context,
+                            asyncIterator,
+                            consumePendingExceptionOrCreateStringError(context, e));
+                }
+                if (context.hasPendingException()) {
+                    return closeIteratorAndReject(context, asyncIterator, consumePendingException(context));
+                }
                 JSPromise awaitPromise = resolveThenable(context, mappedValue);
                 JSPromise processingPromise = context.createJSPromise();
                 awaitPromise.addReactions(
@@ -457,7 +469,10 @@ public final class ArrayConstructor {
                                 context
                         ),
                         new JSPromise.ReactionRecord(
+                                // IfAbruptCloseAsyncIterator: async mapFn rejection
                                 new JSNativeFunction("onReject", 1, (ctx2, t2, a2) -> {
+                                    asyncIterator.close();
+                                    context.processMicrotasks();
                                     processingPromise.reject(a2.length > 0 ? a2[0] : JSUndefined.INSTANCE);
                                     return JSUndefined.INSTANCE;
                                 }),
@@ -561,6 +576,27 @@ public final class ArrayConstructor {
         };
         context.transferPrototype(error, errorType);
         promise.reject(error);
+    }
+
+    private static JSPromise closeIteratorAndReject(JSContext context, JSAsyncIterator asyncIterator, JSValue reason) {
+        asyncIterator.close();
+        JSPromise rejected = context.createJSPromise();
+        rejected.reject(reason);
+        return rejected;
+    }
+
+    private static JSValue consumePendingException(JSContext context) {
+        JSValue ex = context.getPendingException();
+        context.clearAllPendingExceptions();
+        return ex;
+    }
+
+    private static JSValue consumePendingExceptionOrCreateStringError(JSContext context, Exception e) {
+        if (context.hasPendingException()) {
+            return consumePendingException(context);
+        }
+        String message = e.getMessage();
+        return new JSString(message != null ? message : e.toString());
     }
 
     /**

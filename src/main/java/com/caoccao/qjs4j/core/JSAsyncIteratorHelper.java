@@ -285,7 +285,7 @@ public final class JSAsyncIteratorHelper {
         if (!(nextMethod instanceof JSFunction nextFunc)) {
             return null;
         }
-        return new JSAsyncIterator(() -> {
+        JSAsyncIterator asyncIter = new JSAsyncIterator(() -> {
             JSValue result = nextFunc.call(context, iterObj, new JSValue[0]);
             if (result instanceof JSObject resultObj) {
                 JSValue value = resultObj.get("value");
@@ -298,6 +298,8 @@ public final class JSAsyncIteratorHelper {
             promise.reject(new JSString("Iterator result is not an object"));
             return promise;
         }, context);
+        asyncIter.setUnderlyingIterator(iterObj);
+        return asyncIter;
     }
 
     /**

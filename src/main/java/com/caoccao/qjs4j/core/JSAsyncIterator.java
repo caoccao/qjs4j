@@ -225,13 +225,15 @@ public class JSAsyncIterator extends JSObject {
      * @return An async iterator
      */
     public static JSAsyncIterator fromIterator(JSIterator iterator, JSContext context) {
-        return new JSAsyncIterator(() -> {
+        JSAsyncIterator asyncIter = new JSAsyncIterator(() -> {
             JSObject result = iterator.next();
             JSValue value = result.get("value");
             JSValue doneValue = result.get("done");
             boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
             return createAsyncFromSyncResultPromise(context, value, done);
         }, context);
+        asyncIter.setUnderlyingIterator(iterator);
+        return asyncIter;
     }
 
     /**
