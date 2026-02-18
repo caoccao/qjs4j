@@ -50,15 +50,16 @@ public final class JSInt16Array extends JSTypedArray {
             if (firstArg instanceof JSNumber lengthNum) {
                 length = toTypedArrayIndex(context, lengthNum, BYTES_PER_ELEMENT);
             } else if (firstArg instanceof JSArrayBufferable jsArrayBufferable) {
-                length = -1;
                 int byteOffset = 0;
                 if (args.length >= 2) {
-                    byteOffset = (int) JSTypeConversions.toInteger(context, args[1]);
+                    byteOffset = toTypedArrayByteOffset(context, args[1]);
                 }
-                if (args.length >= 3) {
-                    length = toTypedArrayLength(context, args[2], BYTES_PER_ELEMENT);
+                if (args.length >= 3 && !(args[2] instanceof JSUndefined)) {
+                    length = toTypedArrayBufferLength(context, args[2], BYTES_PER_ELEMENT);
+                    return context.createJSInt16Array(jsArrayBufferable, byteOffset, length);
                 }
-                return context.createJSInt16Array(jsArrayBufferable, byteOffset, length >= 0 ? length : jsArrayBufferable.getByteLength() / BYTES_PER_ELEMENT);
+                length = toTypedArrayBufferDefaultLength(jsArrayBufferable, byteOffset, BYTES_PER_ELEMENT);
+                return context.createJSInt16Array(jsArrayBufferable, byteOffset, length);
             } else if (firstArg instanceof JSTypedArray jsTypedArray) {
                 length = jsTypedArray.getLength();
                 JSTypedArray newTypedArray = context.createJSInt16Array(length);
