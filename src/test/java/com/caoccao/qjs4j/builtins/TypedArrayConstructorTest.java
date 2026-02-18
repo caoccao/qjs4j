@@ -20,6 +20,16 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testBigIntTypedArrayIterableAbruptCompletion() {
+        assertBooleanWithJavet(
+                "(() => {" +
+                        "function Test262Error(message) { this.message = message || ''; }" +
+                        "var obj = (function*() { yield 0; throw new Test262Error('boom'); })();" +
+                        "try { new BigInt64Array(obj); return false; } catch (e) { return e instanceof Test262Error; }" +
+                        "})()");
+    }
+
+    @Test
     public void testConstructor() {
         assertErrorWithJavet(
                 "BigInt64Array(1)",

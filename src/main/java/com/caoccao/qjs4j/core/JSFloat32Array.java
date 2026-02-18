@@ -45,7 +45,7 @@ public final class JSFloat32Array extends JSTypedArray {
         if (args.length >= 1) {
             JSValue firstArg = normalizeConstructorSource(context, args[0]);
             if (context.hasPendingException()) {
-                return (JSObject) context.getPendingException();
+                return null;
             }
             if (firstArg instanceof JSNumber lengthNum) {
                 length = (int) JSTypeConversions.toIndex(context, lengthNum);

@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.vm.YieldResult;
 
 /**
@@ -157,10 +158,20 @@ public final class JSGenerator extends JSObject {
             state = State.COMPLETED;
             generatorState.setCompleted(true);
             if (!context.hasPendingException()) {
-                context.throwError(e.getMessage() == null ? "Generator execution failed" : e.getMessage());
+                if (e instanceof JSVirtualMachineException vmException) {
+                    if (vmException.getJsValue() != null) {
+                        context.setPendingException(vmException.getJsValue());
+                    } else if (vmException.getJsError() != null) {
+                        context.setPendingException(vmException.getJsError());
+                    } else {
+                        context.throwError(e.getMessage() == null ? "Generator execution failed" : e.getMessage());
+                    }
+                } else {
+                    context.throwError(e.getMessage() == null ? "Generator execution failed" : e.getMessage());
+                }
             }
-            JSValue pendingException = context.getPendingException();
-            return createIteratorResult(pendingException != null ? pendingException : JSUndefined.INSTANCE, true);
+            // Abrupt completion from generator.next() must throw to the caller.
+            return createIteratorResult(JSUndefined.INSTANCE, true);
         }
     }
 
