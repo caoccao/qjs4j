@@ -103,55 +103,11 @@ public final class JSAsyncIteratorHelper {
             // Accept any JSObject with next() as a sync iterator, wrap as async
             if (result instanceof JSObject iterObj) {
                 JSAsyncIterator wrapped = wrapSyncAsAsyncIterator(iterObj, context);
-                if (wrapped != null) return wrapped;
+                return wrapped;
             }
         }
 
         return null;
-    }
-
-    /**
-     * Wrap any JSObject that has a next() method as an async iterator.
-     * The next() method is expected to return a Promise that resolves to {value, done}.
-     */
-    public static JSAsyncIterator wrapAsAsyncIterator(JSObject iterObj, JSContext context) {
-        JSValue nextMethod = iterObj.get("next");
-        if (!(nextMethod instanceof JSFunction nextFunc)) {
-            return null;
-        }
-        return new JSAsyncIterator(() -> {
-            JSValue result = nextFunc.call(context, iterObj, new JSValue[0]);
-            if (result instanceof JSPromise promise) {
-                return promise;
-            }
-            // If next() doesn't return a promise, wrap the result
-            JSPromise promise = context.createJSPromise();
-            promise.fulfill(result);
-            return promise;
-        }, context);
-    }
-
-    /**
-     * Wrap a sync iterator JSObject (has next() returning {value, done}) as an async iterator.
-     */
-    public static JSAsyncIterator wrapSyncAsAsyncIterator(JSObject iterObj, JSContext context) {
-        JSValue nextMethod = iterObj.get("next");
-        if (!(nextMethod instanceof JSFunction nextFunc)) {
-            return null;
-        }
-        return new JSAsyncIterator(() -> {
-            JSValue result = nextFunc.call(context, iterObj, new JSValue[0]);
-            if (result instanceof JSObject resultObj) {
-                JSValue value = resultObj.get("value");
-                JSValue doneValue = resultObj.get("done");
-                boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
-                // Per ES spec CreateAsyncFromSyncIterator: resolve promise values
-                return JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
-            }
-            JSPromise promise = context.createJSPromise();
-            promise.reject(new JSString("Iterator result is not an object"));
-            return promise;
-        }, context);
     }
 
     /**
@@ -296,6 +252,50 @@ public final class JSAsyncIteratorHelper {
         );
 
         return resultPromise;
+    }
+
+    /**
+     * Wrap any JSObject that has a next() method as an async iterator.
+     * The next() method is expected to return a Promise that resolves to {value, done}.
+     */
+    public static JSAsyncIterator wrapAsAsyncIterator(JSObject iterObj, JSContext context) {
+        JSValue nextMethod = iterObj.get("next");
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            return null;
+        }
+        return new JSAsyncIterator(() -> {
+            JSValue result = nextFunc.call(context, iterObj, new JSValue[0]);
+            if (result instanceof JSPromise promise) {
+                return promise;
+            }
+            // If next() doesn't return a promise, wrap the result
+            JSPromise promise = context.createJSPromise();
+            promise.fulfill(result);
+            return promise;
+        }, context);
+    }
+
+    /**
+     * Wrap a sync iterator JSObject (has next() returning {value, done}) as an async iterator.
+     */
+    public static JSAsyncIterator wrapSyncAsAsyncIterator(JSObject iterObj, JSContext context) {
+        JSValue nextMethod = iterObj.get("next");
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            return null;
+        }
+        return new JSAsyncIterator(() -> {
+            JSValue result = nextFunc.call(context, iterObj, new JSValue[0]);
+            if (result instanceof JSObject resultObj) {
+                JSValue value = resultObj.get("value");
+                JSValue doneValue = resultObj.get("done");
+                boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
+                // Per ES spec CreateAsyncFromSyncIterator: resolve promise values
+                return JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
+            }
+            JSPromise promise = context.createJSPromise();
+            promise.reject(new JSString("Iterator result is not an object"));
+            return promise;
+        }, context);
     }
 
     /**

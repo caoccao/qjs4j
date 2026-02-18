@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -82,7 +84,7 @@ public final class JSSharedArrayBuffer extends JSObject implements JSArrayBuffer
             if (args.length > 0) {
                 length = JSTypeConversions.toIndex(context, args[0]);
             }
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | JSRangeErrorException e) {
             return context.throwRangeError("Invalid array buffer length");
         }
         if (length > Integer.MAX_VALUE) {
@@ -102,7 +104,7 @@ public final class JSSharedArrayBuffer extends JSObject implements JSArrayBuffer
                     long maxLen;
                     try {
                         maxLen = JSTypeConversions.toIndex(context, maxByteLengthValue);
-                    } catch (IllegalArgumentException e) {
+                    } catch (IllegalArgumentException | JSRangeErrorException e) {
                         return context.throwRangeError("Invalid array buffer max length");
                     }
                     if (maxLen > Integer.MAX_VALUE || maxLen < length) {

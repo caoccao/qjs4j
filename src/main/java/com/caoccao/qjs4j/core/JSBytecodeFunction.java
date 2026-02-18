@@ -155,6 +155,75 @@ public final class JSBytecodeFunction extends JSFunction {
         }
     }
 
+    /**
+     * Per ES spec AsyncGeneratorYield/AsyncGeneratorResolve: Await the yielded/returned value
+     * before placing it in the iterator result. If the value is a promise or thenable,
+     * resolve it first; otherwise use it directly.
+     */
+    private static void fulfillAsyncYield(JSContext context, JSPromise promise, JSValue value, boolean done) {
+        if (value instanceof JSPromise yieldedPromise) {
+            // If already settled, use result directly
+            if (yieldedPromise.getState() == JSPromise.PromiseState.FULFILLED) {
+                JSObject iterResult = context.createJSObject();
+                iterResult.set(PropertyKey.VALUE, yieldedPromise.getResult());
+                iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+                promise.fulfill(iterResult);
+                return;
+            }
+            if (yieldedPromise.getState() == JSPromise.PromiseState.REJECTED) {
+                promise.reject(yieldedPromise.getResult());
+                return;
+            }
+            // Pending: chain reactions
+            yieldedPromise.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onResolve", 1, (ctx, thisArg, args) -> {
+                                JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                JSObject iterResult = context.createJSObject();
+                                iterResult.set(PropertyKey.VALUE, resolved);
+                                iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+                                promise.fulfill(iterResult);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null, context
+                    ),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onReject", 1, (ctx, thisArg, args) -> {
+                                promise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null, context
+                    )
+            );
+            return;
+        }
+        if (value instanceof JSObject obj) {
+            JSValue thenMethod = obj.get("then");
+            if (thenMethod instanceof JSFunction thenFunc) {
+                thenFunc.call(context, value, new JSValue[]{
+                        new JSNativeFunction("resolve", 1, (ctx, thisArg, args) -> {
+                            JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            JSObject iterResult = context.createJSObject();
+                            iterResult.set(PropertyKey.VALUE, resolved);
+                            iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+                            promise.fulfill(iterResult);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        new JSNativeFunction("reject", 1, (ctx, thisArg, args) -> {
+                            promise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                            return JSUndefined.INSTANCE;
+                        })
+                });
+                return;
+            }
+        }
+        // Non-thenable: use directly
+        JSObject iterResult = context.createJSObject();
+        iterResult.set(PropertyKey.VALUE, value);
+        iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+        promise.fulfill(iterResult);
+    }
+
     @Override
     public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         // Per ES spec, each function has a [[Realm]] internal slot. When called cross-realm,
@@ -304,75 +373,6 @@ public final class JSBytecodeFunction extends JSFunction {
 
         // For non-async functions, execute normally and let exceptions propagate
         return executionContext.getVirtualMachine().execute(this, thisArg, args);
-    }
-
-    /**
-     * Per ES spec AsyncGeneratorYield/AsyncGeneratorResolve: Await the yielded/returned value
-     * before placing it in the iterator result. If the value is a promise or thenable,
-     * resolve it first; otherwise use it directly.
-     */
-    private static void fulfillAsyncYield(JSContext context, JSPromise promise, JSValue value, boolean done) {
-        if (value instanceof JSPromise yieldedPromise) {
-            // If already settled, use result directly
-            if (yieldedPromise.getState() == JSPromise.PromiseState.FULFILLED) {
-                JSObject iterResult = context.createJSObject();
-                iterResult.set(PropertyKey.VALUE, yieldedPromise.getResult());
-                iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
-                promise.fulfill(iterResult);
-                return;
-            }
-            if (yieldedPromise.getState() == JSPromise.PromiseState.REJECTED) {
-                promise.reject(yieldedPromise.getResult());
-                return;
-            }
-            // Pending: chain reactions
-            yieldedPromise.addReactions(
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onResolve", 1, (ctx, thisArg, args) -> {
-                                JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                                JSObject iterResult = context.createJSObject();
-                                iterResult.set(PropertyKey.VALUE, resolved);
-                                iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
-                                promise.fulfill(iterResult);
-                                return JSUndefined.INSTANCE;
-                            }),
-                            null, context
-                    ),
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onReject", 1, (ctx, thisArg, args) -> {
-                                promise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-                                return JSUndefined.INSTANCE;
-                            }),
-                            null, context
-                    )
-            );
-            return;
-        }
-        if (value instanceof JSObject obj) {
-            JSValue thenMethod = obj.get("then");
-            if (thenMethod instanceof JSFunction thenFunc) {
-                thenFunc.call(context, value, new JSValue[]{
-                        new JSNativeFunction("resolve", 1, (ctx, thisArg, args) -> {
-                            JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                            JSObject iterResult = context.createJSObject();
-                            iterResult.set(PropertyKey.VALUE, resolved);
-                            iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
-                            promise.fulfill(iterResult);
-                            return JSUndefined.INSTANCE;
-                        }),
-                        new JSNativeFunction("reject", 1, (ctx, thisArg, args) -> {
-                            promise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-                            return JSUndefined.INSTANCE;
-                        })
-                });
-                return;
-            }
-        }
-        // Non-thenable: use directly
-        JSObject iterResult = context.createJSObject();
-        iterResult.set(PropertyKey.VALUE, value);
-        iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
-        promise.fulfill(iterResult);
     }
 
     public JSBytecodeFunction copyWithClosureVars(JSValue[] capturedClosureVars) {

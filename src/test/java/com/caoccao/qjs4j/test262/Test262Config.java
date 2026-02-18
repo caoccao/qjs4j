@@ -61,7 +61,7 @@ public class Test262Config {
         config.addExcludePatterns(
                 Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"));
-        config.maxTests = 1200;
+        config.maxTests = 5900;
         return config;
     }
 

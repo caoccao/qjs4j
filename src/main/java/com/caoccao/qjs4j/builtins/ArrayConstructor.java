@@ -341,6 +341,51 @@ public final class ArrayConstructor {
         return resultPromise;
     }
 
+    /**
+     * Process one element of an array-like in fromAsync.
+     * Gets element at index, awaits it (if promise/thenable), pushes to result, recurses.
+     */
+    private static void fromAsyncArrayLikeStep(
+            JSContext context, JSPromise resultPromise, JSArray result,
+            JSObject arrayLikeObj, int index, int length,
+            JSValue mapFn, JSValue mapThisArg) {
+        if (index >= length) {
+            resultPromise.fulfill(result);
+            return;
+        }
+
+        JSValue value = arrayLikeObj.get(PropertyKey.fromIndex(index), context);
+        if (mapFn instanceof JSFunction mappingFunc) {
+            value = mappingFunc.call(context, mapThisArg, new JSValue[]{value, JSNumber.of(index)});
+        }
+
+        // Await the value (resolve promises/thenables)
+        JSPromise awaitPromise = resolveThenable(context, value);
+        // Pass null as reaction promise to prevent triggerReaction from resolving resultPromise
+        // with the handler's return value. We control resultPromise fulfillment explicitly.
+        awaitPromise.addReactions(
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onResolve", 1, (ctx2, t2, a2) -> {
+                            JSValue resolved = a2.length > 0 ? a2[0] : JSUndefined.INSTANCE;
+                            result.push(resolved);
+                            // Continue to next element
+                            fromAsyncArrayLikeStep(context, resultPromise, result, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                ),
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onReject", 1, (ctx2, t2, a2) -> {
+                            resultPromise.reject(a2.length > 0 ? a2[0] : JSUndefined.INSTANCE);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                )
+        );
+    }
+
     private static JSPromise fromAsyncIterablePath(
             JSContext context, JSPromise resultPromise,
             JSAsyncIterator asyncIterator, JSValue arrayLike,
@@ -410,65 +455,6 @@ public final class ArrayConstructor {
         return resultPromise;
     }
 
-    private static void rejectWithError(JSPromise promise, JSContext context, String errorType, String message) {
-        // Clear any pending exception that was set as a side-effect
-        if (context.hasPendingException()) {
-            context.clearAllPendingExceptions();
-        }
-        JSError error = switch (errorType) {
-            case "TypeError" -> new JSTypeError(context, message);
-            case "RangeError" -> new JSRangeError(context, message);
-            default -> new JSError(context, message);
-        };
-        context.transferPrototype(error, errorType);
-        promise.reject(error);
-    }
-
-    /**
-     * Process one element of an array-like in fromAsync.
-     * Gets element at index, awaits it (if promise/thenable), pushes to result, recurses.
-     */
-    private static void fromAsyncArrayLikeStep(
-            JSContext context, JSPromise resultPromise, JSArray result,
-            JSObject arrayLikeObj, int index, int length,
-            JSValue mapFn, JSValue mapThisArg) {
-        if (index >= length) {
-            resultPromise.fulfill(result);
-            return;
-        }
-
-        JSValue value = arrayLikeObj.get(PropertyKey.fromIndex(index), context);
-        if (mapFn instanceof JSFunction mappingFunc) {
-            value = mappingFunc.call(context, mapThisArg, new JSValue[]{value, JSNumber.of(index)});
-        }
-
-        // Await the value (resolve promises/thenables)
-        JSPromise awaitPromise = resolveThenable(context, value);
-        // Pass null as reaction promise to prevent triggerReaction from resolving resultPromise
-        // with the handler's return value. We control resultPromise fulfillment explicitly.
-        awaitPromise.addReactions(
-                new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onResolve", 1, (ctx2, t2, a2) -> {
-                            JSValue resolved = a2.length > 0 ? a2[0] : JSUndefined.INSTANCE;
-                            result.push(resolved);
-                            // Continue to next element
-                            fromAsyncArrayLikeStep(context, resultPromise, result, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
-                            return JSUndefined.INSTANCE;
-                        }),
-                        null,
-                        context
-                ),
-                new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onReject", 1, (ctx2, t2, a2) -> {
-                            resultPromise.reject(a2.length > 0 ? a2[0] : JSUndefined.INSTANCE);
-                            return JSUndefined.INSTANCE;
-                        }),
-                        null,
-                        context
-                )
-        );
-    }
-
     /**
      * get Array[@@species]
      * ES2015 22.1.2.4
@@ -489,6 +475,35 @@ public final class ArrayConstructor {
         }
 
         return JSBoolean.valueOf(args[0] instanceof JSArray);
+    }
+
+    /**
+     * Array.of(...items)
+     * ES2020 22.1.2.3
+     * Creates a new Array instance with a variable number of arguments.
+     */
+    public static JSValue of(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSArray array = context.createJSArray();
+
+        for (JSValue item : args) {
+            array.push(item);
+        }
+
+        return array;
+    }
+
+    private static void rejectWithError(JSPromise promise, JSContext context, String errorType, String message) {
+        // Clear any pending exception that was set as a side-effect
+        if (context.hasPendingException()) {
+            context.clearAllPendingExceptions();
+        }
+        JSError error = switch (errorType) {
+            case "TypeError" -> new JSTypeError(context, message);
+            case "RangeError" -> new JSRangeError(context, message);
+            default -> new JSError(context, message);
+        };
+        context.transferPrototype(error, errorType);
+        promise.reject(error);
     }
 
     /**
@@ -520,20 +535,5 @@ public final class ArrayConstructor {
         JSPromise promise = context.createJSPromise();
         promise.fulfill(value);
         return promise;
-    }
-
-    /**
-     * Array.of(...items)
-     * ES2020 22.1.2.3
-     * Creates a new Array instance with a variable number of arguments.
-     */
-    public static JSValue of(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSArray array = context.createJSArray();
-
-        for (JSValue item : args) {
-            array.push(item);
-        }
-
-        return array;
     }
 }

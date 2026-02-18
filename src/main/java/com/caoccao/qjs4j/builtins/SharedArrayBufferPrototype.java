@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 /**
  * SharedArrayBuffer.prototype methods implementation.
@@ -87,7 +88,7 @@ public final class SharedArrayBufferPrototype {
                 return context.throwRangeError("Invalid array buffer length");
             }
             newByteLength = (int) length;
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | JSRangeErrorException e) {
             return context.throwRangeError("Invalid array buffer length");
         }
 

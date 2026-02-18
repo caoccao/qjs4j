@@ -46,10 +46,10 @@ public final class Parser {
     private Token currentToken;
     private int functionNesting;
     private boolean inDerivedConstructor; // true when parsing a derived class constructor body (super() allowed)
-    private boolean parsingClassWithSuper; // true when parsing a class body that has 'extends'
     private boolean inFunctionBody = true; // false during formal parameter parsing (prevents yield/await as expressions)
     private boolean inOperatorAllowed = true; // false inside for-loop initializer (ES spec [~In])
     private Token nextToken; // Lookahead token
+    private boolean parsingClassWithSuper; // true when parsing a class body that has 'extends'
     private int previousTokenLine; // Line of previous token (for ASI checks)
     private boolean strictMode; // true when in strict mode ("use strict" or module)
 

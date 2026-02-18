@@ -173,6 +173,38 @@ public final class BytecodeCompiler {
         return false;
     }
 
+    /**
+     * Pre-declare all variable names as locals in the given compiler's current scope.
+     * This ensures bindings are visible during Phase 1 (function declaration hoisting),
+     * so nested function declarations can properly capture outer variables via VarRef.
+     * <p>
+     * Handles:
+     * - var declarations: function-scoped, recurse into blocks (they hoist)
+     * - let/const declarations: block-scoped, only top-level of function body
+     * (they don't hoist into nested blocks but ARE in scope at function level)
+     */
+    private static void hoistVarDeclarationsAsLocals(BytecodeCompiler compiler, List<Statement> body) {
+        Set<String> varNames = new HashSet<>();
+        for (Statement stmt : body) {
+            if (stmt instanceof FunctionDeclaration) {
+                continue;
+            }
+            // Collect var names (recurses into blocks since var is function-scoped)
+            compiler.collectVarNamesFromStatement(stmt, varNames);
+            // Collect top-level let/const names (don't recurse — they're block-scoped)
+            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                    compiler.collectPatternBindingNames(d.id(), varNames);
+                }
+            }
+        }
+        for (String varName : varNames) {
+            if (compiler.currentScope().getLocal(varName) == null) {
+                compiler.currentScope().declareLocal(varName);
+            }
+        }
+    }
+
     private static boolean statementContainsVarArguments(Statement stmt) {
         if (stmt instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
             for (var d : varDecl.declarations()) {
@@ -327,38 +359,6 @@ public final class BytecodeCompiler {
             }
         } else if (stmt instanceof LabeledStatement labeledStmt) {
             collectVarNamesFromStatement(labeledStmt.body(), varNames);
-        }
-    }
-
-    /**
-     * Pre-declare all variable names as locals in the given compiler's current scope.
-     * This ensures bindings are visible during Phase 1 (function declaration hoisting),
-     * so nested function declarations can properly capture outer variables via VarRef.
-     * <p>
-     * Handles:
-     * - var declarations: function-scoped, recurse into blocks (they hoist)
-     * - let/const declarations: block-scoped, only top-level of function body
-     *   (they don't hoist into nested blocks but ARE in scope at function level)
-     */
-    private static void hoistVarDeclarationsAsLocals(BytecodeCompiler compiler, List<Statement> body) {
-        Set<String> varNames = new HashSet<>();
-        for (Statement stmt : body) {
-            if (stmt instanceof FunctionDeclaration) {
-                continue;
-            }
-            // Collect var names (recurses into blocks since var is function-scoped)
-            compiler.collectVarNamesFromStatement(stmt, varNames);
-            // Collect top-level let/const names (don't recurse — they're block-scoped)
-            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                    compiler.collectPatternBindingNames(d.id(), varNames);
-                }
-            }
-        }
-        for (String varName : varNames) {
-            if (compiler.currentScope().getLocal(varName) == null) {
-                compiler.currentScope().declareLocal(varName);
-            }
         }
     }
 
@@ -4753,30 +4753,6 @@ public final class BytecodeCompiler {
      */
 
     /**
-     * Emit CLOSE_LOC opcodes for variables declared in a VariableDeclaration.
-     * Used at the end of for-loop iteration bodies to freeze VarRefs for per-iteration binding.
-     */
-    private void emitCloseLocForPattern(VariableDeclaration varDecl) {
-        for (VariableDeclaration.VariableDeclarator decl : varDecl.declarations()) {
-            emitCloseLocForPattern(decl.id());
-        }
-    }
-
-    /**
-     * Emit CLOSE_LOC opcodes for variables in a pattern.
-     * Handles Identifier patterns and can be extended for destructuring.
-     */
-    private void emitCloseLocForPattern(Pattern pattern) {
-        if (pattern instanceof Identifier id) {
-            Integer localIdx = findLocalInScopes(id.name());
-            if (localIdx != null) {
-                emitter.emitOpcodeU16(Opcode.CLOSE_LOC, localIdx);
-            }
-        }
-        // Destructuring patterns would need recursive handling here
-    }
-
-    /**
      * Build capture source info and set it on the template function.
      * Instead of emitting GET_LOCAL/GET_VAR_REF opcodes to push values onto the stack,
      * we store the capture source information in the template function so FCLOSURE
@@ -4801,6 +4777,30 @@ public final class BytecodeCompiler {
             i++;
         }
         templateFunction.setCaptureSourceInfos(captureSourceInfos);
+    }
+
+    /**
+     * Emit CLOSE_LOC opcodes for variables declared in a VariableDeclaration.
+     * Used at the end of for-loop iteration bodies to freeze VarRefs for per-iteration binding.
+     */
+    private void emitCloseLocForPattern(VariableDeclaration varDecl) {
+        for (VariableDeclaration.VariableDeclarator decl : varDecl.declarations()) {
+            emitCloseLocForPattern(decl.id());
+        }
+    }
+
+    /**
+     * Emit CLOSE_LOC opcodes for variables in a pattern.
+     * Handles Identifier patterns and can be extended for destructuring.
+     */
+    private void emitCloseLocForPattern(Pattern pattern) {
+        if (pattern instanceof Identifier id) {
+            Integer localIdx = findLocalInScopes(id.name());
+            if (localIdx != null) {
+                emitter.emitOpcodeU16(Opcode.CLOSE_LOC, localIdx);
+            }
+        }
+        // Destructuring patterns would need recursive handling here
     }
 
     private void emitConditionalVarInit(String name) {

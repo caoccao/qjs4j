@@ -35,8 +35,8 @@ import com.caoccao.qjs4j.core.JSValue;
  * that captured this VarRef, enabling per-iteration binding in loops.
  */
 public final class VarRef {
-    private JSValue[] storage;
     private int index;
+    private JSValue[] storage;
 
     /**
      * Create a VarRef pointing to a slot in a storage array.

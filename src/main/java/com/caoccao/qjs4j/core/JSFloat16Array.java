@@ -47,7 +47,7 @@ public final class JSFloat16Array extends JSTypedArray {
         if (args.length >= 1) {
             JSValue firstArg = args[0];
             if (firstArg instanceof JSNumber lengthNum) {
-                length = (int) JSTypeConversions.toLength(context, lengthNum);
+                length = (int) JSTypeConversions.toIndex(context, lengthNum);
             } else if (firstArg instanceof JSArrayBufferable jsArrayBufferable) {
                 length = -1;
                 int byteOffset = 0;

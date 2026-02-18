@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.vm;
 import com.caoccao.qjs4j.builtins.BigIntConstructor;
 import com.caoccao.qjs4j.builtins.SymbolConstructor;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
@@ -66,6 +67,33 @@ public final class VirtualMachine {
         this.executionDeadlineNanos = 0;
         this.interruptCounter = 0;
         this.forOfTempValues = EMPTY_ARGS;
+    }
+
+    /**
+     * Create VarRef array from capture source info during FCLOSURE.
+     * For LOCAL sources, creates/reuses a VarRef pointing to the parent's local slot.
+     * For VAR_REF sources, shares the parent's existing VarRef.
+     */
+    private static VarRef[] createVarRefsFromCaptures(int[] captureInfos, StackFrame parentFrame) {
+        VarRef[] varRefs = new VarRef[captureInfos.length];
+        for (int i = 0; i < captureInfos.length; i++) {
+            int info = captureInfos[i];
+            if (info >= 0) {
+                // LOCAL capture: create/reuse VarRef pointing to parent's local slot
+                varRefs[i] = parentFrame.getOrCreateLocalVarRef(info);
+            } else {
+                // VAR_REF capture: share parent's existing VarRef
+                int varRefIndex = -(info + 1);
+                VarRef parentRef = parentFrame.getVarRefCell(varRefIndex);
+                if (parentRef != null) {
+                    varRefs[i] = parentRef;
+                } else {
+                    // Fallback: create standalone VarRef with current value
+                    varRefs[i] = new VarRef(parentFrame.getVarRef(varRefIndex));
+                }
+            }
+        }
+        return varRefs;
     }
 
     private JSValue[] buildApplyArguments(JSValue argsArrayValue, boolean allowNullOrUndefined) {
@@ -195,7 +223,14 @@ public final class VirtualMachine {
                  URI_ERROR,
                  WEAK_MAP,
                  WEAK_REF,
-                 WEAK_SET -> result = constructorType.create(context, args);
+                 WEAK_SET -> {
+                try {
+                    result = constructorType.create(context, args);
+                } catch (JSErrorException e) {
+                    throw new JSVirtualMachineException(
+                            context.throwError(e.getErrorType().name(), e.getMessage()));
+                }
+            }
         }
         if (result != null && !result.isError() && !result.isProxy()) {
             context.transferPrototype(result, function);
@@ -2978,6 +3013,11 @@ public final class VirtualMachine {
                     }
                     context.clearPendingException();
                     valueStack.push(JSUndefined.INSTANCE);
+                } catch (JSErrorException e) {
+                    // Native function threw a typed JS error (e.g. JSRangeErrorException)
+                    pendingException = context.throwError(e.getErrorType().name(), e.getMessage());
+                    context.clearPendingException();
+                    valueStack.push(JSUndefined.INSTANCE);
                 }
             } else if (function instanceof JSBytecodeFunction bytecodeFunc) {
                 try {
@@ -4200,33 +4240,6 @@ public final class VirtualMachine {
 
         // Fall back to Java toString
         return exceptionObj.toString();
-    }
-
-    /**
-     * Create VarRef array from capture source info during FCLOSURE.
-     * For LOCAL sources, creates/reuses a VarRef pointing to the parent's local slot.
-     * For VAR_REF sources, shares the parent's existing VarRef.
-     */
-    private static VarRef[] createVarRefsFromCaptures(int[] captureInfos, StackFrame parentFrame) {
-        VarRef[] varRefs = new VarRef[captureInfos.length];
-        for (int i = 0; i < captureInfos.length; i++) {
-            int info = captureInfos[i];
-            if (info >= 0) {
-                // LOCAL capture: create/reuse VarRef pointing to parent's local slot
-                varRefs[i] = parentFrame.getOrCreateLocalVarRef(info);
-            } else {
-                // VAR_REF capture: share parent's existing VarRef
-                int varRefIndex = -(info + 1);
-                VarRef parentRef = parentFrame.getVarRefCell(varRefIndex);
-                if (parentRef != null) {
-                    varRefs[i] = parentRef;
-                } else {
-                    // Fallback: create standalone VarRef with current value
-                    varRefs[i] = new VarRef(parentFrame.getVarRef(varRefIndex));
-                }
-            }
-        }
-        return varRefs;
     }
 
     private void setArgumentValue(int index, JSValue value) {
