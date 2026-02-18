@@ -112,8 +112,6 @@ public final class JSContext implements AutoCloseable {
         }
     }
 
-    // Evaluation
-
     /**
      * Capture stack trace and attach to error object.
      */
@@ -142,8 +140,6 @@ public final class JSContext implements AutoCloseable {
         clearErrorStackTrace();
         virtualMachine.clearPendingException();
     }
-
-    // Module system
 
     private void clearCallStack() {
         callStack.clear();
@@ -577,14 +573,18 @@ public final class JSContext implements AutoCloseable {
         microtaskQueue.enqueue(microtask);
     }
 
+    private void ensureArrayBufferPrototype(JSArrayBufferable buffer) {
+        if (buffer instanceof JSObject jsObject && jsObject.getPrototype() == null) {
+            transferPrototype(jsObject, buffer.isShared() ? JSSharedArrayBuffer.NAME : JSArrayBuffer.NAME);
+        }
+    }
+
     /**
      * Execute code in a try-catch context.
      */
     public void enterCatchHandler() {
         this.inCatchHandler = true;
     }
-
-    // Exception handling
 
     /**
      * Enter strict mode.
@@ -849,8 +849,6 @@ public final class JSContext implements AutoCloseable {
         return currentThis;
     }
 
-    // Stack management
-
     /**
      * Get the error stack trace.
      */
@@ -910,8 +908,6 @@ public final class JSContext implements AutoCloseable {
         return stackDepth;
     }
 
-    // Stack trace capture
-
     /**
      * Get the virtual machine for this context.
      */
@@ -933,8 +929,6 @@ public final class JSContext implements AutoCloseable {
     private void initializeGlobalObject() {
         jsGlobalObject.initialize(this, globalObject);
     }
-
-    // Execution state
 
     /**
      * Check if in strict mode.
@@ -1000,8 +994,6 @@ public final class JSContext implements AutoCloseable {
         return true;
     }
 
-    // Accessors
-
     /**
      * Register a module in the cache.
      */
@@ -1035,8 +1027,6 @@ public final class JSContext implements AutoCloseable {
     public void setGeneratorFunctionPrototype(JSObject generatorFunctionPrototype) {
         this.generatorFunctionPrototype = generatorFunctionPrototype;
     }
-
-    // Microtask queue management
 
     /**
      * Set the maximum stack depth.
@@ -1175,12 +1165,6 @@ public final class JSContext implements AutoCloseable {
      */
     public JSError throwURIError(String message) {
         return throwError(JSURIError.NAME, message);
-    }
-
-    private void ensureArrayBufferPrototype(JSArrayBufferable buffer) {
-        if (buffer instanceof JSObject jsObject && jsObject.getPrototype() == null) {
-            transferPrototype(jsObject, buffer.isShared() ? JSSharedArrayBuffer.NAME : JSArrayBuffer.NAME);
-        }
     }
 
     public boolean transferPrototype(JSObject receiver, String constructorName) {

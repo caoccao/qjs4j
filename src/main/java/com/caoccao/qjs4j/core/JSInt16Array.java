@@ -76,11 +76,10 @@ public final class JSInt16Array extends JSTypedArray {
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSObject jsObject) {
-                length = toTypedArrayLength(context, jsObject.get("length"), BYTES_PER_ELEMENT);
+                JSValue lengthValue = jsObject.get(PropertyKey.LENGTH, context);
+                length = toTypedArrayLength(context, lengthValue, BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSInt16Array(length);
-                for (int i = 0; i < length; i++) {
-                    jsTypedArray.setElement(i, JSTypeConversions.toNumber(context, jsObject.get(i)).value());
-                }
+                jsTypedArray.setArray(context, jsObject, 0);
                 return jsTypedArray;
             } else {
                 length = toTypedArrayLength(context, firstArg, BYTES_PER_ELEMENT);
