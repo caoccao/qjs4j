@@ -57,8 +57,11 @@ public abstract class JSTypedArray extends JSObject {
      */
     protected JSTypedArray(JSArrayBufferable buffer, int byteOffset, int length, int bytesPerElement) {
         super();
-        if (buffer == null || buffer.isDetached()) {
-            throw new IllegalArgumentException("Cannot create TypedArray on detached buffer");
+        if (buffer == null) {
+            throw new IllegalArgumentException("Cannot create TypedArray on null buffer");
+        }
+        if (buffer.isDetached()) {
+            throw new JSTypeErrorException("ArrayBuffer is detached");
         }
 
         this.bytesPerElement = bytesPerElement;
