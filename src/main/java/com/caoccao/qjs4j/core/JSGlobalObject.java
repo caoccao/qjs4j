@@ -1354,6 +1354,7 @@ public final class JSGlobalObject {
         iteratorPrototype.definePropertyWritableConfigurable("flatMap", new JSNativeFunction("flatMap", 1, IteratorPrototype::flatMap));
         iteratorPrototype.definePropertyWritableConfigurable("forEach", new JSNativeFunction("forEach", 1, IteratorPrototype::forEach));
         iteratorPrototype.definePropertyWritableConfigurable("map", new JSNativeFunction("map", 1, IteratorPrototype::map));
+        iteratorPrototype.definePropertyWritableConfigurable("next", new JSNativeFunction("next", 0, IteratorPrototype::next));
         iteratorPrototype.definePropertyWritableConfigurable("reduce", new JSNativeFunction("reduce", 1, IteratorPrototype::reduce));
         iteratorPrototype.definePropertyWritableConfigurable("some", new JSNativeFunction("some", 1, IteratorPrototype::some));
         iteratorPrototype.definePropertyWritableConfigurable("take", new JSNativeFunction("take", 1, IteratorPrototype::take));

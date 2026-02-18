@@ -103,7 +103,6 @@ public abstract class JSTypedArray extends JSObject {
      */
     protected static JSValue normalizeConstructorSource(JSContext context, JSValue source) {
         if (!(source instanceof JSObject sourceObject)
-                || source instanceof JSArray
                 || source instanceof JSIterator
                 || source instanceof JSTypedArray
                 || source instanceof JSArrayBufferable) {

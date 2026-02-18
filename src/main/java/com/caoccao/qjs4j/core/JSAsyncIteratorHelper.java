@@ -259,7 +259,7 @@ public final class JSAsyncIteratorHelper {
      * The next() method is expected to return a Promise that resolves to {value, done}.
      */
     public static JSAsyncIterator wrapAsAsyncIterator(JSObject iterObj, JSContext context) {
-        JSValue nextMethod = iterObj.get("next");
+        JSValue nextMethod = iterObj.get(PropertyKey.NEXT);
         if (!(nextMethod instanceof JSFunction nextFunc)) {
             return null;
         }
@@ -279,7 +279,7 @@ public final class JSAsyncIteratorHelper {
      * Wrap a sync iterator JSObject (has next() returning {value, done}) as an async iterator.
      */
     public static JSAsyncIterator wrapSyncAsAsyncIterator(JSObject iterObj, JSContext context) {
-        JSValue nextMethod = iterObj.get("next");
+        JSValue nextMethod = iterObj.get(PropertyKey.NEXT);
         if (!(nextMethod instanceof JSFunction nextFunc)) {
             return null;
         }

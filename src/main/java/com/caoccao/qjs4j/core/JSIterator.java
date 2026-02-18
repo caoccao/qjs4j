@@ -33,27 +33,37 @@ public class JSIterator extends JSObject {
      * Create an iterator with the given iteration logic.
      */
     public JSIterator(JSContext context, IteratorFunction iteratorFunction) {
-        this(context, iteratorFunction, null);
+        this(context, iteratorFunction, null, true);
     }
 
     /**
      * Create an iterator with the given iteration logic and optional toStringTag.
      */
     public JSIterator(JSContext context, IteratorFunction iteratorFunction, String toStringTag) {
+        this(context, iteratorFunction, toStringTag, true);
+    }
+
+    /**
+     * Create an iterator with optional own next() installation.
+     */
+    public JSIterator(JSContext context, IteratorFunction iteratorFunction, String toStringTag, boolean defineOwnNext) {
         super();
         this.context = context;
         this.iteratorFunction = iteratorFunction;
         this.exhausted = false;
         context.transferPrototype(this, NAME);
 
-        // Set up 'next' method as a property (required by iterator protocol)
-        JSNativeFunction nextMethod = new JSNativeFunction("next", 0, (childContext, thisArg, args) -> {
-            if (thisArg instanceof JSIterator iter) {
-                return iter.next();
-            }
-            return this.next();
-        });
-        this.set("next", nextMethod);
+        if (defineOwnNext) {
+            // Set up 'next' as an own property for iterator kinds that do not
+            // rely on prototype-dispatched next semantics.
+            JSNativeFunction nextMethod = new JSNativeFunction("next", 0, (childContext, thisArg, args) -> {
+                if (thisArg instanceof JSIterator iter) {
+                    return iter.next();
+                }
+                return this.next();
+            });
+            this.set(PropertyKey.NEXT, nextMethod);
+        }
 
         // Make the iterator iterable by adding [Symbol.iterator] method
         JSNativeFunction iteratorMethod = new JSNativeFunction("@@iterator", 0, (childContext, thisArg, args) -> thisArg);
@@ -77,7 +87,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, value);
             }
             return IteratorResult.done(context);
-        }, "Array Iterator");
+        }, "Array Iterator", false);
     }
 
     /**

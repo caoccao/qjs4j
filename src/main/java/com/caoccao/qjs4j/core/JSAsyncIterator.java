@@ -43,7 +43,7 @@ public class JSAsyncIterator extends JSObject {
         this.context = context;
 
         // Add next() method
-        this.set("next", new JSNativeFunction(
+        this.set(PropertyKey.NEXT, new JSNativeFunction(
                 "next",
                 0,
                 (childContext, thisArg, args) -> iteratorFunction.next()));

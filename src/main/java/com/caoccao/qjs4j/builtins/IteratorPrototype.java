@@ -51,7 +51,7 @@ public final class IteratorPrototype {
                 return JSIterator.IteratorResult.of(context, pair);
             }
             return JSIterator.IteratorResult.done(context);
-        });
+        }, "Array Iterator", false);
     }
 
     /**
@@ -69,7 +69,7 @@ public final class IteratorPrototype {
                 return JSIterator.IteratorResult.of(context, JSNumber.of(index[0]++));
             }
             return JSIterator.IteratorResult.done(context);
-        });
+        }, "Array Iterator", false);
     }
 
     /**

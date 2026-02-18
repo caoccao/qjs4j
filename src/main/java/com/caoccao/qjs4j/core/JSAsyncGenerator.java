@@ -49,7 +49,7 @@ public final class JSAsyncGenerator extends JSObject {
         this.thrownValue = null;
 
         // Add next() method
-        this.set("next", new JSNativeFunction("next", 1, (childContext, thisArg, args) -> {
+        this.set(PropertyKey.NEXT, new JSNativeFunction("next", 1, (childContext, thisArg, args) -> {
             JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
             return next(value);
         }));
