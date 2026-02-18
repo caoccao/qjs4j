@@ -98,6 +98,25 @@ public final class JSTypeConversions {
                 value instanceof JSBigInt;
     }
 
+    private static boolean isValidBigIntDigits(String digits, int radix) {
+        for (int i = 0; i < digits.length(); i++) {
+            char c = digits.charAt(i);
+            boolean valid = switch (radix) {
+                case 2 -> c == '0' || c == '1';
+                case 8 -> c >= '0' && c <= '7';
+                case 10 -> c >= '0' && c <= '9';
+                case 16 -> (c >= '0' && c <= '9') ||
+                        (c >= 'a' && c <= 'f') ||
+                        (c >= 'A' && c <= 'F');
+                default -> false;
+            };
+            if (!valid) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /**
      * Less Than Comparison (x < y).
      * ES2020 7.2.13
@@ -172,6 +191,65 @@ public final class JSTypeConversions {
     }
 
     /**
+     * Convert string to BigInt following QuickJS JS_StringToBigInt semantics.
+     * Empty/whitespace-only strings convert to 0n.
+     * Decimal strings allow an optional leading sign.
+     * Binary/octal/hex prefixes do not allow a leading sign.
+     *
+     * @throws NumberFormatException if the string is not a valid BigInt literal
+     */
+    public static JSBigInt stringToBigInt(String value) {
+        String text = value.strip();
+        if (text.isEmpty()) {
+            return new JSBigInt(BigInteger.ZERO);
+        }
+
+        int sign = 1;
+        int start = 0;
+        boolean hasSign = false;
+        char first = text.charAt(0);
+        if (first == '+' || first == '-') {
+            hasSign = true;
+            sign = first == '-' ? -1 : 1;
+            start = 1;
+            if (start >= text.length()) {
+                throw new NumberFormatException("Missing digits");
+            }
+        }
+
+        int radix = 10;
+        int digitsStart = start;
+        if (text.length() - start >= 2 && text.charAt(start) == '0') {
+            char prefix = text.charAt(start + 1);
+            if (prefix == 'x' || prefix == 'X' || prefix == 'o' || prefix == 'O' || prefix == 'b' || prefix == 'B') {
+                if (hasSign) {
+                    throw new NumberFormatException("Signed non-decimal BigInt is not allowed");
+                }
+                digitsStart = start + 2;
+                radix = switch (prefix) {
+                    case 'x', 'X' -> 16;
+                    case 'o', 'O' -> 8;
+                    default -> 2;
+                };
+            }
+        }
+
+        if (digitsStart >= text.length()) {
+            throw new NumberFormatException("Missing digits");
+        }
+        String digits = text.substring(digitsStart);
+        if (!isValidBigIntDigits(digits, radix)) {
+            throw new NumberFormatException("Invalid digits");
+        }
+
+        BigInteger bigInteger = new BigInteger(digits, radix);
+        if (sign < 0) {
+            bigInteger = bigInteger.negate();
+        }
+        return new JSBigInt(bigInteger);
+    }
+
+    /**
      * Convert string to number following ES2020 rules.
      */
     private static JSNumber stringToNumber(String str) {
@@ -226,7 +304,7 @@ public final class JSTypeConversions {
         }
         if (value instanceof JSString stringValue) {
             try {
-                return new JSBigInt(new BigInteger(stringValue.value().trim()));
+                return stringToBigInt(stringValue.value());
             } catch (NumberFormatException e) {
                 throw new JSSyntaxErrorException(
                         "Cannot convert " + stringValue.value() + " to a BigInt");

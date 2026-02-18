@@ -19,8 +19,6 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
-import java.math.BigInteger;
-
 /**
  * Implementation of DataView.prototype methods.
  * Based on QuickJS DataView semantics.
@@ -267,18 +265,8 @@ public final class DataViewPrototype {
     }
 
     private static JSBigInt parseBigInt(JSContext context, String value) {
-        String text = value.strip();
         try {
-            if (text.startsWith("0x") || text.startsWith("0X")) {
-                return new JSBigInt(new BigInteger(text.substring(2), 16));
-            }
-            if (text.startsWith("0o") || text.startsWith("0O")) {
-                return new JSBigInt(new BigInteger(text.substring(2), 8));
-            }
-            if (text.startsWith("0b") || text.startsWith("0B")) {
-                return new JSBigInt(new BigInteger(text.substring(2), 2));
-            }
-            return new JSBigInt(new BigInteger(text, 10));
+            return JSTypeConversions.stringToBigInt(value);
         } catch (NumberFormatException e) {
             context.throwSyntaxError("invalid bigint literal");
             return null;

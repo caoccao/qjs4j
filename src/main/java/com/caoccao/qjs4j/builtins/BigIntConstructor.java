@@ -132,16 +132,7 @@ public final class BigIntConstructor {
         } else if (arg instanceof JSString str) {
             String strValue = str.value().trim();
             try {
-                // Handle different radix
-                if (strValue.startsWith("0x") || strValue.startsWith("0X")) {
-                    return new JSBigInt(new BigInteger(strValue.substring(2), 16));
-                } else if (strValue.startsWith("0o") || strValue.startsWith("0O")) {
-                    return new JSBigInt(new BigInteger(strValue.substring(2), 8));
-                } else if (strValue.startsWith("0b") || strValue.startsWith("0B")) {
-                    return new JSBigInt(new BigInteger(strValue.substring(2), 2));
-                } else {
-                    return new JSBigInt(new BigInteger(strValue, 10));
-                }
+                return JSTypeConversions.stringToBigInt(strValue);
             } catch (NumberFormatException e) {
                 return context.throwSyntaxError("Cannot convert string to BigInt: " + strValue);
             }

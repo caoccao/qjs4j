@@ -51,7 +51,8 @@ public class Test262Config {
         config.includePatterns.clear();
         config.addIncludePatterns(
                 Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
-                Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"));
+                Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
+                Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
         return config;
     }
 
@@ -60,7 +61,8 @@ public class Test262Config {
         // Run a subset of tests for quick validation
         config.addExcludePatterns(
                 Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
-                Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"));
+                Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
+                Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
         config.maxTests = 5900;
         return config;
     }

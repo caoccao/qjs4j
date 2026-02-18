@@ -6,6 +6,20 @@ import org.junit.jupiter.api.Test;
 public class TypedArrayConstructorTest extends BaseJavetTest {
 
     @Test
+    public void testBigIntObjectArgStringToBigInt() {
+        assertStringWithJavet(
+                "new BigInt64Array(['', '1'])[0].toString()",
+                "new BigInt64Array(['', '1'])[1].toString()",
+                "new BigUint64Array(['', '1'])[0].toString()",
+                "new BigUint64Array(['', '1'])[1].toString()");
+        assertErrorWithJavet(
+                "new BigInt64Array(['1n'])",
+                "new BigInt64Array(['Infinity'])",
+                "new BigInt64Array(['1.1'])",
+                "new BigInt64Array(['1e7'])");
+    }
+
+    @Test
     public void testConstructor() {
         assertErrorWithJavet(
                 "BigInt64Array(1)",
