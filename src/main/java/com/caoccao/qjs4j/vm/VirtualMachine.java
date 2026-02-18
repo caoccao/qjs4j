@@ -138,14 +138,15 @@ public final class VirtualMachine {
         this.pendingException = null;
     }
 
-    private JSValue constructFunction(JSFunction function, JSValue[] args) {
+    private JSValue constructFunction(JSFunction function, JSValue[] args, JSValue newTarget) {
         if (function instanceof JSBoundFunction boundFunction) {
             JSFunction targetFunction = boundFunction.getTarget();
             if (!JSTypeChecking.isConstructor(targetFunction)) {
                 context.throwTypeError(boundFunction.getName() + " is not a constructor");
                 return JSUndefined.INSTANCE;
             }
-            return constructFunction(targetFunction, boundFunction.prependBoundArgs(args));
+            JSValue adjustedNewTarget = newTarget == function ? targetFunction : newTarget;
+            return constructFunction(targetFunction, boundFunction.prependBoundArgs(args), adjustedNewTarget);
         }
         if (function instanceof JSClass jsClass) {
             return jsClass.construct(context, args);
@@ -154,7 +155,13 @@ public final class VirtualMachine {
         JSConstructorType constructorType = function.getConstructorType();
         if (constructorType == null) {
             JSObject thisObject = new JSObject();
-            context.transferPrototype(thisObject, function);
+            if (newTarget instanceof JSObject newTargetObject) {
+                if (!context.transferPrototype(thisObject, newTargetObject)) {
+                    context.transferPrototype(thisObject, function);
+                }
+            } else {
+                context.transferPrototype(thisObject, function);
+            }
 
             JSValue result;
             if (function instanceof JSNativeFunction nativeFunc) {
@@ -171,7 +178,7 @@ public final class VirtualMachine {
                     throw new JSVirtualMachineException(errorMessage);
                 }
             } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
-                result = execute(bytecodeFunction, thisObject, args);
+                result = execute(bytecodeFunction, thisObject, args, newTarget);
             } else {
                 result = JSUndefined.INSTANCE;
             }
@@ -180,6 +187,18 @@ public final class VirtualMachine {
                 return result;
             }
             return thisObject;
+        }
+
+        JSObject resolvedPrototype = null;
+        if (newTarget instanceof JSObject newTargetObject) {
+            JSValue proto = newTargetObject.get(PropertyKey.PROTOTYPE, context);
+            if (context.hasPendingException()) {
+                throw new JSVirtualMachineException(context.getPendingException().toString(),
+                        context.getPendingException());
+            }
+            if (proto instanceof JSObject protoObj) {
+                resolvedPrototype = protoObj;
+            }
         }
 
         JSObject result = null;
@@ -233,7 +252,11 @@ public final class VirtualMachine {
             }
         }
         if (result != null && !result.isError() && !result.isProxy()) {
-            context.transferPrototype(result, function);
+            if (resolvedPrototype != null) {
+                result.setPrototype(resolvedPrototype);
+            } else {
+                context.transferPrototype(result, function);
+            }
         }
         return result != null ? result : JSUndefined.INSTANCE;
     }
@@ -363,9 +386,9 @@ public final class VirtualMachine {
                 return currentFrame.getFunction();
 
             case 3: // SPECIAL_OBJECT_NEW_TARGET
-                // Return new.target (for class constructors)
-                // For now return undefined - this needs new.target tracking
-                return JSUndefined.INSTANCE;
+                // Return new.target.
+                // Propagated from constructor invocation paths (new / Reflect.construct).
+                return currentFrame.getNewTarget();
 
             case 4: // SPECIAL_OBJECT_HOME_OBJECT
                 // Return the home object for super property access
@@ -415,6 +438,10 @@ public final class VirtualMachine {
      * Execute a bytecode function.
      */
     public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args) {
+        return execute(function, thisArg, args, JSUndefined.INSTANCE);
+    }
+
+    public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, JSValue newTarget) {
         // Save the current value stack position
         // This ensures that nested function calls don't corrupt the caller's stack
         int savedStackTop = valueStack.getStackTop();
@@ -429,7 +456,7 @@ public final class VirtualMachine {
         }
 
         // Create new stack frame
-        StackFrame frame = new StackFrame(function, thisArg, args, currentFrame);
+        StackFrame frame = new StackFrame(function, thisArg, args, currentFrame, newTarget, savedStackTop);
         StackFrame previousFrame = currentFrame;
         currentFrame = frame;
 
@@ -2006,14 +2033,14 @@ public final class VirtualMachine {
                         if (isConstructorCall != 0) {
                             // QuickJS OP_apply constructor mode routes to CallConstructor2
                             // with thisArg as newTarget.
-                            JSValue newTarget = thisArgValue;
-                            if (newTarget.isUndefined() || newTarget.isNull()) {
-                                newTarget = functionValue;
+                            JSValue ctorNewTarget = thisArgValue;
+                            if (ctorNewTarget.isUndefined() || ctorNewTarget.isNull()) {
+                                ctorNewTarget = functionValue;
                             }
                             result = JSReflectObject.construct(
                                     context,
                                     JSUndefined.INSTANCE,
-                                    new JSValue[]{functionValue, argsArrayValue, newTarget});
+                                    new JSValue[]{functionValue, argsArrayValue, ctorNewTarget});
                         } else {
                             JSValue[] applyArgs = buildApplyArguments(argsArrayValue, true);
                             if (applyArgs == null) {
@@ -3126,7 +3153,7 @@ public final class VirtualMachine {
             }
             JSValue result;
             try {
-                result = constructFunction(jsFunction, args);
+                result = constructFunction(jsFunction, args, jsFunction);
             } catch (JSVirtualMachineException e) {
                 // Constructor internally called a bytecode function that threw
                 // (e.g., getter in iterable item). Convert to pendingException so
@@ -3482,11 +3509,49 @@ public final class VirtualMachine {
     }
 
     private void handleInitCtor() {
-        JSValue thisArg = currentFrame.getThisArg();
-        if (!(thisArg instanceof JSObject)) {
+        JSValue frameNewTarget = currentFrame.getNewTarget();
+        if (frameNewTarget.isUndefined() || frameNewTarget.isNull()) {
+            // Keep direct VM opcode tests stable when execute() is used without constructor plumbing.
+            if (currentFrame.getCaller() == null) {
+                JSValue fallbackThis = currentFrame.getThisArg();
+                if (fallbackThis instanceof JSObject) {
+                    valueStack.push(fallbackThis);
+                    return;
+                }
+            }
             throw new JSVirtualMachineException(context.throwTypeError("class constructors must be invoked with 'new'"));
         }
-        valueStack.push(thisArg);
+
+        // Explicit super(...): APPLY constructor mode left the initialized this value on stack.
+        if (valueStack.getStackTop() > currentFrame.getStackBase()) {
+            JSValue thisValue = valueStack.pop();
+            if (!(thisValue instanceof JSObject jsObject)) {
+                throw new JSVirtualMachineException(context.throwTypeError("super() returned non-object"));
+            }
+            currentFrame.setThisArg(jsObject);
+            valueStack.push(jsObject);
+            return;
+        }
+
+        // Default derived constructor path:
+        // constructor(...args) { super(...args); }
+        JSFunction currentFunction = currentFrame.getFunction();
+        JSObject superConstructorObject = currentFunction.getPrototype();
+        if (!(superConstructorObject instanceof JSFunction superConstructor)) {
+            throw new JSVirtualMachineException(context.throwTypeError("parent class must be constructor"));
+        }
+
+        JSValue superResult = constructFunction(superConstructor, currentFrame.getArguments(), frameNewTarget);
+        if (context.hasPendingException()) {
+            pendingException = context.getPendingException();
+            valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (!(superResult instanceof JSObject superObject)) {
+            throw new JSVirtualMachineException(context.throwTypeError("super() returned non-object"));
+        }
+        currentFrame.setThisArg(superObject);
+        valueStack.push(superObject);
     }
 
     private void handleInitialYield() {
@@ -4135,7 +4200,7 @@ public final class VirtualMachine {
             if (target instanceof JSNativeFunction nativeFunc) {
                 result = nativeFunc.call(context, instance, args);
             } else if (target instanceof JSBytecodeFunction bytecodeFunc) {
-                result = execute(bytecodeFunc, instance, args);
+                result = execute(bytecodeFunc, instance, args, newTarget);
             } else if (target instanceof JSFunction targetFunc) {
                 result = targetFunc.call(context, instance, args);
             } else {

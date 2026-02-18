@@ -146,7 +146,7 @@ public final class JSReflectObject {
             if (function instanceof JSNativeFunction nativeFunc) {
                 result = nativeFunc.call(context, thisObject, args);
             } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
-                result = context.getVirtualMachine().execute(bytecodeFunction, thisObject, args);
+                result = context.getVirtualMachine().execute(bytecodeFunction, thisObject, args, newTarget);
             } else {
                 result = function.call(context, thisObject, args);
             }

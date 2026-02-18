@@ -33,15 +33,19 @@ public final class StackFrame {
     private final JSValue[] closureVars;
     private final JSFunction function;
     private final JSValue[] locals;
-    private final JSValue thisArg;
+    private final JSValue newTarget;
+    private final int stackBase;
     private final VarRef[] varRefs;
     private VarRef[] closedVarRefs;
     private VarRef[] localVarRefs;
     private int programCounter;
+    private JSValue thisArg;
 
-    public StackFrame(JSFunction function, JSValue thisArg, JSValue[] args, StackFrame caller) {
+    public StackFrame(JSFunction function, JSValue thisArg, JSValue[] args, StackFrame caller, JSValue newTarget, int stackBase) {
         this.function = function;
         this.thisArg = thisArg;
+        this.newTarget = newTarget;
+        this.stackBase = stackBase;
         this.arguments = args;  // Store original arguments for arguments object
 
         // Allocate locals array based on function's local count
@@ -136,6 +140,10 @@ public final class StackFrame {
         return locals;
     }
 
+    public JSValue getNewTarget() {
+        return newTarget;
+    }
+
     /**
      * Get or create a VarRef for a local variable at the given index.
      * Used during FCLOSURE to create shared references for captured locals.
@@ -153,6 +161,10 @@ public final class StackFrame {
 
     public int getProgramCounter() {
         return programCounter;
+    }
+
+    public int getStackBase() {
+        return stackBase;
     }
 
     public JSValue getThisArg() {
@@ -197,6 +209,10 @@ public final class StackFrame {
 
     public void setProgramCounter(int pc) {
         this.programCounter = pc;
+    }
+
+    public void setThisArg(JSValue thisArg) {
+        this.thisArg = thisArg;
     }
 
     /**

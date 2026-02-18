@@ -1014,14 +1014,14 @@ public final class BytecodeCompiler {
     private void compileCallExpressionRegular(CallExpression callExpr) {
         // Check for super() call in derived constructor
         if (callExpr.callee() instanceof Identifier calleeId && "super".equals(calleeId.name())) {
-            // super(args) — call parent constructor
-            // Stack layout: superConstructor, this, args...
-            emitter.emitOpcode(Opcode.GET_SUPER);  // Push super class constructor
-            emitter.emitOpcode(Opcode.PUSH_THIS);   // Push 'this' as receiver
-            for (Expression arg : callExpr.arguments()) {
-                compileExpression(arg);
-            }
-            emitter.emitOpcodeU16(Opcode.CALL, callExpr.arguments().size());
+            // super(args) — constructor call with propagated new.target.
+            // Stack for APPLY constructor mode: newTarget, superConstructor, argsArray
+            emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+            emitter.emitU8(3); // SPECIAL_OBJECT_NEW_TARGET
+            emitter.emitOpcode(Opcode.GET_SUPER);
+            emitArgumentsArrayWithSpread(callExpr.arguments());
+            emitter.emitOpcodeU16(Opcode.APPLY, 1);
+            emitter.emitOpcode(Opcode.INIT_CTOR);
             return;
         }
         // Check if this is a method call (callee is a member expression)
@@ -1098,12 +1098,13 @@ public final class BytecodeCompiler {
 
         // Determine thisArg and function
         if (callExpr.callee() instanceof Identifier calleeId && "super".equals(calleeId.name())) {
-            // super(...args) — call parent constructor with spread
-            // Stack layout for APPLY: thisArg function argsArray
-            emitter.emitOpcode(Opcode.PUSH_THIS);   // Push 'this' as receiver
-            emitter.emitOpcode(Opcode.GET_SUPER);    // Push super class constructor
+            // super(...args) — constructor call with propagated new.target.
+            emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+            emitter.emitU8(3); // SPECIAL_OBJECT_NEW_TARGET
+            emitter.emitOpcode(Opcode.GET_SUPER);
             emitArgumentsArrayWithSpread(callExpr.arguments());
-            emitter.emitOpcodeU16(Opcode.APPLY, 0);
+            emitter.emitOpcodeU16(Opcode.APPLY, 1);
+            emitter.emitOpcode(Opcode.INIT_CTOR);
             return;
         }
         if (callExpr.callee() instanceof MemberExpression memberExpr) {
@@ -4506,7 +4507,16 @@ public final class BytecodeCompiler {
         constructorCompiler.enterScope();
         constructorCompiler.inGlobalScope = false;
 
-        // Initialize private methods and fields before constructor body
+        // Default derived constructor semantics:
+        // constructor(...args) { super(...args); }
+        // OP_init_ctor performs the super constructor call using current args/new.target.
+        if (hasSuper) {
+            constructorCompiler.emitter.emitOpcode(Opcode.INIT_CTOR);
+            constructorCompiler.emitter.emitOpcode(Opcode.DROP);
+        }
+
+        // Initialize private methods and instance fields.
+        // For derived constructors this runs after super() returns.
         if (!privateInstanceMethodFunctions.isEmpty()) {
             constructorCompiler.compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
         }
@@ -4514,14 +4524,7 @@ public final class BytecodeCompiler {
             constructorCompiler.compileFieldInitialization(instanceFields, privateSymbols, computedFieldSymbols);
         }
 
-        // Default constructor just returns undefined (or calls super for derived classes)
-        if (hasSuper) {
-            // TODO: Implement super() call for derived class constructor
-            // For now, just return undefined
-            constructorCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
-        } else {
-            constructorCompiler.emitter.emitOpcode(Opcode.UNDEFINED);
-        }
+        constructorCompiler.emitter.emitOpcode(hasSuper ? Opcode.PUSH_THIS : Opcode.UNDEFINED);
         constructorCompiler.emitter.emitOpcode(Opcode.RETURN);
 
         int localCount = constructorCompiler.currentScope().getLocalCount();

@@ -583,6 +583,71 @@ public class ClassCompilerTest extends BaseJavetTest {
     }
 
     @Test
+    public void testDefaultDerivedConstructorForwardsArgumentsToSuper() {
+        assertBooleanWithJavet("""
+                class Parent {
+                    constructor(a, b, c) {
+                        this.argCount = arguments.length;
+                        this.second = b;
+                        this.third = c;
+                    }
+                }
+                class Child extends Parent {}
+                const child = new Child(1, 2, 3);
+                child instanceof Child &&
+                    child instanceof Parent &&
+                    child.argCount === 3 &&
+                    child.second === 2 &&
+                    child.third === 3""");
+    }
+
+    @Test
+    public void testDefaultDerivedTypedArrayConstructorOutOfBoundsThrowsRangeError() {
+        assertBooleanWithJavet("""
+                const buffer = new ArrayBuffer(4);
+                class MyUint8Array extends Uint8Array {}
+                try {
+                    new MyUint8Array(buffer, 0, 8);
+                    false;
+                } catch (e) {
+                    e instanceof RangeError;
+                }""");
+    }
+
+    @Test
+    public void testDefaultDerivedTypedArrayConstructorResizableArrayBufferOutOfBoundsThrowsRangeError() {
+        assertBooleanWithJavet("""
+                const rab = new ArrayBuffer(40, { maxByteLength: 80 });
+                class MyUint8Array extends Uint8Array {}
+                class MyFloat32Array extends Float32Array {}
+                let ok = true;
+                try {
+                    new MyUint8Array(rab, 40, 1);
+                    ok = false;
+                } catch (e) {
+                    ok = ok && (e instanceof RangeError);
+                }
+                try {
+                    new MyFloat32Array(rab, 1);
+                    ok = false;
+                } catch (e) {
+                    ok = ok && (e instanceof RangeError);
+                }
+                ok""");
+    }
+
+    @Test
+    public void testDefaultDerivedTypedArrayConstructorUsesConstructorPath() {
+        assertBooleanWithJavet("""
+                class MyUint8Array extends Uint8Array {}
+                const arr = new MyUint8Array(4);
+                arr instanceof MyUint8Array &&
+                    arr instanceof Uint8Array &&
+                    arr.length === 4 &&
+                    arr[0] === 0""");
+    }
+
+    @Test
     public void testPrivateInOperatorOutsideClassThrows() {
         assertThatThrownBy(() -> resetContext().eval("#x in ({})"))
                 .isInstanceOf(JSException.class)
