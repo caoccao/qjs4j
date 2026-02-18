@@ -88,6 +88,41 @@ public abstract class JSTypedArray extends JSObject {
     }
 
     /**
+     * TypedArray constructor source normalization for object arguments.
+     *
+     * <p>If @@iterator exists and is callable, constructors must consume the iterable.
+     * If @@iterator exists but is not callable, throw TypeError. If absent/nullish,
+     * keep array-like semantics.</p>
+     */
+    protected static JSValue normalizeConstructorSource(JSContext context, JSValue source) {
+        if (!(source instanceof JSObject sourceObject)
+                || source instanceof JSArray
+                || source instanceof JSIterator
+                || source instanceof JSTypedArray
+                || source instanceof JSArrayBufferable) {
+            return source;
+        }
+
+        JSValue iteratorMethod = sourceObject.get(PropertyKey.SYMBOL_ITERATOR, context);
+        if (context.hasPendingException()) {
+            return source;
+        }
+        if (iteratorMethod instanceof JSUndefined || iteratorMethod instanceof JSNull) {
+            return source;
+        }
+        if (!(iteratorMethod instanceof JSFunction)) {
+            context.throwTypeError("Symbol.iterator is not a function");
+            return source;
+        }
+
+        JSArray iterableValues = JSIteratorHelper.iterableToList(context, source);
+        if (context.hasPendingException() || iterableValues == null) {
+            return source;
+        }
+        return iterableValues;
+    }
+
+    /**
      * Try to interpret a PropertyKey as a typed array integer index.
      * Returns the index if it's a valid canonical numeric index string, or -1 otherwise.
      */

@@ -44,7 +44,10 @@ public final class JSBigUint64Array extends JSTypedArray {
     public static JSObject create(JSContext context, JSValue... args) {
         int length = 0;
         if (args.length >= 1) {
-            JSValue firstArg = args[0];
+            JSValue firstArg = normalizeConstructorSource(context, args[0]);
+            if (context.hasPendingException()) {
+                return (JSObject) context.getPendingException();
+            }
             if (firstArg instanceof JSNumber lengthNum) {
                 length = (int) JSTypeConversions.toIndex(context, lengthNum);
             } else if (firstArg instanceof JSArrayBufferable jsArrayBufferable) {
