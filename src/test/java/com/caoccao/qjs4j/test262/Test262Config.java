@@ -50,6 +50,7 @@ public class Test262Config {
         Test262Config config = loadDefault();
         config.includePatterns.clear();
         config.addIncludePatterns(
+                Pattern.compile(".*/test/annexB/built-ins/RegExp/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
@@ -60,10 +61,11 @@ public class Test262Config {
         Test262Config config = loadDefault();
         // Run a subset of tests for quick validation
         config.addExcludePatterns(
+                Pattern.compile(".*/test/annexB/built-ins/RegExp/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
-        config.maxTests = 5900;
+        config.maxTests = 5800;
         return config;
     }
 

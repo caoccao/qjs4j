@@ -30,6 +30,13 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testBigIntTypedArrayLengthExcessiveThrowsRangeError() {
+        assertBooleanWithJavet(
+                "(() => { var obj = { length: Math.pow(2, 53) }; try { new BigInt64Array(obj); return false; } catch (e) { return e instanceof RangeError; } })()",
+                "(() => { var obj = { length: Math.pow(2, 53) }; try { new BigUint64Array(obj); return false; } catch (e) { return e instanceof RangeError; } })()");
+    }
+
+    @Test
     public void testConstructor() {
         assertErrorWithJavet(
                 "BigInt64Array(1)",

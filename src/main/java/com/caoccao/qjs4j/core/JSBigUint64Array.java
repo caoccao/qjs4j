@@ -49,7 +49,7 @@ public final class JSBigUint64Array extends JSTypedArray {
                 return null;
             }
             if (firstArg instanceof JSNumber lengthNum) {
-                length = (int) JSTypeConversions.toIndex(context, lengthNum);
+                length = toTypedArrayIndex(context, lengthNum, BYTES_PER_ELEMENT);
             } else if (firstArg instanceof JSArrayBufferable jsArrayBufferable) {
                 length = -1;
                 int byteOffset = 0;
@@ -57,7 +57,7 @@ public final class JSBigUint64Array extends JSTypedArray {
                     byteOffset = (int) JSTypeConversions.toInteger(context, args[1]);
                 }
                 if (args.length >= 3) {
-                    length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, args[2]));
+                    length = toTypedArrayLength(context, args[2], BYTES_PER_ELEMENT);
                 }
                 return context.createJSBigUint64Array(jsArrayBufferable, byteOffset, length >= 0 ? length : jsArrayBufferable.getByteLength() / BYTES_PER_ELEMENT);
             } else if (firstArg instanceof JSTypedArray jsTypedArray) {
@@ -66,24 +66,24 @@ public final class JSBigUint64Array extends JSTypedArray {
                 newTypedArray.setArray(context, jsTypedArray, 0);
                 return newTypedArray;
             } else if (firstArg instanceof JSArray jsArray) {
-                length = (int) jsArray.getLength();
+                length = toTypedArrayLength(jsArray.getLength(), BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSBigUint64Array(length);
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSIterator jsIterator) {
                 JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
-                length = (int) jsArray.getLength();
+                length = toTypedArrayLength(jsArray.getLength(), BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSBigUint64Array(length);
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSObject jsObject) {
                 JSValue lengthValue = jsObject.get(PropertyKey.LENGTH, context);
-                length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, lengthValue));
+                length = toTypedArrayLength(context, lengthValue, BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSBigUint64Array(length);
                 jsTypedArray.setArray(context, jsObject, 0);
                 return jsTypedArray;
             } else {
-                length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, firstArg));
+                length = toTypedArrayLength(context, firstArg, BYTES_PER_ELEMENT);
             }
         }
         return context.createJSBigUint64Array(length);

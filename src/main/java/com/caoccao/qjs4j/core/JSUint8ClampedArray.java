@@ -49,7 +49,7 @@ public final class JSUint8ClampedArray extends JSTypedArray {
                 return null;
             }
             if (firstArg instanceof JSNumber lengthNum) {
-                length = (int) JSTypeConversions.toIndex(context, lengthNum);
+                length = toTypedArrayIndex(context, lengthNum, BYTES_PER_ELEMENT);
             } else if (firstArg instanceof JSArrayBufferable jsArrayBufferable) {
                 length = -1;
                 int byteOffset = 0;
@@ -57,7 +57,7 @@ public final class JSUint8ClampedArray extends JSTypedArray {
                     byteOffset = (int) JSTypeConversions.toInteger(context, args[1]);
                 }
                 if (args.length >= 3) {
-                    length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, args[2]));
+                    length = toTypedArrayLength(context, args[2], BYTES_PER_ELEMENT);
                 }
                 return context.createJSUint8ClampedArray(jsArrayBufferable, byteOffset, length >= 0 ? length : jsArrayBufferable.getByteLength() / BYTES_PER_ELEMENT);
             } else if (firstArg instanceof JSTypedArray jsTypedArray) {
@@ -66,25 +66,25 @@ public final class JSUint8ClampedArray extends JSTypedArray {
                 newTypedArray.setArray(context, jsTypedArray, 0);
                 return newTypedArray;
             } else if (firstArg instanceof JSArray jsArray) {
-                length = (int) jsArray.getLength();
+                length = toTypedArrayLength(jsArray.getLength(), BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSUint8ClampedArray(length);
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSIterator jsIterator) {
                 JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
-                length = (int) jsArray.getLength();
+                length = toTypedArrayLength(jsArray.getLength(), BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSUint8ClampedArray(length);
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSObject jsObject) {
-                length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, jsObject.get("length")));
+                length = toTypedArrayLength(context, jsObject.get("length"), BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSUint8ClampedArray(length);
                 for (int i = 0; i < length; i++) {
                     jsTypedArray.setElement(i, JSTypeConversions.toNumber(context, jsObject.get(i)).value());
                 }
                 return jsTypedArray;
             } else {
-                length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, firstArg));
+                length = toTypedArrayLength(context, firstArg, BYTES_PER_ELEMENT);
             }
         }
         return context.createJSUint8ClampedArray(length);
