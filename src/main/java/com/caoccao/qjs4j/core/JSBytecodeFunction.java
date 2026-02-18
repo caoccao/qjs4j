@@ -344,8 +344,8 @@ public final class JSBytecodeFunction extends JSFunction {
                     return result;
                 }
 
-                // Otherwise, wrap the result in a fulfilled promise
-                promise.fulfill(result);
+                // Otherwise, resolve the promise (handles thenables per ES spec)
+                promise.resolve(context, result);
             } catch (JSVirtualMachineException e) {
                 // VM exception during async function execution
                 // Check if there's a pending exception in the context

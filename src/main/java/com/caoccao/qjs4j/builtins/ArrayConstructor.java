@@ -262,7 +262,7 @@ public final class ArrayConstructor {
                 if (iterResult instanceof JSAsyncIterator ai) {
                     asyncIterator = ai;
                 } else if (iterResult instanceof JSObject iterObj) {
-                    asyncIterator = JSAsyncIteratorHelper.wrapAsAsyncIterator(iterObj, context);
+                    asyncIterator = JSAsyncIterator.wrapAsAsyncIterator(iterObj, context);
                 }
                 if (asyncIterator == null) {
                     rejectWithError(resultPromise, context, "TypeError", "Result of Symbol.asyncIterator is not an async iterator");
@@ -278,7 +278,7 @@ public final class ArrayConstructor {
                 if (iterResult instanceof JSIterator syncIter) {
                     asyncIterator = JSAsyncIterator.fromIterator(syncIter, context);
                 } else if (iterResult instanceof JSObject iterObj) {
-                    asyncIterator = JSAsyncIteratorHelper.wrapSyncAsAsyncIterator(iterObj, context);
+                    asyncIterator = JSAsyncIterator.wrapSyncAsAsyncIterator(iterObj, context);
                 }
                 if (asyncIterator == null) {
                     rejectWithError(resultPromise, context, "TypeError", "Result of Symbol.iterator is not an iterator");
@@ -324,9 +324,26 @@ public final class ArrayConstructor {
                 return resultPromise;
             }
 
-            // Array-like iteration: get each element, await it, then push
-            JSArray result = context.createJSArray();
-            fromAsyncArrayLikeStep(context, resultPromise, result, arrayLikeObj, 0, (int) length, mapFn, mapThisArg);
+            // Per spec: If IsConstructor(C), let A be Construct(C), else ArrayCreate(0)
+            JSObject target;
+            boolean isArray;
+            if (JSTypeChecking.isConstructor(thisArg)) {
+                JSValue constructed = JSReflectObject.constructSimple(context, thisArg, new JSValue[0]);
+                if (context.hasPendingException()) {
+                    JSValue pendingException = context.getPendingException();
+                    context.clearAllPendingExceptions();
+                    resultPromise.reject(pendingException);
+                    return resultPromise;
+                }
+                target = (JSObject) constructed;
+                isArray = target instanceof JSArray;
+            } else {
+                target = context.createJSArray();
+                isArray = true;
+            }
+
+            // Array-like iteration: get each element, await it, then store
+            fromAsyncArrayLikeStep(context, resultPromise, target, isArray, arrayLikeObj, 0, (int) length, mapFn, mapThisArg);
         } catch (Exception e) {
             // Any synchronous error in the async body → reject the promise
             if (context.hasPendingException()) {
@@ -343,19 +360,34 @@ public final class ArrayConstructor {
 
     /**
      * Process one element of an array-like in fromAsync.
-     * Gets element at index, awaits it (if promise/thenable), pushes to result, recurses.
+     * Gets element at index, awaits it (if promise/thenable), stores to result, recurses.
      */
     private static void fromAsyncArrayLikeStep(
-            JSContext context, JSPromise resultPromise, JSArray result,
-            JSObject arrayLikeObj, int index, int length,
+            JSContext context, JSPromise resultPromise, JSObject target,
+            boolean isArray, JSObject arrayLikeObj, int index, int length,
             JSValue mapFn, JSValue mapThisArg) {
         if (index >= length) {
-            resultPromise.fulfill(result);
+            if (!isArray) {
+                target.set(PropertyKey.LENGTH, JSNumber.of(length));
+            }
+            resultPromise.fulfill(target);
             return;
         }
 
-        // Step 1: Get element value and await it
-        JSValue value = arrayLikeObj.get(PropertyKey.fromIndex(index), context);
+        // Step 1: Get element value - may throw (e.g., getter throws)
+        JSValue value;
+        try {
+            value = arrayLikeObj.get(PropertyKey.fromIndex(index), context);
+        } catch (Exception e) {
+            resultPromise.reject(consumePendingExceptionOrCreateStringError(context, e));
+            return;
+        }
+        if (context.hasPendingException()) {
+            resultPromise.reject(consumePendingException(context));
+            return;
+        }
+
+        // Await the value
         JSPromise awaitValue = resolveThenable(context, value);
         awaitValue.addReactions(
                 new JSPromise.ReactionRecord(
@@ -364,14 +396,28 @@ public final class ArrayConstructor {
 
                             // Step 2: If mapping, call mapFn on awaited value, then await result
                             if (mapFn instanceof JSFunction mappingFunc) {
-                                JSValue mapped = mappingFunc.call(context, mapThisArg, new JSValue[]{awaitedValue, JSNumber.of(index)});
+                                JSValue mapped;
+                                try {
+                                    mapped = mappingFunc.call(context, mapThisArg, new JSValue[]{awaitedValue, JSNumber.of(index)});
+                                } catch (Exception e) {
+                                    resultPromise.reject(consumePendingExceptionOrCreateStringError(context, e));
+                                    return JSUndefined.INSTANCE;
+                                }
+                                if (context.hasPendingException()) {
+                                    resultPromise.reject(consumePendingException(context));
+                                    return JSUndefined.INSTANCE;
+                                }
                                 JSPromise awaitMapped = resolveThenable(context, mapped);
                                 awaitMapped.addReactions(
                                         new JSPromise.ReactionRecord(
                                                 new JSNativeFunction("onMapResolve", 1, (innerContext, innerThisArg, innerArgs) -> {
                                                     JSValue finalValue = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
-                                                    result.push(finalValue);
-                                                    fromAsyncArrayLikeStep(context, resultPromise, result, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
+                                                    if (isArray) {
+                                                        ((JSArray) target).push(finalValue);
+                                                    } else {
+                                                        target.createDataProperty(PropertyKey.fromIndex(index), finalValue);
+                                                    }
+                                                    fromAsyncArrayLikeStep(context, resultPromise, target, isArray, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
                                                     return JSUndefined.INSTANCE;
                                                 }),
                                                 null, context
@@ -386,8 +432,12 @@ public final class ArrayConstructor {
                                 );
                             } else {
                                 // No mapFn: use awaited value directly
-                                result.push(awaitedValue);
-                                fromAsyncArrayLikeStep(context, resultPromise, result, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
+                                if (isArray) {
+                                    ((JSArray) target).push(awaitedValue);
+                                } else {
+                                    target.createDataProperty(PropertyKey.fromIndex(index), awaitedValue);
+                                }
+                                fromAsyncArrayLikeStep(context, resultPromise, target, isArray, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
                             }
                             return JSUndefined.INSTANCE;
                         }),
@@ -426,7 +476,7 @@ public final class ArrayConstructor {
         final JSObject target = A;
         final boolean isArray = A instanceof JSArray;
 
-        JSPromise iterationPromise = JSAsyncIteratorHelper.forAwaitOfIterator(context, asyncIterator, (value) -> {
+        JSPromise iterationPromise = JSAsyncIterator.forAwaitOfIterator(context, asyncIterator, (value) -> {
             // Per ES2024 23.1.2.1: async iterable path
             // - Without mapFn: mappedValue = nextValue (no Await)
             // - With mapFn: mappedValue = Await(mapFn(value, k))
