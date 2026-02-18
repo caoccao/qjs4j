@@ -268,7 +268,7 @@ public final class ArrayConstructor {
                     rejectWithError(resultPromise, context, "TypeError", "Result of Symbol.asyncIterator is not an async iterator");
                     return resultPromise;
                 }
-                return fromAsyncIterablePath(context, resultPromise, asyncIterator, arrayLike, mapFn, mapThisArg);
+                return fromAsyncIterablePath(context, resultPromise, asyncIterator, thisArg, mapFn, mapThisArg);
             }
 
             // Sync iterable path (wrap as async)
@@ -284,7 +284,7 @@ public final class ArrayConstructor {
                     rejectWithError(resultPromise, context, "TypeError", "Result of Symbol.iterator is not an iterator");
                     return resultPromise;
                 }
-                return fromAsyncIterablePath(context, resultPromise, asyncIterator, arrayLike, mapFn, mapThisArg);
+                return fromAsyncIterablePath(context, resultPromise, asyncIterator, thisArg, mapFn, mapThisArg);
             }
 
             // Array-like path: no iterators found
@@ -388,10 +388,26 @@ public final class ArrayConstructor {
 
     private static JSPromise fromAsyncIterablePath(
             JSContext context, JSPromise resultPromise,
-            JSAsyncIterator asyncIterator, JSValue arrayLike,
+            JSAsyncIterator asyncIterator, JSValue C,
             JSValue mapFn, JSValue mapThisArg) {
-        JSArray result = context.createJSArray();
+        // Per ES spec: If IsConstructor(C), let A be Construct(C), else ArrayCreate(0)
+        JSObject A;
+        if (JSTypeChecking.isConstructor(C)) {
+            JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[0]);
+            if (context.hasPendingException()) {
+                JSValue ex = context.getPendingException();
+                context.clearAllPendingExceptions();
+                resultPromise.reject(ex);
+                return resultPromise;
+            }
+            A = (JSObject) constructed;
+        } else {
+            A = context.createJSArray();
+        }
+
         final int[] index = {0};
+        final JSObject target = A;
+        final boolean isArray = A instanceof JSArray;
 
         JSPromise iterationPromise = JSAsyncIteratorHelper.forAwaitOfIterator(context, asyncIterator, (value) -> {
             // Per ES2024 23.1.2.1: async iterable path
@@ -405,7 +421,17 @@ public final class ArrayConstructor {
                         new JSPromise.ReactionRecord(
                                 new JSNativeFunction("onResolve", 1, (ctx2, t2, a2) -> {
                                     JSValue resolved = a2.length > 0 ? a2[0] : JSUndefined.INSTANCE;
-                                    result.push(resolved);
+                                    // CreateDataPropertyOrThrow
+                                    if (isArray) {
+                                        ((JSArray) target).push(resolved);
+                                    } else if (!target.createDataProperty(PropertyKey.fromIndex(index[0]), resolved)) {
+                                        asyncIterator.close();
+                                        context.processMicrotasks();
+                                        JSValue error = context.throwTypeError("Cannot define property " + index[0] + " on result object");
+                                        context.clearAllPendingExceptions();
+                                        processingPromise.reject(error);
+                                        return JSUndefined.INSTANCE;
+                                    }
                                     index[0]++;
                                     processingPromise.fulfill(JSUndefined.INSTANCE);
                                     return JSUndefined.INSTANCE;
@@ -425,7 +451,18 @@ public final class ArrayConstructor {
                 return processingPromise;
             } else {
                 // No mapFn: use value directly, no Await
-                result.push(value);
+                // CreateDataPropertyOrThrow
+                if (isArray) {
+                    ((JSArray) target).push(value);
+                } else if (!target.createDataProperty(PropertyKey.fromIndex(index[0]), value)) {
+                    asyncIterator.close();
+                    context.processMicrotasks();
+                    JSValue error = context.throwTypeError("Cannot define property " + index[0] + " on result object");
+                    context.clearAllPendingExceptions();
+                    JSPromise rejected = context.createJSPromise();
+                    rejected.reject(error);
+                    return rejected;
+                }
                 index[0]++;
                 JSPromise resolved = context.createJSPromise();
                 resolved.fulfill(JSUndefined.INSTANCE);
@@ -436,10 +473,13 @@ public final class ArrayConstructor {
         iterationPromise.addReactions(
                 new JSPromise.ReactionRecord(
                         new JSNativeFunction("onComplete", 1, (ctx2, t2, a2) -> {
-                            resultPromise.fulfill(result);
+                            if (!isArray) {
+                                target.set(PropertyKey.LENGTH, JSNumber.of(index[0]));
+                            }
+                            resultPromise.fulfill(target);
                             return JSUndefined.INSTANCE;
                         }),
-                        resultPromise,
+                        null,
                         context
                 ),
                 new JSPromise.ReactionRecord(
@@ -447,7 +487,7 @@ public final class ArrayConstructor {
                             resultPromise.reject(a2.length > 0 ? a2[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         }),
-                        resultPromise,
+                        null,
                         context
                 )
         );

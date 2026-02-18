@@ -30,6 +30,8 @@ import java.util.Iterator;
 public class JSAsyncIterator extends JSObject {
     private final JSContext context;
     private final AsyncIteratorFunction iteratorFunction;
+    /** The underlying iterator object, used for calling return() to close. */
+    private JSObject underlyingIterator;
 
     /**
      * Create a new async iterator.
@@ -56,6 +58,37 @@ public class JSAsyncIterator extends JSObject {
                     0,
                     (childContext, thisArg, args) -> thisArg));
         }
+    }
+
+    /**
+     * Set the underlying iterator object so that close() can call its return() method.
+     */
+    public void setUnderlyingIterator(JSObject underlyingIterator) {
+        this.underlyingIterator = underlyingIterator;
+    }
+
+    /**
+     * Close this async iterator by calling return() on the underlying iterator object.
+     * Per ES spec AsyncIteratorClose.
+     *
+     * @return A promise that resolves when the iterator is closed, or null if no return method
+     */
+    public JSPromise close() {
+        JSObject iter = underlyingIterator;
+        if (iter == null) {
+            return null;
+        }
+        JSValue returnMethod = iter.get("return");
+        if (!(returnMethod instanceof JSFunction returnFunc)) {
+            return null;
+        }
+        JSValue result = returnFunc.call(context, iter, new JSValue[0]);
+        if (result instanceof JSPromise p) {
+            return p;
+        }
+        JSPromise p = context.createJSPromise();
+        p.fulfill(result != null ? result : JSUndefined.INSTANCE);
+        return p;
     }
 
     /**
