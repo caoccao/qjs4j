@@ -647,8 +647,16 @@ public final class ArrayConstructor {
             return JSBoolean.FALSE;
         }
 
-        // Per ES spec / QuickJS: check class_id == JS_CLASS_ARRAY
-        return JSBoolean.valueOf(args[0] instanceof JSObject obj && obj.isArrayObject());
+        // Per ES spec 7.2.2 IsArray / QuickJS JS_IsArray:
+        // Recursively unwrap Proxy exotic objects to find the target
+        JSValue arg = args[0];
+        while (arg instanceof JSProxy proxy) {
+            if (proxy.isRevoked()) {
+                return context.throwTypeError("Cannot perform 'isArray' on a proxy that has been revoked");
+            }
+            arg = proxy.getTarget();
+        }
+        return JSBoolean.valueOf(arg instanceof JSObject obj && obj.isArrayObject());
     }
 
     /**
