@@ -61,6 +61,8 @@ public final class JSArray extends JSObject {
         this.length = length;
         capacity = Math.min(capacity, INITIAL_CAPACITY);
         this.denseArray = new JSValue[capacity];
+        // Mark as array class (equivalent to QuickJS class_id == JS_CLASS_ARRAY)
+        this.arrayObject = true;
         initializeLengthProperty();
     }
 
@@ -71,6 +73,8 @@ public final class JSArray extends JSObject {
         super();
         this.length = values.length;
         this.denseArray = Arrays.copyOf(values, Math.max(values.length, INITIAL_CAPACITY));
+        // Mark as array class (equivalent to QuickJS class_id == JS_CLASS_ARRAY)
+        this.arrayObject = true;
         initializeLengthProperty();
     }
 

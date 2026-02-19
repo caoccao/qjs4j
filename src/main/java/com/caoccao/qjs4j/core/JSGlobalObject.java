@@ -620,8 +620,10 @@ public final class JSGlobalObject {
      * Initialize Array constructor and prototype.
      */
     private void initializeArrayConstructor(JSContext context, JSObject global) {
-        // Create Array.prototype
+        // Create Array.prototype - marked as array class per ES spec 23.1.3
+        // (matching QuickJS JS_NEW_CTOR_PROTO_CLASS flag for JS_CLASS_ARRAY)
         JSObject arrayPrototype = context.createJSObject();
+        arrayPrototype.setArrayObject(true);
         JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, IteratorPrototype::arrayValues);
         arrayPrototype.set("at", new JSNativeFunction("at", 1, ArrayPrototype::at));
         arrayPrototype.set("concat", new JSNativeFunction("concat", 1, ArrayPrototype::concat));
@@ -662,7 +664,7 @@ public final class JSGlobalObject {
         arrayPrototype.set("values", valuesFunction);
         arrayPrototype.set("with", new JSNativeFunction("with", 2, ArrayPrototype::with));
 
-        // Array.prototype.length is a data property with value 0 (not writable, not enumerable, not configurable)
+        // Array.prototype.length is a data property with value 0
         arrayPrototype.definePropertyReadonlyNonConfigurable("length", JSNumber.of(0));
 
         // Array.prototype[Symbol.*]

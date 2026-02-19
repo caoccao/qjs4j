@@ -647,7 +647,8 @@ public final class ArrayConstructor {
             return JSBoolean.FALSE;
         }
 
-        return JSBoolean.valueOf(args[0] instanceof JSArray);
+        // Per ES spec / QuickJS: check class_id == JS_CLASS_ARRAY
+        return JSBoolean.valueOf(args[0] instanceof JSObject obj && obj.isArrayObject());
     }
 
     /**

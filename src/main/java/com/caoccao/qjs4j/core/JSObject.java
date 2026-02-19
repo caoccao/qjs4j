@@ -37,6 +37,7 @@ public non-sealed class JSObject implements JSValue {
     // ThreadLocal to track visited objects during prototype chain traversal
     private static final ThreadLocal<Set<JSObject>> visitedObjects = ThreadLocal.withInitial(HashSet::new);
     protected JSConstructorType constructorType; // Internal slot for [[Constructor]] type (not accessible from JS)
+    protected boolean arrayObject; // Equivalent to QuickJS class_id == JS_CLASS_ARRAY
     protected boolean extensible = true;
     protected boolean frozen = false;
     protected boolean htmlDDA; // Internal slot for [IsHTMLDDA] (Annex B test262 host object)
@@ -732,6 +733,10 @@ public non-sealed class JSObject implements JSValue {
      * Check if this object is extensible.
      * ES5.1 15.2.3.13
      */
+    public boolean isArrayObject() {
+        return arrayObject;
+    }
+
     public boolean isExtensible() {
         return extensible;
     }
@@ -778,6 +783,10 @@ public non-sealed class JSObject implements JSValue {
      */
     public void preventExtensions() {
         this.extensible = false;
+    }
+
+    public void setArrayObject(boolean arrayObject) {
+        this.arrayObject = arrayObject;
     }
 
     /**
