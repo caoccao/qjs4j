@@ -883,13 +883,17 @@ public non-sealed class JSObject implements JSValue {
         }
 
         // Property doesn't exist on own object - walk prototype chain for setters/writability checks.
-        // Per ES spec 9.1.9.1 OrdinarySet, if a prototype is a Proxy, delegate to its [[Set]].
+        // Per ES spec 9.1.9.1 OrdinarySet, if a prototype is an exotic object, delegate to its [[Set]].
         Set<JSObject> visited = new HashSet<>();
         visited.add(this);
         JSObject proto = prototype;
         while (proto != null && !visited.contains(proto)) {
             if (proto instanceof JSProxy proxy) {
                 return proxy.setWithResult(key, value, context, receiver);
+            }
+            // TypedArray has exotic [[Set]] for canonical numeric index keys
+            if (proto instanceof JSTypedArray typedArray) {
+                return typedArray.setWithResult(key, value, context, (JSValue) receiver);
             }
             visited.add(proto);
             PropertyKey protoShapeKey = proto.getOwnShapeKey(key);
