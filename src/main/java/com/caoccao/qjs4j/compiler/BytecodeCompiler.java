@@ -628,7 +628,7 @@ public final class BytecodeCompiler {
                 arrowExpr.isAsync(),
                 false,           // Arrow functions cannot be generators
                 true,            // isArrow - this is an arrow function
-                false,           // strict - TODO: inherit from enclosing scope
+                functionCompiler.strictMode,  // strict - inherit from enclosing scope
                 functionSource   // source code for toString()
         );
         function.setHasParameterExpressions(hasNonSimpleParameters(arrowExpr.defaults(), arrowExpr.restParameter()));
