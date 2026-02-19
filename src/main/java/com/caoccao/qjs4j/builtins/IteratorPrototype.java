@@ -37,16 +37,17 @@ public final class IteratorPrototype {
      * Returns an iterator of [index, value] pairs.
      */
     public static JSValue arrayEntries(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray array)) {
+        if (!(thisArg instanceof JSArray) && !(thisArg instanceof JSArguments)) {
             return context.throwTypeError("Array.prototype.entries called on non-array");
         }
+        JSObject arrayLike = (JSObject) thisArg;
 
-        final int[] index = {0};
+        final long[] index = {0};
         return new JSIterator(context, () -> {
-            if (index[0] < array.getLength()) {
+            if (index[0] < getArrayLikeLength(context, arrayLike)) {
                 JSArray pair = context.createJSArray();
                 pair.push(JSNumber.of(index[0]));
-                pair.push(array.get(index[0]));
+                pair.push(getArrayLikeValue(arrayLike, index[0]));
                 index[0]++;
                 return JSIterator.IteratorResult.of(context, pair);
             }
@@ -59,13 +60,14 @@ public final class IteratorPrototype {
      * Returns an iterator of array indices.
      */
     public static JSValue arrayKeys(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray array)) {
+        if (!(thisArg instanceof JSArray) && !(thisArg instanceof JSArguments)) {
             return context.throwTypeError("Array.prototype.keys called on non-array");
         }
+        JSObject arrayLike = (JSObject) thisArg;
 
-        final int[] index = {0};
+        final long[] index = {0};
         return new JSIterator(context, () -> {
-            if (index[0] < array.getLength()) {
+            if (index[0] < getArrayLikeLength(context, arrayLike)) {
                 return JSIterator.IteratorResult.of(context, JSNumber.of(index[0]++));
             }
             return JSIterator.IteratorResult.done(context);
@@ -77,11 +79,18 @@ public final class IteratorPrototype {
      * Returns an iterator of array values.
      */
     public static JSValue arrayValues(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray array)) {
+        if (!(thisArg instanceof JSArray) && !(thisArg instanceof JSArguments)) {
             return context.throwTypeError("Array.prototype.values called on non-array");
         }
+        JSObject arrayLike = (JSObject) thisArg;
 
-        return JSIterator.arrayIterator(context, array);
+        final long[] index = {0};
+        return new JSIterator(context, () -> {
+            if (index[0] < getArrayLikeLength(context, arrayLike)) {
+                return JSIterator.IteratorResult.of(context, getArrayLikeValue(arrayLike, index[0]++));
+            }
+            return JSIterator.IteratorResult.done(context);
+        }, "Array Iterator", false);
     }
 
     private static JSValue closeIterator(JSContext context, JSObject iteratorObject) {
@@ -466,8 +475,6 @@ public final class IteratorPrototype {
         return createIteratorObject(context, nextFunction, returnFunction, "Iterator Helper");
     }
 
-    // Iterator helper methods (ES2024) - Placeholders for now
-
     /**
      * Iterator.prototype.find(predicate)
      * Returns the first element that satisfies the predicate.
@@ -659,6 +666,8 @@ public final class IteratorPrototype {
         return createIteratorObject(context, nextFunction, returnFunction, "Iterator Helper");
     }
 
+    // Iterator helper methods (ES2024) - Placeholders for now
+
     /**
      * Iterator.prototype.forEach(fn)
      * Calls fn for each element.
@@ -736,6 +745,17 @@ public final class IteratorPrototype {
         }
 
         return createIteratorWrap(context, iteratorObject, nextMethod);
+    }
+
+    private static long getArrayLikeLength(JSContext context, JSObject arrayLike) {
+        return JSTypeConversions.toLength(context, arrayLike.get(PropertyKey.LENGTH));
+    }
+
+    private static JSValue getArrayLikeValue(JSObject arrayLike, long index) {
+        if (index <= Integer.MAX_VALUE) {
+            return arrayLike.get((int) index);
+        }
+        return arrayLike.get(PropertyKey.fromString(Long.toString(index)));
     }
 
     private static boolean isIteratorInstance(JSContext context, JSObject object) {
