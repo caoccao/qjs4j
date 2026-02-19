@@ -1616,6 +1616,13 @@ public final class Parser {
             }
             throw new JSSyntaxErrorException("Unexpected 'await' keyword");
         }
+        // 'from' is a contextual keyword (module grammar) and must remain
+        // valid as an Identifier in normal bindings and expressions.
+        if (match(TokenType.FROM)) {
+            String name = currentToken.value();
+            advance();
+            return new Identifier(name, location);
+        }
         throw new RuntimeException("Expected identifier but got " + currentToken.type() +
                 " at line " + currentToken.line() + ", column " + currentToken.column());
     }
