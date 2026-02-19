@@ -483,6 +483,36 @@ public abstract class JSTypedArray extends JSObject {
         return length;
     }
 
+    /**
+     * Integer-Indexed exotic object [[GetOwnProperty]].
+     * Following QuickJS JS_GetOwnPropertyInternal for fast arrays (lines 8452-8467).
+     * For valid integer indices: returns {value, writable: true, enumerable: true, configurable: true}.
+     * For canonical numeric indices that are not valid integer indices: returns null.
+     * For non-numeric keys: delegates to ordinary getOwnPropertyDescriptor.
+     */
+    @Override
+    public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+        if (!isCanonicalNumericIndex(key)) {
+            return super.getOwnPropertyDescriptor(key);
+        }
+        String str = key.toPropertyString();
+        if ("-0".equals(str)) {
+            return null;
+        }
+        double numericIndex = Double.parseDouble(str);
+        if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
+            return null;
+        }
+        int index = (int) numericIndex;
+        if (index != numericIndex) {
+            return null;
+        }
+        if (buffer.isDetached() || index >= getLength()) {
+            return null;
+        }
+        return PropertyDescriptor.dataDescriptor(getJSElement(index), true, true, true);
+    }
+
     @Override
     public boolean has(PropertyKey key) {
         int index = toTypedArrayIndex(key);
