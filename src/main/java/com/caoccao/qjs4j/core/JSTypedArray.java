@@ -104,6 +104,35 @@ public abstract class JSTypedArray extends JSObject {
     }
 
     /**
+     * CanonicalNumericIndexString check per ES spec.
+     * Returns true if the key is a canonical numeric index string
+     * (i.e., ToString(ToNumber(str)) === str, or str is "-0").
+     * Following QuickJS JS_AtomIsNumericIndex.
+     */
+    private static boolean isCanonicalNumericIndex(PropertyKey key) {
+        if (key.isSymbol()) {
+            return false;
+        }
+        String str = key.toPropertyString();
+        if (str.isEmpty()) {
+            return false;
+        }
+        if ("-0".equals(str)) {
+            return true;
+        }
+        char first = str.charAt(0);
+        if (!((first >= '0' && first <= '9') || first == '-' || first == 'I' || first == 'N')) {
+            return false;
+        }
+        try {
+            double num = Double.parseDouble(str);
+            return numberToString(num).equals(str);
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    /**
      * TypedArray constructor source normalization for object arguments.
      *
      * <p>If @@iterator exists and is callable, constructors must consume the iterable.
@@ -135,6 +164,24 @@ public abstract class JSTypedArray extends JSObject {
             return source;
         }
         return iterableValues;
+    }
+
+    /**
+     * Format a number the same way as JavaScript's ToString(Number).
+     * Used by isCanonicalNumericIndex to check round-trip identity.
+     */
+    private static String numberToString(double value) {
+        if (Double.isNaN(value)) {
+            return "NaN";
+        }
+        if (Double.isInfinite(value)) {
+            return value > 0 ? "Infinity" : "-Infinity";
+        }
+        long asLong = (long) value;
+        if (value == asLong) {
+            return Long.toString(asLong);
+        }
+        return Double.toString(value);
     }
 
     protected static int toArrayLikeLength(JSContext context, JSValue value) {
@@ -244,6 +291,62 @@ public abstract class JSTypedArray extends JSObject {
         if (index < 0 || index >= getLength()) {
             throw new JSRangeErrorException("TypedArray index out of range: " + index);
         }
+    }
+
+    /**
+     * Integer-Indexed exotic object [[DefineOwnProperty]].
+     * Following QuickJS JS_DefineProperty for typed arrays (lines 10176-10221).
+     * For canonical numeric index strings: validates the index and descriptor,
+     * sets the value if provided, and returns true/false per the spec.
+     * For non-numeric keys: delegates to ordinary defineOwnProperty.
+     */
+    @Override
+    public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor) {
+        if (!isCanonicalNumericIndex(key)) {
+            return super.defineOwnProperty(key, descriptor);
+        }
+        String str = key.toPropertyString();
+        // -0 is never a valid integer index
+        if ("-0".equals(str)) {
+            return false;
+        }
+        double numericIndex = Double.parseDouble(str);
+        // Must be a finite integer
+        if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex)) {
+            return false;
+        }
+        // Must be non-negative
+        if (numericIndex < 0) {
+            return false;
+        }
+        int index = (int) numericIndex;
+        // Must fit in int and match the double
+        if (index != numericIndex) {
+            return false;
+        }
+        // Check bounds and detachment
+        if (buffer.isDetached() || index >= getLength()) {
+            return false;
+        }
+        // Typed array elements are always {configurable: true, enumerable: true, writable: true}
+        // Accessor descriptors are not allowed
+        if (descriptor.isAccessorDescriptor()) {
+            return false;
+        }
+        if (descriptor.hasConfigurable() && !descriptor.isConfigurable()) {
+            return false;
+        }
+        if (descriptor.hasEnumerable() && !descriptor.isEnumerable()) {
+            return false;
+        }
+        if (descriptor.hasWritable() && !descriptor.isWritable()) {
+            return false;
+        }
+        // IntegerIndexedElementSet: convert value then write if buffer still valid
+        if (descriptor.hasValue()) {
+            integerIndexedElementSet(index, descriptor.getValue(), null);
+        }
+        return true;
     }
 
     /**
@@ -387,6 +490,20 @@ public abstract class JSTypedArray extends JSObject {
             return index < getLength() && !buffer.isDetached();
         }
         return super.has(key);
+    }
+
+    /**
+     * IntegerIndexedElementSet per ES spec.
+     * Converts value to the appropriate type (ToNumber or ToBigInt), then writes
+     * to the buffer only if it is still valid (not detached and index in bounds).
+     * This handles the case where ToNumber/ToBigInt detaches the buffer as a side effect.
+     * BigInt typed arrays override to use ToBigInt instead of ToNumber.
+     */
+    protected void integerIndexedElementSet(int index, JSValue value, JSContext context) {
+        double numValue = JSTypeConversions.toNumber(context, value).value();
+        if (!buffer.isDetached() && index >= 0 && index < getLength()) {
+            setElement(index, numValue);
+        }
     }
 
     /**

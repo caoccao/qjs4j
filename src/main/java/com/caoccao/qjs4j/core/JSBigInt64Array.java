@@ -117,6 +117,15 @@ public final class JSBigInt64Array extends JSTypedArray {
     }
 
     @Override
+    protected void integerIndexedElementSet(int index, JSValue value, JSContext context) {
+        long longVal = JSTypeConversions.toBigInt64(context, value);
+        if (!buffer.isDetached() && index >= 0 && index < getLength()) {
+            ByteBuffer buf = getByteBuffer();
+            buf.putLong(index * BYTES_PER_ELEMENT, longVal);
+        }
+    }
+
+    @Override
     public void setElement(int index, double value) {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
