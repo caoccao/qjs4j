@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
+import com.caoccao.qjs4j.utils.DtoaConverter;
 
 import java.nio.ByteBuffer;
 
@@ -171,17 +172,7 @@ public abstract class JSTypedArray extends JSObject {
      * Used by isCanonicalNumericIndex to check round-trip identity.
      */
     private static String numberToString(double value) {
-        if (Double.isNaN(value)) {
-            return "NaN";
-        }
-        if (Double.isInfinite(value)) {
-            return value > 0 ? "Infinity" : "-Infinity";
-        }
-        long asLong = (long) value;
-        if (value == asLong) {
-            return Long.toString(asLong);
-        }
-        return Double.toString(value);
+        return DtoaConverter.convert(value);
     }
 
     protected static int toArrayLikeLength(JSContext context, JSValue value) {
