@@ -48,6 +48,25 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testBigIntTypedArrayFromWithMapFn() {
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                        const mapfn = (kValue) => kValue * 2n;
+                        const a = BigInt64Array.from([42n, 43n, 42n], mapfn);
+                        const b = BigUint64Array.from([42n, 43n, 42n], mapfn);
+                        return a.length === 3
+                          && a[0] === 84n
+                          && a[1] === 86n
+                          && a[2] === 84n
+                          && b.length === 3
+                          && b[0] === 84n
+                          && b[1] === 86n
+                          && b[2] === 84n;
+                        })()""");
+    }
+
+    @Test
     public void testBigIntTypedArrayIterableAbruptCompletion() {
         assertBooleanWithJavet(
                 """

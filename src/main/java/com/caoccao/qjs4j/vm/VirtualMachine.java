@@ -23,6 +23,7 @@ import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
+import java.math.BigInteger;
 import java.util.*;
 
 /**
@@ -30,6 +31,9 @@ import java.util.*;
  * Executes compiled bytecode using a stack-based architecture.
  */
 public final class VirtualMachine {
+    private static final BigInteger BIGINT_NEGATIVE_ONE = BigInteger.valueOf(-1);
+    private static final BigInteger BIGINT_ONE = BigInteger.ONE;
+    private static final BigInteger BIGINT_ZERO = BigInteger.ZERO;
     private static final JSValue[] EMPTY_ARGS = new JSValue[0];
     private static final int INTERRUPT_CHECK_INTERVAL = 0xFFFF; // Check every ~65K opcodes
     private static final JSObject UNINITIALIZED_MARKER = new JSObject();
@@ -96,6 +100,30 @@ public final class VirtualMachine {
         return varRefs;
     }
 
+    private JSValue addValues(JSValue left, JSValue right) {
+        JSValue leftPrimitive = JSTypeConversions.toPrimitive(context, left, JSTypeConversions.PreferredType.DEFAULT);
+        JSValue rightPrimitive = JSTypeConversions.toPrimitive(context, right, JSTypeConversions.PreferredType.DEFAULT);
+        capturePendingException();
+
+        if (leftPrimitive instanceof JSString || rightPrimitive instanceof JSString) {
+            JSValue result = new JSString(
+                    JSTypeConversions.toString(context, leftPrimitive).value()
+                            + JSTypeConversions.toString(context, rightPrimitive).value());
+            capturePendingException();
+            return result;
+        }
+
+        JSValue leftNumeric = toNumericValue(leftPrimitive);
+        JSValue rightNumeric = toNumericValue(rightPrimitive);
+        if (leftNumeric instanceof JSBigInt leftBigInt && rightNumeric instanceof JSBigInt rightBigInt) {
+            return new JSBigInt(leftBigInt.value().add(rightBigInt.value()));
+        }
+        if (leftNumeric instanceof JSBigInt || rightNumeric instanceof JSBigInt) {
+            return throwMixedBigIntTypeError();
+        }
+        return JSNumber.of(((JSNumber) leftNumeric).value() + ((JSNumber) rightNumeric).value());
+    }
+
     private JSValue[] buildApplyArguments(JSValue argsArrayValue, boolean allowNullOrUndefined) {
         if (allowNullOrUndefined && (argsArrayValue.isUndefined() || argsArrayValue.isNull())) {
             return EMPTY_ARGS;
@@ -128,6 +156,12 @@ public final class VirtualMachine {
             args[i] = argValue;
         }
         return args;
+    }
+
+    private void capturePendingException() {
+        if (pendingException == null && context.hasPendingException()) {
+            pendingException = context.getPendingException();
+        }
     }
 
     /**
@@ -811,11 +845,6 @@ public final class VirtualMachine {
                         if (addL instanceof JSNumber addLN && addR instanceof JSNumber addRN) {
                             stack[sp - 2] = JSNumber.of(addLN.value() + addRN.value());
                             sp--;
-                        } else if (addL instanceof JSString || addR instanceof JSString) {
-                            stack[sp - 2] = new JSString(
-                                    JSTypeConversions.toString(context, addL).value() +
-                                            JSTypeConversions.toString(context, addR).value());
-                            sp--;
                         } else {
                             valueStack.stackTop = sp;
                             handleAdd();
@@ -893,24 +922,14 @@ public final class VirtualMachine {
                     }
                     case INC_LOC -> {
                         int incLocIdx = ins[pc + 1] & 0xFF;
-                        JSValue incLocVal = locals[incLocIdx];
-                        if (incLocVal instanceof JSNumber incNum) {
-                            locals[incLocIdx] = JSNumber.of(incNum.value() + 1);
-                        } else {
-                            locals[incLocIdx] = JSNumber.of(
-                                    JSTypeConversions.toNumber(context, incLocVal != null ? incLocVal : JSUndefined.INSTANCE).value() + 1);
-                        }
+                        JSValue incLocVal = locals[incLocIdx] != null ? locals[incLocIdx] : JSUndefined.INSTANCE;
+                        locals[incLocIdx] = incrementValue(incLocVal, 1);
                         pc += 2;
                     }
                     case DEC_LOC -> {
                         int decLocIdx = ins[pc + 1] & 0xFF;
-                        JSValue decLocVal = locals[decLocIdx];
-                        if (decLocVal instanceof JSNumber decNum) {
-                            locals[decLocIdx] = JSNumber.of(decNum.value() - 1);
-                        } else {
-                            locals[decLocIdx] = JSNumber.of(
-                                    JSTypeConversions.toNumber(context, decLocVal != null ? decLocVal : JSUndefined.INSTANCE).value() - 1);
-                        }
+                        JSValue decLocVal = locals[decLocIdx] != null ? locals[decLocIdx] : JSUndefined.INSTANCE;
+                        locals[decLocIdx] = incrementValue(decLocVal, -1);
                         pc += 2;
                     }
                     case ADD_LOC -> {
@@ -918,17 +937,7 @@ public final class VirtualMachine {
                         JSValue addRight = (JSValue) stack[--sp];
                         JSValue addLeft = locals[addLocIdx];
                         if (addLeft == null) addLeft = JSUndefined.INSTANCE;
-                        if (addLeft instanceof JSNumber addLeftNum && addRight instanceof JSNumber addRightNum) {
-                            locals[addLocIdx] = JSNumber.of(addLeftNum.value() + addRightNum.value());
-                        } else if (addLeft instanceof JSString || addRight instanceof JSString) {
-                            locals[addLocIdx] = new JSString(
-                                    JSTypeConversions.toString(context, addLeft).value() +
-                                            JSTypeConversions.toString(context, addRight).value());
-                        } else {
-                            locals[addLocIdx] = JSNumber.of(
-                                    JSTypeConversions.toNumber(context, addLeft).value() +
-                                            JSTypeConversions.toNumber(context, addRight).value());
-                        }
+                        locals[addLocIdx] = addValues(addLeft, addRight);
                         pc += 2;
                     }
                     case POST_INC -> {
@@ -2833,23 +2842,7 @@ public final class VirtualMachine {
     private void handleAdd() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-
-        // Fast path for number addition (avoids toNumber overhead)
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            valueStack.push(JSNumber.of(leftNum.value() + rightNum.value()));
-            return;
-        }
-
-        // String concatenation or numeric addition
-        if (left instanceof JSString || right instanceof JSString) {
-            String leftStr = JSTypeConversions.toString(context, left).value();
-            String rightStr = JSTypeConversions.toString(context, right).value();
-            valueStack.push(new JSString(leftStr + rightStr));
-        } else {
-            double leftNum = JSTypeConversions.toNumber(context, left).value();
-            double rightNum = JSTypeConversions.toNumber(context, right).value();
-            valueStack.push(JSNumber.of(leftNum + rightNum));
-        }
+        valueStack.push(addValues(left, right));
     }
 
     private void handleAnd() {
@@ -2860,7 +2853,18 @@ public final class VirtualMachine {
             valueStack.push(JSNumber.of((int) leftNum.value() & (int) rightNum.value()));
             return;
         }
-        int result = JSTypeConversions.toInt32(context, left) & JSTypeConversions.toInt32(context, right);
+        NumericPair pair = numericPair(left, right);
+        if (pair == null) {
+            valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (pair.bigInt()) {
+            JSBigInt leftBigInt = (JSBigInt) pair.left();
+            JSBigInt rightBigInt = (JSBigInt) pair.right();
+            valueStack.push(new JSBigInt(leftBigInt.value().and(rightBigInt.value())));
+            return;
+        }
+        int result = JSTypeConversions.toInt32(context, pair.left()) & JSTypeConversions.toInt32(context, pair.right());
         valueStack.push(JSNumber.of(result));
     }
 
@@ -3148,12 +3152,7 @@ public final class VirtualMachine {
 
     private void handleDec() {
         JSValue operand = valueStack.pop();
-        if (operand instanceof JSNumber num) {
-            valueStack.push(JSNumber.of(num.value() - 1));
-            return;
-        }
-        double result = JSTypeConversions.toNumber(context, operand).value() - 1;
-        valueStack.push(JSNumber.of(result));
+        valueStack.push(incrementValue(operand, -1));
     }
 
     private void handleDelete() {
@@ -3170,8 +3169,25 @@ public final class VirtualMachine {
     private void handleDiv() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        double result = JSTypeConversions.toNumber(context, left).value() / JSTypeConversions.toNumber(context, right).value();
-        valueStack.push(JSNumber.of(result));
+        NumericPair pair = numericPair(left, right);
+        if (pair == null) {
+            valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (pair.bigInt()) {
+            JSBigInt leftBigInt = (JSBigInt) pair.left();
+            JSBigInt rightBigInt = (JSBigInt) pair.right();
+            if (rightBigInt.value().equals(BIGINT_ZERO)) {
+                pendingException = context.throwRangeError("Division by zero");
+                valueStack.push(JSUndefined.INSTANCE);
+                return;
+            }
+            valueStack.push(new JSBigInt(leftBigInt.value().divide(rightBigInt.value())));
+            return;
+        }
+        JSNumber leftNumber = (JSNumber) pair.left();
+        JSNumber rightNumber = (JSNumber) pair.right();
+        valueStack.push(JSNumber.of(leftNumber.value() / rightNumber.value()));
     }
 
     private void handleEq() {
@@ -3184,8 +3200,34 @@ public final class VirtualMachine {
     private void handleExp() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        double result = Math.pow(JSTypeConversions.toNumber(context, left).value(), JSTypeConversions.toNumber(context, right).value());
-        valueStack.push(JSNumber.of(result));
+        NumericPair pair = numericPair(left, right);
+        if (pair == null) {
+            valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (pair.bigInt()) {
+            JSBigInt leftBigInt = (JSBigInt) pair.left();
+            JSBigInt rightBigInt = (JSBigInt) pair.right();
+            BigInteger exponent = rightBigInt.value();
+            if (exponent.signum() < 0) {
+                pendingException = context.throwRangeError("Exponent must be positive");
+                valueStack.push(JSUndefined.INSTANCE);
+                return;
+            }
+            final int exponentInt;
+            try {
+                exponentInt = exponent.intValueExact();
+            } catch (ArithmeticException e) {
+                pendingException = context.throwRangeError("BigInt exponent is too large");
+                valueStack.push(JSUndefined.INSTANCE);
+                return;
+            }
+            valueStack.push(new JSBigInt(leftBigInt.value().pow(exponentInt)));
+            return;
+        }
+        JSNumber leftNumber = (JSNumber) pair.left();
+        JSNumber rightNumber = (JSNumber) pair.right();
+        valueStack.push(JSNumber.of(Math.pow(leftNumber.value(), rightNumber.value())));
     }
 
     private void handleForAwaitOfNext() {
@@ -3461,12 +3503,7 @@ public final class VirtualMachine {
 
     private void handleInc() {
         JSValue operand = valueStack.pop();
-        if (operand instanceof JSNumber num) {
-            valueStack.push(JSNumber.of(num.value() + 1));
-            return;
-        }
-        double result = JSTypeConversions.toNumber(context, operand).value() + 1;
-        valueStack.push(JSNumber.of(result));
+        valueStack.push(incrementValue(operand, 1));
     }
 
     private void handleInitCtor() {
@@ -3635,30 +3672,54 @@ public final class VirtualMachine {
     private void handleMod() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        double result = JSTypeConversions.toNumber(context, left).value() % JSTypeConversions.toNumber(context, right).value();
-        valueStack.push(JSNumber.of(result));
+        NumericPair pair = numericPair(left, right);
+        if (pair == null) {
+            valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (pair.bigInt()) {
+            JSBigInt leftBigInt = (JSBigInt) pair.left();
+            JSBigInt rightBigInt = (JSBigInt) pair.right();
+            if (rightBigInt.value().equals(BIGINT_ZERO)) {
+                pendingException = context.throwRangeError("Division by zero");
+                valueStack.push(JSUndefined.INSTANCE);
+                return;
+            }
+            valueStack.push(new JSBigInt(leftBigInt.value().remainder(rightBigInt.value())));
+            return;
+        }
+        JSNumber leftNumber = (JSNumber) pair.left();
+        JSNumber rightNumber = (JSNumber) pair.right();
+        valueStack.push(JSNumber.of(leftNumber.value() % rightNumber.value()));
     }
 
     private void handleMul() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            valueStack.push(JSNumber.of(leftNum.value() * rightNum.value()));
+        NumericPair pair = numericPair(left, right);
+        if (pair == null) {
+            valueStack.push(JSUndefined.INSTANCE);
             return;
         }
-        double result = JSTypeConversions.toNumber(context, left).value() * JSTypeConversions.toNumber(context, right).value();
-        valueStack.push(JSNumber.of(result));
+        if (pair.bigInt()) {
+            JSBigInt leftBigInt = (JSBigInt) pair.left();
+            JSBigInt rightBigInt = (JSBigInt) pair.right();
+            valueStack.push(new JSBigInt(leftBigInt.value().multiply(rightBigInt.value())));
+            return;
+        }
+        JSNumber leftNumber = (JSNumber) pair.left();
+        JSNumber rightNumber = (JSNumber) pair.right();
+        valueStack.push(JSNumber.of(leftNumber.value() * rightNumber.value()));
     }
 
     private void handleNeg() {
         JSValue operand = valueStack.pop();
-        // Per ES spec, unary minus on BigInt produces negated BigInt
-        if (operand instanceof JSBigInt bigInt) {
+        JSValue numeric = toNumericValue(operand);
+        if (numeric instanceof JSBigInt bigInt) {
             valueStack.push(new JSBigInt(bigInt.value().negate()));
             return;
         }
-        double result = -JSTypeConversions.toNumber(context, operand).value();
-        valueStack.push(JSNumber.of(result));
+        valueStack.push(JSNumber.of(-((JSNumber) numeric).value()));
     }
 
     private void handleNeq() {
@@ -3670,7 +3731,12 @@ public final class VirtualMachine {
 
     private void handleNot() {
         JSValue operand = valueStack.pop();
-        int result = ~JSTypeConversions.toInt32(context, operand);
+        JSValue numeric = toNumericValue(operand);
+        if (numeric instanceof JSBigInt bigInt) {
+            valueStack.push(new JSBigInt(bigInt.value().not()));
+            return;
+        }
+        int result = ~JSTypeConversions.toInt32(context, numeric);
         valueStack.push(JSNumber.of(result));
     }
 
@@ -3692,46 +3758,52 @@ public final class VirtualMachine {
             valueStack.push(JSNumber.of((int) leftNum.value() | (int) rightNum.value()));
             return;
         }
-        int result = JSTypeConversions.toInt32(context, left) | JSTypeConversions.toInt32(context, right);
+        NumericPair pair = numericPair(left, right);
+        if (pair == null) {
+            valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (pair.bigInt()) {
+            JSBigInt leftBigInt = (JSBigInt) pair.left();
+            JSBigInt rightBigInt = (JSBigInt) pair.right();
+            valueStack.push(new JSBigInt(leftBigInt.value().or(rightBigInt.value())));
+            return;
+        }
+        int result = JSTypeConversions.toInt32(context, pair.left()) | JSTypeConversions.toInt32(context, pair.right());
         valueStack.push(JSNumber.of(result));
     }
 
     private void handlePlus() {
         JSValue operand = valueStack.pop();
-        double result = JSTypeConversions.toNumber(context, operand).value();
-        valueStack.push(JSNumber.of(result));
+        JSNumber result = JSTypeConversions.toNumber(context, operand);
+        capturePendingException();
+        valueStack.push(result);
     }
 
     private void handlePostDec() {
         // POST_DEC: [value] -> [old_value, new_value]
         // Takes value on top, pushes old value then new value
         JSValue operand = valueStack.pop();
-        if (operand instanceof JSNumber num) {
-            double oldValue = num.value();
-            valueStack.push(num);
-            valueStack.push(JSNumber.of(oldValue - 1));
+        JSValue oldValue = toNumericValue(operand);
+        valueStack.push(oldValue);
+        if (oldValue instanceof JSBigInt bigInt) {
+            valueStack.push(new JSBigInt(bigInt.value().subtract(BIGINT_ONE)));
             return;
         }
-        double oldValue = JSTypeConversions.toNumber(context, operand).value();
-        double newValue = oldValue - 1;
-        valueStack.push(JSNumber.of(oldValue));
-        valueStack.push(JSNumber.of(newValue));
+        valueStack.push(JSNumber.of(((JSNumber) oldValue).value() - 1));
     }
 
     private void handlePostInc() {
         // POST_INC: [value] -> [old_value, new_value]
         // Takes value on top, pushes old value then new value
         JSValue operand = valueStack.pop();
-        if (operand instanceof JSNumber num) {
-            double oldValue = num.value();
-            valueStack.push(num);
-            valueStack.push(JSNumber.of(oldValue + 1));
+        JSValue oldValue = toNumericValue(operand);
+        valueStack.push(oldValue);
+        if (oldValue instanceof JSBigInt bigInt) {
+            valueStack.push(new JSBigInt(bigInt.value().add(BIGINT_ONE)));
             return;
         }
-        double oldValue = JSTypeConversions.toNumber(context, operand).value();
-        double newValue = oldValue + 1;
-        valueStack.push(JSNumber.of(oldValue));
-        valueStack.push(JSNumber.of(newValue));
+        valueStack.push(JSNumber.of(((JSNumber) oldValue).value() + 1));
     }
 
     private void handlePrivateIn() {
@@ -3757,8 +3829,17 @@ public final class VirtualMachine {
             valueStack.push(JSNumber.of((int) leftNum.value() >> ((int) rightNum.value() & 0x1F)));
             return;
         }
-        int leftInt = JSTypeConversions.toInt32(context, left);
-        int rightInt = JSTypeConversions.toInt32(context, right);
+        NumericPair pair = numericPair(left, right);
+        if (pair == null) {
+            valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (pair.bigInt()) {
+            valueStack.push(shiftBigInt((JSBigInt) pair.left(), (JSBigInt) pair.right(), false));
+            return;
+        }
+        int leftInt = JSTypeConversions.toInt32(context, pair.left());
+        int rightInt = JSTypeConversions.toInt32(context, pair.right());
         valueStack.push(JSNumber.of(leftInt >> (rightInt & 0x1F)));
     }
 
@@ -3769,20 +3850,38 @@ public final class VirtualMachine {
             valueStack.push(JSNumber.of((int) leftNum.value() << ((int) rightNum.value() & 0x1F)));
             return;
         }
-        int leftInt = JSTypeConversions.toInt32(context, left);
-        int rightInt = JSTypeConversions.toInt32(context, right);
+        NumericPair pair = numericPair(left, right);
+        if (pair == null) {
+            valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (pair.bigInt()) {
+            valueStack.push(shiftBigInt((JSBigInt) pair.left(), (JSBigInt) pair.right(), true));
+            return;
+        }
+        int leftInt = JSTypeConversions.toInt32(context, pair.left());
+        int rightInt = JSTypeConversions.toInt32(context, pair.right());
         valueStack.push(JSNumber.of(leftInt << (rightInt & 0x1F)));
     }
 
     private void handleShr() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+        JSValue leftPrimitive = JSTypeConversions.toPrimitive(context, left, JSTypeConversions.PreferredType.NUMBER);
+        JSValue rightPrimitive = JSTypeConversions.toPrimitive(context, right, JSTypeConversions.PreferredType.NUMBER);
+        if (leftPrimitive instanceof JSBigInt || rightPrimitive instanceof JSBigInt) {
+            pendingException = context.throwTypeError("BigInts do not support >>>");
+            valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        JSValue leftNumeric = JSTypeConversions.toNumber(context, leftPrimitive);
+        JSValue rightNumeric = JSTypeConversions.toNumber(context, rightPrimitive);
+        if (leftNumeric instanceof JSNumber leftNum && rightNumeric instanceof JSNumber rightNum) {
             valueStack.push(JSNumber.of(((int) leftNum.value() >>> ((int) rightNum.value() & 0x1F)) & 0xFFFFFFFFL));
             return;
         }
-        int leftInt = JSTypeConversions.toInt32(context, left);
-        int rightInt = JSTypeConversions.toInt32(context, right);
+        int leftInt = JSTypeConversions.toInt32(context, leftNumeric);
+        int rightInt = JSTypeConversions.toInt32(context, rightNumeric);
         valueStack.push(JSNumber.of((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
     }
 
@@ -3803,12 +3902,20 @@ public final class VirtualMachine {
     private void handleSub() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            valueStack.push(JSNumber.of(leftNum.value() - rightNum.value()));
+        NumericPair pair = numericPair(left, right);
+        if (pair == null) {
+            valueStack.push(JSUndefined.INSTANCE);
             return;
         }
-        double result = JSTypeConversions.toNumber(context, left).value() - JSTypeConversions.toNumber(context, right).value();
-        valueStack.push(JSNumber.of(result));
+        if (pair.bigInt()) {
+            JSBigInt leftBigInt = (JSBigInt) pair.left();
+            JSBigInt rightBigInt = (JSBigInt) pair.right();
+            valueStack.push(new JSBigInt(leftBigInt.value().subtract(rightBigInt.value())));
+            return;
+        }
+        JSNumber leftNumber = (JSNumber) pair.left();
+        JSNumber rightNumber = (JSNumber) pair.right();
+        valueStack.push(JSNumber.of(leftNumber.value() - rightNumber.value()));
     }
 
     private void handleTypeof() {
@@ -3824,7 +3931,18 @@ public final class VirtualMachine {
             valueStack.push(JSNumber.of((int) leftNum.value() ^ (int) rightNum.value()));
             return;
         }
-        int result = JSTypeConversions.toInt32(context, left) ^ JSTypeConversions.toInt32(context, right);
+        NumericPair pair = numericPair(left, right);
+        if (pair == null) {
+            valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (pair.bigInt()) {
+            JSBigInt leftBigInt = (JSBigInt) pair.left();
+            JSBigInt rightBigInt = (JSBigInt) pair.right();
+            valueStack.push(new JSBigInt(leftBigInt.value().xor(rightBigInt.value())));
+            return;
+        }
+        int result = JSTypeConversions.toInt32(context, pair.left()) ^ JSTypeConversions.toInt32(context, pair.right());
         valueStack.push(JSNumber.of(result));
     }
 
@@ -4030,8 +4148,28 @@ public final class VirtualMachine {
         valueStack.push(result);
     }
 
+    private JSValue incrementValue(JSValue value, int delta) {
+        JSValue numeric = toNumericValue(value);
+        if (numeric instanceof JSBigInt bigInt) {
+            return new JSBigInt(bigInt.value().add(delta >= 0 ? BIGINT_ONE : BIGINT_NEGATIVE_ONE));
+        }
+        return JSNumber.of(((JSNumber) numeric).value() + delta);
+    }
+
     private boolean isUninitialized(JSValue value) {
         return value == UNINITIALIZED_MARKER;
+    }
+
+    private NumericPair numericPair(JSValue left, JSValue right) {
+        JSValue leftNumeric = toNumericValue(left);
+        JSValue rightNumeric = toNumericValue(right);
+        boolean leftIsBigInt = leftNumeric instanceof JSBigInt;
+        boolean rightIsBigInt = rightNumeric instanceof JSBigInt;
+        if (leftIsBigInt != rightIsBigInt) {
+            throwMixedBigIntTypeError();
+            return null;
+        }
+        return new NumericPair(leftNumeric, rightNumeric, leftIsBigInt);
     }
 
     private boolean ordinaryHasInstance(JSValue constructorValue, JSValue objectValue) {
@@ -4308,6 +4446,41 @@ public final class VirtualMachine {
         object.definePropertyConfigurable("name", nameValue);
     }
 
+    private JSValue shiftBigInt(JSBigInt value, JSBigInt shiftCount, boolean leftShiftOperator) {
+        BigInteger count = shiftCount.value();
+        boolean countPositive = count.signum() >= 0;
+        boolean performLeftShift = leftShiftOperator == countPositive;
+        BigInteger magnitude = count.abs();
+        if (magnitude.bitLength() > 31) {
+            if (performLeftShift) {
+                pendingException = context.throwRangeError("BigInt shift count is too large");
+                return JSUndefined.INSTANCE;
+            }
+            return new JSBigInt(value.value().signum() < 0 ? BIGINT_NEGATIVE_ONE : BIGINT_ZERO);
+        }
+        int shift = magnitude.intValue();
+        BigInteger result = performLeftShift
+                ? value.value().shiftLeft(shift)
+                : value.value().shiftRight(shift);
+        return new JSBigInt(result);
+    }
+
+    private JSValue throwMixedBigIntTypeError() {
+        pendingException = context.throwTypeError("Cannot mix BigInt and other types");
+        return JSUndefined.INSTANCE;
+    }
+
+    private JSValue toNumericValue(JSValue value) {
+        JSValue primitive = JSTypeConversions.toPrimitive(context, value, JSTypeConversions.PreferredType.NUMBER);
+        capturePendingException();
+        if (primitive instanceof JSBigInt || primitive instanceof JSNumber) {
+            return primitive;
+        }
+        JSValue result = JSTypeConversions.toNumber(context, primitive);
+        capturePendingException();
+        return result;
+    }
+
     /**
      * Convert a value to an object (auto-boxing for primitives).
      * Returns null for null and undefined.
@@ -4434,5 +4607,8 @@ public final class VirtualMachine {
             default -> {
             }
         }
+    }
+
+    private record NumericPair(JSValue left, JSValue right, boolean bigInt) {
     }
 }

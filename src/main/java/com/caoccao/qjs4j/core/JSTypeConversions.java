@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 
 /**
@@ -60,6 +61,26 @@ public final class JSTypeConversions {
         if (x.isString() && y.isNumber()) {
             return abstractEquals(context, toNumber(context, x), y);
         }
+        if (x.isBigInt() && y.isString()) {
+            try {
+                return strictEquals(x, stringToBigInt(((JSString) y).value()));
+            } catch (NumberFormatException ignored) {
+                return false;
+            }
+        }
+        if (x.isString() && y.isBigInt()) {
+            try {
+                return strictEquals(stringToBigInt(((JSString) x).value()), y);
+            } catch (NumberFormatException ignored) {
+                return false;
+            }
+        }
+        if (x instanceof JSNumber xNumber && y instanceof JSBigInt yBigInt) {
+            return numberEqualsBigInt(xNumber.value(), yBigInt.value());
+        }
+        if (x instanceof JSBigInt xBigInt && y instanceof JSNumber yNumber) {
+            return numberEqualsBigInt(yNumber.value(), xBigInt.value());
+        }
 
         // Boolean to number
         if (x.isBoolean()) {
@@ -83,6 +104,19 @@ public final class JSTypeConversions {
             return true;
         }
         return y instanceof JSObject yObj && yObj.isHTMLDDA() && x.isNullOrUndefined();
+    }
+
+    private static int compareBigIntAndNumber(BigInteger bigInt, double number) {
+        if (Double.isNaN(number)) {
+            return 1;
+        }
+        if (number == Double.POSITIVE_INFINITY) {
+            return -1;
+        }
+        if (number == Double.NEGATIVE_INFINITY) {
+            return 1;
+        }
+        return new BigDecimal(bigInt).compareTo(BigDecimal.valueOf(number));
     }
 
     /**
@@ -131,6 +165,24 @@ public final class JSTypeConversions {
             return xStr.value().compareTo(yStr.value()) < 0;
         }
 
+        if (px instanceof JSBigInt xBigInt) {
+            if (py instanceof JSBigInt yBigInt) {
+                return xBigInt.value().compareTo(yBigInt.value()) < 0;
+            }
+            double ny = py instanceof JSNumber n ? n.value() : toNumber(context, py).value();
+            if (Double.isNaN(ny)) {
+                return false;
+            }
+            return compareBigIntAndNumber(xBigInt.value(), ny) < 0;
+        }
+        if (py instanceof JSBigInt yBigInt) {
+            double nx = px instanceof JSNumber n ? n.value() : toNumber(context, px).value();
+            if (Double.isNaN(nx)) {
+                return false;
+            }
+            return compareBigIntAndNumber(yBigInt.value(), nx) > 0;
+        }
+
         // Otherwise, convert to numbers and compare
         double nx = toNumber(context, px).value();
         double ny = toNumber(context, py).value();
@@ -141,6 +193,16 @@ public final class JSTypeConversions {
         }
 
         return nx < ny;
+    }
+
+    private static boolean numberEqualsBigInt(double number, BigInteger bigInt) {
+        if (Double.isNaN(number) || Double.isInfinite(number)) {
+            return false;
+        }
+        if (Math.rint(number) != number) {
+            return false;
+        }
+        return compareBigIntAndNumber(bigInt, number) == 0;
     }
 
     /**
