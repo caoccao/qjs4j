@@ -621,19 +621,47 @@ public final class JSArray extends JSObject {
         if (index >= 0) {
             set(index, value, context);
         } else if (key.isString() && "length".equals(key.asString())) {
-            // Special handling for length property
+            // Per ES spec ArraySetLength / QuickJS set_array_length:
+            // Coerce value BEFORE the read-only test (coercion can change writable flag)
+            Long newLength = toArrayLengthForLengthProperty(context, value);
+            if (newLength == null) {
+                return; // coercion error (pending exception)
+            }
             if (!isLengthWritable()) {
-                super.set(key, value, context);
+                // Delegate to JSObject.set which will handle the non-writable error
+                super.set(key, JSNumber.of(newLength), context);
                 return;
             }
-            Long newLength = toArrayLengthForLengthProperty(context, value);
-            if (newLength != null) {
-                setLength(newLength);
-            }
+            setLength(newLength);
         } else {
             // Otherwise, use the shape-based storage from JSObject
             super.set(key, value, context);
         }
+    }
+
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context) {
+        return setWithResult(key, value, context, this);
+    }
+
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
+        long index = getArrayIndex(key);
+        if (index >= 0 || !(key.isString() && "length".equals(key.asString()))) {
+            // Non-length keys: delegate to JSObject
+            return super.setWithResult(key, value, context, receiver);
+        }
+        // Per ES spec ArraySetLength / QuickJS set_array_length:
+        // Coerce value BEFORE the read-only test
+        Long newLength = toArrayLengthForLengthProperty(context, value);
+        if (newLength == null) {
+            return false; // coercion error (pending exception)
+        }
+        if (!isLengthWritable()) {
+            return false;
+        }
+        setLength(newLength);
+        return true;
     }
 
     /**
