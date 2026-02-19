@@ -180,8 +180,7 @@ public final class JSProxy extends JSObject {
 
         JSValue trap = getTrapMethod("defineProperty");
         if (trap instanceof JSUndefined) {
-            targetObj.defineProperty(key, descriptor);
-            return true;
+            return targetObj.defineOwnProperty(key, descriptor);
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {

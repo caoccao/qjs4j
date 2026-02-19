@@ -173,7 +173,21 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
+     * [[DefineOwnProperty]] per ES spec.
+     * Returns true if the property was successfully defined, false if the object
+     * is not extensible and the property does not already exist.
+     */
+    public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor) {
+        if (!extensible && !hasOwnProperty(key)) {
+            return false;
+        }
+        defineProperty(key, descriptor);
+        return true;
+    }
+
+    /**
      * Define a new property with a descriptor.
+     * This is the internal method that always succeeds (used by freeze, seal, etc.).
      */
     public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
         // When defining a property (especially accessor), remove any sparse entry

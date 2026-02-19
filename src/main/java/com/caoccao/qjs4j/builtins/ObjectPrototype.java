@@ -392,7 +392,9 @@ public final class ObjectPrototype {
             desc.setSetter((JSFunction) setter);
         }
 
-        obj.defineProperty(key, desc);
+        if (!obj.defineOwnProperty(key, desc)) {
+            return context.throwTypeError("Cannot define property " + key.toPropertyString() + ", object is not extensible");
+        }
         return obj;
     }
 
