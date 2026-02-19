@@ -350,46 +350,49 @@ public final class ObjectPrototype {
 
         PropertyDescriptor desc = new PropertyDescriptor();
 
-        // Check for value
-        JSValue value = descObj.get(PropertyKey.VALUE);
-        if (value != null && !(value instanceof JSUndefined)) {
-            desc.setValue(value);
-        }
-
-        // Check for writable
-        JSValue writable = descObj.get(PropertyKey.WRITABLE);
-        if (writable != null && !(writable instanceof JSUndefined)) {
-            desc.setWritable(JSTypeChecking.isTruthy(writable));
-        }
+        // Following QuickJS js_obj_to_desc: use HasProperty to check field existence,
+        // not whether the value is undefined. {value: undefined} is a valid descriptor.
 
         // Check for enumerable
-        JSValue enumerable = descObj.get(PropertyKey.ENUMERABLE);
-        if (enumerable != null && !(enumerable instanceof JSUndefined)) {
+        if (descObj.has(PropertyKey.ENUMERABLE)) {
+            JSValue enumerable = descObj.get(PropertyKey.ENUMERABLE, context);
             desc.setEnumerable(JSTypeChecking.isTruthy(enumerable));
         }
 
         // Check for configurable
-        JSValue configurable = descObj.get(PropertyKey.CONFIGURABLE);
-        if (configurable != null && !(configurable instanceof JSUndefined)) {
+        if (descObj.has(PropertyKey.CONFIGURABLE)) {
+            JSValue configurable = descObj.get(PropertyKey.CONFIGURABLE, context);
             desc.setConfigurable(JSTypeChecking.isTruthy(configurable));
         }
 
+        // Check for value
+        if (descObj.has(PropertyKey.VALUE)) {
+            JSValue value = descObj.get(PropertyKey.VALUE, context);
+            desc.setValue(value);
+        }
+
+        // Check for writable
+        if (descObj.has(PropertyKey.WRITABLE)) {
+            JSValue writable = descObj.get(PropertyKey.WRITABLE, context);
+            desc.setWritable(JSTypeChecking.isTruthy(writable));
+        }
+
         // Check for getter
-        JSValue getter = descObj.get(PropertyKey.GET);
-        if (getter != null && !(getter instanceof JSUndefined)) {
-            if (!(getter instanceof JSFunction)) {
+        if (descObj.has(PropertyKey.GET)) {
+            JSValue getter = descObj.get(PropertyKey.GET, context);
+            if (!(getter instanceof JSUndefined) && !(getter instanceof JSFunction)) {
                 return context.throwTypeError("Getter must be a function");
             }
-            desc.setGetter((JSFunction) getter);
+            desc.setGetter(getter instanceof JSFunction ? (JSFunction) getter : null);
         }
 
         // Check for setter
-        JSValue setter = descObj.get(PropertyKey.SET);
-        if (setter != null && !(setter instanceof JSUndefined)) {
-            if (!(setter instanceof JSFunction)) {
+        if (descObj.has(PropertyKey.SET)) {
+            JSValue setter = descObj.get(PropertyKey.SET, context);
+            if (!(setter instanceof JSUndefined) && !(setter instanceof JSFunction)) {
                 return context.throwTypeError("Setter must be a function");
             }
-            desc.setSetter((JSFunction) setter);
+            desc.setSetter(setter instanceof JSFunction ? (JSFunction) setter : null);
         }
 
         if (!obj.defineOwnProperty(key, desc, context)) {

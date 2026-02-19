@@ -441,39 +441,42 @@ public final class JSReflectObject {
     private static PropertyDescriptor toPropertyDescriptor(JSContext context, JSObject descriptorObject) {
         PropertyDescriptor descriptor = new PropertyDescriptor();
 
-        JSValue value = descriptorObject.get(PropertyKey.VALUE);
-        if (!(value instanceof JSUndefined)) {
-            descriptor.setValue(value);
-        }
+        // Following QuickJS js_obj_to_desc: use HasProperty to check field existence.
+        // {value: undefined} is a valid descriptor with an explicit value field.
 
-        JSValue writable = descriptorObject.get(PropertyKey.WRITABLE);
-        if (!(writable instanceof JSUndefined)) {
-            descriptor.setWritable(JSTypeConversions.toBoolean(writable) == JSBoolean.TRUE);
-        }
-
-        JSValue enumerable = descriptorObject.get(PropertyKey.ENUMERABLE);
-        if (!(enumerable instanceof JSUndefined)) {
+        if (descriptorObject.has(PropertyKey.ENUMERABLE)) {
+            JSValue enumerable = descriptorObject.get(PropertyKey.ENUMERABLE, context);
             descriptor.setEnumerable(JSTypeConversions.toBoolean(enumerable) == JSBoolean.TRUE);
         }
 
-        JSValue configurable = descriptorObject.get(PropertyKey.CONFIGURABLE);
-        if (!(configurable instanceof JSUndefined)) {
+        if (descriptorObject.has(PropertyKey.CONFIGURABLE)) {
+            JSValue configurable = descriptorObject.get(PropertyKey.CONFIGURABLE, context);
             descriptor.setConfigurable(JSTypeConversions.toBoolean(configurable) == JSBoolean.TRUE);
         }
 
-        JSValue get = descriptorObject.get(PropertyKey.GET);
-        if (!(get instanceof JSUndefined)) {
-            if (!(get instanceof JSFunction) && !(get instanceof JSNull)) {
-                context.throwTypeError("Getter must be a function");
+        if (descriptorObject.has(PropertyKey.VALUE)) {
+            JSValue value = descriptorObject.get(PropertyKey.VALUE, context);
+            descriptor.setValue(value);
+        }
+
+        if (descriptorObject.has(PropertyKey.WRITABLE)) {
+            JSValue writable = descriptorObject.get(PropertyKey.WRITABLE, context);
+            descriptor.setWritable(JSTypeConversions.toBoolean(writable) == JSBoolean.TRUE);
+        }
+
+        if (descriptorObject.has(PropertyKey.GET)) {
+            JSValue get = descriptorObject.get(PropertyKey.GET, context);
+            if (!(get instanceof JSUndefined) && !(get instanceof JSFunction)) {
+                context.throwTypeError("invalid getter");
                 return null;
             }
             descriptor.setGetter(get instanceof JSFunction getter ? getter : null);
         }
 
-        JSValue set = descriptorObject.get(PropertyKey.SET);
-        if (!(set instanceof JSUndefined)) {
-            if (!(set instanceof JSFunction) && !(set instanceof JSNull)) {
-                context.throwTypeError("Setter must be a function");
+        if (descriptorObject.has(PropertyKey.SET)) {
+            JSValue set = descriptorObject.get(PropertyKey.SET, context);
+            if (!(set instanceof JSUndefined) && !(set instanceof JSFunction)) {
+                context.throwTypeError("invalid setter");
                 return null;
             }
             descriptor.setSetter(set instanceof JSFunction setter ? setter : null);
