@@ -620,10 +620,30 @@ public abstract class JSTypedArray extends JSObject {
 
     @Override
     public void set(PropertyKey key, JSValue value, JSContext context) {
-        int index = toTypedArrayIndex(key);
-        if (index >= 0) {
-            if (index < getLength() && !buffer.isDetached()) {
-                setJSElement(index, value, context);
+        if (isCanonicalNumericIndex(key)) {
+            // TypedArray [[Set]] with SameValue(O, Receiver) = true
+            // Always call integerIndexedElementSet which performs value conversion
+            // (ToNumber/ToBigInt) BEFORE checking detached/bounds per spec.
+            String str = key.toPropertyString();
+            if ("-0".equals(str)) {
+                // -0 is never a valid integer index; use -1 to skip write after conversion
+                integerIndexedElementSet(-1, value, context);
+                return;
+            }
+            try {
+                double numericIndex = Double.parseDouble(str);
+                if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
+                    integerIndexedElementSet(-1, value, context);
+                    return;
+                }
+                int index = (int) numericIndex;
+                if (index != numericIndex) {
+                    integerIndexedElementSet(-1, value, context);
+                    return;
+                }
+                integerIndexedElementSet(index, value, context);
+            } catch (NumberFormatException e) {
+                integerIndexedElementSet(-1, value, context);
             }
             return;
         }
