@@ -189,55 +189,12 @@ public final class VirtualMachine {
             return thisObject;
         }
 
-        JSObject result = null;
-        switch (constructorType) {
-            case AGGREGATE_ERROR,
-                 ARRAY,
-                 ARRAY_BUFFER,
-                 BIG_INT_OBJECT,
-                 BOOLEAN_OBJECT,
-                 DATA_VIEW,
-                 DATE,
-                 ERROR,
-                 EVAL_ERROR,
-                 FINALIZATION_REGISTRY,
-                 MAP,
-                 NUMBER_OBJECT,
-                 PROMISE,
-                 PROXY,
-                 RANGE_ERROR,
-                 REFERENCE_ERROR,
-                 REGEXP,
-                 SET,
-                 SHARED_ARRAY_BUFFER,
-                 STRING_OBJECT,
-                 SUPPRESSED_ERROR,
-                 SYMBOL_OBJECT,
-                 SYNTAX_ERROR,
-                 TYPED_ARRAY_BIGINT64,
-                 TYPED_ARRAY_BIGUINT64,
-                 TYPED_ARRAY_FLOAT16,
-                 TYPED_ARRAY_FLOAT32,
-                 TYPED_ARRAY_FLOAT64,
-                 TYPED_ARRAY_INT16,
-                 TYPED_ARRAY_INT32,
-                 TYPED_ARRAY_INT8,
-                 TYPED_ARRAY_UINT16,
-                 TYPED_ARRAY_UINT32,
-                 TYPED_ARRAY_UINT8,
-                 TYPED_ARRAY_UINT8_CLAMPED,
-                 TYPE_ERROR,
-                 URI_ERROR,
-                 WEAK_MAP,
-                 WEAK_REF,
-                 WEAK_SET -> {
-                try {
-                    result = constructorType.create(context, args);
-                } catch (JSErrorException e) {
-                    throw new JSVirtualMachineException(
-                            context.throwError(e.getErrorType().name(), e.getMessage()));
-                }
-            }
+        JSObject result;
+        try {
+            result = constructorType.create(context, args);
+        } catch (JSErrorException e) {
+            throw new JSVirtualMachineException(
+                    context.throwError(e.getErrorType().name(), e.getMessage()));
         }
 
         // Per ES spec and QuickJS (js_create_from_ctor), resolve the prototype

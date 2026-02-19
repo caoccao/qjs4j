@@ -16,11 +16,7 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.core.JSBigInt;
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSNumber;
-import com.caoccao.qjs4j.core.JSTypeConversions;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
 
 /**
  * Implementation of Number constructor.

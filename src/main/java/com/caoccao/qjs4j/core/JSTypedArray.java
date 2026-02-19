@@ -246,25 +246,6 @@ public abstract class JSTypedArray extends JSObject {
         }
     }
 
-    /**
-     * Check if this TypedArray is out of bounds due to buffer resize or detach.
-     * Following QuickJS typed_array_is_oob semantics.
-     */
-    public boolean isOutOfBounds() {
-        if (buffer.isDetached()) {
-            return true;
-        }
-        int currentByteLength = buffer.getByteLength();
-        if (byteOffset > currentByteLength) {
-            return true;
-        }
-        if (trackRab) {
-            return false;
-        }
-        // Fixed length: check if the view exceeds the current buffer size
-        return (long) byteOffset + byteLength > currentByteLength;
-    }
-
     protected String formatElement(double value) {
         if (Double.isNaN(value)) {
             return "NaN";
@@ -384,6 +365,25 @@ public abstract class JSTypedArray extends JSObject {
             return index < getLength() && !buffer.isDetached();
         }
         return super.has(key);
+    }
+
+    /**
+     * Check if this TypedArray is out of bounds due to buffer resize or detach.
+     * Following QuickJS typed_array_is_oob semantics.
+     */
+    public boolean isOutOfBounds() {
+        if (buffer.isDetached()) {
+            return true;
+        }
+        int currentByteLength = buffer.getByteLength();
+        if (byteOffset > currentByteLength) {
+            return true;
+        }
+        if (trackRab) {
+            return false;
+        }
+        // Fixed length: check if the view exceeds the current buffer size
+        return (long) byteOffset + byteLength > currentByteLength;
     }
 
     @Override

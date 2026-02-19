@@ -539,25 +539,6 @@ public final class JSContext implements AutoCloseable {
         microtaskQueue.enqueue(microtask);
     }
 
-    private void ensureArrayBufferPrototype(JSArrayBufferable buffer) {
-        if (buffer instanceof JSObject jsObject && jsObject.getPrototype() == null) {
-            transferPrototype(jsObject, buffer.isShared() ? JSSharedArrayBuffer.NAME : JSArrayBuffer.NAME);
-        }
-    }
-
-    private <T extends JSTypedArray> T initializeTypedArray(T typedArray, String constructorName) {
-        transferPrototype(typedArray, constructorName);
-        ensureArrayBufferPrototype(typedArray.getBuffer());
-        return typedArray;
-    }
-
-    /**
-     * Execute code in a try-catch context.
-     */
-    public void enterCatchHandler() {
-        this.inCatchHandler = true;
-    }
-
     /**
      * Enter strict mode.
      */
@@ -775,13 +756,6 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * Exit try-catch context.
-     */
-    public void exitCatchHandler() {
-        this.inCatchHandler = false;
-    }
-
-    /**
      * Exit strict mode.
      */
     public void exitStrictMode() {
@@ -900,6 +874,15 @@ public final class JSContext implements AutoCloseable {
      */
     private void initializeGlobalObject() {
         jsGlobalObject.initialize(this, globalObject);
+    }
+
+    private <T extends JSTypedArray> T initializeTypedArray(T typedArray, String constructorName) {
+        transferPrototype(typedArray, constructorName);
+        var buffer = typedArray.getBuffer();
+        if (buffer instanceof JSObject jsObject && jsObject.getPrototype() == null) {
+            transferPrototype(jsObject, buffer.isShared() ? JSSharedArrayBuffer.NAME : JSArrayBuffer.NAME);
+        }
+        return typedArray;
     }
 
     /**

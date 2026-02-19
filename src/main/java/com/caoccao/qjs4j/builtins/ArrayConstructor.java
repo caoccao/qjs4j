@@ -33,6 +33,27 @@ public final class ArrayConstructor {
         return JSArray.create(context, args);
     }
 
+    private static JSPromise closeIteratorAndReject(JSContext context, JSAsyncIterator asyncIterator, JSValue reason) {
+        asyncIterator.close();
+        JSPromise rejected = context.createJSPromise();
+        rejected.reject(reason);
+        return rejected;
+    }
+
+    private static JSValue consumePendingException(JSContext context) {
+        JSValue pendingException = context.getPendingException();
+        context.clearAllPendingExceptions();
+        return pendingException;
+    }
+
+    private static JSValue consumePendingExceptionOrCreateStringError(JSContext context, Exception e) {
+        if (context.hasPendingException()) {
+            return consumePendingException(context);
+        }
+        String message = e.getMessage();
+        return new JSString(message != null ? message : e.toString());
+    }
+
     /**
      * Array.from(items, mapFn, thisArg)
      * ES2024 23.1.2.1
@@ -626,27 +647,6 @@ public final class ArrayConstructor {
         };
         context.transferPrototype(error, errorType);
         promise.reject(error);
-    }
-
-    private static JSPromise closeIteratorAndReject(JSContext context, JSAsyncIterator asyncIterator, JSValue reason) {
-        asyncIterator.close();
-        JSPromise rejected = context.createJSPromise();
-        rejected.reject(reason);
-        return rejected;
-    }
-
-    private static JSValue consumePendingException(JSContext context) {
-        JSValue pendingException = context.getPendingException();
-        context.clearAllPendingExceptions();
-        return pendingException;
-    }
-
-    private static JSValue consumePendingExceptionOrCreateStringError(JSContext context, Exception e) {
-        if (context.hasPendingException()) {
-            return consumePendingException(context);
-        }
-        String message = e.getMessage();
-        return new JSString(message != null ? message : e.toString());
     }
 
     /**

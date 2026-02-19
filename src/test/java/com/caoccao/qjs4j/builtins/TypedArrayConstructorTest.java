@@ -106,26 +106,6 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
-    public void testSharedArrayBufferBackedTypedArraySourceCreatesArrayBufferBackedTarget() {
-        assertBooleanWithJavet(
-                """
-                        (() => {
-                        const sab = new SharedArrayBuffer(4);
-                        const views = [Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array];
-                        for (const View1 of views) {
-                          const ta1 = new View1(sab);
-                          for (const View2 of views) {
-                            const ta2 = new View2(ta1);
-                            if (ta2.buffer.constructor !== ArrayBuffer) {
-                              return false;
-                            }
-                          }
-                        }
-                        return true;
-                        })()""");
-    }
-
-    @Test
     public void testDescriptorsAndAliases() {
         assertStringWithJavet(
                 """
@@ -160,6 +140,26 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
         assertBooleanWithJavet(
                 "(() => { const a = new Uint8Array(2); try { a.set([1], 3); return false; } catch (e) { return e instanceof RangeError; } })()",
                 "(() => { const a = new Uint8Array(2); try { a.set([1, 2, 3], 0); return false; } catch (e) { return e instanceof RangeError; } })()");
+    }
+
+    @Test
+    public void testSharedArrayBufferBackedTypedArraySourceCreatesArrayBufferBackedTarget() {
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                        const sab = new SharedArrayBuffer(4);
+                        const views = [Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array];
+                        for (const View1 of views) {
+                          const ta1 = new View1(sab);
+                          for (const View2 of views) {
+                            const ta2 = new View2(ta1);
+                            if (ta2.buffer.constructor !== ArrayBuffer) {
+                              return false;
+                            }
+                          }
+                        }
+                        return true;
+                        })()""");
     }
 
     @Test

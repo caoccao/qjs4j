@@ -30,7 +30,9 @@ import java.util.Iterator;
 public class JSAsyncIterator extends JSObject {
     private final JSContext context;
     private final AsyncIteratorFunction iteratorFunction;
-    /** The underlying iterator object, used for calling return() to close. */
+    /**
+     * The underlying iterator object, used for calling return() to close.
+     */
     private JSObject underlyingIterator;
 
     /**
@@ -60,35 +62,18 @@ public class JSAsyncIterator extends JSObject {
         }
     }
 
-    /**
-     * Set the underlying iterator object so that close() can call its return() method.
-     */
-    public void setUnderlyingIterator(JSObject underlyingIterator) {
-        this.underlyingIterator = underlyingIterator;
+    static JSValue consumePendingException(JSContext context) {
+        JSValue reason = context.getPendingException();
+        context.clearAllPendingExceptions();
+        return reason;
     }
 
-    /**
-     * Close this async iterator by calling return() on the underlying iterator object.
-     * Per ES spec AsyncIteratorClose.
-     *
-     * @return A promise that resolves when the iterator is closed, or null if no return method
-     */
-    public JSPromise close() {
-        JSObject iter = underlyingIterator;
-        if (iter == null) {
-            return null;
+    static JSValue consumePendingExceptionOrCreateStringError(JSContext context, Exception e) {
+        if (context.hasPendingException()) {
+            return consumePendingException(context);
         }
-        JSValue returnMethod = iter.get(PropertyKey.RETURN);
-        if (!(returnMethod instanceof JSFunction returnFunc)) {
-            return null;
-        }
-        JSValue result = returnFunc.call(context, iter, new JSValue[0]);
-        if (result instanceof JSPromise promise) {
-            return promise;
-        }
-        JSPromise promise = context.createJSPromise();
-        promise.fulfill(result != null ? result : JSUndefined.INSTANCE);
-        return promise;
+        String message = e.getMessage();
+        return new JSString(message != null ? message : e.toString());
     }
 
     /**
@@ -172,24 +157,47 @@ public class JSAsyncIterator extends JSObject {
         return promise;
     }
 
-    static JSValue consumePendingException(JSContext context) {
-        JSValue reason = context.getPendingException();
-        context.clearAllPendingExceptions();
-        return reason;
-    }
-
-    static JSValue consumePendingExceptionOrCreateStringError(JSContext context, Exception e) {
-        if (context.hasPendingException()) {
-            return consumePendingException(context);
-        }
-        String message = e.getMessage();
-        return new JSString(message != null ? message : e.toString());
-    }
-
     static JSPromise createRejectedPromise(JSContext context, JSValue reason) {
         JSPromise promise = context.createJSPromise();
         promise.reject(reason);
         return promise;
+    }
+
+    /**
+     * Execute a for-await-of loop.
+     * Iterates asynchronously, waiting for each promise to resolve.
+     *
+     * @param context  The execution context
+     * @param iterable The iterable to loop over
+     * @param callback The callback to execute for each value
+     * @return A promise that resolves when iteration is complete
+     */
+    public static JSPromise forAwaitOf(JSContext context, JSValue iterable, AsyncIterationCallback callback) {
+        JSPromise completionPromise = context.createJSPromise();
+
+        // Get async iterator
+        JSAsyncIterator iterator = getAsyncIterator(iterable, context);
+        if (iterator == null) {
+            JSObject error = context.createJSObject();
+            error.set(PropertyKey.NAME, new JSString("TypeError"));
+            error.set(PropertyKey.MESSAGE, new JSString("Object is not async iterable"));
+            completionPromise.reject(error);
+            return completionPromise;
+        }
+
+        // Start iteration
+        iterateNext(iterator, callback, context, completionPromise);
+
+        return completionPromise;
+    }
+
+    /**
+     * Execute a for-await-of loop using an already-obtained async iterator.
+     */
+    public static JSPromise forAwaitOfIterator(JSContext context, JSAsyncIterator iterator, AsyncIterationCallback callback) {
+        JSPromise completionPromise = context.createJSPromise();
+        iterateNext(iterator, callback, context, completionPromise);
+        return completionPromise;
     }
 
     /**
@@ -316,43 +324,6 @@ public class JSAsyncIterator extends JSObject {
     }
 
     /**
-     * Execute a for-await-of loop.
-     * Iterates asynchronously, waiting for each promise to resolve.
-     *
-     * @param context  The execution context
-     * @param iterable The iterable to loop over
-     * @param callback The callback to execute for each value
-     * @return A promise that resolves when iteration is complete
-     */
-    public static JSPromise forAwaitOf(JSContext context, JSValue iterable, AsyncIterationCallback callback) {
-        JSPromise completionPromise = context.createJSPromise();
-
-        // Get async iterator
-        JSAsyncIterator iterator = getAsyncIterator(iterable, context);
-        if (iterator == null) {
-            JSObject error = context.createJSObject();
-            error.set(PropertyKey.NAME, new JSString("TypeError"));
-            error.set(PropertyKey.MESSAGE, new JSString("Object is not async iterable"));
-            completionPromise.reject(error);
-            return completionPromise;
-        }
-
-        // Start iteration
-        iterateNext(iterator, callback, context, completionPromise);
-
-        return completionPromise;
-    }
-
-    /**
-     * Execute a for-await-of loop using an already-obtained async iterator.
-     */
-    public static JSPromise forAwaitOfIterator(JSContext context, JSAsyncIterator iterator, AsyncIterationCallback callback) {
-        JSPromise completionPromise = context.createJSPromise();
-        iterateNext(iterator, callback, context, completionPromise);
-        return completionPromise;
-    }
-
-    /**
      * Get an async iterator from a value.
      * Checks for Symbol.asyncIterator, falls back to Symbol.iterator.
      *
@@ -421,6 +392,84 @@ public class JSAsyncIterator extends JSObject {
         PropertyKey iteratorKey = PropertyKey.SYMBOL_ITERATOR;
         JSValue iteratorMethod = obj.get(iteratorKey);
         return iteratorMethod instanceof JSFunction;
+    }
+
+    /**
+     * Internal helper to iterate to the next value.
+     * Uses continuation-passing style to avoid deep recursion.
+     */
+    private static void iterateNext(
+            JSAsyncIterator iterator,
+            AsyncIterationCallback callback,
+            JSContext context,
+            JSPromise completionPromise) {
+        // Get next promise
+        JSPromise nextPromise = iterator.next();
+
+        // When next promise resolves, process the result
+        nextPromise.addReactions(
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onNextFulfilled", 1, (childContext, thisArg, args) -> {
+                            JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+
+                            if (!(result instanceof JSObject resultObj)) {
+                                completionPromise.reject(new JSString("Iterator result is not an object"));
+                                return JSUndefined.INSTANCE;
+                            }
+
+                            // Check if done
+                            JSValue doneValue = resultObj.get("done");
+                            boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
+
+                            if (done) {
+                                // Iteration complete
+                                completionPromise.fulfill(JSUndefined.INSTANCE);
+                                return JSUndefined.INSTANCE;
+                            }
+
+                            // Get value and process it
+                            JSValue value = resultObj.get("value");
+                            JSPromise processingPromise = callback.iterate(value);
+
+                            // When processing completes, continue to next iteration
+                            processingPromise.addReactions(
+                                    new JSPromise.ReactionRecord(
+                                            new JSNativeFunction("onProcessed", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                                // Continue iteration
+                                                iterateNext(iterator, callback, childContext, completionPromise);
+                                                return JSUndefined.INSTANCE;
+                                            }),
+                                            null,
+                                            childContext
+                                    ),
+                                    new JSPromise.ReactionRecord(
+                                            new JSNativeFunction("onProcessError", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                                // If processing fails, reject completion promise
+                                                JSValue error = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
+                                                completionPromise.reject(error);
+                                                return JSUndefined.INSTANCE;
+                                            }),
+                                            null,
+                                            childContext
+                                    )
+                            );
+
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                ),
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onNextRejected", 1, (childContext, thisArg, args) -> {
+                            // If next() fails, reject completion promise
+                            JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            completionPromise.reject(error);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                )
+        );
     }
 
     /**
@@ -523,81 +572,27 @@ public class JSAsyncIterator extends JSObject {
     }
 
     /**
-     * Internal helper to iterate to the next value.
-     * Uses continuation-passing style to avoid deep recursion.
+     * Close this async iterator by calling return() on the underlying iterator object.
+     * Per ES spec AsyncIteratorClose.
+     *
+     * @return A promise that resolves when the iterator is closed, or null if no return method
      */
-    private static void iterateNext(
-            JSAsyncIterator iterator,
-            AsyncIterationCallback callback,
-            JSContext context,
-            JSPromise completionPromise) {
-        // Get next promise
-        JSPromise nextPromise = iterator.next();
-
-        // When next promise resolves, process the result
-        nextPromise.addReactions(
-                new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onNextFulfilled", 1, (childContext, thisArg, args) -> {
-                            JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-
-                            if (!(result instanceof JSObject resultObj)) {
-                                completionPromise.reject(new JSString("Iterator result is not an object"));
-                                return JSUndefined.INSTANCE;
-                            }
-
-                            // Check if done
-                            JSValue doneValue = resultObj.get("done");
-                            boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
-
-                            if (done) {
-                                // Iteration complete
-                                completionPromise.fulfill(JSUndefined.INSTANCE);
-                                return JSUndefined.INSTANCE;
-                            }
-
-                            // Get value and process it
-                            JSValue value = resultObj.get("value");
-                            JSPromise processingPromise = callback.iterate(value);
-
-                            // When processing completes, continue to next iteration
-                            processingPromise.addReactions(
-                                    new JSPromise.ReactionRecord(
-                                            new JSNativeFunction("onProcessed", 1, (innerContext, innerThisArg, innerArgs) -> {
-                                                // Continue iteration
-                                                iterateNext(iterator, callback, childContext, completionPromise);
-                                                return JSUndefined.INSTANCE;
-                                            }),
-                                            null,
-                                            childContext
-                                    ),
-                                    new JSPromise.ReactionRecord(
-                                            new JSNativeFunction("onProcessError", 1, (innerContext, innerThisArg, innerArgs) -> {
-                                                // If processing fails, reject completion promise
-                                                JSValue error = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
-                                                completionPromise.reject(error);
-                                                return JSUndefined.INSTANCE;
-                                            }),
-                                            null,
-                                            childContext
-                                    )
-                            );
-
-                            return JSUndefined.INSTANCE;
-                        }),
-                        null,
-                        context
-                ),
-                new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onNextRejected", 1, (childContext, thisArg, args) -> {
-                            // If next() fails, reject completion promise
-                            JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                            completionPromise.reject(error);
-                            return JSUndefined.INSTANCE;
-                        }),
-                        null,
-                        context
-                )
-        );
+    public JSPromise close() {
+        JSObject iter = underlyingIterator;
+        if (iter == null) {
+            return null;
+        }
+        JSValue returnMethod = iter.get(PropertyKey.RETURN);
+        if (!(returnMethod instanceof JSFunction returnFunc)) {
+            return null;
+        }
+        JSValue result = returnFunc.call(context, iter, new JSValue[0]);
+        if (result instanceof JSPromise promise) {
+            return promise;
+        }
+        JSPromise promise = context.createJSPromise();
+        promise.fulfill(result != null ? result : JSUndefined.INSTANCE);
+        return promise;
     }
 
     /**
@@ -607,6 +602,13 @@ public class JSAsyncIterator extends JSObject {
      */
     public JSPromise next() {
         return iteratorFunction.next();
+    }
+
+    /**
+     * Set the underlying iterator object so that close() can call its return() method.
+     */
+    public void setUnderlyingIterator(JSObject underlyingIterator) {
+        this.underlyingIterator = underlyingIterator;
     }
 
     @Override
