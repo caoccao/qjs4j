@@ -1345,12 +1345,9 @@ public final class BytecodeCompiler {
                         Map.of(),
                         false
                 );
-                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
-                // Stack: proto constructor method
 
-                // DEFINE_METHOD wants: obj method -> obj
                 String methodName = getMethodName(method);
-                emitter.emitOpcodeAtom(Opcode.DEFINE_METHOD, methodName);
+                emitClassMethodDefinition(method, methodFunc, methodName);
                 // Stack: proto constructor (method added to constructor)
 
                 // Swap back to restore order: constructor proto
@@ -1371,17 +1368,9 @@ public final class BytecodeCompiler {
                         Map.of(),
                         false
                 );
-                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
-                // Stack: constructor proto method
-
-                // DEFINE_METHOD wants: obj method -> obj
-                // We have: constructor proto method
-                // We want proto and method together: constructor proto method (already correct!)
-                // But after DEFINE_METHOD we'll have: constructor proto
-                // which is what we want!
 
                 String methodName = getMethodName(method);
-                emitter.emitOpcodeAtom(Opcode.DEFINE_METHOD, methodName);
+                emitClassMethodDefinition(method, methodFunc, methodName);
                 // Stack: constructor proto (method added to proto)
             }
         }
@@ -1588,11 +1577,9 @@ public final class BytecodeCompiler {
                         Map.of(),
                         false
                 );
-                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
-                // Stack: proto constructor method
 
                 String methodName = getMethodName(method);
-                emitter.emitOpcodeAtom(Opcode.DEFINE_METHOD, methodName);
+                emitClassMethodDefinition(method, methodFunc, methodName);
                 // Stack: proto constructor
 
                 // Restore canonical order for next iteration
@@ -1609,11 +1596,9 @@ public final class BytecodeCompiler {
                         Map.of(),
                         false
                 );
-                emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
-                // Stack: constructor proto method
 
                 String methodName = getMethodName(method);
-                emitter.emitOpcodeAtom(Opcode.DEFINE_METHOD, methodName);
+                emitClassMethodDefinition(method, methodFunc, methodName);
                 // Stack: constructor proto
             }
         }
@@ -5135,6 +5120,32 @@ public final class BytecodeCompiler {
         } else {
             // Computed property name - for now use a placeholder
             return "[computed]";
+        }
+    }
+
+    /**
+     * Emit the correct opcode sequence for a class method definition.
+     * For getter/setter methods, emits DEFINE_METHOD_COMPUTED with accessor flags.
+     * For regular methods, emits DEFINE_METHOD with the method name atom.
+     * Stack before: ... obj
+     * Stack after:  ... obj (method added to obj)
+     */
+    private void emitClassMethodDefinition(ClassDeclaration.MethodDefinition method,
+                                           JSBytecodeFunction methodFunc, String methodName) {
+        String kind = method.kind();
+        if ("get".equals(kind) || "set".equals(kind)) {
+            // Getter/setter: use DEFINE_METHOD_COMPUTED with accessor flags
+            // Stack: ... obj -> ... obj key method -> ... obj
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
+            int methodKind = "get".equals(kind) ? 1 : 2;
+            // Class properties are not enumerable (no enumerable flag)
+            emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind);
+        } else {
+            // Regular method: use DEFINE_METHOD with atom name
+            // Stack: ... obj -> ... obj method -> ... obj
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
+            emitter.emitOpcodeAtom(Opcode.DEFINE_METHOD, methodName);
         }
     }
 

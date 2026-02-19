@@ -1005,11 +1005,11 @@ public final class Parser {
         // Check for getter/setter
         if (match(TokenType.IDENTIFIER)) {
             String name = currentToken.value();
-            Token nextToken = lexer.peekToken();
+            Token peekNext = this.nextToken;
             if (("get".equals(name) || "set".equals(name)) &&
-                    nextToken.type() != TokenType.LPAREN &&
-                    nextToken.type() != TokenType.ASSIGN &&
-                    nextToken.type() != TokenType.SEMICOLON) {
+                    peekNext.type() != TokenType.LPAREN &&
+                    peekNext.type() != TokenType.ASSIGN &&
+                    peekNext.type() != TokenType.SEMICOLON) {
                 String kind = name;
                 advance(); // consume 'get' or 'set'
 

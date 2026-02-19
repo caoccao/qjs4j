@@ -389,7 +389,16 @@ public final class ArrayConstructor {
             JSValue mapFn, JSValue mapThisArg) {
         if (index >= length) {
             if (!isArray) {
-                target.set(PropertyKey.LENGTH, JSNumber.of(length));
+                try {
+                    target.set(PropertyKey.LENGTH, JSNumber.of(length), context);
+                    if (context.hasPendingException()) {
+                        resultPromise.reject(consumePendingException(context));
+                        return;
+                    }
+                } catch (Exception e) {
+                    resultPromise.reject(consumePendingExceptionOrCreateStringError(context, e));
+                    return;
+                }
             }
             resultPromise.fulfill(target);
             return;
@@ -577,7 +586,16 @@ public final class ArrayConstructor {
                 new JSPromise.ReactionRecord(
                         new JSNativeFunction("onComplete", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                             if (!isArray) {
-                                target.set(PropertyKey.LENGTH, JSNumber.of(index[0]));
+                                try {
+                                    target.set(PropertyKey.LENGTH, JSNumber.of(index[0]), context);
+                                    if (context.hasPendingException()) {
+                                        resultPromise.reject(consumePendingException(context));
+                                        return JSUndefined.INSTANCE;
+                                    }
+                                } catch (Exception e) {
+                                    resultPromise.reject(consumePendingExceptionOrCreateStringError(context, e));
+                                    return JSUndefined.INSTANCE;
+                                }
                             }
                             resultPromise.fulfill(target);
                             return JSUndefined.INSTANCE;

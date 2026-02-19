@@ -1629,10 +1629,25 @@ public final class VirtualMachine {
                         // The value should be on top of the stack.
                         JSValue putFieldValue = (JSValue) stack[sp - 1];
                         if (putFieldObj instanceof JSObject jsObj) {
-                            jsObj.set(PropertyKey.fromString(putFieldName), putFieldValue, context);
-                            // Check if setter threw an exception
-                            if (context.hasPendingException()) {
-                                pendingException = context.getPendingException();
+                            try {
+                                jsObj.set(PropertyKey.fromString(putFieldName), putFieldValue, context);
+                                // Check if setter threw an exception
+                                if (context.hasPendingException()) {
+                                    pendingException = context.getPendingException();
+                                    context.clearPendingException();
+                                }
+                            } catch (JSVirtualMachineException e) {
+                                // Bytecode setter threw - convert to pending exception
+                                if (e.getJsValue() != null) {
+                                    pendingException = e.getJsValue();
+                                } else if (e.getJsError() != null) {
+                                    pendingException = e.getJsError();
+                                } else if (context.hasPendingException()) {
+                                    pendingException = context.getPendingException();
+                                } else {
+                                    pendingException = context.throwError("Error",
+                                            e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                                }
                                 context.clearPendingException();
                             }
                         } else if (putFieldObj instanceof JSNull || putFieldObj instanceof JSUndefined) {
@@ -1646,9 +1661,23 @@ public final class VirtualMachine {
                             // chain must be triggered even for primitive bases.
                             JSObject boxed = toObject(putFieldObj);
                             if (boxed != null) {
-                                boxed.set(PropertyKey.fromString(putFieldName), putFieldValue, context);
-                                if (context.hasPendingException()) {
-                                    pendingException = context.getPendingException();
+                                try {
+                                    boxed.set(PropertyKey.fromString(putFieldName), putFieldValue, context);
+                                    if (context.hasPendingException()) {
+                                        pendingException = context.getPendingException();
+                                        context.clearPendingException();
+                                    }
+                                } catch (JSVirtualMachineException e) {
+                                    if (e.getJsValue() != null) {
+                                        pendingException = e.getJsValue();
+                                    } else if (e.getJsError() != null) {
+                                        pendingException = e.getJsError();
+                                    } else if (context.hasPendingException()) {
+                                        pendingException = context.getPendingException();
+                                    } else {
+                                        pendingException = context.throwError("Error",
+                                                e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                                    }
                                     context.clearPendingException();
                                 }
                             }
@@ -1773,11 +1802,25 @@ public final class VirtualMachine {
                         JSValue putElObj = (JSValue) stack[--sp];     // Pop object
                         JSValue putElValue = (JSValue) stack[--sp];   // Pop value
                         if (putElObj instanceof JSObject jsObj) {
-                            PropertyKey key = PropertyKey.fromValue(context, putElIndex);
-                            jsObj.set(key, putElValue, context);
-                            // Check if setter threw an exception
-                            if (context.hasPendingException()) {
-                                pendingException = context.getPendingException();
+                            try {
+                                PropertyKey key = PropertyKey.fromValue(context, putElIndex);
+                                jsObj.set(key, putElValue, context);
+                                // Check if setter threw an exception
+                                if (context.hasPendingException()) {
+                                    pendingException = context.getPendingException();
+                                    context.clearPendingException();
+                                }
+                            } catch (JSVirtualMachineException e) {
+                                if (e.getJsValue() != null) {
+                                    pendingException = e.getJsValue();
+                                } else if (e.getJsError() != null) {
+                                    pendingException = e.getJsError();
+                                } else if (context.hasPendingException()) {
+                                    pendingException = context.getPendingException();
+                                } else {
+                                    pendingException = context.throwError("Error",
+                                            e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                                }
                                 context.clearPendingException();
                             }
                         } else if (putElObj instanceof JSNull || putElObj instanceof JSUndefined) {
@@ -1790,10 +1833,24 @@ public final class VirtualMachine {
                             // Primitive base: auto-box and set (triggers setters on prototype chain)
                             JSObject boxed = toObject(putElObj);
                             if (boxed != null) {
-                                PropertyKey key = PropertyKey.fromValue(context, putElIndex);
-                                boxed.set(key, putElValue, context);
-                                if (context.hasPendingException()) {
-                                    pendingException = context.getPendingException();
+                                try {
+                                    PropertyKey key = PropertyKey.fromValue(context, putElIndex);
+                                    boxed.set(key, putElValue, context);
+                                    if (context.hasPendingException()) {
+                                        pendingException = context.getPendingException();
+                                        context.clearPendingException();
+                                    }
+                                } catch (JSVirtualMachineException e) {
+                                    if (e.getJsValue() != null) {
+                                        pendingException = e.getJsValue();
+                                    } else if (e.getJsError() != null) {
+                                        pendingException = e.getJsError();
+                                    } else if (context.hasPendingException()) {
+                                        pendingException = context.getPendingException();
+                                    } else {
+                                        pendingException = context.throwError("Error",
+                                                e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                                    }
                                     context.clearPendingException();
                                 }
                             }

@@ -653,4 +653,29 @@ public class ClassCompilerTest extends BaseJavetTest {
                 .isInstanceOf(JSException.class)
                 .hasMessageContaining("undefined private field '#x'");
     }
+
+    @Test
+    public void testClassGetterSetter() {
+        assertBooleanWithJavet("""
+                class MyObj {
+                    get name() { return 'hello'; }
+                    set name(v) { this._name = v; }
+                }
+                var o = new MyObj();
+                o.name === 'hello' && (o.name = 'world', o._name === 'world')""");
+    }
+
+    @Test
+    public void testClassSetterThrows() {
+        assertBooleanWithJavet("""
+                class MyArray {
+                    set length(v) {
+                        throw new Error("setter called");
+                    }
+                }
+                var a = new MyArray();
+                var caught = false;
+                try { a.length = 5; } catch(e) { caught = e.message === "setter called"; }
+                caught""");
+    }
 }
