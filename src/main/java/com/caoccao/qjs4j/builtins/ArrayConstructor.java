@@ -389,10 +389,19 @@ public final class ArrayConstructor {
             JSValue mapFn, JSValue mapThisArg) {
         if (index >= length) {
             if (!isArray) {
+                // Per spec: Perform ? Set(A, "length", k, true)
+                // The true Throw flag means always throw TypeError on failure
                 try {
-                    target.set(PropertyKey.LENGTH, JSNumber.of(length), context);
+                    boolean success = target.setWithResult(PropertyKey.LENGTH, JSNumber.of(length), context);
                     if (context.hasPendingException()) {
                         resultPromise.reject(consumePendingException(context));
+                        return;
+                    }
+                    if (!success) {
+                        JSValue error = context.throwTypeError(
+                                "Cannot assign to read only property 'length' of object");
+                        context.clearPendingException();
+                        resultPromise.reject(error);
                         return;
                     }
                 } catch (Exception e) {
@@ -586,10 +595,18 @@ public final class ArrayConstructor {
                 new JSPromise.ReactionRecord(
                         new JSNativeFunction("onComplete", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                             if (!isArray) {
+                                // Per spec: Perform ? Set(A, "length", len, true)
                                 try {
-                                    target.set(PropertyKey.LENGTH, JSNumber.of(index[0]), context);
+                                    boolean success = target.setWithResult(PropertyKey.LENGTH, JSNumber.of(index[0]), context);
                                     if (context.hasPendingException()) {
                                         resultPromise.reject(consumePendingException(context));
+                                        return JSUndefined.INSTANCE;
+                                    }
+                                    if (!success) {
+                                        JSValue error = context.throwTypeError(
+                                                "Cannot assign to read only property 'length' of object");
+                                        context.clearPendingException();
+                                        resultPromise.reject(error);
                                         return JSUndefined.INSTANCE;
                                     }
                                 } catch (Exception e) {
