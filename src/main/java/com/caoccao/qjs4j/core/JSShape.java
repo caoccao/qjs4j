@@ -63,8 +63,8 @@ public final class JSShape {
         // Check if property already exists (might be deleted)
         int existingOffset = getPropertyOffset(key);
         if (existingOffset >= 0) {
-            // Property exists, update it
-            descriptors[existingOffset] = descriptor;
+            // Property exists, merge only explicitly specified attributes
+            descriptors[existingOffset].mergeFrom(descriptor);
             return;
         }
 

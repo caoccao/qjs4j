@@ -191,6 +191,33 @@ public final class PropertyDescriptor {
         return (flags & FLAG_WRITABLE) != 0;
     }
 
+    /**
+     * Merge attributes from another descriptor into this one.
+     * Only attributes explicitly specified in the other descriptor are updated.
+     * Unspecified attributes in the other descriptor are left unchanged.
+     * Handles data↔accessor descriptor type conversion by clearing
+     * the old type-specific attributes when switching types.
+     */
+    public void mergeFrom(PropertyDescriptor other) {
+        // Handle data → accessor conversion: clear data attributes
+        if ((other.hasGetter() || other.hasSetter()) && isDataDescriptor()) {
+            flags &= ~(FLAG_HAS_VALUE | FLAG_HAS_WRITABLE | FLAG_WRITABLE);
+            value = null;
+        }
+        // Handle accessor → data conversion: clear accessor attributes
+        if ((other.hasValue() || other.hasWritable()) && isAccessorDescriptor()) {
+            flags &= ~(FLAG_HAS_GET | FLAG_HAS_SET);
+            getter = null;
+            setter = null;
+        }
+        if (other.hasValue()) setValue(other.getValue());
+        if (other.hasWritable()) setWritable(other.isWritable());
+        if (other.hasEnumerable()) setEnumerable(other.isEnumerable());
+        if (other.hasConfigurable()) setConfigurable(other.isConfigurable());
+        if (other.hasGetter()) setGetter(other.getGetter());
+        if (other.hasSetter()) setSetter(other.getSetter());
+    }
+
     // Type checks
 
     public void setConfigurable(boolean configurable) {
