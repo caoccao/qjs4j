@@ -47,7 +47,7 @@ public final class JSWeakSet extends JSObject {
         if (pendingException != null) {
             context.clearPendingException();
         }
-        JSValue returnMethod = iteratorObject.get("return");
+        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunction) {
             returnFunction.call(context, iterator, new JSValue[0]);
         }
@@ -102,7 +102,7 @@ public final class JSWeakSet extends JSObject {
                     break;
                 }
 
-                JSValue value = nextResult.get("value");
+                JSValue value = nextResult.get(PropertyKey.VALUE);
                 JSValue adderResult;
                 try {
                     adderResult = adderFunction.call(context, weakSetObj, new JSValue[]{value});

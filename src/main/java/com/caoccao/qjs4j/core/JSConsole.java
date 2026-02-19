@@ -222,7 +222,7 @@ public final class JSConsole {
     }
 
     private String formatError(JSObject error) {
-        JSValue stackValue = error.get("stack");
+        JSValue stackValue = error.get(PropertyKey.STACK);
         JSValue nameValue = error.get(PropertyKey.NAME);
         JSValue messageValue = error.get(PropertyKey.MESSAGE);
         String name = nameValue instanceof JSString s ? s.value() : "Error";

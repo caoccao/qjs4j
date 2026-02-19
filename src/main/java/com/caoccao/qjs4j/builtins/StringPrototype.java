@@ -636,7 +636,7 @@ public final class StringPrototype {
             // Add 'index' property and update lastIndex
             int[][] indices = result.indices();
             if (indices != null && indices.length > 0) {
-                matchArray.set("index", JSNumber.of(indices[0][0]));
+                matchArray.set(PropertyKey.INDEX, JSNumber.of(indices[0][0]));
                 lastIndex = indices[0][1];
                 if (lastIndex == indices[0][0]) {
                     lastIndex++; // Prevent infinite loop on zero-width matches
@@ -646,8 +646,8 @@ public final class StringPrototype {
             }
 
             // Add 'input' property
-            matchArray.set("input", new JSString(s));
-            matchArray.set("groups", createNamedGroupsValue(captures, regexp.getBytecode().groupNames()));
+            matchArray.set(PropertyKey.INPUT, new JSString(s));
+            matchArray.set(PropertyKey.GROUPS, createNamedGroupsValue(captures, regexp.getBytecode().groupNames()));
 
             matches.push(matchArray);
         }

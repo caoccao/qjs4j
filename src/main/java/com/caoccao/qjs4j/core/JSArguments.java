@@ -158,7 +158,7 @@ public final class JSArguments extends JSObject {
                 JSValue iteratorSymbol = symbolObj.get(PropertyKey.ITERATOR);
                 if (iteratorSymbol instanceof JSSymbol sym) {
                     // Get Array.prototype
-                    JSValue arrayCtor = context.getGlobalObject().get(PropertyKey.ARRAY);
+                    JSValue arrayCtor = context.getGlobalObject().get(JSArray.NAME);
                     if (arrayCtor instanceof JSObject arrayCtorObj) {
                         JSValue arrayProto = arrayCtorObj.get(PropertyKey.PROTOTYPE);
                         if (arrayProto instanceof JSObject arrayProtoObj) {

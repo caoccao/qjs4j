@@ -280,31 +280,31 @@ public final class ObjectPrototype {
                 PropertyDescriptor descriptor = new PropertyDescriptor();
 
                 // Check for value
-                JSValue value = descObj.get("value");
+                JSValue value = descObj.get(PropertyKey.VALUE);
                 if (!(value instanceof JSUndefined)) {
                     descriptor.setValue(value);
                 }
 
                 // Check for writable
-                JSValue writable = descObj.get("writable");
+                JSValue writable = descObj.get(PropertyKey.WRITABLE);
                 if (!(writable instanceof JSUndefined)) {
                     descriptor.setWritable(JSTypeConversions.toBoolean(writable) == JSBoolean.TRUE);
                 }
 
                 // Check for enumerable
-                JSValue enumerable = descObj.get("enumerable");
+                JSValue enumerable = descObj.get(PropertyKey.ENUMERABLE);
                 if (!(enumerable instanceof JSUndefined)) {
                     descriptor.setEnumerable(JSTypeConversions.toBoolean(enumerable) == JSBoolean.TRUE);
                 }
 
                 // Check for configurable
-                JSValue configurable = descObj.get("configurable");
+                JSValue configurable = descObj.get(PropertyKey.CONFIGURABLE);
                 if (!(configurable instanceof JSUndefined)) {
                     descriptor.setConfigurable(JSTypeConversions.toBoolean(configurable) == JSBoolean.TRUE);
                 }
 
                 // Check for getter
-                JSValue getter = descObj.get("get");
+                JSValue getter = descObj.get(PropertyKey.GET);
                 if (!(getter instanceof JSUndefined)) {
                     if (!(getter instanceof JSFunction)) {
                         return context.throwTypeError("Getter must be a function");
@@ -313,7 +313,7 @@ public final class ObjectPrototype {
                 }
 
                 // Check for setter
-                JSValue setter = descObj.get("set");
+                JSValue setter = descObj.get(PropertyKey.SET);
                 if (!(setter instanceof JSUndefined)) {
                     if (!(setter instanceof JSFunction)) {
                         return context.throwTypeError("Setter must be a function");
@@ -351,31 +351,31 @@ public final class ObjectPrototype {
         PropertyDescriptor desc = new PropertyDescriptor();
 
         // Check for value
-        JSValue value = descObj.get("value");
+        JSValue value = descObj.get(PropertyKey.VALUE);
         if (value != null && !(value instanceof JSUndefined)) {
             desc.setValue(value);
         }
 
         // Check for writable
-        JSValue writable = descObj.get("writable");
+        JSValue writable = descObj.get(PropertyKey.WRITABLE);
         if (writable != null && !(writable instanceof JSUndefined)) {
             desc.setWritable(JSTypeChecking.isTruthy(writable));
         }
 
         // Check for enumerable
-        JSValue enumerable = descObj.get("enumerable");
+        JSValue enumerable = descObj.get(PropertyKey.ENUMERABLE);
         if (enumerable != null && !(enumerable instanceof JSUndefined)) {
             desc.setEnumerable(JSTypeChecking.isTruthy(enumerable));
         }
 
         // Check for configurable
-        JSValue configurable = descObj.get("configurable");
+        JSValue configurable = descObj.get(PropertyKey.CONFIGURABLE);
         if (configurable != null && !(configurable instanceof JSUndefined)) {
             desc.setConfigurable(JSTypeChecking.isTruthy(configurable));
         }
 
         // Check for getter
-        JSValue getter = descObj.get("get");
+        JSValue getter = descObj.get(PropertyKey.GET);
         if (getter != null && !(getter instanceof JSUndefined)) {
             if (!(getter instanceof JSFunction)) {
                 return context.throwTypeError("Getter must be a function");
@@ -384,7 +384,7 @@ public final class ObjectPrototype {
         }
 
         // Check for setter
-        JSValue setter = descObj.get("set");
+        JSValue setter = descObj.get(PropertyKey.SET);
         if (setter != null && !(setter instanceof JSUndefined)) {
             if (!(setter instanceof JSFunction)) {
                 return context.throwTypeError("Setter must be a function");

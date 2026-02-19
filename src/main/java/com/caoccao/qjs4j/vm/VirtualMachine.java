@@ -2161,7 +2161,7 @@ public final class VirtualMachine {
                                 }
 
                                 // Get value and append to array at position
-                                JSValue value = resultObj.get("value");
+                                JSValue value = resultObj.get(PropertyKey.VALUE);
                                 // Set array element (this will update length automatically)
                                 array.set(pos++, value, context);
                             }

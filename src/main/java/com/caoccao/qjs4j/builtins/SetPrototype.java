@@ -484,7 +484,7 @@ public final class SetPrototype {
         if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
             return new IteratorStep(JSUndefined.INSTANCE, true);
         }
-        return new IteratorStep(nextResult.get("value"), false);
+        return new IteratorStep(nextResult.get(PropertyKey.VALUE), false);
     }
 
     /**

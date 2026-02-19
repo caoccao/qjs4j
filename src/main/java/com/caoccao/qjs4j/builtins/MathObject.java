@@ -165,7 +165,7 @@ public final class MathObject {
         if (pendingException != null) {
             context.clearPendingException();
         }
-        JSValue returnMethod = iterator.get("return");
+        JSValue returnMethod = iterator.get(PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunction) {
             returnFunction.call(context, iterator, new JSValue[0]);
         }
@@ -504,7 +504,7 @@ public final class MathObject {
                 break;
             }
 
-            JSValue item = nextResult.get("value");
+            JSValue item = nextResult.get(PropertyKey.VALUE);
             if (!(item instanceof JSNumber number)) {
                 context.throwTypeError("not a number");
                 closeIterator(context, iterator);

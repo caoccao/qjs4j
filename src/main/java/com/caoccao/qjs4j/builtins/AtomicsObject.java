@@ -526,8 +526,8 @@ public final class AtomicsObject {
         if (currentValue != expectedValue) {
             // Return {async: false, value: "not-equal"}
             JSObject result = context.createJSObject();
-            result.set("async", JSBoolean.FALSE);
-            result.set("value", new JSString("not-equal"));
+            result.set(PropertyKey.ASYNC, JSBoolean.FALSE);
+            result.set(PropertyKey.VALUE, new JSString("not-equal"));
             return result;
         }
 
@@ -538,8 +538,8 @@ public final class AtomicsObject {
 
         JSPromise promise = context.createJSPromise();
         JSObject result = context.createJSObject();
-        result.set("async", JSBoolean.TRUE);
-        result.set("value", promise);
+        result.set(PropertyKey.ASYNC, JSBoolean.TRUE);
+        result.set(PropertyKey.VALUE, promise);
 
         Thread waitThread = new Thread(() -> {
             try {

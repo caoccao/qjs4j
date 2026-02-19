@@ -42,7 +42,7 @@ public final class MapConstructor {
         if (!(iterator instanceof JSObject iteratorObject)) {
             return;
         }
-        JSValue returnMethod = iteratorObject.get("return");
+        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunction) {
             returnFunction.call(context, iterator, new JSValue[0]);
         }
@@ -92,7 +92,7 @@ public final class MapConstructor {
                 break;
             }
 
-            JSValue value = nextResult.get("value");
+            JSValue value = nextResult.get(PropertyKey.VALUE);
             JSValue key = callback.call(context, JSUndefined.INSTANCE, new JSValue[]{value, JSNumber.of(index)});
             if (context.hasPendingException()) {
                 closeIterator(context, iterator);

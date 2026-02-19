@@ -128,7 +128,7 @@ public final class JSContext implements AutoCloseable {
                     .append(")\n");
         }
 
-        error.set("stack", new JSString(stackTrace.toString()));
+        error.set(PropertyKey.STACK, new JSString(stackTrace.toString()));
     }
 
     /**

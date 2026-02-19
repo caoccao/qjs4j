@@ -246,15 +246,15 @@ public final class JSReflectObject {
         JSObject descriptorObject = context.createJSObject();
 
         if (descriptor.isDataDescriptor()) {
-            descriptorObject.set("value", descriptor.getValue() != null ? descriptor.getValue() : JSUndefined.INSTANCE);
-            descriptorObject.set("writable", JSBoolean.valueOf(descriptor.isWritable()));
+            descriptorObject.set(PropertyKey.VALUE, descriptor.getValue() != null ? descriptor.getValue() : JSUndefined.INSTANCE);
+            descriptorObject.set(PropertyKey.WRITABLE, JSBoolean.valueOf(descriptor.isWritable()));
         } else if (descriptor.isAccessorDescriptor()) {
-            descriptorObject.set("get", descriptor.getGetter() != null ? descriptor.getGetter() : JSUndefined.INSTANCE);
-            descriptorObject.set("set", descriptor.getSetter() != null ? descriptor.getSetter() : JSUndefined.INSTANCE);
+            descriptorObject.set(PropertyKey.GET, descriptor.getGetter() != null ? descriptor.getGetter() : JSUndefined.INSTANCE);
+            descriptorObject.set(PropertyKey.SET, descriptor.getSetter() != null ? descriptor.getSetter() : JSUndefined.INSTANCE);
         }
 
-        descriptorObject.set("enumerable", JSBoolean.valueOf(descriptor.isEnumerable()));
-        descriptorObject.set("configurable", JSBoolean.valueOf(descriptor.isConfigurable()));
+        descriptorObject.set(PropertyKey.ENUMERABLE, JSBoolean.valueOf(descriptor.isEnumerable()));
+        descriptorObject.set(PropertyKey.CONFIGURABLE, JSBoolean.valueOf(descriptor.isConfigurable()));
         return descriptorObject;
     }
 
@@ -442,27 +442,27 @@ public final class JSReflectObject {
     private static PropertyDescriptor toPropertyDescriptor(JSContext context, JSObject descriptorObject) {
         PropertyDescriptor descriptor = new PropertyDescriptor();
 
-        JSValue value = descriptorObject.get("value");
+        JSValue value = descriptorObject.get(PropertyKey.VALUE);
         if (!(value instanceof JSUndefined)) {
             descriptor.setValue(value);
         }
 
-        JSValue writable = descriptorObject.get("writable");
+        JSValue writable = descriptorObject.get(PropertyKey.WRITABLE);
         if (!(writable instanceof JSUndefined)) {
             descriptor.setWritable(JSTypeConversions.toBoolean(writable) == JSBoolean.TRUE);
         }
 
-        JSValue enumerable = descriptorObject.get("enumerable");
+        JSValue enumerable = descriptorObject.get(PropertyKey.ENUMERABLE);
         if (!(enumerable instanceof JSUndefined)) {
             descriptor.setEnumerable(JSTypeConversions.toBoolean(enumerable) == JSBoolean.TRUE);
         }
 
-        JSValue configurable = descriptorObject.get("configurable");
+        JSValue configurable = descriptorObject.get(PropertyKey.CONFIGURABLE);
         if (!(configurable instanceof JSUndefined)) {
             descriptor.setConfigurable(JSTypeConversions.toBoolean(configurable) == JSBoolean.TRUE);
         }
 
-        JSValue get = descriptorObject.get("get");
+        JSValue get = descriptorObject.get(PropertyKey.GET);
         if (!(get instanceof JSUndefined)) {
             if (!(get instanceof JSFunction) && !(get instanceof JSNull)) {
                 context.throwTypeError("Getter must be a function");
@@ -471,7 +471,7 @@ public final class JSReflectObject {
             descriptor.setGetter(get instanceof JSFunction getter ? getter : null);
         }
 
-        JSValue set = descriptorObject.get("set");
+        JSValue set = descriptorObject.get(PropertyKey.SET);
         if (!(set instanceof JSUndefined)) {
             if (!(set instanceof JSFunction) && !(set instanceof JSNull)) {
                 context.throwTypeError("Setter must be a function");

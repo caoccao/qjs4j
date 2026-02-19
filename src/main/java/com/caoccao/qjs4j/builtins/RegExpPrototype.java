@@ -45,7 +45,7 @@ public final class RegExpPrototype {
         if (!(thisArg instanceof JSRegExp regexp)) {
             return context.throwTypeError("RegExp.prototype.compile called on non-RegExp");
         }
-        JSValue realmRegExpConstructor = context.getGlobalObject().get("RegExp");
+        JSValue realmRegExpConstructor = context.getGlobalObject().get(JSRegExp.NAME);
         JSValue receiverConstructor = regexp.get(PropertyKey.CONSTRUCTOR);
         if (realmRegExpConstructor != receiverConstructor) {
             return context.throwTypeError("RegExp.prototype.compile called on incompatible receiver");
@@ -114,7 +114,7 @@ public final class RegExpPrototype {
             }
         }
         if (groupNames != null) {
-            indicesArray.set("groups", groupIndices);
+            indicesArray.set(PropertyKey.GROUPS, groupIndices);
         }
         return indicesArray;
     }
@@ -177,12 +177,12 @@ public final class RegExpPrototype {
             // Set properties
             int[][] indices = result.indices();
             if (indices != null && indices.length > 0) {
-                array.set("index", JSNumber.of(indices[0][0]));
+                array.set(PropertyKey.INDEX, JSNumber.of(indices[0][0]));
             }
-            array.set("input", new JSString(str));
-            array.set("groups", createNamedGroupsValue(captures, regexp.getBytecode().groupNames()));
+            array.set(PropertyKey.INPUT, new JSString(str));
+            array.set(PropertyKey.GROUPS, createNamedGroupsValue(captures, regexp.getBytecode().groupNames()));
             if (regexp.hasIndices()) {
-                array.set("indices", createIndicesValue(indices, regexp.getBytecode().groupNames()));
+                array.set(PropertyKey.INDICES, createIndicesValue(indices, regexp.getBytecode().groupNames()));
             }
 
             // Update lastIndex for global/sticky regexes

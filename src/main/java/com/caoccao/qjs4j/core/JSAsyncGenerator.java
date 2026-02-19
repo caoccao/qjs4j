@@ -55,13 +55,13 @@ public final class JSAsyncGenerator extends JSObject {
         }));
 
         // Add return() method
-        this.set("return", new JSNativeFunction("return", 1, (childContext, thisArg, args) -> {
+        this.set(PropertyKey.RETURN, new JSNativeFunction("return", 1, (childContext, thisArg, args) -> {
             JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
             return return_(value);
         }));
 
         // Add throw() method
-        this.set("throw", new JSNativeFunction("throw", 1, (childContext, thisArg, args) -> {
+        this.set(PropertyKey.THROW, new JSNativeFunction("throw", 1, (childContext, thisArg, args) -> {
             JSValue exception = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
             return throw_(exception);
         }));
@@ -203,7 +203,7 @@ public final class JSAsyncGenerator extends JSObject {
             boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
             if (done) {
                 state = AsyncGeneratorState.COMPLETED;
-                returnValue = resultObj.get("value");
+                returnValue = resultObj.get(PropertyKey.VALUE);
             } else {
                 state = AsyncGeneratorState.SUSPENDED_YIELD;
             }

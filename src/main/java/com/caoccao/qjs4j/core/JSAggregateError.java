@@ -70,7 +70,7 @@ public final class JSAggregateError extends JSError {
         if (context.hasPendingException()) {
             return (JSObject) context.getPendingException();
         }
-        obj.set("errors", errorsList);
+        obj.set(PropertyKey.ERRORS, errorsList);
 
         return obj;
     }
@@ -126,7 +126,7 @@ public final class JSAggregateError extends JSError {
                     if (childContext.hasPendingException()) {
                         return childContext.getPendingException();
                     }
-                    obj.set("errors", errorsList);
+                    obj.set(PropertyKey.ERRORS, errorsList);
 
                     return obj;
                 },

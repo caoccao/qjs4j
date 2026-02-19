@@ -340,7 +340,7 @@ public final class JSIteratorHelper {
             if (done) {
                 break;
             }
-            JSValue value = iterResult.get("value");
+            JSValue value = iterResult.get(PropertyKey.VALUE);
             result.push(value);
         }
         return result;

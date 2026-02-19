@@ -45,7 +45,7 @@ public final class JSWeakMap extends JSObject {
         if (pendingException != null) {
             context.clearPendingException();
         }
-        JSValue returnMethod = iteratorObject.get("return");
+        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunction) {
             returnFunction.call(context, iterator, new JSValue[0]);
         }

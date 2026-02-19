@@ -206,7 +206,7 @@ public final class JSPromise extends JSObject {
             return;
         }
 
-        JSValue thenValue = resolutionObject.get("then");
+        JSValue thenValue = resolutionObject.get(PropertyKey.THEN);
         if (context.hasPendingException()) {
             JSValue error = context.getPendingException();
             context.clearPendingException();

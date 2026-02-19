@@ -107,8 +107,8 @@ public final class PromiseConstructor {
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
                                 JSObject result = childContext.createJSObject();
-                                result.set("status", new com.caoccao.qjs4j.core.JSString("fulfilled"));
-                                result.set("value", funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE);
+                                result.set(PropertyKey.STATUS, new JSString("fulfilled"));
+                                result.set(PropertyKey.VALUE, funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE);
                                 results.set(index, result);
                                 if (--remaining[0] == 0) {
                                     resultPromise.fulfill(results);
@@ -120,8 +120,8 @@ public final class PromiseConstructor {
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
                                 JSObject result = childContext.createJSObject();
-                                result.set("status", new com.caoccao.qjs4j.core.JSString("rejected"));
-                                result.set("reason", funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE);
+                                result.set(PropertyKey.STATUS, new JSString("rejected"));
+                                result.set(PropertyKey.REASON, funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE);
                                 results.set(index, result);
                                 if (--remaining[0] == 0) {
                                     resultPromise.fulfill(results);
@@ -375,9 +375,9 @@ public final class PromiseConstructor {
         });
 
         JSObject result = context.createJSObject();
-        result.set("promise", promise);
-        result.set("resolve", resolveFn);
-        result.set("reject", rejectFn);
+        result.set(PropertyKey.PROMISE, promise);
+        result.set(PropertyKey.RESOLVE, resolveFn);
+        result.set(PropertyKey.REJECT, rejectFn);
         return result;
     }
 }

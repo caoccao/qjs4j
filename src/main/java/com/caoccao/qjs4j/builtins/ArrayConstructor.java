@@ -659,7 +659,7 @@ public final class ArrayConstructor {
             return promise;
         }
         if (value instanceof JSObject obj) {
-            JSValue thenMethod = obj.get("then");
+            JSValue thenMethod = obj.get(PropertyKey.THEN);
             if (thenMethod instanceof JSFunction thenFunc) {
                 JSPromise promise = context.createJSPromise();
                 thenFunc.call(context, value, new JSValue[]{

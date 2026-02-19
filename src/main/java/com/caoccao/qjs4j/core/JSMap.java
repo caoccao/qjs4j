@@ -46,7 +46,7 @@ public final class JSMap extends JSObject {
         if (pendingException != null) {
             context.clearPendingException();
         }
-        JSValue returnMethod = iteratorObject.get("return");
+        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunction) {
             returnFunction.call(context, iterator, new JSValue[0]);
         }
@@ -61,7 +61,7 @@ public final class JSMap extends JSObject {
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
 
-            JSValue adder = mapObj.get("set");
+            JSValue adder = mapObj.get(PropertyKey.SET);
             if (!(adder instanceof JSFunction adderFunction)) {
                 return context.throwTypeError("set/add is not a function");
             }
@@ -100,7 +100,7 @@ public final class JSMap extends JSObject {
                     break;
                 }
 
-                JSValue entry = nextResult.get("value");
+                JSValue entry = nextResult.get(PropertyKey.VALUE);
                 if (!(entry instanceof JSObject entryObj)) {
                     closeIterator(context, iterator);
                     return context.throwTypeError("Iterator value must be an object");

@@ -116,7 +116,7 @@ public class JSAsyncIterator extends JSObject {
             return resultPromise;
         }
         if (value instanceof JSObject obj) {
-            JSValue thenMethod = obj.get("then");
+            JSValue thenMethod = obj.get(PropertyKey.THEN);
             if (thenMethod instanceof JSFunction thenFunc) {
                 JSPromise resultPromise = context.createJSPromise();
                 thenFunc.call(context, value, new JSValue[]{
@@ -264,7 +264,7 @@ public class JSAsyncIterator extends JSObject {
             if (context.hasPendingException()) {
                 return createRejectedPromise(context, consumePendingException(context));
             }
-            JSValue value = result.get("value");
+            JSValue value = result.get(PropertyKey.VALUE);
             JSValue doneValue = result.get("done");
             boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
             return createAsyncFromSyncResultPromise(context, value, done);
@@ -428,7 +428,7 @@ public class JSAsyncIterator extends JSObject {
                             }
 
                             // Get value and process it
-                            JSValue value = resultObj.get("value");
+                            JSValue value = resultObj.get(PropertyKey.VALUE);
                             JSPromise processingPromise = callback.iterate(value);
 
                             // When processing completes, continue to next iteration
@@ -559,7 +559,7 @@ public class JSAsyncIterator extends JSObject {
                 return createRejectedPromise(context, consumePendingException(context));
             }
             if (result instanceof JSObject resultObj) {
-                JSValue value = resultObj.get("value");
+                JSValue value = resultObj.get(PropertyKey.VALUE);
                 JSValue doneValue = resultObj.get("done");
                 boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
                 // Per ES spec CreateAsyncFromSyncIterator: resolve promise values

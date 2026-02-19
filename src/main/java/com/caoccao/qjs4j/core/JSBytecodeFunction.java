@@ -198,7 +198,7 @@ public final class JSBytecodeFunction extends JSFunction {
             return;
         }
         if (value instanceof JSObject obj) {
-            JSValue thenMethod = obj.get("then");
+            JSValue thenMethod = obj.get(PropertyKey.THEN);
             if (thenMethod instanceof JSFunction thenFunc) {
                 thenFunc.call(context, value, new JSValue[]{
                         new JSNativeFunction("resolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {

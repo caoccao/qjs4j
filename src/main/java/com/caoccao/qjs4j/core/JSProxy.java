@@ -1083,34 +1083,34 @@ public final class JSProxy extends JSObject {
     private PropertyDescriptor toPropertyDescriptor(JSObject obj) {
         PropertyDescriptor desc = new PropertyDescriptor();
 
-        JSValue value = obj.get("value");
+        JSValue value = obj.get(PropertyKey.VALUE);
         if (!(value instanceof JSUndefined)) {
             desc.setValue(value);
         }
 
-        JSValue writable = obj.get("writable");
+        JSValue writable = obj.get(PropertyKey.WRITABLE);
         if (!(writable instanceof JSUndefined)) {
             desc.setWritable(JSTypeConversions.toBoolean(writable) == JSBoolean.TRUE);
         }
 
-        JSValue enumerable = obj.get("enumerable");
+        JSValue enumerable = obj.get(PropertyKey.ENUMERABLE);
         if (!(enumerable instanceof JSUndefined)) {
             desc.setEnumerable(JSTypeConversions.toBoolean(enumerable) == JSBoolean.TRUE);
         }
 
-        JSValue configurable = obj.get("configurable");
+        JSValue configurable = obj.get(PropertyKey.CONFIGURABLE);
         if (!(configurable instanceof JSUndefined)) {
             desc.setConfigurable(JSTypeConversions.toBoolean(configurable) == JSBoolean.TRUE);
         }
 
-        JSValue get = obj.get("get");
+        JSValue get = obj.get(PropertyKey.GET);
         if (!(get instanceof JSUndefined)) {
             if (get instanceof JSFunction getFunc) {
                 desc.setGetter(getFunc);
             }
         }
 
-        JSValue set = obj.get("set");
+        JSValue set = obj.get(PropertyKey.SET);
         if (!(set instanceof JSUndefined)) {
             if (set instanceof JSFunction setFunc) {
                 desc.setSetter(setFunc);
