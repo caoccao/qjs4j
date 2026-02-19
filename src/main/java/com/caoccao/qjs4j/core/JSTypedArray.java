@@ -301,9 +301,9 @@ public abstract class JSTypedArray extends JSObject {
      * For non-numeric keys: delegates to ordinary defineOwnProperty.
      */
     @Override
-    public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor) {
+    public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
         if (!isCanonicalNumericIndex(key)) {
-            return super.defineOwnProperty(key, descriptor);
+            return super.defineOwnProperty(key, descriptor, context);
         }
         String str = key.toPropertyString();
         // -0 is never a valid integer index
@@ -344,7 +344,7 @@ public abstract class JSTypedArray extends JSObject {
         }
         // IntegerIndexedElementSet: convert value then write if buffer still valid
         if (descriptor.hasValue()) {
-            integerIndexedElementSet(index, descriptor.getValue(), null);
+            integerIndexedElementSet(index, descriptor.getValue(), context);
         }
         return true;
     }

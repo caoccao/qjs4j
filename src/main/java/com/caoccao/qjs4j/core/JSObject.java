@@ -177,7 +177,7 @@ public non-sealed class JSObject implements JSValue {
      * Returns true if the property was successfully defined, false if the object
      * is not extensible and the property does not already exist.
      */
-    public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor) {
+    public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
         if (!extensible && !hasOwnProperty(key)) {
             return false;
         }
