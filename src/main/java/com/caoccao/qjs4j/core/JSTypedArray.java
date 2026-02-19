@@ -395,14 +395,28 @@ public abstract class JSTypedArray extends JSObject {
         return Double.toString(value);
     }
 
+    /**
+     * Integer-Indexed exotic object [[Get]].
+     * For canonical numeric index strings, return the element or undefined
+     * without walking the prototype chain.
+     */
     @Override
     protected JSValue get(PropertyKey key, JSContext context, JSObject receiver) {
-        int index = toTypedArrayIndex(key);
-        if (index >= 0) {
-            if (index < getLength() && !buffer.isDetached()) {
-                return getJSElement(index);
+        if (isCanonicalNumericIndex(key)) {
+            // For canonical numeric indices, never fall through to prototype chain.
+            String str = key.toPropertyString();
+            if ("-0".equals(str)) {
+                return JSUndefined.INSTANCE;
             }
-            return JSUndefined.INSTANCE;
+            double numericIndex = Double.parseDouble(str);
+            if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
+                return JSUndefined.INSTANCE;
+            }
+            int index = (int) numericIndex;
+            if (index != numericIndex || buffer.isDetached() || index >= getLength()) {
+                return JSUndefined.INSTANCE;
+            }
+            return getJSElement(index);
         }
         return super.get(key, context, receiver);
     }
@@ -542,9 +556,20 @@ public abstract class JSTypedArray extends JSObject {
 
     @Override
     public boolean has(PropertyKey key) {
-        int index = toTypedArrayIndex(key);
-        if (index >= 0) {
-            return index < getLength() && !buffer.isDetached();
+        if (isCanonicalNumericIndex(key)) {
+            String str = key.toPropertyString();
+            if ("-0".equals(str)) {
+                return false;
+            }
+            double numericIndex = Double.parseDouble(str);
+            if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
+                return false;
+            }
+            int index = (int) numericIndex;
+            if (index != numericIndex) {
+                return false;
+            }
+            return !buffer.isDetached() && index < getLength();
         }
         return super.has(key);
     }
