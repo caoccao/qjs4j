@@ -65,30 +65,90 @@ public final class ArrayPrototype {
      * Merges arrays and/or values.
      */
     public static JSValue concat(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray jsArray)) {
-            return context.throwTypeError("Array.prototype.concat called on non-array");
-        }
-
-        int length = (int) jsArray.getLength();
-        JSArray result = context.createJSArray(0, length * 2);
-
-        // Add original array elements
-        for (int i = 0; i < length; i++) {
-            result.push(jsArray.get(i));
-        }
-
-        // Add arguments
-        for (JSValue arg : args) {
-            if (arg instanceof JSArray argArr) {
-                for (int i = 0; i < argArr.getLength(); i++) {
-                    result.push(argArr.get(i));
-                }
-            } else {
-                result.push(arg);
+        // ES2024 23.1.3.1 Array.prototype.concat
+        // Step 1: Let O be ? ToObject(this value)
+        JSObject obj;
+        if (thisArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, thisArg);
+            if (obj == null || context.hasPendingException()) {
+                return context.hasPendingException() ? context.getPendingException()
+                        : context.throwTypeError("Array.prototype.concat called on null or undefined");
             }
         }
 
+        // Step 2: Let A be ArrayCreate(0) (simplified from ArraySpeciesCreate)
+        JSArray result = context.createJSArray();
+        long n = 0;
+
+        // Steps 3-4: Process O (this) and each argument
+        for (int i = -1; i < args.length; i++) {
+            JSValue e = (i < 0) ? obj : args[i];
+
+            // Step 4a: Let spreadable be ? IsConcatSpreadable(E)
+            boolean spreadable = isConcatSpreadable(context, e);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+
+            if (spreadable) {
+                // Step 4b: Spreadable case - iterate through elements
+                JSObject eObj = (JSObject) e;
+                long len;
+                if (eObj instanceof JSArray eArr) {
+                    len = eArr.getLength();
+                } else {
+                    JSValue lenVal = eObj.get(PropertyKey.LENGTH, context);
+                    if (context.hasPendingException()) return context.getPendingException();
+                    len = JSTypeConversions.toLength(context, lenVal);
+                    if (context.hasPendingException()) return context.getPendingException();
+                }
+
+                if (n + len > 9007199254740991L) { // MAX_SAFE_INTEGER
+                    return context.throwTypeError("Array too long");
+                }
+
+                for (long k = 0; k < len; k++, n++) {
+                    PropertyKey indexKey = PropertyKey.fromIndex((int) k);
+                    // JS_TryGetPropertyInt64: only define property if it exists (preserve holes)
+                    if (eObj.has(indexKey)) {
+                        JSValue val = eObj.get(indexKey, context);
+                        if (context.hasPendingException()) return context.getPendingException();
+                        result.set(n, val);
+                    }
+                }
+            } else {
+                // Step 4c: Non-spreadable - add as single element
+                if (n >= 9007199254740991L) {
+                    return context.throwTypeError("Array too long");
+                }
+                result.set(n, e);
+                n++;
+            }
+        }
+
+        // Step 5: Set final length (important for holes)
+        result.setLength(n);
         return result;
+    }
+
+    /**
+     * IsConcatSpreadable per ES2024 23.1.3.1 step 4a.
+     * Following QuickJS JS_isConcatSpreadable.
+     */
+    private static boolean isConcatSpreadable(JSContext context, JSValue val) {
+        if (!(val instanceof JSObject obj)) {
+            return false;
+        }
+        JSValue spreadable = obj.get(PropertyKey.SYMBOL_IS_CONCAT_SPREADABLE, context);
+        if (context.hasPendingException()) {
+            return false;
+        }
+        if (!(spreadable instanceof JSUndefined)) {
+            return JSTypeConversions.toBoolean(spreadable) == JSBoolean.TRUE;
+        }
+        return obj instanceof JSArray;
     }
 
     /**

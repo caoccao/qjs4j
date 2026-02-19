@@ -110,10 +110,11 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         concatenated = result.asArray().orElseThrow();
         assertThat(concatenated.getLength()).isEqualTo(2);
 
-        // Edge case: concat on non-array
+        // Edge case: concat on non-array (per ES spec, ToObject wraps it; the wrapper is non-spreadable)
         JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.concat(context, nonArray, new JSValue[]{}));
-        assertPendingException(context);
+        result = ArrayPrototype.concat(context, nonArray, new JSValue[]{});
+        concatenated = result.asArray().orElseThrow();
+        assertThat(concatenated.getLength()).isEqualTo(1);
     }
 
     @Test
