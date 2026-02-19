@@ -21,6 +21,9 @@ import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import com.caoccao.qjs4j.utils.DtoaConverter;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Base class for JavaScript TypedArray objects.
@@ -362,6 +365,19 @@ public abstract class JSTypedArray extends JSObject {
         return super.delete(key, context);
     }
 
+    @Override
+    public PropertyKey[] enumerableKeys() {
+        List<PropertyKey> result = new ArrayList<>();
+        if (!buffer.isDetached() && !isOutOfBounds()) {
+            int len = getLength();
+            for (int i = 0; i < len; i++) {
+                result.add(PropertyKey.fromString(Integer.toString(i)));
+            }
+        }
+        Collections.addAll(result, super.enumerableKeys());
+        return result.toArray(new PropertyKey[0]);
+    }
+
     protected String formatElement(double value) {
         if (Double.isNaN(value)) {
             return "NaN";
@@ -504,6 +520,26 @@ public abstract class JSTypedArray extends JSObject {
         return PropertyDescriptor.dataDescriptor(getJSElement(index), true, true, true);
     }
 
+    /**
+     * Integer-Indexed exotic object [[OwnPropertyKeys]].
+     * Following QuickJS JS_GetOwnPropertyNamesInternal for fast arrays (lines 8334-8354).
+     * Returns integer indices first (in ascending order), then string keys, then symbol keys.
+     */
+    @Override
+    public List<PropertyKey> getOwnPropertyKeys() {
+        List<PropertyKey> result = new ArrayList<>();
+        // Add integer indices for buffer elements (only if not detached and not OOB)
+        if (!buffer.isDetached() && !isOutOfBounds()) {
+            int len = getLength();
+            for (int i = 0; i < len; i++) {
+                result.add(PropertyKey.fromString(Integer.toString(i)));
+            }
+        }
+        // Add non-index own properties from the shape (string keys, then symbols)
+        result.addAll(super.getOwnPropertyKeys());
+        return result;
+    }
+
     @Override
     public boolean has(PropertyKey key) {
         int index = toTypedArrayIndex(key);
@@ -512,6 +548,12 @@ public abstract class JSTypedArray extends JSObject {
         }
         return super.has(key);
     }
+
+    /**
+     * Integer-Indexed exotic object [[OwnPropertyKeys]].
+     * Following QuickJS JS_GetOwnPropertyNamesInternal for fast arrays (lines 8334-8354).
+     * Returns integer indices first (in ascending order), then string keys, then symbol keys.
+     */
 
     /**
      * IntegerIndexedElementSet per ES spec.
@@ -544,6 +586,11 @@ public abstract class JSTypedArray extends JSObject {
         }
         // Fixed length: check if the view exceeds the current buffer size
         return (long) byteOffset + byteLength > currentByteLength;
+    }
+
+    @Override
+    public PropertyKey[] ownPropertyKeys() {
+        return getOwnPropertyKeys().toArray(new PropertyKey[0]);
     }
 
     @Override
