@@ -207,7 +207,7 @@ public final class ArrayPrototype {
             final PropertyKey toKey = PropertyKey.fromString(Long.toString(to));
 
             if (arr.has(fromKey)) {
-                JSValue value = arr.get(fromKey, context);
+                JSValue value = arr.getDense(context, fromKey, from);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }

@@ -226,11 +226,13 @@ public final class JSArray extends JSObject {
      * Get element at index.
      */
     public JSValue get(long index) {
-        if (index < 0 || index >= length) {
+        if (index < 0) {
             return JSUndefined.INSTANCE;
         }
 
-        if (index <= Integer.MAX_VALUE) {
+        // Own indexed elements cannot exist at or above length, but inherited
+        // numeric properties must still be observable through prototype lookup.
+        if (index < length && index <= Integer.MAX_VALUE) {
             int intIndex = (int) index;
 
             // Try dense array first
@@ -285,6 +287,25 @@ public final class JSArray extends JSObject {
 
         // Otherwise, use the shape-based storage from JSObject
         return super.get(key, context);
+    }
+
+    /**
+     * copyWithin helper:
+     * resolves an indexed source value while honoring inherited indexed properties.
+     * Mirrors QuickJS JS_TryGetPropertyInt64 lookup shape for this use case.
+     */
+    public JSValue getDense(JSContext context, PropertyKey key, long index) {
+        JSObject current = this;
+        while (current != null) {
+            if (current.hasOwnProperty(key)) {
+                if (current instanceof JSArray currentArray && currentArray.hasElement(index)) {
+                    return currentArray.get(index);
+                }
+                return current.getWithReceiver(key, context, this);
+            }
+            current = current.getPrototype();
+        }
+        return JSUndefined.INSTANCE;
     }
 
     /**
