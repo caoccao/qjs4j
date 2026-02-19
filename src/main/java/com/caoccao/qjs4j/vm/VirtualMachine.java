@@ -306,6 +306,31 @@ public final class VirtualMachine {
         }
     }
 
+    private JSValue createArgumentsObject(StackFrame frame, JSFunction function, boolean mapped) {
+        JSArguments cachedArgumentsObject = frame.getArgumentsObject(mapped);
+        if (cachedArgumentsObject != null) {
+            return cachedArgumentsObject;
+        }
+
+        JSValue[] args = frame.getArguments();
+        JSArguments argumentsObject;
+        if (mapped && function != null) {
+            int formalArgCount = function.getLength();
+            int mappedCount = Math.min(args.length, formalArgCount);
+            VarRef[] mappedVarRefs = mappedCount > 0 ? new VarRef[args.length] : null;
+            for (int i = 0; i < mappedCount; i++) {
+                mappedVarRefs[i] = frame.getOrCreateLocalVarRef(i);
+            }
+            argumentsObject = new JSArguments(context, args, false, function, mappedVarRefs);
+        } else {
+            boolean isStrict = function instanceof JSBytecodeFunction bytecodeFunction && bytecodeFunction.isStrict();
+            argumentsObject = new JSArguments(context, args, isStrict, isStrict ? null : function);
+        }
+        context.transferPrototype(argumentsObject, JSObject.NAME);
+        frame.setArgumentsObject(mapped, argumentsObject);
+        return argumentsObject;
+    }
+
     private JSObject createReferenceObject(Opcode makeRefOpcode, int refIndex, String atomName) {
         StackFrame capturedFrame = currentFrame;
         JSObject referenceObject = new JSObject();
@@ -357,24 +382,15 @@ public final class VirtualMachine {
                     }
                     targetFunc = targetFrame.getFunction();
                 }
-
-                // Create non-mapped arguments object (strict mode or modern)
-                JSValue[] args = targetFrame.getArguments();
-                boolean isStrict = targetFunc instanceof JSBytecodeFunction func && func.isStrict();
-                // Pass the target function as callee for non-strict mode
-                JSArguments argsObj = new JSArguments(context, args, isStrict, isStrict ? null : targetFunc);
-                context.transferPrototype(argsObj, JSObject.NAME);
-                return argsObj;
+                return createArgumentsObject(targetFrame, targetFunc, shouldUseMappedArguments(targetFunc));
 
             case 1: // SPECIAL_OBJECT_MAPPED_ARGUMENTS
                 // Legacy mapped arguments (shares with function parameters)
-                // For now, treat same as normal arguments
-                // TODO: Implement parameter mapping for non-strict mode
-                JSValue[] mappedArgs = currentFrame.getArguments();
                 JSFunction mappedFunc = currentFrame.getFunction();
-                JSArguments mappedArgsObj = new JSArguments(context, mappedArgs, false, mappedFunc);
-                context.transferPrototype(mappedArgsObj, JSObject.NAME);
-                return mappedArgsObj;
+                boolean canMap = mappedFunc != null && !(
+                        mappedFunc instanceof JSBytecodeFunction bytecodeFunction
+                                && bytecodeFunction.isStrict());
+                return createArgumentsObject(currentFrame, mappedFunc, canMap);
 
             case 2: // SPECIAL_OBJECT_THIS_FUNC
                 // Return the currently executing function
@@ -387,8 +403,8 @@ public final class VirtualMachine {
 
             case 4: // SPECIAL_OBJECT_HOME_OBJECT
                 // Return the home object for super property access
-                // For now return undefined - needs super tracking
-                return JSUndefined.INSTANCE;
+                JSObject homeObject = currentFrame.getFunction().getHomeObject();
+                return homeObject != null ? homeObject : JSUndefined.INSTANCE;
 
             case 5: // SPECIAL_OBJECT_VAR_OBJECT
                 // Return the variable object (for with statement)
@@ -1786,6 +1802,66 @@ public final class VirtualMachine {
                         stack[sp++] = putElValue;
                         pc += op.getSize();
                     }
+                    case GET_SUPER_VALUE -> {
+                        // Stack layout: [receiver, superObject, property]
+                        JSValue keyValue = (JSValue) stack[--sp];
+                        JSValue superObjectValue = (JSValue) stack[--sp];
+                        JSValue receiverValue = (JSValue) stack[--sp];
+
+                        if (!(superObjectValue instanceof JSObject superObject)) {
+                            throw new JSVirtualMachineException(context.throwTypeError("super object expected"));
+                        }
+
+                        PropertyKey key = PropertyKey.fromValue(context, keyValue);
+                        JSValue result;
+                        if (receiverValue instanceof JSObject receiverObject) {
+                            result = superObject.getWithReceiver(key, context, receiverObject);
+                        } else {
+                            JSObject boxedReceiver = toObject(receiverValue);
+                            result = boxedReceiver != null
+                                    ? superObject.getWithReceiver(key, context, boxedReceiver)
+                                    : superObject.get(key, context);
+                        }
+
+                        if (context.hasPendingException()) {
+                            pendingException = context.getPendingException();
+                            context.clearPendingException();
+                            stack[sp++] = JSUndefined.INSTANCE;
+                        } else {
+                            stack[sp++] = result;
+                        }
+                        pc += op.getSize();
+                    }
+                    case PUT_SUPER_VALUE -> {
+                        // Stack layout: [value, receiver, superObject, property]
+                        JSValue keyValue = (JSValue) stack[--sp];
+                        JSValue superObjectValue = (JSValue) stack[--sp];
+                        JSValue receiverValue = (JSValue) stack[--sp];
+                        JSValue assignedValue = (JSValue) stack[--sp];
+
+                        if (!(superObjectValue instanceof JSObject superObject)) {
+                            throw new JSVirtualMachineException(context.throwTypeError("super object expected"));
+                        }
+
+                        PropertyKey key = PropertyKey.fromValue(context, keyValue);
+                        if (receiverValue instanceof JSObject receiverObject) {
+                            superObject.set(key, assignedValue, context, receiverObject);
+                        } else {
+                            JSObject boxedReceiver = toObject(receiverValue);
+                            if (boxedReceiver != null) {
+                                superObject.set(key, assignedValue, context, boxedReceiver);
+                            } else {
+                                superObject.set(key, assignedValue, context);
+                            }
+                        }
+
+                        if (context.hasPendingException()) {
+                            pendingException = context.getPendingException();
+                            context.clearPendingException();
+                        }
+                        stack[sp++] = assignedValue;
+                        pc += op.getSize();
+                    }
                     case TO_PROPKEY -> {
                         JSValue rawKey = (JSValue) stack[--sp];
                         stack[sp++] = toPropertyKeyValue(rawKey);
@@ -2272,6 +2348,9 @@ public final class VirtualMachine {
                         JSValue obj = (JSValue) stack[--sp];     // Pop obj
 
                         if (obj instanceof JSObject jsObj) {
+                            if (method instanceof JSFunction methodFunction) {
+                                methodFunction.setHomeObject(jsObj);
+                            }
                             jsObj.set(PropertyKey.fromString(methodName), method);
                         }
 
@@ -2723,12 +2802,20 @@ public final class VirtualMachine {
                     case NOP -> pc += op.getSize();
 
                     case GET_SUPER -> {
-                        // Push the super class constructor onto the stack.
-                        // In a derived class constructor, the constructor's [[Prototype]]
-                        // is the parent class constructor (set by DEFINE_CLASS).
-                        JSFunction currentFunc = currentFrame.getFunction();
-                        JSObject superConstructor = currentFunc.getPrototype();
-                        stack[sp++] = superConstructor != null ? superConstructor : JSUndefined.INSTANCE;
+                        // Stack layout: [object]
+                        // Replace object with object.[[Prototype]].
+                        JSValue objectValue = (JSValue) stack[sp - 1];
+                        JSObject object = toObject(objectValue);
+                        if (object == null) {
+                            if (context.hasPendingException()) {
+                                pendingException = context.getPendingException();
+                                context.clearPendingException();
+                            }
+                            stack[sp - 1] = JSUndefined.INSTANCE;
+                        } else {
+                            JSObject prototype = object.getPrototype();
+                            stack[sp - 1] = prototype != null ? prototype : JSNull.INSTANCE;
+                        }
                         pc += op.getSize();
                     }
 
@@ -4466,6 +4553,13 @@ public final class VirtualMachine {
                 ? value.value().shiftLeft(shift)
                 : value.value().shiftRight(shift);
         return new JSBigInt(result);
+    }
+
+    private boolean shouldUseMappedArguments(JSFunction function) {
+        return function instanceof JSBytecodeFunction bytecodeFunction
+                && !bytecodeFunction.isStrict()
+                && !bytecodeFunction.isArrow()
+                && !bytecodeFunction.hasParameterExpressions();
     }
 
     private JSValue throwMixedBigIntTypeError() {

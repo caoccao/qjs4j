@@ -16,10 +16,7 @@ The `arguments` object is a special array-like object accessible within function
 - ✅ Works in method contexts
 
 **Known Limitations:**
-- Arguments object modification (arguments[0] = value) requires additional property handling
-- Arrow functions don't capture outer scope's arguments (future enhancement)
-- Mapped arguments (non-strict mode linking to parameters) not yet implemented
-- Rest parameters (...args) interaction needs REST opcode implementation
+- Arrow functions don't capture a lexical `arguments` binding yet (they resolve dynamically via call stack walk)
 
 ## Architecture
 
@@ -33,7 +30,7 @@ The `arguments` object is a special array-like object accessible within function
 
 2. **SPECIAL_OBJECT Opcode** (`Opcode.SPECIAL_OBJECT(12)`)
    - Creates special runtime objects including arguments
-   - Takes a type parameter (0 = arguments object)
+   - Takes a type parameter (0 = arguments object, 1 = mapped arguments object)
    - Other types reserved for: new.target, import.meta, etc.
 
 3. **VM Implementation** (`VirtualMachine.createSpecialObject()`)
@@ -132,11 +129,10 @@ Test coverage in `ArgumentsTest.java`:
 - ✅ `testArgumentsArrayLike` - Iteration over arguments
 - ✅ `testArgumentsInNestedFunction` - Nested function scope
 - ✅ `testArgumentsInMethodContext` - Object method context
-- ⏳ `testArgumentsModification` - Modifying arguments (TODO)
-- ⏳ `testArgumentsWithRestParameters` - Rest params interaction (TODO)
-- ⏳ `testArgumentsNotInArrowFunction` - Arrow function scoping (TODO)
-
-**Test Results:** 8/11 passing (73%)
+- ✅ `testArgumentsModification` - Modifying arguments
+- ✅ `testArgumentsWithRestParameters` - Rest params interaction
+- ✅ `testArgumentsNotInArrowFunction` - Arrow function scoping
+- ✅ mapped/unmapped parity tests for strict, default params, delete/rebind behavior
 
 ## Future Enhancements
 

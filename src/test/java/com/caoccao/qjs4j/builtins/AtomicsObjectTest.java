@@ -454,12 +454,20 @@ public class AtomicsObjectTest extends BaseTest {
         assertThat(resultObj.get("async")).isEqualTo(JSBoolean.FALSE);
         assertThat(((JSString) resultObj.get("value")).value()).isEqualTo("not-equal");
 
-        // Test 2: waitAsync with matching value - should return {async: true, value: ...}
+        // Test 2: waitAsync with matching value - should return {async: true, value: Promise}
         result = AtomicsObject.waitAsync(context, null, new JSValue[]{
-                arr, new JSNumber(0), new JSNumber(42)
+                arr, new JSNumber(0), new JSNumber(42), new JSNumber(0)
         });
         resultObj = result.asObject().orElseThrow();
         assertThat(resultObj.get("async")).isEqualTo(JSBoolean.TRUE);
+        assertThat(resultObj.get("value")).isInstanceOf(JSPromise.class);
+        JSPromise waitPromise = (JSPromise) resultObj.get("value");
+        long deadline = System.currentTimeMillis() + 500;
+        while (waitPromise.getState() == JSPromise.PromiseState.PENDING && System.currentTimeMillis() < deadline) {
+            Thread.yield();
+        }
+        assertThat(waitPromise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
+        assertThat(waitPromise.getResult().asString().map(JSString::value).orElseThrow()).isEqualTo("timed-out");
 
         // Test 3: Invalid arguments
         JSValue error = AtomicsObject.waitAsync(context, null, new JSValue[]{arr, new JSNumber(0)});

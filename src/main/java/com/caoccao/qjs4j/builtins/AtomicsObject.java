@@ -536,14 +536,22 @@ public final class AtomicsObject {
         String waitKey = getWaitKey(buffer, index);
         WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
 
-        // For now, return a simplified version without actual Promise support
-        // A full implementation would require Promise support in the runtime
+        JSPromise promise = context.createJSPromise();
         JSObject result = context.createJSObject();
         result.set("async", JSBoolean.TRUE);
+        result.set("value", promise);
 
-        // TODO: Implement Promise-based async waiting when Promise support is available
-        // For now, just return a result indicating async waiting was initiated
-        result.set("value", new JSString("ok"));
+        Thread waitThread = new Thread(() -> {
+            try {
+                String waitResult = waitList.await(timeout);
+                promise.fulfill(new JSString(waitResult));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                promise.reject(new JSString("timed-out"));
+            }
+        }, "qjs4j-atomics-waitAsync");
+        waitThread.setDaemon(true);
+        waitThread.start();
 
         return result;
     }

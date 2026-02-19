@@ -681,26 +681,36 @@ public final class BytecodeCompiler {
                 }
             } else if (left instanceof MemberExpression memberExpr) {
                 // For obj.prop += value, we need DUP2 pattern or similar
-                compileExpression(memberExpr.object());
-                if (memberExpr.computed()) {
-                    compileExpression(memberExpr.property());
-                    emitter.emitOpcode(Opcode.DUP2);  // Duplicate obj and prop
-                    emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-                } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
-                    // obj.#field += value
-                    String fieldName = privateId.name();
-                    JSSymbol symbol = privateSymbols != null ? privateSymbols.get(fieldName) : null;
-                    if (symbol != null) {
-                        emitter.emitOpcode(Opcode.DUP);  // Duplicate object
-                        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                        emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
-                    } else {
-                        emitter.emitOpcode(Opcode.UNDEFINED);
-                    }
+                if (isSuperMemberExpression(memberExpr)) {
+                    emitter.emitOpcode(Opcode.PUSH_THIS);
+                    emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                    emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+                    emitter.emitOpcode(Opcode.GET_SUPER);
+                    emitSuperPropertyKey(memberExpr);
+                    emitter.emitOpcode(Opcode.DUP3); // Keep receiver/super/property for put phase
+                    emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
                 } else {
-                    if (memberExpr.property() instanceof Identifier propId) {
-                        emitter.emitOpcode(Opcode.DUP);  // Duplicate object
-                        emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                    compileExpression(memberExpr.object());
+                    if (memberExpr.computed()) {
+                        compileExpression(memberExpr.property());
+                        emitter.emitOpcode(Opcode.DUP2);  // Duplicate obj and prop
+                        emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                    } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
+                        // obj.#field += value
+                        String fieldName = privateId.name();
+                        JSSymbol symbol = privateSymbols != null ? privateSymbols.get(fieldName) : null;
+                        if (symbol != null) {
+                            emitter.emitOpcode(Opcode.DUP);  // Duplicate object
+                            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                            emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
+                        } else {
+                            emitter.emitOpcode(Opcode.UNDEFINED);
+                        }
+                    } else {
+                        if (memberExpr.property() instanceof Identifier propId) {
+                            emitter.emitOpcode(Opcode.DUP);  // Duplicate object
+                            emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                        }
                     }
                 }
             }
@@ -748,32 +758,47 @@ public final class BytecodeCompiler {
         } else if (left instanceof MemberExpression memberExpr) {
             // obj[prop] = value or obj.prop = value or obj.#field = value
             if (operator == AssignmentExpression.AssignmentOperator.ASSIGN) {
-                // For simple assignment, compile object and property now
-                compileExpression(memberExpr.object());
-                if (memberExpr.computed()) {
-                    compileExpression(memberExpr.property());
-                    emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
-                } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
-                    // obj.#field = value
-                    // Stack: value obj
-                    // Need: obj value symbol (for PUT_PRIVATE_FIELD)
-                    String fieldName = privateId.name();
-                    JSSymbol symbol = privateSymbols != null ? privateSymbols.get(fieldName) : null;
-                    if (symbol != null) {
-                        emitter.emitOpcode(Opcode.SWAP);  // Stack: obj value
-                        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                        // Stack: obj value symbol
-                        emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
-                    } else {
-                        // Error: private field not found - clean up stack and leave value
-                        emitter.emitOpcode(Opcode.DROP);  // Drop obj, leaving value
+                if (isSuperMemberExpression(memberExpr)) {
+                    // Stack starts with [value]
+                    emitter.emitOpcode(Opcode.PUSH_THIS);
+                    emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                    emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+                    emitter.emitOpcode(Opcode.GET_SUPER);
+                    emitSuperPropertyKey(memberExpr);
+                    emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
+                } else {
+                    // For simple assignment, compile object and property now
+                    compileExpression(memberExpr.object());
+                    if (memberExpr.computed()) {
+                        compileExpression(memberExpr.property());
+                        emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                    } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
+                        // obj.#field = value
+                        // Stack: value obj
+                        // Need: obj value symbol (for PUT_PRIVATE_FIELD)
+                        String fieldName = privateId.name();
+                        JSSymbol symbol = privateSymbols != null ? privateSymbols.get(fieldName) : null;
+                        if (symbol != null) {
+                            emitter.emitOpcode(Opcode.SWAP);  // Stack: obj value
+                            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                            // Stack: obj value symbol
+                            emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
+                        } else {
+                            // Error: private field not found - clean up stack and leave value
+                            emitter.emitOpcode(Opcode.DROP);  // Drop obj, leaving value
+                        }
+                    } else if (memberExpr.property() instanceof Identifier propId) {
+                        emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
                     }
-                } else if (memberExpr.property() instanceof Identifier propId) {
-                    emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
                 }
             } else {
                 // For compound assignment, object and property are already on stack from DUP
-                if (memberExpr.computed()) {
+                if (isSuperMemberExpression(memberExpr)) {
+                    // [receiver, super, key, newValue] -> [newValue, receiver, super, key]
+                    emitter.emitOpcode(Opcode.INSERT4);
+                    emitter.emitOpcode(Opcode.DROP);
+                    emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
+                } else if (memberExpr.computed()) {
                     emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                 } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
                     // obj.#field += value
@@ -826,17 +851,27 @@ public final class BytecodeCompiler {
                 }
             }
         } else if (target instanceof MemberExpression memberExpr) {
-            // Stack: [value]
-            compileExpression(memberExpr.object());
-            // Stack: [value, obj]
-            if (memberExpr.computed()) {
-                compileExpression(memberExpr.property());
-                // Stack: [value, obj, prop]
-                emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
-            } else if (memberExpr.property() instanceof Identifier propId) {
-                emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+            if (isSuperMemberExpression(memberExpr)) {
+                // Stack starts with [value]
+                emitter.emitOpcode(Opcode.PUSH_THIS);
+                emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+                emitter.emitOpcode(Opcode.GET_SUPER);
+                emitSuperPropertyKey(memberExpr);
+                emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
+            } else {
+                // Stack: [value]
+                compileExpression(memberExpr.object());
+                // Stack: [value, obj]
+                if (memberExpr.computed()) {
+                    compileExpression(memberExpr.property());
+                    // Stack: [value, obj, prop]
+                    emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                } else if (memberExpr.property() instanceof Identifier propId) {
+                    emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+                }
             }
-            // PUT_FIELD/PUT_ARRAY_EL leave value on stack; drop it
+            // PUT_* leaves value on stack; drop it
             emitter.emitOpcode(Opcode.DROP);
         } else if (target instanceof ArrayExpression nestedArray) {
             compileArrayDestructuringAssignment(nestedArray);
@@ -1018,6 +1053,8 @@ public final class BytecodeCompiler {
             // Stack for APPLY constructor mode: newTarget, superConstructor, argsArray
             emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
             emitter.emitU8(3); // SPECIAL_OBJECT_NEW_TARGET
+            emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+            emitter.emitU8(2); // SPECIAL_OBJECT_THIS_FUNC
             emitter.emitOpcode(Opcode.GET_SUPER);
             emitArgumentsArrayWithSpread(callExpr.arguments());
             emitter.emitOpcodeU16(Opcode.APPLY, 1);
@@ -1026,6 +1063,16 @@ public final class BytecodeCompiler {
         }
         // Check if this is a method call (callee is a member expression)
         if (callExpr.callee() instanceof MemberExpression memberExpr) {
+            if (isSuperMemberExpression(memberExpr)) {
+                emitGetSuperValue(memberExpr, true);
+                // Stack: receiver method -> method receiver
+                emitter.emitOpcode(Opcode.SWAP);
+                for (Expression arg : callExpr.arguments()) {
+                    compileExpression(arg);
+                }
+                emitter.emitOpcodeU16(Opcode.CALL, callExpr.arguments().size());
+                return;
+            }
             // For method calls: obj.method()
             // We need to preserve obj as the 'this' value
 
@@ -1101,6 +1148,8 @@ public final class BytecodeCompiler {
             // super(...args) — constructor call with propagated new.target.
             emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
             emitter.emitU8(3); // SPECIAL_OBJECT_NEW_TARGET
+            emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+            emitter.emitU8(2); // SPECIAL_OBJECT_THIS_FUNC
             emitter.emitOpcode(Opcode.GET_SUPER);
             emitArgumentsArrayWithSpread(callExpr.arguments());
             emitter.emitOpcodeU16(Opcode.APPLY, 1);
@@ -1108,6 +1157,13 @@ public final class BytecodeCompiler {
             return;
         }
         if (callExpr.callee() instanceof MemberExpression memberExpr) {
+            if (isSuperMemberExpression(memberExpr)) {
+                emitGetSuperValue(memberExpr, true);
+                emitArgumentsArrayWithSpread(callExpr.arguments());
+                // Stack: thisArg function argsArray
+                emitter.emitOpcodeU16(Opcode.APPLY, 0);
+                return;
+            }
             // Method call: obj.method(...args)
             // Stack should be: thisArg function argsArray
 
@@ -2909,7 +2965,7 @@ public final class BytecodeCompiler {
         if (left instanceof Identifier) {
             depthLvalue = 0;
         } else if (left instanceof MemberExpression memberExpr) {
-            depthLvalue = memberExpr.computed() ? 2 : 1;
+            depthLvalue = isSuperMemberExpression(memberExpr) ? 3 : (memberExpr.computed() ? 2 : 1);
         } else {
             throw new CompilerException("Invalid left-hand side in logical assignment");
         }
@@ -2929,15 +2985,25 @@ public final class BytecodeCompiler {
                 }
             }
         } else if (left instanceof MemberExpression memberExpr) {
-            compileExpression(memberExpr.object());
-            if (memberExpr.computed()) {
-                compileExpression(memberExpr.property());
-                emitter.emitOpcode(Opcode.DUP2);  // Duplicate obj and prop
-                emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+            if (isSuperMemberExpression(memberExpr)) {
+                emitter.emitOpcode(Opcode.PUSH_THIS);
+                emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+                emitter.emitOpcode(Opcode.GET_SUPER);
+                emitSuperPropertyKey(memberExpr);
+                emitter.emitOpcode(Opcode.DUP3);
+                emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
             } else {
-                if (memberExpr.property() instanceof Identifier propId) {
-                    emitter.emitOpcode(Opcode.DUP);  // Duplicate object
-                    emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                compileExpression(memberExpr.object());
+                if (memberExpr.computed()) {
+                    compileExpression(memberExpr.property());
+                    emitter.emitOpcode(Opcode.DUP2);  // Duplicate obj and prop
+                    emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                } else {
+                    if (memberExpr.property() instanceof Identifier propId) {
+                        emitter.emitOpcode(Opcode.DUP);  // Duplicate object
+                        emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                    }
                 }
             }
         }
@@ -2991,6 +3057,12 @@ public final class BytecodeCompiler {
                 // So [obj, prop, newValue] -> [newValue, obj, prop]
                 emitter.emitOpcode(Opcode.ROT3R);
             }
+            case 3 -> {
+                // For super[prop]: stack is [receiver, superObj, key, newValue]
+                // We need: [newValue, receiver, superObj, key] for PUT_SUPER_VALUE
+                emitter.emitOpcode(Opcode.INSERT4);
+                emitter.emitOpcode(Opcode.DROP);
+            }
             default -> throw new CompilerException("Invalid depth for logical assignment");
         }
 
@@ -3009,7 +3081,9 @@ public final class BytecodeCompiler {
                 }
             }
         } else if (left instanceof MemberExpression memberExpr) {
-            if (memberExpr.computed()) {
+            if (isSuperMemberExpression(memberExpr)) {
+                emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
+            } else if (memberExpr.computed()) {
                 emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
             } else if (memberExpr.property() instanceof Identifier propId) {
                 emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
@@ -3036,6 +3110,11 @@ public final class BytecodeCompiler {
     }
 
     private void compileMemberExpression(MemberExpression memberExpr) {
+        if (isSuperMemberExpression(memberExpr)) {
+            emitGetSuperValue(memberExpr, false);
+            return;
+        }
+
         compileExpression(memberExpr.object());
 
         if (memberExpr.computed()) {
@@ -4720,42 +4799,6 @@ public final class BytecodeCompiler {
     }
 
     /**
-     * Emit default parameter initialization bytecode following QuickJS pattern.
-     * For each parameter with a default value, emits:
-     * GET_ARG idx
-     * DUP
-     * UNDEFINED
-     * STRICT_EQ
-     * IF_FALSE label
-     * DROP
-     * <compile default expression>
-     * DUP
-     * PUT_ARG idx
-     * label:
-     * PUT_LOCAL idx  (store into the local variable slot)
-     */
-
-    /**
-     * Emit a conditional var initialization: only create the binding with undefined
-     * if the property doesn't already exist on the global object.
-     * Implements ES2024 CreateGlobalVarBinding semantics.
-     * <p>
-     * Uses GET_VAR "globalThis" instead of PUSH_THIS to access the global object,
-     * because in strict-mode eval code, 'this' may be undefined rather than the global object.
-     * <p>
-     * Bytecode sequence:
-     * <pre>
-     *   PUSH_ATOM_VALUE "name"        // push property name
-     *   GET_VAR "globalThis"          // push global object
-     *   IN                            // "name" in globalObject -> boolean
-     *   IF_TRUE skip                  // if exists, skip initialization
-     *   UNDEFINED                     // push undefined
-     *   PUT_VAR "name"               // create the binding
-     *   skip:
-     * </pre>
-     */
-
-    /**
      * Build capture source info and set it on the template function.
      * Instead of emitting GET_LOCAL/GET_VAR_REF opcodes to push values onto the stack,
      * we store the capture source information in the template function so FCLOSURE
@@ -4816,6 +4859,42 @@ public final class BytecodeCompiler {
         emitter.patchJump(skipJump, emitter.currentOffset());
     }
 
+    /**
+     * Emit default parameter initialization bytecode following QuickJS pattern.
+     * For each parameter with a default value, emits:
+     * GET_ARG idx
+     * DUP
+     * UNDEFINED
+     * STRICT_EQ
+     * IF_FALSE label
+     * DROP
+     * <compile default expression>
+     * DUP
+     * PUT_ARG idx
+     * label:
+     * PUT_LOCAL idx  (store into the local variable slot)
+     */
+
+    /**
+     * Emit a conditional var initialization: only create the binding with undefined
+     * if the property doesn't already exist on the global object.
+     * Implements ES2024 CreateGlobalVarBinding semantics.
+     * <p>
+     * Uses GET_VAR "globalThis" instead of PUSH_THIS to access the global object,
+     * because in strict-mode eval code, 'this' may be undefined rather than the global object.
+     * <p>
+     * Bytecode sequence:
+     * <pre>
+     *   PUSH_ATOM_VALUE "name"        // push property name
+     *   GET_VAR "globalThis"          // push global object
+     *   IN                            // "name" in globalObject -> boolean
+     *   IF_TRUE skip                  // if exists, skip initialization
+     *   UNDEFINED                     // push undefined
+     *   PUT_VAR "name"               // create the binding
+     *   skip:
+     * </pre>
+     */
+
     private void emitCurrentScopeUsingDisposal() {
         emitScopeUsingDisposal(currentScope());
     }
@@ -4848,6 +4927,22 @@ public final class BytecodeCompiler {
                 functionCompiler.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, i);
             }
         }
+    }
+
+    private void emitGetSuperValue(MemberExpression memberExpr, boolean keepReceiverForCall) {
+        // Stack start: []
+        // Push current this as receiver for super property resolution.
+        emitter.emitOpcode(Opcode.PUSH_THIS);
+        if (keepReceiverForCall) {
+            // Keep one copy of receiver for the eventual CALL/APPLY thisArg.
+            emitter.emitOpcode(Opcode.DUP);
+        }
+        // Resolve super base: [[HomeObject]].[[Prototype]]
+        emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+        emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+        emitter.emitOpcode(Opcode.GET_SUPER);
+        emitSuperPropertyKey(memberExpr);
+        emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
     }
 
     /**
@@ -4925,6 +5020,18 @@ public final class BytecodeCompiler {
         } else {
             emitMethodCallOnLocalObject(usingStackLocalIndex, "dispose", 0);
             emitter.emitOpcode(Opcode.DROP);
+        }
+    }
+
+    private void emitSuperPropertyKey(MemberExpression memberExpr) {
+        if (memberExpr.computed()) {
+            compileExpression(memberExpr.property());
+        } else if (memberExpr.property() instanceof Identifier propId) {
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.name()));
+        } else if (memberExpr.property() instanceof PrivateIdentifier) {
+            throw new CompilerException("super private fields are not supported");
+        } else {
+            compileExpression(memberExpr.property());
         }
     }
 
@@ -5092,15 +5199,6 @@ public final class BytecodeCompiler {
     }
 
     /**
-     * Scan the program body for Annex B.3.3.3 eligible function declarations.
-     * These are function declarations nested inside blocks, if-statements, catch clauses,
-     * switch cases, etc. (not top-level in the program body).
-     * <p>
-     * For each eligible name not already in declaredFuncVarNames, a var binding
-     * initialized to undefined is created, and the name is recorded for the runtime
-     * hook (copying the block-scoped value to the var-scoped value when evaluated).
-     */
-    /**
      * Annex B.3.3.1: Hoist eligible function declarations from blocks/if-statements
      * to the function scope as var bindings (initialized to undefined).
      *
@@ -5180,6 +5278,24 @@ public final class BytecodeCompiler {
             emitter.emitOpcode(Opcode.DROP); // proto constructor
             emitter.emitOpcode(Opcode.SWAP); // constructor proto
         }
+    }
+
+    /**
+     * Scan the program body for Annex B.3.3.3 eligible function declarations.
+     * These are function declarations nested inside blocks, if-statements, catch clauses,
+     * switch cases, etc. (not top-level in the program body).
+     * <p>
+     * For each eligible name not already in declaredFuncVarNames, a var binding
+     * initialized to undefined is created, and the name is recorded for the runtime
+     * hook (copying the block-scoped value to the var-scoped value when evaluated).
+     */
+
+    private boolean isSuperIdentifier(Expression expression) {
+        return expression instanceof Identifier id && "super".equals(id.name());
+    }
+
+    private boolean isSuperMemberExpression(MemberExpression memberExpr) {
+        return isSuperIdentifier(memberExpr.object());
     }
 
     private void registerGlobalProgramBindings(List<Statement> body) {

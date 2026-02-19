@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.vm.VarRef;
+
 /**
  * Represents the arguments object available in functions.
  * Based on QuickJS JS_CLASS_ARGUMENTS implementation.
@@ -44,7 +46,7 @@ public final class JSArguments extends JSObject {
      * @param isStrict Whether the function is in strict mode
      */
     public JSArguments(JSContext context, JSValue[] args, boolean isStrict) {
-        this(context, args, isStrict, null);
+        this(context, args, isStrict, null, null);
     }
 
     /**
@@ -56,6 +58,24 @@ public final class JSArguments extends JSObject {
      * @param callee   The function being called (for non-strict mode)
      */
     public JSArguments(JSContext context, JSValue[] args, boolean isStrict, JSFunction callee) {
+        this(context, args, isStrict, callee, null);
+    }
+
+    /**
+     * Create an arguments object with optional mapped parameter references.
+     *
+     * @param context       The execution context
+     * @param args          The argument values
+     * @param isStrict      Whether the function is in strict mode
+     * @param callee        The function being called (for non-strict mode)
+     * @param mappedVarRefs Optional per-index references for mapped arguments object
+     */
+    public JSArguments(
+            JSContext context,
+            JSValue[] args,
+            boolean isStrict,
+            JSFunction callee,
+            VarRef[] mappedVarRefs) {
         super();
         this.argumentValues = args != null ? args : new JSValue[0];
         this.isStrict = isStrict;
@@ -65,13 +85,36 @@ public final class JSArguments extends JSObject {
 
         // Set indexed properties for each argument
         for (int i = 0; i < argumentValues.length; i++) {
-            PropertyDescriptor argDesc = PropertyDescriptor.dataDescriptor(
-                    argumentValues[i],
-                    true,  // writable
-                    true,  // enumerable
-                    true   // configurable
-            );
-            defineProperty(PropertyKey.fromIndex(i), argDesc);
+            if (mappedVarRefs != null && i < mappedVarRefs.length && mappedVarRefs[i] != null) {
+                final VarRef mappedVarRef = mappedVarRefs[i];
+                final int mappedIndex = i;
+                JSNativeFunction getter = new JSNativeFunction(
+                        "get " + mappedIndex,
+                        0,
+                        (ctx, thisArg, argsArray) -> {
+                            JSValue value = mappedVarRef.get();
+                            return value != null ? value : JSUndefined.INSTANCE;
+                        });
+                JSNativeFunction setter = new JSNativeFunction(
+                        "set " + mappedIndex,
+                        1,
+                        (ctx, thisArg, argsArray) -> {
+                            JSValue value = argsArray.length > 0 ? argsArray[0] : JSUndefined.INSTANCE;
+                            mappedVarRef.set(value);
+                            return JSUndefined.INSTANCE;
+                        });
+                defineProperty(
+                        PropertyKey.fromIndex(i),
+                        PropertyDescriptor.accessorDescriptor(getter, setter, true, true));
+            } else {
+                PropertyDescriptor argDesc = PropertyDescriptor.dataDescriptor(
+                        argumentValues[i],
+                        true,  // writable
+                        true,  // enumerable
+                        true   // configurable
+                );
+                defineProperty(PropertyKey.fromIndex(i), argDesc);
+            }
         }
 
         // Handle callee and caller properties based on strict mode
@@ -130,23 +173,6 @@ public final class JSArguments extends JSObject {
         } catch (Exception e) {
             // Ignore errors setting up Symbol.iterator - not critical
         }
-    }
-
-    /**
-     * Override get to return from argumentValues for indexed properties.
-     * This ensures we return the most up-to-date value.
-     */
-    @Override
-    protected JSValue get(PropertyKey key, JSContext context, JSObject receiver) {
-        // For indexed properties within bounds, return from argumentValues
-        if (key.isIndex()) {
-            int index = key.asIndex();
-            if (index >= 0 && index < argumentValues.length) {
-                return argumentValues[index];
-            }
-        }
-        // For other properties, use parent implementation
-        return super.get(key, context, receiver);
     }
 
     /**

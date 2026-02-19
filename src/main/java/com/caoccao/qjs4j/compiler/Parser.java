@@ -52,6 +52,7 @@ public final class Parser {
     private boolean parsingClassWithSuper; // true when parsing a class body that has 'extends'
     private int previousTokenLine; // Line of previous token (for ASI checks)
     private boolean strictMode; // true when in strict mode ("use strict" or module)
+    private boolean superPropertyAllowed; // true while parsing method bodies where super.property is valid
 
     public Parser(Lexer lexer) {
         this(lexer, false);
@@ -1792,11 +1793,14 @@ public final class Parser {
         // If this is a constructor in a derived class, enable super() calls
         boolean isConstructorMethod = !isStatic && key instanceof Identifier keyId && "constructor".equals(keyId.name());
         boolean savedInDerivedConstructor = inDerivedConstructor;
+        boolean savedSuperPropertyAllowed = superPropertyAllowed;
         if (isConstructorMethod && parsingClassWithSuper) {
             inDerivedConstructor = true;
         }
+        superPropertyAllowed = true;
         FunctionExpression method = parseMethod("method");
         inDerivedConstructor = savedInDerivedConstructor;
+        superPropertyAllowed = savedSuperPropertyAllowed;
         return new ClassDeclaration.MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
     }
 
@@ -2333,12 +2337,16 @@ public final class Parser {
             case FUNCTION -> parseFunctionExpression();
             case CLASS -> parseClassExpression(); // Class expressions
             case SUPER -> {
-                // Per ES spec, 'super' is only valid in specific contexts:
-                // - super() in derived class constructors (super_call_allowed)
-                // - super.property / super[expr] in methods (TODO: not yet supported)
                 advance(); // consume 'super'
-                if (inDerivedConstructor) {
-                    // Parse as Identifier("super") — the compiler will handle it
+                // super() is only valid in derived class constructors.
+                if (match(TokenType.LPAREN)) {
+                    if (inDerivedConstructor) {
+                        yield new Identifier("super", location);
+                    }
+                    throw new JSSyntaxErrorException("'super' keyword unexpected here");
+                }
+                // super.property / super[expr] is valid in method bodies.
+                if (superPropertyAllowed && (match(TokenType.DOT) || match(TokenType.LBRACKET))) {
                     yield new Identifier("super", location);
                 }
                 throw new JSSyntaxErrorException("'super' keyword unexpected here");

@@ -56,7 +56,46 @@ public class SuperExpressionTest extends BaseJavetTest {
     }
 
     @Test
+    public void testSuperPropertyInDerivedMethod() {
+        assertIntegerWithJavet("""
+                class A {
+                    m() { return 2; }
+                    n() { return 40; }
+                }
+                class B extends A {
+                    m() { return super.n() + super.m(); }
+                }
+                new B().m();
+                """);
+    }
+
+    @Test
     public void testSuperPropertyInRegularFunction() {
         assertErrorWithJavet("(function() { return super.x; })()");
+    }
+
+    @Test
+    public void testSuperPropertyInStaticMethod() {
+        assertIntegerWithJavet("""
+                class A {
+                    static m() { return 5; }
+                }
+                class B extends A {
+                    static m() { return super.m() + 1; }
+                }
+                B.m();
+                """);
+    }
+
+    @Test
+    public void testSuperPropertyWriteInDerivedMethod() {
+        assertIntegerWithJavet("""
+                class A {}
+                A.prototype.x = 1;
+                class B extends A {
+                    m() { super.x = 42; return this.x; }
+                }
+                new B().m();
+                """);
     }
 }

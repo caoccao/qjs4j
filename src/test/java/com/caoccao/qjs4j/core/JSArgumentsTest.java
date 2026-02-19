@@ -211,6 +211,50 @@ public class JSArgumentsTest extends BaseJavetTest {
     }
 
     @Test
+    public void testMappedArgumentsDeleteBreaksLink() {
+        assertStringWithJavet("""
+                function test(a) {
+                    delete arguments[0];
+                    a = 9;
+                    return String(arguments[0]);
+                }
+                test(1);
+                """);
+    }
+
+    @Test
+    public void testMappedArgumentsParameterToArguments() {
+        assertIntegerWithJavet("""
+                function test(a) {
+                    a = 7;
+                    return arguments[0];
+                }
+                test(1);
+                """);
+    }
+
+    @Test
+    public void testMappedArgumentsStableIdentity() {
+        assertBooleanWithJavet("""
+                function test(a) {
+                    return arguments === arguments;
+                }
+                test(1);
+                """);
+    }
+
+    @Test
+    public void testMappedArgumentsWriteThrough() {
+        assertIntegerWithJavet("""
+                function test(a) {
+                    arguments[0] = 11;
+                    return a;
+                }
+                test(1);
+                """);
+    }
+
+    @Test
     public void testRestParameterAccess() {
         assertIntegerWithJavet("""
                 function test(a, ...rest) {
@@ -295,5 +339,28 @@ public class JSArgumentsTest extends BaseJavetTest {
                     return numbers.reduce((a, b) => a + b, 0);
                 }
                 test(1, 2, 3, 4, 5);""");
+    }
+
+    @Test
+    public void testStrictArgumentsAreUnmapped() {
+        assertIntegerWithJavet("""
+                function test(a) {
+                    'use strict';
+                    arguments[0] = 13;
+                    return a;
+                }
+                test(1);
+                """);
+    }
+
+    @Test
+    public void testUnmappedWithDefaultParameters() {
+        assertIntegerWithJavet("""
+                function test(a = 1) {
+                    arguments[0] = 21;
+                    return a;
+                }
+                test(2);
+                """);
     }
 }

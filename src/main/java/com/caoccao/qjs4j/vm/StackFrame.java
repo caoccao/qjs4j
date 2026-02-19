@@ -16,10 +16,7 @@
 
 package com.caoccao.qjs4j.vm;
 
-import com.caoccao.qjs4j.core.JSBytecodeFunction;
-import com.caoccao.qjs4j.core.JSFunction;
-import com.caoccao.qjs4j.core.JSUndefined;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
 
 /**
  * Represents a call frame (activation record) on the call stack.
@@ -38,8 +35,10 @@ public final class StackFrame {
     private final VarRef[] varRefs;
     private VarRef[] closedVarRefs;
     private VarRef[] localVarRefs;
+    private JSArguments mappedArgumentsObject;
     private int programCounter;
     private JSValue thisArg;
+    private JSArguments unmappedArgumentsObject;
 
     public StackFrame(JSFunction function, JSValue thisArg, JSValue[] args, StackFrame caller, JSValue newTarget, int stackBase) {
         this.function = function;
@@ -128,6 +127,10 @@ public final class StackFrame {
         return arguments;
     }
 
+    public JSArguments getArgumentsObject(boolean mapped) {
+        return mapped ? mappedArgumentsObject : unmappedArgumentsObject;
+    }
+
     public StackFrame getCaller() {
         return caller;
     }
@@ -205,6 +208,14 @@ public final class StackFrame {
             return varRefs[index];
         }
         return null;
+    }
+
+    public void setArgumentsObject(boolean mapped, JSArguments argumentsObject) {
+        if (mapped) {
+            mappedArgumentsObject = argumentsObject;
+        } else {
+            unmappedArgumentsObject = argumentsObject;
+        }
     }
 
     public void setProgramCounter(int pc) {

@@ -137,8 +137,8 @@ public enum Opcode {
     PUT_FIELD(96, 5, 2, 0),
     GET_ARRAY_EL(97, 1, 2, 1),
     PUT_ARRAY_EL(98, 1, 3, 0),
-    GET_SUPER_VALUE(99, 1, 2, 1),
-    PUT_SUPER_VALUE(100, 1, 3, 0),
+    GET_SUPER_VALUE(99, 1, 3, 1),
+    PUT_SUPER_VALUE(100, 1, 4, 1),
 
     // Control flow
     IF_FALSE(101, 5, 1, 0),
