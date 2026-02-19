@@ -182,6 +182,53 @@ public non-sealed class JSObject implements JSValue {
         if (!extensible && !hasOwnProperty(key)) {
             return false;
         }
+
+        // ValidateAndApplyPropertyDescriptor: check current property constraints
+        PropertyDescriptor current = getOwnPropertyDescriptor(key);
+        if (current != null && !current.isConfigurable()) {
+            // Step 4a: Cannot make non-configurable property configurable
+            if (descriptor.hasConfigurable() && descriptor.isConfigurable()) {
+                return false;
+            }
+            // Step 4b: Cannot change enumerable of non-configurable property
+            if (descriptor.hasEnumerable() && descriptor.isEnumerable() != current.isEnumerable()) {
+                return false;
+            }
+            // Step 6: Cannot convert between data and accessor if non-configurable
+            boolean descIsAccessor = descriptor.isAccessorDescriptor();
+            boolean curIsAccessor = current.isAccessorDescriptor();
+            if (descIsAccessor != curIsAccessor) {
+                // Trying to change property type on non-configurable property
+                if (descriptor.hasValue() || descriptor.hasWritable() || descriptor.hasGetter() || descriptor.hasSetter()) {
+                    return false;
+                }
+            }
+            // Step 7a: Data property specific checks when non-configurable
+            if (!curIsAccessor && !descIsAccessor && !current.isWritable()) {
+                // Cannot set writable to true when current is non-writable, non-configurable
+                if (descriptor.hasWritable() && descriptor.isWritable()) {
+                    return false;
+                }
+                // Cannot change value when non-writable, non-configurable
+                if (descriptor.hasValue()) {
+                    JSValue curVal = current.getValue();
+                    JSValue newVal = descriptor.getValue();
+                    if (!sameValue(curVal, newVal)) {
+                        return false;
+                    }
+                }
+            }
+            // Step 7b (accessor): Cannot change getter/setter on non-configurable accessor
+            if (curIsAccessor && descIsAccessor) {
+                if (descriptor.hasGetter() && descriptor.getGetter() != current.getGetter()) {
+                    return false;
+                }
+                if (descriptor.hasSetter() && descriptor.getSetter() != current.getSetter()) {
+                    return false;
+                }
+            }
+        }
+
         defineProperty(key, descriptor);
         return true;
     }
@@ -544,6 +591,45 @@ public non-sealed class JSObject implements JSValue {
      */
     public JSConstructorType getConstructorType() {
         return constructorType;
+    }
+
+    private static boolean sameValue(JSValue x, JSValue y) {
+        if (x == y) {
+            return true;
+        }
+        if (x == null || y == null) {
+            return false;
+        }
+
+        // SameValue compares by ECMAScript type first (not Java class).
+        JSValueType xType = x.type();
+        JSValueType yType = y.type();
+        if (xType != yType) {
+            return false;
+        }
+
+        return switch (xType) {
+            case UNDEFINED, NULL -> true;
+            case NUMBER -> {
+                if (!(x instanceof JSNumber xNum) || !(y instanceof JSNumber yNum)) {
+                    yield false;
+                }
+                double xVal = xNum.value();
+                double yVal = yNum.value();
+                if (Double.isNaN(xVal) && Double.isNaN(yVal)) {
+                    yield true;
+                }
+                yield Double.doubleToRawLongBits(xVal) == Double.doubleToRawLongBits(yVal);
+            }
+            case STRING -> (x instanceof JSString xStr && y instanceof JSString yStr)
+                    && xStr.value().equals(yStr.value());
+            case BOOLEAN -> (x instanceof JSBoolean xBool && y instanceof JSBoolean yBool)
+                    && xBool.value() == yBool.value();
+            case BIGINT -> (x instanceof JSBigInt xBigInt && y instanceof JSBigInt yBigInt)
+                    && xBigInt.value().equals(yBigInt.value());
+            // Symbol, Object, and Function types are same-value only by identity.
+            case SYMBOL, OBJECT, FUNCTION -> false;
+        };
     }
 
     /**
