@@ -19,6 +19,8 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 public final class TypedArrayConstructor {
+    private static final JSValue[] NO_ARGS = new JSValue[0];
+
     private TypedArrayConstructor() {
     }
 
@@ -27,11 +29,10 @@ public final class TypedArrayConstructor {
     }
 
     public static JSValue from(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSConstructorType constructorType = getTypedArrayConstructorType(context, thisArg, "TypedArray.from");
-        if (constructorType == null) {
-            return context.getPendingException();
+        if (!JSTypeChecking.isConstructor(thisArg)) {
+            return context.throwTypeError("TypedArray.from called on non-TypedArray constructor");
         }
-        JSObject constructor = (JSObject) thisArg;
+
         JSValue items = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue mapFnValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         JSValue thisArgValue = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
@@ -45,86 +46,85 @@ public final class TypedArrayConstructor {
             mapFn = mapFnFunc;
         }
 
-        // GetMethod(items, @@iterator) - check for Symbol.iterator on generic JSObject
-        // (JSArray, JSIterator, JSTypedArray are handled by fast paths in create())
-        JSArray sourceArray = null;
-        if (items instanceof JSObject itemsObj
-                && !(items instanceof JSArray)
-                && !(items instanceof JSIterator)
-                && !(items instanceof JSTypedArray)
-                && !(items instanceof JSArrayBufferable)) {
-            JSValue iteratorMethod = itemsObj.get(PropertyKey.SYMBOL_ITERATOR);
-            if (iteratorMethod instanceof JSFunction iteratorFunc) {
-                JSValue iterator = iteratorFunc.call(context, items, new JSValue[0]);
+        JSArray iterableValues = null;
+        JSObject arrayLike = null;
+        long len;
+        JSObject itemsObject = JSTypeConversions.toObject(context, items);
+        if (itemsObject == null) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+
+        JSValue iteratorMethod = itemsObject.get(PropertyKey.SYMBOL_ITERATOR, context);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (!(iteratorMethod instanceof JSUndefined) && !(iteratorMethod instanceof JSNull)) {
+            if (!(iteratorMethod instanceof JSFunction iteratorFunction)) {
+                return context.throwTypeError("value is not iterable");
+            }
+            JSValue iterator = iteratorFunction.call(context, items, NO_ARGS);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (!(iterator instanceof JSObject iteratorObject)) {
+                return context.throwTypeError("Result of the Symbol.iterator method is not an object");
+            }
+            iterableValues = context.createJSArray();
+            while (true) {
+                JSObject iterResult = JSIteratorHelper.iteratorNext(iteratorObject, context);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
-                if (!(iterator instanceof JSObject)) {
-                    return context.throwTypeError("Result of the Symbol.iterator method is not an object");
+                if (iterResult == null) {
+                    break;
                 }
-                sourceArray = context.createJSArray();
-                while (true) {
-                    JSObject result = JSIteratorHelper.iteratorNext(iterator, context);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                    if (result == null) {
-                        break;
-                    }
-                    JSValue doneValue = result.get(PropertyKey.DONE, context);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                    if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) break;
-                    JSValue value = result.get(PropertyKey.VALUE, context);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                    sourceArray.push(value);
+                JSValue doneValue = iterResult.get(PropertyKey.DONE, context);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
                 }
-            } else if (iteratorMethod != null
-                    && !(iteratorMethod instanceof JSUndefined)
-                    && !(iteratorMethod instanceof JSNull)) {
-                return context.throwTypeError("@@iterator is not a function");
+                if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
+                    break;
+                }
+                JSValue value = iterResult.get(PropertyKey.VALUE, context);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                iterableValues.push(value);
             }
+            len = iterableValues.getLength();
+        } else {
+            arrayLike = itemsObject;
+            JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH, context);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            len = JSTypeConversions.toLength(context, lengthValue);
         }
 
-        if (sourceArray == null) {
-            if (mapFn == null) {
-                JSObject result = constructorType.create(context, items);
-                context.transferPrototype(result, constructor);
-                return result;
+        JSTypedArray target = typedArrayCreate(context, thisArg, len, "TypedArray.from");
+        if (target == null) {
+            return context.getPendingException();
+        }
+
+        for (long k = 0; k < len; k++) {
+            JSValue kValue = iterableValues != null
+                    ? iterableValues.get(PropertyKey.fromIndex((int) k), context)
+                    : arrayLike.get(PropertyKey.fromIndex((int) k), context);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
             }
-            if (items instanceof JSIterator jsIterator) {
-                sourceArray = JSIteratorHelper.toArray(context, jsIterator);
-            } else if (items instanceof JSArray jsArray) {
-                sourceArray = jsArray;
-            } else if (items instanceof JSObject jsObject) {
-                int length = (int) JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, jsObject.get("length")));
-                sourceArray = context.createJSArray(length, length);
-                for (int i = 0; i < length; i++) {
-                    sourceArray.set(i, jsObject.get(i));
+            if (mapFn != null) {
+                kValue = mapFn.call(context, thisArgValue, new JSValue[]{kValue, JSNumber.of(k)});
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
                 }
-            } else {
-                return context.throwTypeError("TypedArray.from source must be iterable or array-like");
+            }
+            target.set(PropertyKey.fromIndex((int) k), kValue, context);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
             }
         }
-
-        if (mapFn == null) {
-            JSObject result = constructorType.create(context, sourceArray);
-            context.transferPrototype(result, constructor);
-            return result;
-        }
-
-        int length = (int) sourceArray.getLength();
-        JSArray mappedArray = context.createJSArray(length, length);
-        for (int i = 0; i < length; i++) {
-            JSValue mappedValue = mapFn.call(context, thisArgValue, new JSValue[]{sourceArray.get(i), JSNumber.of(i)});
-            mappedArray.set(i, mappedValue);
-        }
-        JSObject result = constructorType.create(context, mappedArray);
-        context.transferPrototype(result, constructor);
-        return result;
+        return target;
     }
 
     public static JSValue getSpecies(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -152,5 +152,25 @@ public final class TypedArrayConstructor {
         JSObject result = constructorType.create(context, sourceArray);
         context.transferPrototype(result, constructor);
         return result;
+    }
+
+    private static JSTypedArray typedArrayCreate(JSContext context, JSValue constructor, long length, String methodName) {
+        if (length > Integer.MAX_VALUE) {
+            context.throwRangeError("invalid array length");
+            return null;
+        }
+        JSValue target = JSReflectObject.constructSimple(context, constructor, new JSValue[]{JSNumber.of(length)});
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (!(target instanceof JSTypedArray typedArray)) {
+            context.throwTypeError(methodName + " constructor must return a TypedArray");
+            return null;
+        }
+        if (typedArray.getLength() < length) {
+            context.throwTypeError("TypedArray length is too small");
+            return null;
+        }
+        return typedArray;
     }
 }

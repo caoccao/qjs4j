@@ -131,6 +131,30 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testFromWithCustomConstructorReturningTypedArray() {
+        assertBooleanWithJavet(
+                """
+                        (() => {
+                        const custom = new Uint8Array(3);
+                        const ctor = function() { return custom; };
+                        const result = TypedArray.from.call(ctor, [1, 2, 3]);
+                        return result === custom
+                          && result[0] === 1
+                          && result[1] === 2
+                          && result[2] === 3;
+                        })()""",
+                """
+                        (() => {
+                        const custom = new BigInt64Array(2);
+                        const ctor = function() { return custom; };
+                        const result = TypedArray.from.call(ctor, [1n, 2n]);
+                        return result === custom
+                          && result[0] === 1n
+                          && result[1] === 2n;
+                        })()""");
+    }
+
+    @Test
     public void testPrototypeMethodsAndEdgeCases() {
         assertStringWithJavet(
                 "(() => { const b = new ArrayBuffer(4); const a = new Uint8Array(b); a.set([1, 2, 3, 4]); return new Uint8Array(b, 1, 2).toString(); })()",
