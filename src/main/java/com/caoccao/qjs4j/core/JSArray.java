@@ -17,8 +17,6 @@
 package com.caoccao.qjs4j.core;
 
 import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.LongStream;
 
 /**
  * Represents a JavaScript Array object.
@@ -783,10 +781,11 @@ public final class JSArray extends JSObject {
 
     @Override
     public Object toJavaObject() {
-        return LongStream.range(0, length)
-                .mapToObj(this::get)
-                .map(JSValue::toJavaObject)
-                .collect(Collectors.toCollection(ArrayList::new));
+        List<Object> values = new ArrayList<>((int) Math.min(length, Integer.MAX_VALUE));
+        for (long i = 0; i < length; i++) {
+            values.add(toJavaArrayElement(get(i)));
+        }
+        return values;
     }
 
     @Override
@@ -830,5 +829,26 @@ public final class JSArray extends JSObject {
         if (offset >= 0) {
             propertyValues[offset] = JSNumber.of(length);
         }
+    }
+
+    /**
+     * Align array element conversion with Javet's object conversion:
+     * integral finite numbers are boxed as Integer/Long instead of Double.
+     */
+    private Object toJavaArrayElement(JSValue value) {
+        if (value instanceof JSNumber number) {
+            double numberValue = number.value();
+            if (Double.isFinite(numberValue)
+                    && numberValue == Math.rint(numberValue)
+                    && Double.doubleToRawLongBits(numberValue) != Double.doubleToRawLongBits(-0.0d)) {
+                if (numberValue >= Integer.MIN_VALUE && numberValue <= Integer.MAX_VALUE) {
+                    return (int) numberValue;
+                }
+                if (numberValue >= Long.MIN_VALUE && numberValue <= Long.MAX_VALUE) {
+                    return (long) numberValue;
+                }
+            }
+        }
+        return value.toJavaObject();
     }
 }

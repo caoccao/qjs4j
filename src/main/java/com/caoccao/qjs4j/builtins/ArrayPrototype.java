@@ -192,18 +192,34 @@ public final class ArrayPrototype {
 
         // Calculate count
         long count = Math.min(end - start, length - target);
+        if (count <= 0) {
+            return arr;
+        }
 
-        // Copy elements
-        if (count > 0) {
-            // Create a temporary array to hold values to copy
-            JSValue[] temp = new JSValue[(int) count];
-            for (int i = 0; i < count; i++) {
-                temp[i] = arr.get((int) (start + i));
-            }
+        // Follow QuickJS / spec behavior:
+        // 1) copy direction depends on overlap
+        // 2) holes are preserved by deleting destination when source is absent
+        final boolean backward = start < target && target < start + count;
+        for (long i = 0; i < count; i++) {
+            final long from = backward ? (start + count - i - 1) : (start + i);
+            final long to = backward ? (target + count - i - 1) : (target + i);
+            final PropertyKey fromKey = PropertyKey.fromString(Long.toString(from));
+            final PropertyKey toKey = PropertyKey.fromString(Long.toString(to));
 
-            // Write values to target position
-            for (int i = 0; i < count; i++) {
-                arr.set((int) (target + i), temp[i]);
+            if (arr.has(fromKey)) {
+                JSValue value = arr.get(fromKey, context);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                arr.set(to, value, context);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            } else if (!arr.delete(toKey, context)) {
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                return context.throwTypeError("Cannot delete property '" + to + "' of [object Array]");
             }
         }
 

@@ -168,6 +168,19 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSValue nonArray = new JSString("not an array");
         assertTypeError(ArrayPrototype.copyWithin(context, nonArray, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
         assertPendingException(context);
+
+        assertObjectWithJavet(
+                "[1,2,3,4,5].copyWithin(0,3,5)",
+                "[1,2,3,4,5].copyWithin(-2,0,2)",
+                "[1,2,3,4,5].copyWithin(2)");
+        assertStringWithJavet(
+                "(() => { const a = [1,2,3,4,5]; a.copyWithin(0,3,5); return a.join(','); })()",
+                "(() => { const a = [1,2,3,4,5]; a.copyWithin(-2,0,2); return a.join(','); })()",
+                "(() => { const a = [1,2,3,4,5]; a.copyWithin(2); return a.join(','); })()");
+        assertBooleanWithJavet(
+                "(() => { const a = [1,2,3]; return a.copyWithin(1,2) === a; })()");
+        assertIntegerWithJavet(
+                "(() => { const a = [1,2,3,4,5]; a.copyWithin(1,3,5); return a.length; })()");
     }
 
     @Test
