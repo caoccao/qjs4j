@@ -359,7 +359,8 @@ public final class ArrayConstructor {
                 target = (JSObject) constructed;
                 isArray = target instanceof JSArray;
             } else {
-                target = context.createJSArray();
+                // Per spec 3.k.v: Let A be ArrayCreate(len)
+                target = context.createJSArray(length);
                 isArray = true;
             }
 
@@ -451,11 +452,8 @@ public final class ArrayConstructor {
                                         new JSPromise.ReactionRecord(
                                                 new JSNativeFunction("onMapResolve", 1, (innerContext, innerThisArg, innerArgs) -> {
                                                     JSValue finalValue = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
-                                                    if (isArray) {
-                                                        ((JSArray) target).push(finalValue);
-                                                    } else {
-                                                        target.createDataProperty(PropertyKey.fromIndex(index), finalValue);
-                                                    }
+                                                    // Per spec: CreateDataPropertyOrThrow(A, Pk, mappedValue)
+                                                    target.createDataProperty(PropertyKey.fromIndex(index), finalValue);
                                                     fromAsyncArrayLikeStep(context, resultPromise, target, isArray, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
                                                     return JSUndefined.INSTANCE;
                                                 }),
@@ -471,11 +469,8 @@ public final class ArrayConstructor {
                                 );
                             } else {
                                 // No mapFn: use awaited value directly
-                                if (isArray) {
-                                    ((JSArray) target).push(awaitedValue);
-                                } else {
-                                    target.createDataProperty(PropertyKey.fromIndex(index), awaitedValue);
-                                }
+                                // Per spec: CreateDataPropertyOrThrow(A, Pk, mappedValue)
+                                target.createDataProperty(PropertyKey.fromIndex(index), awaitedValue);
                                 fromAsyncArrayLikeStep(context, resultPromise, target, isArray, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
                             }
                             return JSUndefined.INSTANCE;

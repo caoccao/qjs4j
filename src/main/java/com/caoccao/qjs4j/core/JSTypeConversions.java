@@ -601,65 +601,20 @@ public final class JSTypeConversions {
         if (value instanceof JSNull || value instanceof JSUndefined) {
             return null;
         }
-        JSObject global = context.getGlobalObject();
         if (value instanceof JSString str) {
-            JSValue stringCtor = global.get("String");
-            if (stringCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
-                if (prototype instanceof JSObject protoObj) {
-                    JSObject wrapper = new JSObject();
-                    wrapper.setPrototype(protoObj);
-                    wrapper.setPrimitiveValue(str);
-                    wrapper.definePropertyReadonlyNonConfigurable("length", JSNumber.of(str.value().length()));
-                    return wrapper;
-                }
-            }
+            return context.createJSStringObject(str);
         }
         if (value instanceof JSNumber num) {
-            JSValue numberCtor = global.get("Number");
-            if (numberCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
-                if (prototype instanceof JSObject protoObj) {
-                    JSObject wrapper = new JSObject();
-                    wrapper.setPrototype(protoObj);
-                    wrapper.setPrimitiveValue(num);
-                    return wrapper;
-                }
-            }
+            return context.createJSNumberObject(num);
         }
         if (value instanceof JSBoolean bool) {
-            JSValue booleanCtor = global.get("Boolean");
-            if (booleanCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
-                if (prototype instanceof JSObject protoObj) {
-                    JSObject wrapper = new JSObject();
-                    wrapper.setPrototype(protoObj);
-                    wrapper.setPrimitiveValue(bool);
-                    return wrapper;
-                }
-            }
+            return context.createJSBooleanObject(bool);
         }
         if (value instanceof JSBigInt bigInt) {
-            JSValue bigIntCtor = global.get("BigInt");
-            if (bigIntCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
-                if (prototype instanceof JSObject protoObj) {
-                    JSBigIntObject wrapper = new JSBigIntObject(bigInt);
-                    wrapper.setPrototype(protoObj);
-                    return wrapper;
-                }
-            }
+            return context.createJSBigIntObject(bigInt);
         }
         if (value instanceof JSSymbol sym) {
-            JSValue symbolCtor = global.get("Symbol");
-            if (symbolCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
-                if (prototype instanceof JSObject protoObj) {
-                    JSSymbolObject wrapper = new JSSymbolObject(sym);
-                    wrapper.setPrototype(protoObj);
-                    return wrapper;
-                }
-            }
+            return context.createJSSymbolObject(sym);
         }
         return null;
     }

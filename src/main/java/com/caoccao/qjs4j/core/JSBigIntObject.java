@@ -48,6 +48,7 @@ import java.math.BigInteger;
  * @see JSBigInt
  */
 public final class JSBigIntObject extends JSObject {
+    public static final String NAME = "BigInt";
     private final JSBigInt value;
 
     /**

@@ -266,6 +266,18 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSBigUint64Array(buffer, byteOffset, length), JSBigUint64Array.NAME);
     }
 
+    public JSBigIntObject createJSBigIntObject(JSBigInt value) {
+        JSBigIntObject wrapper = new JSBigIntObject(value);
+        transferPrototype(wrapper, JSBigIntObject.NAME);
+        return wrapper;
+    }
+
+    public JSBooleanObject createJSBooleanObject(JSBoolean value) {
+        JSBooleanObject wrapper = new JSBooleanObject(value);
+        transferPrototype(wrapper, JSBooleanObject.NAME);
+        return wrapper;
+    }
+
     /**
      * Create a new JSDataView with proper prototype chain.
      *
@@ -399,6 +411,12 @@ public final class JSContext implements AutoCloseable {
         return jsMap;
     }
 
+    public JSNumberObject createJSNumberObject(JSNumber value) {
+        JSNumberObject wrapper = new JSNumberObject(value);
+        transferPrototype(wrapper, JSNumberObject.NAME);
+        return wrapper;
+    }
+
     /**
      * Create a new JSObject with proper prototype chain.
      * Sets the object's prototype to Object.prototype from the global object.
@@ -444,6 +462,18 @@ public final class JSContext implements AutoCloseable {
         JSSet jsSet = new JSSet();
         transferPrototype(jsSet, JSSet.NAME);
         return jsSet;
+    }
+
+    public JSStringObject createJSStringObject(JSString value) {
+        JSStringObject wrapper = new JSStringObject(value);
+        transferPrototype(wrapper, JSStringObject.NAME);
+        return wrapper;
+    }
+
+    public JSSymbolObject createJSSymbolObject(JSSymbol value) {
+        JSSymbolObject wrapper = new JSSymbolObject(value);
+        transferPrototype(wrapper, JSSymbolObject.NAME);
+        return wrapper;
     }
 
     public JSSuppressedError createJSSuppressedError(JSValue error, JSValue suppressed, String message) {

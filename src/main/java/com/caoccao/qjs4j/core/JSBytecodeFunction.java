@@ -230,9 +230,14 @@ public final class JSBytecodeFunction extends JSFunction {
         // the function should execute in its own realm, not the caller's realm.
         JSContext executionContext = getHomeContext() != null ? getHomeContext() : context;
 
-        // OrdinaryCallBindThis: in non-strict mode, undefined/null this → global object
-        if (!strict && (thisArg instanceof JSUndefined || thisArg instanceof JSNull)) {
-            thisArg = executionContext.getGlobalObject();
+        // OrdinaryCallBindThis: in non-strict mode, coerce this value
+        if (!strict && !(thisArg instanceof JSObject)) {
+            if (thisArg instanceof JSUndefined || thisArg instanceof JSNull) {
+                thisArg = executionContext.getGlobalObject();
+            } else {
+                // Auto-box primitives to wrapper objects (String, Number, Boolean, etc.)
+                thisArg = JSTypeConversions.toObject(executionContext, thisArg);
+            }
         }
 
         // If this is an async generator function, create and return an async generator object

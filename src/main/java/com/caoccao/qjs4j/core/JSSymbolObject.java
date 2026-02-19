@@ -51,6 +51,7 @@ package com.caoccao.qjs4j.core;
  * @see JSSymbol
  */
 public final class JSSymbolObject extends JSObject {
+    public static final String NAME = "Symbol";
     private final JSSymbol value;
 
     /**
