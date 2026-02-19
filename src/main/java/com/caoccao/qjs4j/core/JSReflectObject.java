@@ -393,14 +393,7 @@ public final class JSReflectObject {
 
         PropertyKey key = PropertyKey.fromValue(context, args[1]);
         JSValue value = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
-        JSObject receiver = target;
-        if (args.length > 3) {
-            if (args[3] instanceof JSObject r) {
-                receiver = r;
-            } else {
-                return JSBoolean.FALSE;
-            }
-        }
+        JSValue receiver = args.length > 3 ? args[3] : target;
 
         boolean success = target.setWithResult(key, value, context, receiver);
         if (context.hasPendingException()) {

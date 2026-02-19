@@ -999,6 +999,21 @@ public non-sealed class JSObject implements JSValue {
         return setInternal(key, value, context, receiver, false);
     }
 
+    /**
+     * Set with result, accepting any JSValue as receiver.
+     * Per ES spec, [[Set]](P, V, Receiver) accepts any ECMAScript language value as Receiver.
+     * When receiver is not an object, OrdinarySet returns false (cannot create properties on non-objects).
+     * Subclasses (e.g. TypedArray) may override for spec-specific behavior.
+     */
+    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSValue receiver) {
+        if (receiver instanceof JSObject objReceiver) {
+            return setWithResult(key, value, context, objReceiver);
+        }
+        // Per QuickJS JS_SetPropertyInternal: when receiver (this_obj) is not an object (p == NULL),
+        // after prototype lookup completes without finding a setter, returns error/false.
+        return false;
+    }
+
     // JSValue implementation
 
     @Override

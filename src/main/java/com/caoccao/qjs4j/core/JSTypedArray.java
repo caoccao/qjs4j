@@ -711,6 +711,42 @@ public abstract class JSTypedArray extends JSObject {
     }
 
     /**
+     * TypedArray [[Set]](P, V, Receiver) - ES spec 10.4.5.5
+     * Handles the case where Receiver may be any ECMAScript value (not just an object).
+     * Following QuickJS JS_SetPropertyInternal typed_array_oob handling.
+     */
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSValue receiver) {
+        if (isCanonicalNumericIndex(key)) {
+            // Step b.i: If SameValue(O, Receiver) is true
+            if (receiver == this) {
+                // Perform TypedArraySetElement(O, numericIndex, V)
+                set(key, value, context);
+                return !context.hasPendingException();
+            }
+            // Step b.ii: If IsValidIntegerIndex(O, numericIndex) is false, return true
+            String str = key.toPropertyString();
+            if ("-0".equals(str)) {
+                return true;
+            }
+            try {
+                double numericIndex = Double.parseDouble(str);
+                if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
+                    return true;
+                }
+                int index = (int) numericIndex;
+                if (index != numericIndex || buffer.isDetached() || index >= getLength()) {
+                    return true;
+                }
+            } catch (NumberFormatException e) {
+                return true;
+            }
+            // Valid integer index with different receiver - fall through to OrdinarySet
+        }
+        return super.setWithResult(key, value, context, receiver);
+    }
+
+    /**
      * TypedArray.prototype.subarray(begin, end)
      * Returns a new TypedArray view on the same buffer.
      */
