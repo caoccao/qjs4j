@@ -489,7 +489,7 @@ public non-sealed class JSObject implements JSValue {
         return JSUndefined.INSTANCE;
     }
 
-    private long getCanonicalArrayIndex(PropertyKey key) {
+    protected long getCanonicalArrayIndex(PropertyKey key) {
         if (key.isIndex()) {
             return Integer.toUnsignedLong(key.asIndex());
         }

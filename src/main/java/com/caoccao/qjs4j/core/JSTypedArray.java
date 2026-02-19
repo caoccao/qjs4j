@@ -246,6 +246,28 @@ public abstract class JSTypedArray extends JSObject {
         }
     }
 
+    /**
+     * Integer-Indexed exotic object [[Delete]].
+     * Returns false for valid in-bounds indices (elements are non-configurable).
+     * Following QuickJS delete_property() for typed arrays.
+     */
+    @Override
+    public boolean delete(PropertyKey key, JSContext context) {
+        int index = toTypedArrayIndex(key);
+        if (index >= 0) {
+            // In-bounds element: not deletable
+            if (index < getLength() && !buffer.isDetached()) {
+                if (context != null && context.isStrictMode()) {
+                    context.throwTypeError("Cannot delete property '" + index + "'");
+                }
+                return false;
+            }
+            // Out-of-bounds or detached: canonical numeric index returns true
+            return true;
+        }
+        return super.delete(key, context);
+    }
+
     protected String formatElement(double value) {
         if (Double.isNaN(value)) {
             return "NaN";

@@ -3162,6 +3162,9 @@ public final class VirtualMachine {
         if (object instanceof JSObject jsObj) {
             PropertyKey key = PropertyKey.fromValue(context, property);
             result = jsObj.delete(key, context);
+            if (context.hasPendingException()) {
+                pendingException = context.getPendingException();
+            }
         }
         valueStack.push(JSBoolean.valueOf(result));
     }
