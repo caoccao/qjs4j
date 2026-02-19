@@ -165,6 +165,44 @@ public final class JSArray extends JSObject {
     }
 
     @Override
+    public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
+        // Per ES spec ArraySetLength / QuickJS JS_DefineProperty:
+        // When defining "length" with a value, coerce BEFORE descriptor validation
+        if (key.isString() && "length".equals(key.asString()) && descriptor.hasValue() && context != null) {
+            Long newLength = toArrayLengthForLengthProperty(context, descriptor.getValue());
+            if (newLength == null) {
+                return false; // coercion error
+            }
+            // Replace raw value with coerced number; re-check property state
+            // (coercion callback may have changed writable flag)
+            descriptor.setValue(JSNumber.of(newLength));
+
+            PropertyDescriptor oldLenDesc = getOwnPropertyDescriptor(key);
+            if (oldLenDesc != null && !oldLenDesc.isWritable()) {
+                // Current writable is false (may have been changed during coercion)
+                if (descriptor.hasWritable() && descriptor.isWritable()) {
+                    // Cannot change writable from false to true
+                    return false;
+                }
+                long oldLen = this.length;
+                if (newLength != oldLen) {
+                    return false;
+                }
+                // Value is same, no writable change needed - just apply the descriptor
+                super.defineProperty(key, descriptor);
+                return true;
+            }
+
+            // Apply the length change
+            setLength(newLength);
+            // Apply any other descriptor attributes (e.g., writable: false)
+            super.defineProperty(key, descriptor);
+            return true;
+        }
+        return super.defineOwnProperty(key, descriptor, context);
+    }
+
+    @Override
     public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
         long index = getArrayIndex(key);
         if (index >= 0 && index <= Integer.MAX_VALUE) {
