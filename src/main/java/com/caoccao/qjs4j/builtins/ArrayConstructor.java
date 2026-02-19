@@ -345,11 +345,11 @@ public final class ArrayConstructor {
                 return resultPromise;
             }
 
-            // Per spec: If IsConstructor(C), let A be Construct(C), else ArrayCreate(0)
+            // Per spec 3.k.iv: If IsConstructor(C), let A be Construct(C, « len »), else ArrayCreate(len)
             JSObject target;
             boolean isArray;
             if (JSTypeChecking.isConstructor(thisArg)) {
-                JSValue constructed = JSReflectObject.constructSimple(context, thisArg, new JSValue[0]);
+                JSValue constructed = JSReflectObject.constructSimple(context, thisArg, new JSValue[]{JSNumber.of(length)});
                 if (context.hasPendingException()) {
                     JSValue pendingException = context.getPendingException();
                     context.clearAllPendingExceptions();
