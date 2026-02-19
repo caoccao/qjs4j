@@ -954,7 +954,8 @@ public final class ArrayPrototype {
         }
 
         // Create new array with spliced result
-        JSArray result = context.createJSArray(0, length - deleteCount + (args.length - 2));
+        int insertCount = Math.max(0, args.length - 2);
+        JSArray result = context.createJSArray(0, length - deleteCount + insertCount);
 
         // Copy elements before start
         for (long i = 0; i < start; i++) {
