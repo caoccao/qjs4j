@@ -396,6 +396,9 @@ public final class ObjectPrototype {
         }
 
         if (!obj.defineOwnProperty(key, desc, context)) {
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             return context.throwTypeError("Cannot define property " + key.toPropertyString() + ", object is not extensible");
         }
         return obj;
