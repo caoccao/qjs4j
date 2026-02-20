@@ -16,10 +16,10 @@
 
 package com.caoccao.qjs4j.cli;
 
-import com.caoccao.qjs4j.compilation.compiler.BytecodeCompiler;
 import com.caoccao.qjs4j.compilation.Lexer;
-import com.caoccao.qjs4j.compilation.Parser;
 import com.caoccao.qjs4j.compilation.ast.Program;
+import com.caoccao.qjs4j.compilation.compiler.BytecodeCompiler;
+import com.caoccao.qjs4j.compilation.parser.Parser;
 import com.caoccao.qjs4j.vm.Bytecode;
 
 import java.io.FileOutputStream;

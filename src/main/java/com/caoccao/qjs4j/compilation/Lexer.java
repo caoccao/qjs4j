@@ -297,7 +297,7 @@ public final class Lexer {
         lastTokenType = null;
     }
 
-    void restoreState(LexerState state) {
+    public void restoreState(LexerState state) {
         this.position = state.position;
         this.line = state.line;
         this.column = state.column;
@@ -306,7 +306,7 @@ public final class Lexer {
         this.strictMode = state.strictMode;
     }
 
-    LexerState saveState() {
+    public LexerState saveState() {
         return new LexerState(position, line, column, lastTokenType, lookahead, strictMode);
     }
 
@@ -1330,7 +1330,7 @@ public final class Lexer {
         }
     }
 
-    record LexerState(int position, int line, int column, TokenType lastTokenType, Token lookahead,
-                      boolean strictMode) {
+    public record LexerState(int position, int line, int column, TokenType lastTokenType, Token lookahead,
+                             boolean strictMode) {
     }
 }

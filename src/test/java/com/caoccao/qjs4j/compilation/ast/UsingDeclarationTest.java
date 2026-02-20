@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 import com.caoccao.qjs4j.compilation.Lexer;
-import com.caoccao.qjs4j.compilation.Parser;
+import com.caoccao.qjs4j.compilation.parser.Parser;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import org.junit.jupiter.api.Test;
 

@@ -18,8 +18,8 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.builtins.*;
 import com.caoccao.qjs4j.compilation.ast.AstUtils;
-import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.compilation.ast.Program;
+import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.JSErrorType;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.vm.StackFrame;
