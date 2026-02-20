@@ -43,6 +43,11 @@ public final class IteratorPrototype {
 
         final long[] index = {0};
         return new JSIterator(context, () -> {
+            // ES2024 %ArrayIteratorPrototype%.next step 5: TypedArray out-of-bounds check
+            if (arrayLike instanceof JSTypedArray ta && ta.isOutOfBounds()) {
+                context.throwTypeError("Cannot perform Array Iterator.prototype.next on a typed array backed by a detached or out-of-bounds buffer");
+                return JSIterator.IteratorResult.done(context);
+            }
             if (index[0] < getArrayLikeLength(context, arrayLike)) {
                 JSArray pair = context.createJSArray();
                 pair.push(JSNumber.of(index[0]));
@@ -66,6 +71,10 @@ public final class IteratorPrototype {
 
         final long[] index = {0};
         return new JSIterator(context, () -> {
+            if (arrayLike instanceof JSTypedArray ta && ta.isOutOfBounds()) {
+                context.throwTypeError("Cannot perform Array Iterator.prototype.next on a typed array backed by a detached or out-of-bounds buffer");
+                return JSIterator.IteratorResult.done(context);
+            }
             if (index[0] < getArrayLikeLength(context, arrayLike)) {
                 return JSIterator.IteratorResult.of(context, JSNumber.of(index[0]++));
             }
@@ -85,6 +94,10 @@ public final class IteratorPrototype {
 
         final long[] index = {0};
         return new JSIterator(context, () -> {
+            if (arrayLike instanceof JSTypedArray ta && ta.isOutOfBounds()) {
+                context.throwTypeError("Cannot perform Array Iterator.prototype.next on a typed array backed by a detached or out-of-bounds buffer");
+                return JSIterator.IteratorResult.done(context);
+            }
             if (index[0] < getArrayLikeLength(context, arrayLike)) {
                 return JSIterator.IteratorResult.of(context, getArrayLikeValue(context, arrayLike, index[0]++));
             }
