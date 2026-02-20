@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -53,6 +54,7 @@ public class Test262Test {
                     .filter(p -> p.toString().endsWith(".js"))
                     .filter(p -> !p.toString().contains("_FIXTURE"))
                     .filter(p -> config.matchesIncludePattern(p))
+                    .sorted(Comparator.comparing(Path::toString)) // Sort for consistent order
                     .limit(config.getMaxTests())
                     .forEach(testFiles::add);
         }
