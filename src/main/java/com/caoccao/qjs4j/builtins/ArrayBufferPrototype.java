@@ -278,13 +278,31 @@ public final class ArrayBufferPrototype {
             return context.throwTypeError("ArrayBuffer.prototype.transfer called on non-ArrayBuffer");
         }
 
-        int newByteLength = -1;
-        if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-            newByteLength = JSTypeConversions.toInt32(context, args[0]);
+        // QuickJS ordering: ToIndex before detach check (valueOf could detach)
+        long newByteLength;
+        if (args.length < 1 || args[0] instanceof JSUndefined) {
+            newByteLength = buffer.getByteLength();
+        } else {
+            try {
+                newByteLength = JSTypeConversions.toIndex(context, args[0]);
+            } catch (JSRangeErrorException e) {
+                return context.throwRangeError(e.getMessage());
+            }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+
+        if (buffer.isDetached()) {
+            return context.throwTypeError("Cannot perform ArrayBuffer.prototype.transfer on a detached ArrayBuffer");
+        }
+
+        if (newByteLength > Integer.MAX_VALUE) {
+            return context.throwRangeError("invalid array buffer length");
         }
 
         try {
-            return buffer.transfer(context, newByteLength);
+            return buffer.transfer(context, (int) newByteLength);
         } catch (IllegalStateException | IllegalArgumentException e) {
             return context.throwTypeError(e.getMessage());
         }
@@ -300,13 +318,31 @@ public final class ArrayBufferPrototype {
             return context.throwTypeError("ArrayBuffer.prototype.transferToFixedLength called on non-ArrayBuffer");
         }
 
-        int newByteLength = -1;
-        if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-            newByteLength = JSTypeConversions.toInt32(context, args[0]);
+        // QuickJS ordering: ToIndex before detach check (valueOf could detach)
+        long newByteLength;
+        if (args.length < 1 || args[0] instanceof JSUndefined) {
+            newByteLength = buffer.getByteLength();
+        } else {
+            try {
+                newByteLength = JSTypeConversions.toIndex(context, args[0]);
+            } catch (JSRangeErrorException e) {
+                return context.throwRangeError(e.getMessage());
+            }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+
+        if (buffer.isDetached()) {
+            return context.throwTypeError("Cannot perform ArrayBuffer.prototype.transferToFixedLength on a detached ArrayBuffer");
+        }
+
+        if (newByteLength > Integer.MAX_VALUE) {
+            return context.throwRangeError("invalid array buffer length");
         }
 
         try {
-            return buffer.transferToFixedLength(context, newByteLength);
+            return buffer.transferToFixedLength(context, (int) newByteLength);
         } catch (IllegalStateException | IllegalArgumentException e) {
             return context.throwTypeError(e.getMessage());
         }
