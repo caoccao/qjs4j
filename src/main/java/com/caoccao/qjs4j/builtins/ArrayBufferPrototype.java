@@ -28,6 +28,35 @@ import java.nio.ByteBuffer;
 public final class ArrayBufferPrototype {
 
     /**
+     * SpeciesConstructor(O, defaultConstructor) per ES2020 7.3.20.
+     * Returns JSUndefined.INSTANCE to use the default constructor,
+     * or the species constructor function.
+     * Sets pending exception on error.
+     */
+    private static JSValue speciesConstructor(JSContext context, JSObject obj) {
+        JSValue ctor = obj.get(PropertyKey.CONSTRUCTOR);
+        if (ctor instanceof JSUndefined) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(ctor instanceof JSObject ctorObj)) {
+            context.throwTypeError("constructor is not an object");
+            return JSUndefined.INSTANCE;
+        }
+        JSValue species = ctorObj.get(PropertyKey.SYMBOL_SPECIES);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (species instanceof JSUndefined || species instanceof JSNull) {
+            return JSUndefined.INSTANCE;
+        }
+        if (species instanceof JSFunction) {
+            return species;
+        }
+        context.throwTypeError("Species is not a constructor");
+        return JSUndefined.INSTANCE;
+    }
+
+    /**
      * get ArrayBuffer.prototype.byteLength
      * ES2020 24.1.4.1
      * Returns the byte length of the buffer.
@@ -157,6 +186,9 @@ public final class ArrayBufferPrototype {
         int first;
         if (args.length > 0) {
             double relativeStart = JSTypeConversions.toInteger(context, args[0]);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (relativeStart < 0) {
                 first = (int) Math.max(len + relativeStart, 0);
             } else {
@@ -170,6 +202,9 @@ public final class ArrayBufferPrototype {
         int fin;
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
             double relativeEnd = JSTypeConversions.toInteger(context, args[1]);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (relativeEnd < 0) {
                 fin = (int) Math.max(len + relativeEnd, 0);
             } else {
@@ -180,7 +215,46 @@ public final class ArrayBufferPrototype {
         }
 
         int newLen = Math.max(fin - first, 0);
-        JSArrayBuffer newBuffer = context.createJSArrayBuffer(newLen);
+
+        // SpeciesConstructor: get constructor, check species
+        JSValue ctor = speciesConstructor(context, buffer);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        JSArrayBuffer newBuffer;
+        if (ctor instanceof JSUndefined) {
+            // Use default ArrayBuffer constructor
+            newBuffer = context.createJSArrayBuffer(newLen);
+        } else {
+            // Call the species constructor via Reflect.construct
+            JSValue newObj = JSReflectObject.construct(context, JSUndefined.INSTANCE,
+                    new JSValue[]{ctor, new JSArray(new JSValue[]{JSNumber.of(newLen)})});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (!(newObj instanceof JSArrayBuffer buf)) {
+                return context.throwTypeError("Species constructor did not return an ArrayBuffer");
+            }
+            newBuffer = buf;
+        }
+
+        // Validate the new buffer
+        if (newBuffer == buffer) {
+            return context.throwTypeError("cannot use identical ArrayBuffer");
+        }
+        if (newBuffer.isDetached()) {
+            return context.throwTypeError("Species constructor returned a detached ArrayBuffer");
+        }
+        if (newBuffer.getByteLength() < newLen) {
+            return context.throwTypeError("new ArrayBuffer is too small");
+        }
+
+        // Re-check source after side effects
+        if (buffer.isDetached()) {
+            return context.throwTypeError("ArrayBuffer was detached during slice");
+        }
+
         if (newLen > 0) {
             ByteBuffer src = buffer.getBuffer();
             int oldPos = src.position();
