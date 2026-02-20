@@ -60,6 +60,11 @@ public final class ArrayBufferPrototype {
             return context.throwTypeError("get ArrayBuffer.prototype.maxByteLength called on non-ArrayBuffer");
         }
 
+        // ES2024: If IsDetachedBuffer(O) is true, return +0.
+        if (buffer.isDetached()) {
+            return JSNumber.of(0);
+        }
+
         return JSNumber.of(buffer.getMaxByteLength());
     }
 
