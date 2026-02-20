@@ -26,7 +26,6 @@ import java.util.List;
  * Based on ES2020 iteration protocols.
  */
 public final class IteratorPrototype {
-    private static final long MAX_SAFE_INTEGER = 9007199254740991L;
     private static final JSValue[] NO_ARGS = new JSValue[0];
 
     private IteratorPrototype() {
@@ -1179,7 +1178,7 @@ public final class IteratorPrototype {
                 context.throwRangeError("must be positive");
                 return null;
             }
-            return MAX_SAFE_INTEGER;
+            return NumberPrototype.MAX_SAFE_INTEGER;
         }
         long limit = (long) JSTypeConversions.toInteger(context, JSNumber.of(number));
         if (limit < 0) {

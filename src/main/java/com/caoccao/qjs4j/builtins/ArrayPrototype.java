@@ -93,8 +93,16 @@ public final class ArrayPrototype {
             }
         }
 
-        // Step 2: Let A be ArrayCreate(0) (simplified from ArraySpeciesCreate)
-        JSArray result = context.createJSArray();
+        // Step 2: Let A be ? ArraySpeciesCreate(O, 0)
+        JSValue resultVal = arraySpeciesCreate(context, obj, 0);
+        if (resultVal == null || context.hasPendingException()) {
+            return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
+        }
+        if (!(resultVal instanceof JSObject resultObj)) {
+            return context.throwTypeError("ArraySpeciesCreate did not return an object");
+        }
+        // Fast path flag: if result is a plain JSArray, use internal array ops
+        JSArray resultArr = resultObj instanceof JSArray arr ? arr : null;
         long n = 0;
 
         // Steps 3-4: Process O (this) and each argument
@@ -120,7 +128,7 @@ public final class ArrayPrototype {
                     if (context.hasPendingException()) return context.getPendingException();
                 }
 
-                if (n + len > 9007199254740991L) { // MAX_SAFE_INTEGER
+                if (n + len > NumberPrototype.MAX_SAFE_INTEGER) { // MAX_SAFE_INTEGER
                     return context.throwTypeError("Array too long");
                 }
 
@@ -130,22 +138,35 @@ public final class ArrayPrototype {
                     if (eObj.has(indexKey)) {
                         JSValue val = eObj.get(indexKey, context);
                         if (context.hasPendingException()) return context.getPendingException();
-                        result.set(n, val);
+                        if (resultArr != null) {
+                            resultArr.set(n, val);
+                        } else if (!resultObj.createDataProperty(PropertyKey.fromIndex((int) n), val)) {
+                            return context.throwTypeError("Cannot define property " + n);
+                        }
                     }
                 }
             } else {
                 // Step 4c: Non-spreadable - add as single element
-                if (n >= 9007199254740991L) {
+                if (n >= NumberPrototype.MAX_SAFE_INTEGER) {
                     return context.throwTypeError("Array too long");
                 }
-                result.set(n, e);
+                if (resultArr != null) {
+                    resultArr.set(n, e);
+                } else if (!resultObj.createDataProperty(PropertyKey.fromIndex((int) n), e)) {
+                    return context.throwTypeError("Cannot define property " + n);
+                }
                 n++;
             }
         }
 
-        // Step 5: Set final length (important for holes)
-        result.setLength(n);
-        return result;
+        // Step 5: Set length
+        if (resultArr != null) {
+            resultArr.setLength(n);
+        } else {
+            resultObj.set(PropertyKey.LENGTH, JSNumber.of(n), context);
+            if (context.hasPendingException()) return context.getPendingException();
+        }
+        return resultObj;
     }
 
     /**
@@ -650,6 +671,63 @@ public final class ArrayPrototype {
             } else {
                 result.push(element);
             }
+        }
+        return result;
+    }
+
+    /**
+     * ES2024 7.3.34 ArraySpeciesCreate(originalArray, length).
+     * Following QuickJS JS_ArraySpeciesCreate.
+     *
+     * @return the new array, or null if an exception was set on context
+     */
+    static JSValue arraySpeciesCreate(JSContext context, JSObject originalArray, long length) {
+        // Step 3: If IsArray(originalArray) is false, return ArrayCreate(length)
+        int isArr = JSTypeChecking.isArray(context, originalArray);
+        if (isArr < 0) {
+            return null;
+        }
+        if (isArr == 0) {
+            return context.createJSArray((int) Math.min(length, Integer.MAX_VALUE));
+        }
+
+        // Step 4: Let C be ? Get(originalArray, "constructor")
+        JSValue ctor = originalArray.get(PropertyKey.CONSTRUCTOR, context);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
+        // Step 5: If IsConstructor(C) is true, cross-realm check
+        if (JSTypeChecking.isConstructor(ctor)) {
+            // Simplified: single-realm engine, skip cross-realm check
+            // QuickJS sets C = undefined if constructor is from a different realm
+        }
+
+        // Step 6: If Type(C) is Object, get Symbol.species
+        if (ctor instanceof JSObject ctorObj) {
+            ctor = ctorObj.get(PropertyKey.SYMBOL_SPECIES, context);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (ctor instanceof JSNull) {
+                ctor = JSUndefined.INSTANCE;
+            }
+        }
+
+        // Step 7: If C is undefined, return ArrayCreate(length)
+        if (ctor instanceof JSUndefined) {
+            return context.createJSArray((int) Math.min(length, Integer.MAX_VALUE));
+        }
+
+        // Step 8: If IsConstructor(C) is false, throw a TypeError exception
+        if (!JSTypeChecking.isConstructor(ctor)) {
+            return context.throwTypeError("Species constructor is not a constructor");
+        }
+
+        // Step 9: Return ? Construct(C, « length »)
+        JSValue result = JSReflectObject.constructSimple(context, ctor, new JSValue[]{JSNumber.of(length)});
+        if (context.hasPendingException()) {
+            return null;
         }
         return result;
     }

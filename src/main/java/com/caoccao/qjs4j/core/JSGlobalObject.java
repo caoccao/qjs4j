@@ -1576,9 +1576,9 @@ public final class JSGlobalObject {
         JSValue globalParseInt = global.get("parseInt");
         JSValue globalParseFloat = global.get("parseFloat");
         numberConstructor.definePropertyReadonlyNonConfigurable("EPSILON", JSNumber.of(Math.ulp(1.0)));
-        numberConstructor.definePropertyReadonlyNonConfigurable("MAX_SAFE_INTEGER", JSNumber.of(9007199254740991d));
+        numberConstructor.definePropertyReadonlyNonConfigurable("MAX_SAFE_INTEGER", JSNumber.of((double) NumberPrototype.MAX_SAFE_INTEGER));
         numberConstructor.definePropertyReadonlyNonConfigurable("MAX_VALUE", JSNumber.of(Double.MAX_VALUE));
-        numberConstructor.definePropertyReadonlyNonConfigurable("MIN_SAFE_INTEGER", JSNumber.of(-9007199254740991d));
+        numberConstructor.definePropertyReadonlyNonConfigurable("MIN_SAFE_INTEGER", JSNumber.of((double) -NumberPrototype.MAX_SAFE_INTEGER));
         numberConstructor.definePropertyReadonlyNonConfigurable("MIN_VALUE", JSNumber.of(Double.MIN_VALUE));
         numberConstructor.definePropertyReadonlyNonConfigurable("NEGATIVE_INFINITY", JSNumber.of(Double.NEGATIVE_INFINITY));
         numberConstructor.definePropertyReadonlyNonConfigurable("NaN", JSNumber.of(Double.NaN));

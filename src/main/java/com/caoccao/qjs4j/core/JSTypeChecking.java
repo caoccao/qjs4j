@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.builtins.NumberPrototype;
+
 /**
  * Type checking utilities for JavaScript values.
  * Based on QuickJS quickjs.c type checking macros.
@@ -275,7 +277,7 @@ public final class JSTypeChecking {
         double d = n.value();
         return Double.isFinite(d) &&
                 d == Math.floor(d) &&
-                Math.abs(d) <= 0x1FFFFFFFFFFFFFL; // 2^53 - 1
+                Math.abs(d) <= NumberPrototype.MAX_SAFE_INTEGER;
     }
 
     /**

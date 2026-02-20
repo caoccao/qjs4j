@@ -23,7 +23,6 @@ import com.caoccao.qjs4j.core.*;
  * Based on ES2024 Map specification.
  */
 public final class MapConstructor {
-    private static final long MAX_SAFE_INTEGER = 9007199254740991L;
 
     /**
      * Map constructor call handler.
@@ -72,7 +71,7 @@ public final class MapConstructor {
         JSMap groups = context.createJSMap();
         long index = 0;
         while (true) {
-            if (index >= MAX_SAFE_INTEGER) {
+            if (index >= NumberPrototype.MAX_SAFE_INTEGER) {
                 closeIterator(context, iterator);
                 return context.throwTypeError("too many elements");
             }

@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.builtins.NumberPrototype;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
@@ -445,7 +446,7 @@ public final class JSTypeConversions {
         } else {
             v = (long) integerIndex;
         }
-        if (v < 0 || v > 0x1FFFFFFFFFFFFFL) { // MAX_SAFE_INTEGER = 2^53 - 1
+        if (v < 0 || v > NumberPrototype.MAX_SAFE_INTEGER) {
             throw new JSRangeErrorException("invalid array index");
         }
 
@@ -524,8 +525,7 @@ public final class JSTypeConversions {
             return 0;
         }
 
-        // Maximum safe integer in JavaScript: 2^53 - 1
-        return (long) Math.min(len, 0x1FFFFFFFFFFFFFL);
+        return (long) Math.min(len, NumberPrototype.MAX_SAFE_INTEGER);
     }
 
     /**
