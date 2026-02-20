@@ -696,7 +696,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
     public void testGetSymbolUnscopables() {
         // Normal case: get unscopables
         JSArray arr = new JSArray();
-        JSValue result = ArrayPrototype.getSymbolUnscopables(context, arr, new JSValue[]{});
+        JSValue result = ArrayPrototype.createUnscopablesObject(context);
 
         assertThat(result.isObject()).isTrue();
         JSObject unscopables = result.asObject().orElseThrow();

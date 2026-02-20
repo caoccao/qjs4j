@@ -209,6 +209,39 @@ public final class ArrayPrototype {
     }
 
     /**
+     * Array.prototype[Symbol.unscopables]
+     * ES2015 23.1.3.32
+     * Returns an object containing property names that are excluded from with statement binding.
+     * These are methods added in ES2015 and later that should not be included in with statements.
+     */
+    public static JSObject createUnscopablesObject(JSContext context) {
+        JSObject unscopables = context.createJSObject();
+        unscopables.setPrototype(null);
+
+        // ES2015 methods
+        unscopables.set("copyWithin", JSBoolean.TRUE);
+        unscopables.set("entries", JSBoolean.TRUE);
+        unscopables.set("fill", JSBoolean.TRUE);
+        unscopables.set("find", JSBoolean.TRUE);
+        unscopables.set("findIndex", JSBoolean.TRUE);
+        unscopables.set("flat", JSBoolean.TRUE);
+        unscopables.set("flatMap", JSBoolean.TRUE);
+        unscopables.set("includes", JSBoolean.TRUE);
+        unscopables.set("keys", JSBoolean.TRUE);
+        unscopables.set("values", JSBoolean.TRUE);
+
+        // ES2022+ methods
+        unscopables.set("at", JSBoolean.TRUE);
+        unscopables.set("findLast", JSBoolean.TRUE);
+        unscopables.set("findLastIndex", JSBoolean.TRUE);
+        unscopables.set("toReversed", JSBoolean.TRUE);
+        unscopables.set("toSorted", JSBoolean.TRUE);
+        unscopables.set("toSpliced", JSBoolean.TRUE);
+
+        return unscopables;
+    }
+
+    /**
      * Array.prototype.every(callbackFn[, thisArg])
      * Tests whether all elements pass the test.
      */
@@ -519,39 +552,6 @@ public final class ArrayPrototype {
             length = jsArray.getLength();
         }
         return JSNumber.of(length);
-    }
-
-    /**
-     * Array.prototype[Symbol.unscopables]
-     * ES2015 23.1.3.32
-     * Returns an object containing property names that are excluded from with statement binding.
-     * These are methods added in ES2015 and later that should not be included in with statements.
-     */
-    public static JSValue getSymbolUnscopables(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSObject unscopables = context.createJSObject();
-        unscopables.setPrototype(null);
-
-        // ES2015 methods
-        unscopables.set("copyWithin", JSBoolean.TRUE);
-        unscopables.set("entries", JSBoolean.TRUE);
-        unscopables.set("fill", JSBoolean.TRUE);
-        unscopables.set("find", JSBoolean.TRUE);
-        unscopables.set("findIndex", JSBoolean.TRUE);
-        unscopables.set("flat", JSBoolean.TRUE);
-        unscopables.set("flatMap", JSBoolean.TRUE);
-        unscopables.set("includes", JSBoolean.TRUE);
-        unscopables.set("keys", JSBoolean.TRUE);
-        unscopables.set("values", JSBoolean.TRUE);
-
-        // ES2022+ methods
-        unscopables.set("at", JSBoolean.TRUE);
-        unscopables.set("findLast", JSBoolean.TRUE);
-        unscopables.set("findLastIndex", JSBoolean.TRUE);
-        unscopables.set("toReversed", JSBoolean.TRUE);
-        unscopables.set("toSorted", JSBoolean.TRUE);
-        unscopables.set("toSpliced", JSBoolean.TRUE);
-
-        return unscopables;
     }
 
     /**

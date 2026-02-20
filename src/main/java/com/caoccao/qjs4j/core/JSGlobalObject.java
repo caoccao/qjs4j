@@ -669,7 +669,7 @@ public final class JSGlobalObject {
 
         // Array.prototype[Symbol.*]
         arrayPrototype.definePropertyWritableConfigurable(JSSymbol.ITERATOR, valuesFunction);
-        arrayPrototype.defineGetterConfigurable(JSSymbol.UNSCOPABLES, ArrayPrototype::getSymbolUnscopables);
+        arrayPrototype.definePropertyConfigurable(JSSymbol.UNSCOPABLES, ArrayPrototype.createUnscopablesObject(context));
 
         // Create Array constructor as a function
         JSNativeFunction arrayConstructor = new JSNativeFunction("Array", 1, ArrayConstructor::call, true);
