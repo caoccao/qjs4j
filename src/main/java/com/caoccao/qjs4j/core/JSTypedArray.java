@@ -413,7 +413,7 @@ public abstract class JSTypedArray extends JSObject {
                 return JSUndefined.INSTANCE;
             }
             int index = (int) numericIndex;
-            if (index != numericIndex || buffer.isDetached() || index >= getLength()) {
+            if (index != numericIndex || buffer.isDetached() || isOutOfBounds() || index >= getLength()) {
                 return JSUndefined.INSTANCE;
             }
             return getJSElement(index);

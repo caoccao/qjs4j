@@ -34,30 +34,45 @@ public final class ArrayPrototype {
      * Array.prototype.at(index)
      * ES2022 23.1.3.1
      * Returns the element at the specified index, supporting negative indices.
+     * Generic: works on any object with a length property (per spec uses ToObject + LengthOfArrayLike).
      */
     public static JSValue at(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
-            return context.throwTypeError("Array.prototype.at called on non-array");
+        // Step 1: Let O be ? ToObject(this value).
+        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        if (obj == null) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
-        if (args.length == 0) {
-            return JSUndefined.INSTANCE;
+        // Step 2: Let len be ? LengthOfArrayLike(O).
+        long length;
+        if (obj instanceof JSArray arr) {
+            length = arr.getLength();
+        } else {
+            JSValue lenVal = obj.get(PropertyKey.LENGTH, context);
+            if (context.hasPendingException()) return context.getPendingException();
+            length = JSTypeConversions.toLength(context, lenVal);
+            if (context.hasPendingException()) return context.getPendingException();
         }
 
-        long index = (long) JSTypeConversions.toInteger(context, args[0]);
-        long length = arr.getLength();
+        // Step 3: Let relativeIndex be ? ToIntegerOrInfinity(index).
+        long index = (long) JSTypeConversions.toInteger(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) return context.getPendingException();
 
-        // Handle negative indices
+        // Steps 4-5: Handle negative indices
         if (index < 0) {
             index = length + index;
         }
 
-        // Check bounds
+        // Step 6: Check bounds
         if (index < 0 || index >= length) {
             return JSUndefined.INSTANCE;
         }
 
-        return arr.get((int) index);
+        // Step 7: Return ? Get(O, ! ToString(k)).
+        if (obj instanceof JSArray arr) {
+            return arr.get((int) index);
+        }
+        return obj.get(PropertyKey.fromIndex((int) index), context);
     }
 
     /**

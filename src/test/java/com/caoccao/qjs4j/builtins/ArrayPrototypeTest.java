@@ -64,19 +64,20 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         result = ArrayPrototype.at(context, arr, new JSValue[]{new JSNumber(-4)});
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
-        // No arguments
+        // No arguments: ToIntegerOrInfinity(undefined) = 0, so returns arr[0]
         result = ArrayPrototype.at(context, arr, new JSValue[]{});
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
+        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray();
         result = ArrayPrototype.at(context, emptyArr, new JSValue[]{new JSNumber(0)});
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
-        // Edge case: at on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.at(context, nonArray, new JSValue[]{new JSNumber(0)}));
-        assertPendingException(context);
+        // Generic: at works on non-array objects via ToObject + LengthOfArrayLike
+        JSValue nonArray = new JSString("abc");
+        result = ArrayPrototype.at(context, nonArray, new JSValue[]{new JSNumber(0)});
+        assertThat(result).isInstanceOf(JSString.class);
+        assertThat(((JSString) result).value()).isEqualTo("a");
     }
 
     @Test

@@ -625,7 +625,7 @@ public final class JSGlobalObject {
         JSObject arrayPrototype = context.createJSObject();
         arrayPrototype.setArrayObject(true);
         JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, IteratorPrototype::arrayValues);
-        arrayPrototype.set("at", new JSNativeFunction("at", 1, ArrayPrototype::at));
+        arrayPrototype.definePropertyWritableConfigurable("at", new JSNativeFunction("at", 1, ArrayPrototype::at));
         arrayPrototype.set("concat", new JSNativeFunction("concat", 1, ArrayPrototype::concat));
         arrayPrototype.set("copyWithin", new JSNativeFunction("copyWithin", 2, ArrayPrototype::copyWithin));
         arrayPrototype.set("entries", new JSNativeFunction("entries", 0, IteratorPrototype::arrayEntries));
