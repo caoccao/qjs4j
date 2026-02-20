@@ -52,6 +52,18 @@ final class CompilerScope {
         return index;
     }
 
+    /**
+     * Declare a function parameter. Unlike declareLocal, always allocates a new
+     * local slot even for duplicate names (allowed in sloppy mode). The name
+     * mapping points to the last occurrence, matching QuickJS semantics where
+     * each formal parameter occupies its own slot.
+     */
+    int declareParameter(String name) {
+        int index = nextLocalIndex++;
+        locals.put(name, index);
+        return index;
+    }
+
     Integer getLocal(String name) {
         return locals.get(name);
     }

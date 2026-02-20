@@ -69,7 +69,7 @@ final class FunctionClassCompiler {
         }
 
         for (Identifier param : arrowExpr.params()) {
-            funcCtx.currentScope().declareLocal(param.name());
+            funcCtx.currentScope().declareParameter(param.name());
         }
 
         // Pre-declare 'arguments' as a local when the arrow function has parameter expressions
@@ -677,7 +677,7 @@ final class FunctionClassCompiler {
         }
 
         for (Identifier param : funcDecl.params()) {
-            funcCtx.currentScope().declareLocal(param.name());
+            funcCtx.currentScope().declareParameter(param.name());
         }
 
         // Emit default parameter initialization following QuickJS pattern
@@ -878,7 +878,7 @@ final class FunctionClassCompiler {
         }
 
         for (Identifier param : funcExpr.params()) {
-            funcCtx.currentScope().declareLocal(param.name());
+            funcCtx.currentScope().declareParameter(param.name());
         }
 
         // Emit default parameter initialization following QuickJS pattern
@@ -1023,7 +1023,7 @@ final class FunctionClassCompiler {
         methodCtx.isInAsyncFunction = funcExpr.isAsync();
 
         for (Identifier param : funcExpr.params()) {
-            methodCtx.currentScope().declareLocal(param.name());
+            methodCtx.currentScope().declareParameter(param.name());
         }
 
         // Emit default parameter initialization following QuickJS pattern
