@@ -36,10 +36,10 @@ public final class IteratorPrototype {
      * Returns an iterator of [index, value] pairs.
      */
     public static JSValue arrayEntries(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray) && !(thisArg instanceof JSArguments)) {
-            return context.throwTypeError("Array.prototype.entries called on non-array");
+        JSObject arrayLike = JSTypeConversions.toObject(context, thisArg);
+        if (arrayLike == null) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
-        JSObject arrayLike = (JSObject) thisArg;
 
         final long[] index = {0};
         return new JSIterator(context, () -> {
@@ -59,10 +59,10 @@ public final class IteratorPrototype {
      * Returns an iterator of array indices.
      */
     public static JSValue arrayKeys(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray) && !(thisArg instanceof JSArguments)) {
-            return context.throwTypeError("Array.prototype.keys called on non-array");
+        JSObject arrayLike = JSTypeConversions.toObject(context, thisArg);
+        if (arrayLike == null) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
-        JSObject arrayLike = (JSObject) thisArg;
 
         final long[] index = {0};
         return new JSIterator(context, () -> {
@@ -78,10 +78,10 @@ public final class IteratorPrototype {
      * Returns an iterator of array values.
      */
     public static JSValue arrayValues(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray) && !(thisArg instanceof JSArguments)) {
-            return context.throwTypeError("Array.prototype.values called on non-array");
+        JSObject arrayLike = JSTypeConversions.toObject(context, thisArg);
+        if (arrayLike == null) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
-        JSObject arrayLike = (JSObject) thisArg;
 
         final long[] index = {0};
         return new JSIterator(context, () -> {

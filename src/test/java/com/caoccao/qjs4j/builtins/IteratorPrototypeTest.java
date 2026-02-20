@@ -79,6 +79,29 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    void testArrayEntriesGeneric() {
+        // Generic: called on plain object with length
+        assertStringWithJavet(
+                "(() => { var it = Array.prototype.entries.call({0: 'a', 1: 'b', length: 2}); var r = it.next(); return r.value[0] + ':' + r.value[1]; })()",
+                "(() => { var it = Array.prototype.entries.call({0: 'a', 1: 'b', length: 2}); it.next(); var r = it.next(); return r.value[0] + ':' + r.value[1]; })()",
+                "(() => { var it = Array.prototype.entries.call({0: 'a', 1: 'b', length: 2}); it.next(); it.next(); return String(it.next().done); })()");
+        // Generic: called on string (ToObject wraps to String object)
+        assertStringWithJavet(
+                "(() => { var it = Array.prototype.entries.call('ab'); var r = it.next(); return r.value[0] + ':' + r.value[1]; })()",
+                "(() => { var it = Array.prototype.entries.call('ab'); it.next(); var r = it.next(); return r.value[0] + ':' + r.value[1]; })()");
+        // Generic: empty object (no length → 0)
+        assertBooleanWithJavet(
+                "Array.prototype.entries.call({}).next().done");
+        // Generic: boolean primitive (no length → 0)
+        assertBooleanWithJavet(
+                "Array.prototype.entries.call(true).next().done");
+        // Error: null/undefined throws TypeError
+        assertErrorWithJavet(
+                "Array.prototype.entries.call(null)",
+                "Array.prototype.entries.call(undefined)");
+    }
+
+    @Test
     public void testArrayKeys() {
         // Create test array
         JSArray array = new JSArray();
@@ -102,13 +125,28 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
-        // Edge case: called on non-array
+        // Edge case: called on plain object (generic, works via ToObject)
         result = IteratorPrototype.arrayKeys(context, new JSObject(), new JSValue[]{});
-        assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
-                    assertThat(name.value()).isEqualTo("TypeError"));
-        });
-        assertThat(context.getPendingException()).isNotNull();
+        JSIterator keysIter = result.asIterator().orElseThrow();
+        iteratorResult = keysIter.next();
+        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+    }
+
+    @Test
+    void testArrayKeysGeneric() {
+        // Generic: called on plain object with length
+        assertStringWithJavet(
+                "(() => { var it = Array.prototype.keys.call({length: 3}); return [it.next().value, it.next().value, it.next().value].join(','); })()",
+                "(() => { var it = Array.prototype.keys.call({length: 3}); it.next(); it.next(); it.next(); return String(it.next().done); })()");
+        // Generic: called on string
+        assertStringWithJavet(
+                "(() => { var it = Array.prototype.keys.call('hi'); return [it.next().value, it.next().value].join(','); })()");
+        // Generic: empty object
+        assertBooleanWithJavet(
+                "Array.prototype.keys.call({}).next().done");
+        // Error: null throws TypeError
+        assertErrorWithJavet(
+                "Array.prototype.keys.call(null)");
     }
 
     @Test
@@ -140,13 +178,35 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
-        // Edge case: called on non-array
-        result = IteratorPrototype.arrayValues(context, new JSString("not an array"), new JSValue[]{});
-        assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
-                    assertThat(name.value()).isEqualTo("TypeError"));
-        });
-        assertThat(context.getPendingException()).isNotNull();
+        // Edge case: called on string (generic, works via ToObject on string primitive)
+        result = IteratorPrototype.arrayValues(context, new JSString("hi"), new JSValue[]{});
+        JSIterator valIter = result.asIterator().orElseThrow();
+        iteratorResult = valIter.next();
+        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class, s -> assertThat(s.value()).isEqualTo("h"));
+        iteratorResult = valIter.next();
+        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class, s -> assertThat(s.value()).isEqualTo("i"));
+        iteratorResult = valIter.next();
+        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+    }
+
+    @Test
+    void testArrayValuesGeneric() {
+        // Generic: called on plain object with length
+        assertStringWithJavet(
+                "(() => { var it = Array.prototype.values.call({0: 'x', 1: 'y', length: 2}); return [it.next().value, it.next().value].join(','); })()",
+                "(() => { var it = Array.prototype.values.call({0: 'x', 1: 'y', length: 2}); it.next(); it.next(); return String(it.next().done); })()");
+        // Generic: called on string (iterates characters)
+        assertStringWithJavet(
+                "(() => { var it = Array.prototype.values.call('ab'); return [it.next().value, it.next().value].join(','); })()");
+        // Generic: missing indices return undefined
+        assertStringWithJavet(
+                "(() => { var it = Array.prototype.values.call({length: 2}); return String(it.next().value); })()");
+        // Generic: number primitive (no length → 0)
+        assertBooleanWithJavet(
+                "Array.prototype.values.call(42).next().done");
+        // Error: undefined throws TypeError
+        assertErrorWithJavet(
+                "Array.prototype.values.call(undefined)");
     }
 
     @Test

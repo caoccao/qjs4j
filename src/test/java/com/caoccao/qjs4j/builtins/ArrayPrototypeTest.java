@@ -218,10 +218,52 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.every(context, arr, new JSValue[]{}));
         assertPendingException(context);
 
-        // Edge case: every on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.every(context, nonArray, new JSValue[]{isEvenFn}));
-        assertPendingException(context);
+        // Edge case: every on non-array (generic, works on any object via ToObject)
+        JSValue nonArray = new JSString("ab");
+        JSFunction isStringFn = createTestFunction(a ->
+                a[0] instanceof JSString ? JSBoolean.TRUE : JSBoolean.FALSE);
+        result = ArrayPrototype.every(context, nonArray, new JSValue[]{isStringFn});
+        assertThat(result).isEqualTo(JSBoolean.TRUE);
+    }
+
+    @Test
+    public void testEveryGeneric() {
+        // Generic: called on plain object with length
+        assertBooleanWithJavet(
+                "Array.prototype.every.call({0: 2, 1: 4, length: 2}, v => v % 2 === 0)",
+                "Array.prototype.every.call({0: 1, 1: 2, length: 2}, v => v > 0)");
+        // Generic: not all pass on plain object
+        assertBooleanWithJavet(
+                "Array.prototype.every.call({0: 2, 1: 3, length: 2}, v => v % 2 === 0)");
+        // Generic: called on string primitive (ToObject wraps to String object)
+        assertBooleanWithJavet(
+                "Array.prototype.every.call('abc', v => typeof v === 'string')",
+                "Array.prototype.every.call('', v => false)");
+        // Generic: called on boolean primitive
+        assertBooleanWithJavet(
+                "Array.prototype.every.call(true, v => false)");
+        // Generic: called on number primitive
+        assertBooleanWithJavet(
+                "Array.prototype.every.call(42, v => false)");
+        // Generic: callback receives correct arguments (element, index, object)
+        assertBooleanWithJavet(
+                "Array.prototype.every.call({0: 'a', length: 1}, function(v, i, o) { return typeof o === 'object' && o.length === 1; })");
+        // Generic: callback thisArg is respected
+        assertBooleanWithJavet(
+                "Array.prototype.every.call({0: 1, length: 1}, function(v) { return this.x === 10; }, {x: 10})");
+        // Generic: empty object (length 0) is vacuously true
+        assertBooleanWithJavet(
+                "Array.prototype.every.call({length: 0}, v => false)");
+        // Generic: object with no length property (length coerces to 0)
+        assertBooleanWithJavet(
+                "Array.prototype.every.call({}, v => false)");
+        // Generic: Math object
+        assertStringWithJavet(
+                "(() => { Math.length = 1; Math[0] = 1; var r = Array.prototype.every.call(Math, function(v, i, o) { return '[object Math]' !== Object.prototype.toString.call(o); }); delete Math[0]; delete Math.length; return String(r); })()");
+        // Error: null/undefined throws TypeError
+        assertErrorWithJavet(
+                "Array.prototype.every.call(null, v => true)",
+                "Array.prototype.every.call(undefined, v => true)");
     }
 
     @Test

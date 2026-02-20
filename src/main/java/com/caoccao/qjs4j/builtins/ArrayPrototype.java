@@ -31,6 +31,63 @@ import java.util.List;
 public final class ArrayPrototype {
 
     /**
+     * ES2024 7.3.34 ArraySpeciesCreate(originalArray, length).
+     * Following QuickJS JS_ArraySpeciesCreate.
+     *
+     * @return the new array, or null if an exception was set on context
+     */
+    static JSValue arraySpeciesCreate(JSContext context, JSObject originalArray, long length) {
+        // Step 3: If IsArray(originalArray) is false, return ArrayCreate(length)
+        int isArr = JSTypeChecking.isArray(context, originalArray);
+        if (isArr < 0) {
+            return null;
+        }
+        if (isArr == 0) {
+            return context.createJSArray((int) Math.min(length, Integer.MAX_VALUE));
+        }
+
+        // Step 4: Let C be ? Get(originalArray, "constructor")
+        JSValue ctor = originalArray.get(PropertyKey.CONSTRUCTOR, context);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
+        // Step 5: If IsConstructor(C) is true, cross-realm check
+        if (JSTypeChecking.isConstructor(ctor)) {
+            // Simplified: single-realm engine, skip cross-realm check
+            // QuickJS sets C = undefined if constructor is from a different realm
+        }
+
+        // Step 6: If Type(C) is Object, get Symbol.species
+        if (ctor instanceof JSObject ctorObj) {
+            ctor = ctorObj.get(PropertyKey.SYMBOL_SPECIES, context);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (ctor instanceof JSNull) {
+                ctor = JSUndefined.INSTANCE;
+            }
+        }
+
+        // Step 7: If C is undefined, return ArrayCreate(length)
+        if (ctor instanceof JSUndefined) {
+            return context.createJSArray((int) Math.min(length, Integer.MAX_VALUE));
+        }
+
+        // Step 8: If IsConstructor(C) is false, throw a TypeError exception
+        if (!JSTypeChecking.isConstructor(ctor)) {
+            return context.throwTypeError("Species constructor is not a constructor");
+        }
+
+        // Step 9: Return ? Construct(C, « length »)
+        JSValue result = JSReflectObject.constructSimple(context, ctor, new JSValue[]{JSNumber.of(length)});
+        if (context.hasPendingException()) {
+            return null;
+        }
+        return result;
+    }
+
+    /**
      * Array.prototype.at(index)
      * ES2022 23.1.3.1
      * Returns the element at the specified index, supporting negative indices.
@@ -296,21 +353,26 @@ public final class ArrayPrototype {
      * Tests whether all elements pass the test.
      */
     public static JSValue every(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
-            return context.throwTypeError("Array.prototype.every called on non-array");
+        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
+            return context.throwTypeError("Array.prototype.every called on null or undefined");
         }
+        JSObject obj = toObjectChecked(context, thisArg);
+        if (obj == null) return context.getPendingException();
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
         }
 
         JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        long length = arr.getLength();
+        long length = lengthOfArrayLike(context, obj);
+        if (context.hasPendingException()) return context.getPendingException();
 
         for (long i = 0; i < length; i++) {
-            JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
+            JSValue element = getElement(context, obj, i);
+            if (context.hasPendingException()) return context.getPendingException();
+            JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
+            if (context.hasPendingException()) return context.getPendingException();
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.FALSE) {
                 return JSBoolean.FALSE;
@@ -592,6 +654,17 @@ public final class ArrayPrototype {
     }
 
     /**
+     * Get element at index from an array-like object.
+     * Uses JSArray fast path for actual arrays.
+     */
+    static JSValue getElement(JSContext context, JSObject obj, long index) {
+        if (obj instanceof JSArray arr && index <= Integer.MAX_VALUE) {
+            return arr.get((int) index);
+        }
+        return obj.get(PropertyKey.fromString(Long.toString(index)), context);
+    }
+
+    /**
      * get Array.prototype.length
      * Returns the number of elements in the array.
      * This is a getter for the length property.
@@ -690,63 +763,6 @@ public final class ArrayPrototype {
     }
 
     /**
-     * ES2024 7.3.34 ArraySpeciesCreate(originalArray, length).
-     * Following QuickJS JS_ArraySpeciesCreate.
-     *
-     * @return the new array, or null if an exception was set on context
-     */
-    static JSValue arraySpeciesCreate(JSContext context, JSObject originalArray, long length) {
-        // Step 3: If IsArray(originalArray) is false, return ArrayCreate(length)
-        int isArr = JSTypeChecking.isArray(context, originalArray);
-        if (isArr < 0) {
-            return null;
-        }
-        if (isArr == 0) {
-            return context.createJSArray((int) Math.min(length, Integer.MAX_VALUE));
-        }
-
-        // Step 4: Let C be ? Get(originalArray, "constructor")
-        JSValue ctor = originalArray.get(PropertyKey.CONSTRUCTOR, context);
-        if (context.hasPendingException()) {
-            return null;
-        }
-
-        // Step 5: If IsConstructor(C) is true, cross-realm check
-        if (JSTypeChecking.isConstructor(ctor)) {
-            // Simplified: single-realm engine, skip cross-realm check
-            // QuickJS sets C = undefined if constructor is from a different realm
-        }
-
-        // Step 6: If Type(C) is Object, get Symbol.species
-        if (ctor instanceof JSObject ctorObj) {
-            ctor = ctorObj.get(PropertyKey.SYMBOL_SPECIES, context);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (ctor instanceof JSNull) {
-                ctor = JSUndefined.INSTANCE;
-            }
-        }
-
-        // Step 7: If C is undefined, return ArrayCreate(length)
-        if (ctor instanceof JSUndefined) {
-            return context.createJSArray((int) Math.min(length, Integer.MAX_VALUE));
-        }
-
-        // Step 8: If IsConstructor(C) is false, throw a TypeError exception
-        if (!JSTypeChecking.isConstructor(ctor)) {
-            return context.throwTypeError("Species constructor is not a constructor");
-        }
-
-        // Step 9: Return ? Construct(C, « length »)
-        JSValue result = JSReflectObject.constructSimple(context, ctor, new JSValue[]{JSNumber.of(length)});
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return result;
-    }
-
-    /**
      * IsConcatSpreadable per ES2024 23.1.3.1 step 4a.
      * Following QuickJS JS_isConcatSpreadable.
      */
@@ -839,6 +855,21 @@ public final class ArrayPrototype {
         }
 
         return JSNumber.of(-1);
+    }
+
+    /**
+     * LengthOfArrayLike(obj) — returns the length of an array-like object.
+     * Uses JSArray.getLength() fast path for actual arrays.
+     */
+    static long lengthOfArrayLike(JSContext context, JSObject obj) {
+        if (obj instanceof JSArray arr) {
+            return arr.getLength();
+        }
+        JSValue lenVal = obj.get(PropertyKey.LENGTH, context);
+        if (context.hasPendingException()) return -1;
+        long len = JSTypeConversions.toLength(context, lenVal);
+        if (context.hasPendingException()) return -1;
+        return len;
     }
 
     /**
@@ -1195,6 +1226,19 @@ public final class ArrayPrototype {
         }
 
         return new JSString(sb.toString());
+    }
+
+    /**
+     * ToObject + LengthOfArrayLike helper.
+     * Converts thisArg to an object and gets its length.
+     * Returns null if thisArg is null/undefined (sets pending exception).
+     */
+    static JSObject toObjectChecked(JSContext context, JSValue thisArg) {
+        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        if (obj == null) {
+            context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        return obj;
     }
 
     /**
