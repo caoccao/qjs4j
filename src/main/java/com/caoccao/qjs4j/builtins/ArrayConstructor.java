@@ -665,10 +665,47 @@ public final class ArrayConstructor {
      * Creates a new Array instance with a variable number of arguments.
      */
     public static JSValue of(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSArray array = context.createJSArray();
+        // Step 1: Let len be the number of arguments passed.
+        int len = args.length;
+        JSObject array;
 
-        for (JSValue item : args) {
-            array.push(item);
+        // Step 2-3: If this is a constructor, construct with len; otherwise create a new Array.
+        if (JSTypeChecking.isConstructor(thisArg)) {
+            JSValue constructed = JSReflectObject.constructSimple(context, thisArg, new JSValue[]{JSNumber.of(len)});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (!(constructed instanceof JSObject constructedObject)) {
+                return context.throwTypeError("Array.of constructor must return an object");
+            }
+            array = constructedObject;
+        } else {
+            array = context.createJSArray();
+        }
+
+        // Step 4-5: CreateDataPropertyOrThrow for each item.
+        for (int index = 0; index < len; index++) {
+            PropertyDescriptor descriptor = PropertyDescriptor.dataDescriptor(args[index], true, true, true);
+            if (!array.defineOwnProperty(PropertyKey.fromIndex(index), descriptor, context)) {
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                return context.throwTypeError("Cannot define property " + index + " on result object");
+            }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+
+        // Step 6: Set length with Throw=true semantics.
+        if (!array.setWithResult(PropertyKey.LENGTH, JSNumber.of(len), context)) {
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            return context.throwTypeError("Cannot set property length of result object");
+        }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
 
         return array;
