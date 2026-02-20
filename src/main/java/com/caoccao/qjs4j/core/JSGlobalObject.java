@@ -668,7 +668,7 @@ public final class JSGlobalObject {
         arrayPrototype.definePropertyReadonlyNonConfigurable("length", JSNumber.of(0));
 
         // Array.prototype[Symbol.*]
-        arrayPrototype.set(PropertyKey.SYMBOL_ITERATOR, valuesFunction);
+        arrayPrototype.definePropertyWritableConfigurable(JSSymbol.ITERATOR, valuesFunction);
         arrayPrototype.defineGetterConfigurable(JSSymbol.UNSCOPABLES, ArrayPrototype::getSymbolUnscopables);
 
         // Create Array constructor as a function
