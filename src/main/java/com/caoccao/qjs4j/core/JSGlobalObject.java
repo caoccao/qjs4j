@@ -1435,6 +1435,16 @@ public final class JSGlobalObject {
                 PropertyKey.SYMBOL_TO_STRING_TAG,
                 PropertyDescriptor.accessorDescriptor(toStringTagGetter, toStringTagSetter, false, true));
 
+        // Create shared iterator-type-specific prototypes inheriting from Iterator.prototype
+        for (String tag : new String[]{"Array Iterator", "Map Iterator", "Set Iterator", "String Iterator", "Iterator Helper"}) {
+            JSObject proto = new JSObject();
+            proto.setPrototype(iteratorPrototype);
+            proto.defineProperty(
+                    PropertyKey.SYMBOL_TO_STRING_TAG,
+                    PropertyDescriptor.dataDescriptor(new JSString(tag), false, false, true));
+            context.registerIteratorPrototype(tag, proto);
+        }
+
         global.definePropertyWritableConfigurable(JSIterator.NAME, iteratorConstructor);
     }
 

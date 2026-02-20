@@ -55,6 +55,8 @@ public final class JSContext implements AutoCloseable {
     private final Map<String, JSModule> moduleCache;
     private final JSRuntime runtime;
     private final VirtualMachine virtualMachine;
+    // Shared iterator prototypes by toStringTag (e.g., "Array Iterator" → %ArrayIteratorPrototype%)
+    private final Map<String, JSObject> iteratorPrototypes;
     // Internal constructor references (not exposed in global scope)
     private JSObject asyncFunctionConstructor;
     // Async generator prototype chain (not exposed in global scope)
@@ -82,6 +84,7 @@ public final class JSContext implements AutoCloseable {
         this.globalLexDeclarations = new HashSet<>();
         this.globalVarDeclarations = new HashSet<>();
         this.inCatchHandler = false;
+        this.iteratorPrototypes = new HashMap<>();
         this.jsGlobalObject = new JSGlobalObject();
         this.maxStackDepth = DEFAULT_MAX_STACK_DEPTH;
         this.microtaskQueue = new JSMicrotaskQueue(this);
@@ -856,6 +859,10 @@ public final class JSContext implements AutoCloseable {
         return globalObject;
     }
 
+    public JSObject getIteratorPrototype(String tag) {
+        return iteratorPrototypes.get(tag);
+    }
+
     public JSGlobalObject getJSGlobalObject() {
         return jsGlobalObject;
     }
@@ -994,6 +1001,10 @@ public final class JSContext implements AutoCloseable {
     /**
      * Register a module in the cache.
      */
+    public void registerIteratorPrototype(String tag, JSObject prototype) {
+        iteratorPrototypes.put(tag, prototype);
+    }
+
     public void registerModule(String specifier, JSModule module) {
         moduleCache.put(specifier, module);
     }

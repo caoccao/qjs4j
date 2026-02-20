@@ -51,7 +51,14 @@ public class JSIterator extends JSObject {
         this.context = context;
         this.iteratorFunction = iteratorFunction;
         this.exhausted = false;
-        context.transferPrototype(this, NAME);
+
+        // Use shared iterator-type-specific prototype if available
+        JSObject iterProto = (toStringTag != null) ? context.getIteratorPrototype(toStringTag) : null;
+        if (iterProto != null) {
+            this.setPrototype(iterProto);
+        } else {
+            context.transferPrototype(this, NAME);
+        }
 
         if (defineOwnNext) {
             // Set up 'next' as an own property for iterator kinds that do not
@@ -69,7 +76,8 @@ public class JSIterator extends JSObject {
         JSNativeFunction iteratorMethod = new JSNativeFunction("@@iterator", 0, (childContext, thisArg, args) -> thisArg);
         definePropertyWritableConfigurable(JSSymbol.ITERATOR, iteratorMethod);
 
-        if (toStringTag != null) {
+        // Only set own toStringTag if no shared prototype provides it
+        if (toStringTag != null && iterProto == null) {
             defineProperty(
                     PropertyKey.SYMBOL_TO_STRING_TAG,
                     PropertyDescriptor.dataDescriptor(new JSString(toStringTag), false, false, true));

@@ -267,12 +267,19 @@ public final class IteratorPrototype {
             JSNativeFunction returnFunction,
             String toStringTag) {
         JSObject iteratorObject = context.createJSObject();
-        context.transferPrototype(iteratorObject, JSIterator.NAME);
+        // Use shared iterator-type-specific prototype if available
+        JSObject iterProto = (toStringTag != null) ? context.getIteratorPrototype(toStringTag) : null;
+        if (iterProto != null) {
+            iteratorObject.setPrototype(iterProto);
+        } else {
+            context.transferPrototype(iteratorObject, JSIterator.NAME);
+        }
         iteratorObject.definePropertyWritableConfigurable("next", nextFunction);
         if (returnFunction != null) {
             iteratorObject.definePropertyWritableConfigurable("return", returnFunction);
         }
-        if (toStringTag != null) {
+        // Only set own toStringTag if no shared prototype provides it
+        if (toStringTag != null && iterProto == null) {
             iteratorObject.defineProperty(
                     PropertyKey.SYMBOL_TO_STRING_TAG,
                     PropertyDescriptor.dataDescriptor(new JSString(toStringTag), false, false, true));
