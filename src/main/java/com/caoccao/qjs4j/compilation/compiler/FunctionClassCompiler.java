@@ -32,10 +32,12 @@ import java.util.*;
 final class FunctionClassCompiler {
     private final CompilerContext ctx;
     private final CompilerDelegates delegates;
+    private final FunctionClassFieldCompiler fieldCompiler;
 
     FunctionClassCompiler(CompilerContext ctx, CompilerDelegates delegates) {
         this.ctx = ctx;
         this.delegates = delegates;
+        fieldCompiler = new FunctionClassFieldCompiler(ctx, delegates);
     }
 
     void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
@@ -628,27 +630,7 @@ final class FunctionClassCompiler {
     void compileComputedFieldNameCache(
             ClassDeclaration.PropertyDefinition field,
             IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
-        JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
-        if (computedFieldSymbol == null) {
-            throw new JSCompilerException("Computed field key symbol not found");
-        }
-
-        // constructor proto -> proto constructor
-        ctx.emitter.emitOpcode(Opcode.SWAP);
-        // proto constructor -> proto constructor constructor
-        ctx.emitter.emitOpcode(Opcode.DUP);
-        // proto constructor constructor -> proto constructor constructor hiddenSymbol
-        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
-        // proto constructor constructor hiddenSymbol -> proto constructor constructor hiddenSymbol rawKey
-        delegates.expressions.compileExpression(field.key());
-        // Convert once to property key (QuickJS OP_to_propkey behavior)
-        ctx.emitter.emitOpcode(Opcode.TO_PROPKEY);
-        // proto constructor constructor hiddenSymbol key -> proto constructor constructor
-        ctx.emitter.emitOpcode(Opcode.DEFINE_PROP);
-        // Drop duplicated constructor
-        ctx.emitter.emitOpcode(Opcode.DROP);
-        // Restore canonical order: constructor proto
-        ctx.emitter.emitOpcode(Opcode.SWAP);
+        fieldCompiler.compileComputedFieldNameCache(field, computedFieldSymbols);
     }
 
     /**
@@ -659,82 +641,7 @@ final class FunctionClassCompiler {
     void compileFieldInitialization(List<ClassDeclaration.PropertyDefinition> fields,
                                     Map<String, JSSymbol> privateSymbols,
                                     IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
-        for (ClassDeclaration.PropertyDefinition field : fields) {
-            boolean isPrivate = field.isPrivate();
-
-            // Push 'this' onto stack
-            ctx.emitter.emitOpcode(Opcode.PUSH_THIS);
-
-            if (isPrivate) {
-                if (!(field.key() instanceof PrivateIdentifier privateId)) {
-                    throw new JSCompilerException("Invalid private field key");
-                }
-                String fieldName = privateId.name();
-
-                // Compile initializer or emit undefined
-                if (field.value() != null) {
-                    delegates.expressions.compileExpression(field.value());
-                } else {
-                    ctx.emitter.emitOpcode(Opcode.UNDEFINED);
-                }
-
-                // For private fields, we need to push the private symbol
-                // Stack: this value
-                // Need: this symbol value (for DEFINE_PRIVATE_FIELD)
-
-                // Get the symbol from the map and emit as constant
-                JSSymbol symbol = privateSymbols.get(fieldName);
-                if (symbol != null) {
-                    ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                    // Stack: this value symbol
-
-                    // DEFINE_PRIVATE_FIELD expects: obj symbol value
-                    // We have: this value symbol
-                    // Need to rotate stack: this symbol value
-                    ctx.emitter.emitOpcode(Opcode.SWAP);  // Stack: this symbol value
-
-                    // Emit DEFINE_PRIVATE_FIELD
-                    ctx.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
-                    // Stack: this (DEFINE_PRIVATE_FIELD pops symbol and value, modifies this, pushes this back)
-                } else {
-                    // Error: private field symbol not found - skip this field
-                    ctx.emitter.emitOpcode(Opcode.DROP);  // Drop value
-                    ctx.emitter.emitOpcode(Opcode.DROP);  // Drop this
-                    continue;
-                }
-            } else {
-                // Public field
-                if (field.computed()) {
-                    // Stack: this
-                    JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
-                    if (computedFieldSymbol == null) {
-                        throw new JSCompilerException("Computed field key not found");
-                    }
-                    // Load the precomputed key from the current constructor function:
-                    // Stack: this func symbol -> this key
-                    ctx.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                    ctx.emitter.emitU8(2); // SPECIAL_OBJECT_THIS_FUNC
-                    ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
-                    ctx.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-                } else {
-                    delegates.emitHelpers.emitNonComputedPublicFieldKey(field.key());
-                }
-
-                // Compile initializer or emit undefined
-                if (field.value() != null) {
-                    delegates.expressions.compileExpression(field.value());
-                } else {
-                    ctx.emitter.emitOpcode(Opcode.UNDEFINED);
-                }
-
-                // Stack: this key value
-                ctx.emitter.emitOpcode(Opcode.DEFINE_PROP);
-                // Stack: this
-            }
-
-            // Drop 'this' from stack
-            ctx.emitter.emitOpcode(Opcode.DROP);
-        }
+        fieldCompiler.compileFieldInitialization(fields, privateSymbols, computedFieldSymbols);
     }
 
     void compileFunctionDeclaration(FunctionDeclaration funcDecl) {
