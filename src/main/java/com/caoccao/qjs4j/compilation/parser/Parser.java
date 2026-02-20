@@ -16,13 +16,13 @@
 
 package com.caoccao.qjs4j.compilation.parser;
 
-import com.caoccao.qjs4j.compilation.Lexer;
-import com.caoccao.qjs4j.compilation.Token;
-import com.caoccao.qjs4j.compilation.TokenType;
 import com.caoccao.qjs4j.compilation.ast.Expression;
 import com.caoccao.qjs4j.compilation.ast.Program;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.compilation.ast.Statement;
+import com.caoccao.qjs4j.compilation.lexer.Lexer;
+import com.caoccao.qjs4j.compilation.lexer.Token;
+import com.caoccao.qjs4j.compilation.lexer.TokenType;
 
 import java.util.ArrayList;
 import java.util.List;

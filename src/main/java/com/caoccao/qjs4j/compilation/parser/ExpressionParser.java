@@ -16,12 +16,12 @@
 
 package com.caoccao.qjs4j.compilation.parser;
 
-import com.caoccao.qjs4j.compilation.Lexer;
-import com.caoccao.qjs4j.compilation.Token;
-import com.caoccao.qjs4j.compilation.TokenType;
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.ast.BinaryExpression.BinaryOperator;
 import com.caoccao.qjs4j.compilation.ast.UnaryExpression.UnaryOperator;
+import com.caoccao.qjs4j.compilation.lexer.LexerState;
+import com.caoccao.qjs4j.compilation.lexer.Token;
+import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.regexp.RegExpLiteralValue;
 
@@ -62,7 +62,7 @@ record ExpressionParser(ParserContext ctx, ParserDelegates delegates) {
             Token savedCurrent = ctx.currentToken;
             Token savedNext = ctx.nextToken;
             int savedPrevLine = ctx.previousTokenLine;
-            Lexer.LexerState savedLexer = ctx.lexer.saveState();
+            LexerState savedLexer = ctx.lexer.saveState();
 
             ctx.advance(); // consume 'async'
 

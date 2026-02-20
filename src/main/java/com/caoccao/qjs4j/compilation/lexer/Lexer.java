@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.compilation;
+package com.caoccao.qjs4j.compilation.lexer;
 
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.unicode.UnicodeData;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -35,62 +34,20 @@ import java.util.Map;
  * - Template literals (basic support)
  */
 public final class Lexer {
-    // Keyword mapping
-    private static final Map<String, TokenType> KEYWORDS = new HashMap<>();
+    private static final Map<String, TokenType> KEYWORDS = LexerKeywords.KEYWORDS;
 
-    static {
-        KEYWORDS.put("as", TokenType.AS);
-        KEYWORDS.put("async", TokenType.ASYNC);
-        KEYWORDS.put("await", TokenType.AWAIT);
-        KEYWORDS.put("break", TokenType.BREAK);
-        KEYWORDS.put("case", TokenType.CASE);
-        KEYWORDS.put("catch", TokenType.CATCH);
-        KEYWORDS.put("class", TokenType.CLASS);
-        KEYWORDS.put("const", TokenType.CONST);
-        KEYWORDS.put("continue", TokenType.CONTINUE);
-        KEYWORDS.put("default", TokenType.DEFAULT);
-        KEYWORDS.put("delete", TokenType.DELETE);
-        KEYWORDS.put("do", TokenType.DO);
-        KEYWORDS.put("else", TokenType.ELSE);
-        KEYWORDS.put("export", TokenType.EXPORT);
-        KEYWORDS.put("extends", TokenType.EXTENDS);
-        KEYWORDS.put("false", TokenType.FALSE);
-        KEYWORDS.put("finally", TokenType.FINALLY);
-        KEYWORDS.put("for", TokenType.FOR);
-        KEYWORDS.put("from", TokenType.FROM);
-        KEYWORDS.put("function", TokenType.FUNCTION);
-        KEYWORDS.put("if", TokenType.IF);
-        KEYWORDS.put("import", TokenType.IMPORT);
-        KEYWORDS.put("in", TokenType.IN);
-        KEYWORDS.put("instanceof", TokenType.INSTANCEOF);
-        KEYWORDS.put("let", TokenType.LET);
-        KEYWORDS.put("new", TokenType.NEW);
-        KEYWORDS.put("null", TokenType.NULL);
-        KEYWORDS.put("of", TokenType.OF);
-        KEYWORDS.put("return", TokenType.RETURN);
-        KEYWORDS.put("super", TokenType.SUPER);
-        KEYWORDS.put("switch", TokenType.SWITCH);
-        KEYWORDS.put("this", TokenType.THIS);
-        KEYWORDS.put("throw", TokenType.THROW);
-        KEYWORDS.put("true", TokenType.TRUE);
-        KEYWORDS.put("try", TokenType.TRY);
-        KEYWORDS.put("typeof", TokenType.TYPEOF);
-        KEYWORDS.put("var", TokenType.VAR);
-        KEYWORDS.put("void", TokenType.VOID);
-        KEYWORDS.put("while", TokenType.WHILE);
-        KEYWORDS.put("yield", TokenType.YIELD);
-    }
-
-    private final String source;
-    private int column;
+    final String source;
+    private final LexerTemplateScanner templateScanner;
+    int column;
+    int line;
+    int position;
     private TokenType lastTokenType;
-    private int line;
     private Token lookahead;
-    private int position;
     private boolean strictMode;
 
     public Lexer(String source) {
         this.source = source;
+        this.templateScanner = new LexerTemplateScanner(this);
         this.position = 0;
         this.line = 1;
         this.column = 1;
@@ -103,7 +60,7 @@ public final class Lexer {
         return c == '\n' || c == '\r' || c == '\u2028' || c == '\u2029';
     }
 
-    private char advance() {
+    char advance() {
         char c = source.charAt(position);
         position++;
         column++;
@@ -153,7 +110,7 @@ public final class Lexer {
         return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
     }
 
-    private boolean isAtEnd() {
+    boolean isAtEnd() {
         return position >= source.length();
     }
 
@@ -161,7 +118,7 @@ public final class Lexer {
         return Character.digit(c, radix) >= 0;
     }
 
-    private boolean isIdentifierPart(char c) {
+    boolean isIdentifierPart(char c) {
         return Character.isLetterOrDigit(c) || c == '_' || c == '$' ||
                 UnicodeData.isIdentifierPart(c);
     }
@@ -175,7 +132,7 @@ public final class Lexer {
 
     // Core scanning logic
 
-    private boolean isIdentifierStart(char c) {
+    boolean isIdentifierStart(char c) {
         return Character.isLetter(c) || c == '_' || c == '$' ||
                 UnicodeData.isIdentifierStart(c);
     }
@@ -269,7 +226,7 @@ public final class Lexer {
         return codeUnit;
     }
 
-    private char peek() {
+    char peek() {
         if (isAtEnd()) return '\0';
         return source.charAt(position);
     }
@@ -298,12 +255,12 @@ public final class Lexer {
     }
 
     public void restoreState(LexerState state) {
-        this.position = state.position;
-        this.line = state.line;
-        this.column = state.column;
-        this.lastTokenType = state.lastTokenType;
-        this.lookahead = state.lookahead;
-        this.strictMode = state.strictMode;
+        this.position = state.position();
+        this.line = state.line();
+        this.column = state.column();
+        this.lastTokenType = state.lastTokenType();
+        this.lookahead = state.lookahead();
+        this.strictMode = state.strictMode();
     }
 
     public LexerState saveState() {
@@ -789,315 +746,7 @@ public final class Lexer {
     }
 
     private Token scanTemplate(int startPos, int startLine, int startColumn) {
-        // Store the complete template literal including ${...} expressions.
-        StringBuilder value = new StringBuilder();
-        boolean terminated = false;
-
-        while (!isAtEnd()) {
-            char c = peek();
-            if (c == '`') {
-                advance(); // consume closing backtick
-                terminated = true;
-                break;
-            }
-            if (c == '\\') {
-                value.append(advance());
-                if (!isAtEnd()) {
-                    value.append(advance());
-                }
-                continue;
-            }
-            if (c == '$' && position + 1 < source.length() && source.charAt(position + 1) == '{') {
-                value.append(advance()); // $
-                value.append(advance()); // {
-                scanTemplateExpression(value);
-                continue;
-            }
-            value.append(advance());
-        }
-
-        if (!terminated) {
-            throw new JSSyntaxErrorException("Invalid or unexpected token");
-        }
-
-        return new Token(TokenType.TEMPLATE, value.toString(), startLine, startColumn, startPos);
-    }
-
-    private void scanTemplateBlockComment(StringBuilder value) {
-        value.append(advance()); // /
-        value.append(advance()); // *
-        while (!isAtEnd()) {
-            char c = advance();
-            value.append(c);
-            if (c == '*' && !isAtEnd() && peek() == '/') {
-                value.append(advance());
-                return;
-            }
-        }
-    }
-
-    private void scanTemplateExpression(StringBuilder value) {
-        int braceDepth = 1;
-        boolean regexAllowed = true;
-        while (!isAtEnd() && braceDepth > 0) {
-            char c = peek();
-            if (Character.isWhitespace(c)) {
-                value.append(advance());
-                continue;
-            }
-            if (c == '\'' || c == '"') {
-                scanTemplateQuotedString(value, c);
-                regexAllowed = false;
-                continue;
-            }
-            if (c == '`') {
-                scanTemplateNestedTemplate(value);
-                regexAllowed = false;
-                continue;
-            }
-            if (c == '/' && position + 1 < source.length()) {
-                char next = source.charAt(position + 1);
-                if (next == '/') {
-                    scanTemplateLineComment(value);
-                    regexAllowed = true;
-                    continue;
-                }
-                if (next == '*') {
-                    scanTemplateBlockComment(value);
-                    regexAllowed = true;
-                    continue;
-                }
-                if (regexAllowed) {
-                    scanTemplateRegex(value);
-                    regexAllowed = false;
-                    continue;
-                }
-                value.append(advance());
-                if (!isAtEnd() && peek() == '=') {
-                    value.append(advance());
-                }
-                regexAllowed = true;
-                continue;
-            }
-
-            if (c == '{') {
-                value.append(advance());
-                braceDepth++;
-                regexAllowed = true;
-                continue;
-            }
-            if (c == '}') {
-                value.append(advance());
-                braceDepth--;
-                regexAllowed = false;
-                continue;
-            }
-            if (c == '(' || c == '[' || c == ',' || c == ';' || c == ':') {
-                value.append(advance());
-                regexAllowed = true;
-                continue;
-            }
-            if (c == ')' || c == ']') {
-                value.append(advance());
-                regexAllowed = false;
-                continue;
-            }
-
-            if (c == '.') {
-                if (position + 2 < source.length()
-                        && source.charAt(position + 1) == '.'
-                        && source.charAt(position + 2) == '.') {
-                    value.append(advance());
-                    value.append(advance());
-                    value.append(advance());
-                    regexAllowed = true;
-                } else if (position + 1 < source.length() && Character.isDigit(source.charAt(position + 1))) {
-                    scanTemplateNumber(value);
-                    regexAllowed = false;
-                } else {
-                    value.append(advance());
-                    regexAllowed = false;
-                }
-                continue;
-            }
-
-            if (isIdentifierStart(c)) {
-                String identifier = scanTemplateIdentifier(value);
-                regexAllowed = switch (identifier) {
-                    case "return", "throw", "case", "delete", "void", "typeof",
-                         "instanceof", "in", "of", "new", "do", "else", "yield", "await" -> true;
-                    default -> false;
-                };
-                continue;
-            }
-
-            if (Character.isDigit(c)) {
-                scanTemplateNumber(value);
-                regexAllowed = false;
-                continue;
-            }
-
-            if ("+-*%&|^!~<>=?".indexOf(c) >= 0) {
-                value.append(advance());
-                if (!isAtEnd()) {
-                    char next = peek();
-                    if (next == '=' || (next == c && "&|+-<>?".indexOf(c) >= 0)) {
-                        value.append(advance());
-                    } else if (c == '=' && next == '>') {
-                        value.append(advance());
-                    }
-                }
-                if (c == '>' && !isAtEnd() && peek() == '>') {
-                    value.append(advance());
-                    if (!isAtEnd() && peek() == '>') {
-                        value.append(advance());
-                    }
-                    if (!isAtEnd() && peek() == '=') {
-                        value.append(advance());
-                    }
-                }
-                regexAllowed = true;
-                continue;
-            }
-
-            value.append(advance());
-            regexAllowed = false;
-        }
-        if (braceDepth != 0) {
-            throw new JSSyntaxErrorException("Invalid or unexpected token");
-        }
-    }
-
-    private String scanTemplateIdentifier(StringBuilder value) {
-        int start = position;
-        value.append(advance());
-        while (!isAtEnd() && isIdentifierPart(peek())) {
-            value.append(advance());
-        }
-        return source.substring(start, position);
-    }
-
-    private void scanTemplateLineComment(StringBuilder value) {
-        value.append(advance()); // /
-        value.append(advance()); // /
-        while (!isAtEnd()) {
-            char c = advance();
-            value.append(c);
-            if (c == '\n' || c == '\r') {
-                return;
-            }
-        }
-    }
-
-    private void scanTemplateNestedTemplate(StringBuilder value) {
-        value.append(advance()); // opening `
-        while (!isAtEnd()) {
-            char c = peek();
-            if (c == '`') {
-                value.append(advance());
-                return;
-            }
-            if (c == '\\') {
-                value.append(advance());
-                if (!isAtEnd()) {
-                    value.append(advance());
-                }
-                continue;
-            }
-            if (c == '$' && position + 1 < source.length() && source.charAt(position + 1) == '{') {
-                value.append(advance());
-                value.append(advance());
-                scanTemplateExpression(value);
-                continue;
-            }
-            value.append(advance());
-        }
-    }
-
-    private void scanTemplateNumber(StringBuilder value) {
-        if (peek() == '0' && position + 1 < source.length()) {
-            char prefix = source.charAt(position + 1);
-            if (prefix == 'x' || prefix == 'X' || prefix == 'b' || prefix == 'B' || prefix == 'o' || prefix == 'O') {
-                value.append(advance());
-                value.append(advance());
-                while (!isAtEnd() && isIdentifierPart(peek())) {
-                    value.append(advance());
-                }
-                return;
-            }
-        }
-
-        while (!isAtEnd() && Character.isDigit(peek())) {
-            value.append(advance());
-        }
-        if (!isAtEnd() && peek() == '.') {
-            value.append(advance());
-            while (!isAtEnd() && Character.isDigit(peek())) {
-                value.append(advance());
-            }
-        }
-        if (!isAtEnd() && (peek() == 'e' || peek() == 'E')) {
-            value.append(advance());
-            if (!isAtEnd() && (peek() == '+' || peek() == '-')) {
-                value.append(advance());
-            }
-            while (!isAtEnd() && Character.isDigit(peek())) {
-                value.append(advance());
-            }
-        }
-        if (!isAtEnd() && peek() == 'n') {
-            value.append(advance());
-        }
-    }
-
-    private void scanTemplateQuotedString(StringBuilder value, char quote) {
-        value.append(advance()); // opening quote
-        while (!isAtEnd()) {
-            char c = peek();
-            if (c == '\\') {
-                value.append(advance());
-                if (!isAtEnd()) {
-                    value.append(advance());
-                }
-                continue;
-            }
-            value.append(advance());
-            if (c == quote) {
-                return;
-            }
-        }
-    }
-
-    private void scanTemplateRegex(StringBuilder value) {
-        value.append(advance()); // opening '/'
-        boolean inClass = false;
-        while (!isAtEnd()) {
-            char c = advance();
-            value.append(c);
-            if (c == '\\') {
-                if (!isAtEnd()) {
-                    value.append(advance());
-                }
-                continue;
-            }
-            if (c == '[') {
-                inClass = true;
-                continue;
-            }
-            if (c == ']' && inClass) {
-                inClass = false;
-                continue;
-            }
-            if (c == '/' && !inClass) {
-                break;
-            }
-            if (c == '\n' || c == '\r') {
-                return;
-            }
-        }
-        while (!isAtEnd() && isIdentifierPart(peek())) {
-            value.append(advance());
-        }
+        return templateScanner.scanTemplate(startPos, startLine, startColumn);
     }
 
     private Token scanToken() {
@@ -1330,7 +979,4 @@ public final class Lexer {
         }
     }
 
-    public record LexerState(int position, int line, int column, TokenType lastTokenType, Token lookahead,
-                             boolean strictMode) {
-    }
 }

@@ -16,9 +16,9 @@
 
 package com.caoccao.qjs4j.compilation.parser;
 
-import com.caoccao.qjs4j.compilation.Lexer;
-import com.caoccao.qjs4j.compilation.TokenType;
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.compilation.lexer.Lexer;
+import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;

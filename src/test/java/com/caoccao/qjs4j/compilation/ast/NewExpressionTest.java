@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.compilation.Lexer;
+import com.caoccao.qjs4j.compilation.lexer.Lexer;
 import com.caoccao.qjs4j.compilation.parser.Parser;
 import org.junit.jupiter.api.Test;
 

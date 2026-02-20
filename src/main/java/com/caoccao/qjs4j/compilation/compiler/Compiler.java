@@ -16,8 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
-import com.caoccao.qjs4j.compilation.Lexer;
 import com.caoccao.qjs4j.compilation.ast.Program;
+import com.caoccao.qjs4j.compilation.lexer.Lexer;
 import com.caoccao.qjs4j.compilation.parser.Parser;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;

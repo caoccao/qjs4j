@@ -14,16 +14,8 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.compilation;
+package com.caoccao.qjs4j.compilation.lexer;
 
-/**
- * Represents a lexical token.
- */
-public record Token(
-        TokenType type,
-        String value,
-        int line,
-        int column,
-        int offset
-) {
+public record LexerState(int position, int line, int column, TokenType lastTokenType, Token lookahead,
+                         boolean strictMode) {
 }

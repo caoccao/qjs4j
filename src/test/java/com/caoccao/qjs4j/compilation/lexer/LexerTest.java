@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.compilation;
+package com.caoccao.qjs4j.compilation.lexer;
 
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import org.junit.jupiter.api.Test;
