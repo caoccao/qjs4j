@@ -23,6 +23,7 @@ package com.caoccao.qjs4j.core;
  * Provides fast type checking predicates for all JavaScript value types.
  */
 public final class JSTypeChecking {
+    private static final int MAX_PROXY_NESTING_DEPTH = 1000;
 
     // Primitive type checks
 
@@ -63,10 +64,40 @@ public final class JSTypeChecking {
     }
 
     /**
-     * Check if value is an array.
+     * ES2024 7.2.2 IsArray(argument).
+     * Unwraps Proxy chains to check the target, following QuickJS JS_IsArray.
+     * Throws TypeError on revoked proxies via context.
+     *
+     * @return 1 if array, 0 if not, -1 if exception (revoked proxy)
+     */
+    public static int isArray(JSContext context, JSValue value) {
+        int depth = 0;
+        while (value instanceof JSProxy proxy) {
+            if (++depth > MAX_PROXY_NESTING_DEPTH) {
+                context.throwTypeError("too much recursion");
+                return -1;
+            }
+            if (proxy.isRevoked()) {
+                context.throwTypeError("Cannot perform 'isArray' on a proxy that has been revoked");
+                return -1;
+            }
+            value = proxy.getTarget();
+        }
+        return (value instanceof JSObject obj && obj.isArrayObject()) ? 1 : 0;
+    }
+
+    /**
+     * Check if value is an array. Simple version without context
+     * that cannot throw on revoked proxies.
      */
     public static boolean isArray(JSValue value) {
-        return value instanceof JSArray;
+        if (value instanceof JSObject obj && obj.isArrayObject()) {
+            return true;
+        }
+        if (value instanceof JSProxy proxy) {
+            return isProxyArray(proxy, 0);
+        }
+        return false;
     }
 
     /**
@@ -199,8 +230,19 @@ public final class JSTypeChecking {
                 value instanceof JSBigInt;
     }
 
+    private static boolean isProxyArray(JSProxy proxy, int depth) {
+        if (depth > MAX_PROXY_NESTING_DEPTH) {
+            return false;
+        }
+        JSValue target = proxy.getTarget();
+        if (target instanceof JSProxy nestedProxy) {
+            return isProxyArray(nestedProxy, depth + 1);
+        }
+        return target instanceof JSObject obj && obj.isArrayObject();
+    }
+
     private static boolean isProxyConstructor(JSProxy proxy, int depth) {
-        if (depth > 1000) {
+        if (depth > MAX_PROXY_NESTING_DEPTH) {
             return false;
         }
         JSValue target = proxy.getTarget();
@@ -211,7 +253,7 @@ public final class JSTypeChecking {
     }
 
     private static boolean isProxyFunction(JSProxy proxy, int depth) {
-        if (depth > 1000) {
+        if (depth > MAX_PROXY_NESTING_DEPTH) {
             return false;
         }
         JSValue target = proxy.getTarget();

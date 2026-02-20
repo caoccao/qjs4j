@@ -669,7 +669,9 @@ public final class ArrayPrototype {
         if (!(spreadable instanceof JSUndefined)) {
             return JSTypeConversions.toBoolean(spreadable) == JSBoolean.TRUE;
         }
-        return obj instanceof JSArray;
+        int res = JSTypeChecking.isArray(context, obj);
+        // res < 0 means exception (revoked proxy) — caller checks hasPendingException
+        return res > 0;
     }
 
     /**
