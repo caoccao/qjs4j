@@ -54,7 +54,7 @@ public final class JSReflectObject {
             return null;
         }
 
-        JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH, context);
+        JSValue lengthValue = arrayLike.get(context, PropertyKey.LENGTH);
         if (context.hasPendingException()) {
             return null;
         }
@@ -70,12 +70,12 @@ public final class JSReflectObject {
 
         JSValue[] callArgs = new JSValue[(int) length];
         for (int i = 0; i < callArgs.length; i++) {
-            JSValue argumentValue = arrayLike.get(PropertyKey.fromString(String.valueOf(i)), context);
+            JSValue argumentValue = arrayLike.get(context, PropertyKey.fromString(String.valueOf(i)));
             if (context.hasPendingException()) {
                 return null;
             }
             if (argumentValue instanceof JSUndefined) {
-                argumentValue = arrayLike.get(PropertyKey.fromIndex(i), context);
+                argumentValue = arrayLike.get(context, PropertyKey.fromIndex(i));
                 if (context.hasPendingException()) {
                     return null;
                 }
@@ -185,7 +185,7 @@ public final class JSReflectObject {
         if (result != null && !result.isError() && !result.isProxy()) {
             JSObject resolvedPrototype = null;
             if (newTarget instanceof JSObject newTargetObject) {
-                JSValue proto = newTargetObject.get(PropertyKey.PROTOTYPE, context);
+                JSValue proto = newTargetObject.get(context, PropertyKey.PROTOTYPE);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -449,27 +449,27 @@ public final class JSReflectObject {
         // {value: undefined} is a valid descriptor with an explicit value field.
 
         if (descriptorObject.has(PropertyKey.ENUMERABLE)) {
-            JSValue enumerable = descriptorObject.get(PropertyKey.ENUMERABLE, context);
+            JSValue enumerable = descriptorObject.get(context, PropertyKey.ENUMERABLE);
             descriptor.setEnumerable(JSTypeConversions.toBoolean(enumerable) == JSBoolean.TRUE);
         }
 
         if (descriptorObject.has(PropertyKey.CONFIGURABLE)) {
-            JSValue configurable = descriptorObject.get(PropertyKey.CONFIGURABLE, context);
+            JSValue configurable = descriptorObject.get(context, PropertyKey.CONFIGURABLE);
             descriptor.setConfigurable(JSTypeConversions.toBoolean(configurable) == JSBoolean.TRUE);
         }
 
         if (descriptorObject.has(PropertyKey.VALUE)) {
-            JSValue value = descriptorObject.get(PropertyKey.VALUE, context);
+            JSValue value = descriptorObject.get(context, PropertyKey.VALUE);
             descriptor.setValue(value);
         }
 
         if (descriptorObject.has(PropertyKey.WRITABLE)) {
-            JSValue writable = descriptorObject.get(PropertyKey.WRITABLE, context);
+            JSValue writable = descriptorObject.get(context, PropertyKey.WRITABLE);
             descriptor.setWritable(JSTypeConversions.toBoolean(writable) == JSBoolean.TRUE);
         }
 
         if (descriptorObject.has(PropertyKey.GET)) {
-            JSValue get = descriptorObject.get(PropertyKey.GET, context);
+            JSValue get = descriptorObject.get(context, PropertyKey.GET);
             if (!(get instanceof JSUndefined) && !(get instanceof JSFunction)) {
                 context.throwTypeError("invalid getter");
                 return null;
@@ -478,7 +478,7 @@ public final class JSReflectObject {
         }
 
         if (descriptorObject.has(PropertyKey.SET)) {
-            JSValue set = descriptorObject.get(PropertyKey.SET, context);
+            JSValue set = descriptorObject.get(context, PropertyKey.SET);
             if (!(set instanceof JSUndefined) && !(set instanceof JSFunction)) {
                 context.throwTypeError("invalid setter");
                 return null;

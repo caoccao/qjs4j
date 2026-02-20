@@ -79,7 +79,7 @@ public final class ArrayConstructor {
         // Step 5: Let usingIterator be ? GetMethod(items, @@iterator).
         boolean hasIterator = false;
         if (items instanceof JSObject itemsObj) {
-            JSValue iterMethod = itemsObj.get(PropertyKey.SYMBOL_ITERATOR, context);
+            JSValue iterMethod = itemsObj.get(context, PropertyKey.SYMBOL_ITERATOR);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -167,7 +167,7 @@ public final class ArrayConstructor {
         }
 
         // Step 9: Let len be ? LengthOfArrayLike(arrayLike).
-        JSValue lenValue = arrayLike.get(PropertyKey.LENGTH, context);
+        JSValue lenValue = arrayLike.get(context, PropertyKey.LENGTH);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -190,7 +190,7 @@ public final class ArrayConstructor {
 
         // Step 12-15: Loop
         for (long k = 0; k < len; k++) {
-            JSValue kValue = arrayLike.get(PropertyKey.fromIndex((int) k), context);
+            JSValue kValue = arrayLike.get(context, PropertyKey.fromIndex((int) k));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -242,7 +242,7 @@ public final class ArrayConstructor {
 
             if (arrayLike instanceof JSObject obj) {
                 // Pass context so getter functions execute properly
-                JSValue asyncIterMethod = obj.get(PropertyKey.SYMBOL_ASYNC_ITERATOR, context);
+                JSValue asyncIterMethod = obj.get(context, PropertyKey.SYMBOL_ASYNC_ITERATOR);
                 if (context.hasPendingException()) {
                     JSValue pendingException = context.getPendingException();
                     context.clearAllPendingExceptions();
@@ -259,7 +259,7 @@ public final class ArrayConstructor {
 
                 // Step 5: if usingAsyncIterator is undefined, get @@iterator
                 if (usingAsyncIterator instanceof JSUndefined) {
-                    JSValue syncIterMethod = obj.get(PropertyKey.SYMBOL_ITERATOR, context);
+                    JSValue syncIterMethod = obj.get(context, PropertyKey.SYMBOL_ITERATOR);
                     if (context.hasPendingException()) {
                         JSValue pendingException = context.getPendingException();
                         context.clearAllPendingExceptions();
@@ -326,7 +326,7 @@ public final class ArrayConstructor {
             }
 
             // LengthOfArrayLike — getter may throw
-            JSValue lenValue = arrayLikeObj.get(PropertyKey.LENGTH, context);
+            JSValue lenValue = arrayLikeObj.get(context, PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 JSValue pendingException = context.getPendingException();
                 context.clearAllPendingExceptions();
@@ -417,7 +417,7 @@ public final class ArrayConstructor {
         // Step 1: Get element value - may throw (e.g., getter throws)
         JSValue value;
         try {
-            value = arrayLikeObj.get(PropertyKey.fromIndex(index), context);
+            value = arrayLikeObj.get(context, PropertyKey.fromIndex(index));
         } catch (Exception e) {
             resultPromise.reject(consumePendingExceptionOrCreateStringError(context, e));
             return;

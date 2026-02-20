@@ -355,31 +355,31 @@ public final class ObjectPrototype {
 
         // Check for enumerable
         if (descObj.has(PropertyKey.ENUMERABLE)) {
-            JSValue enumerable = descObj.get(PropertyKey.ENUMERABLE, context);
+            JSValue enumerable = descObj.get(context, PropertyKey.ENUMERABLE);
             desc.setEnumerable(JSTypeChecking.isTruthy(enumerable));
         }
 
         // Check for configurable
         if (descObj.has(PropertyKey.CONFIGURABLE)) {
-            JSValue configurable = descObj.get(PropertyKey.CONFIGURABLE, context);
+            JSValue configurable = descObj.get(context, PropertyKey.CONFIGURABLE);
             desc.setConfigurable(JSTypeChecking.isTruthy(configurable));
         }
 
         // Check for value
         if (descObj.has(PropertyKey.VALUE)) {
-            JSValue value = descObj.get(PropertyKey.VALUE, context);
+            JSValue value = descObj.get(context, PropertyKey.VALUE);
             desc.setValue(value);
         }
 
         // Check for writable
         if (descObj.has(PropertyKey.WRITABLE)) {
-            JSValue writable = descObj.get(PropertyKey.WRITABLE, context);
+            JSValue writable = descObj.get(context, PropertyKey.WRITABLE);
             desc.setWritable(JSTypeChecking.isTruthy(writable));
         }
 
         // Check for getter
         if (descObj.has(PropertyKey.GET)) {
-            JSValue getter = descObj.get(PropertyKey.GET, context);
+            JSValue getter = descObj.get(context, PropertyKey.GET);
             if (!(getter instanceof JSUndefined) && !(getter instanceof JSFunction)) {
                 return context.throwTypeError("Getter must be a function");
             }
@@ -388,7 +388,7 @@ public final class ObjectPrototype {
 
         // Check for setter
         if (descObj.has(PropertyKey.SET)) {
-            JSValue setter = descObj.get(PropertyKey.SET, context);
+            JSValue setter = descObj.get(context, PropertyKey.SET);
             if (!(setter instanceof JSUndefined) && !(setter instanceof JSFunction)) {
                 return context.throwTypeError("Setter must be a function");
             }
@@ -573,7 +573,7 @@ public final class ObjectPrototype {
         if (thisArg instanceof JSObject obj) {
             // Try to get Symbol.toStringTag
             PropertyKey toStringTagKey = PropertyKey.SYMBOL_TO_STRING_TAG;
-            JSValue tag = obj.get(toStringTagKey, context);
+            JSValue tag = obj.get(context, toStringTagKey);
 
             if (tag instanceof JSString tagStr) {
                 return new JSString("[object " + tagStr.value() + "]");

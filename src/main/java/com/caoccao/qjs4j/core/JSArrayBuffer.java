@@ -108,7 +108,7 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
         // Step 2: OrdinaryCreateFromConstructor - access newTarget.prototype
         JSObject resolvedPrototype = null;
         if (newTarget instanceof JSObject newTargetObject) {
-            JSValue proto = newTargetObject.get(PropertyKey.PROTOTYPE, context);
+            JSValue proto = newTargetObject.get(context, PropertyKey.PROTOTYPE);
             if (context.hasPendingException()) {
                 throw new JSException(context.getPendingException());
             }
@@ -142,7 +142,7 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
         // Check for options (maxByteLength for resizable buffers)
         long maxByteLengthLong = -1;
         if (args.length >= 2 && args[1] instanceof JSObject options) {
-            JSValue maxByteLengthValue = options.get(PropertyKey.fromString("maxByteLength"), context);
+            JSValue maxByteLengthValue = options.get(context, PropertyKey.fromString("maxByteLength"));
             if (context.hasPendingException()) {
                 throw new JSException(context.getPendingException());
             }

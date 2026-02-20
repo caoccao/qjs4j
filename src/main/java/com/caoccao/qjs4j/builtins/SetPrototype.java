@@ -63,7 +63,7 @@ public final class SetPrototype {
     }
 
     private static void closeIterator(JSContext context, JSObject iteratorObject) {
-        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN, context);
+        JSValue returnMethod = iteratorObject.get(context, PropertyKey.RETURN);
         if (context.hasPendingException()) {
             return;
         }
@@ -219,7 +219,7 @@ public final class SetPrototype {
             size = set.size();
         } else {
             JSValue sizeValue = object != null
-                    ? object.get(PropertyKey.SIZE, context)
+                    ? object.get(context, PropertyKey.SIZE)
                     : JSUndefined.INSTANCE;
             if (context.hasPendingException()) {
                 return null;
@@ -244,7 +244,7 @@ public final class SetPrototype {
         }
 
         JSValue hasValue = object != null
-                ? object.get(PropertyKey.HAS, context)
+                ? object.get(context, PropertyKey.HAS)
                 : JSUndefined.INSTANCE;
         if (context.hasPendingException()) {
             return null;
@@ -259,7 +259,7 @@ public final class SetPrototype {
         }
 
         JSValue keysValue = object != null
-                ? object.get(PropertyKey.KEYS, context)
+                ? object.get(context, PropertyKey.KEYS)
                 : JSUndefined.INSTANCE;
         if (context.hasPendingException()) {
             return null;

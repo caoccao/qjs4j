@@ -288,7 +288,7 @@ public final class DatePrototype {
                 ? new String[]{"toString", "valueOf"}
                 : new String[]{"valueOf", "toString"};
         for (String methodName : methodNames) {
-            JSValue method = object.get(PropertyKey.fromString(methodName), context);
+            JSValue method = object.get(context, PropertyKey.fromString(methodName));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -501,7 +501,7 @@ public final class DatePrototype {
             return JSNull.INSTANCE;
         }
 
-        JSValue method = obj.get(PropertyKey.TO_ISO_STRING, context);
+        JSValue method = obj.get(context, PropertyKey.TO_ISO_STRING);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }

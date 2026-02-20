@@ -33,7 +33,7 @@ public final class JSIteratorHelper {
         if (!(iterator instanceof JSObject iteratorObj)) {
             return;
         }
-        JSValue returnMethod = iteratorObj.get(PropertyKey.RETURN, context);
+        JSValue returnMethod = iteratorObj.get(context, PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunc) {
             returnFunc.call(context, iterator, new JSValue[0]);
         }
@@ -65,7 +65,7 @@ public final class JSIteratorHelper {
                 }
 
                 // Check if done (pass context to invoke getters)
-                JSValue doneValue = result.get(PropertyKey.DONE, context);
+                JSValue doneValue = result.get(context, PropertyKey.DONE);
                 if (context.hasPendingException()) {
                     break;
                 }
@@ -77,7 +77,7 @@ public final class JSIteratorHelper {
                 }
 
                 // Get the value and call the callback (pass context to invoke getters)
-                JSValue value = result.get(PropertyKey.VALUE, context);
+                JSValue value = result.get(context, PropertyKey.VALUE);
                 if (context.hasPendingException()) {
                     break;
                 }
@@ -123,7 +123,7 @@ public final class JSIteratorHelper {
         }
 
         // Get the [Symbol.iterator] method
-        JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR, context);
+        JSValue iteratorMethod = iterableObj.get(context, PropertyKey.SYMBOL_ITERATOR);
         if (context.hasPendingException()) {
             return null;
         }
@@ -140,7 +140,7 @@ public final class JSIteratorHelper {
 
         // Verify it's an object with a next method
         if (iterator instanceof JSObject iteratorObj) {
-            JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT, context);
+            JSValue nextMethod = iteratorObj.get(context, PropertyKey.NEXT);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -199,7 +199,7 @@ public final class JSIteratorHelper {
         }
 
         // GetMethod(items, @@iterator) — get the Symbol.iterator property
-        JSValue iteratorMethod = itemsObj.get(PropertyKey.SYMBOL_ITERATOR, context);
+        JSValue iteratorMethod = itemsObj.get(context, PropertyKey.SYMBOL_ITERATOR);
         if (context.hasPendingException()) {
             return null;
         }
@@ -224,7 +224,7 @@ public final class JSIteratorHelper {
         }
 
         // GetV(iterator, "next")
-        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT, context);
+        JSValue nextMethod = iteratorObj.get(context, PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return null;
         }
@@ -247,7 +247,7 @@ public final class JSIteratorHelper {
             }
 
             // IteratorComplete: Get "done"
-            JSValue doneValue = nextResultObj.get(PropertyKey.DONE, context);
+            JSValue doneValue = nextResultObj.get(context, PropertyKey.DONE);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -256,7 +256,7 @@ public final class JSIteratorHelper {
             }
 
             // IteratorValue: Get "value"
-            JSValue value = nextResultObj.get(PropertyKey.VALUE, context);
+            JSValue value = nextResultObj.get(context, PropertyKey.VALUE);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -288,7 +288,7 @@ public final class JSIteratorHelper {
         }
 
         // Generic iterator protocol: call the next() method
-        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT, context);
+        JSValue nextMethod = iteratorObj.get(context, PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return null;
         }

@@ -47,7 +47,7 @@ public final class ArrayPrototype {
         }
 
         // Step 4: Let C be ? Get(originalArray, "constructor")
-        JSValue ctor = originalArray.get(PropertyKey.CONSTRUCTOR, context);
+        JSValue ctor = originalArray.get(context, PropertyKey.CONSTRUCTOR);
         if (context.hasPendingException()) {
             return null;
         }
@@ -60,7 +60,7 @@ public final class ArrayPrototype {
 
         // Step 6: If Type(C) is Object, get Symbol.species
         if (ctor instanceof JSObject ctorObj) {
-            ctor = ctorObj.get(PropertyKey.SYMBOL_SPECIES, context);
+            ctor = ctorObj.get(context, PropertyKey.SYMBOL_SPECIES);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -105,7 +105,7 @@ public final class ArrayPrototype {
         if (obj instanceof JSArray arr) {
             length = arr.getLength();
         } else {
-            JSValue lenVal = obj.get(PropertyKey.LENGTH, context);
+            JSValue lenVal = obj.get(context, PropertyKey.LENGTH);
             if (context.hasPendingException()) return context.getPendingException();
             length = JSTypeConversions.toLength(context, lenVal);
             if (context.hasPendingException()) return context.getPendingException();
@@ -129,7 +129,7 @@ public final class ArrayPrototype {
         if (obj instanceof JSArray arr) {
             return arr.get((int) index);
         }
-        return obj.get(PropertyKey.fromIndex((int) index), context);
+        return obj.get(context, PropertyKey.fromIndex((int) index));
     }
 
     /**
@@ -179,7 +179,7 @@ public final class ArrayPrototype {
                 if (eObj instanceof JSArray eArr) {
                     len = eArr.getLength();
                 } else {
-                    JSValue lenVal = eObj.get(PropertyKey.LENGTH, context);
+                    JSValue lenVal = eObj.get(context, PropertyKey.LENGTH);
                     if (context.hasPendingException()) return context.getPendingException();
                     len = JSTypeConversions.toLength(context, lenVal);
                     if (context.hasPendingException()) return context.getPendingException();
@@ -193,7 +193,7 @@ public final class ArrayPrototype {
                     PropertyKey indexKey = PropertyKey.fromIndex((int) k);
                     // JS_TryGetPropertyInt64: only define property if it exists (preserve holes)
                     if (eObj.has(indexKey)) {
-                        JSValue val = eObj.get(indexKey, context);
+                        JSValue val = eObj.get(context, indexKey);
                         if (context.hasPendingException()) return context.getPendingException();
                         if (resultArr != null) {
                             resultArr.set(n, val);
@@ -243,7 +243,7 @@ public final class ArrayPrototype {
         if (obj instanceof JSArray arr) {
             length = arr.getLength();
         } else {
-            JSValue lenVal = obj.get(PropertyKey.LENGTH, context);
+            JSValue lenVal = obj.get(context, PropertyKey.LENGTH);
             if (context.hasPendingException()) return context.getPendingException();
             length = JSTypeConversions.toLength(context, lenVal);
             if (context.hasPendingException()) return context.getPendingException();
@@ -296,7 +296,7 @@ public final class ArrayPrototype {
             final PropertyKey toKey = PropertyKey.fromString(Long.toString(to));
 
             if (obj.has(fromKey)) {
-                JSValue value = obj.get(fromKey, context);
+                JSValue value = obj.get(context, fromKey);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -661,7 +661,7 @@ public final class ArrayPrototype {
         if (obj instanceof JSArray arr && index <= Integer.MAX_VALUE) {
             return arr.get((int) index);
         }
-        return obj.get(PropertyKey.fromString(Long.toString(index)), context);
+        return obj.get(context, PropertyKey.fromString(Long.toString(index)));
     }
 
     /**
@@ -770,7 +770,7 @@ public final class ArrayPrototype {
         if (!(val instanceof JSObject obj)) {
             return false;
         }
-        JSValue spreadable = obj.get(PropertyKey.SYMBOL_IS_CONCAT_SPREADABLE, context);
+        JSValue spreadable = obj.get(context, PropertyKey.SYMBOL_IS_CONCAT_SPREADABLE);
         if (context.hasPendingException()) {
             return false;
         }
@@ -865,7 +865,7 @@ public final class ArrayPrototype {
         if (obj instanceof JSArray arr) {
             return arr.getLength();
         }
-        JSValue lenVal = obj.get(PropertyKey.LENGTH, context);
+        JSValue lenVal = obj.get(context, PropertyKey.LENGTH);
         if (context.hasPendingException()) return -1;
         long len = JSTypeConversions.toLength(context, lenVal);
         if (context.hasPendingException()) return -1;

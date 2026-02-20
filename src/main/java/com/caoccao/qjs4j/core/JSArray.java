@@ -291,7 +291,7 @@ public final class JSArray extends JSObject {
             }
         }
 
-        JSValue value = super.get(PropertyKey.fromString(Long.toString(index)), null);
+        JSValue value = super.get(null, PropertyKey.fromString(Long.toString(index)));
         if (!(value instanceof JSUndefined)) {
             return value;
         }
@@ -309,26 +309,26 @@ public final class JSArray extends JSObject {
      */
     @Override
     public JSValue get(PropertyKey key) {
-        return get(key, null);
+        return get(null, key);
     }
 
     /**
      * Override get by PropertyKey with context to handle array indices.
      */
     @Override
-    public JSValue get(PropertyKey key, JSContext context) {
+    public JSValue get(JSContext context, PropertyKey key) {
         long index = getArrayIndex(key);
         if (index >= 0) {
             // Check shape for accessor properties first (e.g., Object.defineProperty with getter)
             PropertyDescriptor desc = super.getOwnPropertyDescriptor(key);
             if (desc != null && desc.hasGetter()) {
-                return super.get(key, context);
+                return super.get(context, key);
             }
             return get(index);
         }
 
         // Otherwise, use the shape-based storage from JSObject
-        return super.get(key, context);
+        return super.get(context, key);
     }
 
     /**
@@ -337,7 +337,7 @@ public final class JSArray extends JSObject {
      * missing JSArray's dense storage when this array is in a prototype chain.
      */
     @Override
-    protected JSValue get(PropertyKey key, JSContext context, JSObject receiver) {
+    protected JSValue get(JSContext context, PropertyKey key, JSObject receiver) {
         long index = getArrayIndex(key);
         if (index >= 0 && index < length && index <= Integer.MAX_VALUE) {
             int intIndex = (int) index;
@@ -354,7 +354,7 @@ public final class JSArray extends JSObject {
             }
         }
         // Delegate to JSObject for shape properties, getters, and prototype chain
-        return super.get(key, context, receiver);
+        return super.get(context, key, receiver);
     }
 
     /**

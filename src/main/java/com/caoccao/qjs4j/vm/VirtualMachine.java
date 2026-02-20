@@ -133,7 +133,7 @@ public final class VirtualMachine {
             return null;
         }
 
-        JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH, context);
+        JSValue lengthValue = arrayLike.get(context, PropertyKey.LENGTH);
         if (context.hasPendingException()) {
             return null;
         }
@@ -149,7 +149,7 @@ public final class VirtualMachine {
 
         JSValue[] args = new JSValue[(int) length];
         for (int i = 0; i < args.length; i++) {
-            JSValue argValue = arrayLike.get(PropertyKey.fromIndex(i), context);
+            JSValue argValue = arrayLike.get(context, PropertyKey.fromIndex(i));
             if (context.hasPendingException()) {
                 return null;
             }
@@ -256,7 +256,7 @@ public final class VirtualMachine {
         if (result != null && !result.isError() && !result.isProxy()) {
             JSObject resolvedPrototype = null;
             if (newTarget instanceof JSObject newTargetObject) {
-                JSValue proto = newTargetObject.get(PropertyKey.PROTOTYPE, context);
+                JSValue proto = newTargetObject.get(context, PropertyKey.PROTOTYPE);
                 if (context.hasPendingException()) {
                     throw new JSVirtualMachineException(context.getPendingException().toString(),
                             context.getPendingException());
@@ -296,7 +296,7 @@ public final class VirtualMachine {
         } else if (excludeListValue instanceof JSObject excludeObject) {
             excludedKeys = new HashSet<>();
             for (PropertyKey key : excludeObject.ownPropertyKeys()) {
-                JSValue excludedValue = excludeObject.get(key, context);
+                JSValue excludedValue = excludeObject.get(context, key);
                 excludedKeys.add(PropertyKey.fromValue(context, excludedValue));
             }
         } else if (excludeListValue != null && !excludeListValue.isUndefined() && !excludeListValue.isNull()) {
@@ -309,7 +309,7 @@ public final class VirtualMachine {
             if (descriptor == null || !descriptor.isEnumerable() || (excludedKeys != null && excludedKeys.contains(key))) {
                 continue;
             }
-            JSValue propertyValue = sourceObject.get(key, context);
+            JSValue propertyValue = sourceObject.get(context, key);
             if (context.hasPendingException()) {
                 pendingException = context.getPendingException();
                 context.clearPendingException();
@@ -1229,7 +1229,7 @@ public final class VirtualMachine {
                             }
                             value = JSUndefined.INSTANCE;
                         } else {
-                            value = targetObject.get(key, context);
+                            value = targetObject.get(context, key);
                         }
                         stack[sp++] = value;
                         pc += op.getSize();
@@ -1601,7 +1601,7 @@ public final class VirtualMachine {
                         // Auto-box primitives to access their prototype methods
                         JSObject targetObj = toObject(obj);
                         if (targetObj != null) {
-                            JSValue result = targetObj.get(PropertyKey.fromString(fieldName), context);
+                            JSValue result = targetObj.get(context, PropertyKey.fromString(fieldName));
                             // Check if getter threw an exception
                             if (context.hasPendingException()) {
                                 pendingException = context.getPendingException();
@@ -1627,7 +1627,7 @@ public final class VirtualMachine {
                         JSValue objectValue = (JSValue) stack[--sp];
                         JSObject targetObject = toObject(objectValue);
                         if (targetObject != null) {
-                            JSValue result = targetObject.get(PropertyKey.LENGTH, context);
+                            JSValue result = targetObject.get(context, PropertyKey.LENGTH);
                             if (context.hasPendingException()) {
                                 pendingException = context.getPendingException();
                                 context.clearPendingException();
@@ -1723,7 +1723,7 @@ public final class VirtualMachine {
                         if (targetObj != null) {
                             try {
                                 PropertyKey key = PropertyKey.fromValue(context, gaelIdx);
-                                JSValue result = targetObj.get(key, context);
+                                JSValue result = targetObj.get(context, key);
                                 if (context.hasPendingException()) {
                                     pendingException = context.getPendingException();
                                     context.clearPendingException();
@@ -1778,7 +1778,7 @@ public final class VirtualMachine {
                         if (targetObj != null) {
                             try {
                                 PropertyKey key = PropertyKey.fromValue(context, index);
-                                JSValue result = targetObj.get(key, context);
+                                JSValue result = targetObj.get(context, key);
                                 if (context.hasPendingException()) {
                                     pendingException = context.getPendingException();
                                     context.clearPendingException();
@@ -1819,7 +1819,7 @@ public final class VirtualMachine {
                         }
 
                         PropertyKey key = PropertyKey.fromValue(context, index);
-                        JSValue result = targetObj.get(key, context);
+                        JSValue result = targetObj.get(context, key);
                         if (context.hasPendingException()) {
                             pendingException = context.getPendingException();
                             context.clearPendingException();
@@ -1910,7 +1910,7 @@ public final class VirtualMachine {
                             JSObject boxedReceiver = toObject(receiverValue);
                             result = boxedReceiver != null
                                     ? superObject.getWithReceiver(key, context, boxedReceiver)
-                                    : superObject.get(key, context);
+                                    : superObject.get(context, key);
                         }
 
                         if (context.hasPendingException()) {
@@ -3766,7 +3766,7 @@ public final class VirtualMachine {
             throw new JSVirtualMachineException("Right-hand side of instanceof is not an object");
         }
 
-        JSValue hasInstanceMethod = constructor.get(PropertyKey.SYMBOL_HAS_INSTANCE, context);
+        JSValue hasInstanceMethod = constructor.get(context, PropertyKey.SYMBOL_HAS_INSTANCE);
         if (context.hasPendingException()) {
             JSValue pendingException = context.getPendingException();
             if (pendingException instanceof JSError jsError) {
@@ -4374,7 +4374,7 @@ public final class VirtualMachine {
             return false;
         }
 
-        JSValue prototypeValue = constructorObject.get(PropertyKey.PROTOTYPE, context);
+        JSValue prototypeValue = constructorObject.get(context, PropertyKey.PROTOTYPE);
         if (context.hasPendingException()) {
             JSValue pendingException = context.getPendingException();
             if (pendingException instanceof JSError jsError) {
@@ -4573,7 +4573,7 @@ public final class VirtualMachine {
         // Try to get the message property directly (without calling getters or toString)
         // This avoids calling JavaScript code which might fail in exception state
         try {
-            JSValue messageValue = exceptionObj.get(PropertyKey.MESSAGE, null);
+            JSValue messageValue = exceptionObj.get(null, PropertyKey.MESSAGE);
             if (messageValue instanceof JSString msgStr) {
                 return msgStr.value();
             } else if (messageValue != null && !(messageValue instanceof JSUndefined)) {
@@ -4585,7 +4585,7 @@ public final class VirtualMachine {
 
         // Try to get the name property
         try {
-            JSValue nameValue = exceptionObj.get(PropertyKey.NAME, null);
+            JSValue nameValue = exceptionObj.get(null, PropertyKey.NAME);
             if (nameValue instanceof JSString nameStr) {
                 return nameStr.value();
             }

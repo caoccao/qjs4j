@@ -91,7 +91,7 @@ public final class FunctionPrototype {
             return null;
         }
 
-        JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH, context);
+        JSValue lengthValue = arrayLike.get(context, PropertyKey.LENGTH);
         if (context.hasPendingException()) {
             return null;
         }
@@ -107,12 +107,12 @@ public final class FunctionPrototype {
 
         JSValue[] callArgs = new JSValue[(int) length];
         for (int i = 0; i < callArgs.length; i++) {
-            JSValue argumentValue = arrayLike.get(PropertyKey.fromString(String.valueOf(i)), context);
+            JSValue argumentValue = arrayLike.get(context, PropertyKey.fromString(String.valueOf(i)));
             if (context.hasPendingException()) {
                 return null;
             }
             if (argumentValue instanceof JSUndefined) {
-                argumentValue = arrayLike.get(PropertyKey.fromIndex(i), context);
+                argumentValue = arrayLike.get(context, PropertyKey.fromIndex(i));
                 if (context.hasPendingException()) {
                     return null;
                 }

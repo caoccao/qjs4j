@@ -496,21 +496,21 @@ public non-sealed class JSObject implements JSValue {
      * Get a property value by property key.
      */
     public JSValue get(PropertyKey key) {
-        return get(key, null);
+        return get(null, key);
     }
 
     /**
      * Get a property value by property key with context for getter functions.
      */
-    public JSValue get(PropertyKey key, JSContext context) {
-        return get(key, context, this);  // Pass original receiver
+    public JSValue get(JSContext context, PropertyKey key) {
+        return get(context, key, this);  // Pass original receiver
     }
 
     /**
      * Internal get method with receiver tracking for prototype chain getter invocation.
      * Protected to allow JSProxy to override with proper trap handling.
      */
-    protected JSValue get(PropertyKey key, JSContext context, JSObject receiver) {
+    protected JSValue get(JSContext context, PropertyKey key, JSObject receiver) {
         long arrayIndex = getCanonicalArrayIndex(key);
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             JSValue sparseValue = sparseProperties.get((int) arrayIndex);
@@ -575,7 +575,7 @@ public non-sealed class JSObject implements JSValue {
                 visited.add(prototype);
 
                 // Recurse into prototype chain, passing along the original receiver
-                return prototype.get(key, context, receiver);
+                return prototype.get(context, key, receiver);
             } finally {
                 // Clean up: remove from visited set
                 visited.remove(prototype);
@@ -771,7 +771,7 @@ public non-sealed class JSObject implements JSValue {
      * Used by Reflect.get to pass a different receiver than the target.
      */
     public JSValue getWithReceiver(PropertyKey key, JSContext context, JSObject receiver) {
-        return get(key, context, receiver);
+        return get(context, key, receiver);
     }
 
     /**

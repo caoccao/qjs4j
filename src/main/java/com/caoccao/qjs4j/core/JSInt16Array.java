@@ -80,7 +80,7 @@ public final class JSInt16Array extends JSTypedArray {
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSObject jsObject) {
-                JSValue lengthValue = jsObject.get(PropertyKey.LENGTH, context);
+                JSValue lengthValue = jsObject.get(context, PropertyKey.LENGTH);
                 length = toTypedArrayLength(context, lengthValue, BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSInt16Array(length);
                 jsTypedArray.setArray(context, jsObject, 0);

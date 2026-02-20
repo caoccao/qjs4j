@@ -353,23 +353,23 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public JSValue get(PropertyKey key) {
-        return get(key, context);
+        return get(context, key);
     }
 
     /**
      * Override get with context to intercept property access.
      */
     @Override
-    public JSValue get(PropertyKey key, JSContext context) {
+    public JSValue get(JSContext context, PropertyKey key) {
         // Use this proxy as the receiver
-        return get(key, context, this);
+        return get(context, key, this);
     }
 
     /**
      * Override get method with receiver tracking for prototype chain support.
      */
     @Override
-    protected JSValue get(PropertyKey key, JSContext context, JSObject receiver) {
+    protected JSValue get(JSContext context, PropertyKey key, JSObject receiver) {
         return getInternal(key, context, receiver);
     }
 
@@ -453,7 +453,7 @@ public final class JSProxy extends JSObject {
         // Following QuickJS js_proxy_get: forward to target
         // Since JSFunction now extends JSObject, all targets are JSObjects
         if (target instanceof JSObject targetObj) {
-            return targetObj.get(key, context != null ? context : this.context);
+            return targetObj.get(context != null ? context : this.context, key);
         }
         return JSUndefined.INSTANCE;
     }

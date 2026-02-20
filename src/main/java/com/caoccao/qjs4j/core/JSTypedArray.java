@@ -151,7 +151,7 @@ public abstract class JSTypedArray extends JSObject {
             return source;
         }
 
-        JSValue iteratorMethod = sourceObject.get(PropertyKey.SYMBOL_ITERATOR, context);
+        JSValue iteratorMethod = sourceObject.get(context, PropertyKey.SYMBOL_ITERATOR);
         if (context.hasPendingException()) {
             return source;
         }
@@ -401,7 +401,7 @@ public abstract class JSTypedArray extends JSObject {
      * without walking the prototype chain.
      */
     @Override
-    protected JSValue get(PropertyKey key, JSContext context, JSObject receiver) {
+    protected JSValue get(JSContext context, PropertyKey key, JSObject receiver) {
         if (isCanonicalNumericIndex(key)) {
             // For canonical numeric indices, never fall through to prototype chain.
             String str = key.toPropertyString();
@@ -418,7 +418,7 @@ public abstract class JSTypedArray extends JSObject {
             }
             return getJSElement(index);
         }
-        return super.get(key, context, receiver);
+        return super.get(context, key, receiver);
     }
 
     /**
@@ -670,7 +670,7 @@ public abstract class JSTypedArray extends JSObject {
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
-                JSValue value = srcArray.get(PropertyKey.fromIndex(i), context);
+                JSValue value = srcArray.get(context, PropertyKey.fromIndex(i));
                 if (context != null && context.hasPendingException()) {
                     return;
                 }
@@ -697,7 +697,7 @@ public abstract class JSTypedArray extends JSObject {
             }
             setArray(context, jsArray, offset);
         } else if (source instanceof JSObject srcObject) {
-            JSValue lengthValue = srcObject.get(PropertyKey.LENGTH, context);
+            JSValue lengthValue = srcObject.get(context, PropertyKey.LENGTH);
             if (context != null && context.hasPendingException()) {
                 return;
             }
@@ -709,7 +709,7 @@ public abstract class JSTypedArray extends JSObject {
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
-                JSValue value = srcObject.get(PropertyKey.fromIndex(i), context);
+                JSValue value = srcObject.get(context, PropertyKey.fromIndex(i));
                 if (context != null && context.hasPendingException()) {
                     return;
                 }
