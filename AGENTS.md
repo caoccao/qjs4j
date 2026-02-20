@@ -61,7 +61,7 @@ For each feature task:
 ### Commands
 
 - Run all tests: `./gradlew test`
-- Run specific tests: `./gradlew test --tests "com.caoccao.qjs4j.compiler.ast.ClassCompilerTest"`
+- Run specific tests: `./gradlew test --tests "com.caoccao.qjs4j.compilation.ast.ClassCompilerTest"`
 - Compile only: `./gradlew compileJava` / `./gradlew compileTestJava`
 
 ### Test Patterns

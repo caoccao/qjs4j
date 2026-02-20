@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.compiler.Compiler;
+import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSTypeConversions;
@@ -101,9 +101,7 @@ public final class FunctionConstructor {
             JSValue result = context.getVirtualMachine().execute(func, context.getGlobalObject(), new JSValue[0]);
 
             return result;
-        } catch (JSCompilerException e) {
-            return context.throwSyntaxError(e.getMessage());
-        } catch (JSSyntaxErrorException e) {
+        } catch (JSCompilerException | JSSyntaxErrorException e) {
             return context.throwSyntaxError(e.getMessage());
         } catch (JSException e) {
             return e.getErrorValue();

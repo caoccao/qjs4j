@@ -16,10 +16,10 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.compiler.AstUtils;
-import com.caoccao.qjs4j.compiler.Compiler;
-import com.caoccao.qjs4j.compiler.ast.FunctionDeclaration;
-import com.caoccao.qjs4j.compiler.ast.Statement;
+import com.caoccao.qjs4j.compilation.ast.AstUtils;
+import com.caoccao.qjs4j.compilation.compiler.Compiler;
+import com.caoccao.qjs4j.compilation.ast.FunctionDeclaration;
+import com.caoccao.qjs4j.compilation.ast.Statement;
 import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.types.JSModule;
 import com.caoccao.qjs4j.vm.VirtualMachine;

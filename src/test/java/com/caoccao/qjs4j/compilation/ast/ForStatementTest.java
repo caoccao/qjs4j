@@ -1,0 +1,57 @@
+/*
+ * Copyright (c) 2025-2026. caoccao.com Sam Cao
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.caoccao.qjs4j.compilation.ast;
+
+import com.caoccao.qjs4j.BaseJavetTest;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+
+public class ForStatementTest extends BaseJavetTest {
+    @Test
+    public void testForLetClosurePerIterationBinding() {
+        assertStringWithJavet("""
+                var funcs = [];
+                for (let i = 0; i < 3; i++) {
+                  funcs.push(() => i);
+                }
+                funcs.map(f => f()).join(',')""");
+    }
+
+    @Test
+    public void testPrimeNumber() throws IOException {
+        String code = loadCode("performance/prime-number.js") + " JSON.stringify(primeNumbers);";
+        assertStringWithJavet(code);
+    }
+
+    @Test
+    public void testSum() {
+        assertIntegerWithJavet(
+                """
+                        let sum = 0;
+                        for (let i = 1; i <= 100; i++) {
+                          sum += i;
+                        }
+                        sum;""",
+                """
+                        let sum = 0;
+                        for (let i = 100; i > 0; i--) {
+                          sum += i;
+                        }
+                        sum;""");
+    }
+}

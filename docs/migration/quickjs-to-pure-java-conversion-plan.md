@@ -520,7 +520,7 @@ public final class JSBigInt implements JSValue {
 
 #### 3.1 Lexer (Weeks 9-10)
 - **Input:** `quickjs.c` (parsing functions)
-- **Output:** `com.caoccao.qjs4j.compiler.Lexer`
+- **Output:** `com.caoccao.qjs4j.compilation.Lexer`
 
 **Tasks:**
 1. Token types enumeration
@@ -575,7 +575,7 @@ public record Token(
 
 #### 3.2 Parser (Weeks 10-12)
 - **Input:** `quickjs.c` (parsing logic)
-- **Output:** `com.caoccao.qjs4j.compiler.Parser`, AST classes
+- **Output:** `com.caoccao.qjs4j.compilation.Parser`, AST classes
 
 **Tasks:**
 1. AST node hierarchy
@@ -629,7 +629,7 @@ public record BinaryExpression(
 
 #### 3.3 Bytecode Compiler (Weeks 12-14)
 - **Input:** `quickjs.c` (bytecode emission)
-- **Output:** `com.caoccao.qjs4j.compiler.BytecodeCompiler`
+- **Output:** `com.caoccao.qjs4j.compilation.compiler.BytecodeCompiler`
 
 **Tasks:**
 1. Bytecode emission

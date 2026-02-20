@@ -17,9 +17,9 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.builtins.*;
-import com.caoccao.qjs4j.compiler.AstUtils;
-import com.caoccao.qjs4j.compiler.Compiler;
-import com.caoccao.qjs4j.compiler.ast.Program;
+import com.caoccao.qjs4j.compilation.ast.AstUtils;
+import com.caoccao.qjs4j.compilation.compiler.Compiler;
+import com.caoccao.qjs4j.compilation.ast.Program;
 import com.caoccao.qjs4j.exceptions.JSErrorType;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.vm.StackFrame;
@@ -809,7 +809,7 @@ public final class JSGlobalObject {
                     }
                     src.append("\n) {\n").append(body).append("\n})");
                     try {
-                        JSBytecodeFunction wrapper = new com.caoccao.qjs4j.compiler.Compiler(
+                        JSBytecodeFunction wrapper = new com.caoccao.qjs4j.compilation.compiler.Compiler(
                                 src.toString(), "<AsyncGeneratorFunction>").compile(false).function();
                         wrapper.initializePrototypeChain(ctx);
                         return ctx.getVirtualMachine().execute(wrapper, ctx.getGlobalObject(), new JSValue[0]);

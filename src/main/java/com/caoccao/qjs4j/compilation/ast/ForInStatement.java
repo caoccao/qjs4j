@@ -1,0 +1,35 @@
+/*
+ * Copyright (c) 2025-2026. caoccao.com Sam Cao
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.caoccao.qjs4j.compilation.ast;
+
+/**
+ * Represents a for-in statement: for (variable in object) { ... }
+ * <p>
+ * Based on ES5 for-in loops.
+ * left can be a VariableDeclaration (e.g., var x) or a Pattern/Expression (e.g., x, obj.prop).
+ */
+public record ForInStatement(
+        ASTNode left,                 // VariableDeclaration or Pattern (Identifier, MemberExpression, etc.)
+        Expression right,             // Object expression
+        Statement body,               // Loop body
+        SourceLocation location
+) implements Statement {
+    @Override
+    public SourceLocation getLocation() {
+        return location;
+    }
+}

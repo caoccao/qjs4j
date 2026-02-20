@@ -210,7 +210,7 @@ Tests are organized by component:
 - `com.caoccao.qjs4j.core.*Test` - Core runtime tests
 - `com.caoccao.qjs4j.builtins.*Test` - Built-in object tests
 - `com.caoccao.qjs4j.vm.*Test` - VM and bytecode tests
-- `com.caoccao.qjs4j.compiler.*Test` - Parser/compiler tests
+- `com.caoccao.qjs4j.compilation.*Test` - Parser/compiler tests
 
 ### Test Utilities
 - **BaseTest**: Base class with common test setup (extends JUnit 5)

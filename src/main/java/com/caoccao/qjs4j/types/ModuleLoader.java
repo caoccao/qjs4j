@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.types;
 
-import com.caoccao.qjs4j.compiler.Compiler;
+import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSObject;

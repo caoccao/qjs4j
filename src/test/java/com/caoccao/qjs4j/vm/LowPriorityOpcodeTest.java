@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.compiler.BytecodeEmitter;
+import com.caoccao.qjs4j.compilation.compiler.BytecodeEmitter;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import org.junit.jupiter.api.Test;
