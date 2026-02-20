@@ -332,6 +332,32 @@ public final class JSArray extends JSObject {
     }
 
     /**
+     * Override three-arg get so prototype chain lookups find dense array elements.
+     * Without this, JSObject's three-arg get only checks shape/sparse properties,
+     * missing JSArray's dense storage when this array is in a prototype chain.
+     */
+    @Override
+    protected JSValue get(PropertyKey key, JSContext context, JSObject receiver) {
+        long index = getArrayIndex(key);
+        if (index >= 0 && index < length && index <= Integer.MAX_VALUE) {
+            int intIndex = (int) index;
+            // Check dense array
+            if (intIndex < denseArray.length && denseArray[intIndex] != null) {
+                return denseArray[intIndex];
+            }
+            // Check sparse storage
+            if (sparseProperties != null) {
+                JSValue value = sparseProperties.get(intIndex);
+                if (value != null) {
+                    return value;
+                }
+            }
+        }
+        // Delegate to JSObject for shape properties, getters, and prototype chain
+        return super.get(key, context, receiver);
+    }
+
+    /**
      * copyWithin helper:
      * resolves an indexed source value while honoring inherited indexed properties.
      * Mirrors QuickJS JS_TryGetPropertyInt64 lookup shape for this use case.
