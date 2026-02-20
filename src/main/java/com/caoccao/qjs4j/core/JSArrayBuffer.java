@@ -142,7 +142,10 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
         // Check for options (maxByteLength for resizable buffers)
         long maxByteLengthLong = -1;
         if (args.length >= 2 && args[1] instanceof JSObject options) {
-            JSValue maxByteLengthValue = options.get("maxByteLength");
+            JSValue maxByteLengthValue = options.get(PropertyKey.fromString("maxByteLength"), context);
+            if (context.hasPendingException()) {
+                throw new JSException(context.getPendingException());
+            }
             if (!(maxByteLengthValue instanceof JSUndefined)) {
                 // QuickJS: JS_ToInt64Free then check bounds
                 long maxLenLong = (long) JSTypeConversions.toInteger(context, maxByteLengthValue);
