@@ -157,6 +157,17 @@ public final class JSReflectObject {
             return result instanceof JSObject ? result : thisObject;
         }
 
+        // ArrayBuffer/SharedArrayBuffer: ES spec requires OrdinaryCreateFromConstructor
+        // (prototype access) AFTER argument validation but BEFORE CreateByteDataBlock
+        // (allocation). Use createForConstruct which handles this ordering.
+        if (constructorType == JSConstructorType.ARRAY_BUFFER) {
+            try {
+                return JSArrayBuffer.createForConstruct(context, function, newTarget, args);
+            } catch (JSErrorException e) {
+                return context.throwError(e.getErrorType().name(), e.getMessage());
+            }
+        }
+
         JSObject result;
         try {
             result = constructorType.create(context, args);
