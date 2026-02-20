@@ -131,16 +131,16 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         assertThat(result.isUndefined()).isTrue();
         assertThat(buffer.getByteLength()).isEqualTo(8);
 
-        // Edge case: resize non-resizable buffer
+        // Edge case: resize non-resizable buffer (TypeError per ES2024 spec)
         JSArrayBuffer fixedBuffer = new JSArrayBuffer(16);
         result = ArrayBufferPrototype.resize(context, fixedBuffer, new JSValue[]{new JSNumber(32)});
-        assertRangeError(result);
+        assertTypeError(result);
         assertPendingException(context);
 
-        // Edge case: resize detached buffer
+        // Edge case: resize detached buffer (TypeError per ES2024 spec)
         buffer.detach();
         result = ArrayBufferPrototype.resize(context, buffer, new JSValue[]{new JSNumber(16)});
-        assertRangeError(result);
+        assertTypeError(result);
         assertPendingException(context);
 
         // Edge case: resize beyond maxByteLength
@@ -155,11 +155,11 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         assertTypeError(result);
         assertPendingException(context);
 
-        // Edge case: no arguments
+        // Edge case: no arguments (ToIndex(undefined) = 0, resizes to 0 per ES2024 spec)
         JSArrayBuffer buffer3 = new JSArrayBuffer(16, 64);
         result = ArrayBufferPrototype.resize(context, buffer3, new JSValue[]{});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertThat(result.isUndefined()).isTrue();
+        assertThat(buffer3.getByteLength()).isEqualTo(0);
     }
 
     @Test

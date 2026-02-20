@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 /**
  * Implementation of ArrayBuffer.prototype methods.
@@ -92,7 +93,7 @@ public final class ArrayBufferPrototype {
 
     /**
      * ArrayBuffer.prototype.resize(newByteLength)
-     * ES2024 25.1.5.3
+     * ES2024 25.1.5.4
      * Resizes the ArrayBuffer to the specified size, in bytes.
      */
     public static JSValue resize(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -100,14 +101,34 @@ public final class ArrayBufferPrototype {
             return context.throwTypeError("ArrayBuffer.prototype.resize called on non-ArrayBuffer");
         }
 
-        if (args.length == 0) {
-            return context.throwTypeError("ArrayBuffer.prototype.resize requires a newByteLength argument");
+        // Step 2: RequireInternalSlot(O, [[ArrayBufferMaxByteLength]]) - check resizable
+        if (!buffer.isResizable()) {
+            return context.throwTypeError("Method ArrayBuffer.prototype.resize called on incompatible receiver #<ArrayBuffer>");
         }
 
-        int newByteLength = JSTypeConversions.toInt32(context, args[0]);
+        // Step 4: Let newByteLength be ? ToIndex(newLength) - may trigger valueOf which could detach
+        long newByteLength;
+        try {
+            newByteLength = JSTypeConversions.toIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        } catch (JSRangeErrorException e) {
+            return context.throwRangeError(e.getMessage());
+        }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        // Step 5: If IsDetachedBuffer(O) is true, throw a TypeError
+        if (buffer.isDetached()) {
+            return context.throwTypeError("Cannot perform ArrayBuffer.prototype.resize on a detached ArrayBuffer");
+        }
+
+        // Step 6: If newByteLength > O.[[ArrayBufferMaxByteLength]], throw a RangeError
+        if (newByteLength > buffer.getMaxByteLength()) {
+            return context.throwRangeError("ArrayBuffer.prototype.resize: Invalid length parameter");
+        }
 
         try {
-            buffer.resize(newByteLength);
+            buffer.resize((int) newByteLength);
             return JSUndefined.INSTANCE;
         } catch (IllegalStateException | IllegalArgumentException e) {
             return context.throwRangeError(e.getMessage());

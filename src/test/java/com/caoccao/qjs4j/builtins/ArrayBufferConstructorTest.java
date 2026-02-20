@@ -98,6 +98,33 @@ public class ArrayBufferConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testResize() {
+        // Normal case: resize to larger
+        assertIntegerWithJavet(
+                "var buf = new ArrayBuffer(16, {maxByteLength: 64}); buf.resize(32); buf.byteLength;");
+        // Normal case: resize to smaller
+        assertIntegerWithJavet(
+                "var buf = new ArrayBuffer(16, {maxByteLength: 64}); buf.resize(8); buf.byteLength;");
+        // No arguments: ToIndex(undefined) = 0, resizes to 0
+        assertIntegerWithJavet(
+                "var buf = new ArrayBuffer(16, {maxByteLength: 64}); buf.resize(); buf.byteLength;");
+        // Resize non-resizable buffer: TypeError
+        assertErrorWithJavet(
+                "new ArrayBuffer(16).resize(32);");
+        // Resize beyond maxByteLength: RangeError
+        assertErrorWithJavet(
+                "new ArrayBuffer(16, {maxByteLength: 64}).resize(128);");
+        // Resize detached buffer: TypeError
+        assertErrorWithJavet(
+                "var buf = new ArrayBuffer(16, {maxByteLength: 64}); buf.transfer(); buf.resize(8);");
+        // Coercion order: valueOf detaches buffer, then detach check triggers TypeError
+        assertBooleanWithJavet(
+                "var buf = new ArrayBuffer(16, {maxByteLength: 64});" +
+                "var evil = { valueOf() { buf.transfer(); return 8; } };" +
+                "try { buf.resize(evil); false; } catch(e) { e instanceof TypeError; }");
+    }
+
+    @Test
     public void testTypeof() {
         assertStringWithJavet(
                 "typeof ArrayBuffer;");
