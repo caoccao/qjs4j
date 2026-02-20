@@ -3580,6 +3580,21 @@ public final class VirtualMachine {
 
         JSValue result = nextFunc.call(context, iterator, EMPTY_ARGS);
 
+        // Check for pending exception (e.g., TypedArray detachment during iteration)
+        if (context.hasPendingException()) {
+            // Restore stack before throwing
+            valueStack.push(catchOffset);
+            for (int i = depth - 1; i >= 0; i--) {
+                valueStack.push(forOfTempValues[i]);
+                forOfTempValues[i] = null;
+            }
+            JSValue pendingEx = context.getPendingException();
+            if (pendingEx instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("Iterator next threw", pendingEx);
+        }
+
         // For sync iterators, extract value and done from the result object
         // QuickJS FOR_OF_NEXT pushes: iter, next, catch_offset, value, done
         // So we need to extract {value, done} from result

@@ -45,6 +45,10 @@ public final class TypedArrayPrototype {
         }
         final int[] index = {0};
         return new JSIterator(context, () -> {
+            if (typedArray.isOutOfBounds()) {
+                context.throwTypeError("Cannot perform Array Iterator.prototype.next on a typed array backed by a detached or out-of-bounds buffer");
+                return JSIterator.IteratorResult.done(context);
+            }
             if (index[0] >= typedArray.getLength()) {
                 return JSIterator.IteratorResult.done(context);
             }
@@ -141,6 +145,10 @@ public final class TypedArrayPrototype {
         }
         final int[] index = {0};
         return new JSIterator(context, () -> {
+            if (typedArray.isOutOfBounds()) {
+                context.throwTypeError("Cannot perform Array Iterator.prototype.next on a typed array backed by a detached or out-of-bounds buffer");
+                return JSIterator.IteratorResult.done(context);
+            }
             if (index[0] >= typedArray.getLength()) {
                 return JSIterator.IteratorResult.done(context);
             }
@@ -205,6 +213,10 @@ public final class TypedArrayPrototype {
         }
         final int[] index = {0};
         return new JSIterator(context, () -> {
+            if (typedArray.isOutOfBounds()) {
+                context.throwTypeError("Cannot perform Array Iterator.prototype.next on a typed array backed by a detached or out-of-bounds buffer");
+                return JSIterator.IteratorResult.done(context);
+            }
             if (index[0] >= typedArray.getLength()) {
                 return JSIterator.IteratorResult.done(context);
             }
