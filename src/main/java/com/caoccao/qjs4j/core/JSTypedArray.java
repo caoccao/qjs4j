@@ -501,6 +501,10 @@ public abstract class JSTypedArray extends JSObject {
             }
             return (currentByteLength - byteOffset) / bytesPerElement;
         }
+        // Fixed-length views backed by resizable buffers return 0 when out of bounds
+        if (isOutOfBounds()) {
+            return 0;
+        }
         return length;
     }
 

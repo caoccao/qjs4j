@@ -195,6 +195,34 @@ public final class JSStringObject extends JSObject {
         return super.hasOwnProperty(key);
     }
 
+    /**
+     * Override set to reject writes to character index properties.
+     * Per ES spec 10.4.3 / OrdinarySetWithOwnDescriptor, String exotic objects have
+     * non-writable character index own properties, so Set must fail for those keys.
+     */
+    @Override
+    public void set(PropertyKey key, JSValue val, JSContext context) {
+        int charIndex = -1;
+        if (key.isIndex()) {
+            charIndex = key.asIndex();
+        } else if (key.isString()) {
+            try {
+                charIndex = Integer.parseInt(key.asString());
+            } catch (NumberFormatException e) {
+                // Not a numeric index
+            }
+        }
+        if (charIndex >= 0 && charIndex < value.value().length()) {
+            // Character indices are non-writable, non-configurable own properties
+            if (context != null) {
+                context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString()
+                        + "' of object '[object String]'");
+            }
+            return;
+        }
+        super.set(key, val, context);
+    }
+
     @Override
     public Object toJavaObject() {
         return value.value();

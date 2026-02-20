@@ -175,17 +175,26 @@ public final class ArrayPrototype {
      * Copies a sequence of array elements within the array.
      */
     public static JSValue copyWithin(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
-            return context.throwTypeError("Array.prototype.copyWithin called on non-array");
+        // Step 1: Let O be ? ToObject(this value).
+        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        if (obj == null) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
-        long length = arr.getLength();
-        if (length == 0 || args.length == 0) {
-            return arr;
+        // Step 2: Let len be ? LengthOfArrayLike(O).
+        long length;
+        if (obj instanceof JSArray arr) {
+            length = arr.getLength();
+        } else {
+            JSValue lenVal = obj.get(PropertyKey.LENGTH, context);
+            if (context.hasPendingException()) return context.getPendingException();
+            length = JSTypeConversions.toLength(context, lenVal);
+            if (context.hasPendingException()) return context.getPendingException();
         }
 
-        // Get target position
-        long target = (long) JSTypeConversions.toInteger(context, args[0]);
+        // Get target position (JS_ToInt64Clamp with min=0, max=len, neg_offset=len)
+        long target = (long) JSTypeConversions.toInteger(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) return context.getPendingException();
         if (target < 0) {
             target = Math.max(length + target, 0);
         } else {
@@ -193,7 +202,8 @@ public final class ArrayPrototype {
         }
 
         // Get start position
-        long start = args.length > 1 ? (long) JSTypeConversions.toInteger(context, args[1]) : 0;
+        long start = (long) JSTypeConversions.toInteger(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) return context.getPendingException();
         if (start < 0) {
             start = Math.max(length + start, 0);
         } else {
@@ -201,47 +211,51 @@ public final class ArrayPrototype {
         }
 
         // Get end position
-        long end = args.length > 2 ? (long) JSTypeConversions.toInteger(context, args[2]) : length;
-        if (end < 0) {
-            end = Math.max(length + end, 0);
+        long end;
+        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
+            end = (long) JSTypeConversions.toInteger(context, args[2]);
+            if (context.hasPendingException()) return context.getPendingException();
+            if (end < 0) {
+                end = Math.max(length + end, 0);
+            } else {
+                end = Math.min(end, length);
+            }
         } else {
-            end = Math.min(end, length);
+            end = length;
         }
 
         // Calculate count
         long count = Math.min(end - start, length - target);
         if (count <= 0) {
-            return arr;
+            return obj;
         }
 
-        // Follow QuickJS / spec behavior:
-        // 1) copy direction depends on overlap
-        // 2) holes are preserved by deleting destination when source is absent
-        final boolean backward = start < target && target < start + count;
+        // Copy direction depends on overlap (per spec step 12)
+        int dir = (start < target && target < start + count) ? -1 : 1;
         for (long i = 0; i < count; i++) {
-            final long from = backward ? (start + count - i - 1) : (start + i);
-            final long to = backward ? (target + count - i - 1) : (target + i);
+            final long from = dir < 0 ? (start + count - i - 1) : (start + i);
+            final long to = dir < 0 ? (target + count - i - 1) : (target + i);
             final PropertyKey fromKey = PropertyKey.fromString(Long.toString(from));
             final PropertyKey toKey = PropertyKey.fromString(Long.toString(to));
 
-            if (arr.has(fromKey)) {
-                JSValue value = arr.getDense(context, fromKey, from);
+            if (obj.has(fromKey)) {
+                JSValue value = obj.get(fromKey, context);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
-                arr.set(to, value, context);
+                obj.set(toKey, value, context);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
-            } else if (!arr.delete(toKey, context)) {
+            } else if (!obj.delete(toKey, context)) {
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
-                return context.throwTypeError("Cannot delete property '" + to + "' of [object Array]");
+                return context.throwTypeError("Cannot delete property '" + to + "'");
             }
         }
 
-        return arr;
+        return obj;
     }
 
     /**
