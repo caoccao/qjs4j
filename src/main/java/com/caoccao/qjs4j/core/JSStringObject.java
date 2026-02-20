@@ -171,6 +171,30 @@ public final class JSStringObject extends JSObject {
         return value;
     }
 
+    /**
+     * Override hasOwnProperty for String exotic [[HasProperty]] semantics.
+     * Character indices within the string bounds are own properties.
+     */
+    @Override
+    public boolean hasOwnProperty(PropertyKey key) {
+        if (key.isIndex()) {
+            int index = key.asIndex();
+            if (index >= 0 && index < value.value().length()) {
+                return true;
+            }
+        } else if (key.isString()) {
+            try {
+                int index = Integer.parseInt(key.asString());
+                if (index >= 0 && index < value.value().length()) {
+                    return true;
+                }
+            } catch (NumberFormatException e) {
+                // Not a numeric index, fall through
+            }
+        }
+        return super.hasOwnProperty(key);
+    }
+
     @Override
     public Object toJavaObject() {
         return value.value();
