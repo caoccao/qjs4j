@@ -603,7 +603,7 @@ public final class JSGlobalObject {
         arrayBufferPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSArrayBuffer.NAME));
 
         // Create ArrayBuffer constructor as a function
-        JSNativeFunction arrayBufferConstructor = new JSNativeFunction(JSArrayBuffer.NAME, 1, ArrayBufferConstructor::call, true);
+        JSNativeFunction arrayBufferConstructor = new JSNativeFunction(JSArrayBuffer.NAME, 1, ArrayBufferConstructor::call, true, true);
         arrayBufferConstructor.set(PropertyKey.PROTOTYPE, arrayBufferPrototype);
         arrayBufferConstructor.setConstructorType(JSConstructorType.ARRAY_BUFFER);
         arrayBufferPrototype.definePropertyWritableConfigurable("constructor", arrayBufferConstructor);

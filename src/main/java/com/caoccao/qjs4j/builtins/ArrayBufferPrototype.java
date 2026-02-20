@@ -297,6 +297,11 @@ public final class ArrayBufferPrototype {
             return context.throwTypeError("Cannot perform ArrayBuffer.prototype.transfer on a detached ArrayBuffer");
         }
 
+        // Step 6: If IsImmutableBuffer(arrayBuffer) is true, throw a TypeError
+        if (buffer.isImmutable()) {
+            return context.throwTypeError("Cannot transfer an immutable ArrayBuffer");
+        }
+
         if (newByteLength > Integer.MAX_VALUE) {
             return context.throwRangeError("invalid array buffer length");
         }
@@ -335,6 +340,11 @@ public final class ArrayBufferPrototype {
 
         if (buffer.isDetached()) {
             return context.throwTypeError("Cannot perform ArrayBuffer.prototype.transferToFixedLength on a detached ArrayBuffer");
+        }
+
+        // Step 6: If IsImmutableBuffer(arrayBuffer) is true, throw a TypeError
+        if (buffer.isImmutable()) {
+            return context.throwTypeError("Cannot transfer an immutable ArrayBuffer");
         }
 
         if (newByteLength > Integer.MAX_VALUE) {
