@@ -27,6 +27,7 @@ import java.util.Locale;
  * Intl.DateTimeFormat instance object.
  */
 public final class JSIntlDateTimeFormat extends JSObject {
+    public static final String NAME = "Intl.DateTimeFormat";
     private final FormatStyle dateStyle;
     private final Locale locale;
     private final FormatStyle timeStyle;

@@ -22,6 +22,7 @@ import java.util.Locale;
  * Intl.Locale instance object.
  */
 public final class JSIntlLocale extends JSObject {
+    public static final String NAME = "Intl.Locale";
     private final Locale locale;
     private final String tag;
 

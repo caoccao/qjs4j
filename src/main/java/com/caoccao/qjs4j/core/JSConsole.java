@@ -26,6 +26,69 @@ import java.util.*;
  * Supports configurable output streams for stdout and stderr.
  */
 public final class JSConsole {
+    private static final Map<Class<?>, String> CLASS_NAMES = Map.ofEntries(
+            Map.entry(JSObject.class, JSObject.NAME),
+            Map.entry(JSArray.class, JSArray.NAME),
+            Map.entry(JSArguments.class, JSArguments.NAME),
+            Map.entry(JSArrayBuffer.class, JSArrayBuffer.NAME),
+            Map.entry(JSSharedArrayBuffer.class, JSSharedArrayBuffer.NAME),
+            Map.entry(JSDataView.class, JSDataView.NAME),
+            Map.entry(JSBooleanObject.class, JSBooleanObject.NAME),
+            Map.entry(JSBigIntObject.class, JSBigIntObject.NAME),
+            Map.entry(JSNumberObject.class, JSNumberObject.NAME),
+            Map.entry(JSStringObject.class, JSStringObject.NAME),
+            Map.entry(JSSymbolObject.class, JSSymbolObject.NAME),
+            Map.entry(JSDate.class, JSDate.NAME),
+            Map.entry(JSError.class, JSError.NAME),
+            Map.entry(JSAggregateError.class, JSAggregateError.NAME),
+            Map.entry(JSEvalError.class, JSEvalError.NAME),
+            Map.entry(JSRangeError.class, JSRangeError.NAME),
+            Map.entry(JSReferenceError.class, JSReferenceError.NAME),
+            Map.entry(JSSyntaxError.class, JSSyntaxError.NAME),
+            Map.entry(JSTypeError.class, JSTypeError.NAME),
+            Map.entry(JSURIError.class, JSURIError.NAME),
+            Map.entry(JSSuppressedError.class, JSSuppressedError.NAME),
+            Map.entry(JSFinalizationRegistry.class, JSFinalizationRegistry.NAME),
+            Map.entry(JSFunction.class, JSFunction.NAME),
+            Map.entry(JSBytecodeFunction.class, JSBytecodeFunction.NAME),
+            Map.entry(JSNativeFunction.class, JSNativeFunction.NAME),
+            Map.entry(JSBoundFunction.class, JSBoundFunction.NAME),
+            Map.entry(JSClass.class, JSClass.NAME),
+            Map.entry(JSGenerator.class, JSGenerator.NAME),
+            Map.entry(JSAsyncGenerator.class, JSAsyncGenerator.NAME),
+            Map.entry(JSAsyncIterator.class, JSAsyncIterator.NAME),
+            Map.entry(JSIterator.class, JSIterator.NAME),
+            Map.entry(JSMap.class, JSMap.NAME),
+            Map.entry(JSSet.class, JSSet.NAME),
+            Map.entry(JSWeakMap.class, JSWeakMap.NAME),
+            Map.entry(JSWeakSet.class, JSWeakSet.NAME),
+            Map.entry(JSWeakRef.class, JSWeakRef.NAME),
+            Map.entry(JSPromise.class, JSPromise.NAME),
+            Map.entry(JSProxy.class, JSProxy.NAME),
+            Map.entry(JSRegExp.class, JSRegExp.NAME),
+            Map.entry(JSDisposableStack.class, JSDisposableStack.NAME),
+            Map.entry(JSAsyncDisposableStack.class, JSAsyncDisposableStack.NAME),
+            Map.entry(JSTypedArray.class, JSTypedArray.NAME),
+            Map.entry(JSInt8Array.class, JSInt8Array.NAME),
+            Map.entry(JSInt16Array.class, JSInt16Array.NAME),
+            Map.entry(JSInt32Array.class, JSInt32Array.NAME),
+            Map.entry(JSUint8Array.class, JSUint8Array.NAME),
+            Map.entry(JSUint8ClampedArray.class, JSUint8ClampedArray.NAME),
+            Map.entry(JSUint16Array.class, JSUint16Array.NAME),
+            Map.entry(JSUint32Array.class, JSUint32Array.NAME),
+            Map.entry(JSBigInt64Array.class, JSBigInt64Array.NAME),
+            Map.entry(JSBigUint64Array.class, JSBigUint64Array.NAME),
+            Map.entry(JSFloat16Array.class, JSFloat16Array.NAME),
+            Map.entry(JSFloat32Array.class, JSFloat32Array.NAME),
+            Map.entry(JSFloat64Array.class, JSFloat64Array.NAME),
+            Map.entry(JSIntlCollator.class, JSIntlCollator.NAME),
+            Map.entry(JSIntlDateTimeFormat.class, JSIntlDateTimeFormat.NAME),
+            Map.entry(JSIntlListFormat.class, JSIntlListFormat.NAME),
+            Map.entry(JSIntlLocale.class, JSIntlLocale.NAME),
+            Map.entry(JSIntlNumberFormat.class, JSIntlNumberFormat.NAME),
+            Map.entry(JSIntlPluralRules.class, JSIntlPluralRules.NAME),
+            Map.entry(JSIntlRelativeTimeFormat.class, JSIntlRelativeTimeFormat.NAME)
+    );
     private static final int MAX_PRINT_DEPTH = 2;
     private static final int MAX_PRINT_ITEM_COUNT = 100;
     private static final int MAX_PRINT_STRING_LENGTH = 1000;
@@ -509,35 +572,7 @@ public final class JSConsole {
     }
 
     private String getClassName(JSObject object) {
-        if (object instanceof JSStringObject) {
-            return JSStringObject.NAME;
-        }
-        if (object instanceof JSNumberObject) {
-            return JSNumberObject.NAME;
-        }
-        if (object instanceof JSBooleanObject) {
-            return JSBooleanObject.NAME;
-        }
-        if (object instanceof JSBigIntObject) {
-            return JSBigIntObject.NAME;
-        }
-        if (object instanceof JSDate) {
-            return JSDate.NAME;
-        }
-        if (object instanceof JSTypedArray typedArray) {
-            return typedArray.getClass().getSimpleName().replaceFirst("^JS", "");
-        }
-        if (object instanceof JSArrayBuffer) {
-            return JSArrayBuffer.NAME;
-        }
-        if (object instanceof JSSharedArrayBuffer) {
-            return JSSharedArrayBuffer.NAME;
-        }
-        String simpleName = object.getClass().getSimpleName();
-        if (simpleName.startsWith("JS")) {
-            return simpleName.substring(2);
-        }
-        return JSObject.NAME;
+        return CLASS_NAMES.getOrDefault(object.getClass(), JSObject.NAME);
     }
 
     public PrintStream getErr() {

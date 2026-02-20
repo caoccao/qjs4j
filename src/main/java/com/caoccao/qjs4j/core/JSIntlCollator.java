@@ -23,6 +23,7 @@ import java.util.Locale;
  * Intl.Collator instance object.
  */
 public final class JSIntlCollator extends JSObject {
+    public static final String NAME = "Intl.Collator";
     private final Collator collator;
     private final Locale locale;
     private final String sensitivity;

@@ -20,6 +20,7 @@ package com.caoccao.qjs4j.core;
  * Represents a bound JavaScript function (created via Function.prototype.bind).
  */
 public final class JSBoundFunction extends JSFunction {
+    public static final String NAME = JSFunction.NAME;
     private final JSValue[] boundArgs;
     private final JSValue boundThis;
     private final JSFunction target;

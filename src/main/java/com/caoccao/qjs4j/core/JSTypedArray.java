@@ -32,6 +32,7 @@ import java.util.List;
  * TypedArrays provide an array-like view of an underlying ArrayBuffer.
  */
 public abstract class JSTypedArray extends JSObject {
+    public static final String NAME = "TypedArray";
     protected final JSArrayBufferable buffer;
     protected final int byteLength;
     protected final int byteOffset;

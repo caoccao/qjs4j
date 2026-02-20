@@ -20,6 +20,7 @@ package com.caoccao.qjs4j.core;
  * Represents a native (Java-implemented) JavaScript function.
  */
 public final class JSNativeFunction extends JSFunction {
+    public static final String NAME = JSFunction.NAME;
     private final NativeCallback callback;
     private final boolean isConstructor;
     private final int length;

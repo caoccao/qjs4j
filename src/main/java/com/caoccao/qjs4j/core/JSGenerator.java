@@ -32,6 +32,7 @@ import com.caoccao.qjs4j.vm.YieldResult;
  * in JSGlobalObject, not on each instance.
  */
 public final class JSGenerator extends JSObject {
+    public static final String NAME = "Generator";
     private final JSContext context;
     private final JSGeneratorState generatorState;
     private final JSIterator.IteratorFunction iteratorFunction;

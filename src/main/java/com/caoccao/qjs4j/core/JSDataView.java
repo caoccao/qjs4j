@@ -31,7 +31,7 @@ import java.nio.ByteOrder;
  * multiple number types in an ArrayBuffer.
  */
 public final class JSDataView extends JSObject {
-    public static String NAME = "DataView";
+    public static final String NAME = "DataView";
     private final JSArrayBuffer buffer;
     private final int byteLength;
     private final int byteOffset;

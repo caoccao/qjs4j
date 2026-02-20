@@ -23,6 +23,7 @@ import java.util.Locale;
  * Intl.RelativeTimeFormat instance object.
  */
 public final class JSIntlRelativeTimeFormat extends JSObject {
+    public static final String NAME = "Intl.RelativeTimeFormat";
     private final Locale locale;
     private final String numeric;
     private final String style;

@@ -28,6 +28,7 @@ import java.util.Iterator;
  * - Identified by Symbol.asyncIterator
  */
 public class JSAsyncIterator extends JSObject {
+    public static final String NAME = "AsyncIterator";
     private final JSContext context;
     private final AsyncIteratorFunction iteratorFunction;
     /**

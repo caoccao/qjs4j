@@ -33,6 +33,7 @@ import java.util.Map;
  * - Static methods are added to the class itself
  */
 public final class JSClass extends JSFunction {
+    public static final String NAME = JSFunction.NAME;
     private final JSFunction constructor;
     private final Map<String, PropertyDescriptor> instanceFields;
     private final Map<String, JSFunction> instanceMethods;

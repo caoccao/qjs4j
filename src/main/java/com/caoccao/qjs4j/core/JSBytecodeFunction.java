@@ -38,6 +38,7 @@ import com.caoccao.qjs4j.vm.YieldResult;
  * - Function metadata (name, length)
  */
 public final class JSBytecodeFunction extends JSFunction {
+    public static final String NAME = JSFunction.NAME;
     private final Bytecode bytecode;
     private final JSValue[] closureVars;
     private final boolean isArrow;

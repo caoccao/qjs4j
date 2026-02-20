@@ -24,6 +24,7 @@ import java.util.Locale;
  * Intl.NumberFormat instance object.
  */
 public final class JSIntlNumberFormat extends JSObject {
+    public static final String NAME = "Intl.NumberFormat";
     private final String currency;
     private final Locale locale;
     private final String style;

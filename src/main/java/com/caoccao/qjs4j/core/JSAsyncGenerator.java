@@ -28,6 +28,7 @@ package com.caoccao.qjs4j.core;
  * - Methods return promises: next(), return(), throw()
  */
 public final class JSAsyncGenerator extends JSObject {
+    public static final String NAME = "AsyncGenerator";
     private final JSContext context;
     private final AsyncGeneratorFunction generatorFunction;
     private JSValue returnValue;

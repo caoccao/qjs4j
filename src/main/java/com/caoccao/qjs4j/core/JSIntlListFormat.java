@@ -23,6 +23,7 @@ import java.util.Locale;
  * Intl.ListFormat instance object.
  */
 public final class JSIntlListFormat extends JSObject {
+    public static final String NAME = "Intl.ListFormat";
     private final Locale locale;
     private final String style;
     private final String type;

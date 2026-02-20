@@ -22,6 +22,7 @@ import java.util.Locale;
  * Intl.PluralRules instance object.
  */
 public final class JSIntlPluralRules extends JSObject {
+    public static final String NAME = "Intl.PluralRules";
     private final Locale locale;
     private final String type;
 
