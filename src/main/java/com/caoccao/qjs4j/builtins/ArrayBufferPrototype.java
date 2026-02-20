@@ -209,4 +209,20 @@ public final class ArrayBufferPrototype {
             return context.throwTypeError(e.getMessage());
         }
     }
+
+    /**
+     * ArrayBuffer.prototype.transferToImmutable()
+     * ES2025 - Creates a new immutable ArrayBuffer with the same byte content, then detaches this buffer.
+     */
+    public static JSValue transferToImmutable(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArrayBuffer buffer)) {
+            return context.throwTypeError("ArrayBuffer.prototype.transferToImmutable called on non-ArrayBuffer");
+        }
+
+        try {
+            return buffer.transferToImmutable();
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return context.throwTypeError(e.getMessage());
+        }
+    }
 }

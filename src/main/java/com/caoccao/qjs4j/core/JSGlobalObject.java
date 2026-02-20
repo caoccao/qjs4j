@@ -593,6 +593,7 @@ public final class JSGlobalObject {
         arrayBufferPrototype.definePropertyWritableConfigurable("slice", new JSNativeFunction("slice", 2, ArrayBufferPrototype::slice));
         arrayBufferPrototype.definePropertyWritableConfigurable("transfer", new JSNativeFunction("transfer", 0, ArrayBufferPrototype::transfer));
         arrayBufferPrototype.definePropertyWritableConfigurable("transferToFixedLength", new JSNativeFunction("transferToFixedLength", 0, ArrayBufferPrototype::transferToFixedLength));
+        arrayBufferPrototype.definePropertyWritableConfigurable("transferToImmutable", new JSNativeFunction("transferToImmutable", 0, ArrayBufferPrototype::transferToImmutable));
 
         // Define getter properties
         arrayBufferPrototype.defineGetterConfigurable("byteLength", ArrayBufferPrototype::getByteLength);

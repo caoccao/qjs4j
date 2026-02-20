@@ -35,6 +35,7 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
     private final int maxByteLength;
     private final boolean resizable;
     private boolean detached;
+    private boolean immutable;
 
     /**
      * Create an ArrayBuffer with the specified byte length.
@@ -231,6 +232,15 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
     }
 
     /**
+     * Check if this ArrayBuffer is immutable.
+     *
+     * @return true if immutable, false otherwise
+     */
+    public boolean isImmutable() {
+        return immutable;
+    }
+
+    /**
      * Check if this ArrayBuffer is resizable.
      *
      * @return true if resizable, false otherwise
@@ -403,6 +413,43 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
             newBuffer.getBuffer().put(bytes);
             newBuffer.getBuffer().position(0);
         }
+
+        // Detach this buffer
+        detach();
+
+        return newBuffer;
+    }
+
+    /**
+     * Transfer the contents to a new immutable ArrayBuffer and detach this buffer.
+     * ES2025 ArrayBuffer.prototype.transferToImmutable
+     *
+     * @return A new immutable ArrayBuffer with the transferred contents
+     * @throws IllegalStateException if the buffer is already detached
+     */
+    public JSArrayBuffer transferToImmutable() {
+        if (detached) {
+            throw new IllegalStateException("Cannot transfer a detached ArrayBuffer");
+        }
+
+        int currentLength = getByteLength();
+
+        // Create new fixed-length buffer
+        JSArrayBuffer newBuffer = new JSArrayBuffer(currentLength);
+
+        // Copy data
+        if (currentLength > 0) {
+            byte[] bytes = new byte[currentLength];
+            int oldPosition = buffer.position();
+            buffer.position(0);
+            buffer.get(bytes, 0, currentLength);
+            buffer.position(oldPosition);
+            newBuffer.getBuffer().put(bytes);
+            newBuffer.getBuffer().position(0);
+        }
+
+        // Mark as immutable
+        newBuffer.immutable = true;
 
         // Detach this buffer
         detach();
