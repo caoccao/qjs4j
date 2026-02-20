@@ -30,7 +30,6 @@ com.caoccao.qjs4j/
 ├── core/                  ← JSContext, JSRuntime, JSGlobalObject, JSValue hierarchy
 ├── vm/                    ← VirtualMachine, Opcode (262 opcodes), StackFrame, CallStack
 ├── builtins/              ← Constructor + Prototype pairs (ArrayConstructor/ArrayPrototype, etc.)
-├── types/                 ← JSModule, JSPromise, ModuleLoader, DynamicImport
 ├── exceptions/            ← JSCompilerException, JSSyntaxErrorException, JSTypeErrorException,
 │                            JSRangeErrorException, JSVirtualMachineException, JSErrorException
 ├── memory/                ← GarbageCollector, HeapManager, MemoryPool, ReferenceCounter

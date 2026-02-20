@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.types;
-
-import com.caoccao.qjs4j.core.*;
+package com.caoccao.qjs4j.core;
 
 import java.util.*;
 
