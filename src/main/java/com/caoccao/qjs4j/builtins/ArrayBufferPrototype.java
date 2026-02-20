@@ -19,6 +19,8 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
+import java.nio.ByteBuffer;
+
 /**
  * Implementation of ArrayBuffer.prototype methods.
  * Based on ES2020 ArrayBuffer specification.
@@ -145,25 +147,51 @@ public final class ArrayBufferPrototype {
             return context.throwTypeError("ArrayBuffer.prototype.slice called on non-ArrayBuffer");
         }
 
-        int byteLength = buffer.getByteLength();
+        if (buffer.isDetached()) {
+            return context.throwTypeError("Cannot slice a detached ArrayBuffer");
+        }
 
-        // Get begin index
-        int begin = 0;
+        int len = buffer.getByteLength();
+
+        // Compute first (start) per spec using ToIntegerOrInfinity + clamp
+        int first;
         if (args.length > 0) {
-            begin = JSTypeConversions.toInt32(context, args[0]);
+            double relativeStart = JSTypeConversions.toInteger(context, args[0]);
+            if (relativeStart < 0) {
+                first = (int) Math.max(len + relativeStart, 0);
+            } else {
+                first = (int) Math.min(relativeStart, len);
+            }
+        } else {
+            first = 0;
         }
 
-        // Get end index
-        int end = byteLength;
+        // Compute final (end) per spec using ToIntegerOrInfinity + clamp
+        int fin;
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            end = JSTypeConversions.toInt32(context, args[1]);
+            double relativeEnd = JSTypeConversions.toInteger(context, args[1]);
+            if (relativeEnd < 0) {
+                fin = (int) Math.max(len + relativeEnd, 0);
+            } else {
+                fin = (int) Math.min(relativeEnd, len);
+            }
+        } else {
+            fin = len;
         }
 
-        try {
-            return buffer.slice(context, begin, end);
-        } catch (IllegalStateException e) {
-            return context.throwTypeError(e.getMessage());
+        int newLen = Math.max(fin - first, 0);
+        JSArrayBuffer newBuffer = context.createJSArrayBuffer(newLen);
+        if (newLen > 0) {
+            ByteBuffer src = buffer.getBuffer();
+            int oldPos = src.position();
+            src.position(first);
+            byte[] bytes = new byte[newLen];
+            src.get(bytes, 0, newLen);
+            src.position(oldPos);
+            newBuffer.getBuffer().put(bytes);
+            newBuffer.getBuffer().position(0);
         }
+        return newBuffer;
     }
 
     /**
