@@ -36,8 +36,8 @@ public non-sealed class JSObject implements JSValue {
     private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL; // 2^32 - 2
     // ThreadLocal to track visited objects during prototype chain traversal
     private static final ThreadLocal<Set<JSObject>> visitedObjects = ThreadLocal.withInitial(HashSet::new);
-    protected JSConstructorType constructorType; // Internal slot for [[Constructor]] type (not accessible from JS)
     protected boolean arrayObject; // Equivalent to QuickJS class_id == JS_CLASS_ARRAY
+    protected JSConstructorType constructorType; // Internal slot for [[Constructor]] type (not accessible from JS)
     protected boolean extensible = true;
     protected boolean frozen = false;
     protected boolean htmlDDA; // Internal slot for [IsHTMLDDA] (Annex B test262 host object)
@@ -66,6 +66,45 @@ public non-sealed class JSObject implements JSValue {
     public JSObject(JSObject prototype) {
         this();
         this.prototype = prototype;
+    }
+
+    private static boolean sameValue(JSValue x, JSValue y) {
+        if (x == y) {
+            return true;
+        }
+        if (x == null || y == null) {
+            return false;
+        }
+
+        // SameValue compares by ECMAScript type first (not Java class).
+        JSValueType xType = x.type();
+        JSValueType yType = y.type();
+        if (xType != yType) {
+            return false;
+        }
+
+        return switch (xType) {
+            case UNDEFINED, NULL -> true;
+            case NUMBER -> {
+                if (!(x instanceof JSNumber xNum) || !(y instanceof JSNumber yNum)) {
+                    yield false;
+                }
+                double xVal = xNum.value();
+                double yVal = yNum.value();
+                if (Double.isNaN(xVal) && Double.isNaN(yVal)) {
+                    yield true;
+                }
+                yield Double.doubleToRawLongBits(xVal) == Double.doubleToRawLongBits(yVal);
+            }
+            case STRING -> (x instanceof JSString xStr && y instanceof JSString yStr)
+                    && xStr.value().equals(yStr.value());
+            case BOOLEAN -> (x instanceof JSBoolean xBool && y instanceof JSBoolean yBool)
+                    && xBool.value() == yBool.value();
+            case BIGINT -> (x instanceof JSBigInt xBigInt && y instanceof JSBigInt yBigInt)
+                    && xBigInt.value().equals(yBigInt.value());
+            // Symbol, Object, and Function types are same-value only by identity.
+            case SYMBOL, OBJECT, FUNCTION -> false;
+        };
     }
 
     /**
@@ -146,6 +185,8 @@ public non-sealed class JSObject implements JSValue {
                 PropertyDescriptor.accessorDescriptor(getter, null, false, true));
     }
 
+    // Property operations
+
     public void defineGetterSetterConfigurable(String name) {
         JSObject thisObject = this;
         JSNativeFunction getter = new JSNativeFunction("get " + name, 0, (ctx, thisArg, args) -> {
@@ -164,8 +205,6 @@ public non-sealed class JSObject implements JSValue {
                 PropertyKey.fromString(name),
                 PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
     }
-
-    // Property operations
 
     public void defineGetterSetterConfigurable(String name, JSNativeFunction getter, JSNativeFunction setter) {
         defineProperty(
@@ -593,45 +632,6 @@ public non-sealed class JSObject implements JSValue {
         return constructorType;
     }
 
-    private static boolean sameValue(JSValue x, JSValue y) {
-        if (x == y) {
-            return true;
-        }
-        if (x == null || y == null) {
-            return false;
-        }
-
-        // SameValue compares by ECMAScript type first (not Java class).
-        JSValueType xType = x.type();
-        JSValueType yType = y.type();
-        if (xType != yType) {
-            return false;
-        }
-
-        return switch (xType) {
-            case UNDEFINED, NULL -> true;
-            case NUMBER -> {
-                if (!(x instanceof JSNumber xNum) || !(y instanceof JSNumber yNum)) {
-                    yield false;
-                }
-                double xVal = xNum.value();
-                double yVal = yNum.value();
-                if (Double.isNaN(xVal) && Double.isNaN(yVal)) {
-                    yield true;
-                }
-                yield Double.doubleToRawLongBits(xVal) == Double.doubleToRawLongBits(yVal);
-            }
-            case STRING -> (x instanceof JSString xStr && y instanceof JSString yStr)
-                    && xStr.value().equals(yStr.value());
-            case BOOLEAN -> (x instanceof JSBoolean xBool && y instanceof JSBoolean yBool)
-                    && xBool.value() == yBool.value();
-            case BIGINT -> (x instanceof JSBigInt xBigInt && y instanceof JSBigInt yBigInt)
-                    && xBigInt.value().equals(yBigInt.value());
-            // Symbol, Object, and Function types are same-value only by identity.
-            case SYMBOL, OBJECT, FUNCTION -> false;
-        };
-    }
-
     /**
      * Get a V8-style object description for error messages.
      * Returns format that matches V8 error messages.
@@ -871,10 +871,6 @@ public non-sealed class JSObject implements JSValue {
         this.extensible = false;
     }
 
-    public void setArrayObject(boolean arrayObject) {
-        this.arrayObject = arrayObject;
-    }
-
     /**
      * Seal this object.
      * Prevents adding new properties and deleting existing properties.
@@ -885,14 +881,14 @@ public non-sealed class JSObject implements JSValue {
         this.extensible = false; // Sealed objects are not extensible
     }
 
-    // Prototype chain
-
     /**
      * Set a property value by string name.
      */
     public void set(String propertyName, JSValue value) {
         set(PropertyKey.fromString(propertyName), value);
     }
+
+    // Prototype chain
 
     /**
      * Set a property value by integer index.
@@ -910,14 +906,14 @@ public non-sealed class JSObject implements JSValue {
         set(PropertyKey.fromIndex(index), value);
     }
 
-    // Object integrity levels (ES5)
-
     /**
      * Set a property value by property key.
      */
     public void set(PropertyKey key, JSValue value) {
         set(key, value, null);
     }
+
+    // Object integrity levels (ES5)
 
     /**
      * Set a property value by property key with context for setter functions.
@@ -932,6 +928,10 @@ public non-sealed class JSObject implements JSValue {
      */
     public void set(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
         setInternal(key, value, context, receiver, true);
+    }
+
+    public void setArrayObject(boolean arrayObject) {
+        this.arrayObject = arrayObject;
     }
 
     /**

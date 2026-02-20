@@ -165,6 +165,24 @@ public final class VirtualMachine {
     }
 
     /**
+     * Convert a JSVirtualMachineException to a pendingException so the VM's
+     * JS exception handling mechanism (catch handlers on the value stack) can process it.
+     */
+    private void captureVMException(JSVirtualMachineException e) {
+        if (e.getJsValue() != null) {
+            pendingException = e.getJsValue();
+        } else if (e.getJsError() != null) {
+            pendingException = e.getJsError();
+        } else if (context.hasPendingException()) {
+            pendingException = context.getPendingException();
+        } else {
+            pendingException = context.throwError("Error",
+                    e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+        }
+        context.clearPendingException();
+    }
+
+    /**
      * Clear the pending exception in the VM.
      * This is needed when an async function catches an exception.
      */
@@ -1703,31 +1721,36 @@ public final class VirtualMachine {
                         valueStack.stackTop = sp - 1; // pop both, we'll push result
                         JSObject targetObj = toObject(gaelObj);
                         if (targetObj != null) {
-                            PropertyKey key = PropertyKey.fromValue(context, gaelIdx);
-                            JSValue result = targetObj.get(key, context);
-                            if (context.hasPendingException()) {
-                                pendingException = context.getPendingException();
-                                context.clearPendingException();
-                                stack[sp - 1] = JSUndefined.INSTANCE;
-                            } else {
-                                if (trackPropertyAccess && !propertyAccessLock) {
-                                    if (gaelIdx instanceof JSString jsString) {
-                                        String propertyName = jsString.value();
-                                        if (!propertyAccessChain.isEmpty()) {
-                                            propertyAccessChain.append('.');
+                            try {
+                                PropertyKey key = PropertyKey.fromValue(context, gaelIdx);
+                                JSValue result = targetObj.get(key, context);
+                                if (context.hasPendingException()) {
+                                    pendingException = context.getPendingException();
+                                    context.clearPendingException();
+                                    stack[sp - 1] = JSUndefined.INSTANCE;
+                                } else {
+                                    if (trackPropertyAccess && !propertyAccessLock) {
+                                        if (gaelIdx instanceof JSString jsString) {
+                                            String propertyName = jsString.value();
+                                            if (!propertyAccessChain.isEmpty()) {
+                                                propertyAccessChain.append('.');
+                                            }
+                                            propertyAccessChain.append(propertyName);
+                                        } else if (gaelIdx instanceof JSNumber jsNumber) {
+                                            String propertyName = JSTypeConversions.toString(context, jsNumber).value();
+                                            if (!propertyAccessChain.isEmpty()) {
+                                                propertyAccessChain.append('.');
+                                            }
+                                            propertyAccessChain.append(propertyName);
+                                        } else if (gaelIdx instanceof JSSymbol jsSymbol) {
+                                            propertyAccessChain.append("[Symbol.").append(jsSymbol.getDescription()).append("]");
                                         }
-                                        propertyAccessChain.append(propertyName);
-                                    } else if (gaelIdx instanceof JSNumber jsNumber) {
-                                        String propertyName = JSTypeConversions.toString(context, jsNumber).value();
-                                        if (!propertyAccessChain.isEmpty()) {
-                                            propertyAccessChain.append('.');
-                                        }
-                                        propertyAccessChain.append(propertyName);
-                                    } else if (gaelIdx instanceof JSSymbol jsSymbol) {
-                                        propertyAccessChain.append("[Symbol.").append(jsSymbol.getDescription()).append("]");
                                     }
+                                    stack[sp - 1] = result;
                                 }
-                                stack[sp - 1] = result;
+                            } catch (JSVirtualMachineException e) {
+                                captureVMException(e);
+                                stack[sp - 1] = JSUndefined.INSTANCE;
                             }
                         } else {
                             resetPropertyAccessTracking();
@@ -1753,14 +1776,19 @@ public final class VirtualMachine {
 
                         JSObject targetObj = toObject(arrayObj);
                         if (targetObj != null) {
-                            PropertyKey key = PropertyKey.fromValue(context, index);
-                            JSValue result = targetObj.get(key, context);
-                            if (context.hasPendingException()) {
-                                pendingException = context.getPendingException();
-                                context.clearPendingException();
+                            try {
+                                PropertyKey key = PropertyKey.fromValue(context, index);
+                                JSValue result = targetObj.get(key, context);
+                                if (context.hasPendingException()) {
+                                    pendingException = context.getPendingException();
+                                    context.clearPendingException();
+                                    stack[sp++] = JSUndefined.INSTANCE;
+                                } else {
+                                    stack[sp++] = result;
+                                }
+                            } catch (JSVirtualMachineException e) {
+                                captureVMException(e);
                                 stack[sp++] = JSUndefined.INSTANCE;
-                            } else {
-                                stack[sp++] = result;
                             }
                         } else {
                             stack[sp++] = JSUndefined.INSTANCE;
@@ -1775,9 +1803,14 @@ public final class VirtualMachine {
                             if (arrayObj.isUndefined() || arrayObj.isNull()) {
                                 throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
                             }
-                            JSValue convertedIndex = toPropertyKeyValue(index);
-                            stack[sp - 1] = convertedIndex;
-                            index = convertedIndex;
+                            try {
+                                JSValue convertedIndex = toPropertyKeyValue(index);
+                                stack[sp - 1] = convertedIndex;
+                                index = convertedIndex;
+                            } catch (JSVirtualMachineException e) {
+                                captureVMException(e);
+                                break;
+                            }
                         }
 
                         JSObject targetObj = toObject(arrayObj);
@@ -1921,14 +1954,25 @@ public final class VirtualMachine {
                     }
                     case TO_PROPKEY -> {
                         JSValue rawKey = (JSValue) stack[--sp];
-                        stack[sp++] = toPropertyKeyValue(rawKey);
+                        try {
+                            stack[sp++] = toPropertyKeyValue(rawKey);
+                        } catch (JSVirtualMachineException e) {
+                            captureVMException(e);
+                            break;
+                        }
                         pc += op.getSize();
                     }
                     case TO_PROPKEY2 -> {
                         JSValue rawKey = (JSValue) stack[--sp];
                         JSValue baseObject = (JSValue) stack[--sp];
                         stack[sp++] = baseObject;
-                        stack[sp++] = toPropertyKeyValue(rawKey);
+                        try {
+                            stack[sp++] = toPropertyKeyValue(rawKey);
+                        } catch (JSVirtualMachineException e) {
+                            sp--; // undo baseObject push
+                            captureVMException(e);
+                            break;
+                        }
                         pc += op.getSize();
                     }
 

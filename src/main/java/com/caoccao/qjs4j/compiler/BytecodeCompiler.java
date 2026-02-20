@@ -4811,6 +4811,32 @@ public final class BytecodeCompiler {
     }
 
     /**
+     * Emit the correct opcode sequence for a class method definition.
+     * For getter/setter methods, emits DEFINE_METHOD_COMPUTED with accessor flags.
+     * For regular methods, emits DEFINE_METHOD with the method name atom.
+     * Stack before: ... obj
+     * Stack after:  ... obj (method added to obj)
+     */
+    private void emitClassMethodDefinition(ClassDeclaration.MethodDefinition method,
+                                           JSBytecodeFunction methodFunc, String methodName) {
+        String kind = method.kind();
+        if ("get".equals(kind) || "set".equals(kind)) {
+            // Getter/setter: use DEFINE_METHOD_COMPUTED with accessor flags
+            // Stack: ... obj -> ... obj key method -> ... obj
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
+            int methodKind = "get".equals(kind) ? 1 : 2;
+            // Class properties are not enumerable (no enumerable flag)
+            emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind);
+        } else {
+            // Regular method: use DEFINE_METHOD with atom name
+            // Stack: ... obj -> ... obj method -> ... obj
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
+            emitter.emitOpcodeAtom(Opcode.DEFINE_METHOD, methodName);
+        }
+    }
+
+    /**
      * Emit CLOSE_LOC opcodes for variables declared in a VariableDeclaration.
      * Used at the end of for-loop iteration bodies to freeze VarRefs for per-iteration binding.
      */
@@ -4834,16 +4860,6 @@ public final class BytecodeCompiler {
         // Destructuring patterns would need recursive handling here
     }
 
-    private void emitConditionalVarInit(String name) {
-        emitter.emitOpcodeAtom(Opcode.PUSH_ATOM_VALUE, name);
-        emitter.emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
-        emitter.emitOpcode(Opcode.IN);
-        int skipJump = emitter.emitJump(Opcode.IF_TRUE);
-        emitter.emitOpcode(Opcode.UNDEFINED);
-        emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
-        emitter.patchJump(skipJump, emitter.currentOffset());
-    }
-
     /**
      * Emit default parameter initialization bytecode following QuickJS pattern.
      * For each parameter with a default value, emits:
@@ -4859,6 +4875,16 @@ public final class BytecodeCompiler {
      * label:
      * PUT_LOCAL idx  (store into the local variable slot)
      */
+
+    private void emitConditionalVarInit(String name) {
+        emitter.emitOpcodeAtom(Opcode.PUSH_ATOM_VALUE, name);
+        emitter.emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
+        emitter.emitOpcode(Opcode.IN);
+        int skipJump = emitter.emitJump(Opcode.IF_TRUE);
+        emitter.emitOpcode(Opcode.UNDEFINED);
+        emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
+        emitter.patchJump(skipJump, emitter.currentOffset());
+    }
 
     /**
      * Emit a conditional var initialization: only create the binding with undefined
@@ -5120,32 +5146,6 @@ public final class BytecodeCompiler {
         } else {
             // Computed property name - for now use a placeholder
             return "[computed]";
-        }
-    }
-
-    /**
-     * Emit the correct opcode sequence for a class method definition.
-     * For getter/setter methods, emits DEFINE_METHOD_COMPUTED with accessor flags.
-     * For regular methods, emits DEFINE_METHOD with the method name atom.
-     * Stack before: ... obj
-     * Stack after:  ... obj (method added to obj)
-     */
-    private void emitClassMethodDefinition(ClassDeclaration.MethodDefinition method,
-                                           JSBytecodeFunction methodFunc, String methodName) {
-        String kind = method.kind();
-        if ("get".equals(kind) || "set".equals(kind)) {
-            // Getter/setter: use DEFINE_METHOD_COMPUTED with accessor flags
-            // Stack: ... obj -> ... obj key method -> ... obj
-            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
-            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
-            int methodKind = "get".equals(kind) ? 1 : 2;
-            // Class properties are not enumerable (no enumerable flag)
-            emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind);
-        } else {
-            // Regular method: use DEFINE_METHOD with atom name
-            // Stack: ... obj -> ... obj method -> ... obj
-            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
-            emitter.emitOpcodeAtom(Opcode.DEFINE_METHOD, methodName);
         }
     }
 

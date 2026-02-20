@@ -134,24 +134,6 @@ public final class ArrayPrototype {
     }
 
     /**
-     * IsConcatSpreadable per ES2024 23.1.3.1 step 4a.
-     * Following QuickJS JS_isConcatSpreadable.
-     */
-    private static boolean isConcatSpreadable(JSContext context, JSValue val) {
-        if (!(val instanceof JSObject obj)) {
-            return false;
-        }
-        JSValue spreadable = obj.get(PropertyKey.SYMBOL_IS_CONCAT_SPREADABLE, context);
-        if (context.hasPendingException()) {
-            return false;
-        }
-        if (!(spreadable instanceof JSUndefined)) {
-            return JSTypeConversions.toBoolean(spreadable) == JSBoolean.TRUE;
-        }
-        return obj instanceof JSArray;
-    }
-
-    /**
      * Array.prototype.copyWithin(target, start[, end])
      * ES2015 23.1.3.3
      * Copies a sequence of array elements within the array.
@@ -654,6 +636,24 @@ public final class ArrayPrototype {
             }
         }
         return result;
+    }
+
+    /**
+     * IsConcatSpreadable per ES2024 23.1.3.1 step 4a.
+     * Following QuickJS JS_isConcatSpreadable.
+     */
+    private static boolean isConcatSpreadable(JSContext context, JSValue val) {
+        if (!(val instanceof JSObject obj)) {
+            return false;
+        }
+        JSValue spreadable = obj.get(PropertyKey.SYMBOL_IS_CONCAT_SPREADABLE, context);
+        if (context.hasPendingException()) {
+            return false;
+        }
+        if (!(spreadable instanceof JSUndefined)) {
+            return JSTypeConversions.toBoolean(spreadable) == JSBoolean.TRUE;
+        }
+        return obj instanceof JSArray;
     }
 
     /**

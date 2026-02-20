@@ -252,6 +252,12 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSBigInt64Array(buffer, byteOffset, length), JSBigInt64Array.NAME);
     }
 
+    public JSBigIntObject createJSBigIntObject(JSBigInt value) {
+        JSBigIntObject wrapper = new JSBigIntObject(value);
+        transferPrototype(wrapper, JSBigIntObject.NAME);
+        return wrapper;
+    }
+
     /**
      * Create a new JSBigUint64Array with proper prototype chain.
      *
@@ -264,12 +270,6 @@ public final class JSContext implements AutoCloseable {
 
     public JSBigUint64Array createJSBigUint64Array(JSArrayBufferable buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSBigUint64Array(buffer, byteOffset, length), JSBigUint64Array.NAME);
-    }
-
-    public JSBigIntObject createJSBigIntObject(JSBigInt value) {
-        JSBigIntObject wrapper = new JSBigIntObject(value);
-        transferPrototype(wrapper, JSBigIntObject.NAME);
-        return wrapper;
     }
 
     public JSBooleanObject createJSBooleanObject(JSBoolean value) {
@@ -470,16 +470,16 @@ public final class JSContext implements AutoCloseable {
         return wrapper;
     }
 
-    public JSSymbolObject createJSSymbolObject(JSSymbol value) {
-        JSSymbolObject wrapper = new JSSymbolObject(value);
-        transferPrototype(wrapper, JSSymbolObject.NAME);
-        return wrapper;
-    }
-
     public JSSuppressedError createJSSuppressedError(JSValue error, JSValue suppressed, String message) {
         JSSuppressedError jsError = new JSSuppressedError(this, error, suppressed, message);
         transferPrototype(jsError, JSSuppressedError.NAME);
         return jsError;
+    }
+
+    public JSSymbolObject createJSSymbolObject(JSSymbol value) {
+        JSSymbolObject wrapper = new JSSymbolObject(value);
+        transferPrototype(wrapper, JSSymbolObject.NAME);
+        return wrapper;
     }
 
     /**

@@ -677,31 +677,6 @@ public final class JSArray extends JSObject {
         }
     }
 
-    @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context) {
-        return setWithResult(key, value, context, this);
-    }
-
-    @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
-        long index = getArrayIndex(key);
-        if (index >= 0 || !(key.isString() && "length".equals(key.asString()))) {
-            // Non-length keys: delegate to JSObject
-            return super.setWithResult(key, value, context, receiver);
-        }
-        // Per ES spec ArraySetLength / QuickJS set_array_length:
-        // Coerce value BEFORE the read-only test
-        Long newLength = toArrayLengthForLengthProperty(context, value);
-        if (newLength == null) {
-            return false; // coercion error (pending exception)
-        }
-        if (!isLengthWritable()) {
-            return false;
-        }
-        setLength(newLength);
-        return true;
-    }
-
     /**
      * Set the array length.
      * When length is reduced, elements beyond the new length are deleted.
@@ -734,6 +709,31 @@ public final class JSArray extends JSObject {
 
         this.length = newLength;
         updateLengthProperty();
+    }
+
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context) {
+        return setWithResult(key, value, context, this);
+    }
+
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
+        long index = getArrayIndex(key);
+        if (index >= 0 || !(key.isString() && "length".equals(key.asString()))) {
+            // Non-length keys: delegate to JSObject
+            return super.setWithResult(key, value, context, receiver);
+        }
+        // Per ES spec ArraySetLength / QuickJS set_array_length:
+        // Coerce value BEFORE the read-only test
+        Long newLength = toArrayLengthForLengthProperty(context, value);
+        if (newLength == null) {
+            return false; // coercion error (pending exception)
+        }
+        if (!isLengthWritable()) {
+            return false;
+        }
+        setLength(newLength);
+        return true;
     }
 
     /**
@@ -870,6 +870,27 @@ public final class JSArray extends JSObject {
         return exactLength;
     }
 
+    /**
+     * Align array element conversion with Javet's object conversion:
+     * integral finite numbers are boxed as Integer/Long instead of Double.
+     */
+    private Object toJavaArrayElement(JSValue value) {
+        if (value instanceof JSNumber number) {
+            double numberValue = number.value();
+            if (Double.isFinite(numberValue)
+                    && numberValue == Math.rint(numberValue)
+                    && Double.doubleToRawLongBits(numberValue) != Double.doubleToRawLongBits(-0.0d)) {
+                if (numberValue >= Integer.MIN_VALUE && numberValue <= Integer.MAX_VALUE) {
+                    return (int) numberValue;
+                }
+                if (numberValue >= Long.MIN_VALUE && numberValue <= Long.MAX_VALUE) {
+                    return (long) numberValue;
+                }
+            }
+        }
+        return value.toJavaObject();
+    }
+
     @Override
     public Object toJavaObject() {
         List<Object> values = new ArrayList<>((int) Math.min(length, Integer.MAX_VALUE));
@@ -920,26 +941,5 @@ public final class JSArray extends JSObject {
         if (offset >= 0) {
             propertyValues[offset] = JSNumber.of(length);
         }
-    }
-
-    /**
-     * Align array element conversion with Javet's object conversion:
-     * integral finite numbers are boxed as Integer/Long instead of Double.
-     */
-    private Object toJavaArrayElement(JSValue value) {
-        if (value instanceof JSNumber number) {
-            double numberValue = number.value();
-            if (Double.isFinite(numberValue)
-                    && numberValue == Math.rint(numberValue)
-                    && Double.doubleToRawLongBits(numberValue) != Double.doubleToRawLongBits(-0.0d)) {
-                if (numberValue >= Integer.MIN_VALUE && numberValue <= Integer.MAX_VALUE) {
-                    return (int) numberValue;
-                }
-                if (numberValue >= Long.MIN_VALUE && numberValue <= Long.MAX_VALUE) {
-                    return (long) numberValue;
-                }
-            }
-        }
-        return value.toJavaObject();
     }
 }
