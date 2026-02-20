@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-qjs4j is a **native Java implementation of QuickJS** - a complete reimplementation of the QuickJS JavaScript engine in pure Java (JDK 17+, zero external dependencies). This is NOT a wrapper or binding to C code, but a faithful translation of the QuickJS C implementation into Java.
+qjs4j is a **native Java implementation of QuickJS** — a complete reimplementation of the QuickJS JavaScript engine in pure Java (JDK 17+, zero runtime dependencies). This is NOT a wrapper or binding to C code, but a faithful translation of the QuickJS C implementation into Java.
 
 The project implements ES2024 features with full QuickJS specification compliance, including modern JavaScript features like async/await, for-of/for-await-of loops, promises, modules, generators, proxies, and typed arrays.
 
@@ -12,113 +12,74 @@ The project implements ES2024 features with full QuickJS specification complianc
 
 ### Build & Test
 ```bash
-# Build the project
-./gradlew build
-
-# Run all tests
-./gradlew test
-
-# Clean build artifacts
-./gradlew clean
-
-# Compile Java source only
-./gradlew compileJava
-
-# Compile test source
-./gradlew compileTestJava
-
-# Run tests after clean
-./gradlew clean test
+./gradlew build                   # Build
+./gradlew test                    # All tests (excludes @Tag("performance"))
+./gradlew clean test              # Clean + test
+./gradlew compileJava             # Compile only (fast check)
+./gradlew compileTestJava         # Compile tests
 ```
 
 ### Running a Single Test
 ```bash
-# Run a specific test class
-./gradlew test --tests "com.caoccao.qjs4j.core.JSContextTest"
-
-# Run a specific test method
-./gradlew test --tests "com.caoccao.qjs4j.core.JSContextTest.testEvalSimpleExpression"
-
-# Run tests matching a pattern
-./gradlew test --tests "*AsyncTest"
-```
-
-### Code Quality
-```bash
-# Apply code formatting (if Spotless is configured)
-./gradlew spotlessApply
+./gradlew test --tests "com.caoccao.qjs4j.core.JSContextTest"                 # Specific class
+./gradlew test --tests "com.caoccao.qjs4j.core.JSContextTest.testEvalSimpleExpression"  # Specific method
+./gradlew test --tests "*AsyncTest"                                            # Pattern match
 ```
 
 ### Performance & Conformance Testing
 ```bash
-# Run JMH performance benchmarks (excluded from regular tests)
-./gradlew performanceTest
-
-# Run full Test262 ECMAScript conformance suite (requires ../test262)
-./gradlew test262
-
-# Run quick subset of Test262 for validation
-./gradlew test262Quick
-
-# Run Test262 language tests only
-./gradlew test262Language
-```
-
-### Other Useful Commands
-```bash
-# Generate Javadoc
-./gradlew javadoc
-
-# Install to local Maven repository
-./gradlew publishToMavenLocal
-
-# View all available tasks
-./gradlew tasks --all
+./gradlew performanceTest         # JMH benchmarks (@Tag("performance"))
+./gradlew test262Quick            # Quick Test262 subset
+./gradlew test262                 # Full Test262 suite (requires ../test262, -Xmx2g)
+./gradlew test262Language         # Language tests only
 ```
 
 ## Architecture Overview
 
-### High-Level Design
-
-qjs4j follows the **QuickJS C implementation architecture** closely, translating C structures and algorithms into idiomatic Java. The codebase is organized into modular packages that mirror QuickJS's internal organization:
+### Package Structure
 
 ```
 com.caoccao.qjs4j/
-├── core/          - Runtime components (JSContext, JSRuntime, JSValue hierarchy)
-├── vm/            - Virtual machine (bytecode interpreter, stack management, opcodes)
-├── compiler/      - Frontend (parser, lexer, AST, bytecode compiler)
-├── builtins/      - JavaScript built-in objects and prototype methods
-├── types/         - Specialized types (JSModule, JSIterator, JSGenerator, etc.)
-├── memory/        - Memory management (atom table, garbage collection helpers)
-├── exceptions/    - Exception hierarchy
-├── regexp/        - Regular expression engine
-├── unicode/       - Unicode handling utilities
-└── utils/         - General utilities
+├── compilation/           ← Frontend pipeline
+│   ├── ast/               Records implementing sealed interfaces (Expression, Statement, etc.)
+│   ├── compiler/          Compiler (entry), BytecodeCompiler, CompilerDelegates, EmitHelpers
+│   ├── lexer/             Lexer, LexerTemplateScanner
+│   └── parser/            Parser, ParserDelegates, Expression*Parser, StatementParser
+├── core/                  ← JSContext, JSRuntime, JSGlobalObject, JSValue hierarchy
+├── vm/                    ← VirtualMachine, Opcode (262 opcodes), StackFrame, CallStack
+├── builtins/              ← Constructor + Prototype pairs (ArrayConstructor/ArrayPrototype, etc.)
+├── types/                 ← JSModule, JSPromise, ModuleLoader, DynamicImport
+├── exceptions/            ← JSCompilerException, JSSyntaxErrorException, JSTypeErrorException,
+│                            JSRangeErrorException, JSVirtualMachineException, JSErrorException
+├── memory/                ← GarbageCollector, HeapManager, MemoryPool, ReferenceCounter
+├── regexp/                ← RegExp engine
+├── unicode/               ← Unicode data and normalization
+├── utils/                 ← AtomTable, DtoaConverter, Float16
+└── cli/                   ← QuickJSInterpreter (main class), REPL
 ```
+
+### Key File Paths
+
+| Component | Path |
+|-----------|------|
+| Compiler entry | `src/main/java/com/caoccao/qjs4j/compilation/compiler/Compiler.java` |
+| Lexer | `src/main/java/com/caoccao/qjs4j/compilation/lexer/Lexer.java` |
+| Parser | `src/main/java/com/caoccao/qjs4j/compilation/parser/Parser.java` |
+| BytecodeCompiler | `src/main/java/com/caoccao/qjs4j/compilation/compiler/BytecodeCompiler.java` |
+| BytecodeEmitter | `src/main/java/com/caoccao/qjs4j/compilation/compiler/BytecodeEmitter.java` |
+| VirtualMachine | `src/main/java/com/caoccao/qjs4j/vm/VirtualMachine.java` |
+| Opcode | `src/main/java/com/caoccao/qjs4j/vm/Opcode.java` |
+| JSContext | `src/main/java/com/caoccao/qjs4j/core/JSContext.java` |
+| JSRuntime | `src/main/java/com/caoccao/qjs4j/core/JSRuntime.java` |
+| JSGlobalObject | `src/main/java/com/caoccao/qjs4j/core/JSGlobalObject.java` |
 
 ### Core Architecture Principles
 
-1. **QuickJS Fidelity**: The implementation closely follows QuickJS's design decisions, including:
-   - Shape-based optimization with hidden classes for property access
-   - Bytecode instruction set matching QuickJS opcodes (with renumbering)
-   - Stack-based virtual machine architecture
-   - Atom table for string interning
-   - Microtask queue for promise resolution
+1. **QuickJS Fidelity**: Follows QuickJS's design decisions closely — shape-based optimization, bytecode instruction set matching (with renumbering), stack-based VM, atom table for string interning, microtask queue for promises.
 
-2. **Pure Java**: Zero native dependencies. All JavaScript semantics are implemented in Java, including:
-   - IEEE 754 floating-point arithmetic (including Float16Array)
-   - BigInt arbitrary-precision integers
-   - Proper SameValueZero equality for Map/Set
-   - Complete iterator and async iterator protocols
+2. **Pure Java**: Zero native dependencies. All JavaScript semantics implemented in Java: IEEE 754 arithmetic, BigInt, SameValueZero equality, complete iterator/async iterator protocols.
 
-3. **Modern JavaScript**: Full ES2015-ES2024 support including:
-   - Async/await with dedicated RETURN_ASYNC opcode
-   - for-of and for-await-of loops
-   - ES6 modules with dynamic import()
-   - Promises with microtask queue
-   - Generators and async generators
-   - Proxy and Reflect
-   - Typed arrays (including qjs4j-exclusive Float16Array)
+3. **Modern JavaScript**: Full ES2015-ES2024 support — async/await, for-of/for-await-of, ES6 modules with dynamic import(), generators, Proxy/Reflect, typed arrays.
 
 ### Key Components
 
@@ -130,175 +91,112 @@ com.caoccao.qjs4j/
 
 #### Virtual Machine (vm/)
 - **VirtualMachine**: Stack-based bytecode interpreter
-- **Opcode**: Enumeration of all bytecode instructions (130+ opcodes)
+- **Opcode**: Enumeration of 262 bytecode instructions
 - **StackFrame**: Call stack frame with locals, arguments, and return address
 - **CallStack**: Value stack for operand manipulation
+- Critical opcodes: `RETURN_ASYNC` (async return), `FOR_OF_START/NEXT` (sync iteration), `FOR_AWAIT_OF_START/NEXT` (async iteration), `CALL`, `NEW`, `GET_FIELD`, `SET_FIELD`
 
-The VM executes bytecode in a loop, dispatching on opcode type. Critical opcodes include:
-- `RETURN_ASYNC` (126): Dedicated return for async functions
-- `FOR_OF_START/NEXT` (129-130): Sync iteration
-- `FOR_AWAIT_OF_START/NEXT` (127-128): Async iteration
-- `CALL`, `NEW`, `GET_FIELD`, `SET_FIELD`: Object operations
-
-#### Compiler (compiler/)
+#### Compiler (compilation/)
 - **Parser**: Recursive descent parser producing AST
 - **Lexer**: Tokenizer for JavaScript source
 - **BytecodeCompiler**: AST → bytecode transformation
 - **BytecodeEmitter**: Bytecode generation and jump patching
-
-The compiler tracks context (async function, strict mode, loop depth) to emit appropriate opcodes.
+- Compiler tracks context (async function, strict mode, loop depth) to emit appropriate opcodes
+- Delegate pattern splits logic: `ExpressionCompiler`, `StatementCompiler`, `FunctionClassCompiler`, `PatternCompiler`, etc.
 
 #### Built-ins (builtins/)
-Each built-in object (Array, Object, String, etc.) has:
-- Constructor class (e.g., `ArrayConstructor`)
-- Prototype class (e.g., `ArrayPrototype`) with all prototype methods
-- Follows ES2024 specification for method behavior
+Each built-in object has a Constructor + Prototype pair (e.g., `ArrayConstructor`/`ArrayPrototype`), following ES2024 specification.
 
 #### Type System
-- **JSValue**: Base class for all JavaScript values (sealed hierarchy)
-  - **JSPrimitive**: null, undefined, boolean, number, string, symbol, bigint
-  - **JSObject**: Objects, arrays, functions, typed arrays, etc.
-- **JSFunction**: Abstract base for functions
-  - **JSBytecodeFunction**: Compiled bytecode functions
-  - **JSNativeFunction**: Java method bindings
-  - **JSAsyncFunction**: Async functions (return promises)
+- **JSValue**: Base class (sealed hierarchy) — `JSPrimitive` (null, undefined, boolean, number, string, symbol, bigint) and `JSObject` (objects, arrays, functions, typed arrays)
+- **JSFunction**: `JSBytecodeFunction` (compiled), `JSNativeFunction` (Java bindings), `JSAsyncFunction` (promise-returning)
 
-### Async/Await Implementation
-
-qjs4j implements async/await following the QuickJS model:
-
-1. **Async functions** are compiled with `isInAsyncFunction` flag set
-2. Return statements emit `RETURN_ASYNC` opcode instead of `RETURN`
-3. `JSBytecodeFunction.call()` wraps return values in promises
-4. Microtask queue (`JSMicrotaskQueue`) processes promise reactions
-5. `context.processMicrotasks()` must be called to settle promises
-
-**for-await-of loops**:
-- Parser detects `for await (... of ...)` syntax
-- Compiler emits `FOR_AWAIT_OF_START` to get async iterator
-- `FOR_AWAIT_OF_NEXT` calls iterator.next() and returns promise
-- Result object `{value, done}` is extracted with `GET_FIELD` opcodes
-- Loop continues until `done === true`
-
-### Module System
-
-ES6 modules are fully supported:
-- **JSModule**: Module record with state machine (unlinked → linking → linked → evaluating → evaluated)
-- **Module loader**: File-based resolution with caching
-- **import/export**: Named, default, namespace imports/exports
-- **dynamic import()**: Returns promise resolving to module namespace
-
-Module URLs are used for identity. Circular dependencies are handled through caching.
-
-### Shape-Based Optimization
-
-Following QuickJS, qjs4j uses "shapes" (hidden classes) for property access:
-- Each object has a shape ID
-- Shape transitions on property addition
-- Inline caching for repeated property access (planned optimization)
-
-### Memory Management
-
-- **Atom Table**: String interning for property names and identifiers
-- **WeakMap/WeakSet**: Use Java `WeakReference` and `WeakHashMap`
-- **Garbage Collection**: Relies on Java GC (no manual reference counting needed)
+#### Exception Hierarchy
+```
+RuntimeException
+├── JSException              (wraps JS error values thrown from eval)
+├── JSErrorException         (base for spec-defined JS errors)
+│   ├── JSSyntaxErrorException
+│   ├── JSTypeErrorException
+│   └── JSRangeErrorException
+├── JSCompilerException      (compilation/parse errors)
+└── JSVirtualMachineException (VM execution errors)
+```
 
 ## Testing Guidelines
 
-### Test Organization
-Tests are organized by component:
-- `com.caoccao.qjs4j.core.*Test` - Core runtime tests
-- `com.caoccao.qjs4j.builtins.*Test` - Built-in object tests
-- `com.caoccao.qjs4j.vm.*Test` - VM and bytecode tests
-- `com.caoccao.qjs4j.compilation.*Test` - Parser/compiler tests
+### Test Stack
+JDK 17+. JUnit 6 (6.0.1) + AssertJ + Javet (V8 parity comparison) + JSON-unit-assertj.
 
-### Test Utilities
-- **BaseTest**: Base class with common test setup (extends JUnit 5)
-- All tests use JUnit 5 (`@Test`, `@BeforeEach`, `@AfterEach`)
-- AssertJ for fluent assertions
-- JSON-unit-assertj for JSON comparison
+### Test Base Classes
 
-### Testing JavaScript Code
-Common pattern for testing JavaScript evaluation:
+**`BaseJavetTest`** (preferred) — runs code in both V8/Javet and qjs4j, auto-tests strict mode:
+```java
+public class MyFeatureTest extends BaseJavetTest {
+    @Test void testFeature() {
+        assertStringWithJavet("'hello'.toUpperCase()");
+    }
+}
+```
+Methods: `assertStringWithJavet()`, `assertIntegerWithJavet()`, `assertBooleanWithJavet()`, `assertDoubleWithJavet()`, `assertErrorWithJavet()`, `assertUndefinedWithJavet()`, `assertObjectWithJavet()`, `assertBigIntegerWithJavet()`, `assertLongWithJavet()`. Set `moduleMode = true` for ES module tests.
+
+**`BaseTest`** — for internal assertions not needing V8 parity:
 ```java
 try (JSContext context = new JSContext(new JSRuntime())) {
     JSValue result = context.eval("2 + 2");
-    assertThat(result).isInstanceOf(JSNumber.class);
-    assertThat(((JSNumber) result).getValue()).isEqualTo(4.0);
+    assertThat(result.toString()).isEqualTo("4");
 }
 ```
+Provides `assertError()`, `assertSyntaxError()`, `assertTypeError()`, `awaitPromise()`.
 
-For async code, always call `context.processMicrotasks()`:
-```java
-try (JSContext context = new JSContext(new JSRuntime())) {
-    JSValue promise = context.eval("Promise.resolve(42)");
-    context.processMicrotasks();  // Settle the promise
-    // Assert on promise state
-}
-```
+For async code, always call `context.processMicrotasks()` to settle promises.
+
+### Test Organization
+| Area | Location |
+|------|----------|
+| Compiler/AST | `src/test/java/com/caoccao/qjs4j/compilation/ast/` |
+| Lexer | `src/test/java/com/caoccao/qjs4j/compilation/lexer/` |
+| Built-ins | `src/test/java/com/caoccao/qjs4j/builtins/` |
+| Core/runtime | `src/test/java/com/caoccao/qjs4j/core/` |
+| VM/opcodes | `src/test/java/com/caoccao/qjs4j/vm/` |
+| RegExp | `src/test/java/com/caoccao/qjs4j/regexp/` |
+| Test262 | `src/test/java/com/caoccao/qjs4j/test262/` |
 
 ## Migration from QuickJS C
 
 When porting QuickJS C code to Java:
 
 1. **Opcode Mapping**: QuickJS opcode numbers differ from qjs4j. Use semantic matching, not numeric matching.
-   - Example: QuickJS `OP_return_async` (116) → qjs4j `RETURN_ASYNC` (126)
-
-2. **Stack Signatures**: Preserve the stack effect `(nargs, npop, npush)` from QuickJS
-   - Example: `RETURN_ASYNC(126, 1, 1, 0)` means 1 arg, pops 1, pushes 0
-
-3. **Type Conversion**: C pointers → Java references
-   - `JSValue*` → `JSValue` (reference type)
-   - `JSAtom` (int) → `String` or `Atom` object
-   - C unions → Java sealed classes / instanceof
-
-4. **Error Handling**: C return codes → Java exceptions
-   - QuickJS returns `-1` on error → throw `JSException` or `JSVirtualMachineException`
-   - QuickJS sets `JS_ThrowXxx()` → set `pendingException` in context
-
-5. **Memory Management**: C manual memory → Java GC
-   - `JS_FreeValue()` → not needed (GC handles it)
-   - `JS_DupValue()` → not needed (references are automatically managed)
+2. **Stack Signatures**: Preserve the stack effect `(nargs, npop, npush)` from QuickJS.
+3. **Type Conversion**: `JSValue*` → `JSValue`, `JSAtom` (int) → `String` or `Atom`, C unions → sealed classes / `instanceof`.
+4. **Error Handling**: C return codes (`-1`) → throw `JSException` or `JSVirtualMachineException`. QuickJS `JS_ThrowXxx()` → set `pendingException` in context.
+5. **Memory Management**: Java GC replaces manual memory. `JS_FreeValue()`/`JS_DupValue()` not needed.
 
 ## Important Implementation Details
 
-### Primitive Auto-Boxing
-JavaScript primitives (strings, numbers) are not `JSObject` instances but need to support methods like `"abc".length` or string iteration. The VM auto-boxes primitives when accessing properties or iterating:
-```java
-// In handleForOfStart() - auto-box primitives to access Symbol.iterator
-if (iterable instanceof JSObject obj) {
-    iterableObj = obj;
-} else {
-    iterableObj = toObject(iterable);  // Box primitive
-}
-```
-
-### Strict Mode Tracking
-Each function has a `strict` flag. The compiler sets this based on `"use strict"` directives. The VM saves/restores strict mode when entering/exiting functions.
-
-### Exception Propagation
-Exceptions are stored in `context.pendingException` and checked after each opcode. When caught, the VM clears the exception and jumps to the catch handler.
-
-### Microtask Queue Re-entrancy
-The microtask queue prevents infinite loops by tracking re-entrancy depth. `processMicrotasks()` drains the queue but prevents recursive queueing from running indefinitely.
+- **Primitive Auto-Boxing**: VM auto-boxes primitives (strings, numbers) when accessing properties or iterating via `toObject()`.
+- **Strict Mode Tracking**: Each function has a `strict` flag set by the compiler; the VM saves/restores it on function entry/exit.
+- **Exception Propagation**: Exceptions stored in `context.pendingException`, checked after each opcode. Catch handlers clear the exception and jump.
+- **Microtask Queue**: `processMicrotasks()` drains the queue with re-entrancy depth tracking to prevent infinite loops.
 
 ## Code Style
 
-- **Java 17+ features**: Use records, sealed classes, pattern matching where appropriate
-- **Naming**: Follow Java conventions (camelCase for methods, PascalCase for classes)
-- **QuickJS alignment**: When in doubt, follow QuickJS's approach (check quickjs.c for reference)
-- **Null safety**: Use explicit null checks, avoid returning null (return JSUndefined.INSTANCE or throw)
-- **Immutability**: Prefer immutable data structures where possible (e.g., AST nodes are immutable)
+- **License header**: Apache 2.0 (`Copyright (c) 2025-2026. caoccao.com Sam Cao`) on `src/main/` files.
+- **Java 17+ features**: Use records, sealed classes, pattern matching where appropriate.
+- **4-space indentation**, no tabs. Prefer `final` classes where the project does.
+- **AST nodes**: Records with `SourceLocation location` implementing sealed interfaces — see `Identifier.java`, `ForOfStatement.java`.
+- **QuickJS alignment**: When in doubt, follow QuickJS's approach (check `quickjs.c`).
+- **Null safety**: Use explicit null checks, avoid returning null (return `JSUndefined.INSTANCE` or throw).
+- **Stack shapes**: Document `Stack: ...` in compiler/VM code.
 
 ## Documentation References
 
-For detailed feature status and implementation notes:
-- **docs/migration/FEATURES.md**: Complete list of implemented JavaScript features
-- **docs/migration/ASYNC_AWAIT_ENHANCEMENTS.md**: Async/await and iteration implementation details
-- **docs/migration/MIGRATION_STATUS.md**: Overall migration progress from QuickJS C
-- **docs/migration/OPCODE_IMPLEMENTATION_STATUS.md**: Bytecode instruction coverage
-- **docs/migration/TEST262.md**: ECMAScript conformance test suite status
+- `docs/migration/TODO.md` — Pending work items
+- `docs/migration/FEATURES.md` — Complete feature matrix
+- `docs/migration/MIGRATION_STATUS.md` — Overall migration progress
+- `docs/migration/OPCODE_IMPLEMENTATION_STATUS.md` — Bytecode instruction coverage
+- `docs/migration/TEST262.md` — ECMAScript conformance status
 
 ## Main Entry Point
 
-The CLI interpreter is at `com.caoccao.qjs4j.cli.QuickJSInterpreter` (configured in build.gradle.kts as mainClass).
+`com.caoccao.qjs4j.cli.QuickJSInterpreter` (configured as mainClass in `build.gradle.kts`).

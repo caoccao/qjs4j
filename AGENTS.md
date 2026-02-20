@@ -4,86 +4,106 @@ Guidance for coding agents working in this repository.
 
 ## Project Context
 
-- `qjs4j` is a **pure Java** reimplementation of QuickJS (JDK 17+).
-- Migration work is tracked in `docs/migration/`.
-- The QuickJS reference source is in `../quickjs` (especially `../quickjs/quickjs.c` and `../quickjs/quickjs-opcode.h`).
-- Goal: preserve QuickJS semantics while staying consistent with existing qjs4j architecture and tests.
+- `qjs4j` is a **pure Java** reimplementation of QuickJS (JDK 17+, zero runtime dependencies).
+- Migration work is tracked in `docs/migration/` (`TODO.md`, `FEATURES.md`, `MIGRATION_STATUS.md`).
+- QuickJS reference source: `../quickjs` (especially `quickjs.c` and `quickjs-opcode.h`).
+- Test262 conformance suite: `../test262`.
+- Goal: preserve QuickJS semantics while staying consistent with existing qjs4j architecture.
 
 ## Core Rule: Follow QuickJS
 
-When implementing or fixing language/runtime features:
-
 1. Confirm behavior from QuickJS source.
-2. When useful, validate behavior with `../quickjs/qjs` or `../quickjs/qjs -m`.
+2. Validate with `../quickjs/qjs` or `../quickjs/qjs -m` when useful.
 3. Port semantics, not just syntax.
-4. If current qjs4j behavior diverges from QuickJS, prefer fixing qjs4j.
+4. If qjs4j diverges from QuickJS, prefer fixing qjs4j.
+5. Do not introduce new opcodes unless explicitly required; use the existing 262-opcode set.
 
-## Where To Look First
+## Architecture
 
-- Feature status and pending work: `docs/migration/TODO.md`
-- High-level feature matrix: `docs/migration/FEATURES.md`
-- Detailed migration notes: `docs/migration/MIGRATION_STATUS.md`, feature-specific docs in `docs/migration/`
-- Compiler pipeline:
-  - Lexer: `src/main/java/com/caoccao/qjs4j/compiler/Lexer.java`
-  - Parser: `src/main/java/com/caoccao/qjs4j/compiler/Parser.java`
-  - AST: `src/main/java/com/caoccao/qjs4j/compiler/ast/`
-  - Bytecode compiler: `src/main/java/com/caoccao/qjs4j/compiler/BytecodeCompiler.java`
-  - VM: `src/main/java/com/caoccao/qjs4j/vm/VirtualMachine.java`
+```
+com.caoccao.qjs4j/
+├── compilation/           ← Frontend pipeline
+│   ├── ast/               Records implementing sealed interfaces (Expression, Statement, etc.)
+│   ├── compiler/          Compiler (entry), BytecodeCompiler, CompilerDelegates, EmitHelpers
+│   ├── lexer/             Lexer, LexerTemplateScanner
+│   └── parser/            Parser, ParserDelegates, Expression*Parser, StatementParser
+├── core/                  ← JSContext, JSRuntime, JSGlobalObject, JSValue hierarchy
+├── vm/                    ← VirtualMachine, Opcode (262 opcodes), StackFrame, CallStack
+├── builtins/              ← Constructor + Prototype pairs (ArrayConstructor/ArrayPrototype, etc.)
+├── types/                 ← JSModule, JSPromise, ModuleLoader, DynamicImport
+├── exceptions/            ← JSCompilerException, JSSyntaxErrorException, JSTypeErrorException,
+│                            JSRangeErrorException, JSVirtualMachineException, JSErrorException
+├── memory/                ← GarbageCollector, HeapManager, MemoryPool, ReferenceCounter
+├── regexp/                ← RegExp engine
+├── unicode/               ← Unicode data and normalization
+├── utils/                 ← AtomTable, DtoaConverter, Float16
+└── cli/                   ← QuickJSInterpreter (main class), REPL
+```
 
-## Coding Style Conventions
+Key entry points:
 
-Follow existing code style in `src/main/java`:
+| Component | Path |
+|-----------|------|
+| Compiler entry | `src/main/java/com/caoccao/qjs4j/compilation/compiler/Compiler.java` |
+| Lexer | `src/main/java/com/caoccao/qjs4j/compilation/lexer/Lexer.java` |
+| Parser | `src/main/java/com/caoccao/qjs4j/compilation/parser/Parser.java` |
+| BytecodeCompiler | `src/main/java/com/caoccao/qjs4j/compilation/compiler/BytecodeCompiler.java` |
+| VirtualMachine | `src/main/java/com/caoccao/qjs4j/vm/VirtualMachine.java` |
+| Opcode | `src/main/java/com/caoccao/qjs4j/vm/Opcode.java` |
+| JSContext | `src/main/java/com/caoccao/qjs4j/core/JSContext.java` |
 
-- Keep Apache 2.0 license header on Java files.
-- Use 4-space indentation, no tabs.
-- Prefer `final` classes where the project does.
-- Use records for AST nodes where applicable (match existing AST patterns).
-- Keep methods small and explicit; favor clear control flow over clever abstractions.
-- Add concise comments for non-obvious stack/bytecode behavior.
-- In compiler/VM code, document stack shapes (`Stack: ...`) when relevant.
-- Use project exception types (`JSSyntaxErrorException`, `JSException`, `CompilerException`, etc.) consistently.
+## Coding Style
 
-## Migration Workflow (Expected)
+- Apache 2.0 license header (`Copyright (c) 2025-2026. caoccao.com Sam Cao`) on `src/main/` files.
+- 4-space indentation, no tabs. Prefer `final` classes where the project does.
+- AST nodes are records with `SourceLocation location` implementing sealed interfaces — see `Identifier.java` or `ForOfStatement.java`.
+- Document stack shapes (`Stack: ...`) in compiler/VM code.
+- Use project exception types: `JSSyntaxErrorException`, `JSTypeErrorException`, `JSRangeErrorException`, `JSCompilerException`, `JSVirtualMachineException`.
 
-For each feature task:
+## Build and Test
 
-1. Read `docs/migration/TODO.md` entry and related migration docs.
-2. Confirm QuickJS behavior (source + local quickjs executable when helpful).
-3. Implement in parser/compiler/vm/core as needed.
-4. Add/adjust tests.
-5. Run targeted tests, then full test suite.
-6. Update docs:
-   - remove completed item from `docs/migration/TODO.md`
-   - update status in related docs (`FEATURES.md`, feature implementation docs, etc.)
+```bash
+./gradlew test                    # All tests (excludes @Tag("performance"))
+./gradlew test --tests "com.caoccao.qjs4j.compilation.ast.ClassCompilerTest"  # Single class
+./gradlew test --tests "*.ForOfStatementTest.testArrayForOf"                  # Single method
+./gradlew compileJava             # Compile only (fast check)
+./gradlew compileTestJava         # Compile tests
+./gradlew test262Quick            # Quick Test262 subset
+./gradlew test262                 # Full Test262 (requires ../test262, -Xmx2g)
+./gradlew performanceTest         # JMH benchmarks (@Tag("performance"))
+```
+
+JDK 17+. Test stack: JUnit 6 + AssertJ + Javet (V8 parity).
 
 ## Testing Conventions
 
-### Commands
+**Prefer `BaseJavetTest`** for behavioral tests — runs code in both V8 and qjs4j, auto-tests strict mode:
+```java
+public class MyFeatureTest extends BaseJavetTest {
+    @Test void testFeature() {
+        assertStringWithJavet("'hello'.toUpperCase()");
+    }
+}
+```
+Methods: `assertStringWithJavet()`, `assertIntegerWithJavet()`, `assertBooleanWithJavet()`, `assertDoubleWithJavet()`, `assertErrorWithJavet()`, `assertUndefinedWithJavet()`, `assertObjectWithJavet()`. Set `moduleMode = true` for ES module tests.
 
-- Run all tests: `./gradlew test`
-- Run specific tests: `./gradlew test --tests "com.caoccao.qjs4j.compilation.ast.ClassCompilerTest"`
-- Compile only: `./gradlew compileJava` / `./gradlew compileTestJava`
+**Use `BaseTest`** for internal assertions not needing V8 parity. Provides `assertError()`, `assertSyntaxError()`, `assertTypeError()`, `awaitPromise()`.
 
-### Test Patterns
+Test locations: `compilation/ast/` (compiler), `builtins/` (built-ins), `core/` (runtime), `vm/` (opcodes), `regexp/` (regex).
 
-- Most behavior parity tests should use `BaseJavetTest` (`src/test/java/com/caoccao/qjs4j/BaseJavetTest.java`):
-  - `assertBooleanWithJavet()`, `assertIntegerWithJavet()`, `assertStringWithJavet()`, etc.
-  - `assertErrorWithJavet()` when expecting parity with V8/Javet error behavior.
-- For parser/AST structure checks, instantiate `Parser` + `Lexer` directly and assert AST shape with AssertJ.
-- For module-specific behavior in tests, set `moduleMode = true`.
-- Ensure edge cases are covered (syntax errors, strict mode, async/module contexts, duplicate declarations, ordering effects).
+## Migration Workflow
 
-## Change Scope and Safety
-
-- Make minimal, targeted changes.
-- Do not revert unrelated user changes.
-- Keep behavior-compatible refactors separate from feature logic where possible.
-- If behavior is uncertain, add a failing test first (or validate with QuickJS) before broad changes.
+1. Read `docs/migration/TODO.md` and related docs.
+2. Confirm QuickJS behavior (source + executable).
+3. Implement in parser/compiler/vm/core.
+4. Add/adjust tests.
+5. Run targeted tests, then `./gradlew test`.
+6. Update `docs/migration/TODO.md` and `FEATURES.md`.
 
 ## Pre-Completion Checklist
 
 - [ ] QuickJS behavior checked for the changed feature.
 - [ ] Parser/compiler/vm changes are internally consistent.
-- [ ] Tests added or updated under the relevant package (often `src/test/java/com/caoccao/qjs4j/compiler/ast`).
+- [ ] Tests added or updated under the relevant package.
 - [ ] `./gradlew test` passes.
 - [ ] Migration docs updated to reflect the new status.
