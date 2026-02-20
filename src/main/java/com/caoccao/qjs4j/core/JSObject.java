@@ -116,21 +116,20 @@ public non-sealed class JSObject implements JSValue {
             return; // Nothing to compact
         }
 
-        // Compact the shape
-        shape.compact();
-
-        // Rebuild property values array without deleted entries
-        PropertyKey[] keys = shape.getPropertyKeys();
-        JSValue[] newValues = new JSValue[keys.length];
-
-        int newIndex = 0;
-        for (int i = 0; i < propertyValues.length; i++) {
-            // Check if this slot is still valid after compaction
-            if (newIndex < keys.length) {
-                newValues[newIndex] = propertyValues[i];
-                newIndex++;
+        // Collect values for non-deleted properties before compacting the shape.
+        // Deleted properties have null descriptors (shape key set to null).
+        int propCount = shape.getPropertyCount();
+        int kept = propCount - shape.getDeletedPropCount();
+        JSValue[] newValues = new JSValue[kept];
+        int j = 0;
+        for (int i = 0; i < propCount; i++) {
+            if (shape.getDescriptorAt(i) != null) {
+                newValues[j++] = propertyValues[i];
             }
         }
+
+        // Now compact the shape to match
+        shape.compact();
 
         this.propertyValues = newValues;
     }
