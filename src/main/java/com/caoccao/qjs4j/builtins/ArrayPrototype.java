@@ -529,6 +529,7 @@ public final class ArrayPrototype {
      */
     public static JSValue getSymbolUnscopables(JSContext context, JSValue thisArg, JSValue[] args) {
         JSObject unscopables = context.createJSObject();
+        unscopables.setPrototype(null);
 
         // ES2015 methods
         unscopables.set("copyWithin", JSBoolean.TRUE);
