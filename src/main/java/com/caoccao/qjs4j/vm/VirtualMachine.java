@@ -4699,7 +4699,7 @@ public final class VirtualMachine {
         // Auto-box primitives
         if (value instanceof JSString str) {
             // Get String.prototype from global object
-            JSValue stringCtor = global.get("String");
+            JSValue stringCtor = global.get(JSString.NAME);
             if (stringCtor instanceof JSObject ctorObj) {
                 JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
                 if (prototype instanceof JSObject protoObj) {
@@ -4718,7 +4718,7 @@ public final class VirtualMachine {
 
         if (value instanceof JSNumber num) {
             // Get Number.prototype from global object
-            JSValue numberCtor = global.get("Number");
+            JSValue numberCtor = global.get(JSNumberObject.NAME);
             if (numberCtor instanceof JSObject ctorObj) {
                 JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
                 if (prototype instanceof JSObject protoObj) {
@@ -4732,7 +4732,7 @@ public final class VirtualMachine {
 
         if (value instanceof JSBoolean bool) {
             // Get Boolean.prototype from global object
-            JSValue booleanCtor = global.get("Boolean");
+            JSValue booleanCtor = global.get(JSBoolean.NAME);
             if (booleanCtor instanceof JSObject ctorObj) {
                 JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
                 if (prototype instanceof JSObject protoObj) {
@@ -4746,7 +4746,7 @@ public final class VirtualMachine {
 
         if (value instanceof JSBigInt bigInt) {
             // Get BigInt.prototype from global object
-            JSValue bigIntCtor = global.get("BigInt");
+            JSValue bigIntCtor = global.get(JSBigInt.NAME);
             if (bigIntCtor instanceof JSObject ctorObj) {
                 JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
                 if (prototype instanceof JSObject protoObj) {
@@ -4759,7 +4759,7 @@ public final class VirtualMachine {
 
         if (value instanceof JSSymbol sym) {
             // Get Symbol.prototype from global object
-            JSValue symbolCtor = global.get("Symbol");
+            JSValue symbolCtor = global.get(JSSymbol.NAME);
             if (symbolCtor instanceof JSObject ctorObj) {
                 JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
                 if (prototype instanceof JSObject protoObj) {

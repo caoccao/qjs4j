@@ -82,7 +82,7 @@ public final class ArrayBufferPrototype {
      * Returns "ArrayBuffer".
      */
     public static JSValue getToStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
-        return new JSString("ArrayBuffer");
+        return new JSString(JSArrayBuffer.NAME);
     }
 
     /**

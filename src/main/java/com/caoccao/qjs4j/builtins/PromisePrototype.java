@@ -112,7 +112,7 @@ public final class PromisePrototype {
         }
         JSObject global = context.getGlobalObject();
         if (global != null) {
-            return global.get("Promise");
+            return global.get(JSPromise.NAME);
         }
         return JSUndefined.INSTANCE;
     }

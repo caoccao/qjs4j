@@ -267,7 +267,7 @@ public final class IteratorPrototype {
             JSNativeFunction returnFunction,
             String toStringTag) {
         JSObject iteratorObject = context.createJSObject();
-        context.transferPrototype(iteratorObject, "Iterator");
+        context.transferPrototype(iteratorObject, JSIterator.NAME);
         iteratorObject.definePropertyWritableConfigurable("next", nextFunction);
         if (returnFunction != null) {
             iteratorObject.definePropertyWritableConfigurable("return", returnFunction);

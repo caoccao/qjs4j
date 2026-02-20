@@ -68,7 +68,7 @@ public final class SymbolPrototype {
      * Returns "Symbol".
      */
     public static JSValue toStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
-        return new JSString("Symbol");
+        return new JSString(JSSymbol.NAME);
     }
 
     /**

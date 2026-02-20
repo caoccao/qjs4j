@@ -68,7 +68,7 @@ public final class SharedArrayBufferPrototype {
      * Returns "SharedArrayBuffer".
      */
     public static JSValue getToStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
-        return new JSString("SharedArrayBuffer");
+        return new JSString(JSSharedArrayBuffer.NAME);
     }
 
     /**

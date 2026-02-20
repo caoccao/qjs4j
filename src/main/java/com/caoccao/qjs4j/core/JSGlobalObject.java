@@ -599,10 +599,10 @@ public final class JSGlobalObject {
         arrayBufferPrototype.defineGetterConfigurable("detached", ArrayBufferPrototype::getDetached);
         arrayBufferPrototype.defineGetterConfigurable("maxByteLength", ArrayBufferPrototype::getMaxByteLength);
         arrayBufferPrototype.defineGetterConfigurable("resizable", ArrayBufferPrototype::getResizable);
-        arrayBufferPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, ArrayBufferPrototype::getToStringTag);
+        arrayBufferPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSArrayBuffer.NAME));
 
         // Create ArrayBuffer constructor as a function
-        JSNativeFunction arrayBufferConstructor = new JSNativeFunction("ArrayBuffer", 1, ArrayBufferConstructor::call, true);
+        JSNativeFunction arrayBufferConstructor = new JSNativeFunction(JSArrayBuffer.NAME, 1, ArrayBufferConstructor::call, true);
         arrayBufferConstructor.set(PropertyKey.PROTOTYPE, arrayBufferPrototype);
         arrayBufferConstructor.setConstructorType(JSConstructorType.ARRAY_BUFFER);
         arrayBufferPrototype.definePropertyWritableConfigurable("constructor", arrayBufferConstructor);
@@ -613,7 +613,7 @@ public final class JSGlobalObject {
         // Symbol.species getter
         arrayBufferConstructor.defineGetterConfigurable(JSSymbol.SPECIES, ArrayBufferConstructor::getSpecies);
 
-        global.definePropertyWritableConfigurable("ArrayBuffer", arrayBufferConstructor);
+        global.definePropertyWritableConfigurable(JSArrayBuffer.NAME, arrayBufferConstructor);
     }
 
     /**
@@ -672,7 +672,7 @@ public final class JSGlobalObject {
         arrayPrototype.definePropertyConfigurable(JSSymbol.UNSCOPABLES, ArrayPrototype.createUnscopablesObject(context));
 
         // Create Array constructor as a function
-        JSNativeFunction arrayConstructor = new JSNativeFunction("Array", 1, ArrayConstructor::call, true);
+        JSNativeFunction arrayConstructor = new JSNativeFunction(JSArray.NAME, 1, ArrayConstructor::call, true);
         arrayConstructor.set(PropertyKey.PROTOTYPE, arrayPrototype);
         arrayConstructor.setConstructorType(JSConstructorType.ARRAY);
         arrayPrototype.definePropertyWritableConfigurable("constructor", arrayConstructor);
@@ -686,7 +686,7 @@ public final class JSGlobalObject {
         // Symbol.species getter
         arrayConstructor.defineGetterConfigurable(JSSymbol.SPECIES, ArrayConstructor::getSpecies);
 
-        global.definePropertyWritableConfigurable("Array", arrayConstructor);
+        global.definePropertyWritableConfigurable(JSArray.NAME, arrayConstructor);
     }
 
     /**
@@ -865,7 +865,7 @@ public final class JSGlobalObject {
         bigIntPrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, BigIntPrototype::valueOf));
 
         // Create BigInt constructor
-        JSNativeFunction bigIntConstructor = new JSNativeFunction("BigInt", 1, BigIntConstructor::call);
+        JSNativeFunction bigIntConstructor = new JSNativeFunction(JSBigInt.NAME, 1, BigIntConstructor::call);
         bigIntConstructor.set(PropertyKey.PROTOTYPE, bigIntPrototype);
         bigIntConstructor.setConstructorType(JSConstructorType.BIG_INT_OBJECT); // Mark as BigInt constructor
         bigIntPrototype.definePropertyWritableConfigurable("constructor", bigIntConstructor);
@@ -874,7 +874,7 @@ public final class JSGlobalObject {
         bigIntConstructor.definePropertyWritableConfigurable("asIntN", new JSNativeFunction("asIntN", 2, BigIntConstructor::asIntN));
         bigIntConstructor.definePropertyWritableConfigurable("asUintN", new JSNativeFunction("asUintN", 2, BigIntConstructor::asUintN));
 
-        global.definePropertyWritableConfigurable("BigInt", bigIntConstructor);
+        global.definePropertyWritableConfigurable(JSBigInt.NAME, bigIntConstructor);
     }
 
     /**
@@ -889,12 +889,12 @@ public final class JSGlobalObject {
         booleanPrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, BooleanPrototype::valueOf));
 
         // Create Boolean constructor
-        JSNativeFunction booleanConstructor = new JSNativeFunction("Boolean", 1, BooleanConstructor::call, true);
+        JSNativeFunction booleanConstructor = new JSNativeFunction(JSBoolean.NAME, 1, BooleanConstructor::call, true);
         booleanConstructor.definePropertyReadonlyNonConfigurable("prototype", booleanPrototype);
         booleanConstructor.setConstructorType(JSConstructorType.BOOLEAN_OBJECT);
         booleanPrototype.definePropertyWritableConfigurable("constructor", booleanConstructor);
 
-        global.definePropertyWritableConfigurable("Boolean", booleanConstructor);
+        global.definePropertyWritableConfigurable(JSBoolean.NAME, booleanConstructor);
     }
 
     /**
@@ -1035,7 +1035,7 @@ public final class JSGlobalObject {
         datePrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, DatePrototype::valueOf));
         datePrototype.definePropertyWritableConfigurable(JSSymbol.TO_PRIMITIVE, toPrimitive);
 
-        JSNativeFunction dateConstructor = new JSNativeFunction("Date", 7, DateConstructor::call, true);
+        JSNativeFunction dateConstructor = new JSNativeFunction(JSDate.NAME, 7, DateConstructor::call, true);
         dateConstructor.definePropertyReadonlyNonConfigurable("prototype", datePrototype);
         dateConstructor.setConstructorType(JSConstructorType.DATE);
         datePrototype.definePropertyWritableConfigurable("constructor", dateConstructor);
@@ -1044,7 +1044,7 @@ public final class JSGlobalObject {
         dateConstructor.definePropertyWritableConfigurable("now", new JSNativeFunction("now", 0, DateConstructor::now));
         dateConstructor.definePropertyWritableConfigurable("parse", new JSNativeFunction("parse", 1, DateConstructor::parse));
 
-        global.definePropertyWritableConfigurable("Date", dateConstructor);
+        global.definePropertyWritableConfigurable(JSDate.NAME, dateConstructor);
     }
 
     /**
@@ -1093,15 +1093,15 @@ public final class JSGlobalObject {
         finalizationRegistryPrototype.definePropertyWritableConfigurable("unregister",
                 new JSNativeFunction("unregister", 1, FinalizationRegistryPrototype::unregister));
         finalizationRegistryPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG,
-                new JSString("FinalizationRegistry"));
+                new JSString(JSFinalizationRegistry.NAME));
 
         JSNativeFunction finalizationRegistryConstructor = new JSNativeFunction(
-                "FinalizationRegistry", 1, FinalizationRegistryConstructor::call, true, true);
+                JSFinalizationRegistry.NAME, 1, FinalizationRegistryConstructor::call, true, true);
         finalizationRegistryConstructor.definePropertyReadonlyNonConfigurable("prototype", finalizationRegistryPrototype);
         finalizationRegistryConstructor.setConstructorType(JSConstructorType.FINALIZATION_REGISTRY);
         finalizationRegistryPrototype.definePropertyWritableConfigurable("constructor", finalizationRegistryConstructor);
 
-        global.definePropertyWritableConfigurable("FinalizationRegistry", finalizationRegistryConstructor);
+        global.definePropertyWritableConfigurable(JSFinalizationRegistry.NAME, finalizationRegistryConstructor);
     }
 
     /**
@@ -1476,7 +1476,7 @@ public final class JSGlobalObject {
         mapPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSMap.NAME));
 
         // Create Map constructor as JSNativeFunction
-        JSNativeFunction mapConstructor = new JSNativeFunction("Map", 0, MapConstructor::call, true, true);
+        JSNativeFunction mapConstructor = new JSNativeFunction(JSMap.NAME, 0, MapConstructor::call, true, true);
         mapConstructor.set(PropertyKey.PROTOTYPE, mapPrototype);
         mapConstructor.setConstructorType(JSConstructorType.MAP); // Mark as Map constructor
         mapPrototype.definePropertyWritableConfigurable("constructor", mapConstructor);
@@ -1485,7 +1485,7 @@ public final class JSGlobalObject {
         mapConstructor.definePropertyWritableConfigurable("groupBy", new JSNativeFunction("groupBy", 2, MapConstructor::groupBy));
         mapConstructor.defineGetterConfigurable(JSSymbol.SPECIES, MapConstructor::getSpecies);
 
-        global.definePropertyWritableConfigurable("Map", mapConstructor);
+        global.definePropertyWritableConfigurable(JSMap.NAME, mapConstructor);
     }
 
     /**
@@ -1561,7 +1561,7 @@ public final class JSGlobalObject {
         numberPrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, NumberPrototype::valueOf));
 
         // Create Number constructor
-        JSNativeFunction numberConstructor = new JSNativeFunction("Number", 1, NumberConstructor::call, true);
+        JSNativeFunction numberConstructor = new JSNativeFunction(JSNumberObject.NAME, 1, NumberConstructor::call, true);
         numberConstructor.definePropertyReadonlyNonConfigurable("prototype", numberPrototype);
         numberConstructor.setConstructorType(JSConstructorType.NUMBER_OBJECT); // Mark as Number constructor
         numberPrototype.definePropertyWritableConfigurable("constructor", numberConstructor);
@@ -1586,7 +1586,7 @@ public final class JSGlobalObject {
         numberConstructor.definePropertyWritableConfigurable("parseFloat", globalParseFloat);
         numberConstructor.definePropertyWritableConfigurable("parseInt", globalParseInt);
 
-        global.definePropertyWritableConfigurable("Number", numberConstructor);
+        global.definePropertyWritableConfigurable(JSNumberObject.NAME, numberConstructor);
     }
 
     /**
@@ -1616,7 +1616,7 @@ public final class JSGlobalObject {
         objectPrototype.defineProperty(PropertyKey.PROTO, protoDesc);
 
         // Create Object constructor
-        JSNativeFunction objectConstructor = new JSNativeFunction("Object", 1, ObjectConstructor::call, true);
+        JSNativeFunction objectConstructor = new JSNativeFunction(JSObject.NAME, 1, ObjectConstructor::call, true);
         objectConstructor.definePropertyReadonlyNonConfigurable("prototype", objectPrototype);
         objectPrototype.definePropertyWritableConfigurable("constructor", objectConstructor);
 
@@ -1645,7 +1645,7 @@ public final class JSGlobalObject {
         objectConstructor.definePropertyWritableConfigurable("setPrototypeOf", new JSNativeFunction("setPrototypeOf", 2, ObjectConstructor::setPrototypeOf));
         objectConstructor.definePropertyWritableConfigurable("values", new JSNativeFunction("values", 1, ObjectConstructor::values));
 
-        global.definePropertyWritableConfigurable("Object", objectConstructor);
+        global.definePropertyWritableConfigurable(JSObject.NAME, objectConstructor);
     }
 
     /**
@@ -1657,10 +1657,10 @@ public final class JSGlobalObject {
         promisePrototype.definePropertyWritableConfigurable("catch", new JSNativeFunction("catch", 1, PromisePrototype::catchMethod));
         promisePrototype.definePropertyWritableConfigurable("finally", new JSNativeFunction("finally", 1, PromisePrototype::finallyMethod));
         promisePrototype.definePropertyWritableConfigurable("then", new JSNativeFunction("then", 2, PromisePrototype::then));
-        promisePrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("Promise"));
+        promisePrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSPromise.NAME));
 
         // Create Promise constructor as JSNativeFunction
-        JSNativeFunction promiseConstructor = new JSNativeFunction("Promise", 1, PromiseConstructor::call, true, true);
+        JSNativeFunction promiseConstructor = new JSNativeFunction(JSPromise.NAME, 1, PromiseConstructor::call, true, true);
         context.transferPrototype(promiseConstructor, JSFunction.NAME);
         promiseConstructor.definePropertyReadonlyNonConfigurable("prototype", promisePrototype);
         promiseConstructor.setConstructorType(JSConstructorType.PROMISE); // Mark as Promise constructor
@@ -1677,7 +1677,7 @@ public final class JSGlobalObject {
         promiseConstructor.definePropertyWritableConfigurable("withResolvers", new JSNativeFunction("withResolvers", 0, PromiseConstructor::withResolvers));
         promiseConstructor.defineGetterConfigurable(JSSymbol.SPECIES, PromiseConstructor::getSpecies);
 
-        global.definePropertyWritableConfigurable("Promise", promiseConstructor);
+        global.definePropertyWritableConfigurable(JSPromise.NAME, promiseConstructor);
     }
 
     /**
@@ -1686,7 +1686,7 @@ public final class JSGlobalObject {
     private void initializeProxyConstructor(JSContext context, JSObject global) {
         // Create Proxy constructor as JSNativeFunction
         // Proxy requires 'new' and takes 2 arguments (target, handler)
-        JSNativeFunction proxyConstructor = new JSNativeFunction("Proxy", 2, ProxyConstructor::call, true, true);
+        JSNativeFunction proxyConstructor = new JSNativeFunction(JSProxy.NAME, 2, ProxyConstructor::call, true, true);
         proxyConstructor.setConstructorType(JSConstructorType.PROXY);
         context.transferPrototype(proxyConstructor, JSFunction.NAME);
 
@@ -1696,7 +1696,7 @@ public final class JSGlobalObject {
         // Add static methods.
         proxyConstructor.definePropertyWritableConfigurable("revocable", new JSNativeFunction("revocable", 2, ProxyConstructor::revocable));
 
-        global.definePropertyWritableConfigurable("Proxy", proxyConstructor);
+        global.definePropertyWritableConfigurable(JSProxy.NAME, proxyConstructor);
     }
 
     /**
@@ -1745,10 +1745,10 @@ public final class JSGlobalObject {
         regexpPrototype.defineGetterConfigurable("sticky", RegExpPrototype::getSticky);
         regexpPrototype.defineGetterConfigurable("unicode", RegExpPrototype::getUnicode);
         regexpPrototype.defineGetterConfigurable("unicodeSets", RegExpPrototype::getUnicodeSets);
-        regexpPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("RegExp"));
+        regexpPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSRegExp.NAME));
 
         // Create RegExp constructor as a function
-        JSNativeFunction regexpConstructor = new JSNativeFunction("RegExp", 2, RegExpConstructor::call, true);
+        JSNativeFunction regexpConstructor = new JSNativeFunction(JSRegExp.NAME, 2, RegExpConstructor::call, true);
         regexpConstructor.set(PropertyKey.PROTOTYPE, regexpPrototype);
         regexpConstructor.setConstructorType(JSConstructorType.REGEXP);
         regexpPrototype.definePropertyWritableConfigurable("constructor", regexpConstructor);
@@ -1770,7 +1770,7 @@ public final class JSGlobalObject {
             regexpConstructor.defineGetterConfigurable("$" + i);
         }
 
-        global.definePropertyWritableConfigurable("RegExp", regexpConstructor);
+        global.definePropertyWritableConfigurable(JSRegExp.NAME, regexpConstructor);
     }
 
     /**
@@ -1806,7 +1806,7 @@ public final class JSGlobalObject {
         setPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSSet.NAME));
 
         // Create Set constructor as a function
-        JSNativeFunction setConstructor = new JSNativeFunction("Set", 0, SetConstructor::call, true, true);
+        JSNativeFunction setConstructor = new JSNativeFunction(JSSet.NAME, 0, SetConstructor::call, true, true);
         setConstructor.set(PropertyKey.PROTOTYPE, setPrototype);
         setConstructor.setConstructorType(JSConstructorType.SET);
         setPrototype.definePropertyWritableConfigurable("constructor", setConstructor);
@@ -1814,7 +1814,7 @@ public final class JSGlobalObject {
         setConstructor.definePropertyWritableConfigurable("groupBy", new JSNativeFunction("groupBy", 2, SetConstructor::groupBy));
         setConstructor.defineGetterConfigurable(JSSymbol.SPECIES, SetConstructor::getSpecies);
 
-        global.definePropertyWritableConfigurable("Set", setConstructor);
+        global.definePropertyWritableConfigurable(JSSet.NAME, setConstructor);
     }
 
     /**
@@ -1830,11 +1830,11 @@ public final class JSGlobalObject {
         sharedArrayBufferPrototype.defineGetterConfigurable("byteLength", SharedArrayBufferPrototype::getByteLength);
         sharedArrayBufferPrototype.defineGetterConfigurable("growable", SharedArrayBufferPrototype::getGrowable);
         sharedArrayBufferPrototype.defineGetterConfigurable("maxByteLength", SharedArrayBufferPrototype::getMaxByteLength);
-        sharedArrayBufferPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("SharedArrayBuffer"));
+        sharedArrayBufferPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSSharedArrayBuffer.NAME));
 
         // Create SharedArrayBuffer constructor as a function
         JSNativeFunction sharedArrayBufferConstructor = new JSNativeFunction(
-                "SharedArrayBuffer",
+                JSSharedArrayBuffer.NAME,
                 1,
                 SharedArrayBufferConstructor::call,
                 true,  // isConstructor
@@ -1845,7 +1845,7 @@ public final class JSGlobalObject {
         sharedArrayBufferPrototype.definePropertyWritableConfigurable("constructor", sharedArrayBufferConstructor);
         sharedArrayBufferConstructor.defineGetterConfigurable(JSSymbol.SPECIES, SharedArrayBufferConstructor::getSpecies);
 
-        global.definePropertyWritableConfigurable("SharedArrayBuffer", sharedArrayBufferConstructor);
+        global.definePropertyWritableConfigurable(JSSharedArrayBuffer.NAME, sharedArrayBufferConstructor);
     }
 
     /**
@@ -1920,7 +1920,7 @@ public final class JSGlobalObject {
         stringPrototype.definePropertyReadonlyNonConfigurable("length", JSNumber.of(0));
 
         // Create String constructor
-        JSNativeFunction stringConstructor = new JSNativeFunction("String", 1, StringConstructor::call, true);
+        JSNativeFunction stringConstructor = new JSNativeFunction(JSString.NAME, 1, StringConstructor::call, true);
         stringConstructor.set(PropertyKey.PROTOTYPE, stringPrototype);
         stringConstructor.setConstructorType(JSConstructorType.STRING_OBJECT); // Mark as String constructor
         stringPrototype.definePropertyWritableConfigurable("constructor", stringConstructor);
@@ -1930,7 +1930,7 @@ public final class JSGlobalObject {
         stringConstructor.definePropertyWritableConfigurable("fromCodePoint", new JSNativeFunction("fromCodePoint", 1, StringConstructor::fromCodePoint));
         stringConstructor.definePropertyWritableConfigurable("raw", new JSNativeFunction("raw", 1, StringConstructor::raw));
 
-        global.definePropertyWritableConfigurable("String", stringConstructor);
+        global.definePropertyWritableConfigurable(JSString.NAME, stringConstructor);
     }
 
     /**
@@ -1956,7 +1956,7 @@ public final class JSGlobalObject {
         symbolToPrimitive.initializePrototypeChain(context);
         symbolPrototype.definePropertyWritableConfigurable(JSSymbol.TO_PRIMITIVE, symbolToPrimitive);
 
-        symbolPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("Symbol"));
+        symbolPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSSymbol.NAME));
 
         // Create Symbol constructor
         // Note: Symbol cannot be called with 'new' in JavaScript (throws TypeError)
@@ -1988,7 +1988,7 @@ public final class JSGlobalObject {
         symbolConstructor.definePropertyReadonlyNonConfigurable("dispose", JSSymbol.DISPOSE);
         symbolConstructor.definePropertyReadonlyNonConfigurable("asyncDispose", JSSymbol.ASYNC_DISPOSE);
 
-        global.definePropertyWritableConfigurable("Symbol", symbolConstructor);
+        global.definePropertyWritableConfigurable(JSSymbol.NAME, symbolConstructor);
     }
 
     /**
@@ -2092,7 +2092,7 @@ public final class JSGlobalObject {
         weakMapPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSWeakMap.NAME));
 
         JSNativeFunction weakMapConstructor = new JSNativeFunction(
-                "WeakMap",
+                JSWeakMap.NAME,
                 0,
                 WeakMapConstructor::call,
                 true,
@@ -2102,7 +2102,7 @@ public final class JSGlobalObject {
         weakMapConstructor.setConstructorType(JSConstructorType.WEAK_MAP);
         weakMapPrototype.definePropertyWritableConfigurable("constructor", weakMapConstructor);
 
-        global.definePropertyWritableConfigurable("WeakMap", weakMapConstructor);
+        global.definePropertyWritableConfigurable(JSWeakMap.NAME, weakMapConstructor);
     }
 
     /**
@@ -2114,7 +2114,7 @@ public final class JSGlobalObject {
         weakRefPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSWeakRef.NAME));
 
         JSNativeFunction weakRefConstructor = new JSNativeFunction(
-                "WeakRef",
+                JSWeakRef.NAME,
                 1,
                 WeakRefConstructor::call,
                 true,
@@ -2124,7 +2124,7 @@ public final class JSGlobalObject {
         weakRefConstructor.setConstructorType(JSConstructorType.WEAK_REF);
         weakRefPrototype.definePropertyWritableConfigurable("constructor", weakRefConstructor);
 
-        global.definePropertyWritableConfigurable("WeakRef", weakRefConstructor);
+        global.definePropertyWritableConfigurable(JSWeakRef.NAME, weakRefConstructor);
     }
 
     /**
@@ -2138,7 +2138,7 @@ public final class JSGlobalObject {
         weakSetPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSWeakSet.NAME));
 
         JSNativeFunction weakSetConstructor = new JSNativeFunction(
-                "WeakSet",
+                JSWeakSet.NAME,
                 0,
                 WeakSetConstructor::call,
                 true,
@@ -2148,7 +2148,7 @@ public final class JSGlobalObject {
         weakSetConstructor.setConstructorType(JSConstructorType.WEAK_SET);
         weakSetPrototype.definePropertyWritableConfigurable("constructor", weakSetConstructor);
 
-        global.definePropertyWritableConfigurable("WeakSet", weakSetConstructor);
+        global.definePropertyWritableConfigurable(JSWeakSet.NAME, weakSetConstructor);
     }
 
     private boolean isAsciiDigit(char c) {

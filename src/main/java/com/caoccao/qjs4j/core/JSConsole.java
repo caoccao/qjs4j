@@ -510,34 +510,34 @@ public final class JSConsole {
 
     private String getClassName(JSObject object) {
         if (object instanceof JSStringObject) {
-            return "String";
+            return JSStringObject.NAME;
         }
         if (object instanceof JSNumberObject) {
-            return "Number";
+            return JSNumberObject.NAME;
         }
         if (object instanceof JSBooleanObject) {
-            return "Boolean";
+            return JSBooleanObject.NAME;
         }
         if (object instanceof JSBigIntObject) {
-            return "BigInt";
+            return JSBigIntObject.NAME;
         }
         if (object instanceof JSDate) {
-            return "Date";
+            return JSDate.NAME;
         }
         if (object instanceof JSTypedArray typedArray) {
             return typedArray.getClass().getSimpleName().replaceFirst("^JS", "");
         }
         if (object instanceof JSArrayBuffer) {
-            return "ArrayBuffer";
+            return JSArrayBuffer.NAME;
         }
         if (object instanceof JSSharedArrayBuffer) {
-            return "SharedArrayBuffer";
+            return JSSharedArrayBuffer.NAME;
         }
         String simpleName = object.getClass().getSimpleName();
         if (simpleName.startsWith("JS")) {
             return simpleName.substring(2);
         }
-        return "Object";
+        return JSObject.NAME;
     }
 
     public PrintStream getErr() {
