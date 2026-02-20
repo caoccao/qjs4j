@@ -46,7 +46,7 @@ public final class IteratorPrototype {
             if (index[0] < getArrayLikeLength(context, arrayLike)) {
                 JSArray pair = context.createJSArray();
                 pair.push(JSNumber.of(index[0]));
-                pair.push(getArrayLikeValue(arrayLike, index[0]));
+                pair.push(getArrayLikeValue(context, arrayLike, index[0]));
                 index[0]++;
                 return JSIterator.IteratorResult.of(context, pair);
             }
@@ -86,7 +86,7 @@ public final class IteratorPrototype {
         final long[] index = {0};
         return new JSIterator(context, () -> {
             if (index[0] < getArrayLikeLength(context, arrayLike)) {
-                return JSIterator.IteratorResult.of(context, getArrayLikeValue(arrayLike, index[0]++));
+                return JSIterator.IteratorResult.of(context, getArrayLikeValue(context, arrayLike, index[0]++));
             }
             return JSIterator.IteratorResult.done(context);
         }, "Array Iterator", false);
@@ -747,14 +747,14 @@ public final class IteratorPrototype {
     }
 
     private static long getArrayLikeLength(JSContext context, JSObject arrayLike) {
-        return JSTypeConversions.toLength(context, arrayLike.get(PropertyKey.LENGTH));
+        return JSTypeConversions.toLength(context, arrayLike.get(PropertyKey.LENGTH, context));
     }
 
-    private static JSValue getArrayLikeValue(JSObject arrayLike, long index) {
+    private static JSValue getArrayLikeValue(JSContext context, JSObject arrayLike, long index) {
         if (index <= Integer.MAX_VALUE) {
-            return arrayLike.get((int) index);
+            return arrayLike.get(PropertyKey.fromIndex((int) index), context);
         }
-        return arrayLike.get(PropertyKey.fromString(Long.toString(index)));
+        return arrayLike.get(PropertyKey.fromString(Long.toString(index)), context);
     }
 
     private static boolean isIteratorInstance(JSContext context, JSObject object) {
