@@ -160,7 +160,7 @@ public final class ArrayBufferPrototype {
         }
 
         try {
-            return buffer.slice(begin, end);
+            return buffer.slice(context, begin, end);
         } catch (IllegalStateException e) {
             return context.throwTypeError(e.getMessage());
         }
@@ -182,7 +182,7 @@ public final class ArrayBufferPrototype {
         }
 
         try {
-            return buffer.transfer(newByteLength);
+            return buffer.transfer(context, newByteLength);
         } catch (IllegalStateException | IllegalArgumentException e) {
             return context.throwTypeError(e.getMessage());
         }
@@ -204,7 +204,7 @@ public final class ArrayBufferPrototype {
         }
 
         try {
-            return buffer.transferToFixedLength(newByteLength);
+            return buffer.transferToFixedLength(context, newByteLength);
         } catch (IllegalStateException | IllegalArgumentException e) {
             return context.throwTypeError(e.getMessage());
         }
@@ -220,7 +220,7 @@ public final class ArrayBufferPrototype {
         }
 
         try {
-            return buffer.transferToImmutable();
+            return buffer.transferToImmutable(context);
         } catch (IllegalStateException | IllegalArgumentException e) {
             return context.throwTypeError(e.getMessage());
         }

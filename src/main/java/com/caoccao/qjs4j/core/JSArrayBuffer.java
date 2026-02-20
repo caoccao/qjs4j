@@ -294,7 +294,7 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
      * @param end   End offset (exclusive)
      * @return A new ArrayBuffer
      */
-    public JSArrayBuffer slice(int begin, int end) {
+    public JSArrayBuffer slice(JSContext context, int begin, int end) {
         if (detached) {
             throw new IllegalStateException("Cannot slice a detached ArrayBuffer");
         }
@@ -318,8 +318,8 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
         // Calculate new length
         int newLength = Math.max(end - begin, 0);
 
-        // Create new buffer and copy bytes
-        JSArrayBuffer newBuffer = new JSArrayBuffer(newLength);
+        // Create new buffer with proper prototype and copy bytes
+        JSArrayBuffer newBuffer = context.createJSArrayBuffer(newLength);
         if (newLength > 0) {
             byte[] bytes = new byte[newLength];
             int oldPosition = buffer.position();
@@ -346,7 +346,7 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
      * @return A new ArrayBuffer with the transferred contents
      * @throws IllegalStateException if the buffer is already detached
      */
-    public JSArrayBuffer transfer(int newByteLength) {
+    public JSArrayBuffer transfer(JSContext context, int newByteLength) {
         if (detached) {
             throw new IllegalStateException("Cannot transfer a detached ArrayBuffer");
         }
@@ -358,8 +358,8 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
             throw new IllegalArgumentException("New byte length must be non-negative");
         }
 
-        // Create new resizable buffer with same characteristics
-        JSArrayBuffer newBuffer = new JSArrayBuffer(targetLength, resizable ? maxByteLength : -1);
+        // Create new buffer with proper prototype, preserving resizability
+        JSArrayBuffer newBuffer = context.createJSArrayBuffer(targetLength, resizable ? maxByteLength : -1);
 
         // Copy data up to the minimum of current and target length
         int copyLength = Math.min(currentLength, targetLength);
@@ -387,7 +387,7 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
      * @return A new non-resizable ArrayBuffer with the transferred contents
      * @throws IllegalStateException if the buffer is already detached
      */
-    public JSArrayBuffer transferToFixedLength(int newByteLength) {
+    public JSArrayBuffer transferToFixedLength(JSContext context, int newByteLength) {
         if (detached) {
             throw new IllegalStateException("Cannot transfer a detached ArrayBuffer");
         }
@@ -399,8 +399,8 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
             throw new IllegalArgumentException("New byte length must be non-negative");
         }
 
-        // Create new fixed-length buffer
-        JSArrayBuffer newBuffer = new JSArrayBuffer(targetLength);
+        // Create new fixed-length buffer with proper prototype
+        JSArrayBuffer newBuffer = context.createJSArrayBuffer(targetLength);
 
         // Copy data up to the minimum of current and target length
         int copyLength = Math.min(currentLength, targetLength);
@@ -427,15 +427,15 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
      * @return A new immutable ArrayBuffer with the transferred contents
      * @throws IllegalStateException if the buffer is already detached
      */
-    public JSArrayBuffer transferToImmutable() {
+    public JSArrayBuffer transferToImmutable(JSContext context) {
         if (detached) {
             throw new IllegalStateException("Cannot transfer a detached ArrayBuffer");
         }
 
         int currentLength = getByteLength();
 
-        // Create new fixed-length buffer
-        JSArrayBuffer newBuffer = new JSArrayBuffer(currentLength);
+        // Create new fixed-length buffer with proper prototype
+        JSArrayBuffer newBuffer = context.createJSArrayBuffer(currentLength);
 
         // Copy data
         if (currentLength > 0) {

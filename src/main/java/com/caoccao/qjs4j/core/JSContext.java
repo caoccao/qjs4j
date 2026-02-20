@@ -238,6 +238,19 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Create a new resizable JSArrayBuffer with proper prototype chain.
+     *
+     * @param byteLength    The initial length in bytes
+     * @param maxByteLength The maximum length in bytes, or -1 for non-resizable
+     * @return A new JSArrayBuffer instance with prototype set
+     */
+    public JSArrayBuffer createJSArrayBuffer(int byteLength, int maxByteLength) {
+        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(byteLength, maxByteLength);
+        transferPrototype(jsArrayBuffer, JSArrayBuffer.NAME);
+        return jsArrayBuffer;
+    }
+
+    /**
      * Create a new JSBigInt64Array with proper prototype chain.
      *
      * @param length The length of the array
