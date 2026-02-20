@@ -93,24 +93,31 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
             throw new JSException(context.throwTypeError("ArrayBuffer constructor requires at least 1 argument"));
         }
 
-        // Get byteLength
+        // Get byteLength using ToIndex (preserves large values, throws RangeError for negative)
         JSValue byteLengthArg = args[0];
-        int byteLength = JSTypeConversions.toInt32(context, byteLengthArg);
+        long byteLengthLong = JSTypeConversions.toIndex(context, byteLengthArg);
 
-        if (byteLength < 0) {
-            throw new JSException(context.throwRangeError("Invalid array buffer length"));
+        // QuickJS: limited to INT32_MAX (2 GB)
+        if (byteLengthLong > Integer.MAX_VALUE) {
+            throw new JSException(context.throwRangeError("invalid array buffer length"));
         }
+        int byteLength = (int) byteLengthLong;
 
         // Check for options (maxByteLength for resizable buffers)
         Integer maxByteLength = null;
         if (args.length >= 2 && args[1] instanceof JSObject options) {
             JSValue maxByteLengthValue = options.get("maxByteLength");
             if (!(maxByteLengthValue instanceof JSUndefined)) {
-                int maxLen = JSTypeConversions.toInt32(context, maxByteLengthValue);
-                if (maxLen < byteLength) {
-                    throw new JSException(context.throwRangeError("maxByteLength must be greater than or equal to byteLength"));
+                // QuickJS: JS_ToInt64Free then check bounds
+                long maxLenLong = (long) JSTypeConversions.toInteger(context, maxByteLengthValue);
+                if (byteLengthLong > maxLenLong || maxLenLong > 9007199254740991L) {
+                    throw new JSException(context.throwRangeError("invalid array buffer max length"));
                 }
-                maxByteLength = maxLen;
+                // QuickJS: limited to INT32_MAX (2 GB)
+                if (maxLenLong > Integer.MAX_VALUE) {
+                    throw new JSException(context.throwRangeError("invalid array buffer max length"));
+                }
+                maxByteLength = (int) maxLenLong;
             }
         }
 
