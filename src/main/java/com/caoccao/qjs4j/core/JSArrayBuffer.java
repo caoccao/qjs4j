@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.exceptions.JSException;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 
 /**
  * Represents a JavaScript ArrayBuffer object.
@@ -209,7 +210,12 @@ public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
             throw new IllegalArgumentException("New byte length must be between 0 and " + maxByteLength);
         }
 
+        int oldByteLength = buffer.limit();
         buffer.limit(newByteLength);
+        if (newByteLength > oldByteLength) {
+            // Zero newly accessible bytes per ES2024 spec
+            Arrays.fill(buffer.array(), oldByteLength, newByteLength, (byte) 0);
+        }
     }
 
     /**
