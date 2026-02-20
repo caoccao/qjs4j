@@ -589,10 +589,10 @@ public final class JSGlobalObject {
     private void initializeArrayBufferConstructor(JSContext context, JSObject global) {
         // Create ArrayBuffer.prototype
         JSObject arrayBufferPrototype = context.createJSObject();
-        arrayBufferPrototype.set("resize", new JSNativeFunction("resize", 1, ArrayBufferPrototype::resize));
-        arrayBufferPrototype.set("slice", new JSNativeFunction("slice", 2, ArrayBufferPrototype::slice));
-        arrayBufferPrototype.set("transfer", new JSNativeFunction("transfer", 0, ArrayBufferPrototype::transfer));
-        arrayBufferPrototype.set("transferToFixedLength", new JSNativeFunction("transferToFixedLength", 0, ArrayBufferPrototype::transferToFixedLength));
+        arrayBufferPrototype.definePropertyWritableConfigurable("resize", new JSNativeFunction("resize", 1, ArrayBufferPrototype::resize));
+        arrayBufferPrototype.definePropertyWritableConfigurable("slice", new JSNativeFunction("slice", 2, ArrayBufferPrototype::slice));
+        arrayBufferPrototype.definePropertyWritableConfigurable("transfer", new JSNativeFunction("transfer", 0, ArrayBufferPrototype::transfer));
+        arrayBufferPrototype.definePropertyWritableConfigurable("transferToFixedLength", new JSNativeFunction("transferToFixedLength", 0, ArrayBufferPrototype::transferToFixedLength));
 
         // Define getter properties
         arrayBufferPrototype.defineGetterConfigurable("byteLength", ArrayBufferPrototype::getByteLength);
@@ -605,10 +605,10 @@ public final class JSGlobalObject {
         JSNativeFunction arrayBufferConstructor = new JSNativeFunction("ArrayBuffer", 1, ArrayBufferConstructor::call, true);
         arrayBufferConstructor.set(PropertyKey.PROTOTYPE, arrayBufferPrototype);
         arrayBufferConstructor.setConstructorType(JSConstructorType.ARRAY_BUFFER);
-        arrayBufferPrototype.set(PropertyKey.CONSTRUCTOR, arrayBufferConstructor);
+        arrayBufferPrototype.definePropertyWritableConfigurable("constructor", arrayBufferConstructor);
 
         // Static methods
-        arrayBufferConstructor.set("isView", new JSNativeFunction("isView", 1, ArrayBufferConstructor::isView));
+        arrayBufferConstructor.definePropertyWritableConfigurable("isView", new JSNativeFunction("isView", 1, ArrayBufferConstructor::isView));
 
         // Symbol.species getter
         arrayBufferConstructor.defineGetterConfigurable(JSSymbol.SPECIES, ArrayBufferConstructor::getSpecies);
@@ -626,43 +626,43 @@ public final class JSGlobalObject {
         arrayPrototype.setArrayObject(true);
         JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, IteratorPrototype::arrayValues);
         arrayPrototype.definePropertyWritableConfigurable("at", new JSNativeFunction("at", 1, ArrayPrototype::at));
-        arrayPrototype.set("concat", new JSNativeFunction("concat", 1, ArrayPrototype::concat));
-        arrayPrototype.set("copyWithin", new JSNativeFunction("copyWithin", 2, ArrayPrototype::copyWithin));
-        arrayPrototype.set("entries", new JSNativeFunction("entries", 0, IteratorPrototype::arrayEntries));
-        arrayPrototype.set("every", new JSNativeFunction("every", 1, ArrayPrototype::every));
-        arrayPrototype.set("fill", new JSNativeFunction("fill", 1, ArrayPrototype::fill));
-        arrayPrototype.set("filter", new JSNativeFunction("filter", 1, ArrayPrototype::filter));
-        arrayPrototype.set("find", new JSNativeFunction("find", 1, ArrayPrototype::find));
-        arrayPrototype.set("findIndex", new JSNativeFunction("findIndex", 1, ArrayPrototype::findIndex));
-        arrayPrototype.set("findLast", new JSNativeFunction("findLast", 1, ArrayPrototype::findLast));
-        arrayPrototype.set("findLastIndex", new JSNativeFunction("findLastIndex", 1, ArrayPrototype::findLastIndex));
-        arrayPrototype.set("flat", new JSNativeFunction("flat", 0, ArrayPrototype::flat));
-        arrayPrototype.set("flatMap", new JSNativeFunction("flatMap", 1, ArrayPrototype::flatMap));
-        arrayPrototype.set("forEach", new JSNativeFunction("forEach", 1, ArrayPrototype::forEach));
-        arrayPrototype.set("includes", new JSNativeFunction("includes", 1, ArrayPrototype::includes));
-        arrayPrototype.set("indexOf", new JSNativeFunction("indexOf", 1, ArrayPrototype::indexOf));
-        arrayPrototype.set("join", new JSNativeFunction("join", 1, ArrayPrototype::join));
-        arrayPrototype.set("keys", new JSNativeFunction("keys", 0, IteratorPrototype::arrayKeys));
-        arrayPrototype.set("lastIndexOf", new JSNativeFunction("lastIndexOf", 1, ArrayPrototype::lastIndexOf));
-        arrayPrototype.set("map", new JSNativeFunction("map", 1, ArrayPrototype::map));
-        arrayPrototype.set("pop", new JSNativeFunction("pop", 0, ArrayPrototype::pop));
-        arrayPrototype.set("push", new JSNativeFunction("push", 1, ArrayPrototype::push));
-        arrayPrototype.set("reduce", new JSNativeFunction("reduce", 1, ArrayPrototype::reduce));
-        arrayPrototype.set("reduceRight", new JSNativeFunction("reduceRight", 1, ArrayPrototype::reduceRight));
-        arrayPrototype.set("reverse", new JSNativeFunction("reverse", 0, ArrayPrototype::reverse));
-        arrayPrototype.set("shift", new JSNativeFunction("shift", 0, ArrayPrototype::shift));
-        arrayPrototype.set("slice", new JSNativeFunction("slice", 2, ArrayPrototype::slice));
-        arrayPrototype.set("some", new JSNativeFunction("some", 1, ArrayPrototype::some));
-        arrayPrototype.set("sort", new JSNativeFunction("sort", 1, ArrayPrototype::sort));
-        arrayPrototype.set("splice", new JSNativeFunction("splice", 2, ArrayPrototype::splice));
-        arrayPrototype.set("toLocaleString", new JSNativeFunction("toLocaleString", 0, ArrayPrototype::toLocaleString));
-        arrayPrototype.set("toReversed", new JSNativeFunction("toReversed", 0, ArrayPrototype::toReversed));
-        arrayPrototype.set("toSorted", new JSNativeFunction("toSorted", 1, ArrayPrototype::toSorted));
-        arrayPrototype.set("toSpliced", new JSNativeFunction("toSpliced", 2, ArrayPrototype::toSpliced));
-        arrayPrototype.set(PropertyKey.TO_STRING, new JSNativeFunction("toString", 0, ArrayPrototype::toString));
-        arrayPrototype.set("unshift", new JSNativeFunction("unshift", 1, ArrayPrototype::unshift));
-        arrayPrototype.set("values", valuesFunction);
-        arrayPrototype.set("with", new JSNativeFunction("with", 2, ArrayPrototype::with));
+        arrayPrototype.definePropertyWritableConfigurable("concat", new JSNativeFunction("concat", 1, ArrayPrototype::concat));
+        arrayPrototype.definePropertyWritableConfigurable("copyWithin", new JSNativeFunction("copyWithin", 2, ArrayPrototype::copyWithin));
+        arrayPrototype.definePropertyWritableConfigurable("entries", new JSNativeFunction("entries", 0, IteratorPrototype::arrayEntries));
+        arrayPrototype.definePropertyWritableConfigurable("every", new JSNativeFunction("every", 1, ArrayPrototype::every));
+        arrayPrototype.definePropertyWritableConfigurable("fill", new JSNativeFunction("fill", 1, ArrayPrototype::fill));
+        arrayPrototype.definePropertyWritableConfigurable("filter", new JSNativeFunction("filter", 1, ArrayPrototype::filter));
+        arrayPrototype.definePropertyWritableConfigurable("find", new JSNativeFunction("find", 1, ArrayPrototype::find));
+        arrayPrototype.definePropertyWritableConfigurable("findIndex", new JSNativeFunction("findIndex", 1, ArrayPrototype::findIndex));
+        arrayPrototype.definePropertyWritableConfigurable("findLast", new JSNativeFunction("findLast", 1, ArrayPrototype::findLast));
+        arrayPrototype.definePropertyWritableConfigurable("findLastIndex", new JSNativeFunction("findLastIndex", 1, ArrayPrototype::findLastIndex));
+        arrayPrototype.definePropertyWritableConfigurable("flat", new JSNativeFunction("flat", 0, ArrayPrototype::flat));
+        arrayPrototype.definePropertyWritableConfigurable("flatMap", new JSNativeFunction("flatMap", 1, ArrayPrototype::flatMap));
+        arrayPrototype.definePropertyWritableConfigurable("forEach", new JSNativeFunction("forEach", 1, ArrayPrototype::forEach));
+        arrayPrototype.definePropertyWritableConfigurable("includes", new JSNativeFunction("includes", 1, ArrayPrototype::includes));
+        arrayPrototype.definePropertyWritableConfigurable("indexOf", new JSNativeFunction("indexOf", 1, ArrayPrototype::indexOf));
+        arrayPrototype.definePropertyWritableConfigurable("join", new JSNativeFunction("join", 1, ArrayPrototype::join));
+        arrayPrototype.definePropertyWritableConfigurable("keys", new JSNativeFunction("keys", 0, IteratorPrototype::arrayKeys));
+        arrayPrototype.definePropertyWritableConfigurable("lastIndexOf", new JSNativeFunction("lastIndexOf", 1, ArrayPrototype::lastIndexOf));
+        arrayPrototype.definePropertyWritableConfigurable("map", new JSNativeFunction("map", 1, ArrayPrototype::map));
+        arrayPrototype.definePropertyWritableConfigurable("pop", new JSNativeFunction("pop", 0, ArrayPrototype::pop));
+        arrayPrototype.definePropertyWritableConfigurable("push", new JSNativeFunction("push", 1, ArrayPrototype::push));
+        arrayPrototype.definePropertyWritableConfigurable("reduce", new JSNativeFunction("reduce", 1, ArrayPrototype::reduce));
+        arrayPrototype.definePropertyWritableConfigurable("reduceRight", new JSNativeFunction("reduceRight", 1, ArrayPrototype::reduceRight));
+        arrayPrototype.definePropertyWritableConfigurable("reverse", new JSNativeFunction("reverse", 0, ArrayPrototype::reverse));
+        arrayPrototype.definePropertyWritableConfigurable("shift", new JSNativeFunction("shift", 0, ArrayPrototype::shift));
+        arrayPrototype.definePropertyWritableConfigurable("slice", new JSNativeFunction("slice", 2, ArrayPrototype::slice));
+        arrayPrototype.definePropertyWritableConfigurable("some", new JSNativeFunction("some", 1, ArrayPrototype::some));
+        arrayPrototype.definePropertyWritableConfigurable("sort", new JSNativeFunction("sort", 1, ArrayPrototype::sort));
+        arrayPrototype.definePropertyWritableConfigurable("splice", new JSNativeFunction("splice", 2, ArrayPrototype::splice));
+        arrayPrototype.definePropertyWritableConfigurable("toLocaleString", new JSNativeFunction("toLocaleString", 0, ArrayPrototype::toLocaleString));
+        arrayPrototype.definePropertyWritableConfigurable("toReversed", new JSNativeFunction("toReversed", 0, ArrayPrototype::toReversed));
+        arrayPrototype.definePropertyWritableConfigurable("toSorted", new JSNativeFunction("toSorted", 1, ArrayPrototype::toSorted));
+        arrayPrototype.definePropertyWritableConfigurable("toSpliced", new JSNativeFunction("toSpliced", 2, ArrayPrototype::toSpliced));
+        arrayPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, ArrayPrototype::toString));
+        arrayPrototype.definePropertyWritableConfigurable("unshift", new JSNativeFunction("unshift", 1, ArrayPrototype::unshift));
+        arrayPrototype.definePropertyWritableConfigurable("values", valuesFunction);
+        arrayPrototype.definePropertyWritableConfigurable("with", new JSNativeFunction("with", 2, ArrayPrototype::with));
 
         // Array.prototype.length is a data property with value 0
         arrayPrototype.definePropertyReadonlyNonConfigurable("length", JSNumber.of(0));
@@ -675,7 +675,7 @@ public final class JSGlobalObject {
         JSNativeFunction arrayConstructor = new JSNativeFunction("Array", 1, ArrayConstructor::call, true);
         arrayConstructor.set(PropertyKey.PROTOTYPE, arrayPrototype);
         arrayConstructor.setConstructorType(JSConstructorType.ARRAY);
-        arrayPrototype.set(PropertyKey.CONSTRUCTOR, arrayConstructor);
+        arrayPrototype.definePropertyWritableConfigurable("constructor", arrayConstructor);
 
         // Array static methods (writable, non-enumerable, configurable per spec)
         arrayConstructor.definePropertyWritableConfigurable("from", new JSNativeFunction("from", 1, ArrayConstructor::from));
@@ -694,13 +694,13 @@ public final class JSGlobalObject {
      */
     private void initializeAsyncDisposableStackConstructor(JSContext context, JSObject global) {
         JSObject asyncDisposableStackPrototype = context.createJSObject();
-        asyncDisposableStackPrototype.set("adopt", new JSNativeFunction("adopt", 2, AsyncDisposableStackPrototype::adopt));
-        asyncDisposableStackPrototype.set("defer", new JSNativeFunction("defer", 1, AsyncDisposableStackPrototype::defer));
+        asyncDisposableStackPrototype.definePropertyWritableConfigurable("adopt", new JSNativeFunction("adopt", 2, AsyncDisposableStackPrototype::adopt));
+        asyncDisposableStackPrototype.definePropertyWritableConfigurable("defer", new JSNativeFunction("defer", 1, AsyncDisposableStackPrototype::defer));
         JSNativeFunction disposeAsyncFunction = new JSNativeFunction("disposeAsync", 0, AsyncDisposableStackPrototype::disposeAsync);
-        asyncDisposableStackPrototype.set("disposeAsync", disposeAsyncFunction);
-        asyncDisposableStackPrototype.set("move", new JSNativeFunction("move", 0, AsyncDisposableStackPrototype::move));
-        asyncDisposableStackPrototype.set("use", new JSNativeFunction("use", 1, AsyncDisposableStackPrototype::use));
-        asyncDisposableStackPrototype.set(PropertyKey.SYMBOL_ASYNC_DISPOSE, disposeAsyncFunction);
+        asyncDisposableStackPrototype.definePropertyWritableConfigurable("disposeAsync", disposeAsyncFunction);
+        asyncDisposableStackPrototype.definePropertyWritableConfigurable("move", new JSNativeFunction("move", 0, AsyncDisposableStackPrototype::move));
+        asyncDisposableStackPrototype.definePropertyWritableConfigurable("use", new JSNativeFunction("use", 1, AsyncDisposableStackPrototype::use));
+        asyncDisposableStackPrototype.definePropertyWritableConfigurable(JSSymbol.ASYNC_DISPOSE, disposeAsyncFunction);
 
         asyncDisposableStackPrototype.defineGetterConfigurable("disposed", AsyncDisposableStackPrototype::getDisposed);
         asyncDisposableStackPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, (childContext, thisObj, args) -> {
@@ -713,7 +713,7 @@ public final class JSGlobalObject {
         JSNativeFunction asyncDisposableStackConstructor = new JSNativeFunction(
                 JSAsyncDisposableStack.NAME, 0, AsyncDisposableStackConstructor::call, true, true);
         asyncDisposableStackConstructor.set(PropertyKey.PROTOTYPE, asyncDisposableStackPrototype);
-        asyncDisposableStackPrototype.set(PropertyKey.CONSTRUCTOR, asyncDisposableStackConstructor);
+        asyncDisposableStackPrototype.definePropertyWritableConfigurable("constructor", asyncDisposableStackConstructor);
 
         global.definePropertyWritableConfigurable(JSAsyncDisposableStack.NAME, asyncDisposableStackConstructor);
     }
@@ -732,7 +732,7 @@ public final class JSGlobalObject {
         JSNativeFunction asyncFunctionConstructor = new JSNativeFunction("AsyncFunction", 1,
                 (ctx, thisObj, args) -> ctx.throwTypeError("AsyncFunction is not a constructor"), true);
         asyncFunctionConstructor.set(PropertyKey.PROTOTYPE, asyncFunctionPrototype);
-        asyncFunctionPrototype.set(PropertyKey.CONSTRUCTOR, asyncFunctionConstructor);
+        asyncFunctionPrototype.definePropertyWritableConfigurable("constructor", asyncFunctionConstructor);
 
         // Store AsyncFunction in the context (not in global scope)
         // This is used internally for setting up prototype chains for async bytecode functions
@@ -860,19 +860,19 @@ public final class JSGlobalObject {
     private void initializeBigIntConstructor(JSContext context, JSObject global) {
         // Create BigInt.prototype
         JSObject bigIntPrototype = context.createJSObject();
-        bigIntPrototype.set("toLocaleString", new JSNativeFunction("toLocaleString", 0, BigIntPrototype::toLocaleString));
-        bigIntPrototype.set(PropertyKey.TO_STRING, new JSNativeFunction("toString", 1, BigIntPrototype::toString));
-        bigIntPrototype.set("valueOf", new JSNativeFunction("valueOf", 0, BigIntPrototype::valueOf));
+        bigIntPrototype.definePropertyWritableConfigurable("toLocaleString", new JSNativeFunction("toLocaleString", 0, BigIntPrototype::toLocaleString));
+        bigIntPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 1, BigIntPrototype::toString));
+        bigIntPrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, BigIntPrototype::valueOf));
 
         // Create BigInt constructor
         JSNativeFunction bigIntConstructor = new JSNativeFunction("BigInt", 1, BigIntConstructor::call);
         bigIntConstructor.set(PropertyKey.PROTOTYPE, bigIntPrototype);
         bigIntConstructor.setConstructorType(JSConstructorType.BIG_INT_OBJECT); // Mark as BigInt constructor
-        bigIntPrototype.set(PropertyKey.CONSTRUCTOR, bigIntConstructor);
+        bigIntPrototype.definePropertyWritableConfigurable("constructor", bigIntConstructor);
 
         // BigInt static methods
-        bigIntConstructor.set("asIntN", new JSNativeFunction("asIntN", 2, BigIntConstructor::asIntN));
-        bigIntConstructor.set("asUintN", new JSNativeFunction("asUintN", 2, BigIntConstructor::asUintN));
+        bigIntConstructor.definePropertyWritableConfigurable("asIntN", new JSNativeFunction("asIntN", 2, BigIntConstructor::asIntN));
+        bigIntConstructor.definePropertyWritableConfigurable("asUintN", new JSNativeFunction("asUintN", 2, BigIntConstructor::asUintN));
 
         global.definePropertyWritableConfigurable("BigInt", bigIntConstructor);
     }
@@ -1053,12 +1053,12 @@ public final class JSGlobalObject {
     private void initializeDisposableStackConstructor(JSContext context, JSObject global) {
         JSObject disposableStackPrototype = context.createJSObject();
         JSNativeFunction disposeFunction = new JSNativeFunction("dispose", 0, DisposableStackPrototype::dispose);
-        disposableStackPrototype.set("adopt", new JSNativeFunction("adopt", 2, DisposableStackPrototype::adopt));
-        disposableStackPrototype.set("defer", new JSNativeFunction("defer", 1, DisposableStackPrototype::defer));
-        disposableStackPrototype.set("dispose", disposeFunction);
-        disposableStackPrototype.set("move", new JSNativeFunction("move", 0, DisposableStackPrototype::move));
-        disposableStackPrototype.set("use", new JSNativeFunction("use", 1, DisposableStackPrototype::use));
-        disposableStackPrototype.set(PropertyKey.SYMBOL_DISPOSE, disposeFunction);
+        disposableStackPrototype.definePropertyWritableConfigurable("adopt", new JSNativeFunction("adopt", 2, DisposableStackPrototype::adopt));
+        disposableStackPrototype.definePropertyWritableConfigurable("defer", new JSNativeFunction("defer", 1, DisposableStackPrototype::defer));
+        disposableStackPrototype.definePropertyWritableConfigurable("dispose", disposeFunction);
+        disposableStackPrototype.definePropertyWritableConfigurable("move", new JSNativeFunction("move", 0, DisposableStackPrototype::move));
+        disposableStackPrototype.definePropertyWritableConfigurable("use", new JSNativeFunction("use", 1, DisposableStackPrototype::use));
+        disposableStackPrototype.definePropertyWritableConfigurable(JSSymbol.DISPOSE, disposeFunction);
 
         disposableStackPrototype.defineGetterConfigurable("disposed", DisposableStackPrototype::getDisposed);
         disposableStackPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, (childContext, thisObj, args) -> {
@@ -1071,7 +1071,7 @@ public final class JSGlobalObject {
         JSNativeFunction disposableStackConstructor = new JSNativeFunction(
                 JSDisposableStack.NAME, 0, DisposableStackConstructor::call, true, true);
         disposableStackConstructor.set(PropertyKey.PROTOTYPE, disposableStackPrototype);
-        disposableStackPrototype.set(PropertyKey.CONSTRUCTOR, disposableStackConstructor);
+        disposableStackPrototype.definePropertyWritableConfigurable("constructor", disposableStackConstructor);
 
         global.definePropertyWritableConfigurable(JSDisposableStack.NAME, disposableStackConstructor);
     }
@@ -1258,47 +1258,47 @@ public final class JSGlobalObject {
         intlObject.set("getCanonicalLocales", new JSNativeFunction("getCanonicalLocales", 1, JSIntlObject::getCanonicalLocales));
 
         JSObject dateTimeFormatPrototype = context.createJSObject();
-        dateTimeFormatPrototype.set("format", new JSNativeFunction("format", 1, JSIntlObject::dateTimeFormatFormat));
-        dateTimeFormatPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::dateTimeFormatResolvedOptions));
+        dateTimeFormatPrototype.definePropertyWritableConfigurable("format", new JSNativeFunction("format", 1, JSIntlObject::dateTimeFormatFormat));
+        dateTimeFormatPrototype.definePropertyWritableConfigurable("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::dateTimeFormatResolvedOptions));
         JSNativeFunction dateTimeFormatConstructor = new JSNativeFunction(
                 "DateTimeFormat",
                 0,
                 (childContext, thisArg, args) -> JSIntlObject.createDateTimeFormat(childContext, dateTimeFormatPrototype, args),
                 true);
         dateTimeFormatConstructor.set(PropertyKey.PROTOTYPE, dateTimeFormatPrototype);
-        dateTimeFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
-        dateTimeFormatPrototype.set(PropertyKey.CONSTRUCTOR, dateTimeFormatConstructor);
+        dateTimeFormatConstructor.definePropertyWritableConfigurable("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
+        dateTimeFormatPrototype.definePropertyWritableConfigurable("constructor", dateTimeFormatConstructor);
         intlObject.set("DateTimeFormat", dateTimeFormatConstructor);
 
         JSObject numberFormatPrototype = context.createJSObject();
-        numberFormatPrototype.set("format", new JSNativeFunction("format", 1, JSIntlObject::numberFormatFormat));
-        numberFormatPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::numberFormatResolvedOptions));
+        numberFormatPrototype.definePropertyWritableConfigurable("format", new JSNativeFunction("format", 1, JSIntlObject::numberFormatFormat));
+        numberFormatPrototype.definePropertyWritableConfigurable("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::numberFormatResolvedOptions));
         JSNativeFunction numberFormatConstructor = new JSNativeFunction(
                 "NumberFormat",
                 0,
                 (childContext, thisArg, args) -> JSIntlObject.createNumberFormat(childContext, numberFormatPrototype, args),
                 true);
         numberFormatConstructor.set(PropertyKey.PROTOTYPE, numberFormatPrototype);
-        numberFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
-        numberFormatPrototype.set(PropertyKey.CONSTRUCTOR, numberFormatConstructor);
+        numberFormatConstructor.definePropertyWritableConfigurable("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
+        numberFormatPrototype.definePropertyWritableConfigurable("constructor", numberFormatConstructor);
         intlObject.set("NumberFormat", numberFormatConstructor);
 
         JSObject collatorPrototype = context.createJSObject();
-        collatorPrototype.set("compare", new JSNativeFunction("compare", 2, JSIntlObject::collatorCompare));
-        collatorPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::collatorResolvedOptions));
+        collatorPrototype.definePropertyWritableConfigurable("compare", new JSNativeFunction("compare", 2, JSIntlObject::collatorCompare));
+        collatorPrototype.definePropertyWritableConfigurable("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::collatorResolvedOptions));
         JSNativeFunction collatorConstructor = new JSNativeFunction(
                 "Collator",
                 0,
                 (childContext, thisArg, args) -> JSIntlObject.createCollator(childContext, collatorPrototype, args),
                 true);
         collatorConstructor.set(PropertyKey.PROTOTYPE, collatorPrototype);
-        collatorConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
-        collatorPrototype.set(PropertyKey.CONSTRUCTOR, collatorConstructor);
+        collatorConstructor.definePropertyWritableConfigurable("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
+        collatorPrototype.definePropertyWritableConfigurable("constructor", collatorConstructor);
         intlObject.set("Collator", collatorConstructor);
 
         JSObject pluralRulesPrototype = context.createJSObject();
-        pluralRulesPrototype.set("select", new JSNativeFunction("select", 1, JSIntlObject::pluralRulesSelect));
-        pluralRulesPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::pluralRulesResolvedOptions));
+        pluralRulesPrototype.definePropertyWritableConfigurable("select", new JSNativeFunction("select", 1, JSIntlObject::pluralRulesSelect));
+        pluralRulesPrototype.definePropertyWritableConfigurable("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::pluralRulesResolvedOptions));
         JSNativeFunction pluralRulesConstructor = new JSNativeFunction(
                 "PluralRules",
                 0,
@@ -1306,13 +1306,13 @@ public final class JSGlobalObject {
                 true,
                 true);
         pluralRulesConstructor.set(PropertyKey.PROTOTYPE, pluralRulesPrototype);
-        pluralRulesConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
-        pluralRulesPrototype.set(PropertyKey.CONSTRUCTOR, pluralRulesConstructor);
+        pluralRulesConstructor.definePropertyWritableConfigurable("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
+        pluralRulesPrototype.definePropertyWritableConfigurable("constructor", pluralRulesConstructor);
         intlObject.set("PluralRules", pluralRulesConstructor);
 
         JSObject relativeTimeFormatPrototype = context.createJSObject();
-        relativeTimeFormatPrototype.set("format", new JSNativeFunction("format", 2, JSIntlObject::relativeTimeFormatFormat));
-        relativeTimeFormatPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::relativeTimeFormatResolvedOptions));
+        relativeTimeFormatPrototype.definePropertyWritableConfigurable("format", new JSNativeFunction("format", 2, JSIntlObject::relativeTimeFormatFormat));
+        relativeTimeFormatPrototype.definePropertyWritableConfigurable("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::relativeTimeFormatResolvedOptions));
         JSNativeFunction relativeTimeFormatConstructor = new JSNativeFunction(
                 "RelativeTimeFormat",
                 0,
@@ -1320,13 +1320,13 @@ public final class JSGlobalObject {
                 true,
                 true);
         relativeTimeFormatConstructor.set(PropertyKey.PROTOTYPE, relativeTimeFormatPrototype);
-        relativeTimeFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
-        relativeTimeFormatPrototype.set(PropertyKey.CONSTRUCTOR, relativeTimeFormatConstructor);
+        relativeTimeFormatConstructor.definePropertyWritableConfigurable("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
+        relativeTimeFormatPrototype.definePropertyWritableConfigurable("constructor", relativeTimeFormatConstructor);
         intlObject.set("RelativeTimeFormat", relativeTimeFormatConstructor);
 
         JSObject listFormatPrototype = context.createJSObject();
-        listFormatPrototype.set("format", new JSNativeFunction("format", 1, JSIntlObject::listFormatFormat));
-        listFormatPrototype.set("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::listFormatResolvedOptions));
+        listFormatPrototype.definePropertyWritableConfigurable("format", new JSNativeFunction("format", 1, JSIntlObject::listFormatFormat));
+        listFormatPrototype.definePropertyWritableConfigurable("resolvedOptions", new JSNativeFunction("resolvedOptions", 0, JSIntlObject::listFormatResolvedOptions));
         JSNativeFunction listFormatConstructor = new JSNativeFunction(
                 "ListFormat",
                 0,
@@ -1334,12 +1334,12 @@ public final class JSGlobalObject {
                 true,
                 true);
         listFormatConstructor.set(PropertyKey.PROTOTYPE, listFormatPrototype);
-        listFormatConstructor.set("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
-        listFormatPrototype.set(PropertyKey.CONSTRUCTOR, listFormatConstructor);
+        listFormatConstructor.definePropertyWritableConfigurable("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
+        listFormatPrototype.definePropertyWritableConfigurable("constructor", listFormatConstructor);
         intlObject.set("ListFormat", listFormatConstructor);
 
         JSObject localePrototype = context.createJSObject();
-        localePrototype.set(PropertyKey.TO_STRING, new JSNativeFunction("toString", 0, JSIntlObject::localeToString));
+        localePrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, JSIntlObject::localeToString));
         localePrototype.defineGetterConfigurable("baseName", JSIntlObject::localeGetBaseName);
         localePrototype.defineGetterConfigurable("language", JSIntlObject::localeGetLanguage);
         localePrototype.defineGetterConfigurable("script", JSIntlObject::localeGetScript);
@@ -1351,7 +1351,7 @@ public final class JSGlobalObject {
                 true,
                 true);
         localeConstructor.set(PropertyKey.PROTOTYPE, localePrototype);
-        localePrototype.set(PropertyKey.CONSTRUCTOR, localeConstructor);
+        localePrototype.definePropertyWritableConfigurable("constructor", localeConstructor);
         intlObject.set("Locale", localeConstructor);
 
         global.definePropertyWritableConfigurable("Intl", intlObject);
@@ -1728,11 +1728,11 @@ public final class JSGlobalObject {
     private void initializeRegExpConstructor(JSContext context, JSObject global) {
         // Create RegExp.prototype
         JSObject regexpPrototype = context.createJSObject();
-        regexpPrototype.set("test", new JSNativeFunction("test", 1, RegExpPrototype::test));
-        regexpPrototype.set("exec", new JSNativeFunction("exec", 1, RegExpPrototype::exec));
+        regexpPrototype.definePropertyWritableConfigurable("test", new JSNativeFunction("test", 1, RegExpPrototype::test));
+        regexpPrototype.definePropertyWritableConfigurable("exec", new JSNativeFunction("exec", 1, RegExpPrototype::exec));
         regexpPrototype.definePropertyWritableConfigurable("compile", new JSNativeFunction("compile", 2, RegExpPrototype::compile));
-        regexpPrototype.set(PropertyKey.TO_STRING, new JSNativeFunction("toString", 0, RegExpPrototype::toStringMethod));
-        regexpPrototype.set(PropertyKey.SYMBOL_SPLIT, new JSNativeFunction("[Symbol.split]", 2, RegExpPrototype::symbolSplit));
+        regexpPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, RegExpPrototype::toStringMethod));
+        regexpPrototype.definePropertyWritableConfigurable(JSSymbol.SPLIT, new JSNativeFunction("[Symbol.split]", 2, RegExpPrototype::symbolSplit));
 
         // Accessor properties
         regexpPrototype.defineGetterConfigurable("dotAll", RegExpPrototype::getDotAll);
@@ -1751,7 +1751,7 @@ public final class JSGlobalObject {
         JSNativeFunction regexpConstructor = new JSNativeFunction("RegExp", 2, RegExpConstructor::call, true);
         regexpConstructor.set(PropertyKey.PROTOTYPE, regexpPrototype);
         regexpConstructor.setConstructorType(JSConstructorType.REGEXP);
-        regexpPrototype.set(PropertyKey.CONSTRUCTOR, regexpConstructor);
+        regexpPrototype.definePropertyWritableConfigurable("constructor", regexpConstructor);
 
         // AnnexB legacy RegExp static accessor properties.
         // Each getter validates SameValue(C, thisValue) per GetLegacyRegExpStaticProperty.
