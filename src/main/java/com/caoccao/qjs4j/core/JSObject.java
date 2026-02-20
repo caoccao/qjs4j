@@ -168,8 +168,9 @@ public non-sealed class JSObject implements JSValue {
      * Define a non-enumerable, configurable getter accessor property with a symbol key.
      */
     public void defineGetterConfigurable(JSSymbol symbol, JSNativeFunction.NativeCallback callback) {
+        String symbolName = symbol.getDescription() == null ? "" : symbol.getDescription();
         defineProperty(PropertyKey.fromSymbol(symbol),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get [" + symbol + "]", 0, callback), null, false, true));
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get [" + symbolName + "]", 0, callback), null, false, true));
     }
 
     public void defineGetterConfigurable(String name) {

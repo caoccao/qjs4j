@@ -261,6 +261,23 @@ public class ArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testGetSpeciesAccessorDescriptor() {
+        assertBooleanWithJavet("""
+                (() => {
+                  const thisVal = {};
+                  const desc = Object.getOwnPropertyDescriptor(Array, Symbol.species);
+                  return typeof desc.get === 'function'
+                    && desc.set === undefined
+                    && desc.enumerable === false
+                    && desc.configurable === true
+                    && desc.get.name === 'get [Symbol.species]'
+                    && typeof desc.get.call === 'function'
+                    && desc.get.call(thisVal) === thisVal;
+                })()
+                """);
+    }
+
+    @Test
     public void testIsArray() {
         // Normal case: array
         JSArray arr = new JSArray();

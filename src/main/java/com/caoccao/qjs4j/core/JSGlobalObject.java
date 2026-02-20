@@ -1163,19 +1163,23 @@ public final class JSGlobalObject {
 
         List<PropertyKey> keys = obj.getOwnPropertyKeys();
         for (PropertyKey key : keys) {
-            // Get the property value using the property string
-            String keyStr = key.toPropertyString();
-            JSValue value = obj.get(keyStr);
-            if (value instanceof JSFunction func) {
-                // Initialize this function's prototype chain
-                if (func.getPrototype() == null) {
-                    func.initializePrototypeChain(context);
-                }
-                // Recursively process the function's own properties
-                initializeFunctionPrototypeChains(context, func, visitedObjectSet);
-            } else if (value instanceof JSObject subObj) {
-                // Recursively process nested objects
-                initializeFunctionPrototypeChains(context, subObj, visitedObjectSet);
+            PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
+            if (descriptor == null) {
+                continue;
+            }
+
+            // Walk data descriptor values using the current slot value.
+            // Do not read descriptor.getValue() because data descriptors in this runtime
+            // are not updated when writable properties are reassigned.
+            if (descriptor.isDataDescriptor()) {
+                initializeFunctionPrototypeChainsForValue(context, obj.get(key), visitedObjectSet);
+            }
+            // Walk accessor descriptor functions.
+            if (descriptor.hasGetter()) {
+                initializeFunctionPrototypeChainsForValue(context, descriptor.getGetter(), visitedObjectSet);
+            }
+            if (descriptor.hasSetter()) {
+                initializeFunctionPrototypeChainsForValue(context, descriptor.getSetter(), visitedObjectSet);
             }
         }
 
@@ -1184,6 +1188,17 @@ public final class JSGlobalObject {
         JSObject proto = obj.getPrototype();
         if (proto != null) {
             initializeFunctionPrototypeChains(context, proto, visitedObjectSet);
+        }
+    }
+
+    private void initializeFunctionPrototypeChainsForValue(JSContext context, JSValue value, Set<JSObject> visitedObjectSet) {
+        if (value instanceof JSFunction func) {
+            if (func.getPrototype() == null) {
+                func.initializePrototypeChain(context);
+            }
+            initializeFunctionPrototypeChains(context, func, visitedObjectSet);
+        } else if (value instanceof JSObject subObj) {
+            initializeFunctionPrototypeChains(context, subObj, visitedObjectSet);
         }
     }
 
