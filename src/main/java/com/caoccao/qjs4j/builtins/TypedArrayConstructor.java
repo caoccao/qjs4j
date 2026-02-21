@@ -107,9 +107,10 @@ public final class TypedArrayConstructor {
         }
 
         for (long k = 0; k < len; k++) {
+            PropertyKey key = PropertyKey.fromString(Long.toString(k));
             JSValue kValue = iterableValues != null
-                    ? iterableValues.get(context, PropertyKey.fromIndex((int) k))
-                    : arrayLike.get(context, PropertyKey.fromIndex((int) k));
+                    ? iterableValues.get(context, key)
+                    : arrayLike.get(context, key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -119,7 +120,7 @@ public final class TypedArrayConstructor {
                     return context.getPendingException();
                 }
             }
-            target.set(PropertyKey.fromIndex((int) k), kValue, context);
+            target.set(key, kValue, context);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }

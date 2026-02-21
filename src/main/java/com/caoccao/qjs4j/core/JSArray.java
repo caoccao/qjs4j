@@ -255,11 +255,7 @@ public final class JSArray extends JSObject {
             }
         }
 
-        PropertyKey stringKey = PropertyKey.fromString(Long.toString(index));
-        if (shape.hasProperty(stringKey)) {
-            return super.delete(stringKey, context);
-        }
-        return true;
+        return super.delete(key, context);
     }
 
     /**
@@ -672,6 +668,17 @@ public final class JSArray extends JSObject {
                         "Cannot assign to read only property '" + index + "' of object '[object Array]'");
             }
             return;
+        }
+
+        // If this index has a shape property (e.g., from Object.defineProperty),
+        // delegate to JSObject.set which handles descriptor constraints (writable, accessor, etc.).
+        // Following QuickJS which checks find_own_property before using the fast array path.
+        if (!isAddingNewElement && index <= Integer.MAX_VALUE) {
+            PropertyKey key = PropertyKey.fromString(Long.toString(index));
+            if (super.hasOwnShapeProperty(key)) {
+                super.set(key, value, context);
+                return;
+            }
         }
 
         // Extend length if necessary

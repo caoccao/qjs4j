@@ -124,7 +124,7 @@ public final class ArrayConstructor {
                     }
                 }
                 // Step 6.g.ix: CreateDataPropertyOrThrow(A, Pk, mappedValue)
-                if (!target.createDataProperty(PropertyKey.fromString(Integer.toString(k[0])), mappedValue)) {
+                if (!target.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Integer.toString(k[0])), mappedValue)) {
                     context.throwTypeError("Cannot define property " + k[0] + " on result object");
                     return false;
                 }
@@ -202,7 +202,7 @@ public final class ArrayConstructor {
                 }
             }
             // Step 15.viii: CreateDataPropertyOrThrow(A, Pk, mappedValue)
-            if (!A.createDataProperty(PropertyKey.fromString(Long.toString(k)), mappedValue)) {
+            if (!A.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(k)), mappedValue)) {
                 return context.throwTypeError("Cannot define property " + k + " on result object");
             }
         }
@@ -453,7 +453,7 @@ public final class ArrayConstructor {
                                                 new JSNativeFunction("onMapResolve", 1, (innerContext, innerThisArg, innerArgs) -> {
                                                     JSValue finalValue = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
                                                     // Per spec: CreateDataPropertyOrThrow(A, Pk, mappedValue)
-                                                    target.createDataProperty(PropertyKey.fromString(Integer.toString(index)), finalValue);
+                                                    target.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Integer.toString(index)), finalValue);
                                                     fromAsyncArrayLikeStep(context, resultPromise, target, isArray, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
                                                     return JSUndefined.INSTANCE;
                                                 }),
@@ -470,7 +470,7 @@ public final class ArrayConstructor {
                             } else {
                                 // No mapFn: use awaited value directly
                                 // Per spec: CreateDataPropertyOrThrow(A, Pk, mappedValue)
-                                target.createDataProperty(PropertyKey.fromString(Integer.toString(index)), awaitedValue);
+                                target.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Integer.toString(index)), awaitedValue);
                                 fromAsyncArrayLikeStep(context, resultPromise, target, isArray, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
                             }
                             return JSUndefined.INSTANCE;
@@ -537,7 +537,7 @@ public final class ArrayConstructor {
                                     // CreateDataPropertyOrThrow
                                     if (isArray) {
                                         ((JSArray) target).push(resolved);
-                                    } else if (!target.createDataProperty(PropertyKey.fromString(Integer.toString(index[0])), resolved)) {
+                                    } else if (!target.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Integer.toString(index[0])), resolved)) {
                                         asyncIterator.close();
                                         context.processMicrotasks();
                                         JSValue error = context.throwTypeError("Cannot define property " + index[0] + " on result object");
@@ -570,7 +570,7 @@ public final class ArrayConstructor {
                 // CreateDataPropertyOrThrow
                 if (isArray) {
                     ((JSArray) target).push(value);
-                } else if (!target.createDataProperty(PropertyKey.fromString(Integer.toString(index[0])), value)) {
+                } else if (!target.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Integer.toString(index[0])), value)) {
                     asyncIterator.close();
                     context.processMicrotasks();
                     JSValue error = context.throwTypeError("Cannot define property " + index[0] + " on result object");

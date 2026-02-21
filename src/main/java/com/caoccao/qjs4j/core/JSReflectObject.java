@@ -75,7 +75,7 @@ public final class JSReflectObject {
                 return null;
             }
             if (argumentValue instanceof JSUndefined) {
-                argumentValue = arrayLike.get(context, PropertyKey.fromIndex(i));
+                argumentValue = arrayLike.get(context, PropertyKey.fromString(Integer.toString(i)));
                 if (context.hasPendingException()) {
                     return null;
                 }

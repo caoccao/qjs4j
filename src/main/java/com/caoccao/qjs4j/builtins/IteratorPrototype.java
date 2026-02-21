@@ -771,9 +771,6 @@ public final class IteratorPrototype {
     }
 
     private static JSValue getArrayLikeValue(JSContext context, JSObject arrayLike, long index) {
-        if (index <= Integer.MAX_VALUE) {
-            return arrayLike.get(context, PropertyKey.fromIndex((int) index));
-        }
         return arrayLike.get(context, PropertyKey.fromString(Long.toString(index)));
     }
 

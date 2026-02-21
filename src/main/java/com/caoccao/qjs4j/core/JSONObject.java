@@ -54,7 +54,7 @@ public final class JSONObject {
                     JSValue element = arr.get(i);
                     JSValue newElement = internalizeJSONPropertyForValue(context, val, String.valueOf(i), element, reviver);
                     if (newElement instanceof JSUndefined) {
-                        arr.delete(PropertyKey.fromIndex((int) i));
+                        arr.delete(PropertyKey.fromString(Long.toString(i)));
                     } else {
                         arr.set(i, newElement);
                     }

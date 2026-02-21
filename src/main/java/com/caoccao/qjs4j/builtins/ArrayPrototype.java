@@ -129,7 +129,7 @@ public final class ArrayPrototype {
         if (obj instanceof JSArray arr) {
             return arr.get((int) index);
         }
-        return obj.get(context, PropertyKey.fromIndex((int) index));
+        return obj.get(context, PropertyKey.fromString(Long.toString(index)));
     }
 
     /**
@@ -190,14 +190,14 @@ public final class ArrayPrototype {
                 }
 
                 for (long k = 0; k < len; k++, n++) {
-                    PropertyKey indexKey = PropertyKey.fromIndex((int) k);
+                    PropertyKey indexKey = PropertyKey.fromString(Long.toString(k));
                     // JS_TryGetPropertyInt64: only define property if it exists (preserve holes)
                     if (eObj.has(indexKey)) {
                         JSValue val = eObj.get(context, indexKey);
                         if (context.hasPendingException()) return context.getPendingException();
                         if (resultArr != null) {
                             resultArr.set(n, val);
-                        } else if (!resultObj.createDataProperty(PropertyKey.fromIndex((int) n), val)) {
+                        } else if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), val)) {
                             return context.throwTypeError("Cannot define property " + n);
                         }
                     }
@@ -209,7 +209,7 @@ public final class ArrayPrototype {
                 }
                 if (resultArr != null) {
                     resultArr.set(n, e);
-                } else if (!resultObj.createDataProperty(PropertyKey.fromIndex((int) n), e)) {
+                } else if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), e)) {
                     return context.throwTypeError("Cannot define property " + n);
                 }
                 n++;
@@ -465,9 +465,16 @@ public final class ArrayPrototype {
 
         JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         // Step 5: Let A be ? ArraySpeciesCreate(O, 0).
-        JSArray result = context.createJSArray(0, (int) length);
+        JSValue resultVal = arraySpeciesCreate(context, obj, 0);
+        if (resultVal == null || context.hasPendingException()) {
+            return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
+        }
+        if (!(resultVal instanceof JSObject resultObj)) {
+            return context.throwTypeError("ArraySpeciesCreate did not return an object");
+        }
 
         // Step 7: Repeat, while k < len
+        long n = 0;
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             // Step 7.a: Let kPresent be ? HasProperty(O, Pk).
@@ -483,12 +490,16 @@ public final class ArrayPrototype {
             if (context.hasPendingException()) return context.getPendingException();
 
             if (JSTypeConversions.toBoolean(keep) == JSBoolean.TRUE) {
-                result.push(element);
+                // Step 7.c.iii.1: Perform ? CreateDataPropertyOrThrow(A, ! ToString(to), kValue).
+                if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), element)) {
+                    return context.throwTypeError("Cannot define property " + n);
+                }
+                n++;
             }
         }
 
         // Step 8: Return A.
-        return result;
+        return resultObj;
     }
 
     /**

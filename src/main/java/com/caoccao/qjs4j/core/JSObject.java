@@ -136,23 +136,12 @@ public non-sealed class JSObject implements JSValue {
 
     /**
      * CreateDataProperty (ES2024 7.3.6).
-     * Defines a data property with {writable: true, enumerable: true, configurable: true}.
+     * Calls [[DefineOwnProperty]] with {writable: true, enumerable: true, configurable: true}.
      * Returns false if the property cannot be defined (e.g., existing non-configurable property
      * with incompatible attributes, or non-extensible object for new properties).
      */
-    public boolean createDataProperty(PropertyKey key, JSValue value) {
-        PropertyDescriptor current = getOwnPropertyDescriptor(key);
-        if (current != null) {
-            if (!current.isConfigurable()) {
-                // Non-configurable property exists — can't redefine as configurable
-                return false;
-            }
-        } else if (!isExtensible()) {
-            // Property doesn't exist and object is not extensible
-            return false;
-        }
-        defineProperty(key, PropertyDescriptor.dataDescriptor(value, true, true, true));
-        return true;
+    public boolean definePropertyWritableEnumerableConfigurable(PropertyKey key, JSValue value) {
+        return defineOwnProperty(key, PropertyDescriptor.dataDescriptor(value, true, true, true), null);
     }
 
     /**
@@ -738,6 +727,13 @@ public non-sealed class JSObject implements JSValue {
      */
     public List<PropertyKey> getOwnPropertyKeys() {
         return getOrderedOwnKeys(false);
+    }
+
+    /**
+     * Check if a key has a property in the shape (handles integer/string key equivalence).
+     */
+    protected boolean hasOwnShapeProperty(PropertyKey key) {
+        return getOwnShapeKey(key) != null;
     }
 
     private PropertyKey getOwnShapeKey(PropertyKey key) {
