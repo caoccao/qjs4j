@@ -785,11 +785,23 @@ public final class ArrayPrototype {
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) return context.getPendingException();
 
-        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        long fromIndex = args.length > 1 ? JSTypeConversions.toInt32(context, args[1]) : 0;
+        // Step 4: If len is 0, return false (before ToIntegerOrInfinity).
+        if (length == 0) {
+            return JSBoolean.FALSE;
+        }
 
-        if (fromIndex < 0) {
-            fromIndex = Math.max(0, length + fromIndex);
+        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
+        if (context.hasPendingException()) return context.getPendingException();
+
+        if (fromIndexD >= length) {
+            return JSBoolean.FALSE;
+        }
+        long fromIndex;
+        if (fromIndexD < 0) {
+            fromIndex = Math.max(0, length + (long) fromIndexD);
+        } else {
+            fromIndex = (long) fromIndexD;
         }
 
         for (long i = fromIndex; i < length; i++) {
@@ -830,10 +842,17 @@ public final class ArrayPrototype {
         }
 
         JSValue searchElement = args[0];
-        long fromIndex = args.length > 1 ? JSTypeConversions.toInt32(context, args[1]) : 0;
+        double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
+        if (context.hasPendingException()) return context.getPendingException();
 
-        if (fromIndex < 0) {
-            fromIndex = Math.max(0, length + fromIndex);
+        if (fromIndexD >= length) {
+            return JSNumber.of(-1);
+        }
+        long fromIndex;
+        if (fromIndexD < 0) {
+            fromIndex = Math.max(0, length + (long) fromIndexD);
+        } else {
+            fromIndex = (long) fromIndexD;
         }
 
         for (long i = fromIndex; i < length; i++) {
@@ -960,12 +979,14 @@ public final class ArrayPrototype {
         }
 
         JSValue searchElement = args[0];
-        long fromIndex = args.length > 1 ? JSTypeConversions.toInt32(context, args[1]) : length - 1;
+        double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : length - 1;
+        if (context.hasPendingException()) return context.getPendingException();
 
-        if (fromIndex < 0) {
-            fromIndex = length + fromIndex;
+        long fromIndex;
+        if (fromIndexD < 0) {
+            fromIndex = length + (long) fromIndexD;
         } else {
-            fromIndex = Math.min(fromIndex, length - 1);
+            fromIndex = Math.min((long) fromIndexD, length - 1);
         }
 
         for (long i = fromIndex; i >= 0; i--) {
