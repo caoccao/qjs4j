@@ -257,7 +257,19 @@ public non-sealed class JSObject implements JSValue {
             }
         }
 
-        defineProperty(key, descriptor);
+        // ValidateAndApplyPropertyDescriptor step 9: "For each field of Desc that
+        // is present, set the corresponding attribute of the property named P of
+        // object O to the value of the field."  Absent fields keep their current
+        // values.  Build a merged descriptor so defineProperty receives the full
+        // picture (current attributes + overrides from descriptor).
+        if (current != null) {
+            PropertyDescriptor merged = new PropertyDescriptor();
+            merged.mergeFrom(current);
+            merged.mergeFrom(descriptor);
+            defineProperty(key, merged);
+        } else {
+            defineProperty(key, descriptor);
+        }
         return true;
     }
 
