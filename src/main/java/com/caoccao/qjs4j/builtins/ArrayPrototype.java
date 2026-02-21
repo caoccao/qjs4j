@@ -359,13 +359,15 @@ public final class ArrayPrototype {
         JSObject obj = toObjectChecked(context, thisArg);
         if (obj == null) return context.getPendingException();
 
+        // Step 2: Get length BEFORE checking callback (step 3) per ES2024 spec
+        long length = lengthOfArrayLike(context, obj);
+        if (context.hasPendingException()) return context.getPendingException();
+
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
         }
 
         JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) return context.getPendingException();
 
         for (long i = 0; i < length; i++) {
             JSValue element = getElement(context, obj, i);
