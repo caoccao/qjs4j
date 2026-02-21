@@ -607,7 +607,14 @@ public final class ArrayPrototype {
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) return context.getPendingException();
 
-        int depth = (args.length > 0 && !(args[0] instanceof JSUndefined)) ? JSTypeConversions.toInt32(context, args[0]) : 1;
+        int depth;
+        if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
+            double d = JSTypeConversions.toInteger(context, args[0]);
+            if (context.hasPendingException()) return context.getPendingException();
+            depth = d >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(d, 0);
+        } else {
+            depth = 1;
+        }
 
         // Step 4: Let A be ? ArraySpeciesCreate(O, 0).
         JSValue resultVal = context.createJSArraySpecies(obj, 0);
