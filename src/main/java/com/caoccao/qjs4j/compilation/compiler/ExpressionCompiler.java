@@ -317,6 +317,12 @@ final class ExpressionCompiler {
             return;
         }
 
+        // Handle 'new.target' meta-property
+        if ("new.target".equals(name)) {
+            ctx.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 3);
+            return;
+        }
+
         // Always check local scopes first, even in global scope (for nested blocks/loops)
         // This must happen BEFORE the 'arguments' special handling so that
         // explicit `var arguments` or `let arguments` declarations take precedence.

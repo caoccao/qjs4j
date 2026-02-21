@@ -94,6 +94,15 @@ final class ExpressionPrimaryParser {
         if (ctx.match(TokenType.NEW)) {
             SourceLocation location = ctx.getLocation();
             ctx.advance();
+
+            // Handle new.target meta-property
+            if (ctx.match(TokenType.DOT) && ctx.nextToken.type() == TokenType.IDENTIFIER
+                    && "target".equals(ctx.nextToken.value())) {
+                ctx.advance(); // consume '.'
+                ctx.advance(); // consume 'target'
+                return new Identifier("new.target", location);
+            }
+
             Expression callee = parseMemberExpression();
 
             while (true) {
