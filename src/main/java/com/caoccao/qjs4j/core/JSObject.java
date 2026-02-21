@@ -708,7 +708,17 @@ public non-sealed class JSObject implements JSValue {
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
         PropertyKey shapeKey = getOwnShapeKey(key);
         if (shapeKey != null) {
-            return shape.getDescriptor(shapeKey);
+            PropertyDescriptor desc = shape.getDescriptor(shapeKey);
+            // Sync descriptor value with current propertyValues for data properties.
+            // propertyValues[offset] is the source of truth for current values,
+            // while the descriptor may hold a stale value from initialization.
+            if (desc != null && desc.isDataDescriptor()) {
+                int offset = shape.getPropertyOffset(shapeKey);
+                if (offset >= 0 && offset < propertyValues.length && propertyValues[offset] != null) {
+                    desc.setValue(propertyValues[offset]);
+                }
+            }
+            return desc;
         }
 
         long arrayIndex = getCanonicalArrayIndex(key);

@@ -1002,6 +1002,32 @@ public final class ArrayPrototype {
     }
 
     /**
+     * ES2024 Set(O, P, V, true) — always throws TypeError on failure regardless of strict mode.
+     */
+    private static boolean setOrThrow(JSContext context, JSObject obj, PropertyKey key, JSValue value) {
+        if (!obj.setWithResult(key, value, context)) {
+            if (!context.hasPendingException()) {
+                context.throwTypeError("Cannot set property '" + key.toPropertyString() + "'");
+            }
+            return false;
+        }
+        return !context.hasPendingException();
+    }
+
+    /**
+     * ES2024 DeletePropertyOrThrow(O, P) — throws TypeError if delete returns false.
+     */
+    private static boolean deleteOrThrow(JSContext context, JSObject obj, PropertyKey key) {
+        if (!obj.delete(key, context)) {
+            if (!context.hasPendingException()) {
+                context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "'");
+            }
+            return false;
+        }
+        return !context.hasPendingException();
+    }
+
+    /**
      * LengthOfArrayLike(obj) — returns the length of an array-like object.
      * Uses JSArray.getLength() fast path for actual arrays.
      */
@@ -1075,25 +1101,25 @@ public final class ArrayPrototype {
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
         if (obj == null) return context.getPendingException();
 
-        if (obj instanceof JSArray arr) {
-            return arr.pop();
-        }
-
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) return context.getPendingException();
 
         if (length == 0) {
-            obj.set(PropertyKey.LENGTH, JSNumber.of(0), context);
+            if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(0))) {
+                return context.getPendingException();
+            }
             return JSUndefined.INSTANCE;
         }
         long newLen = length - 1;
         PropertyKey key = PropertyKey.fromString(Long.toString(newLen));
         JSValue element = obj.get(context, key);
         if (context.hasPendingException()) return context.getPendingException();
-        obj.delete(key, context);
-        if (context.hasPendingException()) return context.getPendingException();
-        obj.set(PropertyKey.LENGTH, JSNumber.of(newLen), context);
-        if (context.hasPendingException()) return context.getPendingException();
+        if (!deleteOrThrow(context, obj, key)) {
+            return context.getPendingException();
+        }
+        if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(newLen))) {
+            return context.getPendingException();
+        }
         return element;
     }
 
