@@ -102,7 +102,7 @@ public sealed class JSError extends JSObject permits
                     return JSUndefined.INSTANCE;
                 },
                 true);
-        errorConstructor.set(PropertyKey.PROTOTYPE, errorPrototype);
+        errorConstructor.definePropertyReadonlyNonConfigurable("prototype", errorPrototype);
 
         // Set constructor property on prototype
         errorPrototype.set(PropertyKey.CONSTRUCTOR, errorConstructor);

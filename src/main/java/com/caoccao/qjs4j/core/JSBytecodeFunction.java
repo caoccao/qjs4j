@@ -148,11 +148,14 @@ public final class JSBytecodeFunction extends JSFunction {
 
         // Every function (except arrow functions) has a prototype property
         if (prototype != null) {
-            this.set(PropertyKey.PROTOTYPE, prototype);
+            // Class constructor: prototype is {writable: false, enumerable: false, configurable: false}
+            this.definePropertyReadonlyNonConfigurable("prototype", prototype);
         } else if (isConstructor) {
+            // User-defined function constructor: prototype is {writable: true, enumerable: false, configurable: false}
             JSObject funcPrototype = new JSObject();
             funcPrototype.set(PropertyKey.CONSTRUCTOR, this);
-            this.set(PropertyKey.PROTOTYPE, funcPrototype);
+            this.defineProperty(PropertyKey.PROTOTYPE,
+                    PropertyDescriptor.dataDescriptor(funcPrototype, true, false, false));
         }
     }
 

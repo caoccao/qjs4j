@@ -75,7 +75,9 @@ public final class JSNativeFunction extends JSFunction {
         if (isConstructor) {
             JSObject funcPrototype = new JSObject();
             funcPrototype.set(PropertyKey.CONSTRUCTOR, this);
-            this.set(PropertyKey.PROTOTYPE, funcPrototype);
+            // Default prototype is configurable so it can be deleted (Proxy) or overridden by explicit setup
+            this.defineProperty(PropertyKey.PROTOTYPE,
+                    PropertyDescriptor.dataDescriptor(funcPrototype, true, false, true));
         }
     }
 

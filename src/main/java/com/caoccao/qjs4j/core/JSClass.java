@@ -71,7 +71,7 @@ public final class JSClass extends JSFunction {
         this.prototype.set(PropertyKey.CONSTRUCTOR, this);
 
         // Set prototype property on class
-        this.set(PropertyKey.PROTOTYPE, prototype);
+        this.definePropertyReadonlyNonConfigurable("prototype", prototype);
     }
 
     /**

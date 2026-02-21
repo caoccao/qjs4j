@@ -2387,9 +2387,9 @@ public final class VirtualMachine {
                                 constructorFunc.setPrototype(superFunc);
                             }
                         }
-                        // Set constructor.prototype = prototype
+                        // Set constructor.prototype = prototype (non-writable, non-enumerable, non-configurable per ES2024 15.7.14)
                         if (constructorFunc instanceof JSObject) {
-                            constructorFunc.set(PropertyKey.PROTOTYPE, prototype);
+                            constructorFunc.definePropertyReadonlyNonConfigurable("prototype", prototype);
                         }
 
                         // Set prototype.constructor = constructor
@@ -2427,7 +2427,8 @@ public final class VirtualMachine {
                             }
                         }
 
-                        constructorFunc.set(PropertyKey.PROTOTYPE, prototype);
+                        // Class prototype is non-writable, non-enumerable, non-configurable per ES2024 15.7.14
+                        constructorFunc.definePropertyReadonlyNonConfigurable("prototype", prototype);
                         prototype.set(PropertyKey.CONSTRUCTOR, constructor);
                         JSString computedClassName = getComputedNameString(computedClassNameValue);
                         if (computedClassName.value().isEmpty()) {

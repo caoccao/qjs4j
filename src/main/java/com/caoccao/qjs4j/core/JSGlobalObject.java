@@ -604,7 +604,7 @@ public final class JSGlobalObject {
 
         // Create ArrayBuffer constructor as a function
         JSNativeFunction arrayBufferConstructor = new JSNativeFunction(JSArrayBuffer.NAME, 1, ArrayBufferConstructor::call, true, true);
-        arrayBufferConstructor.set(PropertyKey.PROTOTYPE, arrayBufferPrototype);
+        arrayBufferConstructor.definePropertyReadonlyNonConfigurable("prototype", arrayBufferPrototype);
         arrayBufferConstructor.setConstructorType(JSConstructorType.ARRAY_BUFFER);
         arrayBufferPrototype.definePropertyWritableConfigurable("constructor", arrayBufferConstructor);
 
@@ -671,7 +671,7 @@ public final class JSGlobalObject {
 
         // Create Array constructor as a function
         JSNativeFunction arrayConstructor = new JSNativeFunction(JSArray.NAME, 1, ArrayConstructor::call, true);
-        arrayConstructor.set(PropertyKey.PROTOTYPE, arrayPrototype);
+        arrayConstructor.definePropertyReadonlyNonConfigurable("prototype", arrayPrototype);
         arrayConstructor.setConstructorType(JSConstructorType.ARRAY);
         arrayPrototype.definePropertyWritableConfigurable("constructor", arrayConstructor);
 
@@ -710,7 +710,7 @@ public final class JSGlobalObject {
 
         JSNativeFunction asyncDisposableStackConstructor = new JSNativeFunction(
                 JSAsyncDisposableStack.NAME, 0, AsyncDisposableStackConstructor::call, true, true);
-        asyncDisposableStackConstructor.set(PropertyKey.PROTOTYPE, asyncDisposableStackPrototype);
+        asyncDisposableStackConstructor.definePropertyReadonlyNonConfigurable("prototype", asyncDisposableStackPrototype);
         asyncDisposableStackPrototype.definePropertyWritableConfigurable("constructor", asyncDisposableStackConstructor);
 
         global.definePropertyWritableConfigurable(JSAsyncDisposableStack.NAME, asyncDisposableStackConstructor);
@@ -729,7 +729,7 @@ public final class JSGlobalObject {
         // AsyncFunction is not normally exposed, but we need it for the prototype chain
         JSNativeFunction asyncFunctionConstructor = new JSNativeFunction("AsyncFunction", 1,
                 (ctx, thisObj, args) -> ctx.throwTypeError("AsyncFunction is not a constructor"), true);
-        asyncFunctionConstructor.set(PropertyKey.PROTOTYPE, asyncFunctionPrototype);
+        asyncFunctionConstructor.definePropertyReadonlyNonConfigurable("prototype", asyncFunctionPrototype);
         asyncFunctionPrototype.definePropertyWritableConfigurable("constructor", asyncFunctionConstructor);
 
         // Store AsyncFunction in the context (not in global scope)
@@ -864,7 +864,7 @@ public final class JSGlobalObject {
 
         // Create BigInt constructor
         JSNativeFunction bigIntConstructor = new JSNativeFunction(JSBigInt.NAME, 1, BigIntConstructor::call);
-        bigIntConstructor.set(PropertyKey.PROTOTYPE, bigIntPrototype);
+        bigIntConstructor.definePropertyReadonlyNonConfigurable("prototype", bigIntPrototype);
         bigIntConstructor.setConstructorType(JSConstructorType.BIG_INT_OBJECT); // Mark as BigInt constructor
         bigIntPrototype.definePropertyWritableConfigurable("constructor", bigIntConstructor);
 
@@ -970,7 +970,7 @@ public final class JSGlobalObject {
 
         // Create DataView constructor as a function that requires 'new'
         JSNativeFunction dataViewConstructor = new JSNativeFunction("DataView", 1, DataViewConstructor::call, true, true);
-        dataViewConstructor.set(PropertyKey.PROTOTYPE, dataViewPrototype);
+        dataViewConstructor.definePropertyReadonlyNonConfigurable("prototype", dataViewPrototype);
         dataViewConstructor.setConstructorType(JSConstructorType.DATA_VIEW);
         dataViewPrototype.definePropertyWritableConfigurable("constructor", dataViewConstructor);
 
@@ -1068,7 +1068,7 @@ public final class JSGlobalObject {
 
         JSNativeFunction disposableStackConstructor = new JSNativeFunction(
                 JSDisposableStack.NAME, 0, DisposableStackConstructor::call, true, true);
-        disposableStackConstructor.set(PropertyKey.PROTOTYPE, disposableStackPrototype);
+        disposableStackConstructor.definePropertyReadonlyNonConfigurable("prototype", disposableStackPrototype);
         disposableStackPrototype.definePropertyWritableConfigurable("constructor", disposableStackConstructor);
 
         global.definePropertyWritableConfigurable(JSDisposableStack.NAME, disposableStackConstructor);
@@ -1263,7 +1263,7 @@ public final class JSGlobalObject {
                 0,
                 (childContext, thisArg, args) -> JSIntlObject.createDateTimeFormat(childContext, dateTimeFormatPrototype, args),
                 true);
-        dateTimeFormatConstructor.set(PropertyKey.PROTOTYPE, dateTimeFormatPrototype);
+        dateTimeFormatConstructor.definePropertyReadonlyNonConfigurable("prototype", dateTimeFormatPrototype);
         dateTimeFormatConstructor.definePropertyWritableConfigurable("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
         dateTimeFormatPrototype.definePropertyWritableConfigurable("constructor", dateTimeFormatConstructor);
         intlObject.set("DateTimeFormat", dateTimeFormatConstructor);
@@ -1276,7 +1276,7 @@ public final class JSGlobalObject {
                 0,
                 (childContext, thisArg, args) -> JSIntlObject.createNumberFormat(childContext, numberFormatPrototype, args),
                 true);
-        numberFormatConstructor.set(PropertyKey.PROTOTYPE, numberFormatPrototype);
+        numberFormatConstructor.definePropertyReadonlyNonConfigurable("prototype", numberFormatPrototype);
         numberFormatConstructor.definePropertyWritableConfigurable("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
         numberFormatPrototype.definePropertyWritableConfigurable("constructor", numberFormatConstructor);
         intlObject.set("NumberFormat", numberFormatConstructor);
@@ -1289,7 +1289,7 @@ public final class JSGlobalObject {
                 0,
                 (childContext, thisArg, args) -> JSIntlObject.createCollator(childContext, collatorPrototype, args),
                 true);
-        collatorConstructor.set(PropertyKey.PROTOTYPE, collatorPrototype);
+        collatorConstructor.definePropertyReadonlyNonConfigurable("prototype", collatorPrototype);
         collatorConstructor.definePropertyWritableConfigurable("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
         collatorPrototype.definePropertyWritableConfigurable("constructor", collatorConstructor);
         intlObject.set("Collator", collatorConstructor);
@@ -1303,7 +1303,7 @@ public final class JSGlobalObject {
                 (childContext, thisArg, args) -> JSIntlObject.createPluralRules(childContext, pluralRulesPrototype, args),
                 true,
                 true);
-        pluralRulesConstructor.set(PropertyKey.PROTOTYPE, pluralRulesPrototype);
+        pluralRulesConstructor.definePropertyReadonlyNonConfigurable("prototype", pluralRulesPrototype);
         pluralRulesConstructor.definePropertyWritableConfigurable("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
         pluralRulesPrototype.definePropertyWritableConfigurable("constructor", pluralRulesConstructor);
         intlObject.set("PluralRules", pluralRulesConstructor);
@@ -1317,7 +1317,7 @@ public final class JSGlobalObject {
                 (childContext, thisArg, args) -> JSIntlObject.createRelativeTimeFormat(childContext, relativeTimeFormatPrototype, args),
                 true,
                 true);
-        relativeTimeFormatConstructor.set(PropertyKey.PROTOTYPE, relativeTimeFormatPrototype);
+        relativeTimeFormatConstructor.definePropertyReadonlyNonConfigurable("prototype", relativeTimeFormatPrototype);
         relativeTimeFormatConstructor.definePropertyWritableConfigurable("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
         relativeTimeFormatPrototype.definePropertyWritableConfigurable("constructor", relativeTimeFormatConstructor);
         intlObject.set("RelativeTimeFormat", relativeTimeFormatConstructor);
@@ -1331,7 +1331,7 @@ public final class JSGlobalObject {
                 (childContext, thisArg, args) -> JSIntlObject.createListFormat(childContext, listFormatPrototype, args),
                 true,
                 true);
-        listFormatConstructor.set(PropertyKey.PROTOTYPE, listFormatPrototype);
+        listFormatConstructor.definePropertyReadonlyNonConfigurable("prototype", listFormatPrototype);
         listFormatConstructor.definePropertyWritableConfigurable("supportedLocalesOf", new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf));
         listFormatPrototype.definePropertyWritableConfigurable("constructor", listFormatConstructor);
         intlObject.set("ListFormat", listFormatConstructor);
@@ -1348,7 +1348,7 @@ public final class JSGlobalObject {
                 (childContext, thisArg, args) -> JSIntlObject.createLocale(childContext, localePrototype, args),
                 true,
                 true);
-        localeConstructor.set(PropertyKey.PROTOTYPE, localePrototype);
+        localeConstructor.definePropertyReadonlyNonConfigurable("prototype", localePrototype);
         localePrototype.definePropertyWritableConfigurable("constructor", localeConstructor);
         intlObject.set("Locale", localeConstructor);
 
@@ -1487,7 +1487,7 @@ public final class JSGlobalObject {
 
         // Create Map constructor as JSNativeFunction
         JSNativeFunction mapConstructor = new JSNativeFunction(JSMap.NAME, 0, MapConstructor::call, true, true);
-        mapConstructor.set(PropertyKey.PROTOTYPE, mapPrototype);
+        mapConstructor.definePropertyReadonlyNonConfigurable("prototype", mapPrototype);
         mapConstructor.setConstructorType(JSConstructorType.MAP); // Mark as Map constructor
         mapPrototype.definePropertyWritableConfigurable("constructor", mapConstructor);
 
@@ -1759,7 +1759,7 @@ public final class JSGlobalObject {
 
         // Create RegExp constructor as a function
         JSNativeFunction regexpConstructor = new JSNativeFunction(JSRegExp.NAME, 2, RegExpConstructor::call, true);
-        regexpConstructor.set(PropertyKey.PROTOTYPE, regexpPrototype);
+        regexpConstructor.definePropertyReadonlyNonConfigurable("prototype", regexpPrototype);
         regexpConstructor.setConstructorType(JSConstructorType.REGEXP);
         regexpPrototype.definePropertyWritableConfigurable("constructor", regexpConstructor);
 
@@ -1817,7 +1817,7 @@ public final class JSGlobalObject {
 
         // Create Set constructor as a function
         JSNativeFunction setConstructor = new JSNativeFunction(JSSet.NAME, 0, SetConstructor::call, true, true);
-        setConstructor.set(PropertyKey.PROTOTYPE, setPrototype);
+        setConstructor.definePropertyReadonlyNonConfigurable("prototype", setPrototype);
         setConstructor.setConstructorType(JSConstructorType.SET);
         setPrototype.definePropertyWritableConfigurable("constructor", setConstructor);
 
@@ -1931,7 +1931,7 @@ public final class JSGlobalObject {
 
         // Create String constructor
         JSNativeFunction stringConstructor = new JSNativeFunction(JSString.NAME, 1, StringConstructor::call, true);
-        stringConstructor.set(PropertyKey.PROTOTYPE, stringPrototype);
+        stringConstructor.definePropertyReadonlyNonConfigurable("prototype", stringPrototype);
         stringConstructor.setConstructorType(JSConstructorType.STRING_OBJECT); // Mark as String constructor
         stringPrototype.definePropertyWritableConfigurable("constructor", stringConstructor);
 
