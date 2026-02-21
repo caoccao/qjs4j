@@ -937,23 +937,17 @@ public final class ArrayPrototype {
                 }
             }
         } else if (thisArg instanceof JSObject jsObject) {
-            int length = (int) JSTypeConversions.toLength(context, jsObject.get("length"));
-            if (length > 0) {
-                String separator = args.length > 0 && !args[0].isUndefined() ?
-                        JSTypeConversions.toString(context, args[0]).value() : ",";
-                for (int i = 0; i < length; i++) {
-                    if (i > 0) {
-                        result.append(separator);
-                    }
-                    JSValue element = jsObject.get(i);
-                    if (!element.isNullOrUndefined()) {
-                        result.append(JSTypeConversions.toString(context, element).value());
-                    } else {
-                        element = jsObject.get(String.valueOf(i));
-                        if (!element.isNullOrUndefined()) {
-                            result.append(JSTypeConversions.toString(context, element).value());
-                        }
-                    }
+            // Following QuickJS js_array_join: read length first, then coerce separator
+            long length = JSTypeConversions.toLength(context, jsObject.get(context, PropertyKey.fromString("length")));
+            String separator = args.length > 0 && !(args[0] instanceof JSUndefined) ?
+                    JSTypeConversions.toString(context, args[0]).value() : ",";
+            for (long i = 0; i < length; i++) {
+                if (i > 0) {
+                    result.append(separator);
+                }
+                JSValue element = jsObject.get(context, PropertyKey.fromString(Long.toString(i)));
+                if (!(element instanceof JSNull) && !(element instanceof JSUndefined)) {
+                    result.append(JSTypeConversions.toString(context, element).value());
                 }
             }
         }
