@@ -449,9 +449,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.find(context, arr, new JSValue[]{}));
         assertPendingException(context);
 
-        // Edge case: find on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.find(context, nonArray, new JSValue[]{findEvenFn}));
+        // Edge case: find on null/undefined
+        assertTypeError(ArrayPrototype.find(context, JSNull.INSTANCE, new JSValue[]{findEvenFn}));
         assertPendingException(context);
     }
 
@@ -489,9 +488,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.findIndex(context, arr, new JSValue[]{}));
         assertPendingException(context);
 
-        // Edge case: findIndex on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.findIndex(context, nonArray, new JSValue[]{findEvenFn}));
+        // Edge case: findIndex on null/undefined
+        assertTypeError(ArrayPrototype.findIndex(context, JSNull.INSTANCE, new JSValue[]{findEvenFn}));
         assertPendingException(context);
     }
 
@@ -530,9 +528,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.findLast(context, arr, new JSValue[]{}));
         assertPendingException(context);
 
-        // Edge case: findLast on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.findLast(context, nonArray, new JSValue[]{findEvenFn}));
+        // Edge case: findLast on null/undefined
+        assertTypeError(ArrayPrototype.findLast(context, JSNull.INSTANCE, new JSValue[]{findEvenFn}));
         assertPendingException(context);
     }
 
@@ -571,9 +568,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.findLastIndex(context, arr, new JSValue[]{}));
         assertPendingException(context);
 
-        // Edge case: findLastIndex on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.findLastIndex(context, nonArray, new JSValue[]{findEvenFn}));
+        // Edge case: findLastIndex on null/undefined
+        assertTypeError(ArrayPrototype.findLastIndex(context, JSNull.INSTANCE, new JSValue[]{findEvenFn}));
         assertPendingException(context);
     }
 
@@ -617,9 +613,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSArray arr1 = result.asArray().orElseThrow();
         assertThat(arr1.getLength()).isEqualTo(0);
 
-        // Edge case: flat on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.flat(context, nonArray, new JSValue[]{}));
+        // Edge case: flat on null/undefined
+        assertTypeError(ArrayPrototype.flat(context, JSNull.INSTANCE, new JSValue[]{}));
         assertPendingException(context);
     }
 
@@ -664,9 +659,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSArray arr1 = result.asArray().orElseThrow();
         assertThat(arr1.getLength()).isEqualTo(0);
 
-        // Edge case: flatMap on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.flatMap(context, nonArray, new JSValue[]{doubleAndWrapFn}));
+        // Edge case: flatMap on null/undefined
+        assertTypeError(ArrayPrototype.flatMap(context, JSNull.INSTANCE, new JSValue[]{doubleAndWrapFn}));
         assertPendingException(context);
 
         // Edge case: no callback
@@ -709,9 +703,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.forEach(context, arr, new JSValue[]{}));
         assertPendingException(context);
 
-        // Edge case: forEach on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.forEach(context, nonArray, new JSValue[]{collectFn}));
+        // Edge case: forEach on null/undefined
+        assertTypeError(ArrayPrototype.forEach(context, JSNull.INSTANCE, new JSValue[]{collectFn}));
         assertPendingException(context);
     }
 
@@ -846,13 +839,12 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         result = ArrayPrototype.includes(context, emptyArr, new JSValue[]{new JSNumber(1)});
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
-        // Edge case: no search element
+        // Edge case: no search element (searches for undefined, which is in arr)
         result = ArrayPrototype.includes(context, arr, new JSValue[]{});
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        assertThat(result).isEqualTo(JSBoolean.TRUE);
 
-        // Edge case: includes on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.includes(context, nonArray, new JSValue[]{new JSNumber(1)}));
+        // Edge case: includes on null/undefined
+        assertTypeError(ArrayPrototype.includes(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(1)}));
         assertPendingException(context);
     }
 
@@ -889,9 +881,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         result = ArrayPrototype.indexOf(context, arr, new JSValue[]{});
         assertThat(((JSNumber) result).value()).isEqualTo(-1.0);
 
-        // Edge case: indexOf on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.indexOf(context, nonArray, new JSValue[]{new JSNumber(1)}));
+        // Edge case: indexOf on null/undefined
+        assertTypeError(ArrayPrototype.indexOf(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(1)}));
         assertPendingException(context);
     }
 
@@ -974,9 +965,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         result = ArrayPrototype.lastIndexOf(context, arr, new JSValue[]{});
         assertThat(((JSNumber) result).value()).isEqualTo(-1.0);
 
-        // Edge case: lastIndexOf on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.lastIndexOf(context, nonArray, new JSValue[]{new JSNumber(1)}));
+        // Edge case: lastIndexOf on null/undefined
+        assertTypeError(ArrayPrototype.lastIndexOf(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(1)}));
         assertPendingException(context);
     }
 
@@ -1019,9 +1009,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.map(context, arr, new JSValue[]{new JSString("not a function")}));
         assertPendingException(context);
 
-        // Edge case: map on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.map(context, nonArray, new JSValue[]{doubleFn}));
+        // Edge case: map on null/undefined
+        assertTypeError(ArrayPrototype.map(context, JSNull.INSTANCE, new JSValue[]{doubleFn}));
         assertPendingException(context);
     }
 
@@ -1049,9 +1038,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         result = ArrayPrototype.pop(context, arr, new JSValue[]{});
         assertThat(result.isUndefined()).isTrue();
 
-        // Edge case: pop from non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.pop(context, nonArray, new JSValue[]{}));
+        // Edge case: pop from null/undefined
+        assertTypeError(ArrayPrototype.pop(context, JSNull.INSTANCE, new JSValue[]{}));
         assertPendingException(context);
     }
 
@@ -1076,9 +1064,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(3);
         assertThat(arr.getLength()).isEqualTo(3);
 
-        // Edge case: push to non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.push(context, nonArray, new JSValue[]{new JSNumber(1)}));
+        // Edge case: push to null/undefined
+        assertTypeError(ArrayPrototype.push(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(1)}));
         assertPendingException(context);
     }
 
@@ -1122,9 +1109,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.reduce(context, arr, new JSValue[]{}));
         assertPendingException(context);
 
-        // Edge case: reduce on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.reduce(context, nonArray, new JSValue[]{sumFn}));
+        // Edge case: reduce on null/undefined
+        assertTypeError(ArrayPrototype.reduce(context, JSNull.INSTANCE, new JSValue[]{sumFn}));
         assertPendingException(context);
     }
 
@@ -1173,9 +1159,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.reduceRight(context, strArr, new JSValue[]{}));
         assertPendingException(context);
 
-        // Edge case: reduceRight on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.reduceRight(context, nonArray, new JSValue[]{concatFn}));
+        // Edge case: reduceRight on null/undefined
+        assertTypeError(ArrayPrototype.reduceRight(context, JSNull.INSTANCE, new JSValue[]{concatFn}));
         assertPendingException(context);
     }
 
@@ -1208,9 +1193,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(result).isSameAs(singleArr);
         assertThat(singleArr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
 
-        // Edge case: reverse on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.reverse(context, nonArray, new JSValue[]{}));
+        // Edge case: reverse on null/undefined
+        assertTypeError(ArrayPrototype.reverse(context, JSNull.INSTANCE, new JSValue[]{}));
         assertPendingException(context);
     }
 
@@ -1233,9 +1217,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         result = ArrayPrototype.shift(context, emptyArr, new JSValue[]{});
         assertThat(result.isUndefined()).isTrue();
 
-        // Edge case: shift from non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.shift(context, nonArray, new JSValue[]{}));
+        // Edge case: shift from null/undefined
+        assertTypeError(ArrayPrototype.shift(context, JSNull.INSTANCE, new JSValue[]{}));
         assertPendingException(context);
     }
 
@@ -1273,9 +1256,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         sliced = result.asArray().orElseThrow();
         assertThat(sliced.getLength()).isEqualTo(0);
 
-        // Edge case: slice on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.slice(context, nonArray, new JSValue[]{}));
+        // Edge case: slice on null/undefined
+        assertTypeError(ArrayPrototype.slice(context, JSNull.INSTANCE, new JSValue[]{}));
         assertPendingException(context);
     }
 
@@ -1313,9 +1295,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.some(context, arr, new JSValue[]{}));
         assertPendingException(context);
 
-        // Edge case: some on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.some(context, nonArray, new JSValue[]{isOddFn}));
+        // Edge case: some on null/undefined
+        assertTypeError(ArrayPrototype.some(context, JSNull.INSTANCE, new JSValue[]{isOddFn}));
         assertPendingException(context);
     }
 
@@ -1369,9 +1350,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(result).isSameAs(singleArr);
         assertThat(singleArr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
 
-        // Edge case: sort on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.sort(context, nonArray, new JSValue[]{}));
+        // Edge case: sort on null/undefined
+        assertTypeError(ArrayPrototype.sort(context, JSNull.INSTANCE, new JSValue[]{}));
         assertPendingException(context);
 
         assertObjectWithJavet(
@@ -1414,9 +1394,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(deleted.getLength()).isEqualTo(0);
         assertThat(arr2.getLength()).isEqualTo(3);
 
-        // Edge case: splice on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.splice(context, nonArray, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
+        // Edge case: splice on null/undefined
+        assertTypeError(ArrayPrototype.splice(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
         assertPendingException(context);
     }
 
@@ -1501,9 +1480,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         result = ArrayPrototype.toLocaleString(context, emptyArr, new JSValue[]{});
         assertThat(result.asString().map(JSString::value).orElse("FAIL")).isEqualTo("");
 
-        // Edge case: toLocaleString on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.toLocaleString(context, nonArray, new JSValue[]{}));
+        // Edge case: toLocaleString on null/undefined
+        assertTypeError(ArrayPrototype.toLocaleString(context, JSNull.INSTANCE, new JSValue[]{}));
         assertPendingException(context);
     }
 
@@ -1541,9 +1519,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(singleReversed.getLength()).isEqualTo(1);
         assertThat(singleReversed.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
 
-        // Edge case: toReversed on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.toReversed(context, nonArray, new JSValue[]{}));
+        // Edge case: toReversed on null/undefined
+        assertTypeError(ArrayPrototype.toReversed(context, JSNull.INSTANCE, new JSValue[]{}));
         assertPendingException(context);
     }
 
@@ -1595,9 +1572,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(singleSorted.getLength()).isEqualTo(1);
         assertThat(singleSorted.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
 
-        // Edge case: toSorted on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.toSorted(context, nonArray, new JSValue[]{}));
+        // Edge case: toSorted on null/undefined
+        assertTypeError(ArrayPrototype.toSorted(context, JSNull.INSTANCE, new JSValue[]{}));
         assertPendingException(context);
     }
 
@@ -1658,9 +1634,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(emptySpliced.getLength()).isEqualTo(1);
         assertThat(emptySpliced.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
 
-        // Edge case: toSpliced on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.toSpliced(context, nonArray, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
+        // Edge case: toSpliced on null/undefined
+        assertTypeError(ArrayPrototype.toSpliced(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
         assertPendingException(context);
     }
 
@@ -1717,9 +1692,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
         assertThat(emptyArr.getLength()).isEqualTo(1);
 
-        // Edge case: unshift to non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.unshift(context, nonArray, new JSValue[]{new JSNumber(1)}));
+        // Edge case: unshift to null/undefined
+        assertTypeError(ArrayPrototype.unshift(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(1)}));
         assertPendingException(context);
     }
 
@@ -1773,9 +1747,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.with(context, arr, new JSValue[]{new JSNumber(1)}));
         assertPendingException(context);
 
-        // Edge case: with on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.with(context, nonArray, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
+        // Edge case: with on null/undefined
+        assertTypeError(ArrayPrototype.with(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
         assertPendingException(context);
     }
 }
