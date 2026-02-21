@@ -49,8 +49,8 @@ public final class JSONObject {
 
             if (val instanceof JSArray arr) {
                 // Process array elements
-                long len = arr.getLength();
-                for (long i = 0; i < len; i++) {
+                long arrayLength = arr.getLength();
+                for (long i = 0; i < arrayLength; i++) {
                     JSValue element = arr.get(i);
                     JSValue newElement = internalizeJSONPropertyForValue(context, val, String.valueOf(i), element, reviver);
                     if (newElement instanceof JSUndefined) {
@@ -629,8 +629,8 @@ public final class JSONObject {
             } else if (replacer instanceof JSArray replacerArray) {
                 // Build property list from array
                 List<String> propertyList = new ArrayList<>();
-                long len = replacerArray.getLength();
-                for (long i = 0; i < len; i++) {
+                long replacerLength = replacerArray.getLength();
+                for (long i = 0; i < replacerLength; i++) {
                     JSValue item = replacerArray.get(i);
                     String propName = null;
 
@@ -704,10 +704,10 @@ public final class JSONObject {
     private static boolean stringifyArrayWithContext(JSContext context, StringifyContext ctx, StringBuilder sb,
                                                      JSArray arr, String currentIndent, String newIndent) {
         sb.append('[');
-        long len = arr.getLength();
+        long arrayLength = arr.getLength();
         boolean hasContent = false;
 
-        for (long i = 0; i < len; i++) {
+        for (long i = 0; i < arrayLength; i++) {
             if (hasContent) {
                 sb.append(',');
             }

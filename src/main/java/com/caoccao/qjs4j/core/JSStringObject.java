@@ -202,7 +202,7 @@ public final class JSStringObject extends JSObject {
      * own properties, so [[Set]] must return false for those keys.
      */
     @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context) {
+    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
         int charIndex = -1;
         if (key.isIndex()) {
             charIndex = key.asIndex();
@@ -216,7 +216,7 @@ public final class JSStringObject extends JSObject {
         if (charIndex >= 0 && charIndex < this.value.value().length()) {
             return false;
         }
-        return super.setWithResult(key, value, context);
+        return super.setWithResult(context, key, value);
     }
 
     /**

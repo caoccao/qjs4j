@@ -381,9 +381,9 @@ public final class JSGlobalObject {
         Set<String> globalKeysBefore = null;
         if (isEvalInFunction) {
             globalKeysBefore = new HashSet<>();
-            for (PropertyKey pk : global.ownPropertyKeys()) {
-                if (pk.isString()) {
-                    globalKeysBefore.add(pk.asString());
+            for (PropertyKey propertyKey : global.ownPropertyKeys()) {
+                if (propertyKey.isString()) {
+                    globalKeysBefore.add(propertyKey.asString());
                 }
             }
         }
@@ -472,9 +472,9 @@ public final class JSGlobalObject {
             // Per ES2024 B.3.3.3, var/function declarations in eval inside a function
             // go to the function's variable environment, not the global.
             if (globalKeysBefore != null) {
-                for (PropertyKey pk : global.ownPropertyKeys()) {
-                    if (pk.isString() && !globalKeysBefore.contains(pk.asString())) {
-                        global.delete(pk, realmContext);
+                for (PropertyKey propertyKey : global.ownPropertyKeys()) {
+                    if (propertyKey.isString() && !globalKeysBefore.contains(propertyKey.asString())) {
+                        global.delete(propertyKey, realmContext);
                     }
                 }
             }

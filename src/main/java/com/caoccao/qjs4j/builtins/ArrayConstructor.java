@@ -151,10 +151,10 @@ public final class ArrayConstructor {
             // Non-iterable primitives (numbers, booleans, bigints, symbols).
             // When boxed via ToObject, these have no "length" property,
             // so LengthOfArrayLike returns 0, resulting in an empty array.
-            long len = 0;
+            long initialLength = 0;
             JSObject A;
             if (JSTypeChecking.isConstructor(C)) {
-                JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[]{JSNumber.of(len)});
+                JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[]{JSNumber.of(initialLength)});
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -162,7 +162,7 @@ public final class ArrayConstructor {
             } else {
                 A = context.createJSArray();
             }
-            A.set(PropertyKey.LENGTH, JSNumber.of(len), context);
+            A.set(PropertyKey.LENGTH, JSNumber.of(initialLength), context);
             return A;
         }
 
@@ -171,15 +171,15 @@ public final class ArrayConstructor {
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        long len = JSTypeConversions.toLength(context, lenValue);
+        long sourceLength = JSTypeConversions.toLength(context, lenValue);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
 
-        // Step 10-11: If IsConstructor(C), let A be Construct(C, «len»), else ArrayCreate(len).
+        // Step 10-11: If IsConstructor(C), let A be Construct(C, «sourceLength»), else ArrayCreate(sourceLength).
         JSObject A;
         if (JSTypeChecking.isConstructor(C)) {
-            JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[]{JSNumber.of(len)});
+            JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[]{JSNumber.of(sourceLength)});
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -189,7 +189,7 @@ public final class ArrayConstructor {
         }
 
         // Step 12-15: Loop
-        for (long k = 0; k < len; k++) {
+        for (long k = 0; k < sourceLength; k++) {
             JSValue kValue = arrayLike.get(context, PropertyKey.fromString(Long.toString(k)));
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -208,7 +208,7 @@ public final class ArrayConstructor {
         }
 
         // Step 16: Set A.length
-        A.set(PropertyKey.LENGTH, JSNumber.of(len), context);
+        A.set(PropertyKey.LENGTH, JSNumber.of(sourceLength), context);
         return A;
     }
 
@@ -393,7 +393,7 @@ public final class ArrayConstructor {
                 // Per spec: Perform ? Set(A, "length", k, true)
                 // The true Throw flag means always throw TypeError on failure
                 try {
-                    boolean success = target.setWithResult(PropertyKey.LENGTH, JSNumber.of(length), context);
+                    boolean success = target.setWithResult(context, PropertyKey.LENGTH, JSNumber.of(length));
                     if (context.hasPendingException()) {
                         resultPromise.reject(consumePendingException(context));
                         return;
@@ -592,7 +592,7 @@ public final class ArrayConstructor {
                             if (!isArray) {
                                 // Per spec: Perform ? Set(A, "length", len, true)
                                 try {
-                                    boolean success = target.setWithResult(PropertyKey.LENGTH, JSNumber.of(index[0]), context);
+                                    boolean success = target.setWithResult(context, PropertyKey.LENGTH, JSNumber.of(index[0]));
                                     if (context.hasPendingException()) {
                                         resultPromise.reject(consumePendingException(context));
                                         return JSUndefined.INSTANCE;
@@ -692,7 +692,7 @@ public final class ArrayConstructor {
         }
 
         // Step 6: Set length with Throw=true semantics.
-        if (!array.setWithResult(PropertyKey.LENGTH, JSNumber.of(len), context)) {
+        if (!array.setWithResult(context, PropertyKey.LENGTH, JSNumber.of(len))) {
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }

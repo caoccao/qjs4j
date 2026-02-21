@@ -990,11 +990,11 @@ public non-sealed class JSObject implements JSValue {
         JSObject proto = prototype;
         while (proto != null && !visited.contains(proto)) {
             if (proto instanceof JSProxy proxy) {
-                return proxy.setWithResult(key, value, context, receiver);
+                return proxy.setWithResult(context, key, value, receiver);
             }
             // TypedArray has exotic [[Set]] for canonical numeric index keys
             if (proto instanceof JSTypedArray typedArray) {
-                return typedArray.setWithResult(key, value, context, (JSValue) receiver);
+                return typedArray.setWithResult(context, key, value, (JSValue) receiver);
             }
             visited.add(proto);
             PropertyKey protoShapeKey = proto.getOwnShapeKey(key);
@@ -1101,11 +1101,11 @@ public non-sealed class JSObject implements JSValue {
         return SetPrototypeResult.SUCCESS;
     }
 
-    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context) {
-        return setWithResult(key, value, context, this);
+    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
+        return setWithResult(context, key, value, this);
     }
 
-    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
+    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
         return setInternal(key, value, context, receiver, false);
     }
 
@@ -1115,9 +1115,9 @@ public non-sealed class JSObject implements JSValue {
      * When receiver is not an object, OrdinarySet returns false (cannot create properties on non-objects).
      * Subclasses (e.g. TypedArray) may override for spec-specific behavior.
      */
-    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSValue receiver) {
+    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSValue receiver) {
         if (receiver instanceof JSObject objReceiver) {
-            return setWithResult(key, value, context, objReceiver);
+            return setWithResult(context, key, value, objReceiver);
         }
         // Per QuickJS JS_SetPropertyInternal: when receiver (this_obj) is not an object (p == NULL),
         // after prototype lookup completes without finding a setter, returns error/false.

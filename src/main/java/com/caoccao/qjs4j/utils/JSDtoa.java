@@ -138,12 +138,12 @@ public final class JSDtoa {
         return result.toString();
     }
 
-    private static String longToRadix(long n, int radix) {
-        if (n == 0) return "0";
+    private static String longToRadix(long value, int radix) {
+        if (value == 0) return "0";
         StringBuilder sb = new StringBuilder();
-        while (n != 0) {
-            sb.append(digitChar((int) (n % radix)));
-            n /= radix;
+        while (value != 0) {
+            sb.append(digitChar((int) (value % radix)));
+            value /= radix;
         }
         return sb.reverse().toString();
     }

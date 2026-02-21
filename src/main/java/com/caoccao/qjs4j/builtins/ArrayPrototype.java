@@ -103,69 +103,69 @@ public final class ArrayPrototype {
         }
         // Fast path flag: if result is a plain JSArray, use internal array ops
         JSArray resultArr = resultObj instanceof JSArray arr ? arr : null;
-        long n = 0;
+        long resultIndex = 0;
 
         // Steps 3-4: Process O (this) and each argument
         for (int i = -1; i < args.length; i++) {
-            JSValue e = (i < 0) ? obj : args[i];
+            JSValue element = (i < 0) ? obj : args[i];
 
             // Step 4a: Let spreadable be ? IsConcatSpreadable(E)
-            boolean spreadable = isConcatSpreadable(context, e);
+            boolean spreadable = isConcatSpreadable(context, element);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
 
             if (spreadable) {
                 // Step 4b: Spreadable case - iterate through elements
-                JSObject eObj = (JSObject) e;
-                long len;
-                if (eObj instanceof JSArray eArr) {
-                    len = eArr.getLength();
+                JSObject elementObj = (JSObject) element;
+                long elementLength;
+                if (elementObj instanceof JSArray eArr) {
+                    elementLength = eArr.getLength();
                 } else {
-                    JSValue lenVal = eObj.get(context, PropertyKey.LENGTH);
+                    JSValue lenVal = elementObj.get(context, PropertyKey.LENGTH);
                     if (context.hasPendingException()) return context.getPendingException();
-                    len = JSTypeConversions.toLength(context, lenVal);
+                    elementLength = JSTypeConversions.toLength(context, lenVal);
                     if (context.hasPendingException()) return context.getPendingException();
                 }
 
-                if (n + len > NumberPrototype.MAX_SAFE_INTEGER) { // MAX_SAFE_INTEGER
+                if (resultIndex + elementLength > NumberPrototype.MAX_SAFE_INTEGER) { // MAX_SAFE_INTEGER
                     return context.throwTypeError("Array too long");
                 }
 
-                for (long k = 0; k < len; k++, n++) {
+                for (long k = 0; k < elementLength; k++, resultIndex++) {
                     PropertyKey indexKey = PropertyKey.fromString(Long.toString(k));
                     // JS_TryGetPropertyInt64: only define property if it exists (preserve holes)
-                    boolean present = eObj.has(indexKey);
+                    boolean present = elementObj.has(indexKey);
                     if (context.hasPendingException()) return context.getPendingException();
                     if (present) {
-                        JSValue val = eObj.get(context, indexKey);
+                        JSValue val = elementObj.get(context, indexKey);
                         if (context.hasPendingException()) return context.getPendingException();
                         if (resultArr != null) {
-                            resultArr.set(n, val);
-                        } else if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), val)) {
-                            return context.throwTypeError("Cannot define property " + n);
+                            resultArr.set(resultIndex, val);
+                        } else if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), val)) {
+                            return context.throwTypeError("Cannot define property " + resultIndex);
                         }
                     }
                 }
             } else {
                 // Step 4c: Non-spreadable - add as single element
-                if (n >= NumberPrototype.MAX_SAFE_INTEGER) {
+                if (resultIndex >= NumberPrototype.MAX_SAFE_INTEGER) {
                     return context.throwTypeError("Array too long");
                 }
                 if (resultArr != null) {
-                    resultArr.set(n, e);
-                } else if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), e)) {
-                    return context.throwTypeError("Cannot define property " + n);
+                    resultArr.set(resultIndex, element);
+                } else if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), element)) {
+                    return context.throwTypeError("Cannot define property " + resultIndex);
                 }
-                n++;
+                resultIndex++;
             }
         }
 
         // Step 5: Set length
         if (resultArr != null) {
-            resultArr.setLength(n);
+            resultArr.setLength(resultIndex);
         } else {
-            resultObj.set(PropertyKey.LENGTH, JSNumber.of(n), context);
+            resultObj.set(PropertyKey.LENGTH, JSNumber.of(resultIndex), context);
             if (context.hasPendingException()) return context.getPendingException();
         }
         return resultObj;
@@ -413,7 +413,7 @@ public final class ArrayPrototype {
         }
 
         // Step 7: Repeat, while k < len
-        long n = 0;
+        long resultIndex = 0;
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             // Step 7.a: Let kPresent be ? HasProperty(O, Pk).
@@ -431,10 +431,10 @@ public final class ArrayPrototype {
 
             if (JSTypeConversions.toBoolean(keep) == JSBoolean.TRUE) {
                 // Step 7.c.iii.1: Perform ? CreateDataPropertyOrThrow(A, ! ToString(to), kValue).
-                if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), element)) {
-                    return context.throwTypeError("Cannot define property " + n);
+                if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), element)) {
+                    return context.throwTypeError("Cannot define property " + resultIndex);
                 }
-                n++;
+                resultIndex++;
             }
         }
 
@@ -661,7 +661,7 @@ public final class ArrayPrototype {
         }
 
         // Step 6: Perform ? FlattenIntoArray(A, O, sourceLen, 0, 1, mapperFunction, thisArg).
-        long n = 0;
+        long resultIndex = 0;
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
@@ -694,19 +694,19 @@ public final class ArrayPrototype {
                         if (jPresent) {
                             JSValue val = mappedObj.get(context, jKey);
                             if (context.hasPendingException()) return context.getPendingException();
-                            if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), val)) {
-                                return context.throwTypeError("Cannot define property " + n);
+                            if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), val)) {
+                                return context.throwTypeError("Cannot define property " + resultIndex);
                             }
-                            n++;
+                            resultIndex++;
                         }
                     }
                     continue;
                 }
             }
-            if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), mapped)) {
-                return context.throwTypeError("Cannot define property " + n);
+            if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), mapped)) {
+                return context.throwTypeError("Cannot define property " + resultIndex);
             }
-            n++;
+            resultIndex++;
         }
 
         return resultObj;
@@ -1010,7 +1010,7 @@ public final class ArrayPrototype {
      * Generates V8-matching error messages based on the failure reason.
      */
     private static boolean setOrThrow(JSContext context, JSObject obj, PropertyKey key, JSValue value) {
-        if (!obj.setWithResult(key, value, context)) {
+        if (!obj.setWithResult(context, key, value)) {
             if (!context.hasPendingException()) {
                 PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
                 if (desc != null && desc.isDataDescriptor() && !desc.isWritable()) {
@@ -1057,9 +1057,9 @@ public final class ArrayPrototype {
         }
         JSValue lenVal = obj.get(context, PropertyKey.LENGTH);
         if (context.hasPendingException()) return -1;
-        long len = JSTypeConversions.toLength(context, lenVal);
+        long arrayLikeLength = JSTypeConversions.toLength(context, lenVal);
         if (context.hasPendingException()) return -1;
-        return len;
+        return arrayLikeLength;
     }
 
     /**
@@ -1450,23 +1450,23 @@ public final class ArrayPrototype {
             return context.throwTypeError("ArraySpeciesCreate did not return an object");
         }
 
-        long n = 0;
-        for (long i = begin; i < end; i++, n++) {
+        long resultIndex = 0;
+        for (long i = begin; i < end; i++, resultIndex++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             boolean kPresent = obj.has(key);
             if (context.hasPendingException()) return context.getPendingException();
             if (kPresent) {
                 JSValue element = obj.get(context, key);
                 if (context.hasPendingException()) return context.getPendingException();
-                // Step 8.b.iii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(n), kValue).
-                if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), element)) {
-                    return context.throwTypeError("Cannot define property " + n);
+                // Step 8.b.iii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(resultIndex), kValue).
+                if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), element)) {
+                    return context.throwTypeError("Cannot define property " + resultIndex);
                 }
             }
         }
 
-        // Step 9: Perform ? Set(A, "length", n, true).
-        resultObj.set(PropertyKey.LENGTH, JSNumber.of(n), context);
+        // Step 9: Perform ? Set(A, "length", resultIndex, true).
+        resultObj.set(PropertyKey.LENGTH, JSNumber.of(resultIndex), context);
         if (context.hasPendingException()) return context.getPendingException();
 
         return resultObj;

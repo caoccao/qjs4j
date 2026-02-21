@@ -807,16 +807,16 @@ public final class JSArray extends JSObject {
     }
 
     @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context) {
-        return setWithResult(key, value, context, this);
+    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
+        return setWithResult(context, key, value, this);
     }
 
     @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
+    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
         long index = getArrayIndex(key);
         if (index >= 0 || !(key.isString() && "length".equals(key.asString()))) {
             // Non-length keys: delegate to JSObject which handles prototype chain
-            return super.setWithResult(key, value, context, receiver);
+            return super.setWithResult(context, key, value, receiver);
         }
         // Per ES spec ArraySetLength / QuickJS set_array_length:
         // Coerce value BEFORE the read-only test

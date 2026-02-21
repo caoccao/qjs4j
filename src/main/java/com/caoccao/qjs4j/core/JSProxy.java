@@ -948,7 +948,7 @@ public final class JSProxy extends JSObject {
             return true;
         }
 
-        boolean success = targetObj.setWithResult(key, value, executionContext, receiver);
+        boolean success = targetObj.setWithResult(executionContext, key, value, receiver);
         if (!success && throwOnFailure && executionContext.isStrictMode()) {
             throw new JSException(executionContext.throwTypeError(
                     "'set' on proxy: trap returned falsish for property '" + key.toPropertyString() + "'"));
@@ -1079,7 +1079,7 @@ public final class JSProxy extends JSObject {
     }
 
     @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
+    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
         return proxySetInternal(key, value, context, receiver, false);
     }
 

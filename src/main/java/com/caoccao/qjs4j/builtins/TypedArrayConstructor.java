@@ -48,7 +48,7 @@ public final class TypedArrayConstructor {
 
         JSArray iterableValues = null;
         JSObject arrayLike = null;
-        long len;
+        long itemsLength;
         JSObject itemsObject = JSTypeConversions.toObject(context, items);
         if (itemsObject == null) {
             return context.throwTypeError("Cannot convert undefined or null to object");
@@ -91,22 +91,22 @@ public final class TypedArrayConstructor {
                 }
                 iterableValues.push(value);
             }
-            len = iterableValues.getLength();
+            itemsLength = iterableValues.getLength();
         } else {
             arrayLike = itemsObject;
             JSValue lengthValue = arrayLike.get(context, PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            len = JSTypeConversions.toLength(context, lengthValue);
+            itemsLength = JSTypeConversions.toLength(context, lengthValue);
         }
 
-        JSTypedArray target = typedArrayCreate(context, thisArg, len, "TypedArray.from");
+        JSTypedArray target = typedArrayCreate(context, thisArg, itemsLength, "TypedArray.from");
         if (target == null) {
             return context.getPendingException();
         }
 
-        for (long k = 0; k < len; k++) {
+        for (long k = 0; k < itemsLength; k++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(k));
             JSValue kValue = iterableValues != null
                     ? iterableValues.get(context, key)

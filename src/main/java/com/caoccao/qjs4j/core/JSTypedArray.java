@@ -741,8 +741,8 @@ public abstract class JSTypedArray extends JSObject {
      * by generic Array.prototype methods (e.g., copyWithin, fill).
      */
     @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context) {
-        return setWithResult(key, value, context, (JSValue) this);
+    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
+        return setWithResult(context, key, value, (JSValue) this);
     }
 
     /**
@@ -751,7 +751,7 @@ public abstract class JSTypedArray extends JSObject {
      * Following QuickJS JS_SetPropertyInternal typed_array_oob handling.
      */
     @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSValue receiver) {
+    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSValue receiver) {
         if (isCanonicalNumericIndex(key)) {
             // Step b.i: If SameValue(O, Receiver) is true
             if (receiver == this) {
@@ -778,7 +778,7 @@ public abstract class JSTypedArray extends JSObject {
             }
             // Valid integer index with different receiver - fall through to OrdinarySet
         }
-        return super.setWithResult(key, value, context, receiver);
+        return super.setWithResult(context, key, value, receiver);
     }
 
     /**
