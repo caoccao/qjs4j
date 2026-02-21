@@ -837,11 +837,11 @@ public final class ArrayPrototype {
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) return context.getPendingException();
 
-        if (args.length == 0 || length == 0) {
+        if (length == 0) {
             return JSNumber.of(-1);
         }
 
-        JSValue searchElement = args[0];
+        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
         if (context.hasPendingException()) return context.getPendingException();
 
@@ -974,11 +974,11 @@ public final class ArrayPrototype {
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) return context.getPendingException();
 
-        if (args.length == 0 || length == 0) {
+        if (length == 0) {
             return JSNumber.of(-1);
         }
 
-        JSValue searchElement = args[0];
+        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : length - 1;
         if (context.hasPendingException()) return context.getPendingException();
 
@@ -1358,20 +1358,22 @@ public final class ArrayPrototype {
         long end = length;
 
         if (args.length > 0) {
-            begin = JSTypeConversions.toInt32(context, args[0]);
-            if (begin < 0) {
-                begin = Math.max(length + begin, 0);
+            double d = JSTypeConversions.toInteger(context, args[0]);
+            if (context.hasPendingException()) return context.getPendingException();
+            if (d < 0) {
+                begin = Math.max(length + (long) d, 0);
             } else {
-                begin = Math.min(begin, length);
+                begin = (long) Math.min(d, length);
             }
         }
 
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            end = JSTypeConversions.toInt32(context, args[1]);
-            if (end < 0) {
-                end = Math.max(length + end, 0);
+            double d = JSTypeConversions.toInteger(context, args[1]);
+            if (context.hasPendingException()) return context.getPendingException();
+            if (d < 0) {
+                end = Math.max(length + (long) d, 0);
             } else {
-                end = Math.min(end, length);
+                end = (long) Math.min(d, length);
             }
         }
 
@@ -1506,17 +1508,24 @@ public final class ArrayPrototype {
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) return context.getPendingException();
 
-        long start = args.length > 0 ? JSTypeConversions.toInt32(context, args[0]) : 0;
-
-        if (start < 0) {
-            start = Math.max(length + start, 0);
+        long start;
+        if (args.length > 0) {
+            double d = JSTypeConversions.toInteger(context, args[0]);
+            if (context.hasPendingException()) return context.getPendingException();
+            if (d < 0) {
+                start = Math.max(length + (long) d, 0);
+            } else {
+                start = (long) Math.min(d, length);
+            }
         } else {
-            start = Math.min(start, length);
+            start = 0;
         }
 
         long deleteCount = length - start;
         if (args.length > 1) {
-            deleteCount = Math.max(0, Math.min(JSTypeConversions.toInt32(context, args[1]), length - start));
+            double d = JSTypeConversions.toInteger(context, args[1]);
+            if (context.hasPendingException()) return context.getPendingException();
+            deleteCount = Math.max(0, Math.min((long) d, length - start));
         }
 
         // Step 9: Let A be ? ArraySpeciesCreate(O, actualDeleteCount).
@@ -1727,19 +1736,25 @@ public final class ArrayPrototype {
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) return context.getPendingException();
 
-        long start = args.length > 0 ? JSTypeConversions.toInt32(context, args[0]) : 0;
-
-        // Normalize start index
-        if (start < 0) {
-            start = Math.max(length + start, 0);
+        long start;
+        if (args.length > 0) {
+            double d = JSTypeConversions.toInteger(context, args[0]);
+            if (context.hasPendingException()) return context.getPendingException();
+            if (d < 0) {
+                start = Math.max(length + (long) d, 0);
+            } else {
+                start = (long) Math.min(d, length);
+            }
         } else {
-            start = Math.min(start, length);
+            start = 0;
         }
 
         // Calculate delete count
         long deleteCount = length - start;
         if (args.length > 1) {
-            deleteCount = Math.max(0, Math.min(JSTypeConversions.toInt32(context, args[1]), length - start));
+            double d = JSTypeConversions.toInteger(context, args[1]);
+            if (context.hasPendingException()) return context.getPendingException();
+            deleteCount = Math.max(0, Math.min((long) d, length - start));
         }
 
         // Create new array with spliced result
@@ -1846,9 +1861,11 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.with requires 2 arguments");
         }
 
-        long index = JSTypeConversions.toInt32(context, args[0]);
+        double indexD = JSTypeConversions.toInteger(context, args[0]);
+        if (context.hasPendingException()) return context.getPendingException();
 
         // Normalize negative index
+        long index = (long) indexD;
         if (index < 0) {
             index = length + index;
         }
