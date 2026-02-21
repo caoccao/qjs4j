@@ -242,6 +242,23 @@ public final class JSArray extends JSObject {
                         return;
                     }
                 }
+                // Remove any existing shape property for this index, since the
+                // default data descriptor (writable, enumerable, configurable)
+                // is represented by dense/sparse array storage without a shape entry.
+                // This handles the case where a non-default descriptor was previously
+                // defined via Object.defineProperty and is now being overwritten by
+                // CreateDataPropertyOrThrow (e.g., in Array.prototype.filter).
+                PropertyKey shapeKey = getOwnShapeKey(key);
+                if (shapeKey != null) {
+                    int shapeOffset = shape.getPropertyOffset(shapeKey);
+                    shape.removeProperty(shapeKey);
+                    if (shapeOffset >= 0) {
+                        propertyValues[shapeOffset] = JSUndefined.INSTANCE;
+                    }
+                    if (shape.shouldCompact()) {
+                        compactProperties();
+                    }
+                }
                 // Store in array storage
                 if (intIndex < MAX_DENSE_SIZE) {
                     ensureDenseCapacity(intIndex + 1);

@@ -111,7 +111,7 @@ public non-sealed class JSObject implements JSValue {
      * Compact properties by removing deleted properties.
      * Following QuickJS compact_properties() logic.
      */
-    private void compactProperties() {
+    protected void compactProperties() {
         if (shape.getDeletedPropCount() == 0) {
             return; // Nothing to compact
         }
@@ -746,7 +746,7 @@ public non-sealed class JSObject implements JSValue {
         return getOwnShapeKey(key) != null;
     }
 
-    private PropertyKey getOwnShapeKey(PropertyKey key) {
+    protected PropertyKey getOwnShapeKey(PropertyKey key) {
         if (shape.hasProperty(key)) {
             return key;
         }
