@@ -135,7 +135,9 @@ public final class ArrayPrototype {
                 for (long k = 0; k < len; k++, n++) {
                     PropertyKey indexKey = PropertyKey.fromString(Long.toString(k));
                     // JS_TryGetPropertyInt64: only define property if it exists (preserve holes)
-                    if (eObj.has(indexKey)) {
+                    boolean present = eObj.has(indexKey);
+                    if (context.hasPendingException()) return context.getPendingException();
+                    if (present) {
                         JSValue val = eObj.get(context, indexKey);
                         if (context.hasPendingException()) return context.getPendingException();
                         if (resultArr != null) {
@@ -238,20 +240,14 @@ public final class ArrayPrototype {
             final PropertyKey fromKey = PropertyKey.fromString(Long.toString(from));
             final PropertyKey toKey = PropertyKey.fromString(Long.toString(to));
 
-            if (obj.has(fromKey)) {
+            boolean fromPresent = obj.has(fromKey);
+            if (context.hasPendingException()) return context.getPendingException();
+            if (fromPresent) {
                 JSValue value = obj.get(context, fromKey);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                obj.set(toKey, value, context);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-            } else if (!obj.delete(toKey, context)) {
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                return context.throwTypeError("Cannot delete property '" + to + "'");
+                if (context.hasPendingException()) return context.getPendingException();
+                if (!setOrThrow(context, obj, toKey, value)) return context.getPendingException();
+            } else {
+                if (!deleteOrThrow(context, obj, toKey)) return context.getPendingException();
             }
         }
 
@@ -316,6 +312,7 @@ public final class ArrayPrototype {
             // Step 7b: Let kPresent be ? HasProperty(O, key)
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
+                if (context.hasPendingException()) return context.getPendingException();
                 continue;
             }
             // Step 7c.i: Let kValue be ? Get(O, key)
@@ -377,8 +374,7 @@ public final class ArrayPrototype {
         // Step 8: Repeat, while k < final
         for (long i = start; i < end; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            obj.set(key, value, context);
-            if (context.hasPendingException()) return context.getPendingException();
+            if (!setOrThrow(context, obj, key, value)) return context.getPendingException();
         }
 
         // Step 9: Return O.
@@ -422,6 +418,7 @@ public final class ArrayPrototype {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             // Step 7.a: Let kPresent be ? HasProperty(O, Pk).
             if (!obj.has(key)) {
+                if (context.hasPendingException()) return context.getPendingException();
                 continue;
             }
             // Step 7.c.i: Let kValue be ? Get(O, Pk).
@@ -668,6 +665,7 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
+                if (context.hasPendingException()) return context.getPendingException();
                 continue;
             }
             JSValue element = obj.get(context, key);
@@ -691,7 +689,9 @@ public final class ArrayPrototype {
                     if (context.hasPendingException()) return context.getPendingException();
                     for (long j = 0; j < mappedLen; j++) {
                         PropertyKey jKey = PropertyKey.fromString(Long.toString(j));
-                        if (mappedObj.has(jKey)) {
+                        boolean jPresent = mappedObj.has(jKey);
+                        if (context.hasPendingException()) return context.getPendingException();
+                        if (jPresent) {
                             JSValue val = mappedObj.get(context, jKey);
                             if (context.hasPendingException()) return context.getPendingException();
                             if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), val)) {
@@ -735,6 +735,7 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
+                if (context.hasPendingException()) return context.getPendingException();
                 continue;
             }
             JSValue element = obj.get(context, key);
@@ -858,6 +859,7 @@ public final class ArrayPrototype {
         for (long i = fromIndex; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
+                if (context.hasPendingException()) return context.getPendingException();
                 continue;
             }
             JSValue element = obj.get(context, key);
@@ -874,6 +876,7 @@ public final class ArrayPrototype {
         for (long i = 0; i < sourceLen; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!source.has(key)) {
+                if (context.hasPendingException()) return;
                 continue;
             }
             JSValue element = source.get(context, key);
@@ -989,6 +992,7 @@ public final class ArrayPrototype {
         for (long i = fromIndex; i >= 0; i--) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
+                if (context.hasPendingException()) return context.getPendingException();
                 continue;
             }
             JSValue element = obj.get(context, key);
@@ -1090,6 +1094,7 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
+                if (context.hasPendingException()) return context.getPendingException();
                 continue;
             }
             JSValue element = obj.get(context, key);
@@ -1207,7 +1212,9 @@ public final class ArrayPrototype {
             boolean found = false;
             for (long k = 0; k < length; k++) {
                 PropertyKey key = PropertyKey.fromString(Long.toString(k));
-                if (obj.has(key)) {
+                boolean kPresent = obj.has(key);
+                if (context.hasPendingException()) return context.getPendingException();
+                if (kPresent) {
                     accumulator = obj.get(context, key);
                     if (context.hasPendingException()) return context.getPendingException();
                     startIndex = k + 1;
@@ -1223,6 +1230,7 @@ public final class ArrayPrototype {
         for (long i = startIndex; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
+                if (context.hasPendingException()) return context.getPendingException();
                 continue;
             }
             JSValue element = obj.get(context, key);
@@ -1267,7 +1275,9 @@ public final class ArrayPrototype {
             boolean found = false;
             for (long k = length - 1; k >= 0; k--) {
                 PropertyKey key = PropertyKey.fromString(Long.toString(k));
-                if (obj.has(key)) {
+                boolean kPresent = obj.has(key);
+                if (context.hasPendingException()) return context.getPendingException();
+                if (kPresent) {
                     accumulator = obj.get(context, key);
                     if (context.hasPendingException()) return context.getPendingException();
                     startIndex = k - 1;
@@ -1283,6 +1293,7 @@ public final class ArrayPrototype {
         for (long i = startIndex; i >= 0; i--) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
+                if (context.hasPendingException()) return context.getPendingException();
                 continue;
             }
             JSValue element = obj.get(context, key);
@@ -1356,15 +1367,13 @@ public final class ArrayPrototype {
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
         if (obj == null) return context.getPendingException();
 
-        if (obj instanceof JSArray arr) {
-            return arr.shift();
-        }
-
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) return context.getPendingException();
 
         if (length == 0) {
-            obj.set(PropertyKey.LENGTH, JSNumber.of(0), context);
+            if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(0))) {
+                return context.getPendingException();
+            }
             return JSUndefined.INSTANCE;
         }
         PropertyKey firstKey = PropertyKey.fromString("0");
@@ -1374,19 +1383,22 @@ public final class ArrayPrototype {
         for (long k = 1; k < length; k++) {
             PropertyKey from = PropertyKey.fromString(Long.toString(k));
             PropertyKey to = PropertyKey.fromString(Long.toString(k - 1));
-            if (obj.has(from)) {
+            boolean fromPresent = obj.has(from);
+            if (context.hasPendingException()) return context.getPendingException();
+            if (fromPresent) {
                 JSValue val = obj.get(context, from);
                 if (context.hasPendingException()) return context.getPendingException();
-                obj.set(to, val, context);
+                if (!setOrThrow(context, obj, to, val)) return context.getPendingException();
             } else {
-                obj.delete(to, context);
+                if (!deleteOrThrow(context, obj, to)) return context.getPendingException();
             }
-            if (context.hasPendingException()) return context.getPendingException();
         }
-        obj.delete(PropertyKey.fromString(Long.toString(length - 1)), context);
-        if (context.hasPendingException()) return context.getPendingException();
-        obj.set(PropertyKey.LENGTH, JSNumber.of(length - 1), context);
-        if (context.hasPendingException()) return context.getPendingException();
+        if (!deleteOrThrow(context, obj, PropertyKey.fromString(Long.toString(length - 1)))) {
+            return context.getPendingException();
+        }
+        if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(length - 1))) {
+            return context.getPendingException();
+        }
         return first;
     }
 
@@ -1441,7 +1453,9 @@ public final class ArrayPrototype {
         long n = 0;
         for (long i = begin; i < end; i++, n++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            if (obj.has(key)) {
+            boolean kPresent = obj.has(key);
+            if (context.hasPendingException()) return context.getPendingException();
+            if (kPresent) {
                 JSValue element = obj.get(context, key);
                 if (context.hasPendingException()) return context.getPendingException();
                 // Step 8.b.iii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(n), kValue).
@@ -1481,6 +1495,7 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
+                if (context.hasPendingException()) return context.getPendingException();
                 continue;
             }
             JSValue element = obj.get(context, key);
@@ -1590,7 +1605,9 @@ public final class ArrayPrototype {
         // Step 10: Collect deleted elements
         for (long i = 0; i < deleteCount; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(start + i));
-            if (obj.has(key)) {
+            boolean kPresent = obj.has(key);
+            if (context.hasPendingException()) return context.getPendingException();
+            if (kPresent) {
                 JSValue val = obj.get(context, key);
                 if (context.hasPendingException()) return context.getPendingException();
                 // Step 10.c.ii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(k), fromValue).
@@ -1606,46 +1623,58 @@ public final class ArrayPrototype {
         long insertCount = Math.max(0, args.length - 2);
         long newLen = length - deleteCount + insertCount;
 
+        // Step 12: If len + insertCount - actualDeleteCount > 2^53 - 1, throw TypeError
+        if (newLen > NumberPrototype.MAX_SAFE_INTEGER) {
+            return context.throwTypeError("Array too long");
+        }
+
         if (insertCount < deleteCount) {
             // Shift elements left
             for (long k = start; k < length - deleteCount; k++) {
                 PropertyKey from = PropertyKey.fromString(Long.toString(k + deleteCount));
                 PropertyKey to = PropertyKey.fromString(Long.toString(k + insertCount));
-                if (obj.has(from)) {
-                    obj.set(to, obj.get(context, from), context);
-                } else {
-                    obj.delete(to, context);
-                }
+                boolean fromPresent = obj.has(from);
                 if (context.hasPendingException()) return context.getPendingException();
+                if (fromPresent) {
+                    JSValue val = obj.get(context, from);
+                    if (context.hasPendingException()) return context.getPendingException();
+                    if (!setOrThrow(context, obj, to, val)) return context.getPendingException();
+                } else {
+                    if (!deleteOrThrow(context, obj, to)) return context.getPendingException();
+                }
             }
             // Delete trailing elements
             for (long k = newLen; k < length; k++) {
-                obj.delete(PropertyKey.fromString(Long.toString(k)), context);
-                if (context.hasPendingException()) return context.getPendingException();
+                if (!deleteOrThrow(context, obj, PropertyKey.fromString(Long.toString(k)))) {
+                    return context.getPendingException();
+                }
             }
         } else if (insertCount > deleteCount) {
             // Shift elements right
             for (long k = length - deleteCount - 1; k >= start; k--) {
                 PropertyKey from = PropertyKey.fromString(Long.toString(k + deleteCount));
                 PropertyKey to = PropertyKey.fromString(Long.toString(k + insertCount));
-                if (obj.has(from)) {
-                    obj.set(to, obj.get(context, from), context);
-                } else {
-                    obj.delete(to, context);
-                }
+                boolean fromPresent = obj.has(from);
                 if (context.hasPendingException()) return context.getPendingException();
+                if (fromPresent) {
+                    JSValue val = obj.get(context, from);
+                    if (context.hasPendingException()) return context.getPendingException();
+                    if (!setOrThrow(context, obj, to, val)) return context.getPendingException();
+                } else {
+                    if (!deleteOrThrow(context, obj, to)) return context.getPendingException();
+                }
             }
         }
 
         // Insert new elements
         for (int i = 0; i < insertCount; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(start + i));
-            obj.set(key, args[i + 2], context);
-            if (context.hasPendingException()) return context.getPendingException();
+            if (!setOrThrow(context, obj, key, args[i + 2])) return context.getPendingException();
         }
 
-        obj.set(PropertyKey.LENGTH, JSNumber.of(newLen), context);
-        if (context.hasPendingException()) return context.getPendingException();
+        if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(newLen))) {
+            return context.getPendingException();
+        }
         return deletedObj;
     }
 
@@ -1867,28 +1896,37 @@ public final class ArrayPrototype {
         if (context.hasPendingException()) return context.getPendingException();
 
         int argCount = args.length;
+
+        // Step 4: If len + argCount > 2^53 - 1, throw TypeError
+        if (length + argCount > NumberPrototype.MAX_SAFE_INTEGER) {
+            return context.throwTypeError("Array too long");
+        }
+
         // Shift existing elements right
         for (long k = length - 1; k >= 0; k--) {
             PropertyKey from = PropertyKey.fromString(Long.toString(k));
             PropertyKey to = PropertyKey.fromString(Long.toString(k + argCount));
-            if (obj.has(from)) {
+            boolean fromPresent = obj.has(from);
+            if (context.hasPendingException()) return context.getPendingException();
+            if (fromPresent) {
                 JSValue val = obj.get(context, from);
                 if (context.hasPendingException()) return context.getPendingException();
-                obj.set(to, val, context);
+                if (!setOrThrow(context, obj, to, val)) return context.getPendingException();
             } else {
-                obj.delete(to, context);
+                if (!deleteOrThrow(context, obj, to)) return context.getPendingException();
             }
-            if (context.hasPendingException()) return context.getPendingException();
         }
         // Insert new elements at the beginning
         for (int j = 0; j < argCount; j++) {
-            obj.set(PropertyKey.fromString(Long.toString(j)), args[j], context);
-            if (context.hasPendingException()) return context.getPendingException();
+            if (!setOrThrow(context, obj, PropertyKey.fromString(Long.toString(j)), args[j])) {
+                return context.getPendingException();
+            }
         }
 
         long newLen = length + argCount;
-        obj.set(PropertyKey.LENGTH, JSNumber.of(newLen), context);
-        if (context.hasPendingException()) return context.getPendingException();
+        if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(newLen))) {
+            return context.getPendingException();
+        }
         return JSNumber.of(newLen);
     }
 
