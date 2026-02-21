@@ -1309,26 +1309,37 @@ public final class ArrayPrototype {
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) return context.getPendingException();
 
-        for (long lower = 0; lower < length / 2; lower++) {
-            long upper = length - 1 - lower;
+        for (long lower = 0, upper = length - 1; lower < upper; lower++, upper--) {
             PropertyKey lowerKey = PropertyKey.fromString(Long.toString(lower));
             PropertyKey upperKey = PropertyKey.fromString(Long.toString(upper));
+
+            // Per ES2024: HasProperty then Get for lower, then HasProperty then Get for upper
             boolean lowerExists = obj.has(lowerKey);
-            boolean upperExists = obj.has(upperKey);
-            JSValue lowerVal = lowerExists ? obj.get(context, lowerKey) : JSUndefined.INSTANCE;
-            JSValue upperVal = upperExists ? obj.get(context, upperKey) : JSUndefined.INSTANCE;
             if (context.hasPendingException()) return context.getPendingException();
-            if (lowerExists && upperExists) {
-                obj.set(lowerKey, upperVal, context);
-                obj.set(upperKey, lowerVal, context);
-            } else if (upperExists) {
-                obj.set(lowerKey, upperVal, context);
-                obj.delete(upperKey, context);
-            } else if (lowerExists) {
-                obj.delete(lowerKey, context);
-                obj.set(upperKey, lowerVal, context);
+            JSValue lowerVal = JSUndefined.INSTANCE;
+            if (lowerExists) {
+                lowerVal = obj.get(context, lowerKey);
+                if (context.hasPendingException()) return context.getPendingException();
             }
+
+            boolean upperExists = obj.has(upperKey);
             if (context.hasPendingException()) return context.getPendingException();
+            JSValue upperVal = JSUndefined.INSTANCE;
+            if (upperExists) {
+                upperVal = obj.get(context, upperKey);
+                if (context.hasPendingException()) return context.getPendingException();
+            }
+
+            if (lowerExists && upperExists) {
+                if (!setOrThrow(context, obj, lowerKey, upperVal)) return context.getPendingException();
+                if (!setOrThrow(context, obj, upperKey, lowerVal)) return context.getPendingException();
+            } else if (upperExists) {
+                if (!setOrThrow(context, obj, lowerKey, upperVal)) return context.getPendingException();
+                if (!deleteOrThrow(context, obj, upperKey)) return context.getPendingException();
+            } else if (lowerExists) {
+                if (!deleteOrThrow(context, obj, lowerKey)) return context.getPendingException();
+                if (!setOrThrow(context, obj, upperKey, lowerVal)) return context.getPendingException();
+            }
         }
 
         return obj;
