@@ -447,26 +447,38 @@ public final class ArrayPrototype {
      * Creates a new array with elements that pass the test.
      */
     public static JSValue filter(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray jsArray)) {
-            return context.throwTypeError("Array.prototype.filter called on non-array");
+        // Step 1: Let O be ? ToObject(this value).
+        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
+            return context.throwTypeError("Array.prototype.filter called on null or undefined");
         }
+        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        if (obj == null) return context.getPendingException();
 
+        // Step 2: Let len be ? LengthOfArrayLike(O).
+        long length = lengthOfArrayLike(context, obj);
+        if (context.hasPendingException()) return context.getPendingException();
+
+        // Step 3: If IsCallable(callbackfn) is false, throw a TypeError exception.
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
         }
 
         JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        int length = (int) jsArray.getLength();
-        JSArray result = context.createJSArray(0, length);
+        // Step 5: Let A be ? ArraySpeciesCreate(O, 0).
+        JSArray result = context.createJSArray(0, (int) length);
 
+        // Step 7: Repeat, while k < len
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            if (!jsArray.has(key)) {
+            // Step 7.a: Let kPresent be ? HasProperty(O, Pk).
+            if (!obj.has(key)) {
                 continue;
             }
-            JSValue element = jsArray.get(context, key);
+            // Step 7.c.i: Let kValue be ? Get(O, Pk).
+            JSValue element = obj.get(context, key);
             if (context.hasPendingException()) return context.getPendingException();
-            JSValue[] callbackArgs = {element, JSNumber.of(i), jsArray};
+            // Step 7.c.ii: Let selected be ! ToBoolean(? Call(callbackfn, thisArg, ...)).
+            JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             JSValue keep = callback.call(context, callbackThis, callbackArgs);
             if (context.hasPendingException()) return context.getPendingException();
 
@@ -475,6 +487,7 @@ public final class ArrayPrototype {
             }
         }
 
+        // Step 8: Return A.
         return result;
     }
 

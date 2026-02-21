@@ -398,10 +398,21 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.filter(context, arr, new JSValue[]{}));
         assertPendingException(context);
 
-        // Edge case: filter on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.filter(context, nonArray, new JSValue[]{evenFn}));
+        // Edge case: filter on null/undefined
+        assertTypeError(ArrayPrototype.filter(context, JSNull.INSTANCE, new JSValue[]{evenFn}));
         assertPendingException(context);
+        assertTypeError(ArrayPrototype.filter(context, JSUndefined.INSTANCE, new JSValue[]{evenFn}));
+        assertPendingException(context);
+ 
+        assertStringWithJavet(
+                "(() => { var obj = {0: 1, 1: 2, 2: 3, length: 3}; return Array.prototype.filter.call(obj, x => x > 1).join(','); })()",
+                "(() => { var obj = {0: 'a', 1: 'b', 2: 'c', length: 3}; return Array.prototype.filter.call(obj, (v, i) => i > 0).join(','); })()",
+                "(() => { return Array.prototype.filter.call({length: 0}, x => true).length.toString(); })()"
+        );
+        assertErrorWithJavet(
+            "Array.prototype.filter.call(null, x => x)",
+            "Array.prototype.filter.call(undefined, x => x)"
+        );
     }
 
     @Test
