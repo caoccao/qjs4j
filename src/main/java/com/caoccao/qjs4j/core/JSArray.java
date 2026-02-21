@@ -199,6 +199,23 @@ public final class JSArray extends JSObject {
             super.defineProperty(key, descriptor);
             return true;
         }
+        // Per ES spec 10.4.2.1 [[DefineOwnProperty]] / QuickJS JS_CreateProperty:
+        // When defining a property at an array index >= current length,
+        // update the length to index + 1 (if length is writable).
+        long index = getArrayIndex(key);
+        if (index >= 0 && index >= this.length) {
+            if (!isLengthWritable()) {
+                if (context != null) {
+                    context.throwTypeError("Cannot add property " + index + ", array length is not writable");
+                }
+                return false;
+            }
+            boolean result = super.defineOwnProperty(key, descriptor, context);
+            if (result) {
+                setLength(index + 1);
+            }
+            return result;
+        }
         return super.defineOwnProperty(key, descriptor, context);
     }
 
@@ -324,7 +341,22 @@ public final class JSArray extends JSObject {
             if (desc != null && desc.hasGetter()) {
                 return super.get(context, key);
             }
-            return get(index);
+            // Try own dense/sparse storage
+            if (index < length && index <= Integer.MAX_VALUE) {
+                int intIndex = (int) index;
+                if (intIndex < denseArray.length && denseArray[intIndex] != null) {
+                    return denseArray[intIndex];
+                }
+                if (sparseProperties != null) {
+                    JSValue value = sparseProperties.get(intIndex);
+                    if (value != null) {
+                        return value;
+                    }
+                }
+            }
+            // Not found in own storage — delegate to JSObject.get with context
+            // so prototype chain getters are properly invoked
+            return super.get(context, key);
         }
 
         // Otherwise, use the shape-based storage from JSObject
