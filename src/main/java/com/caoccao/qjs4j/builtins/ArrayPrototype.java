@@ -370,6 +370,13 @@ public final class ArrayPrototype {
         JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
         for (long i = 0; i < length; i++) {
+            // Step 7b: Let kPresent be ? HasProperty(O, key)
+            PropertyKey key = (i <= Integer.MAX_VALUE)
+                    ? PropertyKey.fromIndex((int) i)
+                    : PropertyKey.fromString(Long.toString(i));
+            if (!obj.has(key)) {
+                continue;
+            }
             JSValue element = getElement(context, obj, i);
             if (context.hasPendingException()) return context.getPendingException();
             JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
