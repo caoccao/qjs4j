@@ -45,8 +45,11 @@ final class StatementCompiler {
         boolean savedGlobalScope = ctx.inGlobalScope;
         ctx.enterScope();
         ctx.inGlobalScope = false;
-        // Hoist function declarations to top of block (ES2015+ block-scoped functions
-        // are initialized before any statements in the block execute).
+        // Phase 0: Pre-declare block-scoped let/const variables so that function
+        // declarations hoisted in Phase 1 can capture them via closure.
+        preDeclareLexicalBindings(block.body());
+        // Phase 1: Hoist function declarations to top of block (ES2015+ block-scoped
+        // functions are initialized before any statements in the block execute).
         for (Statement stmt : block.body()) {
             if (stmt instanceof FunctionDeclaration funcDecl) {
                 delegates.functions.compileFunctionDeclaration(funcDecl);
@@ -61,6 +64,26 @@ final class StatementCompiler {
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
         ctx.inGlobalScope = savedGlobalScope;
         ctx.exitScope();
+    }
+
+    /**
+     * Pre-declare block-scoped let/const bindings in the current scope.
+     * This must be called before hoisting function declarations so that
+     * closures created by those function declarations can capture the
+     * let/const variables from the same block scope.
+     */
+    private void preDeclareLexicalBindings(List<Statement> body) {
+        for (Statement stmt : body) {
+            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                    Set<String> names = new HashSet<>();
+                    delegates.analysis.collectPatternBindingNames(d.id(), names);
+                    for (String name : names) {
+                        ctx.currentScope().declareLocal(name);
+                    }
+                }
+            }
+        }
     }
 
     void compileBreakStatement(BreakStatement breakStmt) {
