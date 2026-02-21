@@ -2306,7 +2306,7 @@ public final class VirtualMachine {
                         JSValue propObj = (JSValue) stack[sp - 1];
                         if (propObj instanceof JSObject jsObj) {
                             PropertyKey key = PropertyKey.fromValue(context, propKey);
-                            jsObj.set(key, propValue);
+                            jsObj.definePropertyWritableEnumerableConfigurable(key, propValue);
                         }
                         pc += op.getSize();
                     }
