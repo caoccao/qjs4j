@@ -371,13 +371,13 @@ public final class ArrayPrototype {
 
         for (long i = 0; i < length; i++) {
             // Step 7b: Let kPresent be ? HasProperty(O, key)
-            PropertyKey key = (i <= Integer.MAX_VALUE)
-                    ? PropertyKey.fromIndex((int) i)
-                    : PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
                 continue;
             }
-            JSValue element = getElement(context, obj, i);
+            // Step 7c.i: Let kValue be ? Get(O, key)
+            // Use context-aware get so getters are properly invoked
+            JSValue element = obj.get(context, key);
             if (context.hasPendingException()) return context.getPendingException();
             JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
@@ -450,9 +450,15 @@ public final class ArrayPrototype {
         JSArray result = context.createJSArray(0, length);
 
         for (long i = 0; i < length; i++) {
-            JSValue element = jsArray.get(i);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            if (!jsArray.has(key)) {
+                continue;
+            }
+            JSValue element = jsArray.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
             JSValue[] callbackArgs = {element, JSNumber.of(i), jsArray};
             JSValue keep = callback.call(context, callbackThis, callbackArgs);
+            if (context.hasPendingException()) return context.getPendingException();
 
             if (JSTypeConversions.toBoolean(keep) == JSBoolean.TRUE) {
                 result.push(element);
@@ -479,9 +485,12 @@ public final class ArrayPrototype {
         long length = arr.getLength();
 
         for (long i = 0; i < length; i++) {
-            JSValue element = arr.get(i);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            JSValue element = arr.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
             JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
+            if (context.hasPendingException()) return context.getPendingException();
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
                 return element;
@@ -508,9 +517,12 @@ public final class ArrayPrototype {
         long length = arr.getLength();
 
         for (long i = 0; i < length; i++) {
-            JSValue element = arr.get(i);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            JSValue element = arr.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
             JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
+            if (context.hasPendingException()) return context.getPendingException();
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
                 return JSNumber.of(i);
@@ -539,9 +551,12 @@ public final class ArrayPrototype {
 
         // Iterate backwards
         for (long i = length - 1; i >= 0; i--) {
-            JSValue element = arr.get(i);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            JSValue element = arr.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
             JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
+            if (context.hasPendingException()) return context.getPendingException();
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
                 return element;
@@ -570,9 +585,12 @@ public final class ArrayPrototype {
 
         // Iterate backwards
         for (long i = length - 1; i >= 0; i--) {
-            JSValue element = arr.get(i);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            JSValue element = arr.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
             JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
+            if (context.hasPendingException()) return context.getPendingException();
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
                 return JSNumber.of(i);
@@ -614,7 +632,12 @@ public final class ArrayPrototype {
         JSArray result = context.createJSArray(0, length);
 
         for (int i = 0; i < length; i++) {
-            JSValue element = jsArray.get(i);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            if (!jsArray.has(key)) {
+                continue;
+            }
+            JSValue element = jsArray.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
 
             // Call the callback with (element, index, array)
             JSValue[] callbackArgs = new JSValue[]{
@@ -623,6 +646,7 @@ public final class ArrayPrototype {
                     jsArray
             };
             JSValue mapped = callback.call(context, callbackThisArg, callbackArgs);
+            if (context.hasPendingException()) return context.getPendingException();
 
             // Flatten one level
             if (mapped instanceof JSArray mappedArray) {
@@ -654,9 +678,15 @@ public final class ArrayPrototype {
         long length = arr.getLength();
 
         for (long i = 0; i < length; i++) {
-            JSValue element = arr.get(i);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            if (!arr.has(key)) {
+                continue;
+            }
+            JSValue element = arr.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
             JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             callback.call(context, callbackThis, callbackArgs);
+            if (context.hasPendingException()) return context.getPendingException();
         }
 
         return JSUndefined.INSTANCE;
@@ -708,7 +738,9 @@ public final class ArrayPrototype {
         }
 
         for (long i = fromIndex; i < length; i++) {
-            JSValue element = arr.get(i);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            JSValue element = arr.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
             // includes uses SameValueZero (NaN equals NaN)
             if (JSTypeConversions.strictEquals(element, searchElement)) {
                 return JSBoolean.TRUE;
@@ -746,7 +778,13 @@ public final class ArrayPrototype {
         }
 
         for (long i = fromIndex; i < length; i++) {
-            if (JSTypeConversions.strictEquals(arr.get(i), searchElement)) {
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            if (!arr.has(key)) {
+                continue;
+            }
+            JSValue element = arr.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
+            if (JSTypeConversions.strictEquals(element, searchElement)) {
                 return JSNumber.of(i);
             }
         }
@@ -858,7 +896,13 @@ public final class ArrayPrototype {
         }
 
         for (long i = fromIndex; i >= 0; i--) {
-            if (JSTypeConversions.strictEquals(arr.get(i), searchElement)) {
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            if (!arr.has(key)) {
+                continue;
+            }
+            JSValue element = arr.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
+            if (JSTypeConversions.strictEquals(element, searchElement)) {
                 return JSNumber.of(i);
             }
         }
@@ -899,9 +943,15 @@ public final class ArrayPrototype {
         JSArray result = context.createJSArray(0, length);
 
         for (long i = 0; i < length; i++) {
-            JSValue element = jsArray.get(i);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            if (!jsArray.has(key)) {
+                continue;
+            }
+            JSValue element = jsArray.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
             JSValue[] callbackArgs = {element, JSNumber.of(i), jsArray};
             JSValue mapped = callback.call(context, callbackThis, callbackArgs);
+            if (context.hasPendingException()) return context.getPendingException();
             result.push(mapped);
         }
 
@@ -957,19 +1007,38 @@ public final class ArrayPrototype {
         }
 
         long startIndex = 0;
-        JSValue accumulator;
+        JSValue accumulator = JSUndefined.INSTANCE;
 
         if (args.length >= 2) {
             accumulator = args[1];
         } else {
-            accumulator = arr.get(0);
-            startIndex = 1;
+            // Find first present element per ES2024 spec
+            boolean found = false;
+            for (long k = 0; k < length; k++) {
+                PropertyKey key = PropertyKey.fromString(Long.toString(k));
+                if (arr.has(key)) {
+                    accumulator = arr.get(context, key);
+                    if (context.hasPendingException()) return context.getPendingException();
+                    startIndex = k + 1;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                return context.throwTypeError("Reduce of empty array with no initial value");
+            }
         }
 
         for (long i = startIndex; i < length; i++) {
-            JSValue element = arr.get(i);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            if (!arr.has(key)) {
+                continue;
+            }
+            JSValue element = arr.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
             JSValue[] callbackArgs = {accumulator, element, JSNumber.of(i), arr};
             accumulator = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
+            if (context.hasPendingException()) return context.getPendingException();
         }
 
         return accumulator;
@@ -994,19 +1063,38 @@ public final class ArrayPrototype {
         }
 
         long startIndex = length - 1;
-        JSValue accumulator;
+        JSValue accumulator = JSUndefined.INSTANCE;
 
         if (args.length >= 2) {
             accumulator = args[1];
         } else {
-            accumulator = arr.get(length - 1);
-            startIndex = length - 2;
+            // Find last present element per ES2024 spec
+            boolean found = false;
+            for (long k = length - 1; k >= 0; k--) {
+                PropertyKey key = PropertyKey.fromString(Long.toString(k));
+                if (arr.has(key)) {
+                    accumulator = arr.get(context, key);
+                    if (context.hasPendingException()) return context.getPendingException();
+                    startIndex = k - 1;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                return context.throwTypeError("Reduce of empty array with no initial value");
+            }
         }
 
         for (long i = startIndex; i >= 0; i--) {
-            JSValue element = arr.get(i);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            if (!arr.has(key)) {
+                continue;
+            }
+            JSValue element = arr.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
             JSValue[] callbackArgs = {accumulator, element, JSNumber.of(i), arr};
             accumulator = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
+            if (context.hasPendingException()) return context.getPendingException();
         }
 
         return accumulator;
@@ -1099,9 +1187,15 @@ public final class ArrayPrototype {
         long length = arr.getLength();
 
         for (long i = 0; i < length; i++) {
-            JSValue element = arr.get(i);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            if (!arr.has(key)) {
+                continue;
+            }
+            JSValue element = arr.get(context, key);
+            if (context.hasPendingException()) return context.getPendingException();
             JSValue[] callbackArgs = {element, JSNumber.of(i), arr};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
+            if (context.hasPendingException()) return context.getPendingException();
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
                 return JSBoolean.TRUE;
