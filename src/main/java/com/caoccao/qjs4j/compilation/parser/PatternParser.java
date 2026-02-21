@@ -34,7 +34,7 @@ record PatternParser(ParserContext ctx, ParserDelegates delegates) {
         while (!ctx.match(TokenType.RBRACKET) && !ctx.match(TokenType.EOF)) {
             if (!elements.isEmpty()) {
                 ctx.expect(TokenType.COMMA);
-                if (ctx.match(TokenType.RBRACKET)) break;
+                if (ctx.match(TokenType.RBRACKET)) { break; }
             }
             if (ctx.match(TokenType.COMMA)) {
                 elements.add(null);
@@ -70,7 +70,7 @@ record PatternParser(ParserContext ctx, ParserDelegates delegates) {
         while (!ctx.match(TokenType.RBRACE) && !ctx.match(TokenType.EOF)) {
             if (!properties.isEmpty()) {
                 ctx.expect(TokenType.COMMA);
-                if (ctx.match(TokenType.RBRACE)) break;
+                if (ctx.match(TokenType.RBRACE)) { break; }
             }
             Identifier key = ctx.parseIdentifier();
             Pattern value;

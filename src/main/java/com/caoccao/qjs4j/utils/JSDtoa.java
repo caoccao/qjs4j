@@ -139,7 +139,7 @@ public final class JSDtoa {
     }
 
     private static String longToRadix(long value, int radix) {
-        if (value == 0) return "0";
+        if (value == 0) { return "0"; }
         StringBuilder sb = new StringBuilder();
         while (value != 0) {
             sb.append(digitChar((int) (value % radix)));
@@ -199,7 +199,7 @@ public final class JSDtoa {
     }
 
     private static int mpShiftLeft(int[] limbs, int len, int bits) {
-        if (bits <= 0) return len;
+        if (bits <= 0) { return len; }
 
         int words = bits / 32;
         int rem = bits % 32;
@@ -235,14 +235,14 @@ public final class JSDtoa {
         if (shift <= 0) {
             // Shift left
             long result = Integer.toUnsignedLong(limbs[0]);
-            if (len > 1) result |= Integer.toUnsignedLong(limbs[1]) << 32;
+            if (len > 1) { result |= Integer.toUnsignedLong(limbs[1]) << 32; }
             return result << (-shift);
         }
 
         int wordShift = shift / 32;
         int bitShift = shift % 32;
 
-        if (wordShift >= len) return 0;
+        if (wordShift >= len) { return 0; }
 
         // Calculate the round bit and sticky bits
         int roundBit = 0;
@@ -310,14 +310,14 @@ public final class JSDtoa {
      * Compute round(m * 2^exp * radix^f) using multi-precision arithmetic.
      */
     private static long mulPowRound(long m, int exp, int radix, int f) {
-        if (m == 0) return 0;
+        if (m == 0) { return 0; }
 
         // Use multi-precision with 32-bit limbs
         int[] limbs = new int[MAX_LIMBS];
         int len = 2;
         limbs[0] = (int) m;
         limbs[1] = (int) (m >>> 32);
-        if (limbs[1] == 0) len = 1;
+        if (limbs[1] == 0) { len = 1; }
 
         // Track the binary exponent offset
         int binaryExp = exp;
@@ -359,13 +359,13 @@ public final class JSDtoa {
      * d = m * radix^f where f = E - P (position of decimal point adjustment)
      */
     private static double reconstructDouble(long m, int radix, int f) {
-        if (m == 0) return 0.0;
+        if (m == 0) { return 0.0; }
 
         int[] limbs = new int[MAX_LIMBS];
         int len = 2;
         limbs[0] = (int) m;
         limbs[1] = (int) (m >>> 32);
-        if (limbs[1] == 0) len = 1;
+        if (limbs[1] == 0) { len = 1; }
 
         int binaryExp = 0;
 
@@ -383,24 +383,24 @@ public final class JSDtoa {
             for (int i = 0; i < -f; i++) {
                 int rem = mpDiv(limbs, len, radix);
                 len = mpNormalize(limbs, len);
-                if (rem != 0) limbs[0] |= 1;
+                if (rem != 0) { limbs[0] |= 1; }
             }
         }
 
         // Normalize to 53 bits and form the double
         int log2 = mpFloorLog2(limbs, len);
-        if (log2 < 0) return 0.0;
+        if (log2 < 0) { return 0.0; }
 
         int e = log2 + 1 + binaryExp;  // The true exponent
 
         // Handle denormals and overflow
-        if (e < -1074) return 0.0;
-        if (e > 1024) return Double.POSITIVE_INFINITY;
+        if (e < -1074) { return 0.0; }
+        if (e > 1024) { return Double.POSITIVE_INFINITY; }
 
         int prec = 53;
         if (e <= -1022) {
             prec = 53 - (-1022 - e + 1);
-            if (prec <= 0) return 0.0;
+            if (prec <= 0) { return 0.0; }
         }
 
         // Shift right to extract top 'prec' bits from the limbs array
@@ -415,7 +415,7 @@ public final class JSDtoa {
             e++;
         }
 
-        if (e > 1024) return Double.POSITIVE_INFINITY;
+        if (e > 1024) { return Double.POSITIVE_INFINITY; }
 
         int biasedExp;
         if (e <= -1022) {

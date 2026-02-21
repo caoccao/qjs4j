@@ -313,8 +313,8 @@ public class IteratorPrototypeTest extends BaseJavetTest {
             JSObject iteratorResult = iterator.next();
             assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
             String key = iteratorResult.get("value").asString().map(JSString::value).orElseThrow();
-            if ("a".equals(key)) foundA = true;
-            else if ("b".equals(key)) foundB = true;
+            if ("a".equals(key)) { foundA = true; }
+            else if ("b".equals(key)) { foundB = true; }
         }
         assertThat(foundA && foundB).isTrue();
 
@@ -344,8 +344,8 @@ public class IteratorPrototypeTest extends BaseJavetTest {
             JSObject iteratorResult = iterator.next();
             assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
             String value = iteratorResult.get("value").asString().map(JSString::value).orElseThrow();
-            if ("one".equals(value)) foundOne = true;
-            else if ("two".equals(value)) foundTwo = true;
+            if ("one".equals(value)) { foundOne = true; }
+            else if ("two".equals(value)) { foundTwo = true; }
         }
         assertThat(foundOne && foundTwo).isTrue();
 
@@ -475,8 +475,8 @@ public class IteratorPrototypeTest extends BaseJavetTest {
             assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
             JSValue value = iteratorResult.get("value");
             if (value instanceof JSString str) {
-                if ("a".equals(str.value())) foundA = true;
-                else if ("b".equals(str.value())) foundB = true;
+                if ("a".equals(str.value())) { foundA = true; }
+                else if ("b".equals(str.value())) { foundB = true; }
             } else if (value instanceof JSNumber num && num.value() == 3.0) {
                 found3 = true;
             }

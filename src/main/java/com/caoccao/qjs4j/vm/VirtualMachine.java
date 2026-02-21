@@ -970,7 +970,7 @@ public final class VirtualMachine {
                         int addLocIdx = ins[pc + 1] & 0xFF;
                         JSValue addRight = (JSValue) stack[--sp];
                         JSValue addLeft = locals[addLocIdx];
-                        if (addLeft == null) addLeft = JSUndefined.INSTANCE;
+                        if (addLeft == null) { addLeft = JSUndefined.INSTANCE; }
                         locals[addLocIdx] = addValues(addLeft, addRight);
                         pc += 2;
                     }

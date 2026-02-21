@@ -570,11 +570,11 @@ public final class JSBytecodeFunction extends JSFunction {
 
         // Otherwise, return a default representation
         StringBuilder sb = new StringBuilder();
-        if (isAsync) sb.append("async ");
+        if (isAsync) { sb.append("async "); }
         sb.append("function");
-        if (isGenerator) sb.append("*");
+        if (isGenerator) { sb.append("*"); }
         sb.append(" ");
-        if (!name.isEmpty()) sb.append(name);
+        if (!name.isEmpty()) { sb.append(name); }
         sb.append("() { [bytecode] }");
         return sb.toString();
     }

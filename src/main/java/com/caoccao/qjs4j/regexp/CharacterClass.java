@@ -260,7 +260,7 @@ public record CharacterClass(boolean inverted, int[] ranges) {
         StringBuilder sb = new StringBuilder();
         sb.append(inverted ? "[^" : "[");
         for (int i = 0; i < ranges.length; i += 2) {
-            if (i > 0) sb.append(", ");
+            if (i > 0) { sb.append(", "); }
             int start = ranges[i];
             int end = ranges[i + 1];
             if (start == end) {

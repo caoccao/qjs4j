@@ -55,8 +55,8 @@ public final class PropertyDescriptor {
             boolean enumerable,
             boolean configurable) {
         PropertyDescriptor desc = new PropertyDescriptor();
-        if (getter != null) desc.setGetter(getter);
-        if (setter != null) desc.setSetter(setter);
+        if (getter != null) { desc.setGetter(getter); }
+        if (setter != null) { desc.setSetter(setter); }
         desc.setEnumerable(enumerable);
         desc.setConfigurable(configurable);
         return desc;
@@ -91,10 +91,10 @@ public final class PropertyDescriptor {
      * Complete this descriptor with default values for accessor.
      */
     public void completeAsAccessor() {
-        if (!hasGetter()) setGetter(null);
-        if (!hasSetter()) setSetter(null);
-        if (!hasEnumerable()) setEnumerable(false);
-        if (!hasConfigurable()) setConfigurable(false);
+        if (!hasGetter()) { setGetter(null); }
+        if (!hasSetter()) { setSetter(null); }
+        if (!hasEnumerable()) { setEnumerable(false); }
+        if (!hasConfigurable()) { setConfigurable(false); }
     }
 
     /**
@@ -102,10 +102,10 @@ public final class PropertyDescriptor {
      * Used when defining a new property.
      */
     public void completeAsData() {
-        if (!hasValue()) setValue(JSUndefined.INSTANCE);
-        if (!hasWritable()) setWritable(false);
-        if (!hasEnumerable()) setEnumerable(false);
-        if (!hasConfigurable()) setConfigurable(false);
+        if (!hasValue()) { setValue(JSUndefined.INSTANCE); }
+        if (!hasWritable()) { setWritable(false); }
+        if (!hasEnumerable()) { setEnumerable(false); }
+        if (!hasConfigurable()) { setConfigurable(false); }
     }
 
     public JSFunction getGetter() {
@@ -210,12 +210,12 @@ public final class PropertyDescriptor {
             getter = null;
             setter = null;
         }
-        if (other.hasValue()) setValue(other.getValue());
-        if (other.hasWritable()) setWritable(other.isWritable());
-        if (other.hasEnumerable()) setEnumerable(other.isEnumerable());
-        if (other.hasConfigurable()) setConfigurable(other.isConfigurable());
-        if (other.hasGetter()) setGetter(other.getGetter());
-        if (other.hasSetter()) setSetter(other.getSetter());
+        if (other.hasValue()) { setValue(other.getValue()); }
+        if (other.hasWritable()) { setWritable(other.isWritable()); }
+        if (other.hasEnumerable()) { setEnumerable(other.isEnumerable()); }
+        if (other.hasConfigurable()) { setConfigurable(other.isConfigurable()); }
+        if (other.hasGetter()) { setGetter(other.getGetter()); }
+        if (other.hasSetter()) { setSetter(other.getSetter()); }
     }
 
     // Type checks
@@ -265,13 +265,13 @@ public final class PropertyDescriptor {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("PropertyDescriptor{");
-        if (hasValue()) sb.append("value=").append(value).append(", ");
-        if (hasWritable()) sb.append("writable=").append(isWritable()).append(", ");
-        if (hasEnumerable()) sb.append("enumerable=").append(isEnumerable()).append(", ");
-        if (hasConfigurable()) sb.append("configurable=").append(isConfigurable()).append(", ");
-        if (hasGetter()) sb.append("get=").append(getter != null ? "function" : "undefined").append(", ");
-        if (hasSetter()) sb.append("set=").append(setter != null ? "function" : "undefined").append(", ");
-        if (sb.length() > 19) sb.setLength(sb.length() - 2); // Remove trailing ", "
+        if (hasValue()) { sb.append("value=").append(value).append(", "); }
+        if (hasWritable()) { sb.append("writable=").append(isWritable()).append(", "); }
+        if (hasEnumerable()) { sb.append("enumerable=").append(isEnumerable()).append(", "); }
+        if (hasConfigurable()) { sb.append("configurable=").append(isConfigurable()).append(", "); }
+        if (hasGetter()) { sb.append("get=").append(getter != null ? "function" : "undefined").append(", "); }
+        if (hasSetter()) { sb.append("set=").append(setter != null ? "function" : "undefined").append(", "); }
+        if (sb.length() > 19) { sb.setLength(sb.length() - 2); } // Remove trailing ", "
         sb.append("}");
         return sb.toString();
     }

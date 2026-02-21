@@ -237,8 +237,8 @@ public final class Float16 {
      * than {@code y}
      */
     public static int compare(short x, short y) {
-        if (less(x, y)) return -1;
-        if (greater(x, y)) return 1;
+        if (less(x, y)) { return -1; }
+        if (greater(x, y)) { return 1; }
         // Collapse NaNs, akin to halfToIntBits(), but we want to keep
         // (signed) short value types to preserve the ordering of -0.0
         // and +0.0
@@ -257,8 +257,8 @@ public final class Float16 {
      * @return True if x is equal to y, false otherwise
      */
     public static boolean equals(short x, short y) {
-        if (isNaN(x)) return false;
-        if (isNaN(y)) return false;
+        if (isNaN(x)) { return false; }
+        if (isNaN(y)) { return false; }
         return x == y || ((x | y) & EXPONENT_SIGNIFICAND_MASK) == 0;
     }
 
@@ -309,8 +309,8 @@ public final class Float16 {
      * @return True if x is greater than y, false otherwise
      */
     public static boolean greater(short x, short y) {
-        if (isNaN(x)) return false;
-        if (isNaN(y)) return false;
+        if (isNaN(x)) { return false; }
+        if (isNaN(y)) { return false; }
         return ((x & SIGN_MASK) != 0 ? 0x8000 - (x & 0xffff) : x & 0xffff) >
                 ((y & SIGN_MASK) != 0 ? 0x8000 - (y & 0xffff) : y & 0xffff);
     }
@@ -325,8 +325,8 @@ public final class Float16 {
      * @return True if x is greater than y, false otherwise
      */
     public static boolean greaterEquals(short x, short y) {
-        if (isNaN(x)) return false;
-        if (isNaN(y)) return false;
+        if (isNaN(x)) { return false; }
+        if (isNaN(y)) { return false; }
         return ((x & SIGN_MASK) != 0 ? 0x8000 - (x & 0xffff) : x & 0xffff) >=
                 ((y & SIGN_MASK) != 0 ? 0x8000 - (y & 0xffff) : y & 0xffff);
     }
@@ -378,8 +378,8 @@ public final class Float16 {
      * @return True if x is less than y, false otherwise
      */
     public static boolean less(short x, short y) {
-        if (isNaN(x)) return false;
-        if (isNaN(y)) return false;
+        if (isNaN(x)) { return false; }
+        if (isNaN(y)) { return false; }
         return ((x & SIGN_MASK) != 0 ? 0x8000 - (x & 0xffff) : x & 0xffff) <
                 ((y & SIGN_MASK) != 0 ? 0x8000 - (y & 0xffff) : y & 0xffff);
     }
@@ -394,8 +394,8 @@ public final class Float16 {
      * @return True if x is less than or equal to y, false otherwise
      */
     public static boolean lessEquals(short x, short y) {
-        if (isNaN(x)) return false;
-        if (isNaN(y)) return false;
+        if (isNaN(x)) { return false; }
+        if (isNaN(y)) { return false; }
         return ((x & SIGN_MASK) != 0 ? 0x8000 - (x & 0xffff) : x & 0xffff) <=
                 ((y & SIGN_MASK) != 0 ? 0x8000 - (y & 0xffff) : y & 0xffff);
     }
@@ -413,8 +413,8 @@ public final class Float16 {
      * @return The larger of the two specified half-precision values
      */
     public static short max(short x, short y) {
-        if (isNaN(x)) return NaN;
-        if (isNaN(y)) return NaN;
+        if (isNaN(x)) { return NaN; }
+        if (isNaN(y)) { return NaN; }
         if ((x & EXPONENT_SIGNIFICAND_MASK) == 0 && (y & EXPONENT_SIGNIFICAND_MASK) == 0) {
             return (x & SIGN_MASK) != 0 ? y : x;
         }
@@ -435,8 +435,8 @@ public final class Float16 {
      * @return The smaller of the two specified half-precision values
      */
     public static short min(short x, short y) {
-        if (isNaN(x)) return NaN;
-        if (isNaN(y)) return NaN;
+        if (isNaN(x)) { return NaN; }
+        if (isNaN(y)) { return NaN; }
         if ((x & EXPONENT_SIGNIFICAND_MASK) == 0 && (y & EXPONENT_SIGNIFICAND_MASK) == 0) {
             return (x & SIGN_MASK) != 0 ? x : y;
         }
@@ -672,13 +672,13 @@ public final class Float16 {
         int m = (bits) & SIGNIFICAND_MASK;
         if (e == 0x1f) { // Infinite or NaN
             if (m == 0) {
-                if (s != 0) o.append('-');
+                if (s != 0) { o.append('-'); }
                 o.append("Infinity");
             } else {
                 o.append("NaN");
             }
         } else {
-            if (s == 1) o.append('-');
+            if (s == 1) { o.append('-'); }
             if (e == 0) {
                 if (m == 0) {
                     o.append("0x0.0p0");

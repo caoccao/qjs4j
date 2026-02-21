@@ -247,7 +247,7 @@ public final class JSShape {
         boolean first = true;
         for (int i = 0; i < propertyCount; i++) {
             if (propertyKeys[i] != null) {
-                if (!first) sb.append(", ");
+                if (!first) { sb.append(", "); }
                 sb.append(propertyKeys[i].toPropertyString());
                 first = false;
             }

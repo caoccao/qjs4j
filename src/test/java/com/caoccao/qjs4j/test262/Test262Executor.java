@@ -242,12 +242,12 @@ public class Test262Executor {
             // Try to extract error type from message
             String message = jsException.getMessage();
             if (message != null) {
-                if (message.contains("SyntaxError")) return "SyntaxError";
-                if (message.contains("ReferenceError")) return "ReferenceError";
-                if (message.contains("TypeError")) return "TypeError";
-                if (message.contains("RangeError")) return "RangeError";
-                if (message.contains("EvalError")) return "EvalError";
-                if (message.contains("URIError")) return "URIError";
+                if (message.contains("SyntaxError")) { return "SyntaxError"; }
+                if (message.contains("ReferenceError")) { return "ReferenceError"; }
+                if (message.contains("TypeError")) { return "TypeError"; }
+                if (message.contains("RangeError")) { return "RangeError"; }
+                if (message.contains("EvalError")) { return "EvalError"; }
+                if (message.contains("URIError")) { return "URIError"; }
             }
         }
 

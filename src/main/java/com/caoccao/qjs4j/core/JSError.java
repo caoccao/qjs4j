@@ -145,7 +145,7 @@ public sealed class JSError extends JSObject permits
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
+        if (o == null || getClass() != o.getClass()) { return false; }
         JSError jsError = (JSError) o;
         return Objects.equals(getName(), jsError.getName()) &&
                 Objects.equals(getMessage(), jsError.getMessage());

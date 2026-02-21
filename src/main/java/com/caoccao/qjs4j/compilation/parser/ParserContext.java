@@ -298,9 +298,9 @@ final class ParserContext {
             advance(); // consume '('
             int depth = 1;
             while (depth > 0 && !match(TokenType.EOF)) {
-                if (match(TokenType.LPAREN)) depth++;
-                else if (match(TokenType.RPAREN)) depth--;
-                if (depth > 0) advance();
+                if (match(TokenType.LPAREN)) { depth++; }
+                else if (match(TokenType.RPAREN)) { depth--; }
+                if (depth > 0) { advance(); }
             }
             if (depth == 0) {
                 advance(); // consume closing ')'

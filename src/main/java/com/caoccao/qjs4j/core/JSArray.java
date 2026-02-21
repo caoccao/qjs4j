@@ -852,7 +852,7 @@ public final class JSArray extends JSObject {
      * Shift elements left (for shift/splice operations).
      */
     private void shiftElementsLeft(int start, int count) {
-        if (count <= 0) return;
+        if (count <= 0) { return; }
 
         // Shift dense elements
         int denseEnd = (int) Math.min(length, denseArray.length);
@@ -1000,7 +1000,7 @@ public final class JSArray extends JSObject {
         StringBuilder sb = new StringBuilder("[");
         long maxDisplay = Math.min(length, 100);
         for (long i = 0; i < maxDisplay; i++) {
-            if (i > 0) sb.append(", ");
+            if (i > 0) { sb.append(", "); }
             JSValue val = get(i);
             if (val instanceof JSString s) {
                 sb.append('"').append(s.value()).append('"');

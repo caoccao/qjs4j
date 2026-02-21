@@ -139,7 +139,7 @@ public final class JSTypeChecking {
         } else // Other function types default to constructor-capable.
             if (value instanceof JSClass) {
                 return true;
-            } else return value instanceof JSFunction;
+            } else { return value instanceof JSFunction; }
     }
 
     /**

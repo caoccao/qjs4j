@@ -97,7 +97,7 @@ final class CompilerContext {
                         }
                     }
                 }
-                if (hasVarArguments) break;
+                if (hasVarArguments) { break; }
             }
             if (!hasVarArguments) {
                 paramNames.add("arguments");
@@ -173,13 +173,13 @@ final class CompilerContext {
             return containsVarArgumentsDeclaration(block.body());
         }
         if (stmt instanceof IfStatement ifStmt) {
-            if (statementContainsVarArguments(ifStmt.consequent())) return true;
-            if (ifStmt.alternate() != null) return statementContainsVarArguments(ifStmt.alternate());
+            if (statementContainsVarArguments(ifStmt.consequent())) { return true; }
+            if (ifStmt.alternate() != null) { return statementContainsVarArguments(ifStmt.alternate()); }
         }
         if (stmt instanceof ForStatement forStmt) {
             if (forStmt.init() instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
                 for (var d : varDecl.declarations()) {
-                    if (d.id() instanceof Identifier id && "arguments".equals(id.name())) return true;
+                    if (d.id() instanceof Identifier id && "arguments".equals(id.name())) { return true; }
                 }
             }
             return statementContainsVarArguments(forStmt.body());
@@ -195,16 +195,16 @@ final class CompilerContext {
         }
         if (stmt instanceof SwitchStatement switchStmt) {
             for (var c : switchStmt.cases()) {
-                if (containsVarArgumentsDeclaration(c.consequent())) return true;
+                if (containsVarArgumentsDeclaration(c.consequent())) { return true; }
             }
         }
         if (stmt instanceof TryStatement tryStmt) {
-            if (containsVarArgumentsDeclaration(tryStmt.block().body())) return true;
+            if (containsVarArgumentsDeclaration(tryStmt.block().body())) { return true; }
             if (tryStmt.handler() != null) {
-                if (containsVarArgumentsDeclaration(tryStmt.handler().body().body())) return true;
+                if (containsVarArgumentsDeclaration(tryStmt.handler().body().body())) { return true; }
             }
             if (tryStmt.finalizer() != null) {
-                if (containsVarArgumentsDeclaration(tryStmt.finalizer().body())) return true;
+                if (containsVarArgumentsDeclaration(tryStmt.finalizer().body())) { return true; }
             }
         }
         if (stmt instanceof LabeledStatement labeledStmt) {
@@ -310,7 +310,7 @@ final class CompilerContext {
 
     boolean hasEnclosingBlockScopeLocal(String name) {
         Iterator<CompilerScope> it = scopes.iterator();
-        if (!it.hasNext()) return false;
+        if (!it.hasNext()) { return false; }
         it.next(); // skip current scope (innermost)
         while (it.hasNext()) {
             CompilerScope scope = it.next();

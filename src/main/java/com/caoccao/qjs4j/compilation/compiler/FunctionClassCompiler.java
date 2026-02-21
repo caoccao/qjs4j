@@ -774,16 +774,16 @@ final class FunctionClassCompiler {
         // If extraction failed, build a simplified representation
         if (functionSource == null || functionSource.isEmpty()) {
             StringBuilder funcSource = new StringBuilder();
-            if (funcDecl.isAsync()) funcSource.append("async ");
+            if (funcDecl.isAsync()) { funcSource.append("async "); }
             funcSource.append("function");
-            if (funcDecl.isGenerator()) funcSource.append("*");
+            if (funcDecl.isGenerator()) { funcSource.append("*"); }
             funcSource.append(" ").append(functionName).append("(");
             for (int i = 0; i < funcDecl.params().size(); i++) {
-                if (i > 0) funcSource.append(", ");
+                if (i > 0) { funcSource.append(", "); }
                 funcSource.append(funcDecl.params().get(i).name());
             }
             if (funcDecl.restParameter() != null) {
-                if (!funcDecl.params().isEmpty()) funcSource.append(", ");
+                if (!funcDecl.params().isEmpty()) { funcSource.append(", "); }
                 funcSource.append("...").append(funcDecl.restParameter().argument().name());
             }
             funcSource.append(") { [function body] }");
