@@ -64,8 +64,9 @@ public final class JSStringObject extends JSObject {
         super();
         this.value = value;
         this.setPrimitiveValue(value);
-        // String objects have a length property
-        this.set("length", JSNumber.of(value.value().length()));
+        // String objects have a non-writable, non-enumerable, non-configurable length property
+        defineProperty(PropertyKey.fromString("length"),
+                PropertyDescriptor.dataDescriptor(JSNumber.of(value.value().length()), false, false, false));
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
