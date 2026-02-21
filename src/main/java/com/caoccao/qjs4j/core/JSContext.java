@@ -241,7 +241,11 @@ public final class JSContext implements AutoCloseable {
             return null;
         }
         if (isArr == 0) {
-            return createJSArray((int) Math.min(length, Integer.MAX_VALUE));
+            // ArrayCreate(length): throw RangeError if length > 2^32 - 1
+            if (length > 0xFFFFFFFFL) {
+                return throwRangeError("Invalid array length");
+            }
+            return createJSArray(length, 0);
         }
 
         // Step 4: Let C be ? Get(originalArray, "constructor")
@@ -269,7 +273,11 @@ public final class JSContext implements AutoCloseable {
 
         // Step 7: If C is undefined, return ArrayCreate(length)
         if (ctor instanceof JSUndefined) {
-            return createJSArray((int) Math.min(length, Integer.MAX_VALUE));
+            // ArrayCreate(length): throw RangeError if length > 2^32 - 1
+            if (length > 0xFFFFFFFFL) {
+                return throwRangeError("Invalid array length");
+            }
+            return createJSArray(length, 0);
         }
 
         // Step 8: If IsConstructor(C) is false, throw a TypeError exception
