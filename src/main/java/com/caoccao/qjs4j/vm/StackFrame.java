@@ -176,20 +176,22 @@ public final class StackFrame {
 
     /**
      * Get a closure variable by index.
-     * Checks closed VarRefs (from CLOSE_LOC), then VarRefs (from FCLOSURE),
+     * Checks VarRefs (from FCLOSURE) first, then closed VarRefs (from CLOSE_LOC),
      * then falls back to direct JSValue access (class methods, legacy).
+     * VarRefs must be checked before closedVarRefs because they use different
+     * index spaces (VarRef indices vs local indices) that can collide.
      */
     public JSValue getVarRef(int index) {
+        // Use VarRef if available (reference-based capture from FCLOSURE)
+        if (index >= 0 && index < varRefs.length) {
+            return varRefs[index].get();
+        }
         // Check closed VarRefs (from CLOSE_LOC — promotes local to var ref space)
         if (closedVarRefs != null && index >= 0 && index < closedVarRefs.length) {
             VarRef ref = closedVarRefs[index];
             if (ref != null) {
                 return ref.get();
             }
-        }
-        // Use VarRef if available (reference-based capture from FCLOSURE)
-        if (index >= 0 && index < varRefs.length) {
-            return varRefs[index].get();
         }
         // Fall back to direct JSValue access (class methods, legacy)
         if (index >= 0 && index < closureVars.length) {
@@ -228,9 +230,16 @@ public final class StackFrame {
 
     /**
      * Set a closure variable by index.
-     * Checks closed VarRefs, then VarRefs, then falls back to direct access.
+     * Checks VarRefs first, then closed VarRefs, then falls back to direct access.
+     * VarRefs must be checked before closedVarRefs because they use different
+     * index spaces (VarRef indices vs local indices) that can collide.
      */
     public void setVarRef(int index, JSValue value) {
+        // Use VarRef if available (reference-based capture)
+        if (index >= 0 && index < varRefs.length) {
+            varRefs[index].set(value);
+            return;
+        }
         // Check closed VarRefs (from CLOSE_LOC)
         if (closedVarRefs != null && index >= 0 && index < closedVarRefs.length) {
             VarRef ref = closedVarRefs[index];
@@ -238,11 +247,6 @@ public final class StackFrame {
                 ref.set(value);
                 return;
             }
-        }
-        // Use VarRef if available (reference-based capture)
-        if (index >= 0 && index < varRefs.length) {
-            varRefs[index].set(value);
-            return;
         }
         // Fall back to direct JSValue access (class methods, legacy)
         if (index >= 0 && index < closureVars.length) {
