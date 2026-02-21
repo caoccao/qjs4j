@@ -922,6 +922,9 @@ public final class ArrayPrototype {
      * Joins all elements of an array into a string.
      */
     public static JSValue join(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
+            return context.throwTypeError("Array.prototype.join called on null or undefined");
+        }
         StringBuilder result = new StringBuilder();
         if (thisArg instanceof JSArray jsArray) {
             String separator = args.length > 0 && !(args[0] instanceof JSUndefined) ?
