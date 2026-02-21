@@ -54,4 +54,70 @@ public class JSObjectSemanticsTest extends BaseJavetTest {
                 "(() => { const target = {}; Object.defineProperty(target, 'x', { value: 1, writable: true }); const receiver = {}; Reflect.set(target, 'x', 7, receiver); return String(target.x) + ',' + String(receiver.x) + ',' + String(receiver.hasOwnProperty('x')); })()"
         );
     }
+
+    @Test
+    public void testSetOnReceiverProxyTrapOrdering() {
+        // Reflect.set with a proxy receiver must invoke GetOwnPropertyDescriptor
+        // and DefineProperty traps on the receiver in the correct order.
+        assertStringWithJavet(
+                "(() => { var traps = []; var target = { x: 1 }; var receiver = new Proxy({}, { getOwnPropertyDescriptor(t, p) { traps.push('getOwnPropertyDescriptor:' + p); return undefined; }, defineProperty(t, p, d) { traps.push('defineProperty:' + p); return true; }, isExtensible(t) { traps.push('isExtensible'); return true; } }); Reflect.set(target, 'x', 42, receiver); return traps.join(','); })()"
+        );
+    }
+
+    @Test
+    public void testSetOnReceiverProxyExistingProperty() {
+        // When proxy receiver reports an existing writable data property,
+        // setOnReceiver should call DefineProperty with only {value: V}.
+        assertStringWithJavet(
+                "(() => { var traps = []; var target = { x: 1 }; var receiver = new Proxy({ x: 10 }, { getOwnPropertyDescriptor(t, p) { traps.push('getOwnPropertyDescriptor:' + p); return { value: t[p], writable: true, enumerable: true, configurable: true }; }, defineProperty(t, p, d) { traps.push('defineProperty:' + p + ':' + JSON.stringify(d)); t[p] = d.value; return true; } }); Reflect.set(target, 'x', 42, receiver); return traps.join(','); })()"
+        );
+    }
+
+    @Test
+    public void testSetOnReceiverNonWritableProperty() {
+        // Reflect.set returns false when receiver has a non-writable own property.
+        assertBooleanWithJavet(
+                "(() => { var target = { x: 1 }; var receiver = {}; Object.defineProperty(receiver, 'x', { value: 10, writable: false, configurable: true }); return Reflect.set(target, 'x', 42, receiver) === false; })()"
+        );
+    }
+
+    @Test
+    public void testSetOnReceiverAccessorProperty() {
+        // Reflect.set returns false when receiver has an accessor own property (no setter path through setOnReceiver).
+        assertBooleanWithJavet(
+                "(() => { var target = { x: 1 }; var receiver = {}; Object.defineProperty(receiver, 'x', { get: function() { return 10; }, configurable: true }); return Reflect.set(target, 'x', 42, receiver) === false; })()"
+        );
+    }
+
+    @Test
+    public void testSetOnReceiverNonExtensible() {
+        // Reflect.set returns false when receiver is non-extensible and property doesn't exist.
+        assertBooleanWithJavet(
+                "(() => { var target = { x: 1 }; var receiver = Object.preventExtensions({}); return Reflect.set(target, 'x', 42, receiver) === false; })()"
+        );
+    }
+
+    @Test
+    public void testSetOnNonExtensibleStrictMode() {
+        // Strict mode assignment on non-extensible object throws TypeError.
+        assertErrorWithJavet(
+                "'use strict'; var o = Object.preventExtensions({}); o.x = 1"
+        );
+    }
+
+    @Test
+    public void testSetOnSealedObjectStrictMode() {
+        // Strict mode assignment of new property on sealed object throws TypeError.
+        assertErrorWithJavet(
+                "'use strict'; var o = Object.seal({}); o.x = 1"
+        );
+    }
+
+    @Test
+    public void testSetOnFrozenObjectStrictMode() {
+        // Strict mode assignment on frozen object throws TypeError for existing property.
+        assertErrorWithJavet(
+                "'use strict'; var o = Object.freeze({ x: 1 }); o.x = 2"
+        );
+    }
 }

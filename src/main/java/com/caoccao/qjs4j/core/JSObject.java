@@ -1033,34 +1033,47 @@ public non-sealed class JSObject implements JSValue {
     }
 
     private boolean setOnReceiver(PropertyKey key, JSValue value, JSContext context, JSObject receiver, boolean throwOnFailure) {
-        PropertyKey receiverShapeKey = receiver.getOwnShapeKey(key);
-        if (receiverShapeKey != null) {
-            int receiverOffset = receiver.shape.getPropertyOffset(receiverShapeKey);
-            PropertyDescriptor receiverDescriptor = receiver.shape.getDescriptorAt(receiverOffset);
-            if (receiverDescriptor != null && receiverDescriptor.isAccessorDescriptor()) {
-                JSFunction receiverSetter = receiverDescriptor.getSetter();
-                if (receiverSetter != null && context != null) {
-                    receiverSetter.call(context, receiver, new JSValue[]{value});
-                    return !context.hasPendingException();
-                }
-                return failSet(key, context, throwOnFailure);
-            }
-            if (receiverDescriptor == null || !receiverDescriptor.isWritable() || receiver.frozen) {
-                return failSet(key, context, throwOnFailure);
-            }
-            receiver.propertyValues[receiverOffset] = value;
-            return true;
+        // ES2024 OrdinarySetWithOwnDescriptor steps 2c-2e:
+        // Use the virtual [[GetOwnPropertyDescriptor]] and [[DefineOwnProperty]]
+        // methods on the receiver so that proxy traps are correctly invoked when
+        // the receiver is a Proxy object.
+
+        // Step 2c: Let existingDescriptor be ? Receiver.[[GetOwnPropertyDescriptor]](P).
+        PropertyDescriptor existingDescriptor = receiver.getOwnPropertyDescriptor(key);
+        if (context != null && context.hasPendingException()) {
+            return false;
         }
 
+        if (existingDescriptor != null) {
+            // Step 2d.i: If IsAccessorDescriptor(existingDescriptor), return false.
+            if (existingDescriptor.isAccessorDescriptor()) {
+                return failSet(key, context, throwOnFailure);
+            }
+            // Step 2d.ii: If existingDescriptor.[[Writable]] is false, return false.
+            if (!existingDescriptor.isWritable()) {
+                return failSet(key, context, throwOnFailure);
+            }
+            // Step 2d.iii-iv: Let valueDesc be { [[Value]]: V }.
+            // Return ? Receiver.[[DefineOwnProperty]](P, valueDesc).
+            PropertyDescriptor valueDescriptor = new PropertyDescriptor();
+            valueDescriptor.setValue(value);
+            return receiver.defineOwnProperty(key, valueDescriptor, context);
+        }
+
+        // Step 2e: CreateDataProperty(Receiver, P, V).
+        // Check the extensible field directly rather than calling the virtual
+        // isExtensible() method, because for Proxy receivers that would
+        // trigger an isExtensible trap not required by the spec here.
+        // For normal objects the field is authoritative; for proxies the
+        // wrapper field is always true so the defineOwnProperty trap handles
+        // extensibility validation instead.
         if (!receiver.extensible) {
             if (throwOnFailure && context != null && context.isStrictMode()) {
                 context.throwTypeError("Cannot add property " + key.toPropertyString() + ", object is not extensible");
             }
             return false;
         }
-
-        receiver.defineProperty(key, PropertyDescriptor.defaultData(value));
-        return true;
+        return receiver.definePropertyWritableEnumerableConfigurable(key, value);
     }
 
     /**
