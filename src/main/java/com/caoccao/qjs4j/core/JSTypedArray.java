@@ -736,6 +736,16 @@ public abstract class JSTypedArray extends JSObject {
     }
 
     /**
+     * Override 3-arg setWithResult to route through the JSValue receiver version,
+     * ensuring TypedArray's canonical numeric index handling is used when called
+     * by generic Array.prototype methods (e.g., copyWithin, fill).
+     */
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value, JSContext context) {
+        return setWithResult(key, value, context, (JSValue) this);
+    }
+
+    /**
      * TypedArray [[Set]](P, V, Receiver) - ES spec 10.4.5.5
      * Handles the case where Receiver may be any ECMAScript value (not just an object).
      * Following QuickJS JS_SetPropertyInternal typed_array_oob handling.

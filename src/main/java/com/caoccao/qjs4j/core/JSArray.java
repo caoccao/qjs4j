@@ -224,7 +224,37 @@ public final class JSArray extends JSObject {
         long index = getArrayIndex(key);
         if (index >= 0 && index <= Integer.MAX_VALUE) {
             int intIndex = (int) index;
-            // Clear dense array entry so shape-based property takes precedence
+            // For default data descriptors (writable, enumerable, configurable),
+            // store in array storage (denseArray/sparseProperties) rather than shape.
+            // This is the path taken by setOnReceiver when creating a new array element
+            // via the prototype chain [[Set]] algorithm.
+            // Non-default descriptors (from Object.defineProperty with specific attributes)
+            // go through shape storage.
+            if (descriptor.isDataDescriptor() && !descriptor.isAccessorDescriptor()
+                    && descriptor.isWritable() && descriptor.isEnumerable() && descriptor.isConfigurable()) {
+                // Extend length if necessary
+                if (index >= length) {
+                    if (isLengthWritable()) {
+                        setLength(index + 1);
+                    } else {
+                        // Can't extend length, fall through to shape-based storage
+                        super.defineProperty(key, descriptor);
+                        return;
+                    }
+                }
+                // Store in array storage
+                if (intIndex < MAX_DENSE_SIZE) {
+                    ensureDenseCapacity(intIndex + 1);
+                    denseArray[intIndex] = descriptor.getValue();
+                } else {
+                    if (sparseProperties == null) {
+                        sparseProperties = new HashMap<>();
+                    }
+                    sparseProperties.put(intIndex, descriptor.getValue());
+                }
+                return;
+            }
+            // Non-default descriptor: clear dense array entry so shape-based property takes precedence
             if (intIndex < denseArray.length) {
                 denseArray[intIndex] = null;
             }
@@ -785,7 +815,7 @@ public final class JSArray extends JSObject {
     public boolean setWithResult(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
         long index = getArrayIndex(key);
         if (index >= 0 || !(key.isString() && "length".equals(key.asString()))) {
-            // Non-length keys: delegate to JSObject
+            // Non-length keys: delegate to JSObject which handles prototype chain
             return super.setWithResult(key, value, context, receiver);
         }
         // Per ES spec ArraySetLength / QuickJS set_array_length:
