@@ -1830,10 +1830,10 @@ public final class VirtualMachine {
                         pc += op.getSize();
                     }
                     case PUT_ARRAY_EL -> {
-                        // Stack layout: [value, object, property] (property on top)
+                        // Stack layout: [object, property, value] (value on top, matching QuickJS)
+                        JSValue putElValue = (JSValue) stack[--sp];   // Pop value
                         JSValue putElIndex = (JSValue) stack[--sp];   // Pop property
                         JSValue putElObj = (JSValue) stack[--sp];     // Pop object
-                        JSValue putElValue = (JSValue) stack[--sp];   // Pop value
                         if (putElObj instanceof JSObject jsObj) {
                             try {
                                 PropertyKey key = PropertyKey.fromValue(context, putElIndex);

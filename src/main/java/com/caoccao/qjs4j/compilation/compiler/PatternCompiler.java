@@ -102,7 +102,8 @@ final class PatternCompiler {
                 // Stack: [value, obj]
                 if (memberExpr.computed()) {
                     delegates.expressions.compileExpression(memberExpr.property());
-                    // Stack: [value, obj, prop]
+                    // Stack: [value, obj, prop] → ROT3L → [obj, prop, value]
+                    ctx.emitter.emitOpcode(Opcode.ROT3L);
                     ctx.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                 } else if (memberExpr.property() instanceof Identifier propId) {
                     ctx.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());

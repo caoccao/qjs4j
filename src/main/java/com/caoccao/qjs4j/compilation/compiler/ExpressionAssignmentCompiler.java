@@ -145,6 +145,8 @@ final class ExpressionAssignmentCompiler {
                     owner.compileExpression(memberExpr.object());
                     if (memberExpr.computed()) {
                         owner.compileExpression(memberExpr.property());
+                        // Stack: [value, obj, prop] → ROT3L → [obj, prop, value]
+                        ctx.emitter.emitOpcode(Opcode.ROT3L);
                         ctx.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                     } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
                         String fieldName = privateId.name();
@@ -166,6 +168,7 @@ final class ExpressionAssignmentCompiler {
                     ctx.emitter.emitOpcode(Opcode.DROP);
                     ctx.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
                 } else if (memberExpr.computed()) {
+                    // Stack: [obj, prop, newValue] — already in QuickJS order
                     ctx.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                 } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
                     String fieldName = privateId.name();
@@ -256,7 +259,9 @@ final class ExpressionAssignmentCompiler {
             case 0 -> {
             }
             case 1 -> ctx.emitter.emitOpcode(Opcode.SWAP);
-            case 2 -> ctx.emitter.emitOpcode(Opcode.ROT3R);
+            case 2 -> {
+                // Stack: [obj, prop, value] — already in QuickJS order for PUT_ARRAY_EL
+            }
             case 3 -> {
                 ctx.emitter.emitOpcode(Opcode.INSERT4);
                 ctx.emitter.emitOpcode(Opcode.DROP);

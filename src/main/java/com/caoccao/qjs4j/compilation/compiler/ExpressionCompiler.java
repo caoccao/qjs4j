@@ -693,8 +693,7 @@ final class ExpressionCompiler {
                         ctx.emitter.emitOpcode(Opcode.PLUS); // ToNumber conversion
                         ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
                         ctx.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
-                        // Stack: [obj, prop, new_val] -> need [new_val, obj, prop]
-                        ctx.emitter.emitOpcode(Opcode.ROT3R);
+                        // Stack: [obj, prop, new_val] — already in QuickJS order
                         ctx.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                     } else {
                         // Postfix: arr[i]++ - returns old value (must be ToNumber'd per ES spec)
@@ -704,8 +703,8 @@ final class ExpressionCompiler {
                         ctx.emitter.emitOpcode(Opcode.DUP); // obj prop old_numeric old_numeric
                         ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
                         ctx.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj prop old_val new_val
-                        // SWAP2 to rearrange: [obj, prop, old_val, new_val] -> [old_val, new_val, obj, prop]
-                        ctx.emitter.emitOpcode(Opcode.SWAP2); // old_val new_val obj prop
+                        // PERM4 to rearrange: [obj, prop, old_val, new_val] -> [old_val, obj, prop, new_val]
+                        ctx.emitter.emitOpcode(Opcode.PERM4); // old_val obj prop new_val
                         ctx.emitter.emitOpcode(Opcode.PUT_ARRAY_EL); // old_val new_val
                         ctx.emitter.emitOpcode(Opcode.DROP); // old_val
                     }
