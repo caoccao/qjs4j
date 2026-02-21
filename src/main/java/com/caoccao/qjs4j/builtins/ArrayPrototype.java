@@ -397,39 +397,49 @@ public final class ArrayPrototype {
      * Fills all the elements of an array from a start index to an end index with a static value.
      */
     public static JSValue fill(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArray arr)) {
-            return context.throwTypeError("Array.prototype.fill called on non-array");
-        }
+        // Step 1: Let O be ? ToObject(this value).
+        JSObject obj = toObjectChecked(context, thisArg);
+        if (obj == null) return context.getPendingException();
 
-        long length = arr.getLength();
-        if (length == 0) {
-            return arr;
-        }
+        // Step 2: Let len be ? LengthOfArrayLike(O).
+        long length = lengthOfArrayLike(context, obj);
+        if (context.hasPendingException()) return context.getPendingException();
 
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
-        // Get start position
-        long start = args.length > 1 ? (long) JSTypeConversions.toInteger(context, args[1]) : 0;
+        // Step 4: Let relativeStart be ? ToIntegerOrInfinity(start).
+        long start = 0;
+        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+            start = (long) JSTypeConversions.toInteger(context, args[1]);
+            if (context.hasPendingException()) return context.getPendingException();
+        }
         if (start < 0) {
             start = Math.max(length + start, 0);
         } else {
             start = Math.min(start, length);
         }
 
-        // Get end position
-        long end = args.length > 2 ? (long) JSTypeConversions.toInteger(context, args[2]) : length;
+        // Step 6: Let relativeEnd be ? ToIntegerOrInfinity(end).
+        long end = length;
+        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
+            end = (long) JSTypeConversions.toInteger(context, args[2]);
+            if (context.hasPendingException()) return context.getPendingException();
+        }
         if (end < 0) {
             end = Math.max(length + end, 0);
         } else {
             end = Math.min(end, length);
         }
 
-        // Fill the array
+        // Step 8: Repeat, while k < final
         for (long i = start; i < end; i++) {
-            arr.set((int) i, value);
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            obj.set(key, value, context);
+            if (context.hasPendingException()) return context.getPendingException();
         }
 
-        return arr;
+        // Step 9: Return O.
+        return obj;
     }
 
     /**

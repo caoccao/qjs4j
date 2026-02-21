@@ -333,10 +333,27 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         result = ArrayPrototype.fill(context, emptyArr, new JSValue[]{new JSNumber(1)});
         assertThat(result).isSameAs(emptyArr);
 
-        // Edge case: fill on non-array
-        JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.fill(context, nonArray, new JSValue[]{new JSNumber(0)}));
+        // Edge case: fill on null/undefined should throw TypeError
+        assertTypeError(ArrayPrototype.fill(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(0)}));
         assertPendingException(context);
+    }
+
+    @Test
+    public void testFillGeneric() {
+        // fill is generic — works on non-array objects and primitives via ToObject
+        assertStringWithJavet(
+                // fill on boolean primitive returns Boolean wrapper object
+                "(() => (Array.prototype.fill.call(true) instanceof Boolean).toString())()",
+                // fill on an array-like object
+                "(() => { var obj = {0: 'a', 1: 'b', 2: 'c', length: 3}; Array.prototype.fill.call(obj, 'x'); return obj[0] + obj[1] + obj[2]; })()",
+                // fill with start/end on array-like
+                "(() => { var obj = {0: 'a', 1: 'b', 2: 'c', length: 3}; Array.prototype.fill.call(obj, 'x', 1, 2); return obj[0] + obj[1] + obj[2]; })()"
+        );
+        // fill on null/undefined should throw TypeError with matching error message
+        assertErrorWithJavet(
+                "Array.prototype.fill.call(null, 0)",
+                "Array.prototype.fill.call(undefined, 0)"
+        );
     }
 
     @Test
