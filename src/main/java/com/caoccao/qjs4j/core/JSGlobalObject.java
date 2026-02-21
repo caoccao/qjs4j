@@ -1436,9 +1436,11 @@ public final class JSGlobalObject {
                 PropertyDescriptor.accessorDescriptor(toStringTagGetter, toStringTagSetter, false, true));
 
         // Create shared iterator-type-specific prototypes inheriting from Iterator.prototype
+        // Each has its own 'next' (writable, configurable) and Symbol.toStringTag per ES2024 spec
         for (String tag : new String[]{"Array Iterator", "Map Iterator", "Set Iterator", "String Iterator", "Iterator Helper"}) {
             JSObject proto = new JSObject();
             proto.setPrototype(iteratorPrototype);
+            proto.definePropertyWritableConfigurable("next", new JSNativeFunction("next", 0, IteratorPrototype::next));
             proto.defineProperty(
                     PropertyKey.SYMBOL_TO_STRING_TAG,
                     PropertyDescriptor.dataDescriptor(new JSString(tag), false, false, true));
