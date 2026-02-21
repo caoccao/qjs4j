@@ -85,7 +85,7 @@ public abstract class BaseTest {
     }
 
     protected JSContext resetContext() {
-        JSPromiseRejectCallback jsPromiseRejectCallback = context.getPromiseRejectCallback();
+        IJSPromiseRejectCallback jsPromiseRejectCallback = context.getPromiseRejectCallback();
         context.getRuntime().gc();
         context.close();
         context = new JSContext(new JSRuntime());

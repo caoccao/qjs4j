@@ -65,7 +65,7 @@ public final class TypedArrayPrototype {
         if (typedArray == null) {
             return context.getPendingException();
         }
-        JSArrayBufferable buffer = typedArray.getBuffer();
+        IJSArrayBuffer buffer = typedArray.getBuffer();
         if (buffer instanceof JSValue value) {
             return value;
         }

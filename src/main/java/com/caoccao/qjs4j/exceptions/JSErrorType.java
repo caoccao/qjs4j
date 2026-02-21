@@ -30,9 +30,9 @@ public enum JSErrorType {
     URIError(JSURIError::createPrototype),
     ;
 
-    private final JSConstructor prototypeConstructor;
+    private final IJSConstructor prototypeConstructor;
 
-    JSErrorType(JSConstructor prototypeConstructor) {
+    JSErrorType(IJSConstructor prototypeConstructor) {
         this.prototypeConstructor = prototypeConstructor;
     }
 

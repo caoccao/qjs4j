@@ -29,7 +29,7 @@ import java.util.Arrays;
  * An ArrayBuffer is a raw binary data buffer of a fixed length.
  * It cannot be read or written directly - use TypedArrays or DataView.
  */
-public final class JSArrayBuffer extends JSObject implements JSArrayBufferable {
+public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     public static final String NAME = "ArrayBuffer";
     private final ByteBuffer buffer;
     private final int maxByteLength;

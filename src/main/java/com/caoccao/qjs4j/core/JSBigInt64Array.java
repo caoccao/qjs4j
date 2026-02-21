@@ -39,7 +39,7 @@ public final class JSBigInt64Array extends JSTypedArray {
     /**
      * Create a BigInt64Array view on an existing buffer.
      */
-    public JSBigInt64Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSBigInt64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
@@ -52,23 +52,23 @@ public final class JSBigInt64Array extends JSTypedArray {
             }
             if (firstArg instanceof JSNumber lengthNum) {
                 length = toTypedArrayIndex(context, lengthNum, BYTES_PER_ELEMENT);
-            } else if (firstArg instanceof JSArrayBufferable jsArrayBufferable) {
+            } else if (firstArg instanceof IJSArrayBuffer jsArrayBuffer) {
                 int byteOffset = 0;
                 if (args.length >= 2) {
                     byteOffset = toTypedArrayByteOffset(context, args[1]);
                 }
-                validateTypedArrayBufferNotDetached(jsArrayBufferable);
-                if (byteOffset % BYTES_PER_ELEMENT != 0 || byteOffset > jsArrayBufferable.getByteLength()) {
+                validateTypedArrayBufferNotDetached(jsArrayBuffer);
+                if (byteOffset % BYTES_PER_ELEMENT != 0 || byteOffset > jsArrayBuffer.getByteLength()) {
                     throw new JSRangeErrorException("invalid offset");
                 }
                 if (args.length >= 3) {
                     if (!(args[2] instanceof JSUndefined)) {
                         length = toTypedArrayBufferLength(context, args[2], BYTES_PER_ELEMENT);
-                        validateTypedArrayBufferNotDetached(jsArrayBufferable);
-                        return context.createJSBigInt64Array(jsArrayBufferable, byteOffset, length);
+                        validateTypedArrayBufferNotDetached(jsArrayBuffer);
+                        return context.createJSBigInt64Array(jsArrayBuffer, byteOffset, length);
                     }
                 }
-                return context.createJSBigInt64Array(jsArrayBufferable, byteOffset, -1);
+                return context.createJSBigInt64Array(jsArrayBuffer, byteOffset, -1);
             } else if (firstArg instanceof JSTypedArray jsTypedArray) {
                 if (jsTypedArray.isOutOfBounds()) {
                     context.throwTypeError("source TypedArray is out of bounds");

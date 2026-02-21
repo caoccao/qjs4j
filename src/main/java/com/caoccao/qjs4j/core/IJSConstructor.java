@@ -17,6 +17,6 @@
 package com.caoccao.qjs4j.core;
 
 @FunctionalInterface
-public interface JSConstructor {
+public interface IJSConstructor {
     JSObject construct(JSContext context, JSValue... args);
 }

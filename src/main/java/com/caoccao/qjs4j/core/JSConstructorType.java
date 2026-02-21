@@ -65,9 +65,9 @@ public enum JSConstructorType {
     WEAK_SET(JSWeakSet::create),
     ;
 
-    private final JSConstructor constructor;
+    private final IJSConstructor constructor;
 
-    JSConstructorType(JSConstructor constructor) {
+    JSConstructorType(IJSConstructor constructor) {
         this.constructor = constructor;
     }
 

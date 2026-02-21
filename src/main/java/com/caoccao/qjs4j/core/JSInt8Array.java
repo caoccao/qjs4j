@@ -36,7 +36,7 @@ public final class JSInt8Array extends JSTypedArray {
     /**
      * Create an Int8Array view on an existing buffer.
      */
-    public JSInt8Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSInt8Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
@@ -49,16 +49,16 @@ public final class JSInt8Array extends JSTypedArray {
             }
             if (firstArg instanceof JSNumber lengthNum) {
                 length = toTypedArrayIndex(context, lengthNum, BYTES_PER_ELEMENT);
-            } else if (firstArg instanceof JSArrayBufferable jsArrayBufferable) {
+            } else if (firstArg instanceof IJSArrayBuffer jsArrayBuffer) {
                 int byteOffset = 0;
                 if (args.length >= 2) {
                     byteOffset = toTypedArrayByteOffset(context, args[1]);
                 }
                 if (args.length >= 3 && !(args[2] instanceof JSUndefined)) {
                     length = toTypedArrayBufferLength(context, args[2], BYTES_PER_ELEMENT);
-                    return context.createJSInt8Array(jsArrayBufferable, byteOffset, length);
+                    return context.createJSInt8Array(jsArrayBuffer, byteOffset, length);
                 }
-                return context.createJSInt8Array(jsArrayBufferable, byteOffset, -1);
+                return context.createJSInt8Array(jsArrayBuffer, byteOffset, -1);
             } else if (firstArg instanceof JSTypedArray jsTypedArray) {
                 if (jsTypedArray.isOutOfBounds()) {
                     context.throwTypeError("source TypedArray is out of bounds");

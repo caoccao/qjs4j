@@ -3092,7 +3092,7 @@ public final class VirtualMachine {
             // Rejected await operand throws into the current async control flow.
             // Let VM catch handling propagate it to surrounding try/catch.
             JSValue result = promise.getResult();
-            JSPromiseRejectCallback callback = context.getPromiseRejectCallback();
+            IJSPromiseRejectCallback callback = context.getPromiseRejectCallback();
             if (callback != null) {
                 callback.callback(PromiseRejectEvent.PromiseRejectWithNoHandler, promise, result);
             }

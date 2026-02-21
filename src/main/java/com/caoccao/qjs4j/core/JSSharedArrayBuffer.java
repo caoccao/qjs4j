@@ -36,7 +36,7 @@ import java.nio.ByteOrder;
  * - Used with Atomics for thread-safe operations
  * - Direct ByteBuffer for efficient multi-threaded access
  */
-public final class JSSharedArrayBuffer extends JSObject implements JSArrayBufferable {
+public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffer {
     public static final String NAME = "SharedArrayBuffer";
     private final ByteBuffer buffer;
     private final boolean growable;

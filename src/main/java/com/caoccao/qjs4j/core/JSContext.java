@@ -69,7 +69,7 @@ public final class JSContext implements AutoCloseable {
     // Exception state
     private JSValue pendingException;
     // Promise rejection callback
-    private JSPromiseRejectCallback promiseRejectCallback;
+    private IJSPromiseRejectCallback promiseRejectCallback;
     private int stackDepth;
     // Execution state
     private boolean strictMode;
@@ -263,7 +263,7 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSBigInt64Array(length), JSBigInt64Array.NAME);
     }
 
-    public JSBigInt64Array createJSBigInt64Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSBigInt64Array createJSBigInt64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSBigInt64Array(buffer, byteOffset, length), JSBigInt64Array.NAME);
     }
 
@@ -283,7 +283,7 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSBigUint64Array(length), JSBigUint64Array.NAME);
     }
 
-    public JSBigUint64Array createJSBigUint64Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSBigUint64Array createJSBigUint64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSBigUint64Array(buffer, byteOffset, length), JSBigUint64Array.NAME);
     }
 
@@ -341,7 +341,7 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSFloat16Array(length), JSFloat16Array.NAME);
     }
 
-    public JSFloat16Array createJSFloat16Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSFloat16Array createJSFloat16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSFloat16Array(buffer, byteOffset, length), JSFloat16Array.NAME);
     }
 
@@ -355,7 +355,7 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSFloat32Array(length), JSFloat32Array.NAME);
     }
 
-    public JSFloat32Array createJSFloat32Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSFloat32Array createJSFloat32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSFloat32Array(buffer, byteOffset, length), JSFloat32Array.NAME);
     }
 
@@ -369,7 +369,7 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSFloat64Array(length), JSFloat64Array.NAME);
     }
 
-    public JSFloat64Array createJSFloat64Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSFloat64Array createJSFloat64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSFloat64Array(buffer, byteOffset, length), JSFloat64Array.NAME);
     }
 
@@ -383,7 +383,7 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSInt16Array(length), JSInt16Array.NAME);
     }
 
-    public JSInt16Array createJSInt16Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSInt16Array createJSInt16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSInt16Array(buffer, byteOffset, length), JSInt16Array.NAME);
     }
 
@@ -397,7 +397,7 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSInt32Array(length), JSInt32Array.NAME);
     }
 
-    public JSInt32Array createJSInt32Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSInt32Array createJSInt32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSInt32Array(buffer, byteOffset, length), JSInt32Array.NAME);
     }
 
@@ -411,7 +411,7 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSInt8Array(length), JSInt8Array.NAME);
     }
 
-    public JSInt8Array createJSInt8Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSInt8Array createJSInt8Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSInt8Array(buffer, byteOffset, length), JSInt8Array.NAME);
     }
 
@@ -507,7 +507,7 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSUint16Array(length), JSUint16Array.NAME);
     }
 
-    public JSUint16Array createJSUint16Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSUint16Array createJSUint16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSUint16Array(buffer, byteOffset, length), JSUint16Array.NAME);
     }
 
@@ -521,7 +521,7 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSUint32Array(length), JSUint32Array.NAME);
     }
 
-    public JSUint32Array createJSUint32Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSUint32Array createJSUint32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSUint32Array(buffer, byteOffset, length), JSUint32Array.NAME);
     }
 
@@ -535,7 +535,7 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSUint8Array(length), JSUint8Array.NAME);
     }
 
-    public JSUint8Array createJSUint8Array(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSUint8Array createJSUint8Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSUint8Array(buffer, byteOffset, length), JSUint8Array.NAME);
     }
 
@@ -549,7 +549,7 @@ public final class JSContext implements AutoCloseable {
         return initializeTypedArray(new JSUint8ClampedArray(length), JSUint8ClampedArray.NAME);
     }
 
-    public JSUint8ClampedArray createJSUint8ClampedArray(JSArrayBufferable buffer, int byteOffset, int length) {
+    public JSUint8ClampedArray createJSUint8ClampedArray(IJSArrayBuffer buffer, int byteOffset, int length) {
         return initializeTypedArray(new JSUint8ClampedArray(buffer, byteOffset, length), JSUint8ClampedArray.NAME);
     }
 
@@ -888,7 +888,7 @@ public final class JSContext implements AutoCloseable {
         return pendingException;
     }
 
-    public JSPromiseRejectCallback getPromiseRejectCallback() {
+    public IJSPromiseRejectCallback getPromiseRejectCallback() {
         return promiseRejectCallback;
     }
 
@@ -1059,7 +1059,7 @@ public final class JSContext implements AutoCloseable {
      * If the callback returns true, the rejection is considered handled and the catch
      * clause will take effect instead of throwing an exception.
      */
-    public void setPromiseRejectCallback(JSPromiseRejectCallback callback) {
+    public void setPromiseRejectCallback(IJSPromiseRejectCallback callback) {
         this.promiseRejectCallback = callback;
     }
 

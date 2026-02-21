@@ -33,7 +33,7 @@ import java.util.List;
  */
 public abstract class JSTypedArray extends JSObject {
     public static final String NAME = "TypedArray";
-    protected final JSArrayBufferable buffer;
+    protected final IJSArrayBuffer buffer;
     protected final int byteLength;
     protected final int byteOffset;
     protected final int bytesPerElement;
@@ -62,7 +62,7 @@ public abstract class JSTypedArray extends JSObject {
     /**
      * Create a TypedArray view on an existing ArrayBuffer or SharedArrayBuffer.
      */
-    protected JSTypedArray(JSArrayBufferable buffer, int byteOffset, int length, int bytesPerElement) {
+    protected JSTypedArray(IJSArrayBuffer buffer, int byteOffset, int length, int bytesPerElement) {
         super();
         if (buffer == null) {
             throw new IllegalArgumentException("Cannot create TypedArray on null buffer");
@@ -148,7 +148,7 @@ public abstract class JSTypedArray extends JSObject {
         if (!(source instanceof JSObject sourceObject)
                 || source instanceof JSIterator
                 || source instanceof JSTypedArray
-                || source instanceof JSArrayBufferable) {
+                || source instanceof IJSArrayBuffer) {
             return source;
         }
 
@@ -187,7 +187,7 @@ public abstract class JSTypedArray extends JSObject {
         return (int) length;
     }
 
-    protected static int toTypedArrayBufferDefaultLength(JSArrayBufferable buffer, int byteOffset, int bytesPerElement) {
+    protected static int toTypedArrayBufferDefaultLength(IJSArrayBuffer buffer, int byteOffset, int bytesPerElement) {
         // QuickJS / spec order: detached buffer check must happen before range/alignment checks.
         // This ensures abrupt detachment during byteOffset conversion throws TypeError, not RangeError.
         validateTypedArrayBufferNotDetached(buffer);
@@ -270,7 +270,7 @@ public abstract class JSTypedArray extends JSObject {
         return (int) length;
     }
 
-    protected static void validateTypedArrayBufferNotDetached(JSArrayBufferable buffer) {
+    protected static void validateTypedArrayBufferNotDetached(IJSArrayBuffer buffer) {
         if (buffer.isDetached()) {
             throw new JSTypeErrorException("ArrayBuffer is detached");
         }
@@ -425,7 +425,7 @@ public abstract class JSTypedArray extends JSObject {
     /**
      * Get the underlying ArrayBuffer or SharedArrayBuffer.
      */
-    public JSArrayBufferable getBuffer() {
+    public IJSArrayBuffer getBuffer() {
         return buffer;
     }
 
