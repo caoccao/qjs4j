@@ -1003,15 +1003,31 @@ public final class ArrayPrototype {
 
     /**
      * ES2024 Set(O, P, V, true) — always throws TypeError on failure regardless of strict mode.
+     * Generates V8-matching error messages based on the failure reason.
      */
     private static boolean setOrThrow(JSContext context, JSObject obj, PropertyKey key, JSValue value) {
         if (!obj.setWithResult(key, value, context)) {
             if (!context.hasPendingException()) {
-                context.throwTypeError("Cannot set property '" + key.toPropertyString() + "'");
+                PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
+                if (desc != null && desc.isDataDescriptor() && !desc.isWritable()) {
+                    context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString()
+                            + "' of object '" + objectTag(obj) + "'");
+                } else if (!obj.isExtensible()) {
+                    context.throwTypeError("Cannot add property " + key.toPropertyString()
+                            + ", object is not extensible");
+                } else {
+                    context.throwTypeError("Cannot set property '" + key.toPropertyString() + "'");
+                }
             }
             return false;
         }
         return !context.hasPendingException();
+    }
+
+    private static String objectTag(JSObject obj) {
+        if (obj instanceof JSArray) return "[object Array]";
+        if (obj instanceof JSStringObject) return "[object String]";
+        return "[object Object]";
     }
 
     /**
@@ -1136,26 +1152,26 @@ public final class ArrayPrototype {
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
         if (obj == null) return context.getPendingException();
 
-        if (obj instanceof JSArray arr) {
-            for (JSValue arg : args) {
-                arr.push(arg, context);
-                if (context.hasPendingException()) return context.getPendingException();
-            }
-            return JSNumber.of(arr.getLength());
-        }
-
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) return context.getPendingException();
 
-        for (JSValue arg : args) {
+        // Per ES2024 step 4: If len + argCount > 2^53 - 1, throw a TypeError
+        long newLen = length + args.length;
+        if (newLen > NumberPrototype.MAX_SAFE_INTEGER) {
+            return context.throwTypeError("Array too long");
+        }
+
+        for (int i = 0; i < args.length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(length));
-            obj.set(key, arg, context);
-            if (context.hasPendingException()) return context.getPendingException();
+            if (!setOrThrow(context, obj, key, args[i])) {
+                return context.getPendingException();
+            }
             length++;
         }
 
-        obj.set(PropertyKey.LENGTH, JSNumber.of(length), context);
-        if (context.hasPendingException()) return context.getPendingException();
+        if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(length))) {
+            return context.getPendingException();
+        }
         return JSNumber.of(length);
     }
 
