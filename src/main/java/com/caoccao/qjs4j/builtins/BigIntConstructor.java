@@ -119,14 +119,23 @@ public final class BigIntConstructor {
 
         JSValue arg = args[0];
 
-        // Convert argument to BigInt
+        // Step 2: Let prim be ? ToPrimitive(value, number).
+        if (!JSTypeConversions.isPrimitive(arg)) {
+            arg = JSTypeConversions.toPrimitive(context, arg, JSTypeConversions.PreferredType.NUMBER);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+
+        // Step 3: Return the value from ToBigInt(prim) conversion table.
         if (arg instanceof JSBigInt bigInt) {
             return bigInt;
         } else if (arg instanceof JSNumber num) {
             double value = num.value();
             // Check if value is an integer
             if (value != Math.floor(value) || Double.isInfinite(value) || Double.isNaN(value)) {
-                return context.throwRangeError("Cannot convert non-integer number to BigInt");
+                return context.throwRangeError("The number " + num +
+                        " cannot be converted to a BigInt because it is not an integer");
             }
             return new JSBigInt((long) value);
         } else if (arg instanceof JSString str) {
@@ -138,6 +147,12 @@ public final class BigIntConstructor {
             }
         } else if (arg instanceof JSBoolean bool) {
             return new JSBigInt(bool.value() ? 1L : 0L);
+        } else if (arg instanceof JSSymbol symbol) {
+            return context.throwTypeError("Cannot convert " + symbol.toJavaObject() + " to a BigInt");
+        } else if (arg instanceof JSUndefined) {
+            return context.throwTypeError("Cannot convert undefined to a BigInt");
+        } else if (arg instanceof JSNull) {
+            return context.throwTypeError("Cannot convert null to a BigInt");
         } else {
             return context.throwTypeError("Cannot convert value to BigInt");
         }

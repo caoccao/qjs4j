@@ -285,6 +285,20 @@ public class BigIntConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testCallWithToPrimitive() {
+        // BigInt() should call ToPrimitive(value, number) on objects before conversion
+        assertLongWithJavet(
+                "BigInt({valueOf: () => 3})",
+                "BigInt({valueOf: () => true})",
+                "BigInt({toString: () => '42'})"
+        );
+        assertErrorWithJavet(
+                "BigInt({valueOf: () => 1.5})",
+                "BigInt(Symbol('foo'))"
+        );
+    }
+
+    @Test
     public void testNewBigIntThrowsTypeError() {
         // BigInt cannot be called with 'new' operator per ES2020 spec
         assertErrorWithJavet("new BigInt(123)");
