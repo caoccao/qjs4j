@@ -1072,11 +1072,16 @@ public non-sealed class JSObject implements JSValue {
         }
 
         // Check for circular prototype chain
+        // ES2024 10.1.2 OrdinarySetPrototypeOf step 8
         if (proto != null) {
             JSObject p = proto;
             while (p != null) {
                 if (p == this) {
                     return SetPrototypeResult.CIRCULAR;
+                }
+                // Step 8.c: If p is not an ordinary object, set done to true.
+                if (p instanceof JSProxy) {
+                    break;
                 }
                 p = p.getPrototype();
             }
