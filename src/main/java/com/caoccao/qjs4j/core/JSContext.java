@@ -229,6 +229,63 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * ES2024 7.3.34 ArraySpeciesCreate(originalArray, length).
+     * Following QuickJS JS_ArraySpeciesCreate.
+     *
+     * @return the new array-like object, or null if an exception was set on context
+     */
+    public JSValue createJSArraySpecies(JSObject originalArray, long length) {
+        // Step 3: If IsArray(originalArray) is false, return ArrayCreate(length)
+        int isArr = JSTypeChecking.isArray(this, originalArray);
+        if (isArr < 0) {
+            return null;
+        }
+        if (isArr == 0) {
+            return createJSArray((int) Math.min(length, Integer.MAX_VALUE));
+        }
+
+        // Step 4: Let C be ? Get(originalArray, "constructor")
+        JSValue ctor = originalArray.get(this, PropertyKey.CONSTRUCTOR);
+        if (hasPendingException()) {
+            return null;
+        }
+
+        // Step 5: If IsConstructor(C) is true, cross-realm check
+        if (JSTypeChecking.isConstructor(ctor)) {
+            // Simplified: single-realm engine, skip cross-realm check
+            // QuickJS sets C = undefined if constructor is from a different realm
+        }
+
+        // Step 6: If Type(C) is Object, get Symbol.species
+        if (ctor instanceof JSObject ctorObj) {
+            ctor = ctorObj.get(this, PropertyKey.SYMBOL_SPECIES);
+            if (hasPendingException()) {
+                return null;
+            }
+            if (ctor instanceof JSNull) {
+                ctor = JSUndefined.INSTANCE;
+            }
+        }
+
+        // Step 7: If C is undefined, return ArrayCreate(length)
+        if (ctor instanceof JSUndefined) {
+            return createJSArray((int) Math.min(length, Integer.MAX_VALUE));
+        }
+
+        // Step 8: If IsConstructor(C) is false, throw a TypeError exception
+        if (!JSTypeChecking.isConstructor(ctor)) {
+            return throwTypeError("Species constructor is not a constructor");
+        }
+
+        // Step 9: Return ? Construct(C, « length »)
+        JSValue result = JSReflectObject.constructSimple(this, ctor, new JSValue[]{JSNumber.of(length)});
+        if (hasPendingException()) {
+            return null;
+        }
+        return result;
+    }
+
+    /**
      * Create a new JSArrayBuffer with proper prototype chain.
      *
      * @param byteLength The length in bytes

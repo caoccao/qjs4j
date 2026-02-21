@@ -31,63 +31,6 @@ import java.util.List;
 public final class ArrayPrototype {
 
     /**
-     * ES2024 7.3.34 ArraySpeciesCreate(originalArray, length).
-     * Following QuickJS JS_ArraySpeciesCreate.
-     *
-     * @return the new array, or null if an exception was set on context
-     */
-    static JSValue arraySpeciesCreate(JSContext context, JSObject originalArray, long length) {
-        // Step 3: If IsArray(originalArray) is false, return ArrayCreate(length)
-        int isArr = JSTypeChecking.isArray(context, originalArray);
-        if (isArr < 0) {
-            return null;
-        }
-        if (isArr == 0) {
-            return context.createJSArray((int) Math.min(length, Integer.MAX_VALUE));
-        }
-
-        // Step 4: Let C be ? Get(originalArray, "constructor")
-        JSValue ctor = originalArray.get(context, PropertyKey.CONSTRUCTOR);
-        if (context.hasPendingException()) {
-            return null;
-        }
-
-        // Step 5: If IsConstructor(C) is true, cross-realm check
-        if (JSTypeChecking.isConstructor(ctor)) {
-            // Simplified: single-realm engine, skip cross-realm check
-            // QuickJS sets C = undefined if constructor is from a different realm
-        }
-
-        // Step 6: If Type(C) is Object, get Symbol.species
-        if (ctor instanceof JSObject ctorObj) {
-            ctor = ctorObj.get(context, PropertyKey.SYMBOL_SPECIES);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (ctor instanceof JSNull) {
-                ctor = JSUndefined.INSTANCE;
-            }
-        }
-
-        // Step 7: If C is undefined, return ArrayCreate(length)
-        if (ctor instanceof JSUndefined) {
-            return context.createJSArray((int) Math.min(length, Integer.MAX_VALUE));
-        }
-
-        // Step 8: If IsConstructor(C) is false, throw a TypeError exception
-        if (!JSTypeChecking.isConstructor(ctor)) {
-            return context.throwTypeError("Species constructor is not a constructor");
-        }
-
-        // Step 9: Return ? Construct(C, « length »)
-        JSValue result = JSReflectObject.constructSimple(context, ctor, new JSValue[]{JSNumber.of(length)});
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return result;
-    }
-
-    /**
      * Array.prototype.at(index)
      * ES2022 23.1.3.1
      * Returns the element at the specified index, supporting negative indices.
@@ -151,7 +94,7 @@ public final class ArrayPrototype {
         }
 
         // Step 2: Let A be ? ArraySpeciesCreate(O, 0)
-        JSValue resultVal = arraySpeciesCreate(context, obj, 0);
+        JSValue resultVal = context.createJSArraySpecies(obj, 0);
         if (resultVal == null || context.hasPendingException()) {
             return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
         }
@@ -465,7 +408,7 @@ public final class ArrayPrototype {
 
         JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         // Step 5: Let A be ? ArraySpeciesCreate(O, 0).
-        JSValue resultVal = arraySpeciesCreate(context, obj, 0);
+        JSValue resultVal = context.createJSArraySpecies(obj, 0);
         if (resultVal == null || context.hasPendingException()) {
             return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
         }
@@ -665,9 +608,22 @@ public final class ArrayPrototype {
         if (context.hasPendingException()) return context.getPendingException();
 
         int depth = args.length > 0 ? JSTypeConversions.toInt32(context, args[0]) : 1;
-        JSArray result = context.createJSArray(0, (int) length);
-        internalFlattenObject(context, obj, length, depth, result);
-        return result;
+
+        // Step 4: Let A be ? ArraySpeciesCreate(O, 0).
+        JSValue resultVal = context.createJSArraySpecies(obj, 0);
+        if (resultVal == null || context.hasPendingException()) {
+            return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
+        }
+        if (!(resultVal instanceof JSObject resultObj)) {
+            return context.throwTypeError("ArraySpeciesCreate did not return an object");
+        }
+
+        // Step 5: Perform ? FlattenIntoArray(A, O, sourceLen, 0, depthNum).
+        long[] targetIndex = {0};
+        internalFlattenIntoObject(context, obj, length, depth, resultObj, targetIndex);
+        if (context.hasPendingException()) return context.getPendingException();
+
+        return resultObj;
     }
 
     /**
@@ -691,8 +647,17 @@ public final class ArrayPrototype {
 
         JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
-        JSArray result = context.createJSArray(0, (int) length);
+        // Step 5: Let A be ? ArraySpeciesCreate(O, 0).
+        JSValue resultVal = context.createJSArraySpecies(obj, 0);
+        if (resultVal == null || context.hasPendingException()) {
+            return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
+        }
+        if (!(resultVal instanceof JSObject resultObj)) {
+            return context.throwTypeError("ArraySpeciesCreate did not return an object");
+        }
 
+        // Step 6: Perform ? FlattenIntoArray(A, O, sourceLen, 0, 1, mapperFunction, thisArg).
+        long n = 0;
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
@@ -711,16 +676,33 @@ public final class ArrayPrototype {
             if (context.hasPendingException()) return context.getPendingException();
 
             // Flatten one level
-            if (mapped instanceof JSArray mappedArray) {
-                for (int j = 0; j < mappedArray.getLength(); j++) {
-                    result.push(mappedArray.get(j));
+            if (mapped instanceof JSObject mappedObj) {
+                int isArr = JSTypeChecking.isArray(context, mappedObj);
+                if (isArr < 0) return context.getPendingException();
+                if (isArr > 0) {
+                    long mappedLen = lengthOfArrayLike(context, mappedObj);
+                    if (context.hasPendingException()) return context.getPendingException();
+                    for (long j = 0; j < mappedLen; j++) {
+                        PropertyKey jKey = PropertyKey.fromString(Long.toString(j));
+                        if (mappedObj.has(jKey)) {
+                            JSValue val = mappedObj.get(context, jKey);
+                            if (context.hasPendingException()) return context.getPendingException();
+                            if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), val)) {
+                                return context.throwTypeError("Cannot define property " + n);
+                            }
+                            n++;
+                        }
+                    }
+                    continue;
                 }
-            } else {
-                result.push(mapped);
             }
+            if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), mapped)) {
+                return context.throwTypeError("Cannot define property " + n);
+            }
+            n++;
         }
 
-        return result;
+        return resultObj;
     }
 
     /**
@@ -862,7 +844,7 @@ public final class ArrayPrototype {
         return JSNumber.of(-1);
     }
 
-    private static void internalFlattenObject(JSContext context, JSObject source, long sourceLen, int depth, JSArray target) {
+    private static void internalFlattenIntoObject(JSContext context, JSObject source, long sourceLen, int depth, JSObject target, long[] targetIndex) {
         for (long i = 0; i < sourceLen; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!source.has(key)) {
@@ -872,15 +854,20 @@ public final class ArrayPrototype {
             if (context.hasPendingException()) return;
             if (depth > 0 && element instanceof JSObject elementObj) {
                 int isArr = JSTypeChecking.isArray(context, elementObj);
+                if (isArr < 0) return;
                 if (isArr > 0) {
                     long elementLen = lengthOfArrayLike(context, elementObj);
                     if (context.hasPendingException()) return;
-                    internalFlattenObject(context, elementObj, elementLen, depth - 1, target);
+                    internalFlattenIntoObject(context, elementObj, elementLen, depth - 1, target, targetIndex);
                     if (context.hasPendingException()) return;
                     continue;
                 }
             }
-            target.push(element);
+            if (!target.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(targetIndex[0])), element)) {
+                context.throwTypeError("Cannot define property " + targetIndex[0]);
+                return;
+            }
+            targetIndex[0]++;
         }
     }
 
@@ -1023,7 +1010,15 @@ public final class ArrayPrototype {
         }
 
         JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        JSArray result = context.createJSArray(0, (int) length);
+
+        // Step 5: Let A be ? ArraySpeciesCreate(O, len).
+        JSValue resultVal = context.createJSArraySpecies(obj, length);
+        if (resultVal == null || context.hasPendingException()) {
+            return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
+        }
+        if (!(resultVal instanceof JSObject resultObj)) {
+            return context.throwTypeError("ArraySpeciesCreate did not return an object");
+        }
 
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
@@ -1035,10 +1030,13 @@ public final class ArrayPrototype {
             JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             JSValue mapped = callback.call(context, callbackThis, callbackArgs);
             if (context.hasPendingException()) return context.getPendingException();
-            result.push(mapped);
+            // Step 7.c.iii.1: Perform ? CreateDataPropertyOrThrow(A, ! ToString(k), mappedValue).
+            if (!resultObj.definePropertyWritableEnumerableConfigurable(key, mapped)) {
+                return context.throwTypeError("Cannot define property " + i);
+            }
         }
 
-        return result;
+        return resultObj;
     }
 
     /**
@@ -1349,19 +1347,35 @@ public final class ArrayPrototype {
             }
         }
 
-        JSArray result = context.createJSArray(0, (int) (end - begin));
-        for (long i = begin; i < end; i++) {
+        long count = Math.max(end - begin, 0);
+
+        // Step 7: Let A be ? ArraySpeciesCreate(O, count).
+        JSValue resultVal = context.createJSArraySpecies(obj, count);
+        if (resultVal == null || context.hasPendingException()) {
+            return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
+        }
+        if (!(resultVal instanceof JSObject resultObj)) {
+            return context.throwTypeError("ArraySpeciesCreate did not return an object");
+        }
+
+        long n = 0;
+        for (long i = begin; i < end; i++, n++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (obj.has(key)) {
                 JSValue element = obj.get(context, key);
                 if (context.hasPendingException()) return context.getPendingException();
-                result.push(element);
-            } else {
-                result.setLength(result.getLength() + 1);
+                // Step 8.b.iii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(n), kValue).
+                if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(n)), element)) {
+                    return context.throwTypeError("Cannot define property " + n);
+                }
             }
         }
 
-        return result;
+        // Step 9: Perform ? Set(A, "length", n, true).
+        resultObj.set(PropertyKey.LENGTH, JSNumber.of(n), context);
+        if (context.hasPendingException()) return context.getPendingException();
+
+        return resultObj;
     }
 
     /**
@@ -1477,18 +1491,30 @@ public final class ArrayPrototype {
             deleteCount = Math.max(0, Math.min(JSTypeConversions.toInt32(context, args[1]), length - start));
         }
 
-        // Collect deleted elements
-        JSArray deleted = context.createJSArray(0, (int) deleteCount);
+        // Step 9: Let A be ? ArraySpeciesCreate(O, actualDeleteCount).
+        JSValue deletedVal = context.createJSArraySpecies(obj, deleteCount);
+        if (deletedVal == null || context.hasPendingException()) {
+            return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
+        }
+        if (!(deletedVal instanceof JSObject deletedObj)) {
+            return context.throwTypeError("ArraySpeciesCreate did not return an object");
+        }
+
+        // Step 10: Collect deleted elements
         for (long i = 0; i < deleteCount; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(start + i));
             if (obj.has(key)) {
                 JSValue val = obj.get(context, key);
                 if (context.hasPendingException()) return context.getPendingException();
-                deleted.push(val);
-            } else {
-                deleted.setLength(deleted.getLength() + 1);
+                // Step 10.c.ii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(k), fromValue).
+                if (!deletedObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(i)), val)) {
+                    return context.throwTypeError("Cannot define property " + i);
+                }
             }
         }
+        // Step 11: Perform ? Set(A, "length", actualDeleteCount, true).
+        deletedObj.set(PropertyKey.LENGTH, JSNumber.of(deleteCount), context);
+        if (context.hasPendingException()) return context.getPendingException();
 
         long insertCount = Math.max(0, args.length - 2);
         long newLen = length - deleteCount + insertCount;
@@ -1533,7 +1559,7 @@ public final class ArrayPrototype {
 
         obj.set(PropertyKey.LENGTH, JSNumber.of(newLen), context);
         if (context.hasPendingException()) return context.getPendingException();
-        return deleted;
+        return deletedObj;
     }
 
     /**
