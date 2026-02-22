@@ -1258,6 +1258,22 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Transfer prototype using Get(constructor, "prototype") with full JS semantics.
+     * This is used by constructor paths that must observe accessors and propagate abrupt completions.
+     */
+    public boolean transferPrototypeFromConstructor(JSObject receiver, JSObject constructor) {
+        JSValue prototype = constructor.get(this, PropertyKey.PROTOTYPE);
+        if (hasPendingException()) {
+            return false;
+        }
+        if (prototype instanceof JSObject prototypeObject) {
+            receiver.setPrototype(prototypeObject);
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Represents a stack frame in the call stack.
      */
     public record StackFrame(String functionName, String filename, int lineNumber, int columnNumber) {

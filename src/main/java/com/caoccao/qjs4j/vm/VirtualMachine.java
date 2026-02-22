@@ -208,11 +208,23 @@ public final class VirtualMachine {
         if (constructorType == null) {
             JSObject thisObject = new JSObject();
             if (newTarget instanceof JSObject newTargetObject) {
-                if (!context.transferPrototype(thisObject, newTargetObject)) {
-                    context.transferPrototype(thisObject, function);
+                if (!context.transferPrototypeFromConstructor(thisObject, newTargetObject)) {
+                    if (context.hasPendingException()) {
+                        JSValue exception = context.getPendingException();
+                        throw new JSVirtualMachineException(exception.toString(), exception);
+                    }
+                    context.transferPrototypeFromConstructor(thisObject, function);
+                    if (context.hasPendingException()) {
+                        JSValue exception = context.getPendingException();
+                        throw new JSVirtualMachineException(exception.toString(), exception);
+                    }
                 }
             } else {
-                context.transferPrototype(thisObject, function);
+                context.transferPrototypeFromConstructor(thisObject, function);
+                if (context.hasPendingException()) {
+                    JSValue exception = context.getPendingException();
+                    throw new JSVirtualMachineException(exception.toString(), exception);
+                }
             }
 
             JSValue result;

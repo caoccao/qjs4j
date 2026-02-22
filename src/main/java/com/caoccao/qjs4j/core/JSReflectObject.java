@@ -134,12 +134,21 @@ public final class JSReflectObject {
         if (constructorType == null) {
             JSObject thisObject = new JSObject();
             if (newTarget instanceof JSObject newTargetObject) {
-                if (!context.transferPrototype(thisObject, newTargetObject)) {
+                if (!context.transferPrototypeFromConstructor(thisObject, newTargetObject)) {
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
                     // GetPrototypeFromConstructor fallback: use target function's prototype
-                    context.transferPrototype(thisObject, function);
+                    context.transferPrototypeFromConstructor(thisObject, function);
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
                 }
             } else {
-                context.transferPrototype(thisObject, function);
+                context.transferPrototypeFromConstructor(thisObject, function);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
             }
 
             JSValue result;
