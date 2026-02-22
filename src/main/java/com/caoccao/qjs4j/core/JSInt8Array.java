@@ -94,6 +94,21 @@ public final class JSInt8Array extends JSTypedArray {
 
 
     @Override
+    public String getObjectTag() {
+        return "[object " + NAME + "]";
+    }
+
+    @Override
+    public boolean isAtomicsReadableAndWriteable() {
+        return true;
+    }
+
+    @Override
+    public boolean isAtomicsWriteable() {
+        return false;
+    }
+
+    @Override
     public double getElement(int index) {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();

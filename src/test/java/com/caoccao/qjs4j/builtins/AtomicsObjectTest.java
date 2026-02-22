@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Unit tests for AtomicsObject synchronization methods.
  */
-public class AtomicsObjectTest extends BaseTest {
+public class AtomicsObjectTest extends BaseJavetTest {
 
     @Test
     public void testAdd() {
@@ -144,6 +144,15 @@ public class AtomicsObjectTest extends BaseTest {
     }
 
     @Test
+    public void testIsLockFreeWithJavet() {
+        assertBooleanWithJavet(
+                "Atomics.isLockFree('1') === Atomics.isLockFree(1)",
+                "Atomics.isLockFree(true) === Atomics.isLockFree(1)",
+                "Atomics.isLockFree({ valueOf() { return 3; } }) === Atomics.isLockFree(3)",
+                "Atomics.isLockFree({ toString() { return '3'; } }) === Atomics.isLockFree(3)");
+    }
+
+    @Test
     public void testLoad() {
         // Create SharedArrayBuffer and Int32Array
         JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
@@ -187,15 +196,29 @@ public class AtomicsObjectTest extends BaseTest {
         error = AtomicsObject.notify(context, null, new JSValue[]{arr, new JSNumber(10)});
         assertRangeError(error);
 
-        // Test 5: Negative count
-        error = AtomicsObject.notify(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(-1)});
-        assertRangeError(error);
+        // Test 5: Negative count is clamped to 0; non-shared buffers still return 0
+        JSValue negativeCountResult = AtomicsObject.notify(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(-1)});
+        assertThat(negativeCountResult.isNumber()).isTrue();
+        assertThat(negativeCountResult.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
+    }
+
+    @Test
+    public void testNotifyWithJavet() {
+        assertIntegerWithJavet(
+                "Atomics.notify(new BigInt64Array(new ArrayBuffer(8)), 0, 0)",
+                "Atomics.notify(new Int32Array(new ArrayBuffer(4)), 0, -1)");
+        assertErrorWithJavet(
+                "Atomics.notify(new Uint8Array(new SharedArrayBuffer(8)), 0, 0)");
+        assertErrorWithJavet(
+                "Atomics.notify(new BigInt64Array(new ArrayBuffer(8)), { valueOf() { throw new Error('index'); } }, 0)");
+        assertErrorWithJavet(
+                "Atomics.notify(new BigInt64Array(new ArrayBuffer(8)), 0, { valueOf() { throw new Error('count'); } })");
     }
 
     @Test
     public void testNotifyMultipleWaiters() throws InterruptedException {
         // Create ArrayBuffer and Int32Array
-        JSArrayBuffer ab = new JSArrayBuffer(4);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(4);
         JSInt32Array arr = new JSInt32Array(ab, 0, 1);
 
         // Store initial value
@@ -247,7 +270,7 @@ public class AtomicsObjectTest extends BaseTest {
     @Test
     public void testNotifyWithInfinity() throws InterruptedException {
         // Create ArrayBuffer and Int32Array
-        JSArrayBuffer ab = new JSArrayBuffer(4);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(4);
         JSInt32Array arr = new JSInt32Array(ab, 0, 1);
 
         assertThat(arr.getBuffer().getBuffer()).isNotNull();
@@ -351,7 +374,7 @@ public class AtomicsObjectTest extends BaseTest {
     @Test
     public void testWait() {
         // Create ArrayBuffer and Int32Array
-        JSArrayBuffer ab = new JSArrayBuffer(4);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(4);
         JSInt32Array arr = new JSInt32Array(ab, 0, 1);
 
         // Store initial value
@@ -387,8 +410,8 @@ public class AtomicsObjectTest extends BaseTest {
 
     @Test
     public void testWaitAndNotifyMultithreaded() throws InterruptedException {
-        // Create ArrayBuffer and Int32Array
-        JSArrayBuffer ab = new JSArrayBuffer(4);
+        // Create SharedArrayBuffer and Int32Array
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(4);
         JSInt32Array arr = new JSInt32Array(ab, 0, 1);
 
         // Store initial value

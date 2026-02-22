@@ -103,6 +103,21 @@ public final class JSBigInt64Array extends JSTypedArray {
     }
 
     @Override
+    public String getObjectTag() {
+        return "[object " + NAME + "]";
+    }
+
+    @Override
+    public boolean isAtomicsReadableAndWriteable() {
+        return true;
+    }
+
+    @Override
+    public boolean isAtomicsWriteable() {
+        return true;
+    }
+
+    @Override
     public double getElement(int index) {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();

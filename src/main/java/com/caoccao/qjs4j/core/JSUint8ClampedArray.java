@@ -95,6 +95,21 @@ public final class JSUint8ClampedArray extends JSTypedArray {
 
 
     @Override
+    public String getObjectTag() {
+        return "[object " + NAME + "]";
+    }
+
+    @Override
+    public boolean isAtomicsReadableAndWriteable() {
+        return false;
+    }
+
+    @Override
+    public boolean isAtomicsWriteable() {
+        return false;
+    }
+
+    @Override
     public double getElement(int index) {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();

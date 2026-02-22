@@ -49,17 +49,6 @@ public final class AtomicsObject {
         return new JSBigInt(unsigned);
     }
 
-    private static boolean isAtomicsReadWriteTypedArray(JSTypedArray typedArray) {
-        return typedArray instanceof JSInt8Array
-                || typedArray instanceof JSUint8Array
-                || typedArray instanceof JSInt16Array
-                || typedArray instanceof JSUint16Array
-                || typedArray instanceof JSInt32Array
-                || typedArray instanceof JSUint32Array
-                || typedArray instanceof JSBigInt64Array
-                || typedArray instanceof JSBigUint64Array;
-    }
-
     private static int getAtomicIndex(JSContext context, JSTypedArray typedArray, JSValue indexValue) {
         final long indexLong;
         try {
@@ -106,7 +95,7 @@ public final class AtomicsObject {
         if (!(args[0] instanceof JSTypedArray typedArray)) {
             return context.throwTypeError("Atomics.add requires a TypedArray");
         }
-        if (!isAtomicsReadWriteTypedArray(typedArray)) {
+        if (!typedArray.isAtomicsReadableAndWriteable()) {
             return context.throwTypeError(
                     "Atomics.add only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
         }
@@ -198,7 +187,7 @@ public final class AtomicsObject {
         if (!(args[0] instanceof JSTypedArray typedArray)) {
             return context.throwTypeError("Atomics.and requires a TypedArray");
         }
-        if (!isAtomicsReadWriteTypedArray(typedArray)) {
+        if (!typedArray.isAtomicsReadableAndWriteable()) {
             return context.throwTypeError(
                     "Atomics.and only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
         }
@@ -291,7 +280,7 @@ public final class AtomicsObject {
             return context.throwTypeError("Atomics.compareExchange requires a TypedArray");
         }
 
-        if (!isAtomicsReadWriteTypedArray(typedArray)) {
+        if (!typedArray.isAtomicsReadableAndWriteable()) {
             return context.throwTypeError(
                     "Atomics.compareExchange only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
         }
@@ -408,7 +397,7 @@ public final class AtomicsObject {
             return context.throwTypeError("Atomics.exchange requires a TypedArray");
         }
 
-        if (!isAtomicsReadWriteTypedArray(typedArray)) {
+        if (!typedArray.isAtomicsReadableAndWriteable()) {
             return context.throwTypeError(
                     "Atomics.exchange only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
         }
@@ -501,7 +490,12 @@ public final class AtomicsObject {
             return JSBoolean.FALSE;
         }
 
-        int size = (int) ((JSNumber) args[0]).value();
+        int size;
+        try {
+            size = (int) JSTypeConversions.toInteger(context, args[0]);
+        } catch (JSErrorException e) {
+            return rethrowAsJSValue(context, e);
+        }
 
         // In Java, operations on 1, 2, 4 bytes are typically lock-free on modern hardware
         // 8 bytes (long) is also lock-free with AtomicLong
@@ -522,7 +516,7 @@ public final class AtomicsObject {
         if (!(args[0] instanceof JSTypedArray typedArray)) {
             return context.throwTypeError("Atomics.load requires a TypedArray");
         }
-        if (!isAtomicsReadWriteTypedArray(typedArray)) {
+        if (!typedArray.isAtomicsReadableAndWriteable()) {
             return context.throwTypeError(
                     "Atomics.load only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
         }
@@ -592,32 +586,37 @@ public final class AtomicsObject {
             return context.throwTypeError("Atomics.notify requires a TypedArray");
         }
 
-        if (!(typedArray instanceof JSInt32Array)) {
-            return context.throwTypeError("Atomics.notify only works on Int32Array");
+        if (!typedArray.isAtomicsWriteable()) {
+            return context.throwTypeError(
+                    typedArray.getObjectTag() + " is not an int32 or BigInt64 typed array.");
         }
+        try {
+            int index = getAtomicIndex(context, typedArray, args.length >= 2 ? args[1] : JSUndefined.INSTANCE);
+            double countNumber = args.length >= 3
+                    ? JSTypeConversions.toInteger(context, args[2])
+                    : Double.POSITIVE_INFINITY;
+            double clampedCount = Math.max(countNumber, 0.0);
 
-        int index = args.length >= 2 ? (int) ((JSNumber) args[1]).value() : 0;
-        int count = args.length >= 3 ? (int) ((JSNumber) args[2]).value() : Integer.MAX_VALUE;
+            IJSArrayBuffer buffer = typedArray.getBuffer();
+            if (!buffer.isShared()) {
+                return JSNumber.of(0);
+            }
 
-        if (index < 0 || index >= typedArray.getLength()) {
-            return context.throwRangeError("Index out of bounds");
+            int count = Double.isInfinite(clampedCount)
+                    ? Integer.MAX_VALUE
+                    : (int) Math.min(clampedCount, Integer.MAX_VALUE);
+
+            String waitKey = getWaitKey(buffer, index);
+            WaitList waitList = waitLists.get(waitKey);
+            if (waitList == null) {
+                return JSNumber.of(0);
+            }
+
+            int notified = waitList.notifyWaiters(count);
+            return JSNumber.of(notified);
+        } catch (JSErrorException e) {
+            return rethrowAsJSValue(context, e);
         }
-
-        if (count < 0) {
-            return context.throwRangeError("Count must be non-negative");
-        }
-
-        // Get the buffer
-        IJSArrayBuffer buffer = typedArray.getBuffer();
-        String waitKey = getWaitKey(buffer, index);
-
-        WaitList waitList = waitLists.get(waitKey);
-        if (waitList == null) {
-            return JSNumber.of(0);
-        }
-
-        int notified = waitList.notifyWaiters(count);
-        return JSNumber.of(notified);
     }
 
     /**
@@ -684,7 +683,7 @@ public final class AtomicsObject {
         if (!(args[0] instanceof JSTypedArray typedArray)) {
             return context.throwTypeError("Atomics.store requires a TypedArray");
         }
-        if (!isAtomicsReadWriteTypedArray(typedArray)) {
+        if (!typedArray.isAtomicsReadableAndWriteable()) {
             return context.throwTypeError(
                     "Atomics.store only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
         }

@@ -482,6 +482,12 @@ public abstract class JSTypedArray extends JSObject {
      */
     public abstract double getElement(int index);
 
+    public abstract String getObjectTag();
+
+    public abstract boolean isAtomicsReadableAndWriteable();
+
+    public abstract boolean isAtomicsWriteable();
+
     /**
      * Get an element as the appropriate JSValue type.
      * Regular typed arrays return JSNumber, BigInt typed arrays override to return JSBigInt.

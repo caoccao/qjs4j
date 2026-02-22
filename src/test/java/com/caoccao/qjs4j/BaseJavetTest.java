@@ -207,7 +207,7 @@ public class BaseJavetTest extends BaseTest {
                     .isInstanceOf(JavetException.class).actual().getMessage();
             assertThatThrownBy(() -> resetContext().eval(code, FILE_NAME, moduleMode), expectedMessage)
                     .isInstanceOf(JSException.class)
-                    .hasMessageContaining(expectedMessage);
+                    .hasMessage(expectedMessage);
         }
     }
 

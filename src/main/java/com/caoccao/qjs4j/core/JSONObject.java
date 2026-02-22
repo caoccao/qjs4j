@@ -571,7 +571,7 @@ public final class JSONObject {
         int i = skipWhitespace(parseContext.text, start);
 
         if (i >= parseContext.text.length()) {
-            throw new JSONParseException("Unexpected end of JSON input " + parseContext.getPositionInfo(i));
+            throw new JSONParseException("Unexpected end of JSON input");
         }
 
         char ch = parseContext.text.charAt(i);
