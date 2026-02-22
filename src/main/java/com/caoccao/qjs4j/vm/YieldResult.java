@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.vm;
 
+import com.caoccao.qjs4j.core.JSObject;
 import com.caoccao.qjs4j.core.JSValue;
 
 /**
@@ -26,9 +27,13 @@ import com.caoccao.qjs4j.core.JSValue;
  * instead of a regular JSValue. The generator execution logic can then
  * detect this and suspend execution properly.
  *
- * @param value The yielded value
+ * @param value            The yielded value
+ * @param delegateIterator The delegated iterator for yield* (optional)
  */
-public record YieldResult(Type type, JSValue value) {
+public record YieldResult(Type type, JSValue value, JSObject delegateIterator) {
+    public YieldResult(Type type, JSValue value) {
+        this(type, value, null);
+    }
 
     public boolean isInitialYield() {
         return type == Type.INITIAL_YIELD;

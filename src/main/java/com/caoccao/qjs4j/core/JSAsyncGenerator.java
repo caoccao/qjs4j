@@ -179,13 +179,28 @@ public final class JSAsyncGenerator extends JSObject {
         if (request == null) {
             return;
         }
-        executeRequest(request);
+        try {
+            executeRequest(request);
+        } catch (RuntimeException e) {
+            state = AsyncGeneratorState.COMPLETED;
+            if (context.hasPendingException()) {
+                JSValue error = context.getPendingException();
+                context.clearAllPendingExceptions();
+                request.promise().reject(error);
+            } else {
+                request.promise().reject(new JSString(e.getMessage() != null ? e.getMessage() : e.toString()));
+            }
+            drainRequestQueue();
+        }
     }
 
     private JSPromise enqueueRequest(AsyncGeneratorRequestKind kind, JSValue value) {
         JSPromise promise = context.createJSPromise();
         requestQueue.offer(new AsyncGeneratorRequest(kind, value, promise));
         drainRequestQueue();
+        if (context.hasPendingException()) {
+            context.clearAllPendingExceptions();
+        }
         return promise;
     }
 

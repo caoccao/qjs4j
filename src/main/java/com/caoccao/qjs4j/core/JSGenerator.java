@@ -172,7 +172,10 @@ public final class JSGenerator extends JSObject {
                 }
             }
             // Abrupt completion from generator.next() must throw to the caller.
-            return createIteratorResult(JSUndefined.INSTANCE, true);
+            if (e instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new RuntimeException(e);
         }
     }
 

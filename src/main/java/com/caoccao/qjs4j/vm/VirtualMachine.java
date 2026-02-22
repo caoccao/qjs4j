@@ -3567,7 +3567,7 @@ public final class VirtualMachine {
                     return rejectedPromise;
                 }
 
-                JSValue value = syncResultObject.get(PropertyKey.VALUE);
+                JSValue value = syncResultObject.get(childContext, PropertyKey.VALUE);
                 if (childContext.hasPendingException()) {
                     JSValue reason = childContext.getPendingException();
                     childContext.clearAllPendingExceptions();
@@ -3575,7 +3575,7 @@ public final class VirtualMachine {
                     rejectedPromise.reject(reason);
                     return rejectedPromise;
                 }
-                JSValue doneValue = syncResultObject.get(PropertyKey.DONE);
+                JSValue doneValue = syncResultObject.get(childContext, PropertyKey.DONE);
                 if (childContext.hasPendingException()) {
                     JSValue reason = childContext.getPendingException();
                     childContext.clearAllPendingExceptions();
@@ -3609,7 +3609,7 @@ public final class VirtualMachine {
                         new JSPromise.ReactionRecord(
                                 new JSNativeFunction("onRejected", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                                     JSValue reason = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                                    JSValue returnMethodValue = syncIteratorObject.get(PropertyKey.RETURN);
+                                    JSValue returnMethodValue = syncIteratorObject.get(callbackContext, PropertyKey.RETURN);
                                     if (callbackContext.hasPendingException()) {
                                         callbackContext.clearAllPendingExceptions();
                                     } else if (returnMethodValue instanceof JSFunction returnFunction) {
@@ -4388,7 +4388,7 @@ public final class VirtualMachine {
                 return;
             } else {
                 // Not done - yield the result and continue delegation
-                yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result);
+                yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
                 valueStack.push(result);
                 return;
             }
@@ -4433,7 +4433,7 @@ public final class VirtualMachine {
                 return;
             } else {
                 // Not done - yield the result
-                yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result);
+                yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
                 valueStack.push(result);
                 return;
             }
@@ -4482,7 +4482,7 @@ public final class VirtualMachine {
 
         // Set yield result to the raw iterator result object
         // This is what QuickJS does with *pdone = 2
-        yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result);
+        yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
 
         // Push the result back on the stack
         valueStack.push(result);

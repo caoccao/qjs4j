@@ -228,7 +228,11 @@ public final class JSBytecodeFunction extends JSFunction {
         promise.fulfill(iterResult);
     }
 
-    private static void fulfillAsyncYieldStarResult(JSContext context, JSPromise promise, JSObject iteratorResultObject) {
+    private static void fulfillAsyncYieldStarResult(
+            JSContext context,
+            JSPromise promise,
+            JSObject iteratorResultObject,
+            JSObject delegateIterator) {
         JSValue doneValue = iteratorResultObject.get(context, PropertyKey.DONE);
         if (context.hasPendingException()) {
             JSValue error = context.getPendingException();
@@ -251,7 +255,47 @@ public final class JSBytecodeFunction extends JSFunction {
             return;
         }
         JSPromise asyncFromSyncResultPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
-        asyncFromSyncResultPromise.addReactions(
+        JSPromise resultPromise = asyncFromSyncResultPromise;
+        if (!done && delegateIterator != null) {
+            JSPromise closeOnRejectionPromise = context.createJSPromise();
+            asyncFromSyncResultPromise.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onResolve", 1, (childContext, thisArg, args) -> {
+                                JSValue resolvedResult = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                closeOnRejectionPromise.fulfill(resolvedResult);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context
+                    ),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onReject", 1, (childContext, thisArg, args) -> {
+                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                JSValue returnMethodValue = delegateIterator.get(context, PropertyKey.RETURN);
+                                if (context.hasPendingException()) {
+                                    context.clearAllPendingExceptions();
+                                } else if (returnMethodValue instanceof JSFunction returnFunction) {
+                                    JSValue closeResult = returnFunction.call(context, delegateIterator, new JSValue[0]);
+                                    if (context.hasPendingException()) {
+                                        context.clearAllPendingExceptions();
+                                    } else if (!(closeResult instanceof JSObject)) {
+                                        // Preserve the original rejection reason during close-on-rejection.
+                                    }
+                                } else if (returnMethodValue.isNullOrUndefined()) {
+                                    // No return method.
+                                } else {
+                                    // Non-callable return method is ignored here to preserve original rejection.
+                                }
+                                closeOnRejectionPromise.reject(error);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context
+                    )
+            );
+            resultPromise = closeOnRejectionPromise;
+        }
+        resultPromise.addReactions(
                 new JSPromise.ReactionRecord(
                         new JSNativeFunction("onResolve", 1, (childContext, thisArg, args) -> {
                             JSValue resolvedResult = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -327,7 +371,7 @@ public final class JSBytecodeFunction extends JSFunction {
                         if (lastYield != null && lastYield.isYieldStar() && result instanceof JSObject iteratorResultObject) {
                             // ASYNC_YIELD_STAR currently returns a raw sync iterator result object.
                             // Apply async-from-sync iterator-result processing here.
-                            fulfillAsyncYieldStarResult(context, promise, iteratorResultObject);
+                            fulfillAsyncYieldStarResult(context, promise, iteratorResultObject, lastYield.delegateIterator());
                         } else {
                             // Per ES spec AsyncGeneratorYield step 8: Await the yielded value
                             fulfillAsyncYield(context, promise, result, false);
