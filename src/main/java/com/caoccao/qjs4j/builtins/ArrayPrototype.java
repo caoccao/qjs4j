@@ -2172,6 +2172,15 @@ public final class ArrayPrototype {
      * Returns a new sorted array (immutable version of sort).
      */
     public static JSValue toSorted(JSContext context, JSValue thisArg, JSValue[] args) {
+        // Step 1: If comparefn is not undefined and IsCallable(comparefn) is false, throw a TypeError.
+        // This must happen before ToObject and LengthOfArrayLike per spec.
+        if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSFunction)) {
+            return context.throwTypeError("The comparison function must be either a function or undefined: "
+                    + JSTypeConversions.toString(context, args[0]).value());
+        }
+        final JSFunction compareFn = args.length > 0 && args[0] instanceof JSFunction
+                ? (JSFunction) args[0] : null;
+
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
             return context.throwTypeError("Array.prototype.toSorted called on null or undefined");
         }
@@ -2184,9 +2193,6 @@ public final class ArrayPrototype {
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-
-        JSFunction compareFn = args.length > 0 && args[0] instanceof JSFunction ?
-                (JSFunction) args[0] : null;
 
         // Create a copy of the elements
         List<JSValue> elements = new ArrayList<>();

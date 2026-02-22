@@ -1581,6 +1581,11 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         // Edge case: toSorted on null/undefined
         assertTypeError(ArrayPrototype.toSorted(context, JSNull.INSTANCE, new JSValue[]{}));
         assertPendingException(context);
+        assertErrorWithJavet(
+                "[1].toSorted(null)",
+                "[1].toSorted(true)",
+                "[1].toSorted(1)",
+                "[1].toSorted('abc')");
     }
 
     @Test
