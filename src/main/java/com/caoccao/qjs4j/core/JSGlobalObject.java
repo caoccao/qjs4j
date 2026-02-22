@@ -860,20 +860,21 @@ public final class JSGlobalObject {
      */
     private void initializeAtomicsObject(JSContext context, JSObject global) {
         JSObject atomics = context.createJSObject();
-        atomics.set("add", new JSNativeFunction("add", 3, AtomicsObject::add));
-        atomics.set("and", new JSNativeFunction("and", 3, AtomicsObject::and));
-        atomics.set("compareExchange", new JSNativeFunction("compareExchange", 4, AtomicsObject::compareExchange));
-        atomics.set("exchange", new JSNativeFunction("exchange", 3, AtomicsObject::exchange));
-        atomics.set("isLockFree", new JSNativeFunction("isLockFree", 1, AtomicsObject::isLockFree));
-        atomics.set("load", new JSNativeFunction("load", 2, AtomicsObject::load));
-        atomics.set("notify", new JSNativeFunction("notify", 3, AtomicsObject::notify));
-        atomics.set("or", new JSNativeFunction("or", 3, AtomicsObject::or));
-        atomics.set("pause", new JSNativeFunction("pause", 0, AtomicsObject::pause));
-        atomics.set("store", new JSNativeFunction("store", 3, AtomicsObject::store));
-        atomics.set("sub", new JSNativeFunction("sub", 3, AtomicsObject::sub));
-        atomics.set("wait", new JSNativeFunction("wait", 4, AtomicsObject::wait));
-        atomics.set("waitAsync", new JSNativeFunction("waitAsync", 4, AtomicsObject::waitAsync));
-        atomics.set("xor", new JSNativeFunction("xor", 3, AtomicsObject::xor));
+        atomics.definePropertyWritableConfigurable("add", new JSNativeFunction("add", 3, AtomicsObject::add));
+        atomics.definePropertyWritableConfigurable("and", new JSNativeFunction("and", 3, AtomicsObject::and));
+        atomics.definePropertyWritableConfigurable("compareExchange", new JSNativeFunction("compareExchange", 4, AtomicsObject::compareExchange));
+        atomics.definePropertyWritableConfigurable("exchange", new JSNativeFunction("exchange", 3, AtomicsObject::exchange));
+        atomics.definePropertyWritableConfigurable("isLockFree", new JSNativeFunction("isLockFree", 1, AtomicsObject::isLockFree));
+        atomics.definePropertyWritableConfigurable("load", new JSNativeFunction("load", 2, AtomicsObject::load));
+        atomics.definePropertyWritableConfigurable("notify", new JSNativeFunction("notify", 3, AtomicsObject::notify));
+        atomics.definePropertyWritableConfigurable("or", new JSNativeFunction("or", 3, AtomicsObject::or));
+        atomics.definePropertyWritableConfigurable("pause", new JSNativeFunction("pause", 0, AtomicsObject::pause));
+        atomics.definePropertyWritableConfigurable("store", new JSNativeFunction("store", 3, AtomicsObject::store));
+        atomics.definePropertyWritableConfigurable("sub", new JSNativeFunction("sub", 3, AtomicsObject::sub));
+        atomics.definePropertyWritableConfigurable("wait", new JSNativeFunction("wait", 4, AtomicsObject::wait));
+        atomics.definePropertyWritableConfigurable("waitAsync", new JSNativeFunction("waitAsync", 4, AtomicsObject::waitAsync));
+        atomics.definePropertyWritableConfigurable("xor", new JSNativeFunction("xor", 3, AtomicsObject::xor));
+        atomics.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("Atomics"));
 
         global.definePropertyWritableConfigurable("Atomics", atomics);
     }
@@ -2051,6 +2052,7 @@ public final class JSGlobalObject {
         JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, TypedArrayPrototype::values);
         typedArrayPrototype.definePropertyWritableConfigurable("at", new JSNativeFunction("at", 1, TypedArrayPrototype::at));
         typedArrayPrototype.definePropertyWritableConfigurable("entries", new JSNativeFunction("entries", 0, TypedArrayPrototype::entries));
+        typedArrayPrototype.definePropertyWritableConfigurable("fill", new JSNativeFunction("fill", 1, TypedArrayPrototype::fill));
         typedArrayPrototype.definePropertyWritableConfigurable("join", new JSNativeFunction("join", 1, TypedArrayPrototype::join));
         typedArrayPrototype.definePropertyWritableConfigurable("keys", new JSNativeFunction("keys", 0, TypedArrayPrototype::keys));
         typedArrayPrototype.definePropertyWritableConfigurable("set", new JSNativeFunction("set", 1, TypedArrayPrototype::set));

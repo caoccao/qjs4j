@@ -60,6 +60,43 @@ public final class TypedArrayPrototype {
         }, "Array Iterator");
     }
 
+    public static JSValue fill(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.fill");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        JSValue fillValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        int length = typedArray.getLength();
+
+        int start = 0;
+        if (args.length > 1) {
+            double relativeStart = JSTypeConversions.toInteger(context, args[1]);
+            if (relativeStart < 0) {
+                start = Math.max((int) (length + relativeStart), 0);
+            } else {
+                start = Math.min((int) relativeStart, length);
+            }
+        }
+
+        int end = length;
+        if (args.length > 2 && !args[2].isUndefined()) {
+            double relativeEnd = JSTypeConversions.toInteger(context, args[2]);
+            if (relativeEnd < 0) {
+                end = Math.max((int) (length + relativeEnd), 0);
+            } else {
+                end = Math.min((int) relativeEnd, length);
+            }
+        }
+
+        for (int i = start; i < end; i++) {
+            typedArray.set(context, PropertyKey.fromIndex(i), fillValue);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+        return typedArray;
+    }
+
     public static JSValue getBuffer(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTypedArray typedArray = toTypedArray(context, thisArg, "get TypedArray.prototype.buffer");
         if (typedArray == null) {

@@ -436,10 +436,13 @@ public abstract class JSTypedArray extends JSObject {
         if (buffer.isDetached()) {
             throw new IllegalStateException("TypedArray buffer is detached");
         }
-        ByteBuffer buf = buffer.getBuffer().duplicate();
+        ByteBuffer backingBuffer = buffer.getBuffer();
+        ByteBuffer buf = backingBuffer.duplicate();
         buf.position(byteOffset);
         buf.limit(byteOffset + getByteLength());
-        return buf.slice();
+        ByteBuffer slice = buf.slice();
+        slice.order(backingBuffer.order());
+        return slice;
     }
 
     /**
