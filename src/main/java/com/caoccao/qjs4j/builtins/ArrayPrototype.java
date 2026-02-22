@@ -2146,6 +2146,11 @@ public final class ArrayPrototype {
             return context.getPendingException();
         }
 
+        // ArrayCreate step 1: If length > 2^32 - 1, throw a RangeError exception.
+        if (length > 0xFFFF_FFFFL) {
+            return context.throwRangeError("Invalid array length");
+        }
+
         JSArray result = context.createJSArray(0, (int) length);
 
         // Copy elements in reverse order
