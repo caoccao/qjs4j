@@ -218,7 +218,9 @@ public final class JSAsyncGenerator extends JSObject {
             if (isThrow) {
                 request.promise().reject(request.value());
             } else {
-                JSValue completedValue = request.kind() == AsyncGeneratorRequestKind.NEXT ? returnValue : request.value();
+                JSValue completedValue = request.kind() == AsyncGeneratorRequestKind.NEXT
+                        ? JSUndefined.INSTANCE
+                        : request.value();
                 request.promise().fulfill(createIteratorResultObject(completedValue, true));
             }
             drainRequestQueue();
