@@ -760,12 +760,22 @@ public final class JSGlobalObject {
     private void initializeAsyncGeneratorPrototype(JSContext context, JSObject global) {
         // Create AsyncIteratorPrototype (has Symbol.asyncIterator)
         JSObject asyncIteratorPrototype = context.createJSObject();
+        JSNativeFunction asyncIteratorMethod = new JSNativeFunction(
+                "[Symbol.asyncIterator]",
+                0,
+                (ctx, thisArg, args) -> thisArg);
+        asyncIteratorMethod.initializePrototypeChain(context);
         asyncIteratorPrototype.defineProperty(
                 PropertyKey.fromSymbol(JSSymbol.ASYNC_ITERATOR),
-                PropertyDescriptor.dataDescriptor(
-                        new JSNativeFunction("[Symbol.asyncIterator]", 0,
-                                (ctx, thisArg, args) -> thisArg),
-                        true, false, true));
+                PropertyDescriptor.dataDescriptor(asyncIteratorMethod, true, false, true));
+        JSNativeFunction asyncDisposeMethod = new JSNativeFunction(
+                "[Symbol.asyncDispose]",
+                0,
+                AsyncIteratorPrototype::asyncDispose);
+        asyncDisposeMethod.initializePrototypeChain(context);
+        asyncIteratorPrototype.defineProperty(
+                PropertyKey.fromSymbol(JSSymbol.ASYNC_DISPOSE),
+                PropertyDescriptor.dataDescriptor(asyncDisposeMethod, true, false, true));
 
         // Create AsyncGenerator.prototype inheriting from AsyncIteratorPrototype
         JSObject asyncGeneratorPrototype = context.createJSObject();

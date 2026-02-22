@@ -479,11 +479,34 @@ public class JSAsyncIterator extends JSObject {
                         null,
                         context
                 ),
-                new JSPromise.ReactionRecord(
+                    new JSPromise.ReactionRecord(
                         new JSNativeFunction("onNextRejected", 1, (childContext, thisArg, args) -> {
                             // If next() fails, reject completion promise
                             JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                            completionPromise.reject(error);
+                            JSPromise closePromise = iterator.close();
+                            if (closePromise == null) {
+                                completionPromise.reject(error);
+                                return JSUndefined.INSTANCE;
+                            }
+                            closePromise.addReactions(
+                                    new JSPromise.ReactionRecord(
+                                            new JSNativeFunction("onCloseResolve", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                                completionPromise.reject(error);
+                                                return JSUndefined.INSTANCE;
+                                            }),
+                                            null,
+                                            childContext
+                                    ),
+                                    new JSPromise.ReactionRecord(
+                                            new JSNativeFunction("onCloseReject", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                                // Preserve the original next() rejection reason.
+                                                completionPromise.reject(error);
+                                                return JSUndefined.INSTANCE;
+                                            }),
+                                            null,
+                                            childContext
+                                    )
+                            );
                             return JSUndefined.INSTANCE;
                         }),
                         null,
@@ -611,11 +634,21 @@ public class JSAsyncIterator extends JSObject {
         if (iter == null) {
             return null;
         }
-        JSValue returnMethod = iter.get(PropertyKey.RETURN);
+        JSValue returnMethod = iter.get(context, PropertyKey.RETURN);
+        if (context.hasPendingException()) {
+            JSPromise rejected = context.createJSPromise();
+            rejected.reject(consumePendingException(context));
+            return rejected;
+        }
         if (!(returnMethod instanceof JSFunction returnFunc)) {
             return null;
         }
         JSValue result = returnFunc.call(context, iter, new JSValue[0]);
+        if (context.hasPendingException()) {
+            JSPromise rejected = context.createJSPromise();
+            rejected.reject(consumePendingException(context));
+            return rejected;
+        }
         if (result instanceof JSPromise promise) {
             return promise;
         }
