@@ -228,6 +228,51 @@ public final class JSBytecodeFunction extends JSFunction {
         promise.fulfill(iterResult);
     }
 
+    private static void fulfillAsyncYieldStarResult(JSContext context, JSPromise promise, JSObject iteratorResultObject) {
+        JSValue doneValue = iteratorResultObject.get(context, PropertyKey.DONE);
+        if (context.hasPendingException()) {
+            JSValue error = context.getPendingException();
+            context.clearAllPendingExceptions();
+            promise.reject(error);
+            return;
+        }
+        boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
+        if (context.hasPendingException()) {
+            JSValue error = context.getPendingException();
+            context.clearAllPendingExceptions();
+            promise.reject(error);
+            return;
+        }
+        JSValue value = iteratorResultObject.get(context, PropertyKey.VALUE);
+        if (context.hasPendingException()) {
+            JSValue error = context.getPendingException();
+            context.clearAllPendingExceptions();
+            promise.reject(error);
+            return;
+        }
+        JSPromise asyncFromSyncResultPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
+        asyncFromSyncResultPromise.addReactions(
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onResolve", 1, (childContext, thisArg, args) -> {
+                            JSValue resolvedResult = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            promise.fulfill(resolvedResult);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                ),
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onReject", 1, (childContext, thisArg, args) -> {
+                            JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            promise.reject(error);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                )
+        );
+    }
+
     @Override
     public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         // Per ES spec, each function has a [[Realm]] internal slot. When called cross-realm,
@@ -279,9 +324,10 @@ public final class JSBytecodeFunction extends JSFunction {
                     } else {
                         // Generator yielded - check if yield* (already has {value, done})
                         YieldResult lastYield = context.getVirtualMachine().getLastYieldResult();
-                        if (lastYield != null && lastYield.isYieldStar() && result instanceof JSObject) {
-                            // yield* returns raw iterator result - don't wrap again
-                            promise.fulfill(result);
+                        if (lastYield != null && lastYield.isYieldStar() && result instanceof JSObject iteratorResultObject) {
+                            // ASYNC_YIELD_STAR currently returns a raw sync iterator result object.
+                            // Apply async-from-sync iterator-result processing here.
+                            fulfillAsyncYieldStarResult(context, promise, iteratorResultObject);
                         } else {
                             // Per ES spec AsyncGeneratorYield step 8: Await the yielded value
                             fulfillAsyncYield(context, promise, result, false);
