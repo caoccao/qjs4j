@@ -85,11 +85,19 @@ public final class JSAsyncGenerator extends JSObject {
      * @return An async generator
      */
     public static JSAsyncGenerator create(AsyncYieldFunction yielder, JSContext context) {
-        return new JSAsyncGenerator((inputValue, isThrow) -> {
-            if (isThrow) {
+        return new JSAsyncGenerator((inputValue, requestKind) -> {
+            if (requestKind == AsyncGeneratorRequestKind.THROW) {
                 // If throwing, reject the promise
                 JSPromise promise = context.createJSPromise();
                 promise.reject(inputValue);
+                return promise;
+            }
+            if (requestKind == AsyncGeneratorRequestKind.RETURN) {
+                JSPromise promise = context.createJSPromise();
+                JSObject result = context.createJSObject();
+                result.set(PropertyKey.VALUE, inputValue);
+                result.set(PropertyKey.DONE, JSBoolean.TRUE);
+                promise.fulfill(result);
                 return promise;
             }
             return yielder.yieldNext(inputValue);
@@ -204,7 +212,8 @@ public final class JSAsyncGenerator extends JSObject {
         return promise;
     }
 
-    private void executeNextOrThrow(AsyncGeneratorRequest request, boolean isThrow) {
+    private void executeRequestWithGeneratorFunction(AsyncGeneratorRequest request) {
+        boolean isThrow = request.kind() == AsyncGeneratorRequestKind.THROW;
         if (state == AsyncGeneratorState.COMPLETED) {
             if (isThrow) {
                 request.promise().reject(request.value());
@@ -217,12 +226,12 @@ public final class JSAsyncGenerator extends JSObject {
         }
 
         state = AsyncGeneratorState.EXECUTING;
-        if (isThrow) {
+        if (request.kind() == AsyncGeneratorRequestKind.THROW) {
             thrownValue = request.value();
         }
 
         try {
-            JSPromise resultPromise = generatorFunction.executeNext(request.value(), isThrow);
+            JSPromise resultPromise = generatorFunction.executeNext(request.value(), request.kind());
             if (resultPromise.getState() == JSPromise.PromiseState.FULFILLED) {
                 JSValue result = resultPromise.getResult();
                 processResult(result);
@@ -252,11 +261,11 @@ public final class JSAsyncGenerator extends JSObject {
                             new JSNativeFunction("onRejected", 1, (childContext, thisArg, args) -> {
                                 state = AsyncGeneratorState.COMPLETED;
                                 JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                                request.promise().reject(error);
-                                drainRequestQueue();
-                                return JSUndefined.INSTANCE;
-                            }),
-                            null,
+                request.promise().reject(error);
+                drainRequestQueue();
+                return JSUndefined.INSTANCE;
+            }),
+            null,
                             context
                     )
             );
@@ -278,20 +287,7 @@ public final class JSAsyncGenerator extends JSObject {
 
     private void executeRequest(AsyncGeneratorRequest request) {
         switch (request.kind()) {
-            case NEXT -> executeNextOrThrow(request, false);
-            case THROW -> executeNextOrThrow(request, true);
-            case RETURN -> {
-                if (state == AsyncGeneratorState.COMPLETED) {
-                    request.promise().fulfill(createIteratorResultObject(request.value(), true));
-                    drainRequestQueue();
-                    return;
-                }
-                state = AsyncGeneratorState.AWAITING_RETURN;
-                returnValue = request.value();
-                state = AsyncGeneratorState.COMPLETED;
-                request.promise().fulfill(createIteratorResultObject(request.value(), true));
-                drainRequestQueue();
-            }
+            case NEXT, THROW, RETURN -> executeRequestWithGeneratorFunction(request);
         }
     }
 
@@ -326,11 +322,11 @@ public final class JSAsyncGenerator extends JSObject {
         /**
          * Execute the next step of the generator.
          *
-         * @param inputValue Value passed to next()
-         * @param isThrow    Whether this is a throw() call
+         * @param inputValue   Value passed to next()/return()/throw()
+         * @param requestKind  The async generator request kind
          * @return A promise that resolves to {value, done}
          */
-        JSPromise executeNext(JSValue inputValue, boolean isThrow);
+        JSPromise executeNext(JSValue inputValue, AsyncGeneratorRequestKind requestKind);
     }
 
     /**
@@ -349,7 +345,7 @@ public final class JSAsyncGenerator extends JSObject {
     private record AsyncGeneratorRequest(AsyncGeneratorRequestKind kind, JSValue value, JSPromise promise) {
     }
 
-    private enum AsyncGeneratorRequestKind {
+    public enum AsyncGeneratorRequestKind {
         NEXT,
         RETURN,
         THROW

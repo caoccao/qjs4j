@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.test262;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -70,6 +71,25 @@ public class Test262Reporter {
         int total = getTotalTests();
         int executed = getTotalExecuted();
 
+        if (!failures.isEmpty()) {
+            List<TestResult> sortedFailures = new ArrayList<>(failures);
+            sortedFailures.sort(Comparator.comparingInt(r -> r.getTestCase().getIndex()));
+            System.out.println("\nFailed Tests:");
+            for (TestResult failure : sortedFailures) {
+                System.out.printf("  ❌ %s%n", failure.getTestCase().getPath());
+                if (failure.getMessage() != null) {
+                    System.out.printf("     %s%n", failure.getMessage());
+                }
+            }
+        }
+
+        if (!timeouts.isEmpty()) {
+            System.out.println("\nTimeout Tests:");
+            for (TestResult timeout : timeouts) {
+                System.out.printf("  ⏱️  %s%n", timeout.getTestCase().getPath());
+            }
+        }
+
         System.out.println("\n" + "=".repeat(70));
         System.out.println("Test262 Results Summary");
         System.out.println("=".repeat(70));
@@ -87,28 +107,6 @@ public class Test262Reporter {
 
         System.out.printf("Skipped:       %d%n", skipped.get());
         System.out.println("=".repeat(70));
-
-        if (!failures.isEmpty()) {
-            System.out.println("\nFailed Tests (showing first 50):");
-            int count = 0;
-            for (TestResult failure : failures) {
-                if (count++ >= 50) {
-                    System.out.printf("  ... and %d more failures%n", failures.size() - 50);
-                    break;
-                }
-                System.out.printf("  ❌ %s%n", failure.getTestCase().getPath());
-                if (failure.getMessage() != null) {
-                    System.out.printf("     %s%n", failure.getMessage());
-                }
-            }
-        }
-
-        if (!timeouts.isEmpty()) {
-            System.out.println("\nTimeout Tests:");
-            for (TestResult timeout : timeouts) {
-                System.out.printf("  ⏱️  %s%n", timeout.getTestCase().getPath());
-            }
-        }
     }
 
     public void recordResult(TestResult result) {

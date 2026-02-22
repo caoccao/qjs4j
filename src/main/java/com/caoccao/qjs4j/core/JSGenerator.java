@@ -232,6 +232,10 @@ public final class JSGenerator extends JSObject {
             // and the yield* bytecode calls iterator.return(value).
             com.caoccao.qjs4j.vm.YieldResult lastYield = context.getVirtualMachine().getLastYieldResult();
             if (lastYield != null && lastYield.isYieldStar()) {
+                // The replay-based generator implementation replays an earlier yield point
+                // before reaching the delegated yield* resume site. Preserve RETURN for the
+                // later yield* handler by consuming a dummy NEXT during replay.
+                generatorState.recordResume(JSGeneratorState.ResumeKind.NEXT, JSUndefined.INSTANCE);
                 generatorState.recordResume(JSGeneratorState.ResumeKind.RETURN, returnVal);
                 state = State.EXECUTING;
                 try {

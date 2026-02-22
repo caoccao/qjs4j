@@ -36,12 +36,20 @@ public final class AsyncGeneratorPrototype {
      * @return An async generator that yields values "asynchronously"
      */
     public static JSAsyncGenerator createDelayedGenerator(JSContext context, JSValue[] values) {
-        return new JSAsyncGenerator((inputValue, isThrow) -> {
+        return new JSAsyncGenerator((inputValue, requestKind) -> {
             final int[] index = {0};
 
-            if (isThrow) {
+            if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.THROW) {
                 JSPromise promise = context.createJSPromise();
                 promise.reject(inputValue);
+                return promise;
+            }
+            if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.RETURN) {
+                JSPromise promise = context.createJSPromise();
+                JSObject result = context.createJSObject();
+                result.set(PropertyKey.VALUE, inputValue);
+                result.set(PropertyKey.DONE, JSBoolean.TRUE);
+                promise.fulfill(result);
                 return promise;
             }
 
@@ -81,13 +89,21 @@ public final class AsyncGeneratorPrototype {
      * @return An async generator
      */
     public static JSAsyncGenerator createFromPromises(JSContext context, JSPromise[] promises) {
-        return new JSAsyncGenerator((inputValue, isThrow) -> {
+        return new JSAsyncGenerator((inputValue, requestKind) -> {
             // Use a holder to track the current index
             final int[] index = {0};
 
-            if (isThrow) {
+            if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.THROW) {
                 JSPromise promise = context.createJSPromise();
                 promise.reject(inputValue);
+                return promise;
+            }
+            if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.RETURN) {
+                JSPromise promise = context.createJSPromise();
+                JSObject result = context.createJSObject();
+                result.set(PropertyKey.VALUE, inputValue);
+                result.set(PropertyKey.DONE, JSBoolean.TRUE);
+                promise.fulfill(result);
                 return promise;
             }
 

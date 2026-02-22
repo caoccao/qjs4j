@@ -22,9 +22,6 @@ import com.caoccao.qjs4j.test262.harness.HarnessLoader;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Executes test262 test cases with proper flag handling.
@@ -105,23 +102,27 @@ public class Test262Executor {
 
     private TestResult executeAsync(JSContext context, JSRuntime runtime,
                                     String code, Test262TestCase test) {
-        // Set up $DONE callback
-        AtomicReference<Object> doneResult = new AtomicReference<>();
-        CountDownLatch doneLatch = new CountDownLatch(1);
-
         try {
+            // Set execution deadline to prevent hangs in eval/runJobs
+            if (syncTimeoutMs > 0) {
+                context.getVirtualMachine().setExecutionDeadline(
+                        System.currentTimeMillis() + syncTimeoutMs);
+            }
+
             JSObject globalObject = context.getGlobalObject();
+
+            // $DONE is called synchronously from within runJobs on the same thread,
+            // so a simple array is sufficient to capture the result.
+            Object[] doneResult = {null};
+            boolean[] doneCalled = {false};
 
             JSNativeFunction doneFunction = new JSNativeFunction("$DONE", 1,
                     (ctx, thisArg, args) -> {
+                        doneCalled[0] = true;
                         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
                             // Error passed to $DONE
-                            doneResult.set(args[0].toString());
-                        } else {
-                            // Success - no error
-                            doneResult.set(null);
+                            doneResult[0] = args[0].toString();
                         }
-                        doneLatch.countDown();
                         return JSUndefined.INSTANCE;
                     }
             );
@@ -134,20 +135,16 @@ public class Test262Executor {
             // Process microtasks (promises)
             runtime.runJobs();
 
-            // Wait for $DONE with timeout
-            boolean completed = doneLatch.await(asyncTimeoutMs, TimeUnit.MILLISECONDS);
-
-            if (!completed) {
-                return TestResult.timeout(test);
+            if (!doneCalled[0]) {
+                return TestResult.fail(test, "Async test did not call $DONE");
             }
 
-            Object result = doneResult.get();
-            if (result != null) {
+            if (doneResult[0] != null) {
                 // $DONE was called with an error
                 if (test.getNegative() != null) {
-                    return checkNegativeResult(result.toString(), test);
+                    return checkNegativeResult(doneResult[0].toString(), test);
                 } else {
-                    return TestResult.fail(test, "Async error: " + result);
+                    return TestResult.fail(test, "Async error: " + doneResult[0]);
                 }
             } else {
                 // $DONE was called without error
@@ -160,17 +157,24 @@ public class Test262Executor {
 
         } catch (JSException e) {
             return handleException(e, test);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return TestResult.timeout(test);
         } catch (Exception e) {
+            if (e.getMessage() != null && e.getMessage().contains("execution timeout")) {
+                return TestResult.timeout(test);
+            }
             return handleException(e, test);
+        } finally {
+            context.getVirtualMachine().setExecutionDeadline(0);
         }
     }
 
     private TestResult executeModule(JSContext context, JSRuntime runtime,
                                      String code, Test262TestCase test) {
         try {
+            // Set execution deadline to prevent hangs
+            if (syncTimeoutMs > 0) {
+                context.getVirtualMachine().setExecutionDeadline(
+                        System.currentTimeMillis() + syncTimeoutMs);
+            }
             context.eval(code, test.getPath().toString(), true);
             runtime.runJobs();
 
@@ -182,7 +186,12 @@ public class Test262Executor {
         } catch (JSException e) {
             return handleException(e, test);
         } catch (Exception e) {
+            if (e.getMessage() != null && e.getMessage().contains("execution timeout")) {
+                return TestResult.timeout(test);
+            }
             return handleException(e, test);
+        } finally {
+            context.getVirtualMachine().setExecutionDeadline(0);
         }
     }
 

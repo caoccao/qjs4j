@@ -119,10 +119,13 @@ public class Test262Runner {
                 threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, taskQueue);
         AtomicInteger testCount = new AtomicInteger(0);
 
-        for (Path testFile : testFiles) {
+        for (int i = 0; i < testFiles.size(); i++) {
+            final Path testFile = testFiles.get(i);
+            final int fileIndex = i;
             executorService.submit(() -> {
                 try {
                     Test262TestCase testCase = parser.parse(testFile);
+                    testCase.setIndex(fileIndex);
 
                     // Apply filters
                     if (config.shouldSkipTest(testCase)) {

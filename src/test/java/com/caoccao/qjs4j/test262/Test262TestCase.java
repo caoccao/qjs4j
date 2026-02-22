@@ -31,6 +31,7 @@ public class Test262TestCase {
     private Set<String> features = new HashSet<>();
     private Set<String> flags = new HashSet<>();
     private Set<String> includes = new HashSet<>();
+    private int index;
     private NegativeInfo negative;
     private Path path;
 
@@ -73,6 +74,10 @@ public class Test262TestCase {
         return flags;
     }
 
+    public int getIndex() {
+        return index;
+    }
+
     public Set<String> getIncludes() {
         return includes;
     }
@@ -112,6 +117,10 @@ public class Test262TestCase {
 
     public void setFlags(Set<String> flags) {
         this.flags = flags;
+    }
+
+    public void setIndex(int index) {
+        this.index = index;
     }
 
     public void setIncludes(Set<String> includes) {

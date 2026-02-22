@@ -2727,7 +2727,15 @@ public final class VirtualMachine {
                         sp--; // next method
                         JSValue iteratorValue = (JSValue) stack[--sp];
                         if (iteratorValue instanceof JSObject iteratorObject && !iteratorValue.isUndefined()) {
-                            JSValue returnMethodValue = iteratorObject.get(PropertyKey.RETURN);
+                            JSValue returnMethodValue = iteratorObject.get(context, PropertyKey.RETURN);
+                            if (context.hasPendingException()) {
+                                if (originalPendingException == null) {
+                                    pendingException = context.getPendingException();
+                                }
+                                context.clearPendingException();
+                                pc += op.getSize();
+                                break;
+                            }
                             if (returnMethodValue instanceof JSFunction returnMethod) {
                                 JSValue closeResult = returnMethod.call(context, iteratorObject, EMPTY_ARGS);
                                 if (context.hasPendingException()) {
@@ -2779,8 +2787,13 @@ public final class VirtualMachine {
 
                         String methodName = (flags & 1) != 0 ? "throw" : "return";
                         JSValue methodValue = (flags & 1) != 0
-                                ? iteratorObject.get(PropertyKey.THROW)
-                                : iteratorObject.get(PropertyKey.RETURN);
+                                ? iteratorObject.get(context, PropertyKey.THROW)
+                                : iteratorObject.get(context, PropertyKey.RETURN);
+                        if (context.hasPendingException()) {
+                            throw new JSVirtualMachineException(
+                                    context.getPendingException().toString(),
+                                    context.getPendingException());
+                        }
                         boolean noMethod = methodValue.isNullOrUndefined();
                         if (!noMethod) {
                             if (!(methodValue instanceof JSFunction method)) {
@@ -4358,7 +4371,12 @@ public final class VirtualMachine {
             JSValue returnValue = resumeRecord.value();
 
             // Get "return" method from iterator
-            JSValue returnMethodValue = iteratorObj.get(PropertyKey.RETURN);
+            JSValue returnMethodValue = iteratorObj.get(context, PropertyKey.RETURN);
+            if (context.hasPendingException()) {
+                throw new JSVirtualMachineException(
+                        context.getPendingException().toString(),
+                        context.getPendingException());
+            }
             boolean noReturnMethod = returnMethodValue.isNullOrUndefined();
 
             if (noReturnMethod) {
@@ -4373,6 +4391,11 @@ public final class VirtualMachine {
 
             // Call iterator.return(value)
             JSValue result = returnFunc.call(context, iteratorObj, new JSValue[]{returnValue});
+            if (context.hasPendingException()) {
+                throw new JSVirtualMachineException(
+                        context.getPendingException().toString(),
+                        context.getPendingException());
+            }
 
             // Check result is an object (per spec, TypeError if not)
             if (!(result instanceof JSObject)) {
@@ -4380,10 +4403,20 @@ public final class VirtualMachine {
             }
 
             // Check done flag
-            JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
+            JSValue doneValue = ((JSObject) result).get(context, PropertyKey.DONE);
+            if (context.hasPendingException()) {
+                throw new JSVirtualMachineException(
+                        context.getPendingException().toString(),
+                        context.getPendingException());
+            }
             if (JSTypeConversions.toBoolean(doneValue).value()) {
                 // Done - push value and complete (don't yield)
-                JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
+                JSValue value = ((JSObject) result).get(context, PropertyKey.VALUE);
+                if (context.hasPendingException()) {
+                    throw new JSVirtualMachineException(
+                            context.getPendingException().toString(),
+                            context.getPendingException());
+                }
                 valueStack.push(value);
                 return;
             } else {
