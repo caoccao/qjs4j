@@ -2722,6 +2722,7 @@ public final class VirtualMachine {
                         pc += op.getSize();
                     }
                     case ITERATOR_CLOSE -> {
+                        final JSValue originalPendingException = pendingException;
                         sp--; // catch_offset
                         sp--; // next method
                         JSValue iteratorValue = (JSValue) stack[--sp];
@@ -2730,12 +2731,16 @@ public final class VirtualMachine {
                             if (returnMethodValue instanceof JSFunction returnMethod) {
                                 JSValue closeResult = returnMethod.call(context, iteratorObject, EMPTY_ARGS);
                                 if (context.hasPendingException()) {
-                                    pendingException = context.getPendingException();
+                                    if (originalPendingException == null) {
+                                        pendingException = context.getPendingException();
+                                    }
                                     context.clearPendingException();
                                 } else if (!(closeResult instanceof JSObject)) {
                                     // Per ES2024 7.4.6 IteratorClose step 6:
                                     // If innerResult.[[Value]] is not an Object, throw TypeError
-                                    pendingException = context.throwTypeError("iterator result is not an object");
+                                    if (originalPendingException == null) {
+                                        pendingException = context.throwTypeError("iterator result is not an object");
+                                    }
                                 }
                             } else if (returnMethodValue.isUndefined() || returnMethodValue.isNull()) {
                                 // No return method - that's fine, skip
@@ -2744,7 +2749,9 @@ public final class VirtualMachine {
                                 // This shouldn't happen since IsHTMLDDA is a JSFunction,
                                 // but handle for completeness
                             } else {
-                                pendingException = context.throwTypeError("iterator return is not a function");
+                                if (originalPendingException == null) {
+                                    pendingException = context.throwTypeError("iterator return is not a function");
+                                }
                             }
                         }
                         pc += op.getSize();
@@ -3479,6 +3486,7 @@ public final class VirtualMachine {
         // First, try Symbol.asyncIterator
         JSValue asyncIteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ASYNC_ITERATOR);
         JSValue iteratorMethod = null;
+        boolean wrapSyncIteratorAsAsync = false;
 
         if (asyncIteratorMethod instanceof JSFunction) {
             iteratorMethod = asyncIteratorMethod;
@@ -3494,6 +3502,7 @@ public final class VirtualMachine {
                 pendingException = context.throwTypeError("object is not async iterable");
                 return;
             }
+            wrapSyncIteratorAsAsync = true;
         }
 
         // Call the iterator method to get an iterator
@@ -3511,14 +3520,124 @@ public final class VirtualMachine {
         // Get the next() method from the iterator
         JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
 
-        if (!(nextMethod instanceof JSFunction)) {
+        if (!(nextMethod instanceof JSFunction nextFunction)) {
             pendingException = context.throwTypeError("iterator must have a next method");
             return;
         }
 
+        JSValue nextMethodForStack = nextFunction;
+        if (wrapSyncIteratorAsAsync) {
+            final JSObject syncIteratorObject = iteratorObj;
+            final JSFunction syncNextFunction = nextFunction;
+            nextMethodForStack = new JSNativeFunction("next", 0, (childContext, thisArg, args) -> {
+                JSValue syncResult;
+                try {
+                    syncResult = syncNextFunction.call(childContext, syncIteratorObject, EMPTY_ARGS);
+                } catch (JSException e) {
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    if (childContext.hasPendingException()) {
+                        childContext.clearAllPendingExceptions();
+                    }
+                    rejectedPromise.reject(e.getErrorValue());
+                    return rejectedPromise;
+                } catch (Exception e) {
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    JSValue reason;
+                    if (childContext.hasPendingException()) {
+                        reason = childContext.getPendingException();
+                        childContext.clearAllPendingExceptions();
+                    } else {
+                        String message = e.getMessage();
+                        reason = new JSString(message != null ? message : e.toString());
+                    }
+                    rejectedPromise.reject(reason);
+                    return rejectedPromise;
+                }
+                if (childContext.hasPendingException()) {
+                    JSValue reason = childContext.getPendingException();
+                    childContext.clearAllPendingExceptions();
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    rejectedPromise.reject(reason);
+                    return rejectedPromise;
+                }
+                if (!(syncResult instanceof JSObject syncResultObject)) {
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    rejectedPromise.reject(childContext.throwTypeError("iterator result must be an object"));
+                    childContext.clearPendingException();
+                    return rejectedPromise;
+                }
+
+                JSValue value = syncResultObject.get(PropertyKey.VALUE);
+                if (childContext.hasPendingException()) {
+                    JSValue reason = childContext.getPendingException();
+                    childContext.clearAllPendingExceptions();
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    rejectedPromise.reject(reason);
+                    return rejectedPromise;
+                }
+                JSValue doneValue = syncResultObject.get(PropertyKey.DONE);
+                if (childContext.hasPendingException()) {
+                    JSValue reason = childContext.getPendingException();
+                    childContext.clearAllPendingExceptions();
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    rejectedPromise.reject(reason);
+                    return rejectedPromise;
+                }
+                boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
+                if (childContext.hasPendingException()) {
+                    JSValue reason = childContext.getPendingException();
+                    childContext.clearAllPendingExceptions();
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    rejectedPromise.reject(reason);
+                    return rejectedPromise;
+                }
+                JSPromise asyncFromSyncResultPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(childContext, value, done);
+                if (done) {
+                    return asyncFromSyncResultPromise;
+                }
+                JSPromise closeOnRejectionPromise = childContext.createJSPromise();
+                asyncFromSyncResultPromise.addReactions(
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onFulfilled", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                                    JSValue iteratorResult = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                                    closeOnRejectionPromise.fulfill(iteratorResult);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                null,
+                                childContext
+                        ),
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onRejected", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                                    JSValue reason = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                                    JSValue returnMethodValue = syncIteratorObject.get(PropertyKey.RETURN);
+                                    if (callbackContext.hasPendingException()) {
+                                        callbackContext.clearAllPendingExceptions();
+                                    } else if (returnMethodValue instanceof JSFunction returnFunction) {
+                                        JSValue closeResult = returnFunction.call(callbackContext, syncIteratorObject, EMPTY_ARGS);
+                                        if (callbackContext.hasPendingException()) {
+                                            callbackContext.clearAllPendingExceptions();
+                                        } else if (!(closeResult instanceof JSObject)) {
+                                            // Preserve the original rejection reason during close-on-rejection.
+                                        }
+                                    } else if (returnMethodValue.isUndefined() || returnMethodValue.isNull()) {
+                                        // No return method.
+                                    } else {
+                                        // Non-callable return method is ignored here to preserve original rejection.
+                                    }
+                                    closeOnRejectionPromise.reject(reason);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                null,
+                                childContext
+                        )
+                );
+                return closeOnRejectionPromise;
+            });
+        }
+
         // Push iterator, next method, and catch offset (0) onto the stack
         valueStack.push(iterator);         // Iterator object
-        valueStack.push(nextMethod);       // next() method
+        valueStack.push(nextMethodForStack);       // next() method
         valueStack.push(JSNumber.of(0));  // Catch offset (placeholder)
     }
 

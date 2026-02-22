@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.core;
 
+import java.util.ArrayDeque;
+import java.util.Queue;
+
 /**
  * Represents an async generator object in JavaScript.
  * Based on ES2018 async generator specification.
@@ -31,6 +34,7 @@ public final class JSAsyncGenerator extends JSObject {
     public static final String NAME = "AsyncGenerator";
     private final JSContext context;
     private final AsyncGeneratorFunction generatorFunction;
+    private final Queue<AsyncGeneratorRequest> requestQueue;
     private JSValue returnValue;
     private AsyncGeneratorState state;
     private JSValue thrownValue;
@@ -46,6 +50,7 @@ public final class JSAsyncGenerator extends JSObject {
         this.state = AsyncGeneratorState.SUSPENDED_START;
         this.context = context;
         this.generatorFunction = generatorFunction;
+        this.requestQueue = new ArrayDeque<>();
         this.returnValue = JSUndefined.INSTANCE;
         this.thrownValue = null;
 
@@ -128,74 +133,7 @@ public final class JSAsyncGenerator extends JSObject {
      * @return A promise that resolves to {value, done}
      */
     public JSPromise next(JSValue value) {
-        if (state == AsyncGeneratorState.COMPLETED) {
-            // Generator already completed
-            return createIteratorResultPromise(returnValue, true);
-        }
-
-        if (state == AsyncGeneratorState.EXECUTING) {
-            // Generator is already running - queue this request
-            JSPromise promise = context.createJSPromise();
-            JSObject error = context.createJSObject();
-            error.set(PropertyKey.NAME, new JSString("TypeError"));
-            error.set(PropertyKey.MESSAGE, new JSString("Generator is already executing"));
-            promise.reject(error);
-            return promise;
-        }
-
-        state = AsyncGeneratorState.EXECUTING;
-
-        try {
-            // Execute the generator function
-            JSPromise resultPromise = generatorFunction.executeNext(value, false);
-
-            // If the result promise is already fulfilled (synchronous generator execution),
-            // process the result immediately to update generator state before returning.
-            if (resultPromise.getState() == JSPromise.PromiseState.FULFILLED) {
-                JSValue result = resultPromise.getResult();
-                processResult(result);
-                return createIteratorResultFromResult(result);
-            }
-
-            if (resultPromise.getState() == JSPromise.PromiseState.REJECTED) {
-                state = AsyncGeneratorState.COMPLETED;
-                JSPromise errorPromise = context.createJSPromise();
-                errorPromise.reject(resultPromise.getResult());
-                return errorPromise;
-            }
-
-            // Pending promise — chain reactions for async resolution
-            JSPromise finalPromise = context.createJSPromise();
-            resultPromise.addReactions(
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onFulfilled", 1, (childContext, thisArg, args) -> {
-                                JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                                processResult(result);
-                                finalPromise.fulfill(result);
-                                return JSUndefined.INSTANCE;
-                            }),
-                            finalPromise,
-                            context
-                    ),
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onRejected", 1, (childContext, thisArg, args) -> {
-                                state = AsyncGeneratorState.COMPLETED;
-                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                                finalPromise.reject(error);
-                                return JSUndefined.INSTANCE;
-                            }),
-                            finalPromise,
-                            context
-                    )
-            );
-
-            return finalPromise;
-        } catch (Exception e) {
-            state = AsyncGeneratorState.COMPLETED;
-            JSPromise errorPromise = context.createJSPromise();
-            errorPromise.reject(new JSString("Async generator error: " + e.getMessage()));
-            return errorPromise;
-        }
+        return enqueueRequest(AsyncGeneratorRequestKind.NEXT, value);
     }
 
     private void processResult(JSValue result) {
@@ -219,17 +157,7 @@ public final class JSAsyncGenerator extends JSObject {
      * @return A promise that resolves to {value, done: true}
      */
     public JSPromise return_(JSValue value) {
-        if (state == AsyncGeneratorState.COMPLETED) {
-            // Already completed, return the value
-            return createIteratorResultPromise(value, true);
-        }
-
-        state = AsyncGeneratorState.AWAITING_RETURN;
-        returnValue = value;
-
-        // In a full implementation, this would execute finally blocks
-        state = AsyncGeneratorState.COMPLETED;
-        return createIteratorResultPromise(value, true);
+        return enqueueRequest(AsyncGeneratorRequestKind.RETURN, value);
     }
 
     /**
@@ -240,66 +168,123 @@ public final class JSAsyncGenerator extends JSObject {
      * @return A promise that resolves to the next value or rejects
      */
     public JSPromise throw_(JSValue exception) {
+        return enqueueRequest(AsyncGeneratorRequestKind.THROW, exception);
+    }
+
+    private void drainRequestQueue() {
+        if (state == AsyncGeneratorState.EXECUTING) {
+            return;
+        }
+        AsyncGeneratorRequest request = requestQueue.poll();
+        if (request == null) {
+            return;
+        }
+        executeRequest(request);
+    }
+
+    private JSPromise enqueueRequest(AsyncGeneratorRequestKind kind, JSValue value) {
+        JSPromise promise = context.createJSPromise();
+        requestQueue.offer(new AsyncGeneratorRequest(kind, value, promise));
+        drainRequestQueue();
+        return promise;
+    }
+
+    private void executeNextOrThrow(AsyncGeneratorRequest request, boolean isThrow) {
         if (state == AsyncGeneratorState.COMPLETED) {
-            // Generator is completed, reject immediately
-            JSPromise promise = context.createJSPromise();
-            promise.reject(exception);
-            return promise;
+            if (isThrow) {
+                request.promise().reject(request.value());
+            } else {
+                JSValue completedValue = request.kind() == AsyncGeneratorRequestKind.NEXT ? returnValue : request.value();
+                request.promise().fulfill(createIteratorResultObject(completedValue, true));
+            }
+            drainRequestQueue();
+            return;
         }
 
         state = AsyncGeneratorState.EXECUTING;
-        thrownValue = exception;
+        if (isThrow) {
+            thrownValue = request.value();
+        }
 
         try {
-            // Execute the generator with the thrown value
-            JSPromise resultPromise = generatorFunction.executeNext(exception, true);
-
-            // If already resolved synchronously, process immediately
+            JSPromise resultPromise = generatorFunction.executeNext(request.value(), isThrow);
             if (resultPromise.getState() == JSPromise.PromiseState.FULFILLED) {
                 JSValue result = resultPromise.getResult();
                 processResult(result);
-                return createIteratorResultFromResult(result);
+                request.promise().fulfill(result);
+                drainRequestQueue();
+                return;
             }
-
             if (resultPromise.getState() == JSPromise.PromiseState.REJECTED) {
                 state = AsyncGeneratorState.COMPLETED;
-                JSPromise errorPromise = context.createJSPromise();
-                errorPromise.reject(resultPromise.getResult());
-                return errorPromise;
+                request.promise().reject(resultPromise.getResult());
+                drainRequestQueue();
+                return;
             }
-
-            // Pending promise — chain reactions for async resolution
-            JSPromise finalPromise = context.createJSPromise();
             resultPromise.addReactions(
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onFulfilled", 1, (childContext, thisArg, args) -> {
                                 JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                 processResult(result);
-                                finalPromise.fulfill(result);
+                                request.promise().fulfill(result);
+                                drainRequestQueue();
                                 return JSUndefined.INSTANCE;
                             }),
-                            finalPromise,
+                            null,
                             context
                     ),
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onRejected", 1, (childContext, thisArg, args) -> {
                                 state = AsyncGeneratorState.COMPLETED;
                                 JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                                finalPromise.reject(error);
+                                request.promise().reject(error);
+                                drainRequestQueue();
                                 return JSUndefined.INSTANCE;
                             }),
-                            finalPromise,
+                            null,
                             context
                     )
             );
-
-            return finalPromise;
         } catch (Exception e) {
             state = AsyncGeneratorState.COMPLETED;
-            JSPromise errorPromise = context.createJSPromise();
-            errorPromise.reject(exception);
-            return errorPromise;
+            if (context.hasPendingException()) {
+                JSValue error = context.getPendingException();
+                context.clearAllPendingExceptions();
+                request.promise().reject(error);
+            } else if (isThrow) {
+                request.promise().reject(request.value());
+            } else {
+                String message = e.getMessage();
+                request.promise().reject(new JSString("Async generator error: " + (message != null ? message : e.toString())));
+            }
+            drainRequestQueue();
         }
+    }
+
+    private void executeRequest(AsyncGeneratorRequest request) {
+        switch (request.kind()) {
+            case NEXT -> executeNextOrThrow(request, false);
+            case THROW -> executeNextOrThrow(request, true);
+            case RETURN -> {
+                if (state == AsyncGeneratorState.COMPLETED) {
+                    request.promise().fulfill(createIteratorResultObject(request.value(), true));
+                    drainRequestQueue();
+                    return;
+                }
+                state = AsyncGeneratorState.AWAITING_RETURN;
+                returnValue = request.value();
+                state = AsyncGeneratorState.COMPLETED;
+                request.promise().fulfill(createIteratorResultObject(request.value(), true));
+                drainRequestQueue();
+            }
+        }
+    }
+
+    private JSObject createIteratorResultObject(JSValue value, boolean done) {
+        JSObject result = context.createJSObject();
+        result.set(PropertyKey.VALUE, value);
+        result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+        return result;
     }
 
     @Override
@@ -345,5 +330,13 @@ public final class JSAsyncGenerator extends JSObject {
          * @return A promise that resolves to {value, done}
          */
         JSPromise yieldNext(JSValue inputValue);
+    }
+    private record AsyncGeneratorRequest(AsyncGeneratorRequestKind kind, JSValue value, JSPromise promise) {
+    }
+
+    private enum AsyncGeneratorRequestKind {
+        NEXT,
+        RETURN,
+        THROW
     }
 }
