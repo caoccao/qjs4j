@@ -25,6 +25,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 /**
@@ -107,34 +111,56 @@ public class Test262Runner {
             System.out.println("Limited to first " + config.getMaxTests() + " tests");
         }
 
-        System.out.println("Starting test execution...\n");
+        int threadCount = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
+        System.out.println("Starting test execution with " + threadCount + " threads...\n");
 
-        int testCount = 0;
+        LinkedBlockingQueue<Runnable> taskQueue = new LinkedBlockingQueue<>();
+        ThreadPoolExecutor executorService = new ThreadPoolExecutor(
+                threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, taskQueue);
+        AtomicInteger testCount = new AtomicInteger(0);
+
         for (Path testFile : testFiles) {
-            testCount++;
+            executorService.submit(() -> {
+                try {
+                    Test262TestCase testCase = parser.parse(testFile);
 
+                    // Apply filters
+                    if (config.shouldSkipTest(testCase)) {
+                        reporter.recordSkipped(testCase, "Feature not supported or excluded");
+                        return;
+                    }
+
+                    // Execute test
+                    TestResult result = executor.execute(testCase);
+                    reporter.recordResult(result);
+
+                    // Print progress every 100 tests
+                    int count = testCount.incrementAndGet();
+                    if (count % 100 == 0) {
+                        reporter.printProgress();
+                    }
+
+                } catch (Exception e) {
+                    System.err.println("Error processing test " + testFile + ": " + e.getMessage());
+                }
+            });
+        }
+
+        // Wait for the task queue to drain, then shut down
+        while (!taskQueue.isEmpty()) {
             try {
-                Test262TestCase testCase = parser.parse(testFile);
-
-                // Apply filters
-                if (config.shouldSkipTest(testCase)) {
-                    reporter.recordSkipped(testCase, "Feature not supported or excluded");
-                    continue;
-                }
-
-                // Execute test
-                // System.out.println("  test " + testCount + "/" + testFiles.size() + ": " + testFile);
-                TestResult result = executor.execute(testCase);
-                reporter.recordResult(result);
-
-                // Print progress every 100 tests
-                if (testCount % 100 == 0) {
-                    reporter.printProgress();
-                }
-
-            } catch (Exception e) {
-                System.err.println("Error processing test " + testFile + ": " + e.getMessage());
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             }
+        }
+        executorService.shutdown();
+        try {
+            executorService.awaitTermination(1, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("Test execution interrupted");
         }
 
         reporter.printSummary();

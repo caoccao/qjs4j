@@ -210,6 +210,7 @@ tasks {
     }
     withType<Test> {
         systemProperty("file.encoding", "UTF-8")
+        maxParallelForks = maxOf(1, Runtime.getRuntime().availableProcessors() / 2)
     }
 }
 
