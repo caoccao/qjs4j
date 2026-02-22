@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.memory.GarbageCollector;
 import com.caoccao.qjs4j.utils.AtomTable;
 
@@ -206,9 +207,10 @@ public final class JSRuntime implements AutoCloseable {
                 try {
                     job.run();
                     count++;
+                } catch (JSVirtualMachineException e) {
+                    throw e;
                 } catch (Exception e) {
-                    // In full implementation, this would be handled properly
-                    // For now, just continue with next job
+                    // Job failed, continue with next job
                 }
             }
         }

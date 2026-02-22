@@ -50,6 +50,10 @@ public final class AtomicsObject {
     }
 
     private static int getAtomicIndex(JSContext context, JSTypedArray typedArray, JSValue indexValue) {
+        if (typedArray.getBuffer().isDetached()) {
+            throw new JSTypeErrorException("TypedArray buffer is detached");
+        }
+        int typedArrayLength = typedArray.getLength();
         final long indexLong;
         try {
             indexLong = JSTypeConversions.toIndex(context, indexValue);
@@ -58,7 +62,7 @@ public final class AtomicsObject {
         } catch (JSErrorException e) {
             throw e;
         }
-        if (indexLong >= typedArray.getLength()) {
+        if (indexLong >= typedArrayLength) {
             throw new JSRangeErrorException("Index out of bounds");
         }
         return (int) indexLong;
@@ -592,7 +596,7 @@ public final class AtomicsObject {
         }
         try {
             int index = getAtomicIndex(context, typedArray, args.length >= 2 ? args[1] : JSUndefined.INSTANCE);
-            double countNumber = args.length >= 3
+            double countNumber = args.length >= 3 && !(args[2] instanceof JSUndefined)
                     ? JSTypeConversions.toInteger(context, args[2])
                     : Double.POSITIVE_INFINITY;
             double clampedCount = Math.max(countNumber, 0.0);
@@ -813,42 +817,47 @@ public final class AtomicsObject {
             return context.throwTypeError("Atomics.wait requires a TypedArray");
         }
 
-        if (!(typedArray instanceof JSInt32Array)) {
-            return context.throwTypeError("Atomics.wait only works on Int32Array");
-        }
-
-        int index = (int) ((JSNumber) args[1]).value();
-        int expectedValue = (int) ((JSNumber) args[2]).value();
-        long timeout = args.length >= 4 ? (long) ((JSNumber) args[3]).value() : -1;
-
-        if (index < 0 || index >= typedArray.getLength()) {
-            return context.throwRangeError("Index out of bounds");
-        }
-
-        ByteBuffer byteBuffer = typedArray.getBuffer().getBuffer();
-        int byteOffset = typedArray.getByteOffset() + (index * 4);
-
-        // Check if the value matches
-        int currentValue;
-        synchronized (byteBuffer) {
-            currentValue = byteBuffer.getInt(byteOffset);
-        }
-
-        if (currentValue != expectedValue) {
-            return new JSString("not-equal");
-        }
-
-        // Set up wait
-        IJSArrayBuffer buffer = typedArray.getBuffer();
-        String waitKey = getWaitKey(buffer, index);
-        WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
-
         try {
+            if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSBigInt64Array)) {
+                return context.throwTypeError("Atomics.wait only works on Int32Array or BigInt64Array");
+            }
+
+            int index = getAtomicIndex(context, typedArray, args[1]);
+            long timeout = args.length >= 4 ? (long) JSTypeConversions.toInteger(context, args[3]) : -1;
+            ByteBuffer byteBuffer = requireAtomicBuffer(typedArray);
+            IJSArrayBuffer buffer = typedArray.getBuffer();
+            String waitKey = getWaitKey(buffer, index);
+
+            if (typedArray instanceof JSInt32Array) {
+                int expectedValue = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
+                int currentValue;
+                synchronized (byteBuffer) {
+                    currentValue = byteBuffer.getInt(byteOffset);
+                }
+                if (currentValue != expectedValue) {
+                    return new JSString("not-equal");
+                }
+            } else {
+                long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
+                long currentValue;
+                synchronized (byteBuffer) {
+                    currentValue = byteBuffer.getLong(byteOffset);
+                }
+                if (currentValue != expectedValue) {
+                    return new JSString("not-equal");
+                }
+            }
+
+            WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
             String result = waitList.await(timeout);
             return new JSString(result);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new JSString("timed-out");
+        } catch (JSErrorException e) {
+            return rethrowAsJSValue(context, e);
         }
     }
 
@@ -994,7 +1003,7 @@ public final class AtomicsObject {
         public int notifyWaiters(int count) {
             lock.lock();
             try {
-                int toNotify = (count <= 0) ? waitingCount : Math.min(count, waitingCount);
+                int toNotify = Math.min(Math.max(count, 0), waitingCount);
                 for (int i = 0; i < toNotify; i++) {
                     condition.signal();
                 }
