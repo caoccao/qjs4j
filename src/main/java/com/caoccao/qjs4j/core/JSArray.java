@@ -843,6 +843,12 @@ public final class JSArray extends JSObject {
             // Non-length keys: delegate to JSObject which handles prototype chain
             return super.setWithResult(context, key, value, receiver);
         }
+        // When receiver differs from this (e.g. proxy forwarding to target),
+        // delegate to JSObject so that setOnReceiver invokes the receiver's
+        // [[GetOwnPropertyDescriptor]] and [[DefineOwnProperty]] traps.
+        if (receiver != this) {
+            return super.setWithResult(context, key, value, receiver);
+        }
         // Per ES spec ArraySetLength / QuickJS set_array_length:
         // Coerce value BEFORE the read-only test
         Long newLength = toArrayLengthForLengthProperty(context, value);
