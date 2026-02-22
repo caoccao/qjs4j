@@ -2266,8 +2266,11 @@ public final class ArrayPrototype {
             start = 0;
         }
 
-        // Calculate delete count
-        long deleteCount = length - start;
+        // Calculate delete count: 0 args → del=0, 1 arg → del=len-start, 2+ args → clamp(arg)
+        long deleteCount = 0;
+        if (args.length > 0) {
+            deleteCount = length - start;
+        }
         if (args.length > 1) {
             double d = JSTypeConversions.toInteger(context, args[1]);
             if (context.hasPendingException()) {
