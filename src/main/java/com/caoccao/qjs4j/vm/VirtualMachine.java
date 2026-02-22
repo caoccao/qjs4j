@@ -37,6 +37,7 @@ public final class VirtualMachine {
     private static final JSValue[] EMPTY_ARGS = new JSValue[0];
     private static final int INTERRUPT_CHECK_INTERVAL = 0xFFFF; // Check every ~65K opcodes
     private static final JSObject UNINITIALIZED_MARKER = new JSObject();
+    private JSGeneratorState activeGeneratorState;
     private final JSContext context;
     private final Set<JSObject> initializedConstantObjects;
     private final StringBuilder propertyAccessChain;  // Track last property access for better error messages
@@ -51,12 +52,15 @@ public final class VirtualMachine {
     private int interruptCounter;
     private JSValue pendingException;
     private boolean propertyAccessLock;  // When true, don't update lastPropertyAccess (during argument evaluation)
+    private boolean awaitSuspensionEnabled;
+    private JSPromise awaitSuspensionPromise;
     private YieldResult yieldResult;  // Set when generator yields
     private int yieldSkipCount;  // How many yields to skip (for resuming generators)
 
     public VirtualMachine(JSContext context) {
         this.valueStack = new CallStack();
         this.context = context;
+        this.activeGeneratorState = null;
         this.initializedConstantObjects = Collections.newSetFromMap(new IdentityHashMap<>());
         this.currentFrame = null;
         this.generatorResumeRecords = List.of();
@@ -65,6 +69,8 @@ public final class VirtualMachine {
         this.propertyAccessChain = new StringBuilder();
         this.trackPropertyAccess = !"false".equalsIgnoreCase(System.getProperty("qjs4j.vm.trackPropertyAccess", "true"));
         this.propertyAccessLock = false;
+        this.awaitSuspensionEnabled = false;
+        this.awaitSuspensionPromise = null;
         this.yieldResult = null;
         this.yieldSkipCount = 0;
         this.executionDeadline = 0;
@@ -188,6 +194,27 @@ public final class VirtualMachine {
      */
     public void clearPendingException() {
         this.pendingException = null;
+    }
+
+    public JSPromise consumeAwaitSuspensionPromise() {
+        JSPromise promise = awaitSuspensionPromise;
+        awaitSuspensionPromise = null;
+        return promise;
+    }
+
+    public JSValue executeAsyncFunction(JSGeneratorState state, JSContext context) {
+        yieldResult = null;
+        awaitSuspensionPromise = null;
+        JSGeneratorState previousActiveGeneratorState = activeGeneratorState;
+        boolean previousAwaitSuspensionEnabled = awaitSuspensionEnabled;
+        activeGeneratorState = state;
+        awaitSuspensionEnabled = true;
+        try {
+            return execute(state.getFunction(), state.getThisArg(), state.getArgs());
+        } finally {
+            activeGeneratorState = previousActiveGeneratorState;
+            awaitSuspensionEnabled = previousAwaitSuspensionEnabled;
+        }
     }
 
     private JSValue constructFunction(JSFunction function, JSValue[] args, JSValue newTarget) {
@@ -483,9 +510,20 @@ public final class VirtualMachine {
     }
 
     public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, JSValue newTarget) {
-        // Save the current value stack position
-        // This ensures that nested function calls don't corrupt the caller's stack
-        int savedStackTop = valueStack.getStackTop();
+        JSGeneratorState generatorStateForExecution = activeGeneratorState;
+        boolean resumeGeneratorExecution =
+                generatorStateForExecution != null
+                        && generatorStateForExecution.getFunction() == function
+                        && generatorStateForExecution.hasSuspendedExecutionState()
+                        && generatorStateForExecution.hasPendingResumeRecord();
+        // Save the current caller stack position so function exit can restore it.
+        int callerStackTop = valueStack.getStackTop();
+        // Determine the base of the function frame operand stack.
+        int savedStackTop = resumeGeneratorExecution
+                ? generatorStateForExecution.getSuspendedFrame().getStackBase()
+                : callerStackTop;
+        int frameStackBase = savedStackTop;
+        int restoreStackTop = callerStackTop;
 
         // Save and set strict mode based on function
         // Following QuickJS: each function has its own strict mode flag
@@ -496,8 +534,10 @@ public final class VirtualMachine {
             context.exitStrictMode();
         }
 
-        // Create new stack frame
-        StackFrame frame = new StackFrame(function, thisArg, args, currentFrame, newTarget, savedStackTop);
+        // Create or restore stack frame
+        StackFrame frame = resumeGeneratorExecution
+                ? generatorStateForExecution.getSuspendedFrame()
+                : new StackFrame(function, thisArg, args, currentFrame, newTarget, savedStackTop);
         StackFrame previousFrame = currentFrame;
         currentFrame = frame;
 
@@ -508,8 +548,29 @@ public final class VirtualMachine {
             byte[] opcodeRebaseOffsets = bytecode.getOpcodeRebaseOffsets();
             JSValue[] locals = frame.getLocals();
             JSStackValue[] stack = valueStack.stack;
-            int sp = valueStack.stackTop;
-            int pc = 0;
+            int sp;
+            int pc;
+            if (resumeGeneratorExecution) {
+                valueStack.stackTop = frameStackBase;
+                JSStackValue[] suspendedStackValues = generatorStateForExecution.getSuspendedStackValues();
+                if (suspendedStackValues != null && suspendedStackValues.length > 0) {
+                    System.arraycopy(suspendedStackValues, 0, stack, frameStackBase, suspendedStackValues.length);
+                }
+                sp = frameStackBase + (suspendedStackValues == null ? 0 : suspendedStackValues.length);
+                JSGeneratorState.ResumeRecord pendingResumeRecord = generatorStateForExecution.consumePendingResumeRecord();
+                if (pendingResumeRecord != null) {
+                    if (pendingResumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
+                        pendingException = pendingResumeRecord.value();
+                        context.setPendingException(pendingResumeRecord.value());
+                    } else {
+                        stack[sp++] = pendingResumeRecord.value();
+                    }
+                }
+                pc = generatorStateForExecution.getSuspendedProgramCounter();
+            } else {
+                sp = valueStack.stackTop;
+                pc = 0;
+            }
 
             // Main execution loop
             while (true) {
@@ -522,7 +583,7 @@ public final class VirtualMachine {
                     pendingException = null;
 
                     boolean foundHandler = false;
-                    while (valueStack.stackTop > savedStackTop) {
+                    while (valueStack.stackTop > frameStackBase) {
                         JSStackValue val = stack[--valueStack.stackTop];
                         if (val instanceof JSCatchOffset catchOffset) {
                             stack[valueStack.stackTop++] = exception;
@@ -2075,7 +2136,7 @@ public final class VirtualMachine {
                     }
                     case RETURN -> {
                         JSValue returnValue = (JSValue) stack[--sp];
-                        valueStack.stackTop = savedStackTop;
+                        valueStack.stackTop = restoreStackTop;
                         currentFrame = previousFrame;
                         if (savedStrictMode) {
                             context.enterStrictMode();
@@ -2085,7 +2146,7 @@ public final class VirtualMachine {
                         return returnValue;
                     }
                     case RETURN_UNDEF -> {
-                        valueStack.stackTop = savedStackTop;
+                        valueStack.stackTop = restoreStackTop;
                         currentFrame = previousFrame;
                         if (savedStrictMode) {
                             context.enterStrictMode();
@@ -2096,7 +2157,7 @@ public final class VirtualMachine {
                     }
                     case RETURN_ASYNC -> {
                         JSValue returnValue = (JSValue) stack[--sp];
-                        valueStack.stackTop = savedStackTop;
+                        valueStack.stackTop = restoreStackTop;
                         currentFrame = previousFrame;
                         if (savedStrictMode) {
                             context.enterStrictMode();
@@ -2634,7 +2695,7 @@ public final class VirtualMachine {
                     case NIP_CATCH -> {
                         JSValue returnValue = (JSValue) stack[--sp];
                         boolean foundCatchMarker = false;
-                        while (sp > savedStackTop) {
+                        while (sp > frameStackBase) {
                             JSStackValue stackValue = stack[--sp];
                             if (stackValue instanceof JSCatchOffset) {
                                 foundCatchMarker = true;
@@ -2812,6 +2873,18 @@ public final class VirtualMachine {
                         handleAwait();
                         sp = valueStack.stackTop;
                         pc += op.getSize();
+                        if (awaitSuspensionPromise != null) {
+                            saveActiveGeneratorSuspendedExecutionState(frame, pc, stack, sp, frameStackBase);
+                            sp = restoreStackTop;
+                            valueStack.stackTop = sp;
+                            currentFrame = previousFrame;
+                            if (savedStrictMode) {
+                                context.enterStrictMode();
+                            } else {
+                                context.exitStrictMode();
+                            }
+                            return JSUndefined.INSTANCE;
+                        }
                     }
                     case FOR_AWAIT_OF_START -> {
                         valueStack.stackTop = sp;
@@ -2866,7 +2939,7 @@ public final class VirtualMachine {
                         // Check if we should suspend (initial yield during generator creation)
                         if (yieldResult != null) {
                             // Return undefined - execution will resume from here on first .next()
-                            sp = savedStackTop;
+                            sp = restoreStackTop;
                             valueStack.stackTop = sp;
                             currentFrame = previousFrame;
                             if (savedStrictMode) {
@@ -2886,7 +2959,8 @@ public final class VirtualMachine {
                         if (yieldResult != null) {
                             // Return the yielded value - execution will resume here on next()
                             JSValue returnValue = (JSValue) stack[--sp];
-                            sp = savedStackTop;
+                            saveActiveGeneratorSuspendedExecutionState(frame, pc, stack, sp, frameStackBase);
+                            sp = restoreStackTop;
                             valueStack.stackTop = sp;
                             currentFrame = previousFrame;
                             if (savedStrictMode) {
@@ -2905,7 +2979,8 @@ public final class VirtualMachine {
                         // Check if we should suspend
                         if (yieldResult != null) {
                             JSValue returnValue = (JSValue) stack[--sp];
-                            sp = savedStackTop;
+                            clearActiveGeneratorSuspendedExecutionState();
+                            sp = restoreStackTop;
                             valueStack.stackTop = sp;
                             currentFrame = previousFrame;
                             if (savedStrictMode) {
@@ -2924,7 +2999,8 @@ public final class VirtualMachine {
                         // Check if we should suspend (same as YIELD_STAR)
                         if (yieldResult != null) {
                             JSValue returnValue = (JSValue) stack[--sp];
-                            sp = savedStackTop;
+                            clearActiveGeneratorSuspendedExecutionState();
+                            sp = restoreStackTop;
                             valueStack.stackTop = sp;
                             currentFrame = previousFrame;
                             if (savedStrictMode) {
@@ -2961,7 +3037,7 @@ public final class VirtualMachine {
             }
         } catch (JSVirtualMachineException e) {
             // Restore stack and strict mode on exception
-            valueStack.setStackTop(savedStackTop);
+            valueStack.setStackTop(restoreStackTop);
             currentFrame = previousFrame;
             resetPropertyAccessTracking();
             if (savedStrictMode) {
@@ -2972,7 +3048,7 @@ public final class VirtualMachine {
             throw e;
         } catch (Exception e) {
             // Restore stack and strict mode on exception
-            valueStack.setStackTop(savedStackTop);
+            valueStack.setStackTop(restoreStackTop);
             currentFrame = previousFrame;
             resetPropertyAccessTracking();
             if (savedStrictMode) {
@@ -2996,14 +3072,30 @@ public final class VirtualMachine {
         // Clear any previous yield result
         yieldResult = null;
 
-        // Set yield skip count - we'll skip this many yields to resume from the right place
-        // This is a workaround since we're not saving/restoring PC
-        yieldSkipCount = state.getYieldCount();
-        generatorResumeRecords = state.getResumeRecords();
-        generatorResumeIndex = 0;
+        boolean useSuspendedExecutionState =
+                state.hasSuspendedExecutionState()
+                        && state.hasPendingResumeRecord();
+        if (useSuspendedExecutionState) {
+            yieldSkipCount = 0;
+            generatorResumeRecords = List.of();
+            generatorResumeIndex = 0;
+        } else {
+            // Set yield skip count - we'll skip this many yields to resume from the right place
+            // This is a workaround since we're not saving/restoring PC
+            yieldSkipCount = state.getYieldCount();
+            generatorResumeRecords = state.getResumeRecords();
+            generatorResumeIndex = 0;
+        }
 
-        // Execute (or resume) the generator
-        JSValue result = execute(function, thisArg, args);
+        JSGeneratorState previousActiveGeneratorState = activeGeneratorState;
+        activeGeneratorState = state;
+        JSValue result;
+        try {
+            // Execute (or resume) the generator
+            result = execute(function, thisArg, args);
+        } finally {
+            activeGeneratorState = previousActiveGeneratorState;
+        }
 
         // Check if generator yielded
         if (yieldResult != null) {
@@ -3016,6 +3108,29 @@ public final class VirtualMachine {
             state.setCompleted(true);
             return result;
         }
+    }
+
+    private void clearActiveGeneratorSuspendedExecutionState() {
+        if (activeGeneratorState != null) {
+            activeGeneratorState.clearSuspendedExecutionState();
+        }
+    }
+
+    private void saveActiveGeneratorSuspendedExecutionState(
+            StackFrame frame,
+            int programCounter,
+            JSStackValue[] stack,
+            int stackTop,
+            int stackBase) {
+        if (activeGeneratorState == null) {
+            return;
+        }
+        int stackLength = Math.max(0, stackTop - stackBase);
+        JSStackValue[] suspendedStackValues = new JSStackValue[stackLength];
+        if (stackLength > 0) {
+            System.arraycopy(stack, stackBase, suspendedStackValues, 0, stackLength);
+        }
+        activeGeneratorState.saveSuspendedExecutionState(frame, programCounter, suspendedStackValues);
     }
 
     private JSValue getArgumentValue(int index) {
@@ -3116,6 +3231,10 @@ public final class VirtualMachine {
 
         // If the promise is pending, we need to process microtasks until it settles
         if (promise.getState() == JSPromise.PromiseState.PENDING) {
+            if (awaitSuspensionEnabled && activeGeneratorState != null) {
+                awaitSuspensionPromise = promise;
+                return;
+            }
             // Process microtasks until the promise settles
             context.processMicrotasks();
         }

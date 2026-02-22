@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Unit tests for AsyncGeneratorPrototype methods.
  */
-public class AsyncGeneratorPrototypeTest extends BaseTest {
+public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testCreateDelayedGenerator() {
@@ -114,8 +114,25 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
     public void testNextOnNonAsyncGenerator() {
         // Test next() called on non-async generator
         JSValue result = AsyncGeneratorPrototype.next(context, new JSString("not a generator"), new JSValue[0]);
-        assertTypeError(result);
-        assertPendingException(context);
+        JSPromise promise = result.asPromise().orElseThrow();
+        assertThat(awaitPromise(promise)).isTrue();
+        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
+        assertTypeError(promise.getResult());
+        assertThat(context.hasPendingException()).isFalse();
+    }
+
+    @Test
+    public void testNextRejectsOnInvalidReceiverWithExactV8Message() {
+        assertStringWithJavet("""
+                (async () => {
+                    async function* g() {}
+                    const AsyncGeneratorPrototype = Object.getPrototypeOf(g).prototype;
+                    const result = (await Promise.allSettled([
+                        AsyncGeneratorPrototype.next.call({})
+                    ]))[0];
+                    return result.status + "|" + result.reason.name + "|" + result.reason.message;
+                })();
+                """);
     }
 
     @Test
@@ -163,8 +180,25 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
     public void testReturnOnNonAsyncGenerator() {
         // Test return() called on non-async generator
         JSValue result = AsyncGeneratorPrototype.return_(context, new JSNumber(123), new JSValue[]{new JSString("value")});
-        assertTypeError(result);
-        assertPendingException(context);
+        JSPromise promise = result.asPromise().orElseThrow();
+        assertThat(awaitPromise(promise)).isTrue();
+        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
+        assertTypeError(promise.getResult());
+        assertThat(context.hasPendingException()).isFalse();
+    }
+
+    @Test
+    public void testReturnRejectsOnInvalidReceiverWithExactV8Message() {
+        assertStringWithJavet("""
+                (async () => {
+                    async function* g() {}
+                    const AsyncGeneratorPrototype = Object.getPrototypeOf(g).prototype;
+                    const result = (await Promise.allSettled([
+                        AsyncGeneratorPrototype.return.call({}, 1)
+                    ]))[0];
+                    return result.status + "|" + result.reason.name + "|" + result.reason.message;
+                })();
+                """);
     }
 
     @Test
@@ -189,7 +223,24 @@ public class AsyncGeneratorPrototypeTest extends BaseTest {
     public void testThrowOnNonAsyncGenerator() {
         // Test throw() called on non-async generator
         JSValue result = AsyncGeneratorPrototype.throw_(context, new JSObject(), new JSValue[]{new JSString("error")});
-        assertTypeError(result);
-        assertPendingException(context);
+        JSPromise promise = result.asPromise().orElseThrow();
+        assertThat(awaitPromise(promise)).isTrue();
+        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
+        assertTypeError(promise.getResult());
+        assertThat(context.hasPendingException()).isFalse();
+    }
+
+    @Test
+    public void testThrowRejectsOnInvalidReceiverWithExactV8Message() {
+        assertStringWithJavet("""
+                (async () => {
+                    async function* g() {}
+                    const AsyncGeneratorPrototype = Object.getPrototypeOf(g).prototype;
+                    const result = (await Promise.allSettled([
+                        AsyncGeneratorPrototype.throw.call({}, new Error('x'))
+                    ]))[0];
+                    return result.status + "|" + result.reason.name + "|" + result.reason.message;
+                })();
+                """);
     }
 }

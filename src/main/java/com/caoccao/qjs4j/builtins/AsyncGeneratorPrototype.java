@@ -23,6 +23,42 @@ import com.caoccao.qjs4j.core.*;
  * Based on ES2018 AsyncGenerator.prototype specification.
  */
 public final class AsyncGeneratorPrototype {
+    private static String formatIncompatibleReceiver(JSValue receiver) {
+        if (receiver instanceof JSObject objectReceiver) {
+            JSValue constructorValue = objectReceiver.get(PropertyKey.CONSTRUCTOR);
+            if (constructorValue instanceof JSFunction constructorFunction) {
+                JSValue nameValue = constructorFunction.get(PropertyKey.NAME);
+                if (nameValue instanceof JSString nameString && !nameString.value().isEmpty()) {
+                    return "#<" + nameString.value() + ">";
+                }
+            }
+            return "#<Object>";
+        }
+        if (receiver instanceof JSString stringReceiver) {
+            return "'" + stringReceiver.value() + "'";
+        }
+        if (receiver instanceof JSUndefined) {
+            return "undefined";
+        }
+        if (receiver instanceof JSNull) {
+            return "null";
+        }
+        return receiver.toString();
+    }
+
+    private static JSValue rejectIncompatibleReceiver(
+            JSContext context,
+            String methodName,
+            JSValue receiver) {
+        JSPromise promise = context.createJSPromise();
+        JSValue typeError = context.throwTypeError(
+                "Method [AsyncGenerator].prototype." + methodName
+                        + " called on incompatible receiver "
+                        + formatIncompatibleReceiver(receiver));
+        context.clearAllPendingExceptions();
+        promise.reject(typeError);
+        return promise;
+    }
 
     /**
      * Create an async generator that yields values with a delay.
@@ -201,7 +237,7 @@ public final class AsyncGeneratorPrototype {
      */
     public static JSValue next(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSAsyncGenerator generator)) {
-            return context.throwTypeError("AsyncGenerator.prototype.next called on non-AsyncGenerator");
+            return rejectIncompatibleReceiver(context, "next", thisArg);
         }
 
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -216,7 +252,7 @@ public final class AsyncGeneratorPrototype {
      */
     public static JSValue return_(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSAsyncGenerator generator)) {
-            return context.throwTypeError("AsyncGenerator.prototype.return called on non-AsyncGenerator");
+            return rejectIncompatibleReceiver(context, "return", thisArg);
         }
 
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -231,7 +267,7 @@ public final class AsyncGeneratorPrototype {
      */
     public static JSValue throw_(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSAsyncGenerator generator)) {
-            return context.throwTypeError("AsyncGenerator.prototype.throw called on non-AsyncGenerator");
+            return rejectIncompatibleReceiver(context, "throw", thisArg);
         }
 
         JSValue exception = args.length > 0 ? args[0] : JSUndefined.INSTANCE;

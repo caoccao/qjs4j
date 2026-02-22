@@ -35,6 +35,7 @@ public final class JSAsyncGenerator extends JSObject {
     private final JSContext context;
     private final AsyncGeneratorFunction generatorFunction;
     private final Queue<AsyncGeneratorRequest> requestQueue;
+    private boolean drainScheduled;
     private JSValue returnValue;
     private AsyncGeneratorState state;
     private JSValue thrownValue;
@@ -51,6 +52,7 @@ public final class JSAsyncGenerator extends JSObject {
         this.context = context;
         this.generatorFunction = generatorFunction;
         this.requestQueue = new ArrayDeque<>();
+        this.drainScheduled = false;
         this.returnValue = JSUndefined.INSTANCE;
         this.thrownValue = null;
 
@@ -198,14 +200,16 @@ public final class JSAsyncGenerator extends JSObject {
             } else {
                 request.promise().reject(new JSString(e.getMessage() != null ? e.getMessage() : e.toString()));
             }
-            drainRequestQueue();
+            scheduleDrainRequestQueue();
         }
     }
 
     private JSPromise enqueueRequest(AsyncGeneratorRequestKind kind, JSValue value) {
         JSPromise promise = context.createJSPromise();
         requestQueue.offer(new AsyncGeneratorRequest(kind, value, promise));
-        drainRequestQueue();
+        if (!drainScheduled) {
+            drainRequestQueue();
+        }
         if (context.hasPendingException()) {
             context.clearAllPendingExceptions();
         }
@@ -223,7 +227,7 @@ public final class JSAsyncGenerator extends JSObject {
                         : request.value();
                 request.promise().fulfill(createIteratorResultObject(completedValue, true));
             }
-            drainRequestQueue();
+            scheduleDrainRequestQueue();
             return;
         }
 
@@ -238,13 +242,13 @@ public final class JSAsyncGenerator extends JSObject {
                 JSValue result = resultPromise.getResult();
                 processResult(result);
                 request.promise().fulfill(result);
-                drainRequestQueue();
+                scheduleDrainRequestQueue();
                 return;
             }
             if (resultPromise.getState() == JSPromise.PromiseState.REJECTED) {
                 state = AsyncGeneratorState.COMPLETED;
                 request.promise().reject(resultPromise.getResult());
-                drainRequestQueue();
+                scheduleDrainRequestQueue();
                 return;
             }
             resultPromise.addReactions(
@@ -253,7 +257,7 @@ public final class JSAsyncGenerator extends JSObject {
                                 JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                 processResult(result);
                                 request.promise().fulfill(result);
-                                drainRequestQueue();
+                                scheduleDrainRequestQueue();
                                 return JSUndefined.INSTANCE;
                             }),
                             null,
@@ -263,11 +267,11 @@ public final class JSAsyncGenerator extends JSObject {
                             new JSNativeFunction("onRejected", 1, (childContext, thisArg, args) -> {
                                 state = AsyncGeneratorState.COMPLETED;
                                 JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                request.promise().reject(error);
-                drainRequestQueue();
-                return JSUndefined.INSTANCE;
-            }),
-            null,
+                                request.promise().reject(error);
+                                scheduleDrainRequestQueue();
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
                             context
                     )
             );
@@ -283,7 +287,7 @@ public final class JSAsyncGenerator extends JSObject {
                 String message = e.getMessage();
                 request.promise().reject(new JSString("Async generator error: " + (message != null ? message : e.toString())));
             }
-            drainRequestQueue();
+            scheduleDrainRequestQueue();
         }
     }
 
@@ -298,6 +302,17 @@ public final class JSAsyncGenerator extends JSObject {
         result.set(PropertyKey.VALUE, value);
         result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
         return result;
+    }
+
+    private void scheduleDrainRequestQueue() {
+        if (drainScheduled) {
+            return;
+        }
+        drainScheduled = true;
+        context.enqueueMicrotask(() -> {
+            drainScheduled = false;
+            drainRequestQueue();
+        });
     }
 
     @Override

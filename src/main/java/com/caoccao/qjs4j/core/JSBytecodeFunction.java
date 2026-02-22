@@ -317,6 +317,69 @@ public final class JSBytecodeFunction extends JSFunction {
         );
     }
 
+    private static void resumeAsyncFunctionExecution(
+            JSContext context,
+            JSGeneratorState asyncFunctionState,
+            JSPromise outerPromise) {
+        try {
+            JSValue result = context.getVirtualMachine().executeAsyncFunction(asyncFunctionState, context);
+            JSPromise awaitedPromise = context.getVirtualMachine().consumeAwaitSuspensionPromise();
+            if (awaitedPromise != null) {
+                awaitedPromise.addReactions(
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onAwaitResolve", 1, (childContext, callbackThisArg, callbackArgs) -> {
+                                    JSValue resolvedValue = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                                    asyncFunctionState.setPendingResumeRecord(JSGeneratorState.ResumeKind.NEXT, resolvedValue);
+                                    resumeAsyncFunctionExecution(context, asyncFunctionState, outerPromise);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                null,
+                                context
+                        ),
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onAwaitReject", 1, (childContext, callbackThisArg, callbackArgs) -> {
+                                    JSValue rejectionValue = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                                    asyncFunctionState.setPendingResumeRecord(JSGeneratorState.ResumeKind.THROW, rejectionValue);
+                                    resumeAsyncFunctionExecution(context, asyncFunctionState, outerPromise);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                null,
+                                context
+                        )
+                );
+                return;
+            }
+            asyncFunctionState.clearSuspendedExecutionState();
+            if (context.hasPendingException()) {
+                JSValue exception = context.getPendingException();
+                context.clearAllPendingExceptions();
+                outerPromise.reject(exception);
+                return;
+            }
+            outerPromise.resolve(context, result);
+        } catch (JSVirtualMachineException e) {
+            if (context.hasPendingException()) {
+                JSValue exception = context.getPendingException();
+                context.clearAllPendingExceptions();
+                outerPromise.reject(exception);
+            } else if (e.getJsValue() != null) {
+                outerPromise.reject(e.getJsValue());
+            } else if (e.getJsError() != null) {
+                outerPromise.reject(e.getJsError());
+            } else {
+                String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
+                JSObject errorObj = context.createJSObject();
+                errorObj.set(PropertyKey.MESSAGE, new JSString(errorMessage));
+                outerPromise.reject(errorObj);
+            }
+        } catch (Exception e) {
+            String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
+            JSObject errorObj = context.createJSObject();
+            errorObj.set(PropertyKey.MESSAGE, new JSString(errorMessage));
+            outerPromise.reject(errorObj);
+        }
+    }
+
     private static void attachDelegatedIteratorStateHandlers(
             JSContext context,
             JSPromise promise,
@@ -563,7 +626,7 @@ public final class JSBytecodeFunction extends JSFunction {
             JSGenerator generatorDriver = new JSGenerator(context, generatorState);
             final JSObject[] delegatedYieldStarIteratorHolder = new JSObject[]{null};
 
-            return new JSAsyncGenerator((inputValue, requestKind) -> {
+            JSAsyncGenerator asyncGenerator = new JSAsyncGenerator((inputValue, requestKind) -> {
                 JSPromise promise = context.createJSPromise();
 
                 // Check if generator is completed
@@ -656,6 +719,26 @@ public final class JSBytecodeFunction extends JSFunction {
 
                 return promise;
             }, context);
+
+            JSValue asyncGeneratorInstancePrototype = this.get(PropertyKey.PROTOTYPE);
+            if (asyncGeneratorInstancePrototype instanceof JSObject asyncGeneratorInstancePrototypeObject) {
+                asyncGenerator.setPrototype(asyncGeneratorInstancePrototypeObject);
+            } else {
+                JSObject asyncGeneratorPrototype = context.getAsyncGeneratorPrototype();
+                if (asyncGeneratorPrototype != null) {
+                    asyncGenerator.setPrototype(asyncGeneratorPrototype);
+                } else {
+                    JSObject asyncGeneratorFunctionPrototype = context.getAsyncGeneratorFunctionPrototype();
+                    if (asyncGeneratorFunctionPrototype != null) {
+                        JSValue fallbackAsyncGeneratorPrototype = asyncGeneratorFunctionPrototype.get(PropertyKey.PROTOTYPE);
+                        if (fallbackAsyncGeneratorPrototype instanceof JSObject fallbackAsyncGeneratorPrototypeObject) {
+                            asyncGenerator.setPrototype(fallbackAsyncGeneratorPrototypeObject);
+                        }
+                    }
+                }
+            }
+
+            return asyncGenerator;
         }
 
         // If this is a sync generator function, create and return a sync generator object
@@ -697,39 +780,8 @@ public final class JSBytecodeFunction extends JSFunction {
         // If this is an async function, wrap execution in a promise
         if (isAsync) {
             JSPromise promise = context.createJSPromise();
-            try {
-                // Execute bytecode in the VM
-                JSValue result = context.getVirtualMachine().execute(this, thisArg, args);
-
-                // If result is already a promise, use it directly
-                if (result instanceof JSPromise) {
-                    return result;
-                }
-
-                // Otherwise, resolve the promise (handles thenables per ES spec)
-                promise.resolve(context, result);
-            } catch (JSVirtualMachineException e) {
-                // VM exception during async function execution
-                // Check if there's a pending exception in the context
-                if (context.hasPendingException()) {
-                    JSValue exception = context.getPendingException();
-                    context.clearAllPendingExceptions(); // Clear BOTH context and VM pending exceptions
-                    promise.reject(exception);
-                } else {
-                    // Create error object from exception message
-                    String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
-                    JSObject errorObj = context.createJSObject();
-                    errorObj.set(PropertyKey.MESSAGE, new JSString(errorMessage));
-                    promise.reject(errorObj);
-                }
-            } catch (Exception e) {
-                // Any other exception in an async function should be caught
-                // and wrapped in a rejected promise
-                String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
-                JSObject errorObj = context.createJSObject();
-                errorObj.set(PropertyKey.MESSAGE, new JSString(errorMessage));
-                promise.reject(errorObj);
-            }
+            JSGeneratorState asyncFunctionState = new JSGeneratorState(this, thisArg, args);
+            resumeAsyncFunctionExecution(context, asyncFunctionState, promise);
             return promise;
         }
 

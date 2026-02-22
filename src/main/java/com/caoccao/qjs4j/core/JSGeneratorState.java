@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.vm.StackFrame;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -36,6 +38,11 @@ public final class JSGeneratorState {
     private final JSBytecodeFunction function;
     private final List<ResumeRecord> resumeRecords;
     private final JSValue thisArg;
+    private JSValue pendingResumeValue;
+    private ResumeKind pendingResumeKind;
+    private StackFrame suspendedFrame;
+    private JSStackValue[] suspendedStackValues;
+    private int suspendedProgramCounter;
     // Execution state that needs to be preserved across yields
     // TODO: Add full state preservation (PC, stack, locals) for proper resumption
     private boolean isCompleted;
@@ -50,6 +57,11 @@ public final class JSGeneratorState {
         this.isCompleted = false;
         this.yieldCount = 0;
         this.resumeRecords = new ArrayList<>();
+        this.pendingResumeValue = null;
+        this.pendingResumeKind = null;
+        this.suspendedFrame = null;
+        this.suspendedStackValues = null;
+        this.suspendedProgramCounter = 0;
     }
 
     public JSValue[] getArgs() {
@@ -72,6 +84,18 @@ public final class JSGeneratorState {
         return thisArg;
     }
 
+    public JSStackValue[] getSuspendedStackValues() {
+        return suspendedStackValues;
+    }
+
+    public StackFrame getSuspendedFrame() {
+        return suspendedFrame;
+    }
+
+    public int getSuspendedProgramCounter() {
+        return suspendedProgramCounter;
+    }
+
     public int getYieldCount() {
         return yieldCount;
     }
@@ -84,14 +108,52 @@ public final class JSGeneratorState {
         return isCompleted;
     }
 
+    public boolean hasPendingResumeRecord() {
+        return pendingResumeKind != null;
+    }
+
+    public boolean hasSuspendedExecutionState() {
+        return suspendedFrame != null && suspendedStackValues != null;
+    }
+
     public void recordResume(ResumeKind kind, JSValue value) {
         resumeRecords.add(new ResumeRecord(kind, value));
+    }
+
+    public ResumeRecord consumePendingResumeRecord() {
+        if (pendingResumeKind == null) {
+            return null;
+        }
+        ResumeRecord resumeRecord = new ResumeRecord(pendingResumeKind, pendingResumeValue);
+        pendingResumeKind = null;
+        pendingResumeValue = null;
+        return resumeRecord;
+    }
+
+    public void saveSuspendedExecutionState(StackFrame frame, int programCounter, JSStackValue[] stackValues) {
+        this.suspendedFrame = frame;
+        this.suspendedProgramCounter = programCounter;
+        this.suspendedStackValues = stackValues;
+    }
+
+    public void clearSuspendedExecutionState() {
+        this.suspendedFrame = null;
+        this.suspendedProgramCounter = 0;
+        this.suspendedStackValues = null;
+    }
+
+    public void setPendingResumeRecord(ResumeKind kind, JSValue value) {
+        this.pendingResumeKind = kind;
+        this.pendingResumeValue = value;
     }
 
     public void setCompleted(boolean completed) {
         this.isCompleted = completed;
         if (completed) {
             this.state = State.COMPLETED;
+            clearSuspendedExecutionState();
+            pendingResumeKind = null;
+            pendingResumeValue = null;
         }
     }
 

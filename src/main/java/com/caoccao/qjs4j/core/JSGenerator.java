@@ -137,6 +137,9 @@ public final class JSGenerator extends JSObject {
         }
 
         if (previousState == State.SUSPENDED_YIELD) {
+            if (generatorState.hasSuspendedExecutionState()) {
+                generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.NEXT, value);
+            }
             generatorState.recordResume(JSGeneratorState.ResumeKind.NEXT, value);
         }
 

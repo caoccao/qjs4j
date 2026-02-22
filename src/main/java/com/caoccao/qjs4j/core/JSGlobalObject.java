@@ -773,15 +773,19 @@ public final class JSGlobalObject {
 
         // AsyncGenerator.prototype methods are set up on individual JSAsyncGenerator instances
         // but we need next/return/throw on the prototype too for spec compliance
-        asyncGeneratorPrototype.definePropertyWritableConfigurable("next",
-                new JSNativeFunction("next", 1, AsyncGeneratorPrototype::next));
-        asyncGeneratorPrototype.definePropertyWritableConfigurable("return",
-                new JSNativeFunction("return", 1, AsyncGeneratorPrototype::return_));
-        asyncGeneratorPrototype.definePropertyWritableConfigurable("throw",
-                new JSNativeFunction("throw", 1, AsyncGeneratorPrototype::throw_));
+        JSNativeFunction asyncGeneratorNext = new JSNativeFunction("next", 1, AsyncGeneratorPrototype::next);
+        asyncGeneratorNext.initializePrototypeChain(context);
+        asyncGeneratorPrototype.definePropertyWritableConfigurable("next", asyncGeneratorNext);
+        JSNativeFunction asyncGeneratorReturn = new JSNativeFunction("return", 1, AsyncGeneratorPrototype::return_);
+        asyncGeneratorReturn.initializePrototypeChain(context);
+        asyncGeneratorPrototype.definePropertyWritableConfigurable("return", asyncGeneratorReturn);
+        JSNativeFunction asyncGeneratorThrow = new JSNativeFunction("throw", 1, AsyncGeneratorPrototype::throw_);
+        asyncGeneratorThrow.initializePrototypeChain(context);
+        asyncGeneratorPrototype.definePropertyWritableConfigurable("throw", asyncGeneratorThrow);
 
         // AsyncGenerator.prototype[Symbol.toStringTag] = "AsyncGenerator" (configurable)
         asyncGeneratorPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("AsyncGenerator"));
+        context.setAsyncGeneratorPrototype(asyncGeneratorPrototype);
 
         // Create AsyncGeneratorFunction.prototype (not exposed in global scope)
         // All async generator function objects (async function*) inherit from this
