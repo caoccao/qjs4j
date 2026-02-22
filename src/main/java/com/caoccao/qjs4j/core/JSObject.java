@@ -537,6 +537,14 @@ public non-sealed class JSObject implements JSValue {
             if (desc != null && desc.hasGetter()) {
                 JSFunction getter = desc.getGetter();
                 if (getter != null && context != null) {
+                    // Save and clear the prototype-chain visited set so that
+                    // re-entrant property lookups inside the getter start with
+                    // a fresh cycle-detection state (prevents false positives).
+                    Set<JSObject> outerVisited = visitedObjects.get();
+                    Set<JSObject> savedVisited = outerVisited.isEmpty() ? null : new HashSet<>(outerVisited);
+                    if (savedVisited != null) {
+                        outerVisited.clear();
+                    }
                     try {
                         // Call the getter with the ORIGINAL receiver as 'this', not the prototype
                         JSValue result = getter.call(context, receiver, new JSValue[0]);
@@ -552,6 +560,12 @@ public non-sealed class JSObject implements JSValue {
                                 : context.throwError("Error", e.getMessage());
                         context.setPendingException(exception);
                         return JSUndefined.INSTANCE;
+                    } finally {
+                        // Restore the outer visited set for the caller's prototype walk
+                        if (savedVisited != null) {
+                            outerVisited.clear();
+                            outerVisited.addAll(savedVisited);
+                        }
                     }
                 }
                 // Getter is explicitly undefined or no context available
@@ -566,6 +580,7 @@ public non-sealed class JSObject implements JSValue {
             Set<JSObject> visited = visitedObjects.get();
             boolean isTopLevel = visited.isEmpty();
 
+            boolean added = false;
             try {
                 // Check for circular reference
                 if (visited.contains(prototype)) {
@@ -574,12 +589,16 @@ public non-sealed class JSObject implements JSValue {
 
                 // Add current prototype to visited set
                 visited.add(prototype);
+                added = true;
 
                 // Recurse into prototype chain, passing along the original receiver
                 return prototype.get(context, key, receiver);
             } finally {
-                // Clean up: remove from visited set
-                visited.remove(prototype);
+                // Only remove if we added it — early return from cycle detection
+                // must not remove a prototype added by an outer walk
+                if (added) {
+                    visited.remove(prototype);
+                }
 
                 // If this was the top-level call, clear the ThreadLocal
                 if (isTopLevel) {

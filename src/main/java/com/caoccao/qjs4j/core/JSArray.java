@@ -726,6 +726,14 @@ public final class JSArray extends JSObject {
                 super.set(key, value, context);
                 return;
             }
+            // If this index is a hole (not present in own dense/sparse storage),
+            // delegate to JSObject.set so inherited setters on the prototype chain
+            // are correctly invoked per ES2024 OrdinarySet.
+            boolean hasOwnElement = hasElement(index);
+            if (!hasOwnElement) {
+                super.set(key, value, context);
+                return;
+            }
         }
 
         // Extend length if necessary

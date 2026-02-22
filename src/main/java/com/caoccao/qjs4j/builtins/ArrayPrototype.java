@@ -1805,6 +1805,13 @@ public final class ArrayPrototype {
      * Sorts the elements of an array in place.
      */
     public static JSValue sort(JSContext context, JSValue thisArg, JSValue[] args) {
+        // ES2024 23.1.3.30 step 1: validate comparefn before anything else
+        if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSFunction)) {
+            return context.throwTypeError("comparefn is not a function");
+        }
+        final JSFunction compareFn = args.length > 0 && args[0] instanceof JSFunction
+                ? (JSFunction) args[0] : null;
+
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
             return context.throwTypeError("Array.prototype.sort called on null or undefined");
         }
@@ -1818,19 +1825,32 @@ public final class ArrayPrototype {
             return context.getPendingException();
         }
 
-        JSFunction compareFn = args.length > 0 && args[0] instanceof JSFunction ?
-                (JSFunction) args[0] : null;
-
-        List<JSValue> elements = new ArrayList<>();
+        // Following QuickJS js_array_sort: separate holes/undefined from sortable elements.
+        // Phase 1: Collect only present, non-undefined elements; count undefined values; skip holes.
+        List<JSValue> sortableElements = new ArrayList<>();
+        int undefinedCount = 0;
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            elements.add(obj.get(context, key));
+            boolean present = obj.has(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
+            if (!present) {
+                continue;
+            }
+            JSValue value = obj.get(context, key);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (value instanceof JSUndefined) {
+                undefinedCount++;
+                continue;
+            }
+            sortableElements.add(value);
         }
 
-        Collections.sort(elements, (a, b) -> {
+        // Phase 2: Sort only the defined, present elements.
+        Collections.sort(sortableElements, (a, b) -> {
             if (compareFn != null) {
                 JSValue[] compareArgs = {a, b};
                 JSValue result = compareFn.call(context, JSUndefined.INSTANCE, compareArgs);
@@ -1843,10 +1863,33 @@ public final class ArrayPrototype {
             }
         });
 
-        // Update object with sorted elements
-        for (long i = 0; i < length; i++) {
+        // Phase 3: Write back sorted elements, then undefined values, then delete holes.
+        long writeIndex = 0;
+
+        // Write sorted elements
+        for (int i = 0; i < sortableElements.size(); i++) {
+            PropertyKey key = PropertyKey.fromString(Long.toString(writeIndex));
+            obj.set(key, sortableElements.get(i), context);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            writeIndex++;
+        }
+
+        // Write undefined values after sorted elements
+        for (int i = 0; i < undefinedCount; i++) {
+            PropertyKey key = PropertyKey.fromString(Long.toString(writeIndex));
+            obj.set(key, JSUndefined.INSTANCE, context);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            writeIndex++;
+        }
+
+        // Delete remaining holes
+        for (long i = writeIndex; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            obj.set(key, elements.get((int) i), context);
+            obj.delete(key, context);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
