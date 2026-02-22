@@ -125,7 +125,7 @@ public final class VirtualMachine {
     }
 
     private JSValue[] buildApplyArguments(JSValue argsArrayValue, boolean allowNullOrUndefined) {
-        if (allowNullOrUndefined && (argsArrayValue.isUndefined() || argsArrayValue.isNull())) {
+        if (allowNullOrUndefined && argsArrayValue.isNullOrUndefined()) {
             return EMPTY_ARGS;
         }
         if (!(argsArrayValue instanceof JSObject arrayLike)) {
@@ -290,7 +290,7 @@ public final class VirtualMachine {
         if (!(targetValue instanceof JSObject targetObject)) {
             throw new JSVirtualMachineException(context.throwTypeError("copy target must be an object"));
         }
-        if (sourceValue == null || sourceValue.isUndefined() || sourceValue.isNull()) {
+        if (sourceValue == null || sourceValue.isNullOrUndefined()) {
             return;
         }
 
@@ -311,7 +311,7 @@ public final class VirtualMachine {
                 JSValue excludedValue = excludeObject.get(context, key);
                 excludedKeys.add(PropertyKey.fromValue(context, excludedValue));
             }
-        } else if (excludeListValue != null && !excludeListValue.isUndefined() && !excludeListValue.isNull()) {
+        } else if (excludeListValue != null && !excludeListValue.isNullOrUndefined()) {
             excludedKeys = new HashSet<>();
             excludedKeys.add(PropertyKey.fromValue(context, excludeListValue));
         }
@@ -1814,7 +1814,7 @@ public final class VirtualMachine {
                         JSValue arrayObj = (JSValue) stack[sp - 2];
 
                         if (!(index instanceof JSNumber || index instanceof JSString || index instanceof JSSymbol)) {
-                            if (arrayObj.isUndefined() || arrayObj.isNull()) {
+                            if (arrayObj.isNullOrUndefined()) {
                                 throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
                             }
                             try {
@@ -2195,7 +2195,7 @@ public final class VirtualMachine {
                             // QuickJS OP_apply constructor mode routes to CallConstructor2
                             // with thisArg as newTarget.
                             JSValue ctorNewTarget = thisArgValue;
-                            if (ctorNewTarget.isUndefined() || ctorNewTarget.isNull()) {
+                            if (ctorNewTarget.isNullOrUndefined()) {
                                 ctorNewTarget = functionValue;
                             }
                             result = JSReflectObject.construct(
@@ -2742,7 +2742,7 @@ public final class VirtualMachine {
                                         pendingException = context.throwTypeError("iterator result is not an object");
                                     }
                                 }
-                            } else if (returnMethodValue.isUndefined() || returnMethodValue.isNull()) {
+                            } else if (returnMethodValue.isNullOrUndefined()) {
                                 // No return method - that's fine, skip
                             } else if (returnMethodValue instanceof JSObject returnObj && returnObj.isHTMLDDA()) {
                                 // IsHTMLDDA: typeof is "undefined" but it IS callable
@@ -2781,7 +2781,7 @@ public final class VirtualMachine {
                         JSValue methodValue = (flags & 1) != 0
                                 ? iteratorObject.get(PropertyKey.THROW)
                                 : iteratorObject.get(PropertyKey.RETURN);
-                        boolean noMethod = methodValue.isUndefined() || methodValue.isNull();
+                        boolean noMethod = methodValue.isNullOrUndefined();
                         if (!noMethod) {
                             if (!(methodValue instanceof JSFunction method)) {
                                 throw new JSVirtualMachineException(context.throwTypeError("iterator " + methodName + " is not a function"));
@@ -3490,7 +3490,7 @@ public final class VirtualMachine {
 
         if (asyncIteratorMethod instanceof JSFunction) {
             iteratorMethod = asyncIteratorMethod;
-        } else if (asyncIteratorMethod != null && !asyncIteratorMethod.isUndefined() && !asyncIteratorMethod.isNull()) {
+        } else if (asyncIteratorMethod != null && !asyncIteratorMethod.isNullOrUndefined()) {
             // Non-callable, non-nullish value: TypeError
             pendingException = context.throwTypeError("object is not async iterable");
             return;
@@ -3619,7 +3619,7 @@ public final class VirtualMachine {
                                         } else if (!(closeResult instanceof JSObject)) {
                                             // Preserve the original rejection reason during close-on-rejection.
                                         }
-                                    } else if (returnMethodValue.isUndefined() || returnMethodValue.isNull()) {
+                                    } else if (returnMethodValue.isNullOrUndefined()) {
                                         // No return method.
                                     } else {
                                         // Non-callable return method is ignored here to preserve original rejection.
@@ -3848,7 +3848,7 @@ public final class VirtualMachine {
 
     private void handleInitCtor() {
         JSValue frameNewTarget = currentFrame.getNewTarget();
-        if (frameNewTarget.isUndefined() || frameNewTarget.isNull()) {
+        if (frameNewTarget.isNullOrUndefined()) {
             // Keep direct VM opcode tests stable when execute() is used without constructor plumbing.
             if (currentFrame.getCaller() == null) {
                 JSValue fallbackThis = currentFrame.getThisArg();
@@ -4359,7 +4359,7 @@ public final class VirtualMachine {
 
             // Get "return" method from iterator
             JSValue returnMethodValue = iteratorObj.get(PropertyKey.RETURN);
-            boolean noReturnMethod = returnMethodValue.isUndefined() || returnMethodValue.isNull();
+            boolean noReturnMethod = returnMethodValue.isNullOrUndefined();
 
             if (noReturnMethod) {
                 // No return method - complete with the return value (don't yield)
@@ -4400,7 +4400,7 @@ public final class VirtualMachine {
 
             // Get "throw" method from iterator
             JSValue throwMethodValue = iteratorObj.get(PropertyKey.THROW);
-            boolean noThrowMethod = throwMethodValue.isUndefined() || throwMethodValue.isNull();
+            boolean noThrowMethod = throwMethodValue.isNullOrUndefined();
 
             if (noThrowMethod) {
                 // No throw method - close iterator and throw TypeError
