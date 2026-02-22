@@ -722,6 +722,19 @@ public final class AtomicsObject {
      * Useful in spin-wait loops.
      */
     public static JSValue pause(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (args.length > 0) {
+            JSValue iterationNumber = args[0];
+            if (!(iterationNumber instanceof JSUndefined)) {
+                if (iterationNumber instanceof JSNumber jsNumber) {
+                    double value = jsNumber.value();
+                    if (!Double.isFinite(value) || value != Math.rint(value)) {
+                        return context.throwTypeError("not an integral number");
+                    }
+                } else {
+                    return context.throwTypeError("not an integral number");
+                }
+            }
+        }
         // Java 9+ Thread.onSpinWait() provides a hint to the JVM that we're in a spin-wait loop
         Thread.onSpinWait();
         return JSUndefined.INSTANCE;
@@ -748,66 +761,60 @@ public final class AtomicsObject {
         try {
             int index = getAtomicIndex(context, typedArray, args[1]);
             ByteBuffer buffer = requireAtomicBuffer(typedArray);
+            if (typedArray instanceof JSBigInt64Array || typedArray instanceof JSBigUint64Array) {
+                JSBigInt returnValue = JSTypeConversions.toBigInt(context, args[2]);
+                long storedValue = returnValue.value().longValue();
+                int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
+                synchronized (buffer) {
+                    buffer.putLong(byteOffset, storedValue);
+                }
+                return returnValue;
+            }
+            double returnValue = JSTypeConversions.toInteger(context, args[2]);
+            if (returnValue == 0.0) {
+                returnValue = 0.0;
+            }
+            int int32Value = JSTypeConversions.toInt32(context, JSNumber.of(returnValue));
             if (typedArray instanceof JSInt8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte storedValue = (byte) value;
+                byte storedValue = (byte) int32Value;
                 synchronized (buffer) {
                     buffer.put(byteOffset, storedValue);
                 }
-                return JSNumber.of(storedValue);
+                return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSUint8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte storedValue = (byte) value;
+                byte storedValue = (byte) int32Value;
                 synchronized (buffer) {
                     buffer.put(byteOffset, storedValue);
                 }
-                return JSNumber.of(Byte.toUnsignedInt(storedValue));
+                return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSInt16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
-                short storedValue = (short) value;
+                short storedValue = (short) int32Value;
                 synchronized (buffer) {
                     buffer.putShort(byteOffset, storedValue);
                 }
-                return JSNumber.of(storedValue);
+                return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSUint16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
-                short storedValue = (short) value;
+                short storedValue = (short) int32Value;
                 synchronized (buffer) {
                     buffer.putShort(byteOffset, storedValue);
                 }
-                return JSNumber.of(Short.toUnsignedInt(storedValue));
+                return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSInt32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
                 synchronized (buffer) {
-                    buffer.putInt(byteOffset, value);
+                    buffer.putInt(byteOffset, int32Value);
                 }
-                return JSNumber.of(value);
+                return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSUint32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
                 synchronized (buffer) {
-                    buffer.putInt(byteOffset, value);
+                    buffer.putInt(byteOffset, int32Value);
                 }
-                return JSNumber.of(Integer.toUnsignedLong(value));
-            } else if (typedArray instanceof JSBigInt64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                synchronized (buffer) {
-                    buffer.putLong(byteOffset, value);
-                }
-                return new JSBigInt(BigInteger.valueOf(value));
-            } else if (typedArray instanceof JSBigUint64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                synchronized (buffer) {
-                    buffer.putLong(byteOffset, value);
-                }
-                return createBigUint64(value);
+                return JSNumber.of(returnValue);
             }
         } catch (JSErrorException e) {
             return rethrowAsJSValue(context, e);
@@ -828,30 +835,83 @@ public final class AtomicsObject {
         if (!(args[0] instanceof JSTypedArray typedArray)) {
             return context.throwTypeError("Atomics.sub requires a TypedArray");
         }
-
-        if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSUint32Array)) {
-            return context.throwTypeError("Atomics.sub only works on Int32Array or Uint32Array");
+        if (!typedArray.isAtomicsReadableAndWriteable()) {
+            return context.throwTypeError(
+                    "Atomics.sub only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
         }
 
-        if (!typedArray.getBuffer().isShared()) {
-            return context.throwTypeError("Atomics operations require SharedArrayBuffer");
+        try {
+            int index = getAtomicIndex(context, typedArray, args[1]);
+            ByteBuffer buffer = requireAtomicBuffer(typedArray);
+            if (typedArray instanceof JSInt8Array) {
+                int value = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + index;
+                synchronized (buffer) {
+                    byte oldValue = buffer.get(byteOffset);
+                    buffer.put(byteOffset, (byte) (oldValue - value));
+                    return JSNumber.of(oldValue);
+                }
+            } else if (typedArray instanceof JSUint8Array) {
+                int value = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + index;
+                synchronized (buffer) {
+                    int oldValue = Byte.toUnsignedInt(buffer.get(byteOffset));
+                    buffer.put(byteOffset, (byte) (oldValue - value));
+                    return JSNumber.of(oldValue);
+                }
+            } else if (typedArray instanceof JSInt16Array) {
+                int value = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
+                synchronized (buffer) {
+                    short oldValue = buffer.getShort(byteOffset);
+                    buffer.putShort(byteOffset, (short) (oldValue - value));
+                    return JSNumber.of(oldValue);
+                }
+            } else if (typedArray instanceof JSUint16Array) {
+                int value = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
+                synchronized (buffer) {
+                    int oldValue = Short.toUnsignedInt(buffer.getShort(byteOffset));
+                    buffer.putShort(byteOffset, (short) (oldValue - value));
+                    return JSNumber.of(oldValue);
+                }
+            } else if (typedArray instanceof JSInt32Array) {
+                int value = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
+                synchronized (buffer) {
+                    int oldValue = buffer.getInt(byteOffset);
+                    buffer.putInt(byteOffset, oldValue - value);
+                    return JSNumber.of(oldValue);
+                }
+            } else if (typedArray instanceof JSUint32Array) {
+                int value = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
+                synchronized (buffer) {
+                    int oldValue = buffer.getInt(byteOffset);
+                    buffer.putInt(byteOffset, oldValue - value);
+                    return JSNumber.of(Integer.toUnsignedLong(oldValue));
+                }
+            } else if (typedArray instanceof JSBigInt64Array) {
+                long value = JSTypeConversions.toBigInt64(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
+                synchronized (buffer) {
+                    long oldValue = buffer.getLong(byteOffset);
+                    buffer.putLong(byteOffset, oldValue - value);
+                    return new JSBigInt(BigInteger.valueOf(oldValue));
+                }
+            } else if (typedArray instanceof JSBigUint64Array) {
+                long value = JSTypeConversions.toBigInt64(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
+                synchronized (buffer) {
+                    long oldValue = buffer.getLong(byteOffset);
+                    buffer.putLong(byteOffset, oldValue - value);
+                    return createBigUint64(oldValue);
+                }
+            }
+        } catch (JSErrorException e) {
+            return rethrowAsJSValue(context, e);
         }
-
-        int index = (int) ((JSNumber) args[1]).value();
-        int value = (int) ((JSNumber) args[2]).value();
-
-        if (index < 0 || index >= typedArray.getLength()) {
-            return context.throwRangeError("Index out of bounds");
-        }
-
-        ByteBuffer buffer = typedArray.getBuffer().getBuffer();
-        int byteOffset = typedArray.getByteOffset() + (index * 4);
-
-        synchronized (buffer) {
-            int oldValue = buffer.getInt(byteOffset);
-            buffer.putInt(byteOffset, oldValue - value);
-            return JSNumber.of(oldValue);
-        }
+        return context.throwTypeError("Atomics.sub invalid typed array");
     }
 
     /**
