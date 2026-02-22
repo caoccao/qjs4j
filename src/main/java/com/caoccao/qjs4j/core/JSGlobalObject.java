@@ -886,11 +886,12 @@ public final class JSGlobalObject {
         // Create BigInt.prototype
         JSObject bigIntPrototype = context.createJSObject();
         bigIntPrototype.definePropertyWritableConfigurable("toLocaleString", new JSNativeFunction("toLocaleString", 0, BigIntPrototype::toLocaleString));
-        bigIntPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 1, BigIntPrototype::toString));
+        bigIntPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, BigIntPrototype::toString));
         bigIntPrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, BigIntPrototype::valueOf));
+        bigIntPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSBigInt.NAME));
 
         // Create BigInt constructor
-        JSNativeFunction bigIntConstructor = new JSNativeFunction(JSBigInt.NAME, 1, BigIntConstructor::call);
+        JSNativeFunction bigIntConstructor = new JSNativeFunction(JSBigInt.NAME, 1, BigIntConstructor::call, true);
         bigIntConstructor.definePropertyReadonlyNonConfigurable("prototype", bigIntPrototype);
         bigIntConstructor.setConstructorType(JSConstructorType.BIG_INT_OBJECT); // Mark as BigInt constructor
         bigIntPrototype.definePropertyWritableConfigurable("constructor", bigIntConstructor);

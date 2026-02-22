@@ -64,12 +64,12 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertTypeError(result);
         assertPendingException(context);
 
-        // Edge case: first argument not a number
+        // Edge case: first argument is coerced via ToIndex
         result = BigIntConstructor.asIntN(context, JSUndefined.INSTANCE, new JSValue[]{
                 new JSString("8"), new JSBigInt(BigInteger.ONE)
         });
-        assertTypeError(result);
-        assertPendingException(context);
+        bigInt = result.asBigInt().orElseThrow();
+        assertThat(bigInt.value()).isEqualTo(BigInteger.ONE);
 
         // Edge case: second argument not a BigInt
         result = BigIntConstructor.asIntN(context, JSUndefined.INSTANCE, new JSValue[]{
@@ -85,12 +85,12 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertRangeError(result);
         assertPendingException(context);
 
-        // Edge case: bits too large
+        // Edge case: bits larger than Integer.MAX_VALUE are still valid (ToIndex)
         result = BigIntConstructor.asIntN(context, JSUndefined.INSTANCE, new JSValue[]{
                 new JSNumber(2147483648L), new JSBigInt(BigInteger.ONE)
         });
-        assertRangeError(result);
-        assertPendingException(context);
+        bigInt = result.asBigInt().orElseThrow();
+        assertThat(bigInt.value()).isEqualTo(BigInteger.ONE);
     }
 
     @Test
@@ -121,12 +121,12 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertTypeError(result);
         assertPendingException(context);
 
-        // Edge case: first argument not a number
+        // Edge case: first argument is coerced via ToIndex
         result = BigIntConstructor.asUintN(context, JSUndefined.INSTANCE, new JSValue[]{
                 new JSString("8"), new JSBigInt(BigInteger.ONE)
         });
-        assertTypeError(result);
-        assertPendingException(context);
+        bigInt = result.asBigInt().orElseThrow();
+        assertThat(bigInt.value()).isEqualTo(BigInteger.ONE);
 
         // Edge case: second argument not a BigInt
         result = BigIntConstructor.asUintN(context, JSUndefined.INSTANCE, new JSValue[]{

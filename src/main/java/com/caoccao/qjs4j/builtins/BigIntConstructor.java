@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSErrorException;
 
 import java.math.BigInteger;
 
@@ -25,6 +26,61 @@ import java.math.BigInteger;
  * Based on ES2020 BigInt specification.
  */
 public final class BigIntConstructor {
+    private static JSValue rethrowError(JSContext context, JSErrorException errorException) {
+        return switch (errorException.getErrorType()) {
+            case RangeError -> context.throwRangeError(errorException.getMessage());
+            case SyntaxError -> context.throwSyntaxError(errorException.getMessage());
+            case TypeError -> context.throwTypeError(errorException.getMessage());
+            default -> context.throwError(errorException.getMessage());
+        };
+    }
+
+    private static JSBigInt wrapBigIntSigned(long bitsLong, JSBigInt bigInt) {
+        if (bitsLong == 0) {
+            return new JSBigInt(BigInteger.ZERO);
+        }
+        if (bitsLong > Integer.MAX_VALUE) {
+            BigInteger value = bigInt.value();
+            if (value.signum() >= 0) {
+                if ((long) value.bitLength() < bitsLong) {
+                    return bigInt;
+                }
+            } else {
+                BigInteger minAbs = value.negate().subtract(BigInteger.ONE);
+                if ((long) minAbs.bitLength() < bitsLong) {
+                    return bigInt;
+                }
+            }
+        }
+        int bits = (int) bitsLong;
+        BigInteger modulus = BigInteger.ONE.shiftLeft(bits);
+        BigInteger result = bigInt.value().mod(modulus);
+        BigInteger halfModulus = BigInteger.ONE.shiftLeft(bits - 1);
+        if (result.compareTo(halfModulus) >= 0) {
+            result = result.subtract(modulus);
+        }
+        return new JSBigInt(result);
+    }
+
+    private static JSBigInt wrapBigIntUnsigned(long bitsLong, JSBigInt bigInt) {
+        if (bitsLong == 0) {
+            return new JSBigInt(BigInteger.ZERO);
+        }
+        if (bitsLong > Integer.MAX_VALUE) {
+            BigInteger value = bigInt.value();
+            if (value.signum() >= 0 && (long) value.bitLength() <= bitsLong) {
+                return bigInt;
+            }
+        }
+        int bits = (int) bitsLong;
+        BigInteger modulus = BigInteger.ONE.shiftLeft(bits);
+        BigInteger result = bigInt.value().mod(modulus);
+        if (result.signum() < 0) {
+            result = result.add(modulus);
+        }
+        return new JSBigInt(result);
+    }
+
 
     /**
      * BigInt.asIntN(bits, bigint)
@@ -32,39 +88,18 @@ public final class BigIntConstructor {
      * Wraps a BigInt value to a signed integer of the given bit width.
      */
     public static JSValue asIntN(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 2) {
-            return context.throwTypeError("BigInt.asIntN requires 2 arguments");
+        JSValue bitsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue bigIntArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        try {
+            long bits = JSTypeConversions.toIndex(context, bitsArg);
+            JSBigInt bigInt = JSTypeConversions.toBigInt(context, bigIntArg);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            return wrapBigIntSigned(bits, bigInt);
+        } catch (JSErrorException e) {
+            return rethrowError(context, e);
         }
-
-        JSValue bitsArg = args[0];
-        JSValue bigIntArg = args[1];
-
-        if (!(bitsArg instanceof JSNumber bitsNum)) {
-            return context.throwTypeError("First argument must be a number");
-        }
-
-        if (!(bigIntArg instanceof JSBigInt bigInt)) {
-            return context.throwTypeError("Second argument must be a BigInt");
-        }
-
-        double bitsDouble = bitsNum.value();
-        if (bitsDouble < 0 || bitsDouble > Integer.MAX_VALUE || bitsDouble != Math.floor(bitsDouble)) {
-            return context.throwRangeError("Invalid bit width");
-        }
-        int bits = (int) bitsDouble;
-
-        // Simplified implementation
-        BigInteger value = bigInt.value();
-        BigInteger modulus = BigInteger.TWO.pow(bits);
-        BigInteger result = value.mod(modulus);
-
-        // Adjust for signed representation
-        BigInteger halfModulus = BigInteger.TWO.pow(bits - 1);
-        if (result.compareTo(halfModulus) >= 0) {
-            result = result.subtract(modulus);
-        }
-
-        return new JSBigInt(result);
     }
 
     /**
@@ -73,37 +108,18 @@ public final class BigIntConstructor {
      * Wraps a BigInt value to an unsigned integer of the given bit width.
      */
     public static JSValue asUintN(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 2) {
-            return context.throwTypeError("BigInt.asUintN requires 2 arguments");
+        JSValue bitsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue bigIntArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        try {
+            long bits = JSTypeConversions.toIndex(context, bitsArg);
+            JSBigInt bigInt = JSTypeConversions.toBigInt(context, bigIntArg);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            return wrapBigIntUnsigned(bits, bigInt);
+        } catch (JSErrorException e) {
+            return rethrowError(context, e);
         }
-
-        JSValue bitsArg = args[0];
-        JSValue bigIntArg = args[1];
-
-        if (!(bitsArg instanceof JSNumber bitsNum)) {
-            return context.throwTypeError("First argument must be a number");
-        }
-
-        if (!(bigIntArg instanceof JSBigInt bigInt)) {
-            return context.throwTypeError("Second argument must be a BigInt");
-        }
-
-        double bitsDouble = bitsNum.value();
-        if (bitsDouble < 0 || bitsDouble > Integer.MAX_VALUE || bitsDouble != Math.floor(bitsDouble)) {
-            return context.throwRangeError("Invalid bit width");
-        }
-        int bits = (int) bitsDouble;
-
-        // Simplified implementation
-        BigInteger value = bigInt.value();
-        BigInteger modulus = BigInteger.TWO.pow(bits);
-        BigInteger result = value.mod(modulus);
-
-        if (result.signum() < 0) {
-            result = result.add(modulus);
-        }
-
-        return new JSBigInt(result);
     }
 
     /**

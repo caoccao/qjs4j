@@ -44,8 +44,9 @@ public final class BigIntPrototype {
                 .map(jsBigInt -> {
                     int radix = 10;
                     if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-                        if (args[0] instanceof JSNumber num) {
-                            radix = (int) num.value();
+                        radix = (int) JSTypeConversions.toInteger(context, args[0]);
+                        if (context.hasPendingException()) {
+                            return JSUndefined.INSTANCE;
                         }
                     }
                     if (radix < 2 || radix > 36) {
