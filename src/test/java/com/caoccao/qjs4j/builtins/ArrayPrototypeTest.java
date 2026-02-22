@@ -1356,9 +1356,15 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
         assertObjectWithJavet(
                 "[].sort()",
-                "[1.1,2.1]",
-                "['b','a']",
-                "['a',null,undefined,[],'b']");
+                "[1.1,2.1].sort()",
+                "['b','a'].sort()",
+                "['b','a'].sort(undefined)",
+                "['a',null,undefined,[],'b'].sort()");
+        assertErrorWithJavet(
+                "[1].sort(null)",
+                "[1].sort(true)",
+                "[1].sort(1)",
+                "[1].sort('abc')");
     }
 
     @Test

@@ -1807,7 +1807,8 @@ public final class ArrayPrototype {
     public static JSValue sort(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2024 23.1.3.30 step 1: validate comparefn before anything else
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSFunction)) {
-            return context.throwTypeError("comparefn is not a function");
+            return context.throwTypeError("The comparison function must be either a function or undefined: "
+                    + JSTypeConversions.toString(context, args[0]).value());
         }
         final JSFunction compareFn = args.length > 0 && args[0] instanceof JSFunction
                 ? (JSFunction) args[0] : null;
