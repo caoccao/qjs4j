@@ -179,7 +179,7 @@ public final class ArrayPrototype {
         if (resultArr != null) {
             resultArr.setLength(resultIndex);
         } else {
-            resultObj.set(PropertyKey.LENGTH, JSNumber.of(resultIndex), context);
+            resultObj.set(context, PropertyKey.LENGTH, JSNumber.of(resultIndex));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -325,7 +325,7 @@ public final class ArrayPrototype {
      * ES2024 DeletePropertyOrThrow(O, P) — throws TypeError if delete returns false.
      */
     private static boolean deleteOrThrow(JSContext context, JSObject obj, PropertyKey key) {
-        if (!obj.delete(key, context)) {
+        if (!obj.delete(context, key)) {
             if (!context.hasPendingException()) {
                 context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "'");
             }
@@ -1742,7 +1742,7 @@ public final class ArrayPrototype {
         }
 
         // Step 9: Perform ? Set(A, "length", resultIndex, true).
-        resultObj.set(PropertyKey.LENGTH, JSNumber.of(resultIndex), context);
+        resultObj.set(context, PropertyKey.LENGTH, JSNumber.of(resultIndex));
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1870,7 +1870,7 @@ public final class ArrayPrototype {
         // Write sorted elements
         for (int i = 0; i < sortableElements.size(); i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(writeIndex));
-            obj.set(key, sortableElements.get(i), context);
+            obj.set(context, key, sortableElements.get(i));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1880,7 +1880,7 @@ public final class ArrayPrototype {
         // Write undefined values after sorted elements
         for (int i = 0; i < undefinedCount; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(writeIndex));
-            obj.set(key, JSUndefined.INSTANCE, context);
+            obj.set(context, key, JSUndefined.INSTANCE);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1890,7 +1890,7 @@ public final class ArrayPrototype {
         // Delete remaining holes
         for (long i = writeIndex; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            obj.delete(key, context);
+            obj.delete(context, key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1977,7 +1977,7 @@ public final class ArrayPrototype {
             }
         }
         // Step 11: Perform ? Set(A, "length", actualDeleteCount, true).
-        deletedObj.set(PropertyKey.LENGTH, JSNumber.of(deleteCount), context);
+        deletedObj.set(context, PropertyKey.LENGTH, JSNumber.of(deleteCount));
         if (context.hasPendingException()) {
             return context.getPendingException();
         }

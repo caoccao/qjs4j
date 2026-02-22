@@ -202,7 +202,7 @@ public final class JSStringObject extends JSObject {
      * non-writable character index own properties, so Set must fail for those keys.
      */
     @Override
-    public void set(PropertyKey key, JSValue val, JSContext context) {
+    public void set(JSContext context, PropertyKey key, JSValue val) {
         int charIndex = -1;
         if (key.isIndex()) {
             charIndex = key.asIndex();
@@ -221,7 +221,7 @@ public final class JSStringObject extends JSObject {
             }
             return;
         }
-        super.set(key, val, context);
+        super.set(context, key, val);
     }
 
     /**

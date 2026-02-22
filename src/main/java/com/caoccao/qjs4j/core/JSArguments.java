@@ -195,9 +195,9 @@ public final class JSArguments extends JSObject {
      * AND the underlying argumentValues array to keep them in sync.
      */
     @Override
-    public void set(PropertyKey key, JSValue value, JSContext context) {
+    public void set(JSContext context, PropertyKey key, JSValue value) {
         // First, call the parent implementation to handle the property descriptor
-        super.set(key, value, context);
+        super.set(context, key, value);
 
         // If this is an indexed property within the arguments range, also update the array
         if (key.isIndex()) {

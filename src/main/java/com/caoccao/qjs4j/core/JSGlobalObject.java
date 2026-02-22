@@ -469,7 +469,7 @@ public final class JSGlobalObject {
             }
             if (absentKeys != null) {
                 for (String name : absentKeys) {
-                    global.delete(PropertyKey.fromString(name), realmContext);
+                    global.delete(realmContext, PropertyKey.fromString(name));
                 }
             }
             // Clean up eval-created bindings that should be function-scoped (not global).
@@ -478,7 +478,7 @@ public final class JSGlobalObject {
             if (globalKeysBefore != null) {
                 for (PropertyKey propertyKey : global.ownPropertyKeys()) {
                     if (propertyKey.isString() && !globalKeysBefore.contains(propertyKey.asString())) {
-                        global.delete(propertyKey, realmContext);
+                        global.delete(realmContext, propertyKey);
                     }
                 }
             }
@@ -1425,7 +1425,7 @@ public final class JSGlobalObject {
                     PropertyKey toStringTagKey = PropertyKey.SYMBOL_TO_STRING_TAG;
                     PropertyDescriptor descriptor = thisObject.getOwnPropertyDescriptor(toStringTagKey);
                     if (descriptor != null) {
-                        thisObject.set(toStringTagKey, value, childContext);
+                        thisObject.set(childContext, toStringTagKey, value);
                     } else {
                         thisObject.defineProperty(
                                 toStringTagKey,

@@ -136,7 +136,7 @@ public final class ArrayConstructor {
             }
 
             // Step 6.e: Set A.length
-            A.set(PropertyKey.LENGTH, JSNumber.of(k[0]), context);
+            A.set(context, PropertyKey.LENGTH, JSNumber.of(k[0]));
             return A;
         }
 
@@ -162,7 +162,7 @@ public final class ArrayConstructor {
             } else {
                 A = context.createJSArray();
             }
-            A.set(PropertyKey.LENGTH, JSNumber.of(initialLength), context);
+            A.set(context, PropertyKey.LENGTH, JSNumber.of(initialLength));
             return A;
         }
 
@@ -208,7 +208,7 @@ public final class ArrayConstructor {
         }
 
         // Step 16: Set A.length
-        A.set(PropertyKey.LENGTH, JSNumber.of(sourceLength), context);
+        A.set(context, PropertyKey.LENGTH, JSNumber.of(sourceLength));
         return A;
     }
 

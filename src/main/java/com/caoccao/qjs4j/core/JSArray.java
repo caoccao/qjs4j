@@ -280,15 +280,15 @@ public final class JSArray extends JSObject {
     }
 
     @Override
-    public boolean delete(PropertyKey key, JSContext context) {
+    public boolean delete(JSContext context, PropertyKey key) {
         long index = getArrayIndex(key);
         if (index < 0) {
-            return super.delete(key, context);
+            return super.delete(context, key);
         }
 
         if (sealed || frozen) {
             PropertyKey stringKey = key.isString() ? key : PropertyKey.fromString(Long.toString(index));
-            return super.delete(stringKey, context);
+            return super.delete(context, stringKey);
         }
 
         if (index <= Integer.MAX_VALUE) {
@@ -302,7 +302,7 @@ public final class JSArray extends JSObject {
             }
         }
 
-        return super.delete(key, context);
+        return super.delete(context, key);
     }
 
     /**
@@ -635,7 +635,7 @@ public final class JSArray extends JSObject {
         } else if (lastIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             sparseProperties.remove((int) lastIndex);
         } else {
-            super.delete(PropertyKey.fromString(Long.toString(lastIndex)), null);
+            super.delete(null, PropertyKey.fromString(Long.toString(lastIndex)));
         }
 
         setLength(lastIndex);
@@ -654,7 +654,7 @@ public final class JSArray extends JSObject {
      */
     public void push(JSValue value, JSContext context) {
         long previousLength = length;
-        set(length, value, context);
+        set(context, length, value);
 
         // Array.prototype.push must throw when append fails because the array is not extensible
         // or length is read-only.
@@ -672,16 +672,16 @@ public final class JSArray extends JSObject {
      * Set element at index.
      */
     public void set(long index, JSValue value) {
-        set(index, value, null);
+        set(null, index, value);
     }
 
     /**
      * Set element at index with context for strict mode checking.
      */
-    public void set(long index, JSValue value, JSContext context) {
+    public void set(JSContext context, long index, JSValue value) {
         if (index < 0 || index > MAX_ARRAY_INDEX) {
             // Negative indices are treated as string properties
-            super.set(PropertyKey.fromString(Long.toString(index)), value, context);
+            super.set(context, PropertyKey.fromString(Long.toString(index)), value);
             return;
         }
 
@@ -723,7 +723,7 @@ public final class JSArray extends JSObject {
         if (!isAddingNewElement && index <= Integer.MAX_VALUE) {
             PropertyKey key = PropertyKey.fromString(Long.toString(index));
             if (super.hasOwnShapeProperty(key)) {
-                super.set(key, value, context);
+                super.set(context, key, value);
                 return;
             }
             // If this index is a hole (not present in own dense/sparse storage),
@@ -731,7 +731,7 @@ public final class JSArray extends JSObject {
             // are correctly invoked per ES2024 OrdinarySet.
             boolean hasOwnElement = hasElement(index);
             if (!hasOwnElement) {
-                super.set(key, value, context);
+                super.set(context, key, value);
                 return;
             }
         }
@@ -753,7 +753,7 @@ public final class JSArray extends JSObject {
             sparseProperties.put((int) index, value);
         } else {
             // Preserve semantics for very large array indices without integer overflow.
-            super.set(PropertyKey.fromString(Long.toString(index)), value, context);
+            super.set(context, PropertyKey.fromString(Long.toString(index)), value);
         }
     }
 
@@ -767,17 +767,17 @@ public final class JSArray extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue value) {
-        set(key, value, null);
+        set(null, key, value);
     }
 
     /**
      * Override set by PropertyKey with context to handle array indices.
      */
     @Override
-    public void set(PropertyKey key, JSValue value, JSContext context) {
+    public void set(JSContext context, PropertyKey key, JSValue value) {
         long index = getArrayIndex(key);
         if (index >= 0) {
-            set(index, value, context);
+            set(context, index, value);
         } else if (key.isString() && "length".equals(key.asString())) {
             // Per ES spec ArraySetLength / QuickJS set_array_length:
             // Coerce value BEFORE the read-only test (coercion can change writable flag)
@@ -787,13 +787,13 @@ public final class JSArray extends JSObject {
             }
             if (!isLengthWritable()) {
                 // Delegate to JSObject.set which will handle the non-writable error
-                super.set(key, JSNumber.of(newLength), context);
+                super.set(context, key, JSNumber.of(newLength));
                 return;
             }
             setLength(newLength);
         } else {
             // Otherwise, use the shape-based storage from JSObject
-            super.set(key, value, context);
+            super.set(context, key, value);
         }
     }
 
@@ -822,7 +822,7 @@ public final class JSArray extends JSObject {
             for (PropertyKey key : shape.getPropertyKeys()) {
                 long index = getArrayIndex(key);
                 if (index >= newLength && index >= 0) {
-                    super.delete(key, null);
+                    super.delete(null, key);
                 }
             }
         }

@@ -252,11 +252,11 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public boolean delete(PropertyKey key) {
-        return delete(key, null);
+        return delete(null, key);
     }
 
     @Override
-    public boolean delete(PropertyKey key, JSContext ctx) {
+    public boolean delete(JSContext ctx, PropertyKey key) {
         JSContext executionContext = ctx != null ? ctx : context;
         if (revoked) {
             throw new JSException(executionContext.throwTypeError("Cannot perform 'delete' on a proxy that has been revoked"));
@@ -293,7 +293,7 @@ public final class JSProxy extends JSObject {
         }
 
         // No trap, forward to target (pass context for strict mode checking)
-        return targetObj.delete(key, ctx);
+        return targetObj.delete(ctx, key);
     }
 
     /**
@@ -1022,14 +1022,14 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue value) {
-        set(key, value, context);
+        set(context, key, value);
     }
 
     /**
      * Override set with context to intercept property assignment.
      */
     @Override
-    public void set(PropertyKey key, JSValue value, JSContext context) {
+    public void set(JSContext context, PropertyKey key, JSValue value) {
         proxySetInternal(key, value, context, this, true);
     }
 

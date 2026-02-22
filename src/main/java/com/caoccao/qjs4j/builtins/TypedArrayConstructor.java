@@ -120,7 +120,7 @@ public final class TypedArrayConstructor {
                     return context.getPendingException();
                 }
             }
-            target.set(key, kValue, context);
+            target.set(context, key, kValue);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }

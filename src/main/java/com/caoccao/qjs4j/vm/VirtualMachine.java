@@ -315,7 +315,7 @@ public final class VirtualMachine {
                 context.clearPendingException();
                 return;
             }
-            targetObject.set(key, propertyValue, context);
+            targetObject.set(context, key, propertyValue);
             if (context.hasPendingException()) {
                 pendingException = context.getPendingException();
                 context.clearPendingException();
@@ -1293,7 +1293,7 @@ public final class VirtualMachine {
                             break;
                         }
 
-                        targetObject.set(key, setValue, context);
+                        targetObject.set(context, key, setValue);
                         if (context.hasPendingException()) {
                             pendingException = context.getPendingException();
                             context.clearPendingException();
@@ -1325,7 +1325,7 @@ public final class VirtualMachine {
                     case DELETE_VAR -> {
                         int deleteVarAtom = bytecode.readU32(pc + 1);
                         String deleteVarName = bytecode.getAtoms()[deleteVarAtom];
-                        boolean deleted = context.getGlobalObject().delete(PropertyKey.fromString(deleteVarName), context);
+                        boolean deleted = context.getGlobalObject().delete(context, PropertyKey.fromString(deleteVarName));
                         stack[sp++] = JSBoolean.valueOf(deleted);
                         pc += op.getSize();
                     }
@@ -1650,7 +1650,7 @@ public final class VirtualMachine {
                         JSValue putFieldValue = (JSValue) stack[sp - 1];
                         if (putFieldObj instanceof JSObject jsObj) {
                             try {
-                                jsObj.set(PropertyKey.fromString(putFieldName), putFieldValue, context);
+                                jsObj.set(context, PropertyKey.fromString(putFieldName), putFieldValue);
                                 // Check if setter threw an exception
                                 if (context.hasPendingException()) {
                                     pendingException = context.getPendingException();
@@ -1682,7 +1682,7 @@ public final class VirtualMachine {
                             JSObject boxed = toObject(putFieldObj);
                             if (boxed != null) {
                                 try {
-                                    boxed.set(PropertyKey.fromString(putFieldName), putFieldValue, context);
+                                    boxed.set(context, PropertyKey.fromString(putFieldName), putFieldValue);
                                     if (context.hasPendingException()) {
                                         pendingException = context.getPendingException();
                                         context.clearPendingException();
@@ -1839,7 +1839,7 @@ public final class VirtualMachine {
                         if (putElObj instanceof JSObject jsObj) {
                             try {
                                 PropertyKey key = PropertyKey.fromValue(context, putElIndex);
-                                jsObj.set(key, putElValue, context);
+                                jsObj.set(context, key, putElValue);
                                 // Check if setter threw an exception
                                 if (context.hasPendingException()) {
                                     pendingException = context.getPendingException();
@@ -1870,7 +1870,7 @@ public final class VirtualMachine {
                             if (boxed != null) {
                                 try {
                                     PropertyKey key = PropertyKey.fromValue(context, putElIndex);
-                                    boxed.set(key, putElValue, context);
+                                    boxed.set(context, key, putElValue);
                                     if (context.hasPendingException()) {
                                         pendingException = context.getPendingException();
                                         context.clearPendingException();
@@ -1937,13 +1937,13 @@ public final class VirtualMachine {
 
                         PropertyKey key = PropertyKey.fromValue(context, keyValue);
                         if (receiverValue instanceof JSObject receiverObject) {
-                            superObject.set(key, assignedValue, context, receiverObject);
+                            superObject.set(context, key, assignedValue, receiverObject);
                         } else {
                             JSObject boxedReceiver = toObject(receiverValue);
                             if (boxedReceiver != null) {
-                                superObject.set(key, assignedValue, context, boxedReceiver);
+                                superObject.set(context, key, assignedValue, boxedReceiver);
                             } else {
-                                superObject.set(key, assignedValue, context);
+                                superObject.set(context, key, assignedValue);
                             }
                         }
 
@@ -2266,7 +2266,7 @@ public final class VirtualMachine {
                                 // Get value and append to array at position
                                 JSValue value = resultObj.get(PropertyKey.VALUE);
                                 // Set array element (this will update length automatically)
-                                array.set(pos++, value, context);
+                                array.set(context, pos++, value);
                             }
 
                             // Push array and updated position back onto stack
@@ -2298,7 +2298,7 @@ public final class VirtualMachine {
                         int idx = (int) idxNum.value();
 
                         // Set array element (this will update length automatically)
-                        array.set(idx, value, context);
+                        array.set(context, idx, value);
 
                         pc += op.getSize();
                     }
@@ -3352,7 +3352,7 @@ public final class VirtualMachine {
         boolean result = false;
         if (object instanceof JSObject jsObj) {
             PropertyKey key = PropertyKey.fromValue(context, property);
-            result = jsObj.delete(key, context);
+            result = jsObj.delete(context, key);
             if (context.hasPendingException()) {
                 pendingException = context.getPendingException();
             }

@@ -358,7 +358,7 @@ public non-sealed class JSObject implements JSValue {
      * Following QuickJS delete_property() logic.
      */
     public boolean delete(String propertyName) {
-        return delete(PropertyKey.fromString(propertyName), null);
+        return delete(null, PropertyKey.fromString(propertyName));
     }
 
     /**
@@ -366,14 +366,14 @@ public non-sealed class JSObject implements JSValue {
      * Following QuickJS delete_property() implementation.
      */
     public boolean delete(PropertyKey key) {
-        return delete(key, null);
+        return delete(null, key);
     }
 
     /**
      * Delete a property by key with context for strict mode checking.
      * Following QuickJS delete_property() implementation.
      */
-    public boolean delete(PropertyKey key, JSContext context) {
+    public boolean delete(JSContext context, PropertyKey key) {
         // Check sparse properties first.
         long arrayIndex = getCanonicalArrayIndex(key);
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
@@ -947,7 +947,7 @@ public non-sealed class JSObject implements JSValue {
      * Set a property value by property key.
      */
     public void set(PropertyKey key, JSValue value) {
-        set(key, value, null);
+        set(null, key, value);
     }
 
     // Object integrity levels (ES5)
@@ -955,16 +955,16 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Set a property value by property key with context for setter functions.
      */
-    public void set(PropertyKey key, JSValue value, JSContext context) {
-        set(key, value, context, this);
+    public void set(JSContext context, PropertyKey key, JSValue value) {
+        set(context, key, value, this);
     }
 
     /**
      * Set a property value with an explicit receiver for setter invocation.
      * Used by Reflect.set to pass a different receiver than the target.
      */
-    public void set(PropertyKey key, JSValue value, JSContext context, JSObject receiver) {
-        setInternal(key, value, context, receiver, true);
+    public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
+        setInternal(context, key, value, receiver, true);
     }
 
     public void setArrayObject(boolean arrayObject) {
@@ -986,7 +986,7 @@ public non-sealed class JSObject implements JSValue {
         this.htmlDDA = htmlDDA;
     }
 
-    private boolean setInternal(PropertyKey key, JSValue value, JSContext context, JSObject receiver, boolean throwOnFailure) {
+    private boolean setInternal(JSContext context, PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
         // Check if property already exists
         PropertyKey ownShapeKey = getOwnShapeKey(key);
         if (ownShapeKey != null) {
@@ -1007,7 +1007,7 @@ public non-sealed class JSObject implements JSValue {
             }
 
             if (receiver != this) {
-                return setOnReceiver(key, value, context, receiver, throwOnFailure);
+                return setOnReceiver(context, key, value, receiver, throwOnFailure);
             }
 
             propertyValues[offset] = value;
@@ -1048,10 +1048,10 @@ public non-sealed class JSObject implements JSValue {
             proto = proto.prototype;
         }
 
-        return setOnReceiver(key, value, context, receiver, throwOnFailure);
+        return setOnReceiver(context, key, value, receiver, throwOnFailure);
     }
 
-    private boolean setOnReceiver(PropertyKey key, JSValue value, JSContext context, JSObject receiver, boolean throwOnFailure) {
+    private boolean setOnReceiver(JSContext context, PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
         // ES2024 OrdinarySetWithOwnDescriptor steps 2c-2e:
         // Use the virtual [[GetOwnPropertyDescriptor]] and [[DefineOwnProperty]]
         // methods on the receiver so that proxy traps are correctly invoked when
@@ -1150,7 +1150,7 @@ public non-sealed class JSObject implements JSValue {
     }
 
     public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-        return setInternal(key, value, context, receiver, false);
+        return setInternal(context, key, value, receiver, false);
     }
 
     /**

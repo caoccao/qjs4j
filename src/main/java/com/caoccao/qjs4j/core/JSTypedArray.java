@@ -350,7 +350,7 @@ public abstract class JSTypedArray extends JSObject {
      * Following QuickJS delete_property() for typed arrays.
      */
     @Override
-    public boolean delete(PropertyKey key, JSContext context) {
+    public boolean delete(JSContext context, PropertyKey key) {
         int index = toTypedArrayIndex(key);
         if (index >= 0) {
             // In-bounds element: not deletable
@@ -363,7 +363,7 @@ public abstract class JSTypedArray extends JSObject {
             // Out-of-bounds or detached: canonical numeric index returns true
             return true;
         }
-        return super.delete(key, context);
+        return super.delete(context, key);
     }
 
     @Override
@@ -624,7 +624,7 @@ public abstract class JSTypedArray extends JSObject {
     }
 
     @Override
-    public void set(PropertyKey key, JSValue value, JSContext context) {
+    public void set(JSContext context, PropertyKey key, JSValue value) {
         if (isCanonicalNumericIndex(key)) {
             // TypedArray [[Set]] with SameValue(O, Receiver) = true
             // Always call integerIndexedElementSet which performs value conversion
@@ -652,7 +652,7 @@ public abstract class JSTypedArray extends JSObject {
             }
             return;
         }
-        super.set(key, value, context);
+        super.set(context, key, value);
     }
 
     /**
@@ -756,7 +756,7 @@ public abstract class JSTypedArray extends JSObject {
             // Step b.i: If SameValue(O, Receiver) is true
             if (receiver == this) {
                 // Perform TypedArraySetElement(O, numericIndex, V)
-                set(key, value, context);
+                set(context, key, value);
                 return !context.hasPendingException();
             }
             // Step b.ii: If IsValidIntegerIndex(O, numericIndex) is false, return true
