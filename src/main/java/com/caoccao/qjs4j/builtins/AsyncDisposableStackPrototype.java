@@ -44,7 +44,13 @@ public final class AsyncDisposableStackPrototype {
 
     public static JSValue disposeAsync(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSAsyncDisposableStack stack)) {
-            return context.throwTypeError("AsyncDisposableStack.prototype.disposeAsync called on non-AsyncDisposableStack");
+            JSPromise rejectedPromise = context.createJSPromise();
+            JSValue error = context.throwTypeError("AsyncDisposableStack.prototype.disposeAsync called on non-AsyncDisposableStack");
+            if (context.hasPendingException()) {
+                context.clearPendingException();
+            }
+            rejectedPromise.reject(error);
+            return rejectedPromise;
         }
         return stack.disposeAsync(context);
     }
