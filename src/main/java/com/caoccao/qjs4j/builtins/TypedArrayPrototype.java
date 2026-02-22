@@ -104,18 +104,42 @@ public final class TypedArrayPrototype {
     }
 
     private static String getTypedArrayName(JSTypedArray typedArray) {
-        if (typedArray instanceof JSInt8Array) { return JSInt8Array.NAME; }
-        if (typedArray instanceof JSUint8Array) { return JSUint8Array.NAME; }
-        if (typedArray instanceof JSUint8ClampedArray) { return JSUint8ClampedArray.NAME; }
-        if (typedArray instanceof JSInt16Array) { return JSInt16Array.NAME; }
-        if (typedArray instanceof JSUint16Array) { return JSUint16Array.NAME; }
-        if (typedArray instanceof JSInt32Array) { return JSInt32Array.NAME; }
-        if (typedArray instanceof JSUint32Array) { return JSUint32Array.NAME; }
-        if (typedArray instanceof JSFloat16Array) { return JSFloat16Array.NAME; }
-        if (typedArray instanceof JSFloat32Array) { return JSFloat32Array.NAME; }
-        if (typedArray instanceof JSFloat64Array) { return JSFloat64Array.NAME; }
-        if (typedArray instanceof JSBigInt64Array) { return JSBigInt64Array.NAME; }
-        if (typedArray instanceof JSBigUint64Array) { return JSBigUint64Array.NAME; }
+        if (typedArray instanceof JSInt8Array) {
+            return JSInt8Array.NAME;
+        }
+        if (typedArray instanceof JSUint8Array) {
+            return JSUint8Array.NAME;
+        }
+        if (typedArray instanceof JSUint8ClampedArray) {
+            return JSUint8ClampedArray.NAME;
+        }
+        if (typedArray instanceof JSInt16Array) {
+            return JSInt16Array.NAME;
+        }
+        if (typedArray instanceof JSUint16Array) {
+            return JSUint16Array.NAME;
+        }
+        if (typedArray instanceof JSInt32Array) {
+            return JSInt32Array.NAME;
+        }
+        if (typedArray instanceof JSUint32Array) {
+            return JSUint32Array.NAME;
+        }
+        if (typedArray instanceof JSFloat16Array) {
+            return JSFloat16Array.NAME;
+        }
+        if (typedArray instanceof JSFloat32Array) {
+            return JSFloat32Array.NAME;
+        }
+        if (typedArray instanceof JSFloat64Array) {
+            return JSFloat64Array.NAME;
+        }
+        if (typedArray instanceof JSBigInt64Array) {
+            return JSBigInt64Array.NAME;
+        }
+        if (typedArray instanceof JSBigUint64Array) {
+            return JSBigUint64Array.NAME;
+        }
         return "TypedArray";
     }
 

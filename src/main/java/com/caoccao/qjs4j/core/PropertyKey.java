@@ -169,8 +169,12 @@ public final class PropertyKey {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) { return true; }
-        if (!(obj instanceof PropertyKey other)) { return false; }
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof PropertyKey other)) {
+            return false;
+        }
 
         // Fast path: if both have atom indices, compare them
         if (atomIndex >= 0 && other.atomIndex >= 0) {

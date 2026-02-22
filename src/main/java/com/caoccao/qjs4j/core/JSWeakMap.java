@@ -151,8 +151,12 @@ public final class JSWeakMap extends JSObject {
     }
 
     public static boolean isWeakMapKey(JSValue key) {
-        if (key instanceof JSObject) { return true; }
-        if (key instanceof JSSymbol s) { return !s.isRegistered(); }
+        if (key instanceof JSObject) {
+            return true;
+        }
+        if (key instanceof JSSymbol s) {
+            return !s.isRegistered();
+        }
         return false;
     }
 

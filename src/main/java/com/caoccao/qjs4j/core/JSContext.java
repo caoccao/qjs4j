@@ -49,14 +49,14 @@ public final class JSContext implements AutoCloseable {
     private final Set<String> globalLexDeclarations;
     private final JSObject globalObject;
     private final Set<String> globalVarDeclarations;
+    // Shared iterator prototypes by toStringTag (e.g., "Array Iterator" → %ArrayIteratorPrototype%)
+    private final Map<String, JSObject> iteratorPrototypes;
     private final JSGlobalObject jsGlobalObject;
     // Microtask queue for promise resolution and async operations
     private final JSMicrotaskQueue microtaskQueue;
     private final Map<String, JSModule> moduleCache;
     private final JSRuntime runtime;
     private final VirtualMachine virtualMachine;
-    // Shared iterator prototypes by toStringTag (e.g., "Array Iterator" → %ArrayIteratorPrototype%)
-    private final Map<String, JSObject> iteratorPrototypes;
     // Internal constructor references (not exposed in global scope)
     private JSObject asyncFunctionConstructor;
     // Async generator prototype chain (not exposed in global scope)
@@ -229,6 +229,31 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Create a new JSArrayBuffer with proper prototype chain.
+     *
+     * @param byteLength The length in bytes
+     * @return A new JSArrayBuffer instance with prototype set
+     */
+    public JSArrayBuffer createJSArrayBuffer(int byteLength) {
+        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(byteLength);
+        transferPrototype(jsArrayBuffer, JSArrayBuffer.NAME);
+        return jsArrayBuffer;
+    }
+
+    /**
+     * Create a new resizable JSArrayBuffer with proper prototype chain.
+     *
+     * @param byteLength    The initial length in bytes
+     * @param maxByteLength The maximum length in bytes, or -1 for non-resizable
+     * @return A new JSArrayBuffer instance with prototype set
+     */
+    public JSArrayBuffer createJSArrayBuffer(int byteLength, int maxByteLength) {
+        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(byteLength, maxByteLength);
+        transferPrototype(jsArrayBuffer, JSArrayBuffer.NAME);
+        return jsArrayBuffer;
+    }
+
+    /**
      * ES2024 7.3.34 ArraySpeciesCreate(originalArray, length).
      * Following QuickJS JS_ArraySpeciesCreate.
      *
@@ -291,31 +316,6 @@ public final class JSContext implements AutoCloseable {
             return null;
         }
         return result;
-    }
-
-    /**
-     * Create a new JSArrayBuffer with proper prototype chain.
-     *
-     * @param byteLength The length in bytes
-     * @return A new JSArrayBuffer instance with prototype set
-     */
-    public JSArrayBuffer createJSArrayBuffer(int byteLength) {
-        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(byteLength);
-        transferPrototype(jsArrayBuffer, JSArrayBuffer.NAME);
-        return jsArrayBuffer;
-    }
-
-    /**
-     * Create a new resizable JSArrayBuffer with proper prototype chain.
-     *
-     * @param byteLength    The initial length in bytes
-     * @param maxByteLength The maximum length in bytes, or -1 for non-resizable
-     * @return A new JSArrayBuffer instance with prototype set
-     */
-    public JSArrayBuffer createJSArrayBuffer(int byteLength, int maxByteLength) {
-        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(byteLength, maxByteLength);
-        transferPrototype(jsArrayBuffer, JSArrayBuffer.NAME);
-        return jsArrayBuffer;
     }
 
     /**

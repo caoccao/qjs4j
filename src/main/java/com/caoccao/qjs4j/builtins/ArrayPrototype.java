@@ -49,14 +49,20 @@ public final class ArrayPrototype {
             length = arr.getLength();
         } else {
             JSValue lenVal = obj.get(context, PropertyKey.LENGTH);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             length = JSTypeConversions.toLength(context, lenVal);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
 
         // Step 3: Let relativeIndex be ? ToIntegerOrInfinity(index).
         long index = (long) JSTypeConversions.toInteger(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         // Steps 4-5: Handle negative indices
         if (index < 0) {
@@ -123,9 +129,13 @@ public final class ArrayPrototype {
                     elementLength = eArr.getLength();
                 } else {
                     JSValue lenVal = elementObj.get(context, PropertyKey.LENGTH);
-                    if (context.hasPendingException()) { return context.getPendingException(); }
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
                     elementLength = JSTypeConversions.toLength(context, lenVal);
-                    if (context.hasPendingException()) { return context.getPendingException(); }
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
                 }
 
                 if (resultIndex + elementLength > NumberPrototype.MAX_SAFE_INTEGER) { // MAX_SAFE_INTEGER
@@ -136,10 +146,14 @@ public final class ArrayPrototype {
                     PropertyKey indexKey = PropertyKey.fromString(Long.toString(k));
                     // JS_TryGetPropertyInt64: only define property if it exists (preserve holes)
                     boolean present = elementObj.has(indexKey);
-                    if (context.hasPendingException()) { return context.getPendingException(); }
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
                     if (present) {
                         JSValue val = elementObj.get(context, indexKey);
-                        if (context.hasPendingException()) { return context.getPendingException(); }
+                        if (context.hasPendingException()) {
+                            return context.getPendingException();
+                        }
                         if (resultArr != null) {
                             resultArr.set(resultIndex, val);
                         } else if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), val)) {
@@ -166,7 +180,9 @@ public final class ArrayPrototype {
             resultArr.setLength(resultIndex);
         } else {
             resultObj.set(PropertyKey.LENGTH, JSNumber.of(resultIndex), context);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
         return resultObj;
     }
@@ -189,14 +205,20 @@ public final class ArrayPrototype {
             length = arr.getLength();
         } else {
             JSValue lenVal = obj.get(context, PropertyKey.LENGTH);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             length = JSTypeConversions.toLength(context, lenVal);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
 
         // Get target position (JS_ToInt64Clamp with min=0, max=len, neg_offset=len)
         long target = (long) JSTypeConversions.toInteger(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
         if (target < 0) {
             target = Math.max(length + target, 0);
         } else {
@@ -205,7 +227,9 @@ public final class ArrayPrototype {
 
         // Get start position
         long start = (long) JSTypeConversions.toInteger(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
         if (start < 0) {
             start = Math.max(length + start, 0);
         } else {
@@ -216,7 +240,9 @@ public final class ArrayPrototype {
         long end;
         if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
             end = (long) JSTypeConversions.toInteger(context, args[2]);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (end < 0) {
                 end = Math.max(length + end, 0);
             } else {
@@ -241,13 +267,21 @@ public final class ArrayPrototype {
             final PropertyKey toKey = PropertyKey.fromString(Long.toString(to));
 
             boolean fromPresent = obj.has(fromKey);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (fromPresent) {
                 JSValue value = obj.get(context, fromKey);
-                if (context.hasPendingException()) { return context.getPendingException(); }
-                if (!setOrThrow(context, obj, toKey, value)) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (!setOrThrow(context, obj, toKey, value)) {
+                    return context.getPendingException();
+                }
             } else {
-                if (!deleteOrThrow(context, obj, toKey)) { return context.getPendingException(); }
+                if (!deleteOrThrow(context, obj, toKey)) {
+                    return context.getPendingException();
+                }
             }
         }
 
@@ -288,6 +322,19 @@ public final class ArrayPrototype {
     }
 
     /**
+     * ES2024 DeletePropertyOrThrow(O, P) — throws TypeError if delete returns false.
+     */
+    private static boolean deleteOrThrow(JSContext context, JSObject obj, PropertyKey key) {
+        if (!obj.delete(key, context)) {
+            if (!context.hasPendingException()) {
+                context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "'");
+            }
+            return false;
+        }
+        return !context.hasPendingException();
+    }
+
+    /**
      * Array.prototype.every(callbackFn[, thisArg])
      * Tests whether all elements pass the test.
      */
@@ -296,11 +343,15 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.every called on null or undefined");
         }
         JSObject obj = toObjectChecked(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         // Step 2: Get length BEFORE checking callback (step 3) per ES2024 spec
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
@@ -312,16 +363,22 @@ public final class ArrayPrototype {
             // Step 7b: Let kPresent be ? HasProperty(O, key)
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 continue;
             }
             // Step 7c.i: Let kValue be ? Get(O, key)
             // Use context-aware get so getters are properly invoked
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.FALSE) {
                 return JSBoolean.FALSE;
@@ -339,11 +396,15 @@ public final class ArrayPrototype {
     public static JSValue fill(JSContext context, JSValue thisArg, JSValue[] args) {
         // Step 1: Let O be ? ToObject(this value).
         JSObject obj = toObjectChecked(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         // Step 2: Let len be ? LengthOfArrayLike(O).
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
@@ -351,7 +412,9 @@ public final class ArrayPrototype {
         long start = 0;
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
             start = (long) JSTypeConversions.toInteger(context, args[1]);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
         if (start < 0) {
             start = Math.max(length + start, 0);
@@ -363,7 +426,9 @@ public final class ArrayPrototype {
         long end = length;
         if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
             end = (long) JSTypeConversions.toInteger(context, args[2]);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
         if (end < 0) {
             end = Math.max(length + end, 0);
@@ -374,7 +439,9 @@ public final class ArrayPrototype {
         // Step 8: Repeat, while k < final
         for (long i = start; i < end; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            if (!setOrThrow(context, obj, key, value)) { return context.getPendingException(); }
+            if (!setOrThrow(context, obj, key, value)) {
+                return context.getPendingException();
+            }
         }
 
         // Step 9: Return O.
@@ -391,11 +458,15 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.filter called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         // Step 2: Let len be ? LengthOfArrayLike(O).
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         // Step 3: If IsCallable(callbackfn) is false, throw a TypeError exception.
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
@@ -418,16 +489,22 @@ public final class ArrayPrototype {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             // Step 7.a: Let kPresent be ? HasProperty(O, Pk).
             if (!obj.has(key)) {
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 continue;
             }
             // Step 7.c.i: Let kValue be ? Get(O, Pk).
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             // Step 7.c.ii: Let selected be ! ToBoolean(? Call(callbackfn, thisArg, ...)).
             JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             JSValue keep = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
 
             if (JSTypeConversions.toBoolean(keep) == JSBoolean.TRUE) {
                 // Step 7.c.iii.1: Perform ? CreateDataPropertyOrThrow(A, ! ToString(to), kValue).
@@ -451,10 +528,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.find called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
@@ -465,10 +546,14 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
                 return element;
@@ -487,10 +572,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.findIndex called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
@@ -501,10 +590,14 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
                 return JSNumber.of(i);
@@ -524,10 +617,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.findLast called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
@@ -539,10 +636,14 @@ public final class ArrayPrototype {
         for (long i = length - 1; i >= 0; i--) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
                 return element;
@@ -562,10 +663,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.findLastIndex called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
@@ -577,10 +682,14 @@ public final class ArrayPrototype {
         for (long i = length - 1; i >= 0; i--) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
                 return JSNumber.of(i);
@@ -599,15 +708,21 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.flat called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         int depth;
         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
             double d = JSTypeConversions.toInteger(context, args[0]);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             depth = d >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(d, 0);
         } else {
             depth = 1;
@@ -625,7 +740,9 @@ public final class ArrayPrototype {
         // Step 5: Perform ? FlattenIntoArray(A, O, sourceLen, 0, depthNum).
         long[] targetIndex = {0};
         internalFlattenIntoObject(context, obj, length, depth, resultObj, targetIndex);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         return resultObj;
     }
@@ -640,10 +757,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.flatMap called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Array.prototype.flatMap requires a callback function");
@@ -665,11 +786,15 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 continue;
             }
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
 
             // Call the callback with (element, index, array)
             JSValue[] callbackArgs = new JSValue[]{
@@ -678,22 +803,32 @@ public final class ArrayPrototype {
                     obj
             };
             JSValue mapped = callback.call(context, callbackThisArg, callbackArgs);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
 
             // Flatten one level
             if (mapped instanceof JSObject mappedObj) {
                 int isArr = JSTypeChecking.isArray(context, mappedObj);
-                if (isArr < 0) { return context.getPendingException(); }
+                if (isArr < 0) {
+                    return context.getPendingException();
+                }
                 if (isArr > 0) {
                     long mappedLen = lengthOfArrayLike(context, mappedObj);
-                    if (context.hasPendingException()) { return context.getPendingException(); }
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
                     for (long j = 0; j < mappedLen; j++) {
                         PropertyKey jKey = PropertyKey.fromString(Long.toString(j));
                         boolean jPresent = mappedObj.has(jKey);
-                        if (context.hasPendingException()) { return context.getPendingException(); }
+                        if (context.hasPendingException()) {
+                            return context.getPendingException();
+                        }
                         if (jPresent) {
                             JSValue val = mappedObj.get(context, jKey);
-                            if (context.hasPendingException()) { return context.getPendingException(); }
+                            if (context.hasPendingException()) {
+                                return context.getPendingException();
+                            }
                             if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), val)) {
                                 return context.throwTypeError("Cannot define property " + resultIndex);
                             }
@@ -721,10 +856,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.forEach called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
@@ -735,14 +874,20 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 continue;
             }
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
 
         return JSUndefined.INSTANCE;
@@ -781,10 +926,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.includes called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         // Step 4: If len is 0, return false (before ToIntegerOrInfinity).
         if (length == 0) {
@@ -793,7 +942,9 @@ public final class ArrayPrototype {
 
         JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (fromIndexD >= length) {
             return JSBoolean.FALSE;
@@ -808,7 +959,9 @@ public final class ArrayPrototype {
         for (long i = fromIndex; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             // includes uses SameValueZero (NaN equals NaN)
             if (JSTypeConversions.strictEquals(element, searchElement)) {
                 return JSBoolean.TRUE;
@@ -833,10 +986,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.indexOf called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (length == 0) {
             return JSNumber.of(-1);
@@ -844,7 +1001,9 @@ public final class ArrayPrototype {
 
         JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (fromIndexD >= length) {
             return JSNumber.of(-1);
@@ -859,11 +1018,15 @@ public final class ArrayPrototype {
         for (long i = fromIndex; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 continue;
             }
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (JSTypeConversions.strictEquals(element, searchElement)) {
                 return JSNumber.of(i);
             }
@@ -876,19 +1039,29 @@ public final class ArrayPrototype {
         for (long i = 0; i < sourceLen; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!source.has(key)) {
-                if (context.hasPendingException()) { return; }
+                if (context.hasPendingException()) {
+                    return;
+                }
                 continue;
             }
             JSValue element = source.get(context, key);
-            if (context.hasPendingException()) { return; }
+            if (context.hasPendingException()) {
+                return;
+            }
             if (depth > 0 && element instanceof JSObject elementObj) {
                 int isArr = JSTypeChecking.isArray(context, elementObj);
-                if (isArr < 0) { return; }
+                if (isArr < 0) {
+                    return;
+                }
                 if (isArr > 0) {
                     long elementLen = lengthOfArrayLike(context, elementObj);
-                    if (context.hasPendingException()) { return; }
+                    if (context.hasPendingException()) {
+                        return;
+                    }
                     internalFlattenIntoObject(context, elementObj, elementLen, depth - 1, target, targetIndex);
-                    if (context.hasPendingException()) { return; }
+                    if (context.hasPendingException()) {
+                        return;
+                    }
                     continue;
                 }
             }
@@ -969,10 +1142,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.lastIndexOf called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (length == 0) {
             return JSNumber.of(-1);
@@ -980,7 +1157,9 @@ public final class ArrayPrototype {
 
         JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : length - 1;
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         long fromIndex;
         if (fromIndexD < 0) {
@@ -992,59 +1171,21 @@ public final class ArrayPrototype {
         for (long i = fromIndex; i >= 0; i--) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 continue;
             }
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (JSTypeConversions.strictEquals(element, searchElement)) {
                 return JSNumber.of(i);
             }
         }
 
         return JSNumber.of(-1);
-    }
-
-    /**
-     * ES2024 Set(O, P, V, true) — always throws TypeError on failure regardless of strict mode.
-     * Generates V8-matching error messages based on the failure reason.
-     */
-    private static boolean setOrThrow(JSContext context, JSObject obj, PropertyKey key, JSValue value) {
-        if (!obj.setWithResult(context, key, value)) {
-            if (!context.hasPendingException()) {
-                PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
-                if (desc != null && desc.isDataDescriptor() && !desc.isWritable()) {
-                    context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString()
-                            + "' of object '" + objectTag(obj) + "'");
-                } else if (!obj.isExtensible()) {
-                    context.throwTypeError("Cannot add property " + key.toPropertyString()
-                            + ", object is not extensible");
-                } else {
-                    context.throwTypeError("Cannot set property '" + key.toPropertyString() + "'");
-                }
-            }
-            return false;
-        }
-        return !context.hasPendingException();
-    }
-
-    private static String objectTag(JSObject obj) {
-        if (obj instanceof JSArray) { return "[object Array]"; }
-        if (obj instanceof JSStringObject) { return "[object String]"; }
-        return "[object Object]";
-    }
-
-    /**
-     * ES2024 DeletePropertyOrThrow(O, P) — throws TypeError if delete returns false.
-     */
-    private static boolean deleteOrThrow(JSContext context, JSObject obj, PropertyKey key) {
-        if (!obj.delete(key, context)) {
-            if (!context.hasPendingException()) {
-                context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "'");
-            }
-            return false;
-        }
-        return !context.hasPendingException();
     }
 
     /**
@@ -1056,9 +1197,13 @@ public final class ArrayPrototype {
             return arr.getLength();
         }
         JSValue lenVal = obj.get(context, PropertyKey.LENGTH);
-        if (context.hasPendingException()) { return -1; }
+        if (context.hasPendingException()) {
+            return -1;
+        }
         long arrayLikeLength = JSTypeConversions.toLength(context, lenVal);
-        if (context.hasPendingException()) { return -1; }
+        if (context.hasPendingException()) {
+            return -1;
+        }
         return arrayLikeLength;
     }
 
@@ -1071,10 +1216,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.map called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
@@ -1094,14 +1243,20 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 continue;
             }
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             JSValue mapped = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             // Step 7.c.iii.1: Perform ? CreateDataPropertyOrThrow(A, ! ToString(k), mappedValue).
             if (!resultObj.definePropertyWritableEnumerableConfigurable(key, mapped)) {
                 return context.throwTypeError("Cannot define property " + i);
@@ -1109,6 +1264,16 @@ public final class ArrayPrototype {
         }
 
         return resultObj;
+    }
+
+    private static String objectTag(JSObject obj) {
+        if (obj instanceof JSArray) {
+            return "[object Array]";
+        }
+        if (obj instanceof JSStringObject) {
+            return "[object String]";
+        }
+        return "[object Object]";
     }
 
     /**
@@ -1120,10 +1285,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.pop called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (length == 0) {
             if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(0))) {
@@ -1134,7 +1303,9 @@ public final class ArrayPrototype {
         long newLen = length - 1;
         PropertyKey key = PropertyKey.fromString(Long.toString(newLen));
         JSValue element = obj.get(context, key);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
         if (!deleteOrThrow(context, obj, key)) {
             return context.getPendingException();
         }
@@ -1155,10 +1326,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.push called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         // Per ES2024 step 4: If len + argCount > 2^53 - 1, throw a TypeError
         long newLen = length + args.length;
@@ -1189,10 +1364,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.reduce called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
@@ -1213,10 +1392,14 @@ public final class ArrayPrototype {
             for (long k = 0; k < length; k++) {
                 PropertyKey key = PropertyKey.fromString(Long.toString(k));
                 boolean kPresent = obj.has(key);
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 if (kPresent) {
                     accumulator = obj.get(context, key);
-                    if (context.hasPendingException()) { return context.getPendingException(); }
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
                     startIndex = k + 1;
                     found = true;
                     break;
@@ -1230,14 +1413,20 @@ public final class ArrayPrototype {
         for (long i = startIndex; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 continue;
             }
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             JSValue[] callbackArgs = {accumulator, element, JSNumber.of(i), obj};
             accumulator = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
 
         return accumulator;
@@ -1252,10 +1441,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.reduceRight called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
@@ -1276,10 +1469,14 @@ public final class ArrayPrototype {
             for (long k = length - 1; k >= 0; k--) {
                 PropertyKey key = PropertyKey.fromString(Long.toString(k));
                 boolean kPresent = obj.has(key);
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 if (kPresent) {
                     accumulator = obj.get(context, key);
-                    if (context.hasPendingException()) { return context.getPendingException(); }
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
                     startIndex = k - 1;
                     found = true;
                     break;
@@ -1293,14 +1490,20 @@ public final class ArrayPrototype {
         for (long i = startIndex; i >= 0; i--) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 continue;
             }
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             JSValue[] callbackArgs = {accumulator, element, JSNumber.of(i), obj};
             accumulator = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
 
         return accumulator;
@@ -1315,10 +1518,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.reverse called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         for (long lower = 0, upper = length - 1; lower < upper; lower++, upper--) {
             PropertyKey lowerKey = PropertyKey.fromString(Long.toString(lower));
@@ -1326,34 +1533,77 @@ public final class ArrayPrototype {
 
             // Per ES2024: HasProperty then Get for lower, then HasProperty then Get for upper
             boolean lowerExists = obj.has(lowerKey);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             JSValue lowerVal = JSUndefined.INSTANCE;
             if (lowerExists) {
                 lowerVal = obj.get(context, lowerKey);
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
             }
 
             boolean upperExists = obj.has(upperKey);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             JSValue upperVal = JSUndefined.INSTANCE;
             if (upperExists) {
                 upperVal = obj.get(context, upperKey);
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
             }
 
             if (lowerExists && upperExists) {
-                if (!setOrThrow(context, obj, lowerKey, upperVal)) { return context.getPendingException(); }
-                if (!setOrThrow(context, obj, upperKey, lowerVal)) { return context.getPendingException(); }
+                if (!setOrThrow(context, obj, lowerKey, upperVal)) {
+                    return context.getPendingException();
+                }
+                if (!setOrThrow(context, obj, upperKey, lowerVal)) {
+                    return context.getPendingException();
+                }
             } else if (upperExists) {
-                if (!setOrThrow(context, obj, lowerKey, upperVal)) { return context.getPendingException(); }
-                if (!deleteOrThrow(context, obj, upperKey)) { return context.getPendingException(); }
+                if (!setOrThrow(context, obj, lowerKey, upperVal)) {
+                    return context.getPendingException();
+                }
+                if (!deleteOrThrow(context, obj, upperKey)) {
+                    return context.getPendingException();
+                }
             } else if (lowerExists) {
-                if (!deleteOrThrow(context, obj, lowerKey)) { return context.getPendingException(); }
-                if (!setOrThrow(context, obj, upperKey, lowerVal)) { return context.getPendingException(); }
+                if (!deleteOrThrow(context, obj, lowerKey)) {
+                    return context.getPendingException();
+                }
+                if (!setOrThrow(context, obj, upperKey, lowerVal)) {
+                    return context.getPendingException();
+                }
             }
         }
 
         return obj;
+    }
+
+    /**
+     * ES2024 Set(O, P, V, true) — always throws TypeError on failure regardless of strict mode.
+     * Generates V8-matching error messages based on the failure reason.
+     */
+    private static boolean setOrThrow(JSContext context, JSObject obj, PropertyKey key, JSValue value) {
+        if (!obj.setWithResult(context, key, value)) {
+            if (!context.hasPendingException()) {
+                PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
+                if (desc != null && desc.isDataDescriptor() && !desc.isWritable()) {
+                    context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString()
+                            + "' of object '" + objectTag(obj) + "'");
+                } else if (!obj.isExtensible()) {
+                    context.throwTypeError("Cannot add property " + key.toPropertyString()
+                            + ", object is not extensible");
+                } else {
+                    context.throwTypeError("Cannot set property '" + key.toPropertyString() + "'");
+                }
+            }
+            return false;
+        }
+        return !context.hasPendingException();
     }
 
     /**
@@ -1365,10 +1615,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.shift called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (length == 0) {
             if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(0))) {
@@ -1378,19 +1632,29 @@ public final class ArrayPrototype {
         }
         PropertyKey firstKey = PropertyKey.fromString("0");
         JSValue first = obj.get(context, firstKey);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         for (long k = 1; k < length; k++) {
             PropertyKey from = PropertyKey.fromString(Long.toString(k));
             PropertyKey to = PropertyKey.fromString(Long.toString(k - 1));
             boolean fromPresent = obj.has(from);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (fromPresent) {
                 JSValue val = obj.get(context, from);
-                if (context.hasPendingException()) { return context.getPendingException(); }
-                if (!setOrThrow(context, obj, to, val)) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (!setOrThrow(context, obj, to, val)) {
+                    return context.getPendingException();
+                }
             } else {
-                if (!deleteOrThrow(context, obj, to)) { return context.getPendingException(); }
+                if (!deleteOrThrow(context, obj, to)) {
+                    return context.getPendingException();
+                }
             }
         }
         if (!deleteOrThrow(context, obj, PropertyKey.fromString(Long.toString(length - 1)))) {
@@ -1411,17 +1675,23 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.slice called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         long begin = 0;
         long end = length;
 
         if (args.length > 0) {
             double d = JSTypeConversions.toInteger(context, args[0]);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (d < 0) {
                 begin = Math.max(length + (long) d, 0);
             } else {
@@ -1431,7 +1701,9 @@ public final class ArrayPrototype {
 
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
             double d = JSTypeConversions.toInteger(context, args[1]);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (d < 0) {
                 end = Math.max(length + (long) d, 0);
             } else {
@@ -1454,10 +1726,14 @@ public final class ArrayPrototype {
         for (long i = begin; i < end; i++, resultIndex++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             boolean kPresent = obj.has(key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (kPresent) {
                 JSValue element = obj.get(context, key);
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 // Step 8.b.iii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(resultIndex), kValue).
                 if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), element)) {
                     return context.throwTypeError("Cannot define property " + resultIndex);
@@ -1467,7 +1743,9 @@ public final class ArrayPrototype {
 
         // Step 9: Perform ? Set(A, "length", resultIndex, true).
         resultObj.set(PropertyKey.LENGTH, JSNumber.of(resultIndex), context);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         return resultObj;
     }
@@ -1481,10 +1759,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.some called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
@@ -1495,14 +1777,20 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!obj.has(key)) {
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 continue;
             }
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
             JSValue result = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
 
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
                 return JSBoolean.TRUE;
@@ -1521,10 +1809,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.sort called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         JSFunction compareFn = args.length > 0 && args[0] instanceof JSFunction ?
                 (JSFunction) args[0] : null;
@@ -1533,7 +1825,9 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             elements.add(obj.get(context, key));
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
 
         Collections.sort(elements, (a, b) -> {
@@ -1553,7 +1847,9 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             obj.set(key, elements.get((int) i), context);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
 
         return obj;
@@ -1568,15 +1864,21 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.splice called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         long start;
         if (args.length > 0) {
             double d = JSTypeConversions.toInteger(context, args[0]);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (d < 0) {
                 start = Math.max(length + (long) d, 0);
             } else {
@@ -1589,7 +1891,9 @@ public final class ArrayPrototype {
         long deleteCount = length - start;
         if (args.length > 1) {
             double d = JSTypeConversions.toInteger(context, args[1]);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             deleteCount = Math.max(0, Math.min((long) d, length - start));
         }
 
@@ -1606,10 +1910,14 @@ public final class ArrayPrototype {
         for (long i = 0; i < deleteCount; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(start + i));
             boolean kPresent = obj.has(key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (kPresent) {
                 JSValue val = obj.get(context, key);
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 // Step 10.c.ii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(k), fromValue).
                 if (!deletedObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(i)), val)) {
                     return context.throwTypeError("Cannot define property " + i);
@@ -1618,7 +1926,9 @@ public final class ArrayPrototype {
         }
         // Step 11: Perform ? Set(A, "length", actualDeleteCount, true).
         deletedObj.set(PropertyKey.LENGTH, JSNumber.of(deleteCount), context);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         long insertCount = Math.max(0, args.length - 2);
         long newLen = length - deleteCount + insertCount;
@@ -1634,13 +1944,21 @@ public final class ArrayPrototype {
                 PropertyKey from = PropertyKey.fromString(Long.toString(k + deleteCount));
                 PropertyKey to = PropertyKey.fromString(Long.toString(k + insertCount));
                 boolean fromPresent = obj.has(from);
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 if (fromPresent) {
                     JSValue val = obj.get(context, from);
-                    if (context.hasPendingException()) { return context.getPendingException(); }
-                    if (!setOrThrow(context, obj, to, val)) { return context.getPendingException(); }
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
+                    if (!setOrThrow(context, obj, to, val)) {
+                        return context.getPendingException();
+                    }
                 } else {
-                    if (!deleteOrThrow(context, obj, to)) { return context.getPendingException(); }
+                    if (!deleteOrThrow(context, obj, to)) {
+                        return context.getPendingException();
+                    }
                 }
             }
             // Delete trailing elements
@@ -1655,13 +1973,21 @@ public final class ArrayPrototype {
                 PropertyKey from = PropertyKey.fromString(Long.toString(k + deleteCount));
                 PropertyKey to = PropertyKey.fromString(Long.toString(k + insertCount));
                 boolean fromPresent = obj.has(from);
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 if (fromPresent) {
                     JSValue val = obj.get(context, from);
-                    if (context.hasPendingException()) { return context.getPendingException(); }
-                    if (!setOrThrow(context, obj, to, val)) { return context.getPendingException(); }
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
+                    if (!setOrThrow(context, obj, to, val)) {
+                        return context.getPendingException();
+                    }
                 } else {
-                    if (!deleteOrThrow(context, obj, to)) { return context.getPendingException(); }
+                    if (!deleteOrThrow(context, obj, to)) {
+                        return context.getPendingException();
+                    }
                 }
             }
         }
@@ -1669,7 +1995,9 @@ public final class ArrayPrototype {
         // Insert new elements
         for (int i = 0; i < insertCount; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(start + i));
-            if (!setOrThrow(context, obj, key, args[i + 2])) { return context.getPendingException(); }
+            if (!setOrThrow(context, obj, key, args[i + 2])) {
+                return context.getPendingException();
+            }
         }
 
         if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(newLen))) {
@@ -1688,10 +2016,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.toLocaleString called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         StringBuilder sb = new StringBuilder();
 
@@ -1701,7 +2033,9 @@ public final class ArrayPrototype {
             }
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (!(element instanceof JSUndefined || element instanceof JSNull)) {
                 sb.append(JSTypeConversions.toString(context, element).value());
             }
@@ -1733,10 +2067,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.toReversed called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         JSArray result = context.createJSArray(0, (int) length);
 
@@ -1744,7 +2082,9 @@ public final class ArrayPrototype {
         for (long i = length - 1; i >= 0; i--) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             JSValue element = obj.get(context, key);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             result.push(element);
         }
 
@@ -1761,10 +2101,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.toSorted called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         JSFunction compareFn = args.length > 0 && args[0] instanceof JSFunction ?
                 (JSFunction) args[0] : null;
@@ -1774,7 +2118,9 @@ public final class ArrayPrototype {
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             elements.add(obj.get(context, key));
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
 
         // Sort the copy
@@ -1810,15 +2156,21 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.toSpliced called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         long start;
         if (args.length > 0) {
             double d = JSTypeConversions.toInteger(context, args[0]);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (d < 0) {
                 start = Math.max(length + (long) d, 0);
             } else {
@@ -1832,7 +2184,9 @@ public final class ArrayPrototype {
         long deleteCount = length - start;
         if (args.length > 1) {
             double d = JSTypeConversions.toInteger(context, args[1]);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             deleteCount = Math.max(0, Math.min((long) d, length - start));
         }
 
@@ -1843,7 +2197,9 @@ public final class ArrayPrototype {
         for (long i = 0; i < start; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             result.push(obj.get(context, key));
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
 
         // Insert new elements
@@ -1855,7 +2211,9 @@ public final class ArrayPrototype {
         for (long i = start + deleteCount; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             result.push(obj.get(context, key));
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
         }
 
         return result;
@@ -1890,10 +2248,14 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.unshift called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         int argCount = args.length;
 
@@ -1907,13 +2269,21 @@ public final class ArrayPrototype {
             PropertyKey from = PropertyKey.fromString(Long.toString(k));
             PropertyKey to = PropertyKey.fromString(Long.toString(k + argCount));
             boolean fromPresent = obj.has(from);
-            if (context.hasPendingException()) { return context.getPendingException(); }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             if (fromPresent) {
                 JSValue val = obj.get(context, from);
-                if (context.hasPendingException()) { return context.getPendingException(); }
-                if (!setOrThrow(context, obj, to, val)) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (!setOrThrow(context, obj, to, val)) {
+                    return context.getPendingException();
+                }
             } else {
-                if (!deleteOrThrow(context, obj, to)) { return context.getPendingException(); }
+                if (!deleteOrThrow(context, obj, to)) {
+                    return context.getPendingException();
+                }
             }
         }
         // Insert new elements at the beginning
@@ -1940,17 +2310,23 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array.prototype.with called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) { return context.getPendingException(); }
+        if (obj == null) {
+            return context.getPendingException();
+        }
 
         long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         if (args.length < 2) {
             return context.throwTypeError("Array.prototype.with requires 2 arguments");
         }
 
         double indexD = JSTypeConversions.toInteger(context, args[0]);
-        if (context.hasPendingException()) { return context.getPendingException(); }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
 
         // Normalize negative index
         long index = (long) indexD;
@@ -1973,7 +2349,9 @@ public final class ArrayPrototype {
             } else {
                 PropertyKey key = PropertyKey.fromString(Long.toString(i));
                 result.push(obj.get(context, key));
-                if (context.hasPendingException()) { return context.getPendingException(); }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
             }
         }
 

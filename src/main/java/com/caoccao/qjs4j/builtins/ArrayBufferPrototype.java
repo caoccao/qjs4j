@@ -28,35 +28,6 @@ import java.nio.ByteBuffer;
 public final class ArrayBufferPrototype {
 
     /**
-     * SpeciesConstructor(O, defaultConstructor) per ES2020 7.3.20.
-     * Returns JSUndefined.INSTANCE to use the default constructor,
-     * or the species constructor function.
-     * Sets pending exception on error.
-     */
-    private static JSValue speciesConstructor(JSContext context, JSObject obj) {
-        JSValue ctor = obj.get(PropertyKey.CONSTRUCTOR);
-        if (ctor instanceof JSUndefined) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(ctor instanceof JSObject ctorObj)) {
-            context.throwTypeError("constructor is not an object");
-            return JSUndefined.INSTANCE;
-        }
-        JSValue species = ctorObj.get(PropertyKey.SYMBOL_SPECIES);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (species instanceof JSUndefined || species instanceof JSNull) {
-            return JSUndefined.INSTANCE;
-        }
-        if (species instanceof JSFunction) {
-            return species;
-        }
-        context.throwTypeError("Species is not a constructor");
-        return JSUndefined.INSTANCE;
-    }
-
-    /**
      * get ArrayBuffer.prototype.byteLength
      * ES2020 24.1.4.1
      * Returns the byte length of the buffer.
@@ -229,7 +200,7 @@ public final class ArrayBufferPrototype {
         } else {
             // Call the species constructor via Reflect.construct
             JSValue newObj = JSReflectObject.construct(context, JSUndefined.INSTANCE,
-                    new JSValue[]{ctor, new JSArray(new JSValue[]{JSNumber.of(newLen)})});
+                    new JSValue[]{ctor, new JSArray(JSNumber.of(newLen))});
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -266,6 +237,35 @@ public final class ArrayBufferPrototype {
             newBuffer.getBuffer().position(0);
         }
         return newBuffer;
+    }
+
+    /**
+     * SpeciesConstructor(O, defaultConstructor) per ES2020 7.3.20.
+     * Returns JSUndefined.INSTANCE to use the default constructor,
+     * or the species constructor function.
+     * Sets pending exception on error.
+     */
+    private static JSValue speciesConstructor(JSContext context, JSObject obj) {
+        JSValue ctor = obj.get(PropertyKey.CONSTRUCTOR);
+        if (ctor instanceof JSUndefined) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(ctor instanceof JSObject ctorObj)) {
+            context.throwTypeError("constructor is not an object");
+            return JSUndefined.INSTANCE;
+        }
+        JSValue species = ctorObj.get(PropertyKey.SYMBOL_SPECIES);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (species instanceof JSUndefined || species instanceof JSNull) {
+            return JSUndefined.INSTANCE;
+        }
+        if (species instanceof JSFunction) {
+            return species;
+        }
+        context.throwTypeError("Species is not a constructor");
+        return JSUndefined.INSTANCE;
     }
 
     /**

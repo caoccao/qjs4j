@@ -186,7 +186,9 @@ public final class JSConsole {
     public JSValue error(JSContext context, JSValue thisArg, JSValue[] args) {
         err.print(getGroupIndent());
         for (int i = 0; i < args.length; i++) {
-            if (i > 0) { err.print(" "); }
+            if (i > 0) {
+                err.print(" ");
+            }
             err.print(formatArgument(context, args[i]));
         }
         err.println();
@@ -689,7 +691,9 @@ public final class JSConsole {
     public JSValue log(JSContext context, JSValue thisArg, JSValue[] args) {
         out.print(getGroupIndent());
         for (int i = 0; i < args.length; i++) {
-            if (i > 0) { out.print(" "); }
+            if (i > 0) {
+                out.print(" ");
+            }
             out.print(formatArgument(context, args[i]));
         }
         out.println();
@@ -816,7 +820,9 @@ public final class JSConsole {
     public JSValue warn(JSContext context, JSValue thisArg, JSValue[] args) {
         err.print(getGroupIndent());
         for (int i = 0; i < args.length; i++) {
-            if (i > 0) { err.print(" "); }
+            if (i > 0) {
+                err.print(" ");
+            }
             err.print(formatArgument(context, args[i]));
         }
         err.println();

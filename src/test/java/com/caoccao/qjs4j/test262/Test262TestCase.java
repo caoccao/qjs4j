@@ -43,8 +43,12 @@ public class Test262TestCase {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) { return true; }
-        if (o == null || getClass() != o.getClass()) { return false; }
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         Test262TestCase that = (Test262TestCase) o;
         return Objects.equals(path, that.path);
     }

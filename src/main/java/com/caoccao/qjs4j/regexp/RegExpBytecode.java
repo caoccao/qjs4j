@@ -74,14 +74,30 @@ public record RegExpBytecode(byte[] instructions, int flags, int captureCount, S
      */
     public String flagsToString() {
         StringBuilder sb = new StringBuilder();
-        if (isGlobal()) { sb.append('g'); }
-        if (isIgnoreCase()) { sb.append('i'); }
-        if (isMultiline()) { sb.append('m'); }
-        if (isDotAll()) { sb.append('s'); }
-        if (isUnicode()) { sb.append('u'); }
-        if (isSticky()) { sb.append('y'); }
-        if (hasIndices()) { sb.append('d'); }
-        if (hasUnicodeSets()) { sb.append('v'); }
+        if (isGlobal()) {
+            sb.append('g');
+        }
+        if (isIgnoreCase()) {
+            sb.append('i');
+        }
+        if (isMultiline()) {
+            sb.append('m');
+        }
+        if (isDotAll()) {
+            sb.append('s');
+        }
+        if (isUnicode()) {
+            sb.append('u');
+        }
+        if (isSticky()) {
+            sb.append('y');
+        }
+        if (hasIndices()) {
+            sb.append('d');
+        }
+        if (hasUnicodeSets()) {
+            sb.append('v');
+        }
         return sb.toString();
     }
 

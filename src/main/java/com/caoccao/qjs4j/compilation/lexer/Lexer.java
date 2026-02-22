@@ -149,8 +149,12 @@ public final class Lexer {
     }
 
     private boolean match(char expected) {
-        if (isAtEnd()) { return false; }
-        if (source.charAt(position) != expected) { return false; }
+        if (isAtEnd()) {
+            return false;
+        }
+        if (source.charAt(position) != expected) {
+            return false;
+        }
         advance();
         return true;
     }
@@ -227,7 +231,9 @@ public final class Lexer {
     }
 
     char peek() {
-        if (isAtEnd()) { return '\0'; }
+        if (isAtEnd()) {
+            return '\0';
+        }
         return source.charAt(position);
     }
 
@@ -495,19 +501,30 @@ public final class Lexer {
                 yield TokenType.DOT;
             }
             case '+' -> {
-                if (match('+')) { yield TokenType.INC; }
-                else if (match('=')) { yield TokenType.PLUS_ASSIGN; }
-                else { yield TokenType.PLUS; }
+                if (match('+')) {
+                    yield TokenType.INC;
+                } else if (match('=')) {
+                    yield TokenType.PLUS_ASSIGN;
+                } else {
+                    yield TokenType.PLUS;
+                }
             }
             case '-' -> {
-                if (match('-')) { yield TokenType.DEC; }
-                else if (match('=')) { yield TokenType.MINUS_ASSIGN; }
-                else { yield TokenType.MINUS; }
+                if (match('-')) {
+                    yield TokenType.DEC;
+                } else if (match('=')) {
+                    yield TokenType.MINUS_ASSIGN;
+                } else {
+                    yield TokenType.MINUS;
+                }
             }
             case '*' -> {
                 if (match('*')) {
-                    if (match('=')) { yield TokenType.EXP_ASSIGN; }
-                    else { yield TokenType.EXP; }
+                    if (match('=')) {
+                        yield TokenType.EXP_ASSIGN;
+                    } else {
+                        yield TokenType.EXP;
+                    }
                 } else if (match('=')) {
                     yield TokenType.MUL_ASSIGN;
                 } else {
@@ -515,17 +532,26 @@ public final class Lexer {
                 }
             }
             case '/' -> {
-                if (match('=')) { yield TokenType.DIV_ASSIGN; }
-                else { yield TokenType.DIV; }
+                if (match('=')) {
+                    yield TokenType.DIV_ASSIGN;
+                } else {
+                    yield TokenType.DIV;
+                }
             }
             case '%' -> {
-                if (match('=')) { yield TokenType.MOD_ASSIGN; }
-                else { yield TokenType.MOD; }
+                if (match('=')) {
+                    yield TokenType.MOD_ASSIGN;
+                } else {
+                    yield TokenType.MOD;
+                }
             }
             case '&' -> {
                 if (match('&')) {
-                    if (match('=')) { yield TokenType.LOGICAL_AND_ASSIGN; }
-                    else { yield TokenType.LOGICAL_AND; }
+                    if (match('=')) {
+                        yield TokenType.LOGICAL_AND_ASSIGN;
+                    } else {
+                        yield TokenType.LOGICAL_AND;
+                    }
                 } else if (match('=')) {
                     yield TokenType.AND_ASSIGN;
                 } else {
@@ -534,8 +560,11 @@ public final class Lexer {
             }
             case '|' -> {
                 if (match('|')) {
-                    if (match('=')) { yield TokenType.LOGICAL_OR_ASSIGN; }
-                    else { yield TokenType.LOGICAL_OR; }
+                    if (match('=')) {
+                        yield TokenType.LOGICAL_OR_ASSIGN;
+                    } else {
+                        yield TokenType.LOGICAL_OR;
+                    }
                 } else if (match('=')) {
                     yield TokenType.OR_ASSIGN;
                 } else {
@@ -543,13 +572,19 @@ public final class Lexer {
                 }
             }
             case '^' -> {
-                if (match('=')) { yield TokenType.XOR_ASSIGN; }
-                else { yield TokenType.BIT_XOR; }
+                if (match('=')) {
+                    yield TokenType.XOR_ASSIGN;
+                } else {
+                    yield TokenType.BIT_XOR;
+                }
             }
             case '=' -> {
                 if (match('=')) {
-                    if (match('=')) { yield TokenType.STRICT_EQ; }
-                    else { yield TokenType.EQ; }
+                    if (match('=')) {
+                        yield TokenType.STRICT_EQ;
+                    } else {
+                        yield TokenType.EQ;
+                    }
                 } else if (match('>')) {
                     yield TokenType.ARROW;
                 } else {
@@ -558,16 +593,22 @@ public final class Lexer {
             }
             case '!' -> {
                 if (match('=')) {
-                    if (match('=')) { yield TokenType.STRICT_NE; }
-                    else { yield TokenType.NE; }
+                    if (match('=')) {
+                        yield TokenType.STRICT_NE;
+                    } else {
+                        yield TokenType.NE;
+                    }
                 } else {
                     yield TokenType.NOT;
                 }
             }
             case '<' -> {
                 if (match('<')) {
-                    if (match('=')) { yield TokenType.LSHIFT_ASSIGN; }
-                    else { yield TokenType.LSHIFT; }
+                    if (match('=')) {
+                        yield TokenType.LSHIFT_ASSIGN;
+                    } else {
+                        yield TokenType.LSHIFT;
+                    }
                 } else if (match('=')) {
                     yield TokenType.LE;
                 } else {
@@ -577,8 +618,11 @@ public final class Lexer {
             case '>' -> {
                 if (match('>')) {
                     if (match('>')) {
-                        if (match('=')) { yield TokenType.URSHIFT_ASSIGN; }
-                        else { yield TokenType.URSHIFT; }
+                        if (match('=')) {
+                            yield TokenType.URSHIFT_ASSIGN;
+                        } else {
+                            yield TokenType.URSHIFT;
+                        }
                     } else if (match('=')) {
                         yield TokenType.RSHIFT_ASSIGN;
                     } else {

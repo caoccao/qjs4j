@@ -301,8 +301,12 @@ public final class JSMap extends JSObject {
 
         @Override
         public boolean equals(Object obj) {
-            if (this == obj) { return true; }
-            if (!(obj instanceof KeyWrapper other)) { return false; }
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof KeyWrapper other)) {
+                return false;
+            }
 
             // SameValueZero algorithm
             return sameValueZero(this.value, other.value);
@@ -350,10 +354,14 @@ public final class JSMap extends JSObject {
          */
         private boolean sameValueZero(JSValue x, JSValue y) {
             // Same reference
-            if (x == y) { return true; }
+            if (x == y) {
+                return true;
+            }
 
             // Different types
-            if (x.type() != y.type()) { return false; }
+            if (x.type() != y.type()) {
+                return false;
+            }
 
             // Numbers
             if (x instanceof JSNumber xNum && y instanceof JSNumber yNum) {
@@ -390,8 +398,12 @@ public final class JSMap extends JSObject {
             }
 
             // null and undefined
-            if (x instanceof JSNull && y instanceof JSNull) { return true; }
-            if (x instanceof JSUndefined && y instanceof JSUndefined) { return true; }
+            if (x instanceof JSNull && y instanceof JSNull) {
+                return true;
+            }
+            if (x instanceof JSUndefined && y instanceof JSUndefined) {
+                return true;
+            }
 
             // Objects (compare by identity)
             return x == y;

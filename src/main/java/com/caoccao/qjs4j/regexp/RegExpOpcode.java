@@ -79,7 +79,9 @@ public enum RegExpOpcode {
         // Build a fast lookup table indexed by opcode code value.
         int max = 0;
         for (RegExpOpcode op : values()) {
-            if (op.code > max) { max = op.code; }
+            if (op.code > max) {
+                max = op.code;
+            }
         }
         LOOKUP = new RegExpOpcode[max + 1];
         for (RegExpOpcode op : values()) {

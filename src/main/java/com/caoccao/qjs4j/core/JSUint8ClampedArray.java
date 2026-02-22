@@ -113,11 +113,17 @@ public final class JSUint8ClampedArray extends JSTypedArray {
     public JSTypedArray subarray(int begin, int end) {
         // Normalize indices
         int currentLength = getLength();
-        if (begin < 0) { begin = Math.max(currentLength + begin, 0); }
-        else { begin = Math.min(begin, currentLength); }
+        if (begin < 0) {
+            begin = Math.max(currentLength + begin, 0);
+        } else {
+            begin = Math.min(begin, currentLength);
+        }
 
-        if (end < 0) { end = Math.max(currentLength + end, 0); }
-        else { end = Math.min(end, currentLength); }
+        if (end < 0) {
+            end = Math.max(currentLength + end, 0);
+        } else {
+            end = Math.min(end, currentLength);
+        }
 
         int newLength = Math.max(end - begin, 0);
         int newByteOffset = byteOffset + begin * BYTES_PER_ELEMENT;

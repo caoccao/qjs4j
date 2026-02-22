@@ -197,29 +197,6 @@ public final class JSStringObject extends JSObject {
     }
 
     /**
-     * Override setWithResult to reject writes to character index properties.
-     * Per ES spec 10.4.3, String exotic objects have non-writable character index
-     * own properties, so [[Set]] must return false for those keys.
-     */
-    @Override
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
-        int charIndex = -1;
-        if (key.isIndex()) {
-            charIndex = key.asIndex();
-        } else if (key.isString()) {
-            try {
-                charIndex = Integer.parseInt(key.asString());
-            } catch (NumberFormatException e) {
-                // Not a numeric index
-            }
-        }
-        if (charIndex >= 0 && charIndex < this.value.value().length()) {
-            return false;
-        }
-        return super.setWithResult(context, key, value);
-    }
-
-    /**
      * Override set to reject writes to character index properties.
      * Per ES spec 10.4.3 / OrdinarySetWithOwnDescriptor, String exotic objects have
      * non-writable character index own properties, so Set must fail for those keys.
@@ -245,6 +222,29 @@ public final class JSStringObject extends JSObject {
             return;
         }
         super.set(key, val, context);
+    }
+
+    /**
+     * Override setWithResult to reject writes to character index properties.
+     * Per ES spec 10.4.3, String exotic objects have non-writable character index
+     * own properties, so [[Set]] must return false for those keys.
+     */
+    @Override
+    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
+        int charIndex = -1;
+        if (key.isIndex()) {
+            charIndex = key.asIndex();
+        } else if (key.isString()) {
+            try {
+                charIndex = Integer.parseInt(key.asString());
+            } catch (NumberFormatException e) {
+                // Not a numeric index
+            }
+        }
+        if (charIndex >= 0 && charIndex < this.value.value().length()) {
+            return false;
+        }
+        return super.setWithResult(context, key, value);
     }
 
     @Override

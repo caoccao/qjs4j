@@ -83,6 +83,27 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     }
 
     /**
+     * Allocate the ArrayBuffer with validated lengths.
+     * Performs allocation limit checks (QuickJS INT32_MAX limit).
+     */
+    private static JSArrayBuffer allocateBuffer(JSContext context, long byteLengthLong, long maxByteLengthLong) {
+        // QuickJS: limited to INT32_MAX (2 GB)
+        if (byteLengthLong > Integer.MAX_VALUE) {
+            throw new JSException(context.throwRangeError("invalid array buffer length"));
+        }
+        int byteLength = (int) byteLengthLong;
+
+        if (maxByteLengthLong >= 0) {
+            if (maxByteLengthLong > Integer.MAX_VALUE) {
+                throw new JSException(context.throwRangeError("invalid array buffer max length"));
+            }
+            return new JSArrayBuffer(byteLength, (int) maxByteLengthLong);
+        } else {
+            return new JSArrayBuffer(byteLength);
+        }
+    }
+
+    /**
      * ArrayBuffer constructor implementation.
      * new ArrayBuffer(byteLength)
      * new ArrayBuffer(byteLength, options)
@@ -102,7 +123,7 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      * 3. CreateByteDataBlock (allocation limit check + buffer creation)
      */
     public static JSArrayBuffer createForConstruct(JSContext context, JSFunction constructor,
-                                                    JSValue newTarget, JSValue... args) {
+                                                   JSValue newTarget, JSValue... args) {
         // Step 1: Argument validation (before prototype access)
         long[] validated = validateArgs(context, args);
 
@@ -157,27 +178,6 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
             }
         }
         return new long[]{byteLengthLong, maxByteLengthLong};
-    }
-
-    /**
-     * Allocate the ArrayBuffer with validated lengths.
-     * Performs allocation limit checks (QuickJS INT32_MAX limit).
-     */
-    private static JSArrayBuffer allocateBuffer(JSContext context, long byteLengthLong, long maxByteLengthLong) {
-        // QuickJS: limited to INT32_MAX (2 GB)
-        if (byteLengthLong > Integer.MAX_VALUE) {
-            throw new JSException(context.throwRangeError("invalid array buffer length"));
-        }
-        int byteLength = (int) byteLengthLong;
-
-        if (maxByteLengthLong >= 0) {
-            if (maxByteLengthLong > Integer.MAX_VALUE) {
-                throw new JSException(context.throwRangeError("invalid array buffer max length"));
-            }
-            return new JSArrayBuffer(byteLength, (int) maxByteLengthLong);
-        } else {
-            return new JSArrayBuffer(byteLength);
-        }
     }
 
     /**

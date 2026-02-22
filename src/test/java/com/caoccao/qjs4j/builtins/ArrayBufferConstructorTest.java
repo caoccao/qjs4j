@@ -120,8 +120,8 @@ public class ArrayBufferConstructorTest extends BaseJavetTest {
         // Coercion order: valueOf detaches buffer, then detach check triggers TypeError
         assertBooleanWithJavet(
                 "var buf = new ArrayBuffer(16, {maxByteLength: 64});" +
-                "var evil = { valueOf() { buf.transfer(); return 8; } };" +
-                "try { buf.resize(evil); false; } catch(e) { e instanceof TypeError; }");
+                        "var evil = { valueOf() { buf.transfer(); return 8; } };" +
+                        "try { buf.resize(evil); false; } catch(e) { e instanceof TypeError; }");
     }
 
     @Test

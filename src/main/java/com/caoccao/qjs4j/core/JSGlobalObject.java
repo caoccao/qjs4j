@@ -397,7 +397,9 @@ public final class JSGlobalObject {
             JSValue[] locals = callerFrame.getLocals();
             for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
                 String name = localVarNames[i];
-                if (name == null) { continue; }
+                if (name == null) {
+                    continue;
+                }
                 PropertyKey key = PropertyKey.fromString(name);
                 if (global.has(key)) {
                     savedGlobals.put(name, global.get(key));
@@ -443,7 +445,9 @@ public final class JSGlobalObject {
                 JSValue[] locals = callerFrame.getLocals();
                 for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
                     String name = localVarNames[i];
-                    if (name == null) { continue; }
+                    if (name == null) {
+                        continue;
+                    }
                     PropertyKey key = PropertyKey.fromString(name);
                     if (global.has(key)) {
                         locals[i] = global.get(key);
@@ -800,7 +804,9 @@ public final class JSGlobalObject {
                         body = JSTypeConversions.toString(ctx, args[0]).value();
                     } else {
                         for (int i = 0; i < args.length - 1; i++) {
-                            if (i > 0) { src.append(","); }
+                            if (i > 0) {
+                                src.append(",");
+                            }
                             src.append(JSTypeConversions.toString(ctx, args[i]).value());
                         }
                         body = JSTypeConversions.toString(ctx, args[args.length - 1]).value();

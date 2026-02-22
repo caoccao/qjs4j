@@ -135,16 +135,6 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * CreateDataProperty (ES2024 7.3.6).
-     * Calls [[DefineOwnProperty]] with {writable: true, enumerable: true, configurable: true}.
-     * Returns false if the property cannot be defined (e.g., existing non-configurable property
-     * with incompatible attributes, or non-extensible object for new properties).
-     */
-    public boolean definePropertyWritableEnumerableConfigurable(PropertyKey key, JSValue value) {
-        return defineOwnProperty(key, PropertyDescriptor.dataDescriptor(value, true, true, true), null);
-    }
-
-    /**
      * Define a non-enumerable, configurable getter accessor property.
      */
     public void defineGetterConfigurable(String name, JSNativeFunction.NativeCallback callback) {
@@ -174,8 +164,6 @@ public non-sealed class JSObject implements JSValue {
                 PropertyDescriptor.accessorDescriptor(getter, null, false, true));
     }
 
-    // Property operations
-
     public void defineGetterSetterConfigurable(String name) {
         JSObject thisObject = this;
         JSNativeFunction getter = new JSNativeFunction("get " + name, 0, (ctx, thisArg, args) -> {
@@ -194,6 +182,8 @@ public non-sealed class JSObject implements JSValue {
                 PropertyKey.fromString(name),
                 PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
     }
+
+    // Property operations
 
     public void defineGetterSetterConfigurable(String name, JSNativeFunction getter, JSNativeFunction setter) {
         defineProperty(
@@ -350,6 +340,16 @@ public non-sealed class JSObject implements JSValue {
     public void definePropertyWritableConfigurable(String name, JSValue value) {
         defineProperty(PropertyKey.fromString(name),
                 PropertyDescriptor.dataDescriptor(value, true, false, true));
+    }
+
+    /**
+     * CreateDataProperty (ES2024 7.3.6).
+     * Calls [[DefineOwnProperty]] with {writable: true, enumerable: true, configurable: true}.
+     * Returns false if the property cannot be defined (e.g., existing non-configurable property
+     * with incompatible attributes, or non-extensible object for new properties).
+     */
+    public boolean definePropertyWritableEnumerableConfigurable(PropertyKey key, JSValue value) {
+        return defineOwnProperty(key, PropertyDescriptor.dataDescriptor(value, true, true, true), null);
     }
 
     /**
@@ -751,13 +751,6 @@ public non-sealed class JSObject implements JSValue {
         return getOrderedOwnKeys(false);
     }
 
-    /**
-     * Check if a key has a property in the shape (handles integer/string key equivalence).
-     */
-    protected boolean hasOwnShapeProperty(PropertyKey key) {
-        return getOwnShapeKey(key) != null;
-    }
-
     protected PropertyKey getOwnShapeKey(PropertyKey key) {
         if (shape.hasProperty(key)) {
             return key;
@@ -831,6 +824,13 @@ public non-sealed class JSObject implements JSValue {
             return sparseProperties.containsKey((int) arrayIndex);
         }
         return false;
+    }
+
+    /**
+     * Check if a key has a property in the shape (handles integer/string key equivalence).
+     */
+    protected boolean hasOwnShapeProperty(PropertyKey key) {
+        return getOwnShapeKey(key) != null;
     }
 
     /**

@@ -66,26 +66,6 @@ final class StatementCompiler {
         ctx.exitScope();
     }
 
-    /**
-     * Pre-declare block-scoped let/const bindings in the current scope.
-     * This must be called before hoisting function declarations so that
-     * closures created by those function declarations can capture the
-     * let/const variables from the same block scope.
-     */
-    private void preDeclareLexicalBindings(List<Statement> body) {
-        for (Statement stmt : body) {
-            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                    Set<String> names = new HashSet<>();
-                    delegates.analysis.collectPatternBindingNames(d.id(), names);
-                    for (String name : names) {
-                        ctx.currentScope().declareLocal(name);
-                    }
-                }
-            }
-        }
-    }
-
     void compileBreakStatement(BreakStatement breakStmt) {
         loopCompiler.compileBreakStatement(breakStmt);
     }
@@ -660,5 +640,25 @@ final class StatementCompiler {
 
     void compileWhileStatement(WhileStatement whileStmt) {
         loopCompiler.compileWhileStatement(whileStmt);
+    }
+
+    /**
+     * Pre-declare block-scoped let/const bindings in the current scope.
+     * This must be called before hoisting function declarations so that
+     * closures created by those function declarations can capture the
+     * let/const variables from the same block scope.
+     */
+    private void preDeclareLexicalBindings(List<Statement> body) {
+        for (Statement stmt : body) {
+            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                    Set<String> names = new HashSet<>();
+                    delegates.analysis.collectPatternBindingNames(d.id(), names);
+                    for (String name : names) {
+                        ctx.currentScope().declareLocal(name);
+                    }
+                }
+            }
+        }
     }
 }
