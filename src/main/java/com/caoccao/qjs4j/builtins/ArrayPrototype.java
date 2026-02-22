@@ -2194,6 +2194,11 @@ public final class ArrayPrototype {
             return context.getPendingException();
         }
 
+        // ArrayCreate step 1: If length > 2^32 - 1, throw a RangeError exception.
+        if (length > 0xFFFF_FFFFL) {
+            return context.throwRangeError("Invalid array length");
+        }
+
         // Create a copy of the elements
         List<JSValue> elements = new ArrayList<>();
         for (long i = 0; i < length; i++) {
@@ -2271,8 +2276,22 @@ public final class ArrayPrototype {
             deleteCount = Math.max(0, Math.min((long) d, length - start));
         }
 
+        // Step 11: newLen = len + insertCount - actualDeleteCount
+        long insertCount = Math.max(0, args.length - 2);
+        long newLen = length - deleteCount + insertCount;
+
+        // Step 12: If newLen > 2^53 - 1, throw a TypeError exception.
+        if (newLen > NumberPrototype.MAX_SAFE_INTEGER) {
+            return context.throwTypeError("Array length out of range");
+        }
+
+        // ArrayCreate step 1: If newLen > 2^32 - 1, throw a RangeError exception.
+        if (newLen > 0xFFFF_FFFFL) {
+            return context.throwRangeError("Invalid array length");
+        }
+
         // Create new array with spliced result
-        JSArray result = context.createJSArray(0, (int) length);
+        JSArray result = context.createJSArray(0, (int) newLen);
 
         // Copy elements before start
         for (long i = 0; i < start; i++) {
@@ -2398,6 +2417,11 @@ public final class ArrayPrototype {
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) {
             return context.getPendingException();
+        }
+
+        // ArrayCreate step 1: If length > 2^32 - 1, throw a RangeError exception.
+        if (length > 0xFFFF_FFFFL) {
+            return context.throwRangeError("Invalid array length");
         }
 
         if (args.length < 2) {
