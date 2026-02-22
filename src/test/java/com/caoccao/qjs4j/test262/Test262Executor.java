@@ -67,6 +67,7 @@ public class Test262Executor {
         Test262AgentHost agentHost = new Test262AgentHost();
         try (JSRuntime runtime = new JSRuntime();
              JSContext context = runtime.createContext()) {
+            context.setWaitable(!test.hasFlag("CanBlockIsFalse"));
             install262Object(context, realmRuntimes, agentHost, null);
 
             // Load harness files unless 'raw' flag is present.

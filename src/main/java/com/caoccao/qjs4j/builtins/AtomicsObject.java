@@ -944,12 +944,13 @@ public final class AtomicsObject {
             if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSBigInt64Array)) {
                 return context.throwTypeError("Atomics.wait only works on Int32Array or BigInt64Array");
             }
+            if (!typedArray.getBuffer().isShared()) {
+                return context.throwTypeError("Atomics.wait requires a SharedArrayBuffer");
+            }
 
             int index = getAtomicIndex(context, typedArray, args[1]);
-            long timeout = args.length >= 4 ? (long) JSTypeConversions.toInteger(context, args[3]) : -1;
             ByteBuffer byteBuffer = requireAtomicBuffer(typedArray);
-            IJSArrayBuffer buffer = typedArray.getBuffer();
-            String waitKey = getWaitKey(buffer, index);
+            double timeoutDouble;
 
             if (typedArray instanceof JSInt32Array) {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
@@ -979,7 +980,23 @@ public final class AtomicsObject {
                 }
             }
 
+            timeoutDouble = getAtomicsWaitTimeout(context, args, 3);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!context.isWaitable()) {
+                return context.throwTypeError("Atomics.wait cannot be called in this context");
+            }
+            if (timeoutDouble <= 0.0) {
+                return new JSString("timed-out");
+            }
+
+            IJSArrayBuffer buffer = typedArray.getBuffer();
+            String waitKey = getWaitKey(buffer, index);
             WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
+            long timeout = Double.isInfinite(timeoutDouble)
+                    ? -1L
+                    : Math.min((long) timeoutDouble, Long.MAX_VALUE);
             String result = waitList.await(timeout);
             return new JSString(result);
         } catch (InterruptedException e) {
@@ -1198,6 +1215,7 @@ public final class AtomicsObject {
     private static class WaitList {
         private final Lock lock = new ReentrantLock();
         private final Condition condition = lock.newCondition();
+        private int pendingSignals = 0;
         private int waitingCount = 0;
 
         public String await(long timeoutMs) throws InterruptedException {
@@ -1211,18 +1229,26 @@ public final class AtomicsObject {
                 if (registrationLatch != null) {
                     registrationLatch.countDown();
                 }
-                boolean timedOut = false;
-
                 if (timeoutMs < 0) {
-                    // Wait indefinitely
-                    condition.await();
-                } else {
-                    // Wait with timeout
-                    timedOut = !condition.await(timeoutMs, TimeUnit.MILLISECONDS);
+                    while (pendingSignals == 0) {
+                        condition.await();
+                    }
+                    pendingSignals--;
+                    waitingCount--;
+                    return "ok";
                 }
 
+                long remainingNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+                while (pendingSignals == 0) {
+                    if (remainingNanos <= 0) {
+                        waitingCount--;
+                        return "timed-out";
+                    }
+                    remainingNanos = condition.awaitNanos(remainingNanos);
+                }
+                pendingSignals--;
                 waitingCount--;
-                return timedOut ? "timed-out" : "ok";
+                return "ok";
             } finally {
                 lock.unlock();
             }
@@ -1231,7 +1257,9 @@ public final class AtomicsObject {
         public int notifyWaiters(int count) {
             lock.lock();
             try {
-                int toNotify = Math.min(Math.max(count, 0), waitingCount);
+                int availableToSignal = Math.max(waitingCount - pendingSignals, 0);
+                int toNotify = Math.min(Math.max(count, 0), availableToSignal);
+                pendingSignals += toNotify;
                 for (int i = 0; i < toNotify; i++) {
                     condition.signal();
                 }

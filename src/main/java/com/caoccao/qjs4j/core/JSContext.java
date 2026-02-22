@@ -65,6 +65,7 @@ public final class JSContext implements AutoCloseable {
     private JSValue currentThis;
     // Generator prototype chain (not exposed in global scope)
     private JSObject generatorFunctionPrototype;
+    private boolean waitable;
     private boolean inCatchHandler;
     private int maxStackDepth;
     // Exception state
@@ -84,6 +85,7 @@ public final class JSContext implements AutoCloseable {
         this.globalObject = new JSObject();
         this.globalLexDeclarations = new HashSet<>();
         this.globalVarDeclarations = new HashSet<>();
+        this.waitable = true;
         this.inCatchHandler = false;
         this.iteratorPrototypes = new HashMap<>();
         this.jsGlobalObject = new JSGlobalObject();
@@ -164,6 +166,10 @@ public final class JSContext implements AutoCloseable {
      */
     public void clearPendingException() {
         this.pendingException = null;
+    }
+
+    public boolean isWaitable() {
+        return waitable;
     }
 
     /**
@@ -655,6 +661,10 @@ public final class JSContext implements AutoCloseable {
      */
     public void enterStrictMode() {
         this.strictMode = true;
+    }
+
+    public void setWaitable(boolean waitable) {
+        this.waitable = waitable;
     }
 
     /**
