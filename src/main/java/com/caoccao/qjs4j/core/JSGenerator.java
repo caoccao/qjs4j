@@ -106,6 +106,16 @@ public final class JSGenerator extends JSObject {
         return state;
     }
 
+    public JSObject completeReturnWithoutResume(JSValue value) {
+        JSValue returnValue = value != null ? value : JSUndefined.INSTANCE;
+        state = State.COMPLETED;
+        done = true;
+        if (generatorState != null) {
+            generatorState.setCompleted(true);
+        }
+        return createIteratorResult(returnValue, true);
+    }
+
     /**
      * Generator.prototype.next(value)
      * Based on QuickJS js_generator_next with GEN_MAGIC_NEXT.
@@ -145,6 +155,10 @@ public final class JSGenerator extends JSObject {
 
         try {
             JSValue yieldValue = context.getVirtualMachine().executeGenerator(generatorState, context);
+            if (generatorState.isAwaitSuspended()) {
+                state = State.SUSPENDED_YIELD;
+                return createIteratorResult(JSUndefined.INSTANCE, false);
+            }
             if (generatorState.isCompleted()) {
                 state = State.COMPLETED;
                 return createIteratorResult(yieldValue, true);
@@ -377,7 +391,11 @@ public final class JSGenerator extends JSObject {
 
         if (generatorState != null) {
             state = State.EXECUTING;
-            generatorState.recordResume(JSGeneratorState.ResumeKind.THROW, exception);
+            if (generatorState.hasSuspendedExecutionState()) {
+                generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.THROW, exception);
+            } else {
+                generatorState.recordResume(JSGeneratorState.ResumeKind.THROW, exception);
+            }
             try {
                 JSValue yieldValue = context.getVirtualMachine().executeGenerator(generatorState, context);
                 if (generatorState.isCompleted()) {

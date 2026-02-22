@@ -861,7 +861,7 @@ final class ExpressionCompiler {
             compileExpression(yieldExpr.argument());
         } else {
             // No argument means yield undefined
-            ctx.emitter.emitConstant(null);
+            ctx.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
         // Emit the appropriate yield opcode

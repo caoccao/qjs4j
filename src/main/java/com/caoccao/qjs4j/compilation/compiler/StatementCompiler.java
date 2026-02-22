@@ -511,6 +511,30 @@ final class StatementCompiler {
     }
 
     void compileTryStatement(TryStatement tryStmt) {
+        if (tryStmt.finalizer() == null) {
+            compileTryCatchPart(tryStmt);
+            return;
+        }
+
+        int finallyCatchJump = ctx.emitter.emitJump(Opcode.CATCH);
+        compileTryCatchPart(tryStmt);
+        ctx.emitter.emitOpcode(Opcode.NIP_CATCH);
+        ctx.emitter.emitOpcode(Opcode.DROP);
+        compileTryFinallyBlock(tryStmt.finalizer());
+        int jumpAfterFinallyExceptionPath = ctx.emitter.emitJump(Opcode.GOTO);
+
+        ctx.emitter.patchJump(finallyCatchJump, ctx.emitter.currentOffset());
+        int finallyExceptionLocalIndex = ctx.currentScope().declareLocal("$finally_exception_" + ctx.emitter.currentOffset());
+        ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, finallyExceptionLocalIndex);
+        compileTryFinallyBlock(tryStmt.finalizer());
+        ctx.emitter.emitOpcode(Opcode.DROP);
+        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, finallyExceptionLocalIndex);
+        ctx.emitter.emitOpcode(Opcode.THROW);
+
+        ctx.emitter.patchJump(jumpAfterFinallyExceptionPath, ctx.emitter.currentOffset());
+    }
+
+    private void compileTryCatchPart(TryStatement tryStmt) {
         // Mark catch handler location
         int catchJump = -1;
         if (tryStmt.handler() != null) {
@@ -594,11 +618,6 @@ final class StatementCompiler {
 
         // Patch jump over catch
         ctx.emitter.patchJump(jumpOverCatch, ctx.emitter.currentOffset());
-
-        // Compile finally block
-        if (tryStmt.finalizer() != null) {
-            compileTryFinallyBlock(tryStmt.finalizer());
-        }
     }
 
     void compileVariableDeclaration(VariableDeclaration varDecl) {

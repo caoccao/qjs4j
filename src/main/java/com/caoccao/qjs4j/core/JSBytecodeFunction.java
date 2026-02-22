@@ -38,6 +38,19 @@ import com.caoccao.qjs4j.vm.YieldResult;
  * - Function metadata (name, length)
  */
 public final class JSBytecodeFunction extends JSFunction {
+    private static final class AsyncGeneratorReturnSignal extends JSObject {
+        private final JSValue returnValue;
+
+        private AsyncGeneratorReturnSignal(JSValue returnValue) {
+            super();
+            this.returnValue = returnValue;
+        }
+
+        private JSValue getReturnValue() {
+            return returnValue;
+        }
+    }
+
     public static final String NAME = JSFunction.NAME;
     private final Bytecode bytecode;
     private final JSValue[] closureVars;
@@ -165,67 +178,27 @@ public final class JSBytecodeFunction extends JSFunction {
      * resolve it first; otherwise use it directly.
      */
     private static void fulfillAsyncYield(JSContext context, JSPromise promise, JSValue value, boolean done) {
-        if (value instanceof JSPromise yieldedPromise) {
-            // If already settled, use result directly
-            if (yieldedPromise.getState() == JSPromise.PromiseState.FULFILLED) {
-                JSObject iterResult = context.createJSObject();
-                iterResult.set(PropertyKey.VALUE, yieldedPromise.getResult());
-                iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
-                promise.fulfill(iterResult);
-                return;
-            }
-            if (yieldedPromise.getState() == JSPromise.PromiseState.REJECTED) {
-                promise.reject(yieldedPromise.getResult());
-                return;
-            }
-            // Pending: chain reactions
-            yieldedPromise.addReactions(
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                                JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                                JSObject iterResult = context.createJSObject();
-                                iterResult.set(PropertyKey.VALUE, resolved);
-                                iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
-                                promise.fulfill(iterResult);
-                                return JSUndefined.INSTANCE;
-                            }),
-                            null, context
-                    ),
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                                promise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
-                                return JSUndefined.INSTANCE;
-                            }),
-                            null, context
-                    )
-            );
-            return;
-        }
-        if (value instanceof JSObject obj) {
-            JSValue thenMethod = obj.get(PropertyKey.THEN);
-            if (thenMethod instanceof JSFunction thenFunc) {
-                thenFunc.call(context, value, new JSValue[]{
-                        new JSNativeFunction("resolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                            JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                            JSObject iterResult = context.createJSObject();
-                            iterResult.set(PropertyKey.VALUE, resolved);
-                            iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
-                            promise.fulfill(iterResult);
+        JSPromise resolvedResultPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
+        resolvedResultPromise.addReactions(
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onResolve", 1, (childContext, thisArg, args) -> {
+                            JSValue resolvedResult = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            promise.fulfill(resolvedResult);
                             return JSUndefined.INSTANCE;
                         }),
-                        new JSNativeFunction("reject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                            promise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
+                        null,
+                        context
+                ),
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onReject", 1, (childContext, thisArg, args) -> {
+                            JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            promise.reject(error);
                             return JSUndefined.INSTANCE;
-                        })
-                });
-                return;
-            }
-        }
-        // Non-thenable: use directly
-        JSObject iterResult = context.createJSObject();
-        iterResult.set(PropertyKey.VALUE, value);
-        iterResult.set(PropertyKey.DONE, JSBoolean.valueOf(done));
-        promise.fulfill(iterResult);
+                        }),
+                        null,
+                        context
+                )
+        );
     }
 
     private static void fulfillAsyncYieldStarResult(
@@ -315,6 +288,18 @@ public final class JSBytecodeFunction extends JSFunction {
                         context
                 )
         );
+    }
+
+    private static JSValue consumeAsyncGeneratorReturnSignal(JSContext context) {
+        if (!context.hasPendingException()) {
+            return null;
+        }
+        JSValue exception = context.getPendingException();
+        if (exception instanceof AsyncGeneratorReturnSignal returnSignal) {
+            context.clearAllPendingExceptions();
+            return returnSignal.getReturnValue();
+        }
+        return null;
     }
 
     private static void resumeAsyncFunctionExecution(
@@ -625,8 +610,11 @@ public final class JSBytecodeFunction extends JSFunction {
             executionContext.getVirtualMachine().executeGenerator(generatorState, executionContext);
             JSGenerator generatorDriver = new JSGenerator(context, generatorState);
             final JSObject[] delegatedYieldStarIteratorHolder = new JSObject[]{null};
+            final boolean functionSourceHasFinally = sourceCode != null && sourceCode.contains("finally");
+            final JSAsyncGenerator.AsyncGeneratorFunction[] asyncGeneratorRequestExecutorHolder =
+                    new JSAsyncGenerator.AsyncGeneratorFunction[1];
 
-            JSAsyncGenerator asyncGenerator = new JSAsyncGenerator((inputValue, requestKind) -> {
+            asyncGeneratorRequestExecutorHolder[0] = (inputValue, requestKind) -> {
                 JSPromise promise = context.createJSPromise();
 
                 // Check if generator is completed
@@ -669,11 +657,178 @@ public final class JSBytecodeFunction extends JSFunction {
                         return delegatedThrowPromise;
                     }
 
+                    if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.RETURN
+                            && generatorDriver.getState() == JSGenerator.State.SUSPENDED_YIELD
+                            && delegatedYieldStarIteratorHolder[0] == null) {
+                        if (inputValue instanceof JSPromise promiseValue) {
+                            promiseValue.get(context, PropertyKey.CONSTRUCTOR);
+                            if (context.hasPendingException()) {
+                                JSValue constructorError = context.getPendingException();
+                                context.clearAllPendingExceptions();
+                                JSObject throwResult = generatorDriver.throwMethod(constructorError);
+                                if (context.hasPendingException()) {
+                                    JSValue returnSignalValue = consumeAsyncGeneratorReturnSignal(context);
+                                    if (returnSignalValue != null) {
+                                        delegatedYieldStarIteratorHolder[0] = null;
+                                        fulfillAsyncYield(context, promise, returnSignalValue, true);
+                                        return promise;
+                                    }
+                                    JSValue exception = context.getPendingException();
+                                    context.clearAllPendingExceptions();
+                                    promise.reject(exception);
+                                    return promise;
+                                }
+                                JSValue throwCompletedSignalValue = consumeAsyncGeneratorReturnSignal(context);
+                                if (throwCompletedSignalValue != null) {
+                                    delegatedYieldStarIteratorHolder[0] = null;
+                                    fulfillAsyncYield(context, promise, throwCompletedSignalValue, true);
+                                    return promise;
+                                }
+                                if (generatorState.isCompleted()) {
+                                    delegatedYieldStarIteratorHolder[0] = null;
+                                    JSValue completedValue = throwResult.get(PropertyKey.VALUE);
+                                    fulfillAsyncYield(context, promise, completedValue, true);
+                                } else {
+                                    delegatedYieldStarIteratorHolder[0] = null;
+                                    JSValue yieldedValue = throwResult.get(PropertyKey.VALUE);
+                                    fulfillAsyncYield(context, promise, yieldedValue, false);
+                                }
+                                return promise;
+                            }
+                        }
+
+                        if (!functionSourceHasFinally) {
+                            delegatedYieldStarIteratorHolder[0] = null;
+                            JSObject iteratorResult = generatorDriver.completeReturnWithoutResume(inputValue);
+                            JSValue completedValue = iteratorResult.get(PropertyKey.VALUE);
+                            fulfillAsyncYield(context, promise, completedValue, true);
+                            return promise;
+                        }
+
+                        if (functionSourceHasFinally) {
+                            JSObject iteratorResult = generatorDriver.throwMethod(new AsyncGeneratorReturnSignal(inputValue));
+                            JSValue returnSignalValue = consumeAsyncGeneratorReturnSignal(context);
+                            if (returnSignalValue != null) {
+                                delegatedYieldStarIteratorHolder[0] = null;
+                                fulfillAsyncYield(context, promise, returnSignalValue, true);
+                                return promise;
+                            }
+                            if (context.hasPendingException()) {
+                                JSValue exception = context.getPendingException();
+                                context.clearAllPendingExceptions();
+                                promise.reject(exception);
+                                return promise;
+                            }
+                            if (generatorState.isCompleted()) {
+                                delegatedYieldStarIteratorHolder[0] = null;
+                                JSValue completedValue = iteratorResult.get(PropertyKey.VALUE);
+                                fulfillAsyncYield(context, promise, completedValue, true);
+                            } else {
+                                delegatedYieldStarIteratorHolder[0] = null;
+                                YieldResult lastYield = context.getVirtualMachine().getLastYieldResult();
+                                if (lastYield != null && lastYield.isYieldStar()) {
+                                    delegatedYieldStarIteratorHolder[0] = lastYield.delegateIterator();
+                                    fulfillAsyncYieldStarResult(context, promise, iteratorResult, lastYield.delegateIterator());
+                                } else {
+                                    JSValue yieldedValue = iteratorResult.get(PropertyKey.VALUE);
+                                    fulfillAsyncYield(context, promise, yieldedValue, false);
+                                }
+                            }
+                            return promise;
+                        }
+                    }
+
                     JSObject iteratorResult = switch (requestKind) {
                         case NEXT -> generatorDriver.next(inputValue);
                         case RETURN -> generatorDriver.returnMethod(inputValue);
                         case THROW -> generatorDriver.throwMethod(inputValue);
                     };
+                    if (generatorState.isAwaitSuspended()) {
+                        JSPromise awaitedPromise = context.getVirtualMachine().consumeAwaitSuspensionPromise();
+                        if (awaitedPromise == null) {
+                            promise.reject(new JSString("Async generator await suspension promise is missing"));
+                            return promise;
+                        }
+                        awaitedPromise.addReactions(
+                                new JSPromise.ReactionRecord(
+                                        new JSNativeFunction("onAsyncGenAwaitResolve", 1, (childContext, callbackThisArg, callbackArgs) -> {
+                                            JSValue resolvedValue = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                                            generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.NEXT, resolvedValue);
+                                            JSPromise resumedPromise = asyncGeneratorRequestExecutorHolder[0]
+                                                    .executeNext(JSUndefined.INSTANCE, requestKind);
+                                            resumedPromise.addReactions(
+                                                    new JSPromise.ReactionRecord(
+                                                            new JSNativeFunction("onResumeResolve", 1, (resumeContext, resumeThisArg, resumeArgs) -> {
+                                                                JSValue resumedResult = resumeArgs.length > 0
+                                                                        ? resumeArgs[0]
+                                                                        : JSUndefined.INSTANCE;
+                                                                promise.fulfill(resumedResult);
+                                                                return JSUndefined.INSTANCE;
+                                                            }),
+                                                            null,
+                                                            context
+                                                    ),
+                                                    new JSPromise.ReactionRecord(
+                                                            new JSNativeFunction("onResumeReject", 1, (resumeContext, resumeThisArg, resumeArgs) -> {
+                                                                JSValue resumedError = resumeArgs.length > 0
+                                                                        ? resumeArgs[0]
+                                                                        : JSUndefined.INSTANCE;
+                                                                promise.reject(resumedError);
+                                                                return JSUndefined.INSTANCE;
+                                                            }),
+                                                            null,
+                                                            context
+                                                    )
+                                            );
+                                            return JSUndefined.INSTANCE;
+                                        }),
+                                        null,
+                                        context
+                                ),
+                                new JSPromise.ReactionRecord(
+                                        new JSNativeFunction("onAsyncGenAwaitReject", 1, (childContext, callbackThisArg, callbackArgs) -> {
+                                            JSValue rejectionValue = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                                            generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.THROW, rejectionValue);
+                                            JSPromise resumedPromise = asyncGeneratorRequestExecutorHolder[0]
+                                                    .executeNext(JSUndefined.INSTANCE, requestKind);
+                                            resumedPromise.addReactions(
+                                                    new JSPromise.ReactionRecord(
+                                                            new JSNativeFunction("onResumeResolve", 1, (resumeContext, resumeThisArg, resumeArgs) -> {
+                                                                JSValue resumedResult = resumeArgs.length > 0
+                                                                        ? resumeArgs[0]
+                                                                        : JSUndefined.INSTANCE;
+                                                                promise.fulfill(resumedResult);
+                                                                return JSUndefined.INSTANCE;
+                                                            }),
+                                                            null,
+                                                            context
+                                                    ),
+                                                    new JSPromise.ReactionRecord(
+                                                            new JSNativeFunction("onResumeReject", 1, (resumeContext, resumeThisArg, resumeArgs) -> {
+                                                                JSValue resumedError = resumeArgs.length > 0
+                                                                        ? resumeArgs[0]
+                                                                        : JSUndefined.INSTANCE;
+                                                                promise.reject(resumedError);
+                                                                return JSUndefined.INSTANCE;
+                                                            }),
+                                                            null,
+                                                            context
+                                                    )
+                                            );
+                                            return JSUndefined.INSTANCE;
+                                        }),
+                                        null,
+                                        context
+                                )
+                        );
+                        return promise;
+                    }
+                    JSValue returnSignalValue = consumeAsyncGeneratorReturnSignal(context);
+                    if (returnSignalValue != null) {
+                        delegatedYieldStarIteratorHolder[0] = null;
+                        fulfillAsyncYield(context, promise, returnSignalValue, true);
+                        return promise;
+                    }
                     if (context.hasPendingException()) {
                         JSValue exception = context.getPendingException();
                         context.clearAllPendingExceptions();
@@ -704,6 +859,12 @@ public final class JSBytecodeFunction extends JSFunction {
                         }
                     }
                 } catch (Exception e) {
+                    JSValue returnSignalValue = consumeAsyncGeneratorReturnSignal(context);
+                    if (returnSignalValue != null) {
+                        delegatedYieldStarIteratorHolder[0] = null;
+                        fulfillAsyncYield(context, promise, returnSignalValue, true);
+                        return promise;
+                    }
                     // Preserve the actual JS error object from pending exception
                     if (context.hasPendingException()) {
                         JSValue exception = context.getPendingException();
@@ -718,7 +879,9 @@ public final class JSBytecodeFunction extends JSFunction {
                 }
 
                 return promise;
-            }, context);
+            };
+
+            JSAsyncGenerator asyncGenerator = new JSAsyncGenerator(asyncGeneratorRequestExecutorHolder[0], context);
 
             JSValue asyncGeneratorInstancePrototype = this.get(PropertyKey.PROTOTYPE);
             if (asyncGeneratorInstancePrototype instanceof JSObject asyncGeneratorInstancePrototypeObject) {

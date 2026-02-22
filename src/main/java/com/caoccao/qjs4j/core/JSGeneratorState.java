@@ -40,6 +40,7 @@ public final class JSGeneratorState {
     private final JSValue thisArg;
     private JSValue pendingResumeValue;
     private ResumeKind pendingResumeKind;
+    private boolean awaitSuspended;
     private StackFrame suspendedFrame;
     private JSStackValue[] suspendedStackValues;
     private int suspendedProgramCounter;
@@ -59,6 +60,7 @@ public final class JSGeneratorState {
         this.resumeRecords = new ArrayList<>();
         this.pendingResumeValue = null;
         this.pendingResumeKind = null;
+        this.awaitSuspended = false;
         this.suspendedFrame = null;
         this.suspendedStackValues = null;
         this.suspendedProgramCounter = 0;
@@ -116,6 +118,10 @@ public final class JSGeneratorState {
         return suspendedFrame != null && suspendedStackValues != null;
     }
 
+    public boolean isAwaitSuspended() {
+        return awaitSuspended;
+    }
+
     public void recordResume(ResumeKind kind, JSValue value) {
         resumeRecords.add(new ResumeRecord(kind, value));
     }
@@ -147,6 +153,10 @@ public final class JSGeneratorState {
         this.pendingResumeValue = value;
     }
 
+    public void setAwaitSuspended(boolean awaitSuspended) {
+        this.awaitSuspended = awaitSuspended;
+    }
+
     public void setCompleted(boolean completed) {
         this.isCompleted = completed;
         if (completed) {
@@ -154,6 +164,7 @@ public final class JSGeneratorState {
             clearSuspendedExecutionState();
             pendingResumeKind = null;
             pendingResumeValue = null;
+            awaitSuspended = false;
         }
     }
 

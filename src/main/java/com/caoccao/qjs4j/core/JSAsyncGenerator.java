@@ -207,7 +207,9 @@ public final class JSAsyncGenerator extends JSObject {
     private JSPromise enqueueRequest(AsyncGeneratorRequestKind kind, JSValue value) {
         JSPromise promise = context.createJSPromise();
         requestQueue.offer(new AsyncGeneratorRequest(kind, value, promise));
-        if (!drainScheduled) {
+        if (state == AsyncGeneratorState.COMPLETED) {
+            drainRequestQueue();
+        } else if (!drainScheduled) {
             drainRequestQueue();
         }
         if (context.hasPendingException()) {
@@ -225,7 +227,42 @@ public final class JSAsyncGenerator extends JSObject {
                 JSValue completedValue = request.kind() == AsyncGeneratorRequestKind.NEXT
                         ? JSUndefined.INSTANCE
                         : request.value();
-                request.promise().fulfill(createIteratorResultObject(completedValue, true));
+                if (request.kind() == AsyncGeneratorRequestKind.RETURN) {
+                    JSPromise completionPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(
+                            context,
+                            completedValue,
+                            true);
+                    if (completionPromise.getState() == JSPromise.PromiseState.FULFILLED) {
+                        JSValue completionResult = completionPromise.getResult();
+                        context.enqueueMicrotask(() -> request.promise().fulfill(completionResult));
+                    } else if (completionPromise.getState() == JSPromise.PromiseState.REJECTED) {
+                        JSValue completionError = completionPromise.getResult();
+                        context.enqueueMicrotask(() -> request.promise().reject(completionError));
+                    } else {
+                        completionPromise.addReactions(
+                                new JSPromise.ReactionRecord(
+                                        new JSNativeFunction("onReturnResolve", 1, (childContext, thisArg, args) -> {
+                                            JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                            request.promise().fulfill(result);
+                                            return JSUndefined.INSTANCE;
+                                        }),
+                                        null,
+                                        context
+                                ),
+                                new JSPromise.ReactionRecord(
+                                        new JSNativeFunction("onReturnReject", 1, (childContext, thisArg, args) -> {
+                                            JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                            request.promise().reject(error);
+                                            return JSUndefined.INSTANCE;
+                                        }),
+                                        null,
+                                        context
+                                )
+                        );
+                    }
+                } else {
+                    request.promise().fulfill(createIteratorResultObject(completedValue, true));
+                }
             }
             scheduleDrainRequestQueue();
             return;

@@ -3071,6 +3071,7 @@ public final class VirtualMachine {
 
         // Clear any previous yield result
         yieldResult = null;
+        state.setAwaitSuspended(false);
 
         boolean useSuspendedExecutionState =
                 state.hasSuspendedExecutionState()
@@ -3089,11 +3090,16 @@ public final class VirtualMachine {
 
         JSGeneratorState previousActiveGeneratorState = activeGeneratorState;
         activeGeneratorState = state;
+        boolean previousAwaitSuspensionEnabled = awaitSuspensionEnabled;
+        if (function.isAsync()) {
+            awaitSuspensionEnabled = true;
+        }
         JSValue result;
         try {
             // Execute (or resume) the generator
             result = execute(function, thisArg, args);
         } finally {
+            awaitSuspensionEnabled = previousAwaitSuspensionEnabled;
             activeGeneratorState = previousActiveGeneratorState;
         }
 
@@ -3103,6 +3109,10 @@ public final class VirtualMachine {
             state.incrementYieldCount();
             state.setState(JSGeneratorState.State.SUSPENDED_YIELD);
             return yieldResult.value();
+        } else if (awaitSuspensionPromise != null) {
+            state.setAwaitSuspended(true);
+            state.setState(JSGeneratorState.State.SUSPENDED_YIELD);
+            return JSUndefined.INSTANCE;
         } else {
             // Generator completed (returned)
             state.setCompleted(true);
