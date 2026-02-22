@@ -715,6 +715,7 @@ public final class JSGlobalObject {
         JSNativeFunction asyncDisposableStackConstructor = new JSNativeFunction(
                 JSAsyncDisposableStack.NAME, 0, AsyncDisposableStackConstructor::call, true, true);
         asyncDisposableStackConstructor.definePropertyReadonlyNonConfigurable("prototype", asyncDisposableStackPrototype);
+        asyncDisposableStackConstructor.setConstructorType(JSConstructorType.ASYNC_DISPOSABLE_STACK);
         asyncDisposableStackPrototype.definePropertyWritableConfigurable("constructor", asyncDisposableStackConstructor);
 
         global.definePropertyWritableConfigurable(JSAsyncDisposableStack.NAME, asyncDisposableStackConstructor);

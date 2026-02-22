@@ -26,6 +26,7 @@ public enum JSConstructorType {
     AGGREGATE_ERROR(JSAggregateError::create),
     ARRAY(JSArray::create),
     ARRAY_BUFFER(JSArrayBuffer::create),
+    ASYNC_DISPOSABLE_STACK(JSAsyncDisposableStack::create),
     BIG_INT_OBJECT(JSBigIntObject::create),
     BOOLEAN_OBJECT(JSBooleanObject::create),
     DATA_VIEW(JSDataView::create),
