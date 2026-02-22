@@ -430,7 +430,33 @@ public final class JSBytecodeFunction extends JSFunction {
             return JSAsyncIterator.createRejectedPromise(context, exception);
         }
         if (throwMethodValue.isNullOrUndefined()) {
-            return null;
+            JSValue returnMethodValue = delegateIterator.get(context, PropertyKey.RETURN);
+            if (context.hasPendingException()) {
+                JSValue exception = context.getPendingException();
+                context.clearAllPendingExceptions();
+                return JSAsyncIterator.createRejectedPromise(context, exception);
+            }
+            if (!returnMethodValue.isNullOrUndefined()) {
+                if (!(returnMethodValue instanceof JSFunction returnFunction)) {
+                    JSValue typeError = context.throwTypeError("iterator return is not a function");
+                    context.clearAllPendingExceptions();
+                    return JSAsyncIterator.createRejectedPromise(context, typeError);
+                }
+                JSValue closeResult = returnFunction.call(context, delegateIterator, new JSValue[0]);
+                if (context.hasPendingException()) {
+                    JSValue exception = context.getPendingException();
+                    context.clearAllPendingExceptions();
+                    return JSAsyncIterator.createRejectedPromise(context, exception);
+                }
+                if (!(closeResult instanceof JSObject)) {
+                    JSValue typeError = context.throwTypeError("iterator must return an object");
+                    context.clearAllPendingExceptions();
+                    return JSAsyncIterator.createRejectedPromise(context, typeError);
+                }
+            }
+            JSValue typeError = context.throwTypeError("iterator does not have a throw method");
+            context.clearAllPendingExceptions();
+            return JSAsyncIterator.createRejectedPromise(context, typeError);
         }
         if (!(throwMethodValue instanceof JSFunction throwFunction)) {
             JSValue typeError = context.throwTypeError("iterator throw is not a function");
@@ -466,7 +492,47 @@ public final class JSBytecodeFunction extends JSFunction {
             context.clearAllPendingExceptions();
             return JSAsyncIterator.createRejectedPromise(context, exception);
         }
-        return JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
+        JSPromise asyncFromSyncResultPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
+        if (done) {
+            return asyncFromSyncResultPromise;
+        }
+        JSPromise closeOnRejectionPromise = context.createJSPromise();
+        asyncFromSyncResultPromise.addReactions(
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onResolve", 1, (childContext, callbackThisArg, callbackArgs) -> {
+                            JSValue resolvedResult = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                            closeOnRejectionPromise.fulfill(resolvedResult);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                ),
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onReject", 1, (childContext, callbackThisArg, callbackArgs) -> {
+                            JSValue originalError = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                            JSValue returnMethodValue = delegateIterator.get(childContext, PropertyKey.RETURN);
+                            if (childContext.hasPendingException()) {
+                                childContext.clearAllPendingExceptions();
+                            } else if (returnMethodValue instanceof JSFunction returnFunction) {
+                                JSValue closeResult = returnFunction.call(childContext, delegateIterator, new JSValue[0]);
+                                if (childContext.hasPendingException()) {
+                                    childContext.clearAllPendingExceptions();
+                                } else if (!(closeResult instanceof JSObject)) {
+                                    // Preserve the original rejection reason during close-on-rejection.
+                                }
+                            } else if (returnMethodValue.isNullOrUndefined()) {
+                                // No return method to call.
+                            } else {
+                                // Non-callable return during close-on-rejection is ignored to preserve original reason.
+                            }
+                            closeOnRejectionPromise.reject(originalError);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                )
+        );
+        return closeOnRejectionPromise;
     }
 
     @Override
@@ -531,15 +597,13 @@ public final class JSBytecodeFunction extends JSFunction {
                                 context,
                                 delegateIterator,
                                 inputValue);
-                        if (delegatedThrowPromise != null) {
-                            attachDelegatedIteratorStateHandlers(
-                                    context,
-                                    delegatedThrowPromise,
-                                    generatorState,
-                                    delegatedYieldStarIteratorHolder,
-                                    delegateIterator);
-                            return delegatedThrowPromise;
-                        }
+                        attachDelegatedIteratorStateHandlers(
+                                context,
+                                delegatedThrowPromise,
+                                generatorState,
+                                delegatedYieldStarIteratorHolder,
+                                delegateIterator);
+                        return delegatedThrowPromise;
                     }
 
                     JSObject iteratorResult = switch (requestKind) {

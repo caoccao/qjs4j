@@ -90,9 +90,9 @@ public class Test262Reporter {
             }
         }
 
-        System.out.println("\n" + "=".repeat(70));
+        System.out.println("\n" + "=".repeat(40));
         System.out.println("Test262 Results Summary");
-        System.out.println("=".repeat(70));
+        System.out.println("=".repeat(40));
         System.out.printf("Total tests:   %d%n", total);
         System.out.printf("Executed:      %d%n", executed);
 
@@ -106,7 +106,7 @@ public class Test262Reporter {
         }
 
         System.out.printf("Skipped:       %d%n", skipped.get());
-        System.out.println("=".repeat(70));
+        System.out.println("=".repeat(40));
     }
 
     public void recordResult(TestResult result) {

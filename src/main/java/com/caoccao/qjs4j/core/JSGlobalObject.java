@@ -729,11 +729,16 @@ public final class JSGlobalObject {
         // Create AsyncFunction.prototype that inherits from Function.prototype
         JSObject asyncFunctionPrototype = context.createJSObject();
         context.transferPrototype(asyncFunctionPrototype, JSFunction.NAME);
+        asyncFunctionPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("AsyncFunction"));
 
         // Create AsyncFunction constructor
         // AsyncFunction is not normally exposed, but we need it for the prototype chain
         JSNativeFunction asyncFunctionConstructor = new JSNativeFunction("AsyncFunction", 1,
-                (ctx, thisObj, args) -> ctx.throwTypeError("AsyncFunction is not a constructor"), true);
+                FunctionConstructor::callAsync, true);
+        JSValue functionConstructorValue = global.get(JSFunction.NAME);
+        if (functionConstructorValue instanceof JSObject functionConstructorObject) {
+            asyncFunctionConstructor.setPrototype(functionConstructorObject);
+        }
         asyncFunctionConstructor.definePropertyReadonlyNonConfigurable("prototype", asyncFunctionPrototype);
         asyncFunctionPrototype.definePropertyWritableConfigurable("constructor", asyncFunctionConstructor);
 

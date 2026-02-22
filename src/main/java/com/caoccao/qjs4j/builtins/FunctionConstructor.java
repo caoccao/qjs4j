@@ -53,6 +53,23 @@ public final class FunctionConstructor {
      * - new Function('return 42')
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        return callWithWrapper(context, args, "(function anonymous(", "\n) {\n", "\n})", "<Function>",
+                "Failed to create function: ");
+    }
+
+    public static JSValue callAsync(JSContext context, JSValue thisArg, JSValue[] args) {
+        return callWithWrapper(context, args, "(async function anonymous(", "\n) {\n", "\n})",
+                "<AsyncFunction>", "Failed to create async function: ");
+    }
+
+    private static JSValue callWithWrapper(
+            JSContext context,
+            JSValue[] args,
+            String sourcePrefix,
+            String parameterSuffix,
+            String bodySuffix,
+            String filename,
+            String errorPrefix) {
         // Extract parameter names and function body
         List<String> paramNames = new ArrayList<>();
         String body = "";
@@ -82,17 +99,17 @@ public final class FunctionConstructor {
         }
 
         // Build the function source code
-        StringBuilder functionSource = new StringBuilder("(function anonymous(");
+        StringBuilder functionSource = new StringBuilder(sourcePrefix);
         if (!paramNames.isEmpty()) {
             functionSource.append(String.join(", ", paramNames));
         }
-        functionSource.append("\n) {\n");
+        functionSource.append(parameterSuffix);
         functionSource.append(body);
-        functionSource.append("\n})");
+        functionSource.append(bodySuffix);
 
         try {
             // Compile the function
-            JSBytecodeFunction func = new Compiler(functionSource.toString(), "<Function>").compile(false).function();
+            JSBytecodeFunction func = new Compiler(functionSource.toString(), filename).compile(false).function();
 
             // Initialize the function's prototype chain
             func.initializePrototypeChain(context);
@@ -106,7 +123,7 @@ public final class FunctionConstructor {
         } catch (JSException e) {
             return e.getErrorValue();
         } catch (Exception e) {
-            return context.throwError("Failed to create function: " + e.getMessage());
+            return context.throwError(errorPrefix + e.getMessage());
         }
     }
 
