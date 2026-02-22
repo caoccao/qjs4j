@@ -604,26 +604,33 @@ public final class ObjectPrototype {
             // Try to get Symbol.toStringTag
             PropertyKey toStringTagKey = PropertyKey.SYMBOL_TO_STRING_TAG;
             JSValue tag = obj.get(context, toStringTagKey);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
 
             if (tag instanceof JSString tagStr) {
                 return new JSString("[object " + tagStr.value() + "]");
             }
 
             // Determine built-in type
+            int isArrayResult = JSTypeChecking.isArray(context, thisArg);
+            if (isArrayResult < 0) {
+                return context.getPendingException();
+            }
+            if (isArrayResult > 0) {
+                return new JSString("[object Array]");
+            }
+            if (JSTypeChecking.isFunction(thisArg)) {
+                return new JSString("[object Function]");
+            }
             if (thisArg instanceof JSArguments) {
                 return new JSString("[object Arguments]");
-            }
-            if (thisArg instanceof JSArray) {
-                return new JSString("[object Array]");
             }
             if (thisArg instanceof JSPromise) {
                 return new JSString("[object Promise]");
             }
             if (thisArg instanceof JSMap) {
                 return new JSString("[object Map]");
-            }
-            if (thisArg instanceof JSSet) {
-                return new JSString("[object Set]");
             }
             if (thisArg instanceof JSWeakMap) {
                 return new JSString("[object WeakMap]");
@@ -677,8 +684,23 @@ public final class ObjectPrototype {
             if (thisArg instanceof JSDate) {
                 return new JSString("[object Date]");
             }
+            if (thisArg instanceof JSError) {
+                return new JSString("[object Error]");
+            }
             if (thisArg instanceof JSBooleanObject) {
                 return new JSString("[object Boolean]");
+            }
+            if (thisArg instanceof JSNumberObject) {
+                return new JSString("[object Number]");
+            }
+            if (thisArg instanceof JSStringObject) {
+                return new JSString("[object String]");
+            }
+            if (thisArg instanceof JSBigIntObject) {
+                return new JSString("[object BigInt]");
+            }
+            if (thisArg instanceof JSSymbolObject) {
+                return new JSString("[object Symbol]");
             }
 
             // Default for generic objects

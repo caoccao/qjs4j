@@ -2338,6 +2338,7 @@ public final class ArrayPrototype {
             if (joinValue instanceof JSFunction joinFn) {
                 return joinFn.call(context, thisArg, new JSValue[0]);
             }
+            return ObjectPrototype.toString(context, jsObject, args);
         }
         return ObjectPrototype.toString(context, thisArg, args);
     }

@@ -40,6 +40,24 @@ public enum JSErrorType {
         if (prototypeConstructor == null) {
             throw new JSException(context.throwTypeError("Constructor for " + this.name() + " is not implemented"));
         }
-        return prototypeConstructor.construct(context, args);
+        JSObject constructorObject = prototypeConstructor.construct(context, args);
+        if (constructorObject instanceof JSNativeFunction nativeFunction) {
+            nativeFunction.setConstructorType(toConstructorType());
+        }
+        return constructorObject;
+    }
+
+    private JSConstructorType toConstructorType() {
+        return switch (this) {
+            case Error -> JSConstructorType.ERROR;
+            case AggregateError -> JSConstructorType.AGGREGATE_ERROR;
+            case EvalError -> JSConstructorType.EVAL_ERROR;
+            case RangeError -> JSConstructorType.RANGE_ERROR;
+            case ReferenceError -> JSConstructorType.REFERENCE_ERROR;
+            case SuppressedError -> JSConstructorType.SUPPRESSED_ERROR;
+            case SyntaxError -> JSConstructorType.SYNTAX_ERROR;
+            case TypeError -> JSConstructorType.TYPE_ERROR;
+            case URIError -> JSConstructorType.URI_ERROR;
+        };
     }
 }

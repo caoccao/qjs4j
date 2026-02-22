@@ -1761,7 +1761,7 @@ public final class JSGlobalObject {
         regexpPrototype.defineGetterConfigurable("sticky", RegExpPrototype::getSticky);
         regexpPrototype.defineGetterConfigurable("unicode", RegExpPrototype::getUnicode);
         regexpPrototype.defineGetterConfigurable("unicodeSets", RegExpPrototype::getUnicodeSets);
-        regexpPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSRegExp.NAME));
+        regexpPrototype.definePropertyWritableConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSRegExp.NAME));
 
         // Create RegExp constructor as a function
         JSNativeFunction regexpConstructor = new JSNativeFunction(JSRegExp.NAME, 2, RegExpConstructor::call, true);
