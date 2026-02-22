@@ -488,7 +488,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToLocaleString() {
-        JSObject obj = new JSObject();
+        JSObject obj = context.createJSObject();
 
         // Normal case: object without custom toString
         JSValue result = ObjectPrototype.toLocaleString(context, obj, new JSValue[]{});

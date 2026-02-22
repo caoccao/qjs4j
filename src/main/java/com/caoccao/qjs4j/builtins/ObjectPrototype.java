@@ -27,6 +27,26 @@ import java.util.List;
  * @see <a href="https://tc39.es/ecma262/#sec-object-objects">ECMAScript Object Objects</a>
  */
 public final class ObjectPrototype {
+    private static JSValue getValueWithReceiver(JSContext context, JSObject object, PropertyKey key, JSValue receiver) {
+        JSObject currentObject = object;
+        while (currentObject != null) {
+            PropertyDescriptor descriptor = currentObject.getOwnPropertyDescriptor(key);
+            if (descriptor != null) {
+                if (descriptor.isAccessorDescriptor()) {
+                    JSFunction getter = descriptor.getGetter();
+                    if (getter == null) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    return getter.call(context, receiver, new JSValue[0]);
+                }
+                JSValue value = descriptor.getValue();
+                return value != null ? value : JSUndefined.INSTANCE;
+            }
+            currentObject = currentObject.getPrototype();
+        }
+        return JSUndefined.INSTANCE;
+    }
+
 
     /**
      * Object.prototype.__defineGetter__(prop, func)
@@ -537,17 +557,27 @@ public final class ObjectPrototype {
      * Object.prototype.toLocaleString()
      */
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        // Default implementation: call toString
-        if (!(thisArg instanceof JSObject obj)) {
+        // QuickJS semantics: Invoke(this, "toString")
+        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
             return context.throwTypeError("Object.prototype.toLocaleString called on null or undefined");
         }
-
-        JSValue toStringMethod = obj.get(PropertyKey.TO_STRING);
+        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        if (obj == null || context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        JSValue toStringMethod;
+        if (thisArg.isObject()) {
+            toStringMethod = obj.get(context, PropertyKey.TO_STRING);
+        } else {
+            toStringMethod = getValueWithReceiver(context, obj, PropertyKey.TO_STRING, thisArg);
+        }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
         if (toStringMethod instanceof JSFunction func) {
             return func.call(context, thisArg, new JSValue[]{});
         }
-
-        return new JSString("[object Object]");
+        return context.throwTypeError("toString is not a function");
     }
 
     /**

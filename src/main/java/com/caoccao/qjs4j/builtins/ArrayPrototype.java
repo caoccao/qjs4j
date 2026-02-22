@@ -2089,7 +2089,25 @@ public final class ArrayPrototype {
                 return context.getPendingException();
             }
             if (!(element instanceof JSUndefined || element instanceof JSNull)) {
-                sb.append(JSTypeConversions.toString(context, element).value());
+                JSObject elementObject = JSTypeConversions.toObject(context, element);
+                if (elementObject == null || context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                JSValue toLocaleStringValue = elementObject.get(context, PropertyKey.fromString("toLocaleString"));
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (!(toLocaleStringValue instanceof JSFunction toLocaleStringFunction)) {
+                    return context.throwTypeError("toLocaleString is not a function");
+                }
+                JSValue localeStringValue = toLocaleStringFunction.call(context, element, new JSValue[0]);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                sb.append(JSTypeConversions.toString(context, localeStringValue).value());
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
             }
         }
 
