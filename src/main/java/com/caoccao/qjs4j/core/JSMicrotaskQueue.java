@@ -18,8 +18,8 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSException;
 
-import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Manages the microtask queue for promise resolution and async operations.
@@ -31,6 +31,7 @@ import java.util.Queue;
  */
 public final class JSMicrotaskQueue {
     private final JSContext context;
+    private final Object lock;
     private final Queue<Microtask> queue;
     private boolean executing;
 
@@ -41,7 +42,8 @@ public final class JSMicrotaskQueue {
      */
     public JSMicrotaskQueue(JSContext context) {
         this.context = context;
-        this.queue = new LinkedList<>();
+        this.lock = new Object();
+        this.queue = new ConcurrentLinkedQueue<>();
         this.executing = false;
     }
 
@@ -50,7 +52,9 @@ public final class JSMicrotaskQueue {
      * This is used for cleanup or testing.
      */
     public void clear() {
-        queue.clear();
+        synchronized (lock) {
+            queue.clear();
+        }
     }
 
     /**
@@ -59,7 +63,9 @@ public final class JSMicrotaskQueue {
      * @param microtask The microtask to enqueue
      */
     public void enqueue(Microtask microtask) {
-        queue.offer(microtask);
+        synchronized (lock) {
+            queue.offer(microtask);
+        }
     }
 
     /**
@@ -68,7 +74,9 @@ public final class JSMicrotaskQueue {
      * @return true if the queue is not empty
      */
     public boolean hasPendingMicrotasks() {
-        return !queue.isEmpty();
+        synchronized (lock) {
+            return !queue.isEmpty();
+        }
     }
 
     /**
@@ -78,30 +86,39 @@ public final class JSMicrotaskQueue {
      * Microtasks can enqueue more microtasks, so this runs until the queue is empty.
      */
     public void processMicrotasks() {
-        // Prevent re-entrancy
-        if (executing) {
-            return;
+        synchronized (lock) {
+            // Prevent re-entrancy
+            if (executing) {
+                return;
+            }
+            executing = true;
         }
 
-        executing = true;
         try {
-            while (!queue.isEmpty()) {
-                Microtask microtask = queue.poll();
-                if (microtask != null) {
-                    try {
-                        microtask.execute();
-                    } catch (Exception e) {
-                        // Trigger unhandled rejection handler if set
-                        IJSPromiseRejectCallback callback = context.getPromiseRejectCallback();
-                        if (callback != null && e instanceof JSException jsException) {
-                            JSValue reason = jsException.getErrorValue();
-                            callback.callback(PromiseRejectEvent.PromiseRejectWithNoHandler, null, reason);
-                        }
+            while (true) {
+                Microtask microtask;
+                synchronized (lock) {
+                    microtask = queue.poll();
+                    if (microtask == null) {
+                        executing = false;
+                        return;
+                    }
+                }
+                try {
+                    microtask.execute();
+                } catch (Exception e) {
+                    // Trigger unhandled rejection handler if set
+                    IJSPromiseRejectCallback callback = context.getPromiseRejectCallback();
+                    if (callback != null && e instanceof JSException jsException) {
+                        JSValue reason = jsException.getErrorValue();
+                        callback.callback(PromiseRejectEvent.PromiseRejectWithNoHandler, null, reason);
                     }
                 }
             }
         } finally {
-            executing = false;
+            synchronized (lock) {
+                executing = false;
+            }
         }
     }
 
@@ -111,7 +128,9 @@ public final class JSMicrotaskQueue {
      * @return The queue size
      */
     public int size() {
-        return queue.size();
+        synchronized (lock) {
+            return queue.size();
+        }
     }
 
     /**

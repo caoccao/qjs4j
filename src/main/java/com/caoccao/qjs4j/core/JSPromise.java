@@ -30,8 +30,8 @@ public final class JSPromise extends JSObject {
     public static final String NAME = "Promise";
     private final List<ReactionRecord> fulfillReactions;
     private final List<ReactionRecord> rejectReactions;
-    private JSValue result;
-    private PromiseState state;
+    private volatile JSValue result;
+    private volatile PromiseState state;
 
     /**
      * Create a new Promise in pending state.
@@ -105,19 +105,27 @@ public final class JSPromise extends JSObject {
      * Add reactions to be called when promise is fulfilled or rejected.
      */
     public void addReactions(ReactionRecord onFulfill, ReactionRecord onReject) {
-        if (state == PromiseState.PENDING) {
-            if (onFulfill != null) {
-                fulfillReactions.add(onFulfill);
+        JSValue settledResult = null;
+        PromiseState settledState;
+        synchronized (this) {
+            if (state == PromiseState.PENDING) {
+                if (onFulfill != null) {
+                    fulfillReactions.add(onFulfill);
+                }
+                if (onReject != null) {
+                    rejectReactions.add(onReject);
+                }
+                return;
             }
-            if (onReject != null) {
-                rejectReactions.add(onReject);
-            }
-        } else if (state == PromiseState.FULFILLED && onFulfill != null) {
+            settledState = state;
+            settledResult = result;
+        }
+        if (settledState == PromiseState.FULFILLED && onFulfill != null) {
             // Already fulfilled, trigger immediately
-            triggerReaction(onFulfill, result);
-        } else if (state == PromiseState.REJECTED && onReject != null) {
+            triggerReaction(onFulfill, settledResult);
+        } else if (settledState == PromiseState.REJECTED && onReject != null) {
             // Already rejected, trigger immediately
-            triggerReaction(onReject, result);
+            triggerReaction(onReject, settledResult);
         }
     }
 
@@ -126,21 +134,25 @@ public final class JSPromise extends JSObject {
      * ES2020 25.6.1.4
      */
     public void fulfill(JSValue value) {
-        if (state != PromiseState.PENDING) {
-            return; // Promise already settled
-        }
+        List<ReactionRecord> reactionsToTrigger;
+        synchronized (this) {
+            if (state != PromiseState.PENDING) {
+                return; // Promise already settled
+            }
 
-        state = PromiseState.FULFILLED;
-        result = value;
+            state = PromiseState.FULFILLED;
+            result = value;
+            reactionsToTrigger = new ArrayList<>(fulfillReactions);
+
+            // Clear reactions
+            fulfillReactions.clear();
+            rejectReactions.clear();
+        }
 
         // Trigger all fulfill reactions
-        for (ReactionRecord reaction : fulfillReactions) {
+        for (ReactionRecord reaction : reactionsToTrigger) {
             triggerReaction(reaction, value);
         }
-
-        // Clear reactions
-        fulfillReactions.clear();
-        rejectReactions.clear();
     }
 
     /**
@@ -162,21 +174,25 @@ public final class JSPromise extends JSObject {
      * ES2020 25.6.1.7
      */
     public void reject(JSValue reason) {
-        if (state != PromiseState.PENDING) {
-            return; // Promise already settled
-        }
+        List<ReactionRecord> reactionsToTrigger;
+        synchronized (this) {
+            if (state != PromiseState.PENDING) {
+                return; // Promise already settled
+            }
 
-        state = PromiseState.REJECTED;
-        result = reason;
+            state = PromiseState.REJECTED;
+            result = reason;
+            reactionsToTrigger = new ArrayList<>(rejectReactions);
+
+            // Clear reactions
+            fulfillReactions.clear();
+            rejectReactions.clear();
+        }
 
         // Trigger all reject reactions
-        for (ReactionRecord reaction : rejectReactions) {
+        for (ReactionRecord reaction : reactionsToTrigger) {
             triggerReaction(reaction, reason);
         }
-
-        // Clear reactions
-        fulfillReactions.clear();
-        rejectReactions.clear();
     }
 
     /**

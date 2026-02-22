@@ -1090,8 +1090,8 @@ public final class AtomicsObject {
                 } finally {
                     synchronized (promiseRuntime) {
                         promiseRuntime.runJobs();
+                        promiseContext.processMicrotasks();
                     }
-                    promiseContext.processMicrotasks();
                 }
             }, "qjs4j-atomics-waitAsync");
             waitThread.setDaemon(true);
