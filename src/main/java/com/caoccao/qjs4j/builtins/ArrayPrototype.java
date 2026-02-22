@@ -2367,25 +2367,27 @@ public final class ArrayPrototype {
             return context.throwTypeError("Array too long");
         }
 
-        // Shift existing elements right
-        for (long k = length - 1; k >= 0; k--) {
-            PropertyKey from = PropertyKey.fromString(Long.toString(k));
-            PropertyKey to = PropertyKey.fromString(Long.toString(k + argCount));
-            boolean fromPresent = obj.has(from);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (fromPresent) {
-                JSValue val = obj.get(context, from);
+        if (argCount > 0) {
+            // Shift existing elements right
+            for (long k = length - 1; k >= 0; k--) {
+                PropertyKey from = PropertyKey.fromString(Long.toString(k));
+                PropertyKey to = PropertyKey.fromString(Long.toString(k + argCount));
+                boolean fromPresent = obj.has(from);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
-                if (!setOrThrow(context, obj, to, val)) {
-                    return context.getPendingException();
-                }
-            } else {
-                if (!deleteOrThrow(context, obj, to)) {
-                    return context.getPendingException();
+                if (fromPresent) {
+                    JSValue val = obj.get(context, from);
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
+                    if (!setOrThrow(context, obj, to, val)) {
+                        return context.getPendingException();
+                    }
+                } else {
+                    if (!deleteOrThrow(context, obj, to)) {
+                        return context.getPendingException();
+                    }
                 }
             }
         }
