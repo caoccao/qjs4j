@@ -1932,8 +1932,16 @@ public final class ArrayPrototype {
             start = 0;
         }
 
-        long deleteCount = length - start;
-        if (args.length > 1) {
+        // ES2024 23.1.3.29 steps 7-10: determine actualDeleteCount based on argument count
+        long deleteCount;
+        if (args.length == 0) {
+            // Step 8: no arguments → actualDeleteCount = 0
+            deleteCount = 0;
+        } else if (args.length == 1) {
+            // Step 9: one argument → actualDeleteCount = len - actualStart
+            deleteCount = length - start;
+        } else {
+            // Step 10: two+ arguments → clamp deleteCount between 0 and len - actualStart
             double d = JSTypeConversions.toInteger(context, args[1]);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -1941,7 +1949,7 @@ public final class ArrayPrototype {
             deleteCount = Math.max(0, Math.min((long) d, length - start));
         }
 
-        // Step 9: Let A be ? ArraySpeciesCreate(O, actualDeleteCount).
+        // Step 12: Let A be ? ArraySpeciesCreate(O, actualDeleteCount).
         JSValue deletedVal = context.createJSArraySpecies(obj, deleteCount);
         if (deletedVal == null || context.hasPendingException()) {
             return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
