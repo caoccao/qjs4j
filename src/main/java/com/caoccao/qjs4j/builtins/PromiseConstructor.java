@@ -47,6 +47,8 @@ public final class PromiseConstructor {
         }
 
         final int[] remaining = {length};
+        final Object allLock = new Object();
+        final boolean[] allSettled = {false};
         for (int i = 0; i < length; i++) {
             final int index = i;
             JSPromise elementPromise = toPromise(context, thisArg, array.get(i));
@@ -57,9 +59,16 @@ public final class PromiseConstructor {
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
                                 JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                                results.set(index, value);
-                                if (--remaining[0] == 0) {
-                                    resultPromise.fulfill(results);
+                                synchronized (allLock) {
+                                    if (allSettled[0]) {
+                                        return JSUndefined.INSTANCE;
+                                    }
+                                    results.set(index, value);
+                                    remaining[0]--;
+                                    if (remaining[0] == 0) {
+                                        allSettled[0] = true;
+                                        resultPromise.fulfill(results);
+                                    }
                                 }
                                 return JSUndefined.INSTANCE;
                             }),
@@ -68,7 +77,13 @@ public final class PromiseConstructor {
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
                                 JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                                resultPromise.reject(reason);
+                                synchronized (allLock) {
+                                    if (allSettled[0]) {
+                                        return JSUndefined.INSTANCE;
+                                    }
+                                    allSettled[0] = true;
+                                    resultPromise.reject(reason);
+                                }
                                 return JSUndefined.INSTANCE;
                             }),
                             null,
@@ -97,6 +112,7 @@ public final class PromiseConstructor {
         }
 
         final int[] remaining = {length};
+        final Object allSettledLock = new Object();
         for (int i = 0; i < length; i++) {
             final int index = i;
             JSPromise elementPromise = toPromise(context, thisArg, array.get(i));
@@ -109,9 +125,12 @@ public final class PromiseConstructor {
                                 JSObject result = childContext.createJSObject();
                                 result.set(PropertyKey.STATUS, new JSString("fulfilled"));
                                 result.set(PropertyKey.VALUE, funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE);
-                                results.set(index, result);
-                                if (--remaining[0] == 0) {
-                                    resultPromise.fulfill(results);
+                                synchronized (allSettledLock) {
+                                    results.set(index, result);
+                                    remaining[0]--;
+                                    if (remaining[0] == 0) {
+                                        resultPromise.fulfill(results);
+                                    }
                                 }
                                 return JSUndefined.INSTANCE;
                             }),
@@ -122,9 +141,12 @@ public final class PromiseConstructor {
                                 JSObject result = childContext.createJSObject();
                                 result.set(PropertyKey.STATUS, new JSString("rejected"));
                                 result.set(PropertyKey.REASON, funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE);
-                                results.set(index, result);
-                                if (--remaining[0] == 0) {
-                                    resultPromise.fulfill(results);
+                                synchronized (allSettledLock) {
+                                    results.set(index, result);
+                                    remaining[0]--;
+                                    if (remaining[0] == 0) {
+                                        resultPromise.fulfill(results);
+                                    }
                                 }
                                 return JSUndefined.INSTANCE;
                             }),
@@ -154,6 +176,8 @@ public final class PromiseConstructor {
         }
 
         final int[] remaining = {length};
+        final Object anyLock = new Object();
+        final boolean[] anySettled = {false};
         for (int i = 0; i < length; i++) {
             final int index = i;
             JSPromise elementPromise = toPromise(context, thisArg, array.get(i));
@@ -164,7 +188,13 @@ public final class PromiseConstructor {
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
                                 JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                                resultPromise.fulfill(value);
+                                synchronized (anyLock) {
+                                    if (anySettled[0]) {
+                                        return JSUndefined.INSTANCE;
+                                    }
+                                    anySettled[0] = true;
+                                    resultPromise.fulfill(value);
+                                }
                                 return JSUndefined.INSTANCE;
                             }),
                             null,
@@ -172,9 +202,16 @@ public final class PromiseConstructor {
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
                                 JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                                errors.set(index, reason);
-                                if (--remaining[0] == 0) {
-                                    resultPromise.reject(JSAggregateError.create(context, errors));
+                                synchronized (anyLock) {
+                                    if (anySettled[0]) {
+                                        return JSUndefined.INSTANCE;
+                                    }
+                                    errors.set(index, reason);
+                                    remaining[0]--;
+                                    if (remaining[0] == 0) {
+                                        anySettled[0] = true;
+                                        resultPromise.reject(JSAggregateError.create(context, errors));
+                                    }
                                 }
                                 return JSUndefined.INSTANCE;
                             }),
@@ -212,6 +249,8 @@ public final class PromiseConstructor {
 
         JSPromise resultPromise = context.createJSPromise();
         int length = (int) array.getLength();
+        final Object raceLock = new Object();
+        final boolean[] raceSettled = {false};
         for (int i = 0; i < length; i++) {
             JSPromise elementPromise = toPromise(context, thisArg, array.get(i));
             if (elementPromise == null) {
@@ -221,7 +260,13 @@ public final class PromiseConstructor {
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
                                 JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                                resultPromise.fulfill(value);
+                                synchronized (raceLock) {
+                                    if (raceSettled[0]) {
+                                        return JSUndefined.INSTANCE;
+                                    }
+                                    raceSettled[0] = true;
+                                    resultPromise.fulfill(value);
+                                }
                                 return JSUndefined.INSTANCE;
                             }),
                             null,
@@ -229,7 +274,13 @@ public final class PromiseConstructor {
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
                                 JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                                resultPromise.reject(reason);
+                                synchronized (raceLock) {
+                                    if (raceSettled[0]) {
+                                        return JSUndefined.INSTANCE;
+                                    }
+                                    raceSettled[0] = true;
+                                    resultPromise.reject(reason);
+                                }
                                 return JSUndefined.INSTANCE;
                             }),
                             null,
