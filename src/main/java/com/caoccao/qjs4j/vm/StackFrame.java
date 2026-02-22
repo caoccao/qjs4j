@@ -63,6 +63,12 @@ public final class StackFrame {
             for (int i = args.length; i < localCount; i++) {
                 this.locals[i] = JSUndefined.INSTANCE;
             }
+            if (function instanceof JSBytecodeFunction bytecodeFunction) {
+                int selfLocalIndex = bytecodeFunction.getSelfLocalIndex();
+                if (selfLocalIndex >= 0 && selfLocalIndex < localCount) {
+                    this.locals[selfLocalIndex] = function;
+                }
+            }
         } else {
             // For native functions or functions with no locals
             this.locals = args;

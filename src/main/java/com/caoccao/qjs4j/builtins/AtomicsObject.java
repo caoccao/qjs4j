@@ -25,6 +25,7 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -66,6 +67,15 @@ public final class AtomicsObject {
             throw new JSRangeErrorException("Index out of bounds");
         }
         return (int) indexLong;
+    }
+
+    private static double getAtomicsWaitTimeout(JSContext context, JSValue[] args, int timeoutArgIndex) {
+        JSValue timeoutValue = args.length > timeoutArgIndex ? args[timeoutArgIndex] : JSUndefined.INSTANCE;
+        double timeoutNumber = JSTypeConversions.toNumber(context, timeoutValue).value();
+        if (Double.isNaN(timeoutNumber)) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return Math.max(timeoutNumber, 0.0);
     }
 
     private static JSValue rethrowAsJSValue(JSContext context, JSErrorException errorException) {
@@ -943,6 +953,9 @@ public final class AtomicsObject {
 
             if (typedArray instanceof JSInt32Array) {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
                 int currentValue;
                 synchronized (byteBuffer) {
@@ -953,6 +966,9 @@ public final class AtomicsObject {
                 }
             } else {
                 long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
                 long currentValue;
                 synchronized (byteBuffer) {
@@ -990,57 +1006,95 @@ public final class AtomicsObject {
             return context.throwTypeError("Atomics.waitAsync requires a TypedArray");
         }
 
-        if (!(typedArray instanceof JSInt32Array)) {
-            return context.throwTypeError("Atomics.waitAsync only works on Int32Array");
-        }
+        try {
+            if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSBigInt64Array)) {
+                return context.throwTypeError("Atomics.waitAsync only works on Int32Array or BigInt64Array");
+            }
+            if (!typedArray.getBuffer().isShared()) {
+                return context.throwTypeError("Atomics.waitAsync requires a SharedArrayBuffer");
+            }
 
-        int index = (int) ((JSNumber) args[1]).value();
-        int expectedValue = (int) ((JSNumber) args[2]).value();
-        long timeout = args.length >= 4 ? (long) ((JSNumber) args[3]).value() : -1;
+            int index = getAtomicIndex(context, typedArray, args[1]);
+            ByteBuffer byteBuffer = requireAtomicBuffer(typedArray);
+            double timeoutDouble;
 
-        if (index < 0 || index >= typedArray.getLength()) {
-            return context.throwRangeError("Index out of bounds");
-        }
+            if (typedArray instanceof JSInt32Array) {
+                int expectedValue = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
+                int currentValue;
+                synchronized (byteBuffer) {
+                    currentValue = byteBuffer.getInt(byteOffset);
+                }
+                if (currentValue != expectedValue) {
+                    return createWaitAsyncSyncResult(context, "not-equal");
+                }
+            } else {
+                long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
+                long currentValue;
+                synchronized (byteBuffer) {
+                    currentValue = byteBuffer.getLong(byteOffset);
+                }
+                if (currentValue != expectedValue) {
+                    return createWaitAsyncSyncResult(context, "not-equal");
+                }
+            }
 
-        ByteBuffer byteBuffer = typedArray.getBuffer().getBuffer();
-        int byteOffset = typedArray.getByteOffset() + (index * 4);
+            timeoutDouble = getAtomicsWaitTimeout(context, args, 3);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
 
-        // Check if the value matches
-        int currentValue;
-        synchronized (byteBuffer) {
-            currentValue = byteBuffer.getInt(byteOffset);
-        }
+            if (timeoutDouble <= 0.0) {
+                return createWaitAsyncSyncResult(context, "timed-out");
+            }
 
-        if (currentValue != expectedValue) {
-            // Return {async: false, value: "not-equal"}
+            IJSArrayBuffer buffer = typedArray.getBuffer();
+            String waitKey = getWaitKey(buffer, index);
+            WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
+            JSPromise promise = context.createJSPromise();
             JSObject result = context.createJSObject();
-            result.set(PropertyKey.ASYNC, JSBoolean.FALSE);
-            result.set(PropertyKey.VALUE, new JSString("not-equal"));
-            return result;
-        }
-
-        // Create a promise for async waiting
-        IJSArrayBuffer buffer = typedArray.getBuffer();
-        String waitKey = getWaitKey(buffer, index);
-        WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
-
-        JSPromise promise = context.createJSPromise();
-        JSObject result = context.createJSObject();
-        result.set(PropertyKey.ASYNC, JSBoolean.TRUE);
-        result.set(PropertyKey.VALUE, promise);
-
-        Thread waitThread = new Thread(() -> {
+            result.set(PropertyKey.ASYNC, JSBoolean.TRUE);
+            result.set(PropertyKey.VALUE, promise);
+            JSContext promiseContext = context;
+            JSRuntime promiseRuntime = context.getRuntime();
+            long timeoutMillis = Double.isInfinite(timeoutDouble)
+                    ? -1L
+                    : Math.min((long) timeoutDouble, Long.MAX_VALUE);
+            CountDownLatch waiterRegisteredLatch = new CountDownLatch(1);
+            Thread waitThread = new Thread(() -> {
+                try {
+                    String waitResult = waitList.await(timeoutMillis, waiterRegisteredLatch);
+                    promise.fulfill(new JSString(waitResult));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    waiterRegisteredLatch.countDown();
+                    promise.reject(new JSString("timed-out"));
+                } finally {
+                    synchronized (promiseRuntime) {
+                        promiseRuntime.runJobs();
+                    }
+                    promiseContext.processMicrotasks();
+                }
+            }, "qjs4j-atomics-waitAsync");
+            waitThread.setDaemon(true);
+            waitThread.start();
             try {
-                String waitResult = waitList.await(timeout);
-                promise.fulfill(new JSString(waitResult));
+                waiterRegisteredLatch.await();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 promise.reject(new JSString("timed-out"));
             }
-        }, "qjs4j-atomics-waitAsync");
-        waitThread.setDaemon(true);
-        waitThread.start();
+            return result;
+        } catch (JSErrorException e) {
+            return rethrowAsJSValue(context, e);
+        }
+    }
 
+    private static JSObject createWaitAsyncSyncResult(JSContext context, String value) {
+        JSObject result = context.createJSObject();
+        result.set(PropertyKey.ASYNC, JSBoolean.FALSE);
+        result.set(PropertyKey.VALUE, new JSString(value));
         return result;
     }
 
@@ -1058,29 +1112,83 @@ public final class AtomicsObject {
             return context.throwTypeError("Atomics.xor requires a TypedArray");
         }
 
-        if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSUint32Array)) {
-            return context.throwTypeError("Atomics.xor only works on Int32Array or Uint32Array");
+        if (!typedArray.isAtomicsReadableAndWriteable()) {
+            return context.throwTypeError(
+                    "Atomics.xor only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
         }
 
-        if (!typedArray.getBuffer().isShared()) {
-            return context.throwTypeError("Atomics operations require SharedArrayBuffer");
+        try {
+            int index = getAtomicIndex(context, typedArray, args[1]);
+            ByteBuffer buffer = requireAtomicBuffer(typedArray);
+            if (typedArray instanceof JSInt8Array) {
+                int value = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + index;
+                synchronized (buffer) {
+                    byte oldValue = buffer.get(byteOffset);
+                    buffer.put(byteOffset, (byte) (oldValue ^ value));
+                    return JSNumber.of(oldValue);
+                }
+            } else if (typedArray instanceof JSUint8Array) {
+                int value = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + index;
+                synchronized (buffer) {
+                    int oldValue = Byte.toUnsignedInt(buffer.get(byteOffset));
+                    buffer.put(byteOffset, (byte) (oldValue ^ value));
+                    return JSNumber.of(oldValue);
+                }
+            } else if (typedArray instanceof JSInt16Array) {
+                int value = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
+                synchronized (buffer) {
+                    short oldValue = buffer.getShort(byteOffset);
+                    buffer.putShort(byteOffset, (short) (oldValue ^ value));
+                    return JSNumber.of(oldValue);
+                }
+            } else if (typedArray instanceof JSUint16Array) {
+                int value = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
+                synchronized (buffer) {
+                    int oldValue = Short.toUnsignedInt(buffer.getShort(byteOffset));
+                    buffer.putShort(byteOffset, (short) (oldValue ^ value));
+                    return JSNumber.of(oldValue);
+                }
+            } else if (typedArray instanceof JSInt32Array) {
+                int value = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
+                synchronized (buffer) {
+                    int oldValue = buffer.getInt(byteOffset);
+                    buffer.putInt(byteOffset, oldValue ^ value);
+                    return JSNumber.of(oldValue);
+                }
+            } else if (typedArray instanceof JSUint32Array) {
+                int value = JSTypeConversions.toInt32(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
+                synchronized (buffer) {
+                    int oldValue = buffer.getInt(byteOffset);
+                    buffer.putInt(byteOffset, oldValue ^ value);
+                    return JSNumber.of(Integer.toUnsignedLong(oldValue));
+                }
+            } else if (typedArray instanceof JSBigInt64Array) {
+                long value = JSTypeConversions.toBigInt64(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
+                synchronized (buffer) {
+                    long oldValue = buffer.getLong(byteOffset);
+                    buffer.putLong(byteOffset, oldValue ^ value);
+                    return new JSBigInt(BigInteger.valueOf(oldValue));
+                }
+            } else if (typedArray instanceof JSBigUint64Array) {
+                long value = JSTypeConversions.toBigInt64(context, args[2]);
+                int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
+                synchronized (buffer) {
+                    long oldValue = buffer.getLong(byteOffset);
+                    buffer.putLong(byteOffset, oldValue ^ value);
+                    return createBigUint64(oldValue);
+                }
+            }
+        } catch (JSErrorException e) {
+            return rethrowAsJSValue(context, e);
         }
-
-        int index = (int) ((JSNumber) args[1]).value();
-        int value = (int) ((JSNumber) args[2]).value();
-
-        if (index < 0 || index >= typedArray.getLength()) {
-            return context.throwRangeError("Index out of bounds");
-        }
-
-        ByteBuffer buffer = typedArray.getBuffer().getBuffer();
-        int byteOffset = typedArray.getByteOffset() + (index * 4);
-
-        synchronized (buffer) {
-            int oldValue = buffer.getInt(byteOffset);
-            buffer.putInt(byteOffset, oldValue ^ value);
-            return JSNumber.of(oldValue);
-        }
+        return context.throwTypeError("Atomics.xor invalid typed array");
     }
 
     /**
@@ -1093,9 +1201,16 @@ public final class AtomicsObject {
         private int waitingCount = 0;
 
         public String await(long timeoutMs) throws InterruptedException {
+            return await(timeoutMs, null);
+        }
+
+        public String await(long timeoutMs, CountDownLatch registrationLatch) throws InterruptedException {
             lock.lock();
             try {
                 waitingCount++;
+                if (registrationLatch != null) {
+                    registrationLatch.countDown();
+                }
                 boolean timedOut = false;
 
                 if (timeoutMs < 0) {

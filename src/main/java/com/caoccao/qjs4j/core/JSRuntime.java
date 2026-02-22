@@ -204,14 +204,8 @@ public final class JSRuntime implements AutoCloseable {
         while (!jobQueue.isEmpty()) {
             Job job = jobQueue.poll();
             if (job != null) {
-                try {
-                    job.run();
-                    count++;
-                } catch (JSVirtualMachineException e) {
-                    throw e;
-                } catch (Exception e) {
-                    // Job failed, continue with next job
-                }
+                job.run();
+                count++;
             }
         }
         return count;

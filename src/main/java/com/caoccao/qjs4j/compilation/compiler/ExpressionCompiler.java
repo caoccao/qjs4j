@@ -285,8 +285,8 @@ final class ExpressionCompiler {
             compileMemberExpression(memberExpr);
         } else if (expr instanceof NewExpression newExpr) {
             compileNewExpression(newExpr);
-        } else if (expr instanceof FunctionExpression funcExpr) {
-            delegates.functions.compileFunctionExpression(funcExpr);
+        } else if (expr instanceof FunctionExpression functionExpression) {
+            delegates.functions.compileFunctionExpression(functionExpression);
         } else if (expr instanceof ArrowFunctionExpression arrowExpr) {
             delegates.functions.compileArrowFunctionExpression(arrowExpr);
         } else if (expr instanceof AwaitExpression awaitExpr) {
@@ -874,3 +874,4 @@ final class ExpressionCompiler {
         }
     }
 }
+

@@ -65,6 +65,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private final boolean strict;
     private int[] captureSourceInfos;
     private boolean hasParameterExpressions;
+    private int selfLocalIndex;
     private String sourceCode;
     private VarRef[] varRefs;
 
@@ -151,6 +152,7 @@ public final class JSBytecodeFunction extends JSFunction {
         this.strict = strict;
         this.sourceCode = sourceCode;
         this.selfCaptureIndex = selfCaptureIndex;
+        selfLocalIndex = -1;
 
         // Set up function properties on the object
         // Per ES spec, name and length are {writable: false, enumerable: false, configurable: true}
@@ -968,6 +970,7 @@ public final class JSBytecodeFunction extends JSFunction {
                 selfCaptureIndex
         );
         copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
+        copiedFunction.selfLocalIndex = selfLocalIndex;
         return copiedFunction;
     }
 
@@ -992,6 +995,7 @@ public final class JSBytecodeFunction extends JSFunction {
         );
         copiedFunction.varRefs = capturedVarRefs;
         copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
+        copiedFunction.selfLocalIndex = selfLocalIndex;
         return copiedFunction;
     }
 
@@ -1046,6 +1050,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public int getSelfCaptureIndex() {
         return selfCaptureIndex;
+    }
+
+    public int getSelfLocalIndex() {
+        return selfLocalIndex;
     }
 
     /**
@@ -1107,6 +1115,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public void setCaptureSourceInfos(int[] captureSourceInfos) {
         this.captureSourceInfos = captureSourceInfos;
+    }
+
+    public void setSelfLocalIndex(int selfLocalIndex) {
+        this.selfLocalIndex = selfLocalIndex;
     }
 
     /**

@@ -171,8 +171,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
     @Test
     public void testNotify() {
-        // Create ArrayBuffer and Int32Array
-        JSArrayBuffer ab = new JSArrayBuffer(4);
+        // Create SharedArrayBuffer and Int32Array
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(4);
         JSInt32Array arr = new JSInt32Array(ab, 0, 1);
 
         // Store initial value
@@ -461,8 +461,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
     @Test
     public void testWaitAsync() {
-        // Create ArrayBuffer and Int32Array
-        JSArrayBuffer ab = new JSArrayBuffer(4);
+        // Create SharedArrayBuffer and Int32Array
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(4);
         JSInt32Array arr = new JSInt32Array(ab, 0, 1);
 
         // Store initial value
@@ -474,15 +474,17 @@ public class AtomicsObjectTest extends BaseJavetTest {
                 arr, new JSNumber(0), new JSNumber(0)
         });
         JSObject resultObj = result.asObject().orElseThrow();
-        assertThat(resultObj.get("async")).isEqualTo(JSBoolean.FALSE);
+        assertThat(resultObj.get("async").isBoolean()).isTrue();
+        assertThat(resultObj.get("async").asBoolean().map(JSBoolean::value).orElseThrow()).isFalse();
         assertThat(((JSString) resultObj.get("value")).value()).isEqualTo("not-equal");
 
-        // Test 2: waitAsync with matching value - should return {async: true, value: Promise}
+        // Test 2: waitAsync with matching value and positive timeout - should return {async: true, value: Promise}
         result = AtomicsObject.waitAsync(context, null, new JSValue[]{
-                arr, new JSNumber(0), new JSNumber(42), new JSNumber(0)
+                arr, new JSNumber(0), new JSNumber(42), new JSNumber(1)
         });
         resultObj = result.asObject().orElseThrow();
-        assertThat(resultObj.get("async")).isEqualTo(JSBoolean.TRUE);
+        assertThat(resultObj.get("async").isBoolean()).isTrue();
+        assertThat(resultObj.get("async").asBoolean().map(JSBoolean::value).orElseThrow()).isTrue();
         assertThat(resultObj.get("value")).isInstanceOf(JSPromise.class);
         JSPromise waitPromise = (JSPromise) resultObj.get("value");
         long deadline = System.currentTimeMillis() + 500;

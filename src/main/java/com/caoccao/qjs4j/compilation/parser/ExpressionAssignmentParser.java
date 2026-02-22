@@ -138,7 +138,8 @@ final class ExpressionAssignmentParser {
             } else if (left instanceof ObjectExpression
                     || (left instanceof AssignmentExpression assignmentExpression
                     && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN
-                    && assignmentExpression.left() instanceof ObjectExpression)) {
+                    && (assignmentExpression.left() instanceof ObjectExpression
+                    || assignmentExpression.left() instanceof ArrayExpression))) {
                 syntheticParameterCount = parseDestructuringArrowParameter(
                         left,
                         params,
@@ -155,7 +156,15 @@ final class ExpressionAssignmentParser {
                             syntheticParameterCount);
                 }
             } else if (left instanceof ArrayExpression arrayExpr) {
-                if (!arrayExpr.elements().isEmpty()) {
+                boolean isParenthesizedParameterList = arrayExpr.getLocation().offset() == location.offset();
+                if (!isParenthesizedParameterList) {
+                    syntheticParameterCount = parseDestructuringArrowParameter(
+                            left,
+                            params,
+                            defaults,
+                            parameterPreludeStatements,
+                            syntheticParameterCount);
+                } else if (!arrayExpr.elements().isEmpty()) {
                     for (int i = 0; i < arrayExpr.elements().size(); i++) {
                         Expression expr = arrayExpr.elements().get(i);
 

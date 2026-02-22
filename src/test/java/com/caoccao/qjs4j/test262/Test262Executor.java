@@ -26,6 +26,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Executes test262 test cases with proper flag handling.
@@ -79,9 +80,16 @@ public class Test262Executor {
                     }
                 }
                 harnessLoader.loadIntoContext(context, includes);
+                if (includes.contains("atomicsHelper.js")) {
+                    agentHost.installAtomicsHelperOverrides(context);
+                }
             } else if (!test.getIncludes().isEmpty()) {
                 // Load only explicitly included files for raw tests
-                harnessLoader.loadIntoContext(context, new ArrayList<>(test.getIncludes()));
+                List<String> includes = new ArrayList<>(test.getIncludes());
+                harnessLoader.loadIntoContext(context, includes);
+                if (includes.contains("atomicsHelper.js")) {
+                    agentHost.installAtomicsHelperOverrides(context);
+                }
             }
 
             // Prepare code with strict mode if needed
@@ -127,7 +135,20 @@ public class Test262Executor {
                         doneCalled[0] = true;
                         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
                             // Error passed to $DONE
-                            doneResult[0] = args[0].toString();
+                            JSValue doneArg = args[0];
+                            if (doneArg instanceof JSObject errorObject) {
+                                JSValue message = errorObject.get(ctx, PropertyKey.MESSAGE);
+                                if (!ctx.hasPendingException() && message != null && !(message instanceof JSUndefined)) {
+                                    doneResult[0] = message.toString();
+                                } else {
+                                    if (ctx.hasPendingException()) {
+                                        ctx.clearPendingException();
+                                    }
+                                    doneResult[0] = doneArg.toString();
+                                }
+                            } else {
+                                doneResult[0] = doneArg.toString();
+                            }
                         }
                         return JSUndefined.INSTANCE;
                     }
@@ -138,8 +159,20 @@ public class Test262Executor {
             // Execute test code
             context.eval(code, test.getPath().toString(), false);
 
-            // Process microtasks (promises)
-            runtime.runJobs();
+            long deadline = System.currentTimeMillis() + Math.max(asyncTimeoutMs, 1);
+            while (!doneCalled[0] && System.currentTimeMillis() <= deadline) {
+                synchronized (runtime) {
+                    runtime.runJobs();
+                }
+                if (!doneCalled[0]) {
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
 
             if (!doneCalled[0]) {
                 return TestResult.fail(test, "Async test did not call $DONE");
@@ -182,7 +215,9 @@ public class Test262Executor {
                         System.currentTimeMillis() + syncTimeoutMs);
             }
             context.eval(code, test.getPath().toString(), true);
-            runtime.runJobs();
+            synchronized (runtime) {
+                runtime.runJobs();
+            }
 
             if (test.getNegative() != null) {
                 return TestResult.fail(test, "Expected error " + test.getNegative().getType() + " was not thrown");
@@ -210,7 +245,9 @@ public class Test262Executor {
                         System.currentTimeMillis() + syncTimeoutMs);
             }
             context.eval(code, test.getPath().toString(), false);
-            runtime.runJobs();
+            synchronized (runtime) {
+                runtime.runJobs();
+            }
 
             if (test.getNegative() != null) {
                 return TestResult.fail(test, "Expected error " + test.getNegative().getType() + " was not thrown");
@@ -349,7 +386,9 @@ public class Test262Executor {
                                         ? JSTypeConversions.toString(innerCtx, innerArgs[0]).value()
                                         : "";
                                 JSValue result = realmContext.eval(script, "<test262-realm-evalScript>", false);
-                                realmRuntime.runJobs();
+                                synchronized (realmRuntime) {
+                                    realmRuntime.runJobs();
+                                }
                                 return result;
                             }));
                     return realm;
@@ -360,6 +399,9 @@ public class Test262Executor {
         isHTMLDDA.setHTMLDDA(true);
         host262.set("IsHTMLDDA", isHTMLDDA);
         host262.set("agent", agentHost.createAgentObject(context, realmRuntimes, agent));
+        if (global.get("setTimeout") instanceof JSUndefined) {
+            global.set("setTimeout", agentHost.createSetTimeoutFunction(context));
+        }
 
         global.set("$262", host262);
     }
@@ -367,10 +409,12 @@ public class Test262Executor {
     private final class Test262AgentHost implements AutoCloseable {
         private final CopyOnWriteArrayList<Test262Agent> agents;
         private final BlockingQueue<String> reports;
+        private final AtomicLong timerIds;
 
         private Test262AgentHost() {
             agents = new CopyOnWriteArrayList<>();
             reports = new LinkedBlockingQueue<>();
+            timerIds = new AtomicLong(1);
         }
 
         @Override
@@ -402,6 +446,8 @@ public class Test262Executor {
                         }
                         return JSUndefined.INSTANCE;
                     }));
+            agentObject.set("monotonicNow", createAgentFunction(context, "monotonicNow", 0,
+                    (ctx, thisArg, args) -> JSNumber.of(System.nanoTime() / 1_000_000.0)));
 
             if (agent == null) {
                 agentObject.set("start", createAgentFunction(context, "start", 1,
@@ -439,7 +485,9 @@ public class Test262Executor {
                             }
                             JSValue result = callback.call(ctx, JSUndefined.INSTANCE, new JSValue[]{broadcastValue});
                             if (agent.runtime != null) {
-                                agent.runtime.runJobs();
+                                synchronized (agent.runtime) {
+                                    agent.runtime.runJobs();
+                                }
                             }
                             return result;
                         }));
@@ -464,6 +512,53 @@ public class Test262Executor {
                         (ctx, thisArg, args) -> ctx.throwTypeError("$262.agent.broadcast is only available on the main agent")));
             }
             return agentObject;
+        }
+
+        private void installAtomicsHelperOverrides(JSContext context) {
+            // Keep helper-provided getReportAsync()/tryYield()/trySleep(). The runtime now supports
+            // named function expressions used in atomicsHelper.js, so no post-load override is needed.
+        }
+
+        private JSNativeFunction createSetTimeoutFunction(JSContext context) {
+            return createAgentFunction(context, "setTimeout", 2,
+                    (ctx, thisArg, args) -> {
+                        if (args.length < 1 || !(args[0] instanceof JSFunction callback)) {
+                            return ctx.throwTypeError("setTimeout callback must be a function");
+                        }
+                        long delayMillis = 0;
+                        if (args.length > 1) {
+                            delayMillis = Math.max(0L, (long) JSTypeConversions.toInteger(ctx, args[1]));
+                            if (ctx.hasPendingException()) {
+                                return JSUndefined.INSTANCE;
+                            }
+                        }
+                        final long scheduledDelayMillis = delayMillis;
+                        JSRuntime runtime = ctx.getRuntime();
+                        long timerId = timerIds.getAndIncrement();
+                        Thread timerThread = new Thread(() -> {
+                            try {
+                                if (scheduledDelayMillis > 0) {
+                                    Thread.sleep(scheduledDelayMillis);
+                                }
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                return;
+                            }
+                            synchronized (runtime) {
+                                ctx.enqueueMicrotask(() -> {
+                                    callback.call(ctx, JSUndefined.INSTANCE, new JSValue[0]);
+                                    if (ctx.hasPendingException()) {
+                                        ctx.clearAllPendingExceptions();
+                                    }
+                                });
+                                runtime.runJobs();
+                                ctx.processMicrotasks();
+                            }
+                        }, "qjs4j-test262-setTimeout");
+                        timerThread.setDaemon(true);
+                        timerThread.start();
+                        return JSNumber.of(timerId);
+                    });
         }
 
         private JSNativeFunction createAgentFunction(
@@ -536,7 +631,21 @@ public class Test262Executor {
                 runtime = agentRuntime;
                 install262Object(agentContext, agentRealmRuntimes, host, this);
                 agentContext.eval(script, "<test262-agent>", false);
-                agentRuntime.runJobs();
+                long deadline = System.currentTimeMillis() + Math.max(asyncTimeoutMs, 1000);
+                while (!closed && System.currentTimeMillis() <= deadline) {
+                    synchronized (agentRuntime) {
+                        agentRuntime.runJobs();
+                    }
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+                synchronized (agentRuntime) {
+                    agentRuntime.runJobs();
+                }
             } catch (Exception e) {
                 String message = e.getMessage();
                 if (message == null || message.isEmpty()) {

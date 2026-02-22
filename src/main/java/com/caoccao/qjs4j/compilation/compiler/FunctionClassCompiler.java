@@ -44,32 +44,32 @@ final class FunctionClassCompiler {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
         BytecodeCompiler functionCompiler = new BytecodeCompiler(ctx.strictMode, ctx.captureResolver);
-        CompilerContext funcCtx = functionCompiler.context();
+        CompilerContext functionContext = functionCompiler.context();
         CompilerDelegates funcDelegates = functionCompiler.delegates();
-        funcCtx.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
+        functionContext.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
-        funcCtx.enterScope();
-        funcCtx.inGlobalScope = false;
-        funcCtx.isInAsyncFunction = arrowExpr.isAsync();  // Track if this is an async function
-        funcCtx.isInArrowFunction = true;  // Arrow functions don't have their own arguments
+        functionContext.enterScope();
+        functionContext.inGlobalScope = false;
+        functionContext.isInAsyncFunction = arrowExpr.isAsync();  // Track if this is an async function
+        functionContext.isInArrowFunction = true;  // Arrow functions don't have their own arguments
         // Arrow functions inherit arguments from enclosing non-arrow function.
         // If the parent is a regular function (not arrow, not global program), it has arguments binding.
         // If the parent is also an arrow, inherit whatever it has.
         // The global program is not a function and doesn't provide 'arguments'.
         if (ctx.isInArrowFunction) {
-            funcCtx.hasEnclosingArgumentsBinding = ctx.hasEnclosingArgumentsBinding;
+            functionContext.hasEnclosingArgumentsBinding = ctx.hasEnclosingArgumentsBinding;
         } else {
-            funcCtx.hasEnclosingArgumentsBinding = !ctx.isGlobalProgram;
+            functionContext.hasEnclosingArgumentsBinding = !ctx.isGlobalProgram;
         }
 
         // Check for "use strict" directive if body is a block statement
         if (arrowExpr.body() instanceof BlockStatement block && ctx.hasUseStrictDirective(block)) {
-            funcCtx.strictMode = true;
+            functionContext.strictMode = true;
         }
 
         for (Identifier param : arrowExpr.params()) {
-            funcCtx.currentScope().declareParameter(param.name());
+            functionContext.currentScope().declareParameter(param.name());
         }
 
         // Pre-declare 'arguments' as a local when the arrow function has parameter expressions
@@ -78,10 +78,10 @@ final class FunctionClassCompiler {
         // 2. Inner arrows in defaults can capture 'arguments' via closure
         // Only for arrows without enclosing arguments binding (top-level arrows), since
         // arrows inside regular functions use SPECIAL_OBJECT for 'arguments' instead.
-        if (arrowExpr.defaults() != null && !funcCtx.hasEnclosingArgumentsBinding
+        if (arrowExpr.defaults() != null && !functionContext.hasEnclosingArgumentsBinding
                 && arrowExpr.body() instanceof BlockStatement bodyBlock
                 && CompilerContext.containsVarArgumentsDeclaration(bodyBlock.body())) {
-            funcCtx.currentScope().declareLocal("arguments");
+            functionContext.currentScope().declareLocal("arguments");
         }
 
         // Emit default parameter initialization following QuickJS pattern:
@@ -97,16 +97,16 @@ final class FunctionClassCompiler {
             int firstRestIndex = arrowExpr.params().size();
 
             // Emit REST opcode with the starting index
-            funcCtx.emitter.emitOpcode(Opcode.REST);
-            funcCtx.emitter.emitU16(firstRestIndex);
+            functionContext.emitter.emitOpcode(Opcode.REST);
+            functionContext.emitter.emitU16(firstRestIndex);
 
             // Declare the rest parameter as a local and store the rest array
             String restParamName = arrowExpr.restParameter().argument().name();
-            int restLocalIndex = funcCtx.currentScope().declareLocal(restParamName);
+            int restLocalIndex = functionContext.currentScope().declareLocal(restParamName);
 
             // Store the rest array (from stack top) to the rest parameter local
-            funcCtx.emitter.emitOpcode(Opcode.PUT_LOCAL);
-            funcCtx.emitter.emitU16(restLocalIndex);
+            functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
+            functionContext.emitter.emitU16(restLocalIndex);
         }
 
         // Compile function body
@@ -120,31 +120,31 @@ final class FunctionClassCompiler {
             // If body doesn't end with return, add implicit return undefined
             List<Statement> bodyStatements = block.body();
             if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
-                funcCtx.emitter.emitOpcode(Opcode.UNDEFINED);
-                int returnValueIndex = funcCtx.currentScope().declareLocal("$arrow_return_" + funcCtx.emitter.currentOffset());
-                funcCtx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+                functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
+                functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
                 funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-                funcCtx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+                functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
                 // Emit RETURN_ASYNC for async functions, RETURN for sync functions
-                funcCtx.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+                functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
             }
         } else if (arrowExpr.body() instanceof Expression expr) {
             // Expression body - implicitly returns the expression value
             funcDelegates.expressions.compileExpression(expr);
-            int returnValueIndex = funcCtx.currentScope().declareLocal("$arrow_return_" + funcCtx.emitter.currentOffset());
-            funcCtx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+            int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
+            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
             funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-            funcCtx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
             // Emit RETURN_ASYNC for async functions, RETURN for sync functions
-            funcCtx.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+            functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
-        int localCount = funcCtx.currentScope().getLocalCount();
-        String[] localVarNames = CompilerContext.extractLocalVarNames(funcCtx.currentScope());
-        funcCtx.exitScope();
+        int localCount = functionContext.currentScope().getLocalCount();
+        String[] localVarNames = CompilerContext.extractLocalVarNames(functionContext.currentScope());
+        functionContext.exitScope();
 
         // Build the function bytecode
-        Bytecode functionBytecode = funcCtx.emitter.build(localCount, localVarNames);
+        Bytecode functionBytecode = functionContext.emitter.build(localCount, localVarNames);
 
         // Arrow functions are always anonymous
         String functionName = "";
@@ -165,7 +165,7 @@ final class FunctionClassCompiler {
                 arrowExpr.isAsync(),
                 false,           // Arrow functions cannot be generators
                 true,            // isArrow - this is an arrow function
-                funcCtx.strictMode,  // strict - inherit from enclosing scope
+                functionContext.strictMode,  // strict - inherit from enclosing scope
                 functionSource   // source code for toString()
         );
         function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(arrowExpr.defaults(), arrowExpr.restParameter()));
@@ -661,23 +661,23 @@ final class FunctionClassCompiler {
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
         BytecodeCompiler functionCompiler = new BytecodeCompiler(ctx.strictMode, ctx.captureResolver);
-        CompilerContext funcCtx = functionCompiler.context();
+        CompilerContext functionContext = functionCompiler.context();
         CompilerDelegates funcDelegates = functionCompiler.delegates();
-        funcCtx.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
+        functionContext.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
-        funcCtx.enterScope();
-        funcCtx.inGlobalScope = false;
-        funcCtx.isInAsyncFunction = funcDecl.isAsync();  // Track if this is an async function
+        functionContext.enterScope();
+        functionContext.inGlobalScope = false;
+        functionContext.isInAsyncFunction = funcDecl.isAsync();  // Track if this is an async function
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
         if (ctx.hasUseStrictDirective(funcDecl.body())) {
-            funcCtx.strictMode = true;
+            functionContext.strictMode = true;
         }
 
         for (Identifier param : funcDecl.params()) {
-            funcCtx.currentScope().declareParameter(param.name());
+            functionContext.currentScope().declareParameter(param.name());
         }
 
         // Emit default parameter initialization following QuickJS pattern
@@ -692,21 +692,21 @@ final class FunctionClassCompiler {
             int firstRestIndex = funcDecl.params().size();
 
             // Emit REST opcode with the starting index
-            funcCtx.emitter.emitOpcode(Opcode.REST);
-            funcCtx.emitter.emitU16(firstRestIndex);
+            functionContext.emitter.emitOpcode(Opcode.REST);
+            functionContext.emitter.emitU16(firstRestIndex);
 
             // Declare the rest parameter as a local and store the rest array
             String restParamName = funcDecl.restParameter().argument().name();
-            int restLocalIndex = funcCtx.currentScope().declareLocal(restParamName);
+            int restLocalIndex = functionContext.currentScope().declareLocal(restParamName);
 
             // Store the rest array (from stack top) to the rest parameter local
-            funcCtx.emitter.emitOpcode(Opcode.PUT_LOCAL);
-            funcCtx.emitter.emitU16(restLocalIndex);
+            functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
+            functionContext.emitter.emitU16(restLocalIndex);
         }
 
         // If this is a generator function, emit INITIAL_YIELD at the start
         if (funcDecl.isGenerator()) {
-            funcCtx.emitter.emitOpcode(Opcode.INITIAL_YIELD);
+            functionContext.emitter.emitOpcode(Opcode.INITIAL_YIELD);
         }
 
         // Phase 0: Pre-declare all var bindings as locals before function hoisting.
@@ -740,27 +740,27 @@ final class FunctionClassCompiler {
         // If body doesn't end with return, add implicit return undefined
         List<Statement> bodyStatements = funcDecl.body().body();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
-            funcCtx.emitter.emitOpcode(Opcode.UNDEFINED);
-            int returnValueIndex = funcCtx.currentScope().declareLocal("$function_return_" + funcCtx.emitter.currentOffset());
-            funcCtx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+            functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            int returnValueIndex = functionContext.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
+            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
             funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-            funcCtx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
             // Emit RETURN_ASYNC for async functions, RETURN for sync functions
-            funcCtx.emitter.emitOpcode(funcDecl.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+            functionContext.emitter.emitOpcode(funcDecl.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
-        int localCount = funcCtx.currentScope().getLocalCount();
-        String[] localVarNames = CompilerContext.extractLocalVarNames(funcCtx.currentScope());
-        funcCtx.exitScope();
+        int localCount = functionContext.currentScope().getLocalCount();
+        String[] localVarNames = CompilerContext.extractLocalVarNames(functionContext.currentScope());
+        functionContext.exitScope();
 
         // Build the function bytecode
-        Bytecode functionBytecode = funcCtx.emitter.build(localCount, localVarNames);
+        Bytecode functionBytecode = functionContext.emitter.build(localCount, localVarNames);
 
         // Function name (already extracted at start of method)
 
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
-        boolean isStrict = funcCtx.strictMode || ctx.hasUseStrictDirective(funcDecl.body());
+        boolean isStrict = functionContext.strictMode || ctx.hasUseStrictDirective(funcDecl.body());
 
         // Extract function source code from original source
         String functionSource = ctx.extractSourceCode(funcDecl.getLocation());
@@ -803,7 +803,7 @@ final class FunctionClassCompiler {
         // captures the local before the function is stored in it.
         // Following QuickJS var_refs pattern: the closure variable pointing to the function
         // itself is patched after creation via selfCaptureIndex metadata.
-        Integer selfCaptureIdx = funcCtx.findCapturedBindingIndex(functionName);
+        Integer selfCaptureIdx = functionContext.findCapturedBindingIndex(functionName);
         int selfCaptureIndex = selfCaptureIdx != null ? selfCaptureIdx : -1;
 
         // Create JSBytecodeFunction
@@ -866,56 +866,70 @@ final class FunctionClassCompiler {
         }
     }
 
-    void compileFunctionExpression(FunctionExpression funcExpr) {
+    void compileFunctionExpression(FunctionExpression functionExpression) {
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
         BytecodeCompiler functionCompiler = new BytecodeCompiler(ctx.strictMode, ctx.captureResolver);
-        CompilerContext funcCtx = functionCompiler.context();
+        CompilerContext functionContext = functionCompiler.context();
         CompilerDelegates funcDelegates = functionCompiler.delegates();
-        funcCtx.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
+        functionContext.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
-        funcCtx.enterScope();
-        funcCtx.inGlobalScope = false;
-        funcCtx.isInAsyncFunction = funcExpr.isAsync();
+        functionContext.enterScope();
+        functionContext.inGlobalScope = false;
+        functionContext.isInAsyncFunction = functionExpression.isAsync();
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
-        if (ctx.hasUseStrictDirective(funcExpr.body())) {
-            funcCtx.strictMode = true;
+        if (ctx.hasUseStrictDirective(functionExpression.body())) {
+            functionContext.strictMode = true;
         }
 
-        for (Identifier param : funcExpr.params()) {
-            funcCtx.currentScope().declareParameter(param.name());
+        for (Identifier param : functionExpression.params()) {
+            functionContext.currentScope().declareParameter(param.name());
+        }
+
+        if (functionExpression.id() != null) {
+            boolean conflictsWithParameter = false;
+            for (Identifier param : functionExpression.params()) {
+                if (functionExpression.id().name().equals(param.name())) {
+                    conflictsWithParameter = true;
+                    break;
+                }
+            }
+            if (!conflictsWithParameter && (functionExpression.restParameter() == null
+                    || !functionExpression.id().name().equals(functionExpression.restParameter().argument().name()))) {
+                functionContext.currentScope().declareLocal(functionExpression.id().name());
+            }
         }
 
         // Emit default parameter initialization following QuickJS pattern
-        if (funcExpr.defaults() != null) {
-            delegates.emitHelpers.emitDefaultParameterInit(functionCompiler, funcExpr.defaults());
+        if (functionExpression.defaults() != null) {
+            delegates.emitHelpers.emitDefaultParameterInit(functionCompiler, functionExpression.defaults());
         }
 
         // Handle rest parameter if present
         // The REST opcode must be emitted early in the function to initialize the rest array
-        if (funcExpr.restParameter() != null) {
+        if (functionExpression.restParameter() != null) {
             // Calculate the index where rest arguments start
-            int firstRestIndex = funcExpr.params().size();
+            int firstRestIndex = functionExpression.params().size();
 
             // Emit REST opcode with the starting index
-            funcCtx.emitter.emitOpcode(Opcode.REST);
-            funcCtx.emitter.emitU16(firstRestIndex);
+            functionContext.emitter.emitOpcode(Opcode.REST);
+            functionContext.emitter.emitU16(firstRestIndex);
 
             // Declare the rest parameter as a local and store the rest array
-            String restParamName = funcExpr.restParameter().argument().name();
-            int restLocalIndex = funcCtx.currentScope().declareLocal(restParamName);
+            String restParamName = functionExpression.restParameter().argument().name();
+            int restLocalIndex = functionContext.currentScope().declareLocal(restParamName);
 
             // Store the rest array (from stack top) to the rest parameter local
-            funcCtx.emitter.emitOpcode(Opcode.PUT_LOCAL);
-            funcCtx.emitter.emitU16(restLocalIndex);
+            functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
+            functionContext.emitter.emitU16(restLocalIndex);
         }
 
         // If this is a generator function, emit INITIAL_YIELD at the start
-        if (funcExpr.isGenerator()) {
-            funcCtx.emitter.emitOpcode(Opcode.INITIAL_YIELD);
+        if (functionExpression.isGenerator()) {
+            functionContext.emitter.emitOpcode(Opcode.INITIAL_YIELD);
         }
 
         // Phase 0: Pre-declare all var bindings as locals before function hoisting.
@@ -923,11 +937,11 @@ final class FunctionClassCompiler {
         // declarations that may capture them. Without this, Phase 1 function hoisting
         // would fail to resolve captured var references (e.g., inner functions referencing
         // outer var variables would emit GET_VAR instead of GET_VAR_REF).
-        funcDelegates.analysis.hoistVarDeclarationsAsLocals(funcExpr.body().body());
+        funcDelegates.analysis.hoistVarDeclarationsAsLocals(functionExpression.body().body());
 
         // Phase 1: Hoist top-level function declarations (ES spec requires function
         // declarations to be initialized before any code executes).
-        for (Statement stmt : funcExpr.body().body()) {
+        for (Statement stmt : functionExpression.body().body()) {
             if (stmt instanceof FunctionDeclaration funcDecl) {
                 funcDelegates.functions.compileFunctionDeclaration(funcDecl);
             }
@@ -936,11 +950,11 @@ final class FunctionClassCompiler {
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
         // Build parameterNames set (BoundNames of argumentsList + "arguments" binding)
-        Set<String> exprParamNames = CompilerContext.buildParameterNames(funcExpr.params(), funcExpr.body().body());
-        funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(funcExpr.body().body(), exprParamNames);
+        Set<String> exprParamNames = CompilerContext.buildParameterNames(functionExpression.params(), functionExpression.body().body());
+        funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(functionExpression.body().body(), exprParamNames);
 
         // Phase 2: Compile non-FunctionDeclaration statements in source order
-        for (Statement stmt : funcExpr.body().body()) {
+        for (Statement stmt : functionExpression.body().body()) {
             if (stmt instanceof FunctionDeclaration) {
                 continue; // Already hoisted in Phase 1
             }
@@ -949,37 +963,41 @@ final class FunctionClassCompiler {
 
         // If body doesn't end with return, add implicit return undefined
         // Check if last statement is a return statement
-        List<Statement> bodyStatements = funcExpr.body().body();
+        List<Statement> bodyStatements = functionExpression.body().body();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
-            funcCtx.emitter.emitOpcode(Opcode.UNDEFINED);
-            int returnValueIndex = funcCtx.currentScope().declareLocal("$function_return_" + funcCtx.emitter.currentOffset());
-            funcCtx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+            functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            int returnValueIndex = functionContext.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
+            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
             funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-            funcCtx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
-            funcCtx.emitter.emitOpcode(funcExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+            functionContext.emitter.emitOpcode(functionExpression.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
-        int localCount = funcCtx.currentScope().getLocalCount();
-        String[] localVarNames = CompilerContext.extractLocalVarNames(funcCtx.currentScope());
-        funcCtx.exitScope();
+        Integer functionExpressionSelfLocalIndex = null;
+        if (functionExpression.id() != null) {
+            functionExpressionSelfLocalIndex = functionContext.currentScope().getLocal(functionExpression.id().name());
+        }
+        int localCount = functionContext.currentScope().getLocalCount();
+        String[] localVarNames = CompilerContext.extractLocalVarNames(functionContext.currentScope());
+        functionContext.exitScope();
 
         // Build the function bytecode
-        Bytecode functionBytecode = funcCtx.emitter.build(localCount, localVarNames);
+        Bytecode functionBytecode = functionContext.emitter.build(localCount, localVarNames);
 
         // Get function name (empty string for anonymous)
-        String functionName = funcExpr.id() != null ? funcExpr.id().name() : "";
+        String functionName = functionExpression.id() != null ? functionExpression.id().name() : "";
 
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
-        boolean isStrict = funcCtx.strictMode || ctx.hasUseStrictDirective(funcExpr.body());
+        boolean isStrict = functionContext.strictMode || ctx.hasUseStrictDirective(functionExpression.body());
 
         // Extract function source code from original source
-        String functionSource = ctx.extractSourceCode(funcExpr.getLocation());
+        String functionSource = ctx.extractSourceCode(functionExpression.getLocation());
 
         // Create JSBytecodeFunction
-        int definedArgCount = CompilerContext.computeDefinedArgCount(funcExpr.params(), funcExpr.defaults(), funcExpr.restParameter() != null);
+        int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter() != null);
         // Per ES spec FunctionAllocate: async functions and async generators are NOT constructable
-        boolean isFuncConstructor = !funcExpr.isAsync();
+        boolean isFuncConstructor = !functionExpression.isAsync();
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
                 functionName,
@@ -987,13 +1005,16 @@ final class FunctionClassCompiler {
                 new JSValue[0],
                 null,            // prototype - will be set by VM
                 isFuncConstructor,
-                funcExpr.isAsync(),
-                funcExpr.isGenerator(),
+                functionExpression.isAsync(),
+                functionExpression.isGenerator(),
                 false,           // isArrow - regular function, not arrow
                 isStrict,        // strict - detected from "use strict" directive in function body
                 functionSource   // source code for toString()
         );
-        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(funcExpr.defaults(), funcExpr.restParameter()));
+        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.defaults(), functionExpression.restParameter()));
+        if (functionExpressionSelfLocalIndex != null) {
+            function.setSelfLocalIndex(functionExpressionSelfLocalIndex);
+        }
 
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
@@ -1023,24 +1044,24 @@ final class FunctionClassCompiler {
         methodCtx.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
         methodCtx.privateSymbols = privateSymbols;  // Make private symbols available in method
 
-        FunctionExpression funcExpr = method.value();
+        FunctionExpression functionExpression = method.value();
 
         // Enter function scope and add parameters as locals
         methodCtx.enterScope();
         methodCtx.inGlobalScope = false;
-        methodCtx.isInAsyncFunction = funcExpr.isAsync();
+        methodCtx.isInAsyncFunction = functionExpression.isAsync();
 
-        for (Identifier param : funcExpr.params()) {
+        for (Identifier param : functionExpression.params()) {
             methodCtx.currentScope().declareParameter(param.name());
         }
 
         // Emit default parameter initialization following QuickJS pattern
-        if (funcExpr.defaults() != null) {
-            delegates.emitHelpers.emitDefaultParameterInit(methodCompiler, funcExpr.defaults());
+        if (functionExpression.defaults() != null) {
+            delegates.emitHelpers.emitDefaultParameterInit(methodCompiler, functionExpression.defaults());
         }
 
         // If this is a generator method, emit INITIAL_YIELD at the start
-        if (funcExpr.isGenerator()) {
+        if (functionExpression.isGenerator()) {
             methodCtx.emitter.emitOpcode(Opcode.INITIAL_YIELD);
         }
 
@@ -1055,19 +1076,19 @@ final class FunctionClassCompiler {
         }
 
         // Compile method body statements
-        for (Statement stmt : funcExpr.body().body()) {
+        for (Statement stmt : functionExpression.body().body()) {
             methodDelegates.statements.compileStatement(stmt);
         }
 
         // If body doesn't end with return, add implicit return undefined
-        List<Statement> bodyStatements = funcExpr.body().body();
+        List<Statement> bodyStatements = functionExpression.body().body();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             methodCtx.emitter.emitOpcode(Opcode.UNDEFINED);
             int returnValueIndex = methodCtx.currentScope().declareLocal("$method_return_" + methodCtx.emitter.currentOffset());
             methodCtx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
             methodDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
             methodCtx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
-            methodCtx.emitter.emitOpcode(funcExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+            methodCtx.emitter.emitOpcode(functionExpression.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
         int localCount = methodCtx.currentScope().getLocalCount();
@@ -1084,7 +1105,7 @@ final class FunctionClassCompiler {
         }
 
         // Create JSBytecodeFunction for the method
-        int definedArgCount = CompilerContext.computeDefinedArgCount(funcExpr.params(), funcExpr.defaults(), funcExpr.restParameter() != null);
+        int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter() != null);
         JSBytecodeFunction methodFunc = new JSBytecodeFunction(
                 methodBytecode,
                 methodName,
@@ -1092,13 +1113,13 @@ final class FunctionClassCompiler {
                 closureVars,     // closure vars contain private symbols
                 null,            // prototype
                 isConstructor,   // isConstructor - true for class constructors, false for methods
-                funcExpr.isAsync(),
-                funcExpr.isGenerator(),
+                functionExpression.isAsync(),
+                functionExpression.isGenerator(),
                 false,           // isArrow - methods are not arrow functions
                 true,            // strict - classes are always strict mode
                 "method " + methodName + "() { [method body] }"  // source for toString
         );
-        methodFunc.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(funcExpr.defaults(), funcExpr.restParameter()));
+        methodFunc.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.defaults(), functionExpression.restParameter()));
         return methodFunc;
     }
 
@@ -1429,3 +1450,4 @@ final class FunctionClassCompiler {
         throw new JSCompilerException("private class field is already defined");
     }
 }
+
