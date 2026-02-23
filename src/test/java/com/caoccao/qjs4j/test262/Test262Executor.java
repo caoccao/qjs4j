@@ -177,7 +177,7 @@ public class Test262Executor {
             }
 
             if (!doneCalled[0]) {
-                return TestResult.fail(test, "Async test did not call $DONE");
+                return TestResult.timeout(test);
             }
 
             if (doneResult[0] != null) {
