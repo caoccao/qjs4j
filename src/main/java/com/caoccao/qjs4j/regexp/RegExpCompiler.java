@@ -1280,6 +1280,7 @@ public final class RegExpCompiler {
         int ch = context.codePoints[context.pos++];
 
         return switch (ch) {
+            case 'b' -> '\b'; // backspace (U+0008) inside character class
             case 'n' -> '\n';
             case 'r' -> '\r';
             case 't' -> '\t';
