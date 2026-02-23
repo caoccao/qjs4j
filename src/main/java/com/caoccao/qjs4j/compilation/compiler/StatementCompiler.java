@@ -610,6 +610,7 @@ final class StatementCompiler {
         int jumpAfterFinallyExceptionPath = ctx.emitter.emitJump(Opcode.GOTO);
 
         ctx.emitter.patchJump(finallyCatchJump, ctx.emitter.currentOffset());
+        ctx.emitter.markCatchAsFinally(finallyCatchJump);
         int finallyExceptionLocalIndex = ctx.currentScope().declareLocal("$finally_exception_" + ctx.emitter.currentOffset());
         ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, finallyExceptionLocalIndex);
         compileTryFinallyBlock(tryStmt.finalizer());

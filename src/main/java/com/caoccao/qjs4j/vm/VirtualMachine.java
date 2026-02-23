@@ -49,8 +49,10 @@ public final class VirtualMachine {
     private long executionDeadline;  // 0 = no deadline
     private long executionDeadlineNanos; // 0 = no deadline
     private JSValue[] forOfTempValues;
+    private boolean generatorForceReturn;  // When true, exception handler skips catch offsets, enters only finally
     private int generatorResumeIndex;
     private List<JSGeneratorState.ResumeRecord> generatorResumeRecords;
+    private JSValue generatorReturnValue;  // The return value during generator force return
     private int interruptCounter;
     private JSValue lastConstructorThisArg;  // Saved from frame before return for derived constructor check
     private JSValue pendingException;
@@ -554,11 +556,12 @@ public final class VirtualMachine {
                         && generatorStateForExecution.hasPendingResumeRecord();
         // Save the current caller stack position so function exit can restore it.
         int callerStackTop = valueStack.getStackTop();
-        // Determine the base of the function frame operand stack.
-        int savedStackTop = resumeGeneratorExecution
-                ? generatorStateForExecution.getSuspendedFrame().getStackBase()
-                : callerStackTop;
-        int frameStackBase = savedStackTop;
+        // Always use callerStackTop as the frame's operand stack base.
+        // For resumed generators, the suspended stack values are relative and
+        // will be correctly placed at the current caller position.  Using the
+        // original suspended stackBase would write into the caller's stack
+        // region when the generator is resumed at a different call depth.
+        int frameStackBase = callerStackTop;
         int restoreStackTop = callerStackTop;
 
         // Save and set strict mode based on function
@@ -573,7 +576,7 @@ public final class VirtualMachine {
         // Create or restore stack frame
         StackFrame frame = resumeGeneratorExecution
                 ? generatorStateForExecution.getSuspendedFrame()
-                : new StackFrame(function, thisArg, args, currentFrame, newTarget, savedStackTop);
+                : new StackFrame(function, thisArg, args, currentFrame, newTarget, callerStackTop);
         StackFrame previousFrame = currentFrame;
         currentFrame = frame;
 
@@ -596,6 +599,12 @@ public final class VirtualMachine {
                 JSGeneratorState.ResumeRecord pendingResumeRecord = generatorStateForExecution.consumePendingResumeRecord();
                 if (pendingResumeRecord != null) {
                     if (pendingResumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
+                        pendingException = pendingResumeRecord.value();
+                        context.setPendingException(pendingResumeRecord.value());
+                    } else if (pendingResumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
+                        // Generator return: trigger force return through finally handlers
+                        generatorForceReturn = true;
+                        generatorReturnValue = pendingResumeRecord.value();
                         pendingException = pendingResumeRecord.value();
                         context.setPendingException(pendingResumeRecord.value());
                     } else {
@@ -622,6 +631,10 @@ public final class VirtualMachine {
                     while (valueStack.stackTop > frameStackBase) {
                         JSStackValue val = stack[--valueStack.stackTop];
                         if (val instanceof JSCatchOffset catchOffset) {
+                            // During generator force return, skip non-finally catch handlers
+                            if (generatorForceReturn && !catchOffset.isFinally()) {
+                                continue;
+                            }
                             stack[valueStack.stackTop++] = exception;
                             pc = catchOffset.offset();
                             foundHandler = true;
@@ -632,7 +645,31 @@ public final class VirtualMachine {
                     sp = valueStack.stackTop;
 
                     if (!foundHandler) {
+                        if (generatorForceReturn) {
+                            // Generator return completed - all finally blocks have run
+                            generatorForceReturn = false;
+                            valueStack.stackTop = restoreStackTop;
+                            currentFrame = previousFrame;
+                            if (savedStrictMode) {
+                                context.enterStrictMode();
+                            } else {
+                                context.exitStrictMode();
+                            }
+                            context.clearPendingException();
+                            return generatorReturnValue;
+                        }
+                        // Restore the caller's stack top before throwing so the
+                        // caller's catch handler can find its own JSCatchOffset
+                        // markers.  Without this, the generator's frameStackBase
+                        // (which may be lower than the caller's stack) would leave
+                        // the stack pointer below the caller's catch offsets.
+                        valueStack.stackTop = restoreStackTop;
                         currentFrame = previousFrame;
+                        if (savedStrictMode) {
+                            context.enterStrictMode();
+                        } else {
+                            context.exitStrictMode();
+                        }
                         if (exception instanceof JSError jsError) {
                             throw new JSVirtualMachineException(jsError);
                         }
@@ -2748,9 +2785,12 @@ public final class VirtualMachine {
                     case CATCH -> {
                         // QuickJS: pushes catch offset marker onto stack
                         // This marker is used during exception unwinding to find the catch handler
-                        int catchOffset = bytecode.readI32(pc + 1);
+                        // Bit 31 of the offset encodes whether this is a finally handler
+                        int rawCatchOffset = bytecode.readI32(pc + 1);
+                        boolean isFinally = (rawCatchOffset & 0x80000000) != 0;
+                        int catchOffset = rawCatchOffset & 0x7FFFFFFF;
                         int catchHandlerPC = pc + op.getSize() + catchOffset;
-                        stack[sp++] = new JSCatchOffset(catchHandlerPC);
+                        stack[sp++] = new JSCatchOffset(catchHandlerPC, isFinally);
                         pc += op.getSize();
                     }
                     case NIP_CATCH -> {
@@ -3167,6 +3207,10 @@ public final class VirtualMachine {
         JSGeneratorState previousActiveGeneratorState = activeGeneratorState;
         activeGeneratorState = state;
         boolean previousAwaitSuspensionEnabled = awaitSuspensionEnabled;
+        boolean previousGeneratorForceReturn = generatorForceReturn;
+        JSValue previousGeneratorReturnValue = generatorReturnValue;
+        // Don't reset generatorForceReturn here - it may be set by the pending resume record
+        // handling in execute() for suspended state mode
         if (function.isAsync()) {
             awaitSuspensionEnabled = true;
         }
@@ -3177,6 +3221,8 @@ public final class VirtualMachine {
         } finally {
             awaitSuspensionEnabled = previousAwaitSuspensionEnabled;
             activeGeneratorState = previousActiveGeneratorState;
+            generatorForceReturn = previousGeneratorForceReturn;
+            generatorReturnValue = previousGeneratorReturnValue;
         }
 
         // Check if generator yielded
@@ -4518,6 +4564,22 @@ public final class VirtualMachine {
                 valueStack.push(JSUndefined.INSTANCE);
             }
             // Don't yield - just continue execution from the resumed generator state.
+            return;
+        }
+
+        // At the target yield - check for RETURN/THROW resume records (replay mode)
+        JSGeneratorState.ResumeRecord resumeRecord = generatorResumeIndex < generatorResumeRecords.size()
+                ? generatorResumeRecords.get(generatorResumeIndex)
+                : null;
+        if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
+            generatorResumeIndex++;
+            valueStack.pop(); // Pop the yielded value
+            // Trigger force return through finally handlers
+            generatorForceReturn = true;
+            generatorReturnValue = resumeRecord.value();
+            pendingException = resumeRecord.value();
+            context.setPendingException(resumeRecord.value());
+            valueStack.push(resumeRecord.value());
             return;
         }
 

@@ -350,11 +350,36 @@ public final class JSGenerator extends JSObject {
                 }
             }
 
-            // Regular yield - run to completion so finally blocks execute
-            state = State.COMPLETED;
-            done = true;
-            while (!generatorState.isCompleted()) {
-                context.getVirtualMachine().executeGenerator(generatorState, context);
+            // Regular yield - resume with RETURN semantics
+            // The VM will trigger force return, skipping code after yield,
+            // skipping catch handlers, but executing finally handlers.
+            state = State.EXECUTING;
+            if (generatorState.hasSuspendedExecutionState()) {
+                generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.RETURN, returnVal);
+            }
+            generatorState.recordResume(JSGeneratorState.ResumeKind.RETURN, returnVal);
+
+            try {
+                JSValue result = context.getVirtualMachine().executeGenerator(generatorState, context);
+                if (generatorState.isCompleted()) {
+                    state = State.COMPLETED;
+                    done = true;
+                    // Use the actual result, not returnVal, because a return statement
+                    // in a finally block can override the return value
+                    return createIteratorResult(result, true);
+                } else {
+                    // Generator yielded during a finally block - suspend there
+                    state = State.SUSPENDED_YIELD;
+                    return createIteratorResult(result, false);
+                }
+            } catch (Exception e) {
+                state = State.COMPLETED;
+                done = true;
+                generatorState.setCompleted(true);
+                if (e instanceof RuntimeException runtimeException) {
+                    throw runtimeException;
+                }
+                throw new RuntimeException(e);
             }
         } else {
             state = State.COMPLETED;

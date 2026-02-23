@@ -358,6 +358,85 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testThrowWithFinallyYieldThenNextRethrows() {
+        assertStringWithJavet("""
+                function* g() {
+                  yield 1;
+                  try {
+                    yield 2;
+                  } finally {
+                    yield 3;
+                  }
+                  yield 4;
+                }
+                var iter = g();
+                var results = [];
+                results.push(JSON.stringify(iter.next()));
+                results.push(JSON.stringify(iter.next()));
+                results.push(JSON.stringify(iter.throw(new Error('hello'))));
+                try { iter.next(); results.push('NO_THROW'); } catch(e) { results.push('THREW:' + e.message); }
+                results.push(JSON.stringify(iter.next()));
+                results.join('|')""");
+    }
+
+    @Test
+    public void testThrowWithCustomErrorAndFinallyYield() {
+        assertStringWithJavet("""
+                function Test262Error(msg) { this.message = msg || ''; }
+                Test262Error.prototype = Object.create(Error.prototype);
+                function* g() {
+                  yield 1;
+                  try {
+                    yield 2;
+                  } finally {
+                    yield 3;
+                  }
+                  yield 4;
+                }
+                var iter = g();
+                var results = [];
+                results.push(JSON.stringify(iter.next()));
+                results.push(JSON.stringify(iter.next()));
+                results.push(JSON.stringify(iter.throw(new Test262Error('hello'))));
+                try { iter.next(); results.push('NO_THROW'); } catch(e) { results.push('THREW:' + (e instanceof Test262Error)); }
+                results.push(JSON.stringify(iter.next()));
+                results.join('|')""");
+    }
+
+    @Test
+    public void testThrowTryFinallyWithinTryTest262Style() {
+        // Full test262-style: throw into try-finally, yield from finally,
+        // then next() re-throws original exception, generator completes
+        assertStringWithJavet("""
+                var unreachable = 0;
+                function* g() {
+                  yield 1;
+                  try {
+                    yield 2;
+                    unreachable += 1;
+                  } finally {
+                    yield 3;
+                  }
+                  yield 4;
+                }
+                var iter = g();
+                var result;
+                result = iter.next();
+                if (result.value !== 1 || result.done !== false) throw new Error('step1');
+                result = iter.next();
+                if (result.value !== 2 || result.done !== false) throw new Error('step2');
+                result = iter.throw(new Error('hello'));
+                if (result.value !== 3 || result.done !== false) throw new Error('step3');
+                if (unreachable !== 0) throw new Error('unreachable');
+                var threw = false;
+                try { iter.next(); } catch(e) { threw = (e instanceof Error && e.message === 'hello'); }
+                if (!threw) throw new Error('expected throw');
+                result = iter.next();
+                if (result.value !== undefined || result.done !== true) throw new Error('final');
+                'ALL PASS'""");
+    }
+
+    @Test
     public void testYieldStarDelegatedIteratorMissingReturnMethodDoesNotAffectNext() {
         assertStringWithJavet(
                 """

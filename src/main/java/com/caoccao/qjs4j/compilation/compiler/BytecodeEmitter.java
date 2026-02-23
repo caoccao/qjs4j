@@ -228,6 +228,19 @@ public final class BytecodeEmitter {
     }
 
     /**
+     * Mark a previously patched CATCH jump offset as a finally handler
+     * by setting bit 31 of the I32 offset. The VM uses this flag to
+     * distinguish try-catch from try-finally handlers during generator
+     * return unwinding.
+     */
+    public void markCatchAsFinally(int offset) {
+        byte[] bytes = code.toByteArray();
+        bytes[offset] |= (byte) 0x80;
+        code.reset();
+        code.write(bytes, 0, bytes.length);
+    }
+
+    /**
      * Patch a previously emitted jump instruction with the target offset.
      */
     public void patchJump(int offset, int target) {

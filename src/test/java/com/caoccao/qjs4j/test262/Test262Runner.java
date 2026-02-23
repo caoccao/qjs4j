@@ -25,6 +25,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -114,15 +116,15 @@ public class Test262Runner {
         int threadCount = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
         System.out.println("Starting test execution with " + threadCount + " threads...\n");
 
-        LinkedBlockingQueue<Runnable> taskQueue = new LinkedBlockingQueue<>();
         ThreadPoolExecutor executorService = new ThreadPoolExecutor(
-                threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, taskQueue);
+                threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         AtomicInteger testCount = new AtomicInteger(0);
+        List<Future<?>> futures = new ArrayList<>(testFiles.size());
 
         for (int i = 0; i < testFiles.size(); i++) {
             final Path testFile = testFiles.get(i);
             final int fileIndex = i;
-            executorService.submit(() -> {
+            Future<?> future = executorService.submit(() -> {
                 try {
                     Test262TestCase testCase = parser.parse(testFile);
                     testCase.setIndex(fileIndex);
@@ -142,25 +144,43 @@ public class Test262Runner {
                     if (count % 100 == 0) {
                         reporter.printProgress();
                     }
-
-                } catch (Exception e) {
-                    System.err.println("Error processing test " + testFile + ": " + e.getMessage());
+                } catch (Throwable t) {
+                    Test262TestCase failedTestCase = new Test262TestCase(testFile);
+                    failedTestCase.setIndex(fileIndex);
+                    reporter.recordResult(TestResult.fail(failedTestCase,
+                            "Unexpected runner error: " + t.getClass().getSimpleName()
+                                    + (t.getMessage() != null ? " - " + t.getMessage() : "")));
                 }
             });
+            futures.add(future);
         }
 
-        // Wait for the task queue to drain, then shut down
-        while (!taskQueue.isEmpty()) {
+        // All tasks have been submitted at this point; disallow new submissions.
+        executorService.shutdown();
+
+        // Ensure any failure swallowed by submit() Future is surfaced and counted.
+        for (int i = 0; i < futures.size(); i++) {
             try {
-                Thread.sleep(100);
+                futures.get(i).get();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
+            } catch (ExecutionException e) {
+                Path testFile = testFiles.get(i);
+                Throwable cause = e.getCause() == null ? e : e.getCause();
+                System.err.println("Error processing test " + testFile + ": " + cause.getMessage());
+                Test262TestCase failedTestCase = new Test262TestCase(testFile);
+                failedTestCase.setIndex(i);
+                reporter.recordResult(TestResult.fail(failedTestCase,
+                        "Internal runner error: " + cause.getClass().getSimpleName()
+                                + (cause.getMessage() != null ? " - " + cause.getMessage() : "")));
             }
         }
-        executorService.shutdown();
+
         try {
-            executorService.awaitTermination(1, TimeUnit.MINUTES);
+            while (!executorService.awaitTermination(1, TimeUnit.MINUTES)) {
+                System.out.println("Waiting for remaining test tasks to finish...");
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             System.err.println("Test execution interrupted");
