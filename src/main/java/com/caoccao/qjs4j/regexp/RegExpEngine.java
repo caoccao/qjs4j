@@ -704,6 +704,12 @@ public final class RegExpEngine {
             if (pos >= codePoints.length) {
                 return false;
             }
+            // In non-unicode mode, dot/any matches a single UTF-16 code unit.
+            // Supplementary characters (> 0xFFFF) are two code units, so they
+            // should not be matched by a single dot.
+            if (!unicode && codePoints[pos] > 0xFFFF) {
+                return false;
+            }
             pos++;
             return true;
         }
@@ -775,6 +781,12 @@ public final class RegExpEngine {
                 return false;
             }
             int ch = codePoints[pos];
+            // In non-unicode mode, dot matches a single UTF-16 code unit.
+            // Supplementary characters (> 0xFFFF) are two code units, so they
+            // should not be matched by a single dot.
+            if (!unicode && ch > 0xFFFF) {
+                return false;
+            }
             // Dot matches everything except line terminators
             if (ch == '\n' || ch == '\r' || ch == 0x2028 || ch == 0x2029) {
                 return false;

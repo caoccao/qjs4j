@@ -23,6 +23,8 @@ import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
+import java.util.List;
+
 /**
  * Shared mutable state for the parser.
  * Holds all fields, token utilities, validation methods, and context management
@@ -206,13 +208,26 @@ final class ParserContext {
     /**
      * Parse directives at the beginning of a program or function.
      * Returns true if "use strict" directive was found.
+     * Directive strings are also valid expression statements per the ES spec,
+     * so they are added to the provided body list if non-null.
      */
     boolean parseDirectives() {
+        return parseDirectives(null);
+    }
+
+    /**
+     * Parse directives at the beginning of a program or function.
+     * Returns true if "use strict" directive was found.
+     * Directive strings are also valid expression statements per the ES spec,
+     * so they are added to the provided body list if non-null.
+     */
+    boolean parseDirectives(List<Statement> body) {
         boolean hasUseStrict = false;
 
         while (match(TokenType.STRING)) {
             String stringValue = currentToken.value();
             int stringLine = currentToken.line();
+            SourceLocation directiveLocation = getLocation();
 
             Token next = peek();
             boolean hasSemi = false;
@@ -244,6 +259,13 @@ final class ParserContext {
             advance();
             if (match(TokenType.SEMICOLON)) {
                 advance();
+            }
+
+            // Directive strings are also expression statements per ES spec.
+            // This is important for eval() which returns the completion value.
+            if (body != null) {
+                Expression literal = new Literal(stringValue, directiveLocation);
+                body.add(new ExpressionStatement(literal, directiveLocation));
             }
 
             if ("use strict".equals(stringValue)) {

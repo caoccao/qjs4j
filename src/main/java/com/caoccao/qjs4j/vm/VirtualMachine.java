@@ -3309,7 +3309,10 @@ public final class VirtualMachine {
                         case JSPromise.NAME -> "Promise constructor cannot be invoked without 'new'";
                         default -> "Constructor " + constructorName + " requires 'new'";
                     };
-                    throw new JSVirtualMachineException(context.throwTypeError(errorMessage));
+                    pendingException = context.throwTypeError(errorMessage);
+                    context.clearPendingException();
+                    valueStack.push(JSUndefined.INSTANCE);
+                    return;
                 }
                 // Call native function with receiver as thisArg
                 try {
@@ -3405,7 +3408,7 @@ public final class VirtualMachine {
             // Clear property access tracking after successful call
             resetPropertyAccessTracking();
         } else {
-            // Not a function - throw TypeError
+            // Not a function - set pending TypeError so JS catch handlers can process it
             // Generate a descriptive error message similar to V8/QuickJS
             String message;
             if (!propertyAccessChain.isEmpty()) {
@@ -3423,7 +3426,9 @@ public final class VirtualMachine {
                 message = JSTypeChecking.typeof(callee) + " is not a function";
             }
             resetPropertyAccessTracking();
-            throw new JSVirtualMachineException(context.throwTypeError(message));
+            pendingException = context.throwTypeError(message);
+            context.clearPendingException();
+            valueStack.push(JSUndefined.INSTANCE);
         }
     }
 

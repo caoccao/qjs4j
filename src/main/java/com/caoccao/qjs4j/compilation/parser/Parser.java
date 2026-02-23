@@ -73,7 +73,9 @@ public final class Parser {
         SourceLocation location = ctx.getLocation();
 
         // Parse directives (like "use strict") at the beginning
-        boolean strict = ctx.parseDirectives();
+        // Pass body so directive strings are also added as expression statements
+        // (required for eval completion value per ES spec)
+        boolean strict = ctx.parseDirectives(body);
         ctx.strictMode = strict || ctx.moduleMode;
         ctx.lexer.setStrictMode(ctx.strictMode);
 

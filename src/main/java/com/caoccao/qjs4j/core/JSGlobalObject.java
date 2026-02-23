@@ -1808,6 +1808,9 @@ public final class JSGlobalObject {
             regexpConstructor.defineGetterConfigurable("$" + i);
         }
 
+        // Symbol.species getter - ES2024 22.2.4.2 get RegExp[@@species]
+        regexpConstructor.defineGetterConfigurable(JSSymbol.SPECIES, RegExpConstructor::getSpecies);
+
         global.definePropertyWritableConfigurable(JSRegExp.NAME, regexpConstructor);
     }
 

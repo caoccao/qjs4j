@@ -54,24 +54,45 @@ public final class JSRegExp extends JSObject {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        String pattern = "";
-        String flags = "";
-        if (args.length > 0) {
-            // First argument is the pattern
-            JSValue patternArg = args[0];
-            if (patternArg instanceof JSRegExp existingRegExp) {
-                // Copy from existing RegExp
-                pattern = existingRegExp.getPattern();
-                flags = args.length > 1 && !(args[1] instanceof JSUndefined)
-                        ? JSTypeConversions.toString(context, args[1]).value()
-                        : existingRegExp.getFlags();
-            } else if (!(patternArg instanceof JSUndefined)) {
+        JSValue patternArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue flagsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+
+        String pattern;
+        String flags;
+
+        if (patternArg instanceof JSRegExp existingRegExp) {
+            // Pattern is an existing RegExp - extract source and flags
+            pattern = existingRegExp.getPattern();
+            if (flagsArg instanceof JSUndefined) {
+                flags = existingRegExp.getFlags();
+            } else {
+                flags = JSTypeConversions.toString(context, flagsArg).value();
+                if (context.hasPendingException()) {
+                    return (JSObject) context.getPendingException();
+                }
+            }
+        } else {
+            // ES2024 21.2.3.2.2 RegExpInitialize:
+            // If pattern is undefined, let P be "". Else let P be ToString(pattern).
+            if (patternArg instanceof JSUndefined) {
+                pattern = "";
+            } else {
                 pattern = JSTypeConversions.toString(context, patternArg).value();
-                if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-                    flags = JSTypeConversions.toString(context, args[1]).value();
+                if (context.hasPendingException()) {
+                    return (JSObject) context.getPendingException();
+                }
+            }
+            // If flags is undefined, let F be "". Else let F be ToString(flags).
+            if (flagsArg instanceof JSUndefined) {
+                flags = "";
+            } else {
+                flags = JSTypeConversions.toString(context, flagsArg).value();
+                if (context.hasPendingException()) {
+                    return (JSObject) context.getPendingException();
                 }
             }
         }
+
         try {
             return context.createJSRegExp(pattern, flags);
         } catch (Exception e) {
