@@ -164,6 +164,7 @@ public class Test262Executor {
             while (!doneCalled[0] && System.currentTimeMillis() <= deadline) {
                 synchronized (runtime) {
                     runtime.runJobs();
+                    context.processMicrotasks();
                 }
                 if (!doneCalled[0]) {
                     try {
@@ -481,6 +482,7 @@ public class Test262Executor {
                 while (!closed && System.currentTimeMillis() <= deadline) {
                     synchronized (agentRuntime) {
                         agentRuntime.runJobs();
+                        agentContext.processMicrotasks();
                     }
                     try {
                         Thread.sleep(1);
@@ -491,6 +493,7 @@ public class Test262Executor {
                 }
                 synchronized (agentRuntime) {
                     agentRuntime.runJobs();
+                    agentContext.processMicrotasks();
                 }
             } catch (Exception e) {
                 String message = e.getMessage();
@@ -659,16 +662,16 @@ public class Test262Executor {
                                 Thread.currentThread().interrupt();
                                 return;
                             }
-                            synchronized (runtime) {
-                                ctx.enqueueMicrotask(() -> {
-                                    callback.call(ctx, JSUndefined.INSTANCE, new JSValue[0]);
-                                    if (ctx.hasPendingException()) {
-                                        ctx.clearAllPendingExceptions();
-                                    }
-                                });
-                                runtime.runJobs();
-                                ctx.processMicrotasks();
-                            }
+                            // Only enqueue the callback as a microtask.
+                            // Do NOT call runJobs()/processMicrotasks() here
+                            // because eval() may still be running on the main thread.
+                            // The main event loop will process the microtask.
+                            ctx.enqueueMicrotask(() -> {
+                                callback.call(ctx, JSUndefined.INSTANCE, new JSValue[0]);
+                                if (ctx.hasPendingException()) {
+                                    ctx.clearAllPendingExceptions();
+                                }
+                            });
                         }, "qjs4j-test262-setTimeout");
                         timerThread.setDaemon(true);
                         timerThread.start();

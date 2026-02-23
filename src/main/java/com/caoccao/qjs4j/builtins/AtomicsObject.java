@@ -1080,8 +1080,6 @@ public final class AtomicsObject {
             JSObject result = context.createJSObject();
             result.set(PropertyKey.ASYNC, JSBoolean.TRUE);
             result.set(PropertyKey.VALUE, promise);
-            JSContext promiseContext = context;
-            JSRuntime promiseRuntime = context.getRuntime();
             long timeoutMillis = Double.isInfinite(timeoutDouble)
                     ? -1L
                     : Math.min((long) timeoutDouble, Long.MAX_VALUE);
@@ -1093,13 +1091,11 @@ public final class AtomicsObject {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     waiterRegisteredLatch.countDown();
-                    promise.reject(new JSString("timed-out"));
-                } finally {
-                    synchronized (promiseRuntime) {
-                        promiseRuntime.runJobs();
-                        promiseContext.processMicrotasks();
-                    }
+                    promise.fulfill(new JSString("timed-out"));
                 }
+                // Do NOT call runJobs()/processMicrotasks() here.
+                // promise.fulfill() enqueues microtasks thread-safely;
+                // the main event loop will process them.
             }, "qjs4j-atomics-waitAsync");
             waitThread.setDaemon(true);
             waitThread.start();
