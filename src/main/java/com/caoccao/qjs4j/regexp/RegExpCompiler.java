@@ -117,8 +117,9 @@ public final class RegExpCompiler {
         }
     }
 
-    private void compileAlternative(CompileContext context) {
+    private void compileAlternative(CompileContext context, boolean isBackwardDirection) {
         // An alternative is a sequence of terms (atoms with optional quantifiers)
+        int alternativeStart = context.buffer.size();
         while (context.pos < context.codePoints.length) {
             int ch = context.codePoints[context.pos];
 
@@ -128,11 +129,15 @@ public final class RegExpCompiler {
             }
 
             // Parse a term (atom + optional quantifier)
-            compileTerm(context);
+            int termStart = context.buffer.size();
+            compileTerm(context, isBackwardDirection);
+            if (isBackwardDirection) {
+                reverseAlternativeTerm(context, alternativeStart, termStart);
+            }
         }
     }
 
-    private void compileAtom(CompileContext context) {
+    private void compileAtom(CompileContext context, boolean isBackwardDirection) {
         if (context.pos >= context.codePoints.length) {
             return;
         }
@@ -158,23 +163,29 @@ public final class RegExpCompiler {
             }
 
             case '.' -> {
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
                 context.buffer.appendU8(context.isDotAll() ?
                         RegExpOpcode.ANY.getCode() :
                         RegExpOpcode.DOT.getCode());
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
                 context.pos++;
             }
 
             case '\\' -> {
                 context.pos++;
-                compileEscape(context);
+                compileEscape(context, isBackwardDirection);
             }
 
             case '[' -> {
-                compileCharacterClass(context);
+                compileCharacterClass(context, isBackwardDirection);
             }
 
             case '(' -> {
-                compileGroup(context);
+                compileGroup(context, isBackwardDirection);
             }
 
             case '*', '+', '?' -> {
@@ -189,7 +200,7 @@ public final class RegExpCompiler {
                 if (context.isUnicodeMode()) {
                     throw new RegExpSyntaxException("Lone quantifier bracket at position " + context.pos);
                 }
-                compileLiteralChar(context, ch);
+                compileLiteralChar(context, ch, isBackwardDirection);
                 context.pos++;
             }
 
@@ -198,7 +209,7 @@ public final class RegExpCompiler {
                 if (context.isUnicodeMode()) {
                     throw new RegExpSyntaxException("Lone quantifier bracket at position " + context.pos);
                 }
-                compileLiteralChar(context, ch);
+                compileLiteralChar(context, ch, isBackwardDirection);
                 context.pos++;
             }
 
@@ -214,14 +225,17 @@ public final class RegExpCompiler {
 
             default -> {
                 // Literal character
-                compileLiteralChar(context, ch);
+                compileLiteralChar(context, ch, isBackwardDirection);
                 context.pos++;
             }
         }
     }
 
-    private void compileCharacterClass(CompileContext context) {
+    private void compileCharacterClass(CompileContext context, boolean isBackwardDirection) {
         // Character classes [abc], [^abc], [a-z]
+        if (isBackwardDirection) {
+            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+        }
         context.pos++; // Skip '['
 
         boolean inverted = false;
@@ -323,14 +337,17 @@ public final class RegExpCompiler {
             context.buffer.appendU32(ranges.get(i));   // start
             context.buffer.appendU32(ranges.get(i + 1)); // end
         }
+        if (isBackwardDirection) {
+            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+        }
     }
 
-    private void compileDisjunction(CompileContext context) {
+    private void compileDisjunction(CompileContext context, boolean isBackwardDirection) {
         // A disjunction is a sequence of alternatives separated by |
         int start = context.buffer.size();
 
         // Compile first alternative
-        compileAlternative(context);
+        compileAlternative(context, isBackwardDirection);
 
         // Handle additional alternatives
         while (context.pos < context.codePoints.length && context.codePoints[context.pos] == '|') {
@@ -349,7 +366,7 @@ public final class RegExpCompiler {
             context.buffer.appendU32(0); // Placeholder for jump offset
 
             // Compile next alternative
-            compileAlternative(context);
+            compileAlternative(context, isBackwardDirection);
 
             // Patch the GOTO offset
             int gotoOffset = context.buffer.size() - (gotoPos + 5);
@@ -357,39 +374,54 @@ public final class RegExpCompiler {
         }
     }
 
-    private void compileEscape(CompileContext context) {
+    private void compileEscape(CompileContext context, boolean isBackwardDirection) {
         if (context.pos >= context.codePoints.length) {
             throw new RegExpSyntaxException("Incomplete escape sequence");
         }
 
         int ch = context.codePoints[context.pos++];
         switch (ch) {
-            case 'n' -> compileLiteralChar(context, '\n');
-            case 'r' -> compileLiteralChar(context, '\r');
-            case 't' -> compileLiteralChar(context, '\t');
-            case 'f' -> compileLiteralChar(context, '\f');
-            case 'v' -> compileLiteralChar(context, '\u000B');
+            case 'n' -> compileLiteralChar(context, '\n', isBackwardDirection);
+            case 'r' -> compileLiteralChar(context, '\r', isBackwardDirection);
+            case 't' -> compileLiteralChar(context, '\t', isBackwardDirection);
+            case 'f' -> compileLiteralChar(context, '\f', isBackwardDirection);
+            case 'v' -> compileLiteralChar(context, '\u000B', isBackwardDirection);
             case 'd' -> {
                 // \d - match digits [0-9]
                 // Emit a simple character range check for now
                 // This is a simplified implementation - proper implementation would use RANGE opcode
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
                 context.buffer.appendU8(RegExpOpcode.RANGE.getCode());
                 context.buffer.appendU16(10); // length of range data = 1 range * 2 codepoints * 4 bytes + 2 bytes count
                 context.buffer.appendU16(1);  // 1 range
                 context.buffer.appendU32('0');
                 context.buffer.appendU32('9');
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
             }
             case 'D' -> {
                 // \D - match non-digits (not [0-9])
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
                 context.buffer.appendU8(RegExpOpcode.NOT_RANGE.getCode());
                 context.buffer.appendU16(10); // length of range data = 1 range * 2 codepoints * 4 bytes + 2 bytes count
                 context.buffer.appendU16(1);  // 1 range
                 context.buffer.appendU32('0');
                 context.buffer.appendU32('9');
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
             }
             case 'w' -> {
                 // \w - match word characters [a-zA-Z0-9_]
                 // Emit RANGE opcode with ranges for word characters
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
                 context.buffer.appendU8(RegExpOpcode.RANGE.getCode());
                 // Size: 2 bytes for count + (4 ranges * 2 values * 4 bytes each)
                 context.buffer.appendU16(2 + (4 * 8));
@@ -406,10 +438,16 @@ public final class RegExpCompiler {
                 // Range 4: 'a'-'z'
                 context.buffer.appendU32('a');
                 context.buffer.appendU32('z');
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
             }
             case 'W' -> {
                 // \W - match non-word characters (not [a-zA-Z0-9_])
                 // Emit NOT_RANGE opcode with same ranges as \w
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
                 context.buffer.appendU8(RegExpOpcode.NOT_RANGE.getCode());
                 // Size: 2 bytes for count + (4 ranges * 2 values * 4 bytes each)
                 context.buffer.appendU16(2 + (4 * 8));
@@ -426,14 +464,29 @@ public final class RegExpCompiler {
                 // Range 4: 'a'-'z'
                 context.buffer.appendU32('a');
                 context.buffer.appendU32('z');
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
             }
             case 's' -> {
                 // \s - match whitespace
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
                 context.buffer.appendU8(RegExpOpcode.SPACE.getCode());
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
             }
             case 'S' -> {
                 // \S - match non-whitespace
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
                 context.buffer.appendU8(RegExpOpcode.NOT_SPACE.getCode());
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
             }
             case 'b' -> {
                 // \b - match word boundary
@@ -451,7 +504,7 @@ public final class RegExpCompiler {
                 // AnnexB: In non-unicode mode with no named capture groups,
                 // \k is an identity escape matching literal 'k'
                 if (!context.isUnicodeMode() && namedCaptureIndices.isEmpty()) {
-                    compileLiteralChar(context, 'k');
+                    compileLiteralChar(context, 'k', isBackwardDirection);
                     break;
                 }
                 if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '<') {
@@ -470,18 +523,24 @@ public final class RegExpCompiler {
                     throw new RegExpSyntaxException("group name not defined");
                 }
 
-                context.buffer.appendU8(context.isIgnoreCase() ?
-                        RegExpOpcode.BACK_REFERENCE_I.getCode() :
-                        RegExpOpcode.BACK_REFERENCE.getCode());
+                context.buffer.appendU8(context.isIgnoreCase()
+                        ? (isBackwardDirection ? RegExpOpcode.BACKWARD_BACK_REFERENCE_I.getCode() : RegExpOpcode.BACK_REFERENCE_I.getCode())
+                        : (isBackwardDirection ? RegExpOpcode.BACKWARD_BACK_REFERENCE.getCode() : RegExpOpcode.BACK_REFERENCE.getCode()));
                 context.buffer.appendU8(groupNum);
             }
             case 'p', 'P' -> {
                 if (!context.isUnicodeMode()) {
-                    compileLiteralChar(context, ch);
+                    compileLiteralChar(context, ch, isBackwardDirection);
                     break;
                 }
                 int[] propertyRanges = parseUnicodePropertyEscape(context);
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
                 emitRanges(context, propertyRanges, ch == 'P');
+                if (isBackwardDirection) {
+                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                }
             }
             case '0' -> {
                 // \0 escape: null character or legacy octal escape
@@ -493,11 +552,11 @@ public final class RegExpCompiler {
                             throw new RegExpSyntaxException("Invalid escape sequence");
                         }
                     }
-                    compileLiteralChar(context, 0);
+                    compileLiteralChar(context, 0, isBackwardDirection);
                 } else {
                     // Non-Unicode mode: legacy octal escape (\0, \00, \000, etc.)
                     int value = parseLegacyOctalEscape(context, 0);
-                    compileLiteralChar(context, value);
+                    compileLiteralChar(context, value, isBackwardDirection);
                 }
             }
             case '1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
@@ -518,9 +577,9 @@ public final class RegExpCompiler {
 
                 if (groupNum < totalCaptureCount) {
                     // Valid backreference (including forward references)
-                    context.buffer.appendU8(context.isIgnoreCase() ?
-                            RegExpOpcode.BACK_REFERENCE_I.getCode() :
-                            RegExpOpcode.BACK_REFERENCE.getCode());
+                    context.buffer.appendU8(context.isIgnoreCase()
+                            ? (isBackwardDirection ? RegExpOpcode.BACKWARD_BACK_REFERENCE_I.getCode() : RegExpOpcode.BACK_REFERENCE_I.getCode())
+                            : (isBackwardDirection ? RegExpOpcode.BACKWARD_BACK_REFERENCE.getCode() : RegExpOpcode.BACK_REFERENCE.getCode()));
                     context.buffer.appendU8(groupNum);
                 } else if (!context.isUnicodeMode()) {
                     // AnnexB: In non-unicode mode, invalid backreferences are
@@ -544,10 +603,10 @@ public final class RegExpCompiler {
                                 break;
                             }
                         }
-                        compileLiteralChar(context, octalValue);
+                        compileLiteralChar(context, octalValue, isBackwardDirection);
                     } else {
                         // \8, \9 → identity escape (literal digit)
-                        compileLiteralChar(context, ch);
+                        compileLiteralChar(context, ch, isBackwardDirection);
                     }
                 } else {
                     // Unicode mode: invalid backreference is a syntax error
@@ -561,7 +620,7 @@ public final class RegExpCompiler {
                     if ((next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')) {
                         // Valid control escape: \cA-\cZ or \ca-\cz
                         context.pos++;
-                        compileLiteralChar(context, next % 32);
+                        compileLiteralChar(context, next % 32, isBackwardDirection);
                         break;
                     }
                 }
@@ -572,7 +631,7 @@ public final class RegExpCompiler {
                     throw new RegExpSyntaxException("Invalid control escape");
                 }
                 context.pos--; // back up to 'c' so it's re-parsed as next atom
-                compileLiteralChar(context, '\\');
+                compileLiteralChar(context, '\\', isBackwardDirection);
             }
             case 'x' -> {
                 // Hex escape \xHH
@@ -584,10 +643,10 @@ public final class RegExpCompiler {
                     int hex2 = hexValue(context.codePoints[context.pos + 1]);
                     context.pos += 2;
                     int value = (hex1 << 4) | hex2;
-                    compileLiteralChar(context, value);
+                    compileLiteralChar(context, value, isBackwardDirection);
                 } else if (!context.isUnicodeMode()) {
                     // AnnexB: In non-unicode mode, \x without valid hex is identity escape
-                    compileLiteralChar(context, 'x');
+                    compileLiteralChar(context, 'x', isBackwardDirection);
                 } else {
                     throw new RegExpSyntaxException("Invalid hex escape");
                 }
@@ -620,10 +679,10 @@ public final class RegExpCompiler {
                         if (digitCount == 0) {
                             throw new RegExpSyntaxException("Empty unicode escape");
                         }
-                        compileLiteralChar(context, value);
+                        compileLiteralChar(context, value, isBackwardDirection);
                     } else {
                         // Non-unicode mode: backslash-u is identity escape, '{' handled by caller
-                        compileLiteralChar(context, 'u');
+                        compileLiteralChar(context, 'u', isBackwardDirection);
                     }
                 } else {
                     // Check for \\uHHHH format (4 valid hex digits)
@@ -638,10 +697,10 @@ public final class RegExpCompiler {
                             value = (value << 4) | hexValue(context.codePoints[context.pos + i]);
                         }
                         context.pos += 4;
-                        compileLiteralChar(context, value);
+                        compileLiteralChar(context, value, isBackwardDirection);
                     } else if (!context.isUnicodeMode()) {
                         // AnnexB: In non-unicode mode, backslash-u without valid hex is identity escape
-                        compileLiteralChar(context, 'u');
+                        compileLiteralChar(context, 'u', isBackwardDirection);
                     } else {
                         throw new RegExpSyntaxException("Invalid unicode escape");
                     }
@@ -657,12 +716,12 @@ public final class RegExpCompiler {
                     }
                 }
                 // Non-unicode mode: any character is a valid identity escape (Annex B)
-                compileLiteralChar(context, ch);
+                compileLiteralChar(context, ch, isBackwardDirection);
             }
         }
     }
 
-    private void compileGroup(CompileContext context) {
+    private void compileGroup(CompileContext context, boolean isBackwardDirection) {
         // Capture groups (...) or non-capturing groups (?:...)
         context.pos++; // Skip '('
 
@@ -717,16 +776,20 @@ public final class RegExpCompiler {
                 groupNames.set(groupIndex, captureName);
             }
             // Save start
-            context.buffer.appendU8(RegExpOpcode.SAVE_START.getCode());
+            context.buffer.appendU8(isBackwardDirection
+                    ? RegExpOpcode.SAVE_END.getCode()
+                    : RegExpOpcode.SAVE_START.getCode());
             context.buffer.appendU8(groupIndex);
         }
 
         // Compile group contents
-        compileDisjunction(context);
+        compileDisjunction(context, isBackwardDirection);
 
         if (isCapturing) {
             // Save end
-            context.buffer.appendU8(RegExpOpcode.SAVE_END.getCode());
+            context.buffer.appendU8(isBackwardDirection
+                    ? RegExpOpcode.SAVE_START.getCode()
+                    : RegExpOpcode.SAVE_END.getCode());
             context.buffer.appendU8(groupIndex);
         }
 
@@ -751,6 +814,16 @@ public final class RegExpCompiler {
         }
     }
 
+    private void compileLiteralChar(CompileContext context, int ch, boolean isBackwardDirection) {
+        if (isBackwardDirection) {
+            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+        }
+        compileLiteralChar(context, ch);
+        if (isBackwardDirection) {
+            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+        }
+    }
+
     private void compileLookahead(CompileContext context, boolean isNegative) {
         // (?=...) positive lookahead or (?!...) negative lookahead
         int lookaheadStart = context.buffer.size();
@@ -761,8 +834,8 @@ public final class RegExpCompiler {
                 RegExpOpcode.LOOKAHEAD.getCode());
         context.buffer.appendU32(0); // Placeholder for length
 
-        // Compile lookahead contents
-        compileDisjunction(context);
+        // Compile lookahead contents (forward direction)
+        compileDisjunction(context, false);
 
         // Emit LOOKAHEAD_MATCH or NEGATIVE_LOOKAHEAD_MATCH
         context.buffer.appendU8(isNegative ?
@@ -788,7 +861,7 @@ public final class RegExpCompiler {
                 RegExpOpcode.LOOKBEHIND.getCode());
         context.buffer.appendU32(0); // Placeholder for length
 
-        compileDisjunction(context);
+        compileDisjunction(context, true);
 
         context.buffer.appendU8(isNegative ?
                 RegExpOpcode.NEGATIVE_LOOKBEHIND_MATCH.getCode() :
@@ -808,7 +881,7 @@ public final class RegExpCompiler {
         context.buffer.appendU8(RegExpOpcode.SAVE_START.getCode());
         context.buffer.appendU8(0); // Capture group 0
 
-        compileDisjunction(context);
+        compileDisjunction(context, false);
 
         // Save end of capture group 0
         context.buffer.appendU8(RegExpOpcode.SAVE_END.getCode());
@@ -1018,12 +1091,12 @@ public final class RegExpCompiler {
         }
     }
 
-    private void compileTerm(CompileContext context) {
+    private void compileTerm(CompileContext context, boolean isBackwardDirection) {
         int atomStart = context.buffer.size();
         int captureCountBeforeAtom = captureCount;
 
         // Parse the atom
-        compileAtom(context);
+        compileAtom(context, isBackwardDirection);
 
         // Check for quantifier
         if (context.pos < context.codePoints.length) {
@@ -1289,7 +1362,7 @@ public final class RegExpCompiler {
             int opcode = atomCode[pos] & 0xFF;
             RegExpOpcode op = RegExpOpcode.fromCode(opcode);
             switch (op) {
-                case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE:
+                case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE, PREV:
                     break;
                 case RANGE, RANGE_I, RANGE32, RANGE32_I, NOT_RANGE, NOT_RANGE_I: {
                     int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
@@ -1300,7 +1373,7 @@ public final class RegExpCompiler {
                      WORD_BOUNDARY, WORD_BOUNDARY_I, NOT_WORD_BOUNDARY, NOT_WORD_BOUNDARY_I,
                      SAVE_START, SAVE_END, SAVE_RESET, SET_CHAR_POS, SET_I32:
                     break;
-                case BACK_REFERENCE, BACK_REFERENCE_I:
+                case BACK_REFERENCE, BACK_REFERENCE_I, BACKWARD_BACK_REFERENCE, BACKWARD_BACK_REFERENCE_I:
                     return true;
                 default:
                     // Complex opcode (SPLIT, GOTO, etc.) - captures may not be initialized
@@ -1325,6 +1398,10 @@ public final class RegExpCompiler {
             switch (op) {
                 case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE:
                     // These always advance the position
+                    needCheck = false;
+                    break;
+                case PREV:
+                    // PREV moves the position in backward-compiled lookbehind atoms.
                     needCheck = false;
                     break;
                 case RANGE, RANGE_I: {
@@ -1784,6 +1861,18 @@ public final class RegExpCompiler {
             return ranges;
         }
         throw new RegExpSyntaxException("unknown unicode property name");
+    }
+
+    private void reverseAlternativeTerm(CompileContext context, int alternativeStart, int termStart) {
+        if (termStart <= alternativeStart || termStart >= context.buffer.size()) {
+            return;
+        }
+        int end = context.buffer.size();
+        byte[] previousTerms = context.buffer.getRange(alternativeStart, termStart - alternativeStart);
+        byte[] currentTerm = context.buffer.getRange(termStart, end - termStart);
+        context.buffer.truncate(alternativeStart);
+        context.buffer.append(currentTerm);
+        context.buffer.append(previousTerms);
     }
 
     private Map<String, Integer> scanNamedCaptureGroups(String pattern) {

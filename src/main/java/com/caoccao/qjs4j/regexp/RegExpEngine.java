@@ -412,6 +412,34 @@ public final class RegExpEngine {
                     pc += 2;
                 }
 
+                case BACKWARD_BACK_REFERENCE -> {
+                    int groupNum = bc[pc + 1] & 0xFF;
+                    if (!executionContext.matchBackwardBackReference(groupNum, false)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 2;
+                }
+
+                case BACKWARD_BACK_REFERENCE_I -> {
+                    int groupNum = bc[pc + 1] & 0xFF;
+                    if (!executionContext.matchBackwardBackReference(groupNum, true)) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 2;
+                }
+
                 case GOTO -> {
                     int offset = readU32(bc, pc + 1);
                     pc += 5 + offset;
@@ -496,6 +524,19 @@ public final class RegExpEngine {
                     pc += 2;
                 }
 
+                case PREV -> {
+                    if (!executionContext.movePrevious()) {
+                        if (!backtrackStack.isEmpty()) {
+                            BacktrackPoint bp = backtrackStack.pop();
+                            pc = bp.pc;
+                            executionContext.restoreState(bp);
+                            continue;
+                        }
+                        return false;
+                    }
+                    pc += 1;
+                }
+
                 case SAVE_RESET -> {
                     // Reset capture groups in range [start, end] to -1
                     int startCapture = bc[pc + 1] & 0xFF;
@@ -526,15 +567,7 @@ public final class RegExpEngine {
     }
 
     private ExecutionContext executeLookbehindAssertion(ExecutionContext outerContext, byte[] assertionBytecode) {
-        int endPos = outerContext.pos;
-        String prefixInput = outerContext.input.substring(0, outerContext.toCharIndex(endPos));
-        for (int startPos = 0; startPos <= endPos; startPos++) {
-            ExecutionContext assertionContext = executeStandalone(outerContext, prefixInput, assertionBytecode, startPos);
-            if (assertionContext != null && assertionContext.pos == endPos) {
-                return assertionContext;
-            }
-        }
-        return null;
+        return executeStandalone(outerContext, outerContext.input, assertionBytecode, outerContext.pos);
     }
 
     private ExecutionContext executeStandalone(
@@ -759,6 +792,37 @@ public final class RegExpEngine {
             return true;
         }
 
+        boolean matchBackwardBackReference(int groupNum, boolean ignoreCase) {
+            groupNum = resolveNamedBackReferenceGroup(groupNum);
+            if (groupNum >= captureCount || captureStarts[groupNum] == -1 || captureEnds[groupNum] == -1) {
+                return true;
+            }
+
+            int referenceStart = captureStarts[groupNum];
+            int referenceEnd = captureEnds[groupNum];
+            int referenceLength = referenceEnd - referenceStart;
+            if (referenceLength <= 0) {
+                return true;
+            }
+            if (pos < referenceLength) {
+                return false;
+            }
+
+            for (int referenceIndex = referenceEnd - 1; referenceIndex >= referenceStart; referenceIndex--) {
+                int referenceChar = codePoints[referenceIndex];
+                int currentChar = codePoints[pos - 1];
+                if (ignoreCase) {
+                    if (Character.toLowerCase(referenceChar) != Character.toLowerCase(currentChar)) {
+                        return false;
+                    }
+                } else if (referenceChar != currentChar) {
+                    return false;
+                }
+                pos--;
+            }
+            return true;
+        }
+
         boolean matchChar(int ch) {
             if (pos >= codePoints.length) {
                 return false;
@@ -967,6 +1031,14 @@ public final class RegExpEngine {
 
             // Boundary exists if one is word char and the other is not
             return prevIsWord != currIsWord;
+        }
+
+        boolean movePrevious() {
+            if (pos <= 0) {
+                return false;
+            }
+            pos--;
+            return true;
         }
 
         private int readU16(byte[] bc, int offset) {
