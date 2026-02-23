@@ -24,76 +24,50 @@ public final class JSEvalError extends JSError {
     public static final String NAME = "EvalError";
 
     /**
-     * Create an EvalError with an empty message.
-     */
-    public JSEvalError(JSContext context) {
-        this(context, "");
-    }
-
-    /**
      * Create an EvalError with a message.
      */
     public JSEvalError(JSContext context, String message) {
-        super(context, NAME, message);
+        super(context, message);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
+    public static JSValue create(JSContext context, JSValue... args) {
         String message = "";
         if (args.length > 0 && !args[0].isUndefined()) {
             message = JSTypeConversions.toString(context, args[0]).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
-        JSObject jsObject = new JSEvalError(context, message);
-        context.transferPrototype(jsObject, NAME);
-        return jsObject;
+        JSEvalError jsEvalError = context.createJSEvalError(message);
+        context.transferPrototype(jsEvalError, NAME);
+        if (args.length > 1) {
+            if (!JSError.installErrorCause(context, jsEvalError, args[1])) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+        return jsEvalError;
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        // Create Error prototype using the proper error class
-        JSError errorPrototype = new JSEvalError(context);
-        // EvalError.prototype.[[Prototype]] = Error.prototype (ES2024 20.5.5.1)
+        JSObject errorPrototype = new JSObject();
         context.transferPrototype(errorPrototype, JSError.NAME);
 
-        errorPrototype.set(PropertyKey.TO_STRING, new JSNativeFunction("toString", 0, JSError::errorToString));
+        errorPrototype.definePropertyWritableConfigurable("name", new JSString(NAME));
+        errorPrototype.definePropertyWritableConfigurable("message", new JSString(""));
 
-        // Standard Error(message)
-        int length = 1;
-
-        // Create Error constructor as a function (following QuickJS pattern)
-        // QuickJS uses JS_NewCConstructor for error constructors
         JSNativeFunction errorConstructor = new JSNativeFunction(
                 NAME,
-                length,
-                (childContext, thisObj, childArgs) -> {
-                    // The VM has already created thisObj with the correct prototype
-                    // We just need to initialize the error properties on thisObj
-                    if (!(thisObj instanceof JSObject obj)) {
-                        return JSUndefined.INSTANCE;
-                    }
-
-                    // Set name property
-                    obj.set(PropertyKey.NAME, new JSString(NAME));
-
-                    // Standard error: new Error(message, options)
-                    if (childArgs.length > 0 && !(childArgs[0] instanceof JSUndefined)) {
-                        String message = JSTypeConversions.toString(childContext, childArgs[0]).value();
-                        obj.defineProperty(PropertyKey.MESSAGE,
-                                PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
-                    }
-
-                    // InstallErrorCause(O, options)
-                    if (childArgs.length > 1) {
-                        JSError.installErrorCause(obj, childArgs[1]);
-                    }
-
-                    // Return undefined to use the thisObj created by the VM
-                    return JSUndefined.INSTANCE;
-                },
+                1,
+                (childContext, thisObj, childArgs) -> create(childContext, childArgs),
                 true);
         errorConstructor.definePropertyReadonlyNonConfigurable("prototype", errorPrototype);
-
-        // Set constructor property on prototype
-        errorPrototype.set(PropertyKey.CONSTRUCTOR, errorConstructor);
+        errorPrototype.definePropertyWritableConfigurable("constructor", errorConstructor);
 
         return errorConstructor;
+    }
+
+    @Override
+    public String getErrorName() {
+        return NAME;
     }
 }

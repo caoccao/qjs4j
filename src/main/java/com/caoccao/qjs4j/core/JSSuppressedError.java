@@ -26,97 +26,61 @@ public final class JSSuppressedError extends JSError {
     public static final String NAME = "SuppressedError";
 
     /**
-     * Create a SuppressedError with default values.
-     */
-    public JSSuppressedError(JSContext context) {
-        this(context, JSUndefined.INSTANCE, JSUndefined.INSTANCE, "");
-    }
-
-    /**
      * Create a SuppressedError with a message.
      */
     public JSSuppressedError(JSContext context, String message) {
-        this(context, JSUndefined.INSTANCE, JSUndefined.INSTANCE, message);
+        super(context, message);
     }
 
-    /**
-     * Create a SuppressedError with error, suppressed error, and message.
-     *
-     * @param context    The JavaScript context
-     * @param error      The main (primary) error
-     * @param suppressed The error that was suppressed during cleanup/dispose
-     * @param message    Optional custom message
-     */
-    public JSSuppressedError(JSContext context, JSValue error, JSValue suppressed, String message) {
-        super(context, NAME, message);
-        set(PropertyKey.ERROR, error);
-        set(PropertyKey.SUPPRESSED, suppressed);
-    }
-
-    public static JSObject create(JSContext context, JSValue... args) {
-        // SuppressedError has special constructor: new SuppressedError(error, suppressed, message)
-        JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue suppressed = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+    public static JSValue create(JSContext context, JSValue... args) {
+        // SuppressedError(error, suppressed, message)
         String message = "";
         if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
-            JSString messageStr = JSTypeConversions.toString(context, args[2]);
-            message = messageStr.value();
+            message = JSTypeConversions.toString(context, args[2]).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
-        return context.createJSSuppressedError(error, suppressed, message);
+
+        JSSuppressedError jsSuppressedError = context.createJSSuppressedError(message);
+
+        // Set error and suppressed properties
+        JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue suppressed = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        jsSuppressedError.set(PropertyKey.ERROR, error);
+        jsSuppressedError.set(PropertyKey.SUPPRESSED, suppressed);
+
+        // InstallErrorCause(O, options)
+        if (args.length > 3) {
+            if (!JSError.installErrorCause(context, jsSuppressedError, args[3])) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        return jsSuppressedError;
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        // Create Error prototype using the proper error class
-        JSError errorPrototype = new JSSuppressedError(context);
-        // SuppressedError.prototype.[[Prototype]] = Error.prototype (ES2024 20.5.5.1)
+        // Prototype is a plain object per ES spec
+        JSObject errorPrototype = new JSObject();
         context.transferPrototype(errorPrototype, JSError.NAME);
 
-        errorPrototype.set(PropertyKey.TO_STRING, new JSNativeFunction("toString", 0, JSError::errorToString));
+        // Properties: writable, non-enumerable, configurable
+        errorPrototype.definePropertyWritableConfigurable("name", new JSString(NAME));
+        errorPrototype.definePropertyWritableConfigurable("message", new JSString(""));
 
         // SuppressedError(error, suppressed, message)
         int length = 3;
 
-        // Create Error constructor as a function (following QuickJS pattern)
-        // QuickJS uses JS_NewCConstructor for error constructors
         JSNativeFunction errorConstructor = new JSNativeFunction(
                 NAME,
                 length,
-                (childContext, thisObj, childArgs) -> {
-                    // The VM has already created thisObj with the correct prototype
-                    // We just need to initialize the error properties on thisObj
-                    if (!(thisObj instanceof JSObject obj)) {
-                        return JSUndefined.INSTANCE;
-                    }
-
-                    // Set name property
-                    obj.set(PropertyKey.NAME, new JSString(NAME));
-
-                    // SuppressedError: new SuppressedError(error, suppressed, message, options)
-                    JSValue error = childArgs.length > 0 ? childArgs[0] : JSUndefined.INSTANCE;
-                    JSValue suppressed = childArgs.length > 1 ? childArgs[1] : JSUndefined.INSTANCE;
-                    obj.set(PropertyKey.ERROR, error);
-                    obj.set(PropertyKey.SUPPRESSED, suppressed);
-
-                    // If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
-                    if (childArgs.length > 2 && !(childArgs[2] instanceof JSUndefined)) {
-                        String message = JSTypeConversions.toString(childContext, childArgs[2]).value();
-                        obj.defineProperty(PropertyKey.MESSAGE,
-                                PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
-                    }
-
-                    // InstallErrorCause(O, options)
-                    if (childArgs.length > 3) {
-                        JSError.installErrorCause(obj, childArgs[3]);
-                    }
-
-                    // Return undefined to use the thisObj created by the VM
-                    return JSUndefined.INSTANCE;
-                },
+                (childContext, thisObj, childArgs) -> create(childContext, childArgs),
                 true);
         errorConstructor.definePropertyReadonlyNonConfigurable("prototype", errorPrototype);
 
-        // Set constructor property on prototype
-        errorPrototype.set(PropertyKey.CONSTRUCTOR, errorConstructor);
+        // Set constructor property on prototype (writable, non-enumerable, configurable)
+        errorPrototype.definePropertyWritableConfigurable("constructor", errorConstructor);
 
         return errorConstructor;
     }
@@ -126,6 +90,11 @@ public final class JSSuppressedError extends JSError {
      */
     public JSValue getError() {
         return get(PropertyKey.ERROR);
+    }
+
+    @Override
+    public String getErrorName() {
+        return NAME;
     }
 
     /**

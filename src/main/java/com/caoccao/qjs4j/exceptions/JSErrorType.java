@@ -36,11 +36,11 @@ public enum JSErrorType {
         this.prototypeConstructor = prototypeConstructor;
     }
 
-    public JSObject create(JSContext context, JSValue... args) {
+    public JSValue create(JSContext context, JSValue... args) {
         if (prototypeConstructor == null) {
             throw new JSException(context.throwTypeError("Constructor for " + this.name() + " is not implemented"));
         }
-        JSObject constructorObject = prototypeConstructor.construct(context, args);
+        JSValue constructorObject = prototypeConstructor.construct(context, args);
         if (constructorObject instanceof JSNativeFunction nativeFunction) {
             nativeFunction.setConstructorType(toConstructorType());
         }

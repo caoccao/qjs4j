@@ -183,6 +183,12 @@ public final class JSContext implements AutoCloseable {
         runtime.destroyContext(this);
     }
 
+    public JSAggregateError createJSAggregateError(String message) {
+        JSAggregateError jsError = new JSAggregateError(this, message);
+        transferPrototype(jsError, JSAggregateError.NAME);
+        return jsError;
+    }
+
     /**
      * Create a new JSArray with proper prototype chain.
      * Sets the array's prototype to Array.prototype from the global object.
@@ -399,6 +405,12 @@ public final class JSContext implements AutoCloseable {
         return jsError;
     }
 
+    public JSEvalError createJSEvalError(String message) {
+        JSEvalError jsError = new JSEvalError(this, message);
+        transferPrototype(jsError, JSEvalError.NAME);
+        return jsError;
+    }
+
     /**
      * Create a new JSFloat16Array with proper prototype chain.
      *
@@ -523,6 +535,18 @@ public final class JSContext implements AutoCloseable {
         return jsPromise;
     }
 
+    public JSRangeError createJSRangeError(String message) {
+        JSRangeError jsError = new JSRangeError(this, message);
+        transferPrototype(jsError, JSRangeError.NAME);
+        return jsError;
+    }
+
+    public JSReferenceError createJSReferenceError(String message) {
+        JSReferenceError jsError = new JSReferenceError(this, message);
+        transferPrototype(jsError, JSReferenceError.NAME);
+        return jsError;
+    }
+
     /**
      * Create a new JSRegExp with proper prototype chain.
      *
@@ -553,8 +577,8 @@ public final class JSContext implements AutoCloseable {
         return wrapper;
     }
 
-    public JSSuppressedError createJSSuppressedError(JSValue error, JSValue suppressed, String message) {
-        JSSuppressedError jsError = new JSSuppressedError(this, error, suppressed, message);
+    public JSSuppressedError createJSSuppressedError(String message) {
+        JSSuppressedError jsError = new JSSuppressedError(this, message);
         transferPrototype(jsError, JSSuppressedError.NAME);
         return jsError;
     }
@@ -563,6 +587,24 @@ public final class JSContext implements AutoCloseable {
         JSSymbolObject wrapper = new JSSymbolObject(value);
         transferPrototype(wrapper, JSSymbolObject.NAME);
         return wrapper;
+    }
+
+    public JSSyntaxError createJSSyntaxError(String message) {
+        JSSyntaxError jsError = new JSSyntaxError(this, message);
+        transferPrototype(jsError, JSSyntaxError.NAME);
+        return jsError;
+    }
+
+    public JSTypeError createJSTypeError(String message) {
+        JSTypeError jsError = new JSTypeError(this, message);
+        transferPrototype(jsError, JSTypeError.NAME);
+        return jsError;
+    }
+
+    public JSURIError createJSURIError(String message) {
+        JSURIError jsError = new JSURIError(this, message);
+        transferPrototype(jsError, JSURIError.NAME);
+        return jsError;
     }
 
     /**
@@ -1191,7 +1233,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSError throwError(JSError jsError) {
-        transferPrototype(jsError, jsError.getName().value());
+        transferPrototype(jsError, jsError.getErrorName());
         // Capture stack trace
         captureStackTrace(jsError);
         // Set as pending exception

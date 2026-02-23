@@ -73,7 +73,7 @@ public enum JSConstructorType {
         this.constructor = constructor;
     }
 
-    public JSObject create(JSContext context, JSValue... args) {
+    public JSValue create(JSContext context, JSValue... args) {
         if (constructor == null) {
             throw new JSException(context.throwTypeError("Constructor for " + this.name() + " is not implemented"));
         }

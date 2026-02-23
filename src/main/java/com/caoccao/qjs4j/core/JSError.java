@@ -28,103 +28,107 @@ public sealed class JSError extends JSObject permits
     protected final JSContext context;
 
     /**
-     * Create an Error with the default name 'Error'.
-     */
-    public JSError(JSContext context) {
-        this(context, "");
-    }
-
-    /**
      * Create an Error with a message.
      */
     public JSError(JSContext context, String message) {
-        this(context, NAME, message);
-    }
-
-    /**
-     * Create an Error with a specific name and message.
-     */
-    public JSError(JSContext context, String name, String message) {
         super();
         this.context = context;
-        set(PropertyKey.NAME, new JSString(name));
-        set(PropertyKey.MESSAGE, new JSString(message));
+        if (message != null && !message.isEmpty()) {
+            defineProperty(PropertyKey.MESSAGE,
+                    PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
+        }
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
+    public static JSValue create(JSContext context, JSValue... args) {
         String message = "";
         if (args.length > 0 && !args[0].isUndefined()) {
             message = JSTypeConversions.toString(context, args[0]).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
-        return context.createJSError(message);
+        JSError jsError = context.createJSError(message);
+        if (args.length > 1) {
+            if (!installErrorCause(context, jsError, args[1])) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+        return jsError;
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        // Create Error prototype using the proper error class
-        JSError errorPrototype = new JSError(context);
+        // Error.prototype is a plain object (not an Error instance) per ES spec / QuickJS
+        JSObject errorPrototype = new JSObject();
         // Error.prototype.[[Prototype]] = Object.prototype (ES2024 20.5.3)
         context.transferPrototype(errorPrototype, JSObject.NAME);
 
-        errorPrototype.set(PropertyKey.TO_STRING, new JSNativeFunction("toString", 0, JSError::errorToString));
+        // All prototype properties: writable, non-enumerable, configurable
+        errorPrototype.definePropertyWritableConfigurable("name", new JSString(NAME));
+        errorPrototype.definePropertyWritableConfigurable("message", new JSString(""));
+        errorPrototype.definePropertyWritableConfigurable("toString",
+                new JSNativeFunction("toString", 0, JSError::errorToString));
 
-        // Standard Error(message)
-        int length = 1;
-
-        // Create Error constructor as a function (following QuickJS pattern)
-        // QuickJS uses JS_NewCConstructor for error constructors
+        // Standard Error(message, options) — length = 1
         JSNativeFunction errorConstructor = new JSNativeFunction(
                 NAME,
-                length,
-                (childContext, thisObj, childArgs) -> {
-                    // The VM has already created thisObj with the correct prototype
-                    // We just need to initialize the error properties on thisObj
-                    if (!(thisObj instanceof JSObject obj)) {
-                        return JSUndefined.INSTANCE;
-                    }
-
-                    // Set name property
-                    obj.set(PropertyKey.NAME, new JSString(NAME));
-
-                    // Standard error: new Error(message, options)
-                    // Step 3: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
-                    if (childArgs.length > 0 && !(childArgs[0] instanceof JSUndefined)) {
-                        String message = JSTypeConversions.toString(childContext, childArgs[0]).value();
-                        obj.defineProperty(PropertyKey.MESSAGE,
-                                PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
-                    }
-
-                    // InstallErrorCause(O, options)
-                    if (childArgs.length > 1) {
-                        installErrorCause(obj, childArgs[1]);
-                    }
-
-                    // Return undefined to use the thisObj created by the VM
-                    return JSUndefined.INSTANCE;
-                },
+                1,
+                (childContext, thisObj, childArgs) -> create(childContext, childArgs),
                 true);
         errorConstructor.definePropertyReadonlyNonConfigurable("prototype", errorPrototype);
 
-        // Set constructor property on prototype
-        errorPrototype.set(PropertyKey.CONSTRUCTOR, errorConstructor);
+        // Error.isError static method (ES2024)
+        errorConstructor.definePropertyWritableConfigurable("isError",
+                new JSNativeFunction("isError", 1, JSError::isError));
+
+        // Constructor property on prototype (writable, non-enumerable, configurable)
+        errorPrototype.definePropertyWritableConfigurable("constructor", errorConstructor);
 
         return errorConstructor;
     }
 
+    /**
+     * Error.prototype.toString() — ES2024 20.5.3.4
+     * Following QuickJS js_error_toString.
+     */
     public static JSValue errorToString(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject error)) {
-            return new JSString("[object Object]");
+            return context.throwTypeError("Error.prototype.toString requires that 'this' be an Object");
         }
 
-        JSValue nameValue = error.get(PropertyKey.NAME);
-        JSValue messageValue = error.get(PropertyKey.MESSAGE);
+        JSValue nameValue = error.get(context, PropertyKey.NAME);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String name;
+        if (nameValue instanceof JSUndefined) {
+            name = NAME;
+        } else {
+            name = JSTypeConversions.toString(context, nameValue).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
 
-        String name = nameValue instanceof JSString ? ((JSString) nameValue).value() : "Error";
-        String message = messageValue instanceof JSString ? ((JSString) messageValue).value() : "";
+        JSValue messageValue = error.get(context, PropertyKey.MESSAGE);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String message;
+        if (messageValue instanceof JSUndefined) {
+            message = "";
+        } else {
+            message = JSTypeConversions.toString(context, messageValue).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
 
+        if (name.isEmpty()) {
+            return new JSString(message);
+        }
         if (message.isEmpty()) {
             return new JSString(name);
         }
-
         return new JSString(name + ": " + message);
     }
 
@@ -132,15 +136,30 @@ public sealed class JSError extends JSObject permits
      * InstallErrorCause ( O, options )
      * ES2022: If options is an object with a "cause" property, install it as a
      * non-enumerable, writable, configurable own property on the error object.
+     * Returns true on normal completion, false on abrupt completion (exception pending in context).
      */
-    public static void installErrorCause(JSObject obj, JSValue options) {
+    public static boolean installErrorCause(JSContext context, JSObject obj, JSValue options) {
         if (options instanceof JSObject optionsObj) {
             if (optionsObj.has("cause")) {
-                JSValue cause = optionsObj.get("cause");
+                JSValue cause = optionsObj.get(context, PropertyKey.CAUSE);
+                if (context.hasPendingException()) {
+                    return false;
+                }
                 obj.defineProperty(PropertyKey.CAUSE,
                         PropertyDescriptor.dataDescriptor(cause, true, false, true));
             }
         }
+        return true;
+    }
+
+    /**
+     * Error.isError(arg) — ES2024.
+     * Returns true if arg is an error object (has [[ErrorData]] internal slot).
+     * Following QuickJS js_error_isError which checks class_id == JS_CLASS_ERROR.
+     */
+    public static JSValue isError(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        return JSBoolean.valueOf(arg instanceof JSError);
     }
 
     @Override
@@ -153,18 +172,30 @@ public sealed class JSError extends JSObject permits
                 Objects.equals(getMessage(), jsError.getMessage());
     }
 
+    public String getErrorName() {
+        return NAME;
+    }
+
     /**
      * Get the error message.
      */
     public JSString getMessage() {
-        return JSTypeConversions.toString(context, get(PropertyKey.MESSAGE));
+        JSValue msgValue = get(PropertyKey.MESSAGE);
+        if (msgValue.isUndefined()) {
+            return new JSString("");
+        }
+        return JSTypeConversions.toString(context, msgValue);
     }
 
     /**
      * Get the error name.
      */
     public JSString getName() {
-        return JSTypeConversions.toString(context, get(PropertyKey.NAME));
+        JSValue nameValue = get(PropertyKey.NAME);
+        if (nameValue.isUndefined()) {
+            return new JSString(getErrorName());
+        }
+        return JSTypeConversions.toString(context, nameValue);
     }
 
     @Override

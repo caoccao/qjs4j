@@ -150,8 +150,10 @@ public final class TypedArrayConstructor {
         }
         JSObject constructor = (JSObject) thisArg;
         JSArray sourceArray = context.createJSArray(args);
-        JSObject result = constructorType.create(context, sourceArray);
-        context.transferPrototype(result, constructor);
+        JSValue result = constructorType.create(context, sourceArray);
+        if (result instanceof JSObject jsObject) {
+            context.transferPrototype(jsObject, constructor);
+        }
         return result;
     }
 

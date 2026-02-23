@@ -265,19 +265,23 @@ public final class VirtualMachine {
             return thisObject;
         }
 
-        JSObject result;
+        JSValue result;
         try {
             result = constructorType.create(context, args);
         } catch (JSErrorException e) {
             throw new JSVirtualMachineException(
                     context.throwError(e.getErrorType().name(), e.getMessage()));
         }
+        if (context.hasPendingException()) {
+            throw new JSVirtualMachineException(context.getPendingException().toString(),
+                    context.getPendingException());
+        }
 
         // Per ES spec and QuickJS (js_create_from_ctor), resolve the prototype
         // from newTarget AFTER argument processing so that argument errors
         // (e.g. ToIndex(Symbol) → TypeError) are thrown before accessing
         // newTarget.prototype.
-        if (result != null && !result.isProxy()) {
+        if (result instanceof JSObject jsObject && !jsObject.isProxy()) {
             JSObject resolvedPrototype = null;
             if (newTarget instanceof JSObject newTargetObject) {
                 JSValue proto = newTargetObject.get(context, PropertyKey.PROTOTYPE);
@@ -290,16 +294,16 @@ public final class VirtualMachine {
                 }
             }
             if (resolvedPrototype != null) {
-                result.setPrototype(resolvedPrototype);
+                jsObject.setPrototype(resolvedPrototype);
             } else {
-                context.transferPrototype(result, function);
+                context.transferPrototype(jsObject, function);
             }
-            if (result instanceof JSDataView dataView && !dataView.validateConstructorState(context)) {
+            if (jsObject instanceof JSDataView dataView && !dataView.validateConstructorState(context)) {
                 throw new JSVirtualMachineException(context.getPendingException().toString(),
                         context.getPendingException());
             }
         }
-        return result != null ? result : JSUndefined.INSTANCE;
+        return result;
     }
 
     public JSPromise consumeAwaitSuspensionPromise() {
