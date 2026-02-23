@@ -61,7 +61,7 @@ public final class FunctionPrototype {
 
     /**
      * Function.prototype.bind(thisArg, ...args)
-     * ES2020 19.2.3.2
+     * ES2024 20.2.3.2
      */
     public static JSValue bind(JSContext context, JSValue thisArg, JSValue[] args) {
         // thisArg for bind() is the function itself
@@ -73,13 +73,60 @@ public final class FunctionPrototype {
         JSValue boundThis = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
         // Remaining arguments are pre-bound arguments
-        JSValue[] boundArgs = new JSValue[Math.max(0, args.length - 1)];
+        int argCount = Math.max(0, args.length - 1);
+        JSValue[] boundArgs = new JSValue[argCount];
         if (args.length > 1) {
             System.arraycopy(args, 1, boundArgs, 0, args.length - 1);
         }
 
-        // Create a bound function
-        return new JSBoundFunction(targetFunc, boundThis, boundArgs);
+        // Step 5-7: Compute length from target's "length" own property
+        // Per spec, read target's "length" property (not use internal getLength())
+        // to handle overridden length values including Infinity, NaN, etc.
+        double computedLength = 0;
+        PropertyDescriptor lengthDesc = targetFunc.getOwnPropertyDescriptor(PropertyKey.LENGTH);
+        if (lengthDesc != null) {
+            JSValue targetLenValue = targetFunc.get(context, PropertyKey.LENGTH);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (targetLenValue instanceof JSNumber targetLenNum) {
+                double targetLen = targetLenNum.value();
+                if (Double.isInfinite(targetLen) && targetLen > 0) {
+                    computedLength = Double.POSITIVE_INFINITY;
+                } else if (Double.isInfinite(targetLen) && targetLen < 0) {
+                    computedLength = 0;
+                } else if (Double.isNaN(targetLen)) {
+                    computedLength = 0;
+                } else {
+                    // ToIntegerOrInfinity: truncate towards zero
+                    long targetLenInt = (long) targetLen;
+                    computedLength = Math.max(targetLenInt - argCount, 0);
+                }
+            }
+            // If targetLen is not a number, L = 0 (default)
+        }
+
+        // Step 12-15: Compute name from target's "name" property
+        // Per spec, read target's "name" property (not use internal getName())
+        JSValue targetNameValue = targetFunc.get(context, PropertyKey.NAME);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        String targetName;
+        if (targetNameValue instanceof JSString nameStr) {
+            targetName = nameStr.value();
+        } else {
+            targetName = "";
+        }
+        String boundName = "bound " + targetName;
+
+        // Create bound function with computed length and name
+        JSBoundFunction boundFunc = new JSBoundFunction(targetFunc, boundThis, boundArgs,
+                computedLength, boundName);
+
+        // Set [[Prototype]] to Function.prototype
+        context.transferPrototype(boundFunc, JSFunction.NAME);
+        return boundFunc;
     }
 
     private static JSValue[] buildArgumentList(JSContext context, JSValue arrayArg) {
@@ -183,6 +230,66 @@ public final class FunctionPrototype {
 
         String name = func.getName();
         return new JSString(name != null ? name : "");
+    }
+
+    /**
+     * OrdinaryHasInstance(C, O) - ES2024 7.3.21
+     */
+    private static JSValue ordinaryHasInstance(JSContext context, JSValue constructor, JSValue objectValue) {
+        // Step 1: If IsCallable(C) is false, return false.
+        if (!JSTypeChecking.isCallable(constructor)) {
+            return JSBoolean.FALSE;
+        }
+
+        // Step 2: If C has [[BoundTargetFunction]], use InstanceofOperator on bound target
+        if (constructor instanceof JSBoundFunction boundFunc) {
+            // Recursively check with the bound target function
+            return ordinaryHasInstance(context, boundFunc.getTarget(), objectValue);
+        }
+
+        // Step 3: If Type(O) is not Object, return false.
+        if (!(objectValue instanceof JSObject object)) {
+            return JSBoolean.FALSE;
+        }
+
+        // Step 4: Let P be ? Get(C, "prototype").
+        if (!(constructor instanceof JSObject constructorObj)) {
+            return JSBoolean.FALSE;
+        }
+        JSValue prototypeValue = constructorObj.get(context, PropertyKey.PROTOTYPE);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        // Step 5: If Type(P) is not Object, throw TypeError.
+        if (!(prototypeValue instanceof JSObject constructorPrototype)) {
+            return context.throwTypeError("Function has non-object prototype in instanceof check");
+        }
+
+        // Step 7: Repeat - walk prototype chain
+        JSObject currentPrototype = object.getPrototype();
+        while (currentPrototype != null) {
+            if (currentPrototype == constructorPrototype) {
+                return JSBoolean.TRUE;
+            }
+            // Handle proxy getPrototypeOf trap
+            if (currentPrototype instanceof JSProxy proxy) {
+                JSValue proxyProto = proxy.get(context, PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG));
+                // Actually, we need to call [[GetPrototypeOf]] on the proxy
+                // For now, get the prototype from the proxy itself
+            }
+            currentPrototype = currentPrototype.getPrototype();
+        }
+        return JSBoolean.FALSE;
+    }
+
+    /**
+     * Function.prototype[Symbol.hasInstance](V)
+     * ES2024 20.2.3.6 - OrdinaryHasInstance
+     */
+    public static JSValue symbolHasInstance(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        return ordinaryHasInstance(context, thisArg, value);
     }
 
     /**

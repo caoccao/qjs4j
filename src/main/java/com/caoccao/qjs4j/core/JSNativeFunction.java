@@ -45,19 +45,7 @@ public final class JSNativeFunction extends JSFunction {
 
         // Set up function properties on the object
         // Functions are objects in JavaScript and have these standard properties
-        // Use empty string for name property if name is null (e.g., Function.prototype)
-
-        // Per ECMAScript spec, the "name" property has attributes:
-        // { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
-        this.defineProperty(
-                PropertyKey.NAME,
-                PropertyDescriptor.dataDescriptor(
-                        new JSString(this.name != null ? this.name : ""),
-                        false, // writable
-                        false, // enumerable
-                        true   // configurable
-                )
-        );
+        // Per ES spec, "length" comes before "name" in property order
 
         // Per ECMAScript spec, the "length" property has attributes:
         // { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
@@ -65,6 +53,19 @@ public final class JSNativeFunction extends JSFunction {
                 PropertyKey.LENGTH,
                 PropertyDescriptor.dataDescriptor(
                         JSNumber.of(this.length),
+                        false, // writable
+                        false, // enumerable
+                        true   // configurable
+                )
+        );
+
+        // Per ECMAScript spec, the "name" property has attributes:
+        // { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
+        // Use empty string for name property if name is null (e.g., Function.prototype)
+        this.defineProperty(
+                PropertyKey.NAME,
+                PropertyDescriptor.dataDescriptor(
+                        new JSString(this.name != null ? this.name : ""),
                         false, // writable
                         false, // enumerable
                         true   // configurable

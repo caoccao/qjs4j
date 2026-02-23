@@ -1145,13 +1145,14 @@ public final class JSGlobalObject {
         functionPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, FunctionPrototype::toString_));
 
         // Add 'arguments' and 'caller' as accessor properties per QuickJS js_throw_type_error.
-        // Getter: for non-strict bytecode functions with prototype, return undefined (ES5 compat).
-        // For strict, arrow, native, or setter calls, throw TypeError.
-        JSNativeFunction callerArgumentsGetter = new JSNativeFunction(
+        // Single function used for both getter and setter per ES spec %ThrowTypeError%.
+        // When called as getter (args.length == 0): non-strict bytecode functions return undefined (ES5 compat).
+        // When called as setter (args.length >= 1) or for strict/arrow/native: throw TypeError.
+        JSNativeFunction throwTypeError = new JSNativeFunction(
                 "throwTypeError",
                 0,
                 (childContext, thisObj, args) -> {
-                    if (thisObj instanceof JSBytecodeFunction bytecodeFunc) {
+                    if (args.length == 0 && thisObj instanceof JSBytecodeFunction bytecodeFunc) {
                         if (!bytecodeFunc.isStrict() && !bytecodeFunc.isArrow()) {
                             return JSUndefined.INSTANCE;
                         }
@@ -1159,15 +1160,19 @@ public final class JSGlobalObject {
                     return childContext.throwTypeError(
                             "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them");
                 });
-        JSNativeFunction callerArgumentsSetter = new JSNativeFunction(
-                "throwTypeError",
-                1,
-                (childContext, thisObj, args) ->
-                        childContext.throwTypeError(
-                                "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"));
+        // Store as the %ThrowTypeError% intrinsic for sharing with strict arguments.callee
+        context.setThrowTypeErrorIntrinsic(throwTypeError);
 
-        functionPrototype.defineGetterSetterConfigurable("arguments", callerArgumentsGetter, callerArgumentsSetter);
-        functionPrototype.defineGetterSetterConfigurable("caller", callerArgumentsGetter, callerArgumentsSetter);
+        functionPrototype.defineGetterSetterConfigurable("arguments", throwTypeError, throwTypeError);
+        functionPrototype.defineGetterSetterConfigurable("caller", throwTypeError, throwTypeError);
+
+        // Function.prototype[Symbol.hasInstance] - implements OrdinaryHasInstance
+        // Per ES spec 19.2.3.6: writable: false, enumerable: false, configurable: false
+        JSNativeFunction hasInstanceFunc = new JSNativeFunction("[Symbol.hasInstance]", 1,
+                FunctionPrototype::symbolHasInstance);
+        functionPrototype.defineProperty(
+                PropertyKey.SYMBOL_HAS_INSTANCE,
+                PropertyDescriptor.dataDescriptor(hasInstanceFunc, false, false, false));
 
         // Add 'length' and 'name' data properties
         functionPrototype.definePropertyConfigurable("length", JSNumber.of(0));

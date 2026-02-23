@@ -867,7 +867,15 @@ final class FunctionClassCompiler {
         }
     }
 
+    void compileFunctionExpression(FunctionExpression functionExpression, boolean forceNonConstructor) {
+        compileFunctionExpressionInternal(functionExpression, forceNonConstructor);
+    }
+
     void compileFunctionExpression(FunctionExpression functionExpression) {
+        compileFunctionExpressionInternal(functionExpression, false);
+    }
+
+    private void compileFunctionExpressionInternal(FunctionExpression functionExpression, boolean forceNonConstructor) {
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
         BytecodeCompiler functionCompiler = new BytecodeCompiler(ctx.strictMode, ctx.captureResolver);
@@ -998,8 +1006,9 @@ final class FunctionClassCompiler {
 
         // Create JSBytecodeFunction
         int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter() != null);
-        // Per ES spec FunctionAllocate: async functions and async generators are NOT constructable
-        boolean isFuncConstructor = !functionExpression.isAsync();
+        // Per ES spec FunctionAllocate: async functions, async generators, and
+        // getter/setter methods are NOT constructable
+        boolean isFuncConstructor = !forceNonConstructor && !functionExpression.isAsync();
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
                 functionName,

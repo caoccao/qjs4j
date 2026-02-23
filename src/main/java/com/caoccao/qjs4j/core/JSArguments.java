@@ -120,14 +120,19 @@ public final class JSArguments extends JSObject {
         // Handle callee and caller properties based on strict mode
         if (isStrict) {
             // In strict mode, callee is an accessor property that throws TypeError
-            // Create a thrower function that returns TypeError when called
-            JSNativeFunction thrower = new JSNativeFunction(
-                    "ThrowTypeError",
-                    0,
-                    (ctx, thisArg, argsArray) -> ctx.throwTypeError(
-                            "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"
-                    )
-            );
+            // Use the shared %ThrowTypeError% intrinsic from the context so that
+            // Function.prototype.caller/arguments getter === arguments.callee getter
+            JSNativeFunction thrower = context.getThrowTypeErrorIntrinsic();
+            if (thrower == null) {
+                // Fallback if intrinsic not yet initialized
+                thrower = new JSNativeFunction(
+                        "ThrowTypeError",
+                        0,
+                        (ctx, thisArg, argsArray) -> ctx.throwTypeError(
+                                "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"
+                        )
+                );
+            }
 
             // Define callee as accessor with thrower for both get and set
             PropertyDescriptor calleeDesc = PropertyDescriptor.accessorDescriptor(

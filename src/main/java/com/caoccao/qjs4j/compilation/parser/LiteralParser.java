@@ -215,11 +215,18 @@ record LiteralParser(ParserContext ctx, ParserDelegates delegates) {
                     elements.add(new SpreadElement(argument, spreadLocation));
                     if (ctx.match(TokenType.COMMA)) {
                         ctx.advance();
+                    } else if (!ctx.match(TokenType.RBRACKET)) {
+                        // After a spread element, expect comma or closing bracket
+                        ctx.expect(TokenType.RBRACKET);
                     }
                 } else {
                     elements.add(delegates.expressions.parseAssignmentExpression());
                     if (ctx.match(TokenType.COMMA)) {
                         ctx.advance();
+                    } else if (!ctx.match(TokenType.RBRACKET)) {
+                        // After an element, expect comma or closing bracket
+                        // This catches cases like [a b] which should be a SyntaxError
+                        ctx.expect(TokenType.RBRACKET);
                     }
                 }
             } while (!ctx.match(TokenType.RBRACKET) && !ctx.match(TokenType.EOF));

@@ -74,6 +74,8 @@ public final class JSContext implements AutoCloseable {
     private int stackDepth;
     // Execution state
     private boolean strictMode;
+    // The %ThrowTypeError% intrinsic (shared across Function.prototype and strict arguments)
+    private JSNativeFunction throwTypeErrorIntrinsic;
     private boolean waitable;
 
     /**
@@ -1018,6 +1020,15 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Get the %ThrowTypeError% intrinsic function.
+     * This is the single shared function used for Function.prototype caller/arguments
+     * and strict mode arguments.callee per ES spec.
+     */
+    public JSNativeFunction getThrowTypeErrorIntrinsic() {
+        return throwTypeErrorIntrinsic;
+    }
+
+    /**
      * Get the virtual machine for this context.
      */
     public VirtualMachine getVirtualMachine() {
@@ -1183,6 +1194,14 @@ public final class JSContext implements AutoCloseable {
      */
     public void setPromiseRejectCallback(IJSPromiseRejectCallback callback) {
         this.promiseRejectCallback = callback;
+    }
+
+    /**
+     * Set the %ThrowTypeError% intrinsic function.
+     * Called during global object initialization.
+     */
+    public void setThrowTypeErrorIntrinsic(JSNativeFunction throwTypeError) {
+        this.throwTypeErrorIntrinsic = throwTypeError;
     }
 
     public void setWaitable(boolean waitable) {

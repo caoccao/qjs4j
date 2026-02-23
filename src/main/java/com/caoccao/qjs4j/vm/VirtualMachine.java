@@ -52,6 +52,7 @@ public final class VirtualMachine {
     private int generatorResumeIndex;
     private List<JSGeneratorState.ResumeRecord> generatorResumeRecords;
     private int interruptCounter;
+    private JSValue lastConstructorThisArg;  // Saved from frame before return for derived constructor check
     private JSValue pendingException;
     private boolean propertyAccessLock;  // When true, don't update lastPropertyAccess (during argument evaluation)
     private YieldResult yieldResult;  // Set when generator yields
@@ -225,6 +226,12 @@ public final class VirtualMachine {
                         JSValue exception = context.getPendingException();
                         throw new JSVirtualMachineException(exception.toString(), exception);
                     }
+                    // ES spec GetPrototypeFromConstructor step 4a: GetFunctionRealm(constructor)
+                    // If newTarget is a revoked Proxy, throw TypeError
+                    if (newTargetObject instanceof JSProxy proxy && proxy.isRevoked()) {
+                        throw new JSVirtualMachineException(
+                                context.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked"));
+                    }
                     context.transferPrototypeFromConstructor(thisObject, function);
                     if (context.hasPendingException()) {
                         JSValue exception = context.getPendingException();
@@ -239,9 +246,17 @@ public final class VirtualMachine {
                 }
             }
 
+            // Check if this is a derived constructor
+            boolean isDerived = function instanceof JSBytecodeFunction bcFunc
+                    && bcFunc.isDerivedConstructor();
+
+            // For derived constructors, use JSUndefined as initial this
+            // (this must be initialized by super() call)
+            JSValue constructThis = isDerived ? JSUndefined.INSTANCE : thisObject;
+
             JSValue result;
             if (function instanceof JSNativeFunction nativeFunc) {
-                result = nativeFunc.call(context, thisObject, args);
+                result = nativeFunc.call(context, constructThis, args);
                 if (context.hasPendingException()) {
                     JSValue exception = context.getPendingException();
                     String errorMessage = "Unhandled exception in constructor";
@@ -254,13 +269,35 @@ public final class VirtualMachine {
                     throw new JSVirtualMachineException(errorMessage);
                 }
             } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
-                result = execute(bytecodeFunction, thisObject, args, newTarget);
+                result = execute(bytecodeFunction, constructThis, args, newTarget);
             } else {
                 result = JSUndefined.INSTANCE;
             }
 
+            // ES spec step 13: validate constructor return value
             if (result instanceof JSObject) {
                 return result;
+            }
+            if (isDerived) {
+                // ES spec step 13c: If result is not undefined, throw TypeError
+                if (!(result instanceof JSUndefined)) {
+                    throw new JSVirtualMachineException(
+                            context.throwTypeError("Derived constructors may only return object or undefined"));
+                }
+                // ES spec step 15: Return GetThisBinding()
+                // If super() was never called, this is still uninitialized (JSUndefined)
+                // In that case throw ReferenceError
+                // Use lastConstructorThisArg saved by RETURN/RETURN_UNDEF before frame was popped
+                JSValue finalThis = lastConstructorThisArg;
+                if (finalThis == null || finalThis instanceof JSUndefined) {
+                    throw new JSVirtualMachineException(
+                            context.throwReferenceError("Must call super constructor in derived class before accessing 'this' or returning from derived constructor"));
+                }
+                if (finalThis instanceof JSObject finalThisObj) {
+                    return finalThisObj;
+                }
+                throw new JSVirtualMachineException(
+                        context.throwReferenceError("Must call super constructor in derived class before accessing 'this' or returning from derived constructor"));
             }
             return thisObject;
         }
@@ -2143,6 +2180,8 @@ public final class VirtualMachine {
                     }
                     case RETURN -> {
                         JSValue returnValue = (JSValue) stack[--sp];
+                        // Save thisArg before popping frame (for derived constructor check)
+                        lastConstructorThisArg = frame.getThisArg();
                         valueStack.stackTop = restoreStackTop;
                         currentFrame = previousFrame;
                         if (savedStrictMode) {
@@ -2153,6 +2192,8 @@ public final class VirtualMachine {
                         return returnValue;
                     }
                     case RETURN_UNDEF -> {
+                        // Save thisArg before popping frame (for derived constructor check)
+                        lastConstructorThisArg = frame.getThisArg();
                         valueStack.stackTop = restoreStackTop;
                         currentFrame = previousFrame;
                         if (savedStrictMode) {
@@ -2478,6 +2519,15 @@ public final class VirtualMachine {
                         prototype.set(PropertyKey.CONSTRUCTOR, constructor);
                         setObjectName(constructor, new JSString(className));
 
+                        // Mark constructor as a class constructor (prevents calling without 'new')
+                        if (constructorFunc instanceof JSBytecodeFunction bytecodeConstructor) {
+                            bytecodeConstructor.setClassConstructor(true);
+                            // Mark as derived constructor if there is a superclass
+                            if (superClass != JSUndefined.INSTANCE) {
+                                bytecodeConstructor.setDerivedConstructor(true);
+                            }
+                        }
+
                         // Push prototype and constructor onto stack
                         stack[sp++] = prototype;
                         stack[sp++] = constructor;
@@ -2561,6 +2611,10 @@ public final class VirtualMachine {
                                     default -> "";
                                 };
                                 setObjectName(methodFunc, new JSString(namePrefix + computedName.value()));
+                                // Getter/setter methods are not constructable - remove prototype property
+                                if (methodKind == 1 || methodKind == 2) {
+                                    methodFunc.delete(PropertyKey.PROTOTYPE);
+                                }
                             }
 
                             switch (methodKind) {
@@ -3312,6 +3366,20 @@ public final class VirtualMachine {
         }
 
         if (callee instanceof JSFunction function) {
+            // Per ES spec: If F's [[FunctionKind]] is "classConstructor", throw TypeError
+            boolean isClassCtor = function instanceof JSClass;
+            if (!isClassCtor && function instanceof JSBytecodeFunction bytecodeFunc) {
+                isClassCtor = bytecodeFunc.isClassConstructor();
+            }
+            if (isClassCtor) {
+                resetPropertyAccessTracking();
+                pendingException = context.throwTypeError("Class constructor " + function.getName()
+                        + " cannot be invoked without 'new'");
+                context.clearPendingException();
+                valueStack.push(JSUndefined.INSTANCE);
+                return;
+            }
+
             if (function instanceof JSNativeFunction nativeFunc) {
                 // Check if this function requires 'new'
                 if (nativeFunc.requiresNew()) {
@@ -4792,31 +4860,14 @@ public final class VirtualMachine {
         }
 
         if (constructTrap == JSUndefined.INSTANCE || constructTrap == null) {
+            // ES2024 10.5.13 step 7: If trap is undefined, return ? Construct(target, args, newTarget)
             if (target instanceof JSProxy targetProxy) {
                 return proxyConstruct(targetProxy, args, newTarget);
             }
-
-            JSObject instance = new JSObject();
-            if (target instanceof JSObject targetObj) {
-                context.transferPrototype(instance, targetObj);
+            if (target instanceof JSFunction targetFunc) {
+                return constructFunction(targetFunc, args, newTarget);
             }
-
-            JSValue result;
-            if (target instanceof JSNativeFunction nativeFunc) {
-                result = nativeFunc.call(context, instance, args);
-            } else if (target instanceof JSBytecodeFunction bytecodeFunc) {
-                result = execute(bytecodeFunc, instance, args, newTarget);
-            } else if (target instanceof JSFunction targetFunc) {
-                result = targetFunc.call(context, instance, args);
-            } else {
-                return instance;
-            }
-
-            if (result instanceof JSObject) {
-                return result;
-            } else {
-                return instance;
-            }
+            throw new JSException(context.throwTypeError("proxy target is not a constructor"));
         }
 
         if (!(constructTrap instanceof JSFunction constructFunc)) {

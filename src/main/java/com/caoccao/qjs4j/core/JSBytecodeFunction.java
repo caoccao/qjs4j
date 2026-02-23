@@ -51,6 +51,8 @@ public final class JSBytecodeFunction extends JSFunction {
     private final int selfCaptureIndex;
     private final boolean strict;
     private int[] captureSourceInfos;
+    private boolean classConstructor;
+    private boolean derivedConstructor;
     private boolean hasParameterExpressions;
     private int selfLocalIndex;
     private String sourceCode;
@@ -142,11 +144,12 @@ public final class JSBytecodeFunction extends JSFunction {
         selfLocalIndex = -1;
 
         // Set up function properties on the object
-        // Per ES spec, name and length are {writable: false, enumerable: false, configurable: true}
-        this.defineProperty(PropertyKey.NAME,
-                PropertyDescriptor.dataDescriptor(new JSString(this.name), false, false, true));
+        // Per ES spec, length comes before name in property order
+        // Both are {writable: false, enumerable: false, configurable: true}
         this.defineProperty(PropertyKey.LENGTH,
                 PropertyDescriptor.dataDescriptor(JSNumber.of(this.length), false, false, true));
+        this.defineProperty(PropertyKey.NAME,
+                PropertyDescriptor.dataDescriptor(new JSString(this.name), false, false, true));
 
         // Every function (except arrow functions) has a prototype property
         if (prototype != null) {
@@ -1077,8 +1080,23 @@ public final class JSBytecodeFunction extends JSFunction {
     /**
      * Check if this function can be used as a constructor.
      */
+    /**
+     * Check if this is a class constructor.
+     * Class constructors throw TypeError when called without 'new'.
+     */
+    public boolean isClassConstructor() {
+        return classConstructor;
+    }
+
     public boolean isConstructor() {
         return isConstructor;
+    }
+
+    /**
+     * Check if this is a derived class constructor (extends a parent class).
+     */
+    public boolean isDerivedConstructor() {
+        return derivedConstructor;
     }
 
     /**
@@ -1107,6 +1125,22 @@ public final class JSBytecodeFunction extends JSFunction {
     /**
      * Set whether this function has parameter expressions.
      */
+    /**
+     * Mark this function as a class constructor.
+     * Called during DEFINE_CLASS opcode execution.
+     */
+    public void setClassConstructor(boolean classConstructor) {
+        this.classConstructor = classConstructor;
+    }
+
+    /**
+     * Mark this function as a derived class constructor.
+     * Called during DEFINE_CLASS opcode execution when a superclass is present.
+     */
+    public void setDerivedConstructor(boolean derivedConstructor) {
+        this.derivedConstructor = derivedConstructor;
+    }
+
     public void setHasParameterExpressions(boolean hasParameterExpressions) {
         this.hasParameterExpressions = hasParameterExpressions;
     }

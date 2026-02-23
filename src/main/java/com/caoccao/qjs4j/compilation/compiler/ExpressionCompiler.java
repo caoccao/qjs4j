@@ -465,8 +465,8 @@ final class ExpressionCompiler {
                     compileExpression(prop.key());
                 }
 
-                // Compile the getter/setter function
-                delegates.functions.compileFunctionExpression((FunctionExpression) prop.value());
+                // Compile the getter/setter function (not constructable per ES spec)
+                delegates.functions.compileFunctionExpression((FunctionExpression) prop.value(), true);
 
                 // DEFINE_METHOD_COMPUTED with flags: kind (1=get, 2=set) | enumerable (4)
                 int methodKind = "get".equals(kind) ? 1 : 2;

@@ -23,22 +23,41 @@ public final class JSBoundFunction extends JSFunction {
     public static final String NAME = JSFunction.NAME;
     private final JSValue[] boundArgs;
     private final JSValue boundThis;
+    private final double computedLength;
+    private final String computedName;
     private final JSFunction target;
 
     public JSBoundFunction(JSFunction target, JSValue boundThis, JSValue[] boundArgs) {
+        this(target, boundThis, boundArgs,
+                Math.max(0, target.getLength() - (boundArgs != null ? boundArgs.length : 0)),
+                "bound " + (target.getName() != null ? target.getName() : ""));
+    }
+
+    public JSBoundFunction(JSFunction target, JSValue boundThis, JSValue[] boundArgs,
+                           double computedLength, String computedName) {
         super(); // Initialize as JSObject
         this.target = target;
         this.boundThis = boundThis;
         this.boundArgs = boundArgs != null ? boundArgs.clone() : new JSValue[0];
+        this.computedLength = computedLength;
+        this.computedName = computedName != null ? computedName : "bound ";
 
         // Set up function properties on the object
         // Per ECMAScript spec, bound functions have "name" and "length" properties
         // with attributes: { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
         // Following QuickJS implementation: use defineProperty with only configurable=true
+
+        // Length can be Infinity or a large double, use JSNumber for full range
+        JSValue lengthValue;
+        if (Double.isInfinite(this.computedLength) || this.computedLength > Integer.MAX_VALUE) {
+            lengthValue = JSNumber.of(this.computedLength);
+        } else {
+            lengthValue = JSNumber.of((int) this.computedLength);
+        }
         this.defineProperty(
-                PropertyKey.NAME,
+                PropertyKey.LENGTH,
                 PropertyDescriptor.dataDescriptor(
-                        new JSString(getName()),
+                        lengthValue,
                         false, // writable
                         false, // enumerable
                         true   // configurable
@@ -46,9 +65,9 @@ public final class JSBoundFunction extends JSFunction {
         );
 
         this.defineProperty(
-                PropertyKey.LENGTH,
+                PropertyKey.NAME,
                 PropertyDescriptor.dataDescriptor(
-                        JSNumber.of(getLength()),
+                        new JSString(this.computedName),
                         false, // writable
                         false, // enumerable
                         true   // configurable
@@ -64,16 +83,15 @@ public final class JSBoundFunction extends JSFunction {
 
     @Override
     public int getLength() {
-        return Math.max(0, target.getLength() - boundArgs.length);
+        if (Double.isInfinite(computedLength) || computedLength > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) computedLength;
     }
 
     @Override
     public String getName() {
-        String targetName = target.getName();
-        if (targetName == null) {
-            targetName = "";
-        }
-        return "bound " + targetName;
+        return computedName;
     }
 
     public JSFunction getTarget() {
