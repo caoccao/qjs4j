@@ -1059,7 +1059,7 @@ public final class JSGlobalObject {
         datePrototype.definePropertyWritableConfigurable("toTimeString", new JSNativeFunction("toTimeString", 0, DatePrototype::toTimeString));
         datePrototype.definePropertyWritableConfigurable("toUTCString", toUTCString);
         datePrototype.definePropertyWritableConfigurable("valueOf", new JSNativeFunction("valueOf", 0, DatePrototype::valueOf));
-        datePrototype.definePropertyWritableConfigurable(JSSymbol.TO_PRIMITIVE, toPrimitive);
+        datePrototype.definePropertyConfigurable(JSSymbol.TO_PRIMITIVE, toPrimitive);
 
         JSNativeFunction dateConstructor = new JSNativeFunction(JSDate.NAME, 7, DateConstructor::call, true);
         dateConstructor.definePropertyReadonlyNonConfigurable("prototype", datePrototype);
@@ -1997,7 +1997,7 @@ public final class JSGlobalObject {
 
         JSNativeFunction symbolToPrimitive = new JSNativeFunction("[Symbol.toPrimitive]", 1, SymbolPrototype::toPrimitive);
         symbolToPrimitive.initializePrototypeChain(context);
-        symbolPrototype.definePropertyWritableConfigurable(JSSymbol.TO_PRIMITIVE, symbolToPrimitive);
+        symbolPrototype.definePropertyConfigurable(JSSymbol.TO_PRIMITIVE, symbolToPrimitive);
 
         symbolPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSSymbol.NAME));
 

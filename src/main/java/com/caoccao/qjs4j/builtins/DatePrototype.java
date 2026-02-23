@@ -460,8 +460,13 @@ public final class DatePrototype {
             return context.throwTypeError("not an object");
         }
 
-        String hint = args.length > 0 ? JSTypeConversions.toString(context, args[0]).value() : "default";
-        return switch (hint) {
+        // Per ES2024 20.4.4.45 and QuickJS: hint must be a string primitive.
+        // If hint is not a string (undefined, null, object, etc.), throw TypeError.
+        JSValue hintArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (!(hintArg instanceof JSString hintString)) {
+            return context.throwTypeError("invalid hint");
+        }
+        return switch (hintString.value()) {
             case "number" -> ordinaryToPrimitive(context, obj, false);
             case "string", "default" -> ordinaryToPrimitive(context, obj, true);
             default -> context.throwTypeError("invalid hint");
