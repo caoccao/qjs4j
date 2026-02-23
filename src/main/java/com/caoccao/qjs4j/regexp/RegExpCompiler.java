@@ -1526,6 +1526,15 @@ public final class RegExpCompiler {
                 }
                 codePoint = escapedCodePoint.codePoint();
                 pos = escapedCodePoint.nextPos();
+                if (Character.isHighSurrogate((char) codePoint) && pos < codePoints.length && codePoints[pos] == '\\') {
+                    EscapedCodePoint trailingEscapedCodePoint = parseUnicodeEscapeInGroupName(codePoints, pos);
+                    if (trailingEscapedCodePoint != null && Character.isLowSurrogate((char) trailingEscapedCodePoint.codePoint())) {
+                        codePoint = Character.toCodePoint(
+                                (char) codePoint,
+                                (char) trailingEscapedCodePoint.codePoint());
+                        pos = trailingEscapedCodePoint.nextPos();
+                    }
+                }
             } else {
                 pos++;
             }

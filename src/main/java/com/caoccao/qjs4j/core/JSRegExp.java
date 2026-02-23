@@ -49,47 +49,60 @@ public final class JSRegExp extends JSObject {
             throw new RuntimeException("Invalid regular expression: " + e.getMessage(), e);
         }
 
-        // Per spec, lastIndex is an own data property.
-        this.set("lastIndex", JSNumber.of(0));
+        // Per spec, lastIndex is an own data property:
+        // writable, non-enumerable, non-configurable.
+        this.defineProperty(
+                PropertyKey.LAST_INDEX,
+                PropertyDescriptor.dataDescriptor(JSNumber.of(0), true, false, false)
+        );
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
         JSValue patternArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue flagsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
-        String pattern;
-        String flags;
+        JSValue patternValue;
+        JSValue flagsValue;
 
-        if (patternArg instanceof JSRegExp existingRegExp) {
-            // Pattern is an existing RegExp - extract source and flags
-            pattern = existingRegExp.getPattern();
+        if (isRegExpLike(context, patternArg)) {
+            if (context.hasPendingException()) {
+                return (JSObject) context.getPendingException();
+            }
+            if (!(patternArg instanceof JSObject patternObject)) {
+                return context.throwTypeError("Invalid RegExp pattern");
+            }
+            patternValue = patternObject.get(context, PropertyKey.fromString("source"));
+            if (context.hasPendingException()) {
+                return (JSObject) context.getPendingException();
+            }
             if (flagsArg instanceof JSUndefined) {
-                flags = existingRegExp.getFlags();
-            } else {
-                flags = JSTypeConversions.toString(context, flagsArg).value();
+                flagsValue = patternObject.get(context, PropertyKey.fromString("flags"));
                 if (context.hasPendingException()) {
                     return (JSObject) context.getPendingException();
                 }
+            } else {
+                flagsValue = flagsArg;
             }
         } else {
-            // ES2024 21.2.3.2.2 RegExpInitialize:
-            // If pattern is undefined, let P be "". Else let P be ToString(pattern).
-            if (patternArg instanceof JSUndefined) {
-                pattern = "";
-            } else {
-                pattern = JSTypeConversions.toString(context, patternArg).value();
-                if (context.hasPendingException()) {
-                    return (JSObject) context.getPendingException();
-                }
+            if (context.hasPendingException()) {
+                return (JSObject) context.getPendingException();
             }
-            // If flags is undefined, let F be "". Else let F be ToString(flags).
-            if (flagsArg instanceof JSUndefined) {
-                flags = "";
-            } else {
-                flags = JSTypeConversions.toString(context, flagsArg).value();
-                if (context.hasPendingException()) {
-                    return (JSObject) context.getPendingException();
-                }
+            patternValue = patternArg instanceof JSUndefined ? new JSString("") : patternArg;
+            flagsValue = flagsArg instanceof JSUndefined ? new JSString("") : flagsArg;
+        }
+
+        String pattern = "";
+        String flags = "";
+        if (!(patternValue instanceof JSUndefined)) {
+            pattern = JSTypeConversions.toString(context, patternValue).value();
+            if (context.hasPendingException()) {
+                return (JSObject) context.getPendingException();
+            }
+        }
+        if (!(flagsValue instanceof JSUndefined)) {
+            flags = JSTypeConversions.toString(context, flagsValue).value();
+            if (context.hasPendingException()) {
+                return (JSObject) context.getPendingException();
             }
         }
 
@@ -98,6 +111,20 @@ public final class JSRegExp extends JSObject {
         } catch (Exception e) {
             return context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
         }
+    }
+
+    private static boolean isRegExpLike(JSContext context, JSValue value) {
+        if (!(value instanceof JSObject objectValue)) {
+            return false;
+        }
+        JSValue matchValue = objectValue.get(context, PropertyKey.SYMBOL_MATCH);
+        if (context.hasPendingException()) {
+            return false;
+        }
+        if (!(matchValue instanceof JSUndefined)) {
+            return JSTypeConversions.toBoolean(matchValue).value();
+        }
+        return value instanceof JSRegExp;
     }
 
     /**

@@ -37,30 +37,110 @@ public final class StringPrototype {
         return createHTML(context, thisArg, args, "a", "name");
     }
 
-    private static String applyRegExpReplacementPattern(String replacementTemplate, String[] captures, String[] groupNames) {
-        String replacement = replacementTemplate;
-        if (captures != null) {
-            for (int i = captures.length - 1; i >= 0; i--) {
-                if (captures[i] != null) {
-                    replacement = replacement.replace("$" + i, captures[i]);
+    private static String applyRegExpReplacement(
+            JSContext context,
+            JSValue replaceValue,
+            String input,
+            int matchStart,
+            int matchEnd,
+            String[] captures,
+            String[] groupNames
+    ) {
+        if (replaceValue instanceof JSFunction replaceFunction) {
+            JSValue[] callbackArgs = buildRegExpReplaceCallbackArgs(context, input, matchStart, captures, groupNames);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            JSValue callbackResult = replaceFunction.call(context, JSUndefined.INSTANCE, callbackArgs);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            return JSTypeConversions.toString(context, callbackResult).value();
+        }
+        String replacementTemplate = JSTypeConversions.toString(context, replaceValue).value();
+        if (context.hasPendingException()) {
+            return null;
+        }
+        return applyRegExpReplacementPattern(replacementTemplate, input, matchStart, matchEnd, captures, groupNames);
+    }
+
+    private static String applyRegExpReplacementPattern(
+            String replacementTemplate,
+            String input,
+            int matchStart,
+            int matchEnd,
+            String[] captures,
+            String[] groupNames
+    ) {
+        StringBuilder resultBuilder = new StringBuilder(replacementTemplate.length() + 16);
+        int replacementIndex = 0;
+        while (replacementIndex < replacementTemplate.length()) {
+            char currentChar = replacementTemplate.charAt(replacementIndex);
+            if (currentChar != '$' || replacementIndex + 1 >= replacementTemplate.length()) {
+                resultBuilder.append(currentChar);
+                replacementIndex++;
+                continue;
+            }
+            char nextChar = replacementTemplate.charAt(replacementIndex + 1);
+            if (nextChar == '$') {
+                resultBuilder.append('$');
+                replacementIndex += 2;
+                continue;
+            }
+            if (nextChar == '&') {
+                resultBuilder.append(captures != null && captures.length > 0 && captures[0] != null ? captures[0] : "");
+                replacementIndex += 2;
+                continue;
+            }
+            if (nextChar == '`') {
+                resultBuilder.append(input, 0, matchStart);
+                replacementIndex += 2;
+                continue;
+            }
+            if (nextChar == '\'') {
+                resultBuilder.append(input.substring(matchEnd));
+                replacementIndex += 2;
+                continue;
+            }
+            if (nextChar == '<') {
+                int closeIndex = replacementTemplate.indexOf('>', replacementIndex + 2);
+                if (closeIndex >= 0) {
+                    String groupName = replacementTemplate.substring(replacementIndex + 2, closeIndex);
+                    boolean hasNamedCaptures = hasNamedCaptures(groupNames);
+                    String namedCaptureValue = getNamedCaptureReplacement(groupName, captures, groupNames);
+                    if (namedCaptureValue != null) {
+                        resultBuilder.append(namedCaptureValue);
+                    } else if (hasNamedCaptures) {
+                    } else {
+                        resultBuilder.append(replacementTemplate, replacementIndex, closeIndex + 1);
+                    }
+                    replacementIndex = closeIndex + 1;
+                    continue;
                 }
             }
-            if (captures.length > 0 && captures[0] != null) {
-                replacement = replacement.replace("$&", captures[0]);
-            }
-        }
-        if (captures != null && groupNames != null) {
-            int maxLength = Math.min(captures.length, groupNames.length);
-            for (int i = 1; i < maxLength; i++) {
-                String groupName = groupNames[i];
-                if (groupName != null) {
-                    replacement = replacement.replace(
-                            "$<" + groupName + ">",
-                            captures[i] != null ? captures[i] : "");
+            if (nextChar >= '1' && nextChar <= '9') {
+                int captureIndex = nextChar - '0';
+                int consumedDigits = 1;
+                if (replacementIndex + 2 < replacementTemplate.length()) {
+                    char secondDigit = replacementTemplate.charAt(replacementIndex + 2);
+                    if (secondDigit >= '0' && secondDigit <= '9') {
+                        int twoDigitCaptureIndex = captureIndex * 10 + (secondDigit - '0');
+                        if (captures != null && twoDigitCaptureIndex < captures.length) {
+                            captureIndex = twoDigitCaptureIndex;
+                            consumedDigits = 2;
+                        }
+                    }
+                }
+                if (captures != null && captureIndex < captures.length) {
+                    resultBuilder.append(captures[captureIndex] != null ? captures[captureIndex] : "");
+                    replacementIndex += 1 + consumedDigits;
+                    continue;
                 }
             }
+            resultBuilder.append('$');
+            replacementIndex++;
         }
-        return replacement;
+        return resultBuilder.toString();
     }
 
     /**
@@ -114,6 +194,29 @@ public final class StringPrototype {
      */
     public static JSValue bold(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "b", null);
+    }
+
+    private static JSValue[] buildRegExpReplaceCallbackArgs(
+            JSContext context,
+            String input,
+            int matchStart,
+            String[] captures,
+            String[] groupNames
+    ) {
+        String[] matchCaptures = captures != null ? captures : new String[]{""};
+        boolean hasNamedCaptures = hasNamedCaptures(groupNames);
+        int callbackArgCount = matchCaptures.length + 2 + (hasNamedCaptures ? 1 : 0);
+        JSValue[] callbackArgs = new JSValue[callbackArgCount];
+        for (int captureIndex = 0; captureIndex < matchCaptures.length; captureIndex++) {
+            String captureValue = matchCaptures[captureIndex];
+            callbackArgs[captureIndex] = captureValue != null ? new JSString(captureValue) : JSUndefined.INSTANCE;
+        }
+        callbackArgs[matchCaptures.length] = JSNumber.of(matchStart);
+        callbackArgs[matchCaptures.length + 1] = new JSString(input);
+        if (hasNamedCaptures) {
+            callbackArgs[matchCaptures.length + 2] = createNamedGroupsObject(captures, groupNames);
+        }
+        return callbackArgs;
     }
 
     /**
@@ -212,6 +315,24 @@ public final class StringPrototype {
         result.append('>').append(str.value()).append("</").append(tag).append('>');
 
         return new JSString(result.toString());
+    }
+
+    private static JSObject createNamedGroupsObject(String[] captures, String[] groupNames) {
+        JSObject groupsObject = new JSObject();
+        groupsObject.setPrototype(null);
+        if (captures == null || groupNames == null) {
+            return groupsObject;
+        }
+        int maxLength = Math.min(captures.length, groupNames.length);
+        for (int captureIndex = 1; captureIndex < maxLength; captureIndex++) {
+            String groupName = groupNames[captureIndex];
+            if (groupName == null) {
+                continue;
+            }
+            JSValue captureValue = captures[captureIndex] != null ? new JSString(captures[captureIndex]) : JSUndefined.INSTANCE;
+            groupsObject.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(groupName), captureValue);
+        }
+        return groupsObject;
     }
 
     private static JSValue createNamedGroupsValue(String[] captures, String[] groupNames) {
@@ -337,6 +458,43 @@ public final class StringPrototype {
             }
         }
         return JSNumber.of(length);
+    }
+
+    private static String getNamedCaptureReplacement(String groupName, String[] captures, String[] groupNames) {
+        if (captures == null || groupNames == null) {
+            return null;
+        }
+        String replacement = null;
+        boolean found = false;
+        boolean foundMatchedCapture = false;
+        int maxLength = Math.min(captures.length, groupNames.length);
+        for (int captureIndex = 1; captureIndex < maxLength; captureIndex++) {
+            if (groupName.equals(groupNames[captureIndex])) {
+                found = true;
+                if (captures[captureIndex] != null) {
+                    replacement = captures[captureIndex];
+                    foundMatchedCapture = true;
+                } else if (!foundMatchedCapture) {
+                    replacement = "";
+                }
+            }
+        }
+        if (!found) {
+            return null;
+        }
+        return replacement;
+    }
+
+    private static boolean hasNamedCaptures(String[] groupNames) {
+        if (groupNames == null) {
+            return false;
+        }
+        for (String groupName : groupNames) {
+            if (groupName != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -809,8 +967,6 @@ public final class StringPrototype {
 
         JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
-        String replaceStr = JSTypeConversions.toString(context, replaceValue).value();
-
         // Handle RegExp
         if (searchValue instanceof JSRegExp regexp) {
             if (regexp.isGlobal()) {
@@ -831,12 +987,18 @@ public final class StringPrototype {
                 int matchStart = indices[0][0];
                 int matchEnd = indices[0][1];
 
-                // Build result with replacement
                 String[] captures = result.captures();
-                String replacement = applyRegExpReplacementPattern(
-                        replaceStr,
+                String replacement = applyRegExpReplacement(
+                        context,
+                        replaceValue,
+                        s,
+                        matchStart,
+                        matchEnd,
                         captures,
                         regexp.getBytecode().groupNames());
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
 
                 String resultStr = s.substring(0, matchStart) + replacement + s.substring(matchEnd);
                 return new JSString(resultStr);
@@ -844,6 +1006,7 @@ public final class StringPrototype {
         }
 
         // Handle string search
+        String replaceStr = JSTypeConversions.toString(context, replaceValue).value();
         String searchStr = JSTypeConversions.toString(context, searchValue).value();
 
         // Handle empty search string: insert at position 0
@@ -891,8 +1054,6 @@ public final class StringPrototype {
 
         JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
-        String replaceStr = JSTypeConversions.toString(context, replaceValue).value();
-
         // Handle RegExp
         if (searchValue instanceof JSRegExp regexp) {
             RegExpEngine engine = regexp.getEngine();
@@ -920,12 +1081,18 @@ public final class StringPrototype {
                 // Append text before match
                 result.append(s, lastIndex, matchStart);
 
-                // Build replacement with special patterns
                 String[] captures = matchResult.captures();
-                String replacement = applyRegExpReplacementPattern(
-                        replaceStr,
+                String replacement = applyRegExpReplacement(
+                        context,
+                        replaceValue,
+                        s,
+                        matchStart,
+                        matchEnd,
                         captures,
                         regexp.getBytecode().groupNames());
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
 
                 // Append replacement
                 result.append(replacement);
@@ -948,6 +1115,7 @@ public final class StringPrototype {
         }
 
         // Handle string search
+        String replaceStr = JSTypeConversions.toString(context, replaceValue).value();
         String searchStr = JSTypeConversions.toString(context, searchValue).value();
 
         // Handle empty search string: insert replacement at every position

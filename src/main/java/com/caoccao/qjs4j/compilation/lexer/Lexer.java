@@ -343,7 +343,21 @@ public final class Lexer {
                 continue;
             }
 
-            if (!isIdentifierPart(peek())) {
+            char nextChar = peek();
+            if (Character.isHighSurrogate(nextChar)
+                    && position + 1 < source.length()
+                    && Character.isLowSurrogate(source.charAt(position + 1))) {
+                int codePoint = Character.toCodePoint(nextChar, source.charAt(position + 1));
+                if (!isIdentifierPartCodePoint(codePoint)) {
+                    break;
+                }
+                advance();
+                advance();
+                valueBuilder.appendCodePoint(codePoint);
+                continue;
+            }
+
+            if (!isIdentifierPart(nextChar)) {
                 break;
             }
             valueBuilder.append(advance());
@@ -813,6 +827,19 @@ public final class Lexer {
             Token token = scanIdentifier(startPos, startLine, startColumn, c);
             lastTokenType = token.type();
             return token;
+        }
+
+        // Astral Unicode identifier start encoded as a surrogate pair.
+        if (Character.isHighSurrogate(c) && !isAtEnd() && Character.isLowSurrogate(peek())) {
+            char trailingSurrogate = advance();
+            int codePoint = Character.toCodePoint(c, trailingSurrogate);
+            if (isIdentifierStartCodePoint(codePoint)) {
+                Token token = scanIdentifier(startPos, startLine, startColumn, codePoint);
+                lastTokenType = token.type();
+                return token;
+            }
+            position--;
+            column--;
         }
 
         // Identifier with Unicode escape start (\\uXXXX / \\u{...})

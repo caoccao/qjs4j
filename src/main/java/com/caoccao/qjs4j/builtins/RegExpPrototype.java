@@ -86,36 +86,37 @@ public final class RegExpPrototype {
         return regexp;
     }
 
-    private static JSValue createIndexPairValue(int[] pair) {
+    private static JSValue createIndexPairValue(JSContext context, int[] pair) {
         if (pair == null || pair.length < 2 || pair[0] < 0 || pair[1] < 0) {
             return JSUndefined.INSTANCE;
         }
-        JSArray range = new JSArray();
+        JSArray range = context.createJSArray();
         range.push(JSNumber.of(pair[0]));
         range.push(JSNumber.of(pair[1]));
         return range;
     }
 
-    private static JSValue createIndicesValue(int[][] indices, String[] groupNames) {
+    private static JSValue createIndicesValue(JSContext context, int[][] indices, String[] groupNames) {
         if (indices == null) {
             return JSUndefined.INSTANCE;
         }
-        JSArray indicesArray = new JSArray();
+        JSArray indicesArray = context.createJSArray();
         JSObject groupIndices = new JSObject();
         groupIndices.setPrototype(null);
         for (int i = 0; i < indices.length; i++) {
-            JSValue pairValue = createIndexPairValue(indices[i]);
+            JSValue pairValue = createIndexPairValue(context, indices[i]);
             indicesArray.push(pairValue);
             if (i > 0 && groupNames != null && i < groupNames.length) {
                 String groupName = groupNames[i];
-                if (groupName != null && !groupIndices.hasOwnProperty(groupName)) {
-                    groupIndices.set(groupName, pairValue);
+                if (groupName != null) {
+                    if (!(pairValue instanceof JSUndefined) || !groupIndices.hasOwnProperty(groupName)) {
+                        groupIndices.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(groupName), pairValue);
+                    }
                 }
             }
         }
-        if (groupNames != null) {
-            indicesArray.set(PropertyKey.GROUPS, groupIndices);
-        }
+        JSValue groupsValue = groupNames != null ? groupIndices : JSUndefined.INSTANCE;
+        indicesArray.definePropertyWritableEnumerableConfigurable(PropertyKey.GROUPS, groupsValue);
         return indicesArray;
     }
 
@@ -130,11 +131,11 @@ public final class RegExpPrototype {
         int maxLength = Math.min(captures.length, groupNames.length);
         for (int i = 1; i < maxLength; i++) {
             String groupName = groupNames[i];
-            if (groupName != null && !groups.hasOwnProperty(groupName)) {
+            if (groupName != null) {
                 if (captures[i] != null) {
-                    groups.set(groupName, new JSString(captures[i]));
-                } else {
-                    groups.set(groupName, JSUndefined.INSTANCE);
+                    groups.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(groupName), new JSString(captures[i]));
+                } else if (!groups.hasOwnProperty(groupName)) {
+                    groups.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(groupName), JSUndefined.INSTANCE);
                 }
             }
         }
@@ -177,12 +178,16 @@ public final class RegExpPrototype {
             // Set properties
             int[][] indices = result.indices();
             if (indices != null && indices.length > 0) {
-                array.set(PropertyKey.INDEX, JSNumber.of(indices[0][0]));
+                array.definePropertyWritableEnumerableConfigurable(PropertyKey.INDEX, JSNumber.of(indices[0][0]));
             }
-            array.set(PropertyKey.INPUT, new JSString(str));
-            array.set(PropertyKey.GROUPS, createNamedGroupsValue(captures, regexp.getBytecode().groupNames()));
+            array.definePropertyWritableEnumerableConfigurable(PropertyKey.INPUT, new JSString(str));
+            array.definePropertyWritableEnumerableConfigurable(
+                    PropertyKey.GROUPS,
+                    createNamedGroupsValue(captures, regexp.getBytecode().groupNames()));
             if (regexp.hasIndices()) {
-                array.set(PropertyKey.INDICES, createIndicesValue(indices, regexp.getBytecode().groupNames()));
+                array.definePropertyWritableEnumerableConfigurable(
+                        PropertyKey.INDICES,
+                        createIndicesValue(context, indices, regexp.getBytecode().groupNames()));
             }
 
             // Update lastIndex for global/sticky regexes

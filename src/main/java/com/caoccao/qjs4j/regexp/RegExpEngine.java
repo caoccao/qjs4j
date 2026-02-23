@@ -527,7 +527,7 @@ public final class RegExpEngine {
     private ExecutionContext executeLookbehindAssertion(ExecutionContext outerContext, byte[] assertionBytecode) {
         int endPos = outerContext.pos;
         String prefixInput = outerContext.input.substring(0, outerContext.toCharIndex(endPos));
-        for (int startPos = 0; startPos <= endPos; startPos++) {
+        for (int startPos = endPos; startPos >= 0; startPos--) {
             ExecutionContext assertionContext = executeStandalone(outerContext, prefixInput, assertionBytecode, startPos);
             if (assertionContext != null && assertionContext.pos == endPos) {
                 return assertionContext;
