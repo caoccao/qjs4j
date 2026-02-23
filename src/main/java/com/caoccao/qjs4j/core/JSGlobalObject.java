@@ -1087,16 +1087,12 @@ public final class JSGlobalObject {
         disposableStackPrototype.definePropertyWritableConfigurable(JSSymbol.DISPOSE, disposeFunction);
 
         disposableStackPrototype.defineGetterConfigurable("disposed", DisposableStackPrototype::getDisposed);
-        disposableStackPrototype.defineGetterConfigurable(JSSymbol.TO_STRING_TAG, (childContext, thisObj, args) -> {
-            if (!(thisObj instanceof JSDisposableStack)) {
-                return childContext.throwTypeError("get DisposableStack.prototype[Symbol.toStringTag] called on non-DisposableStack");
-            }
-            return new JSString(JSDisposableStack.NAME);
-        });
+        disposableStackPrototype.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString(JSDisposableStack.NAME));
 
         JSNativeFunction disposableStackConstructor = new JSNativeFunction(
                 JSDisposableStack.NAME, 0, DisposableStackConstructor::call, true, true);
         disposableStackConstructor.definePropertyReadonlyNonConfigurable("prototype", disposableStackPrototype);
+        disposableStackConstructor.setConstructorType(JSConstructorType.DISPOSABLE_STACK);
         disposableStackPrototype.definePropertyWritableConfigurable("constructor", disposableStackConstructor);
 
         global.definePropertyWritableConfigurable(JSDisposableStack.NAME, disposableStackConstructor);

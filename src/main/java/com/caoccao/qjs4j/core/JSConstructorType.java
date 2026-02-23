@@ -31,6 +31,7 @@ public enum JSConstructorType {
     BOOLEAN_OBJECT(JSBooleanObject::create),
     DATA_VIEW(JSDataView::create),
     DATE(JSDate::create),
+    DISPOSABLE_STACK(JSDisposableStack::create),
     ERROR(JSError::create),
     EVAL_ERROR(JSEvalError::create),
     FINALIZATION_REGISTRY(JSFinalizationRegistry::create),

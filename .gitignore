@@ -43,3 +43,6 @@ bin/
 
 # Claude
 .claude/
+
+# Test
+temp/

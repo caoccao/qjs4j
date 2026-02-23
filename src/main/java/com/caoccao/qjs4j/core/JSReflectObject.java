@@ -191,7 +191,7 @@ public final class JSReflectObject {
         // from newTarget AFTER argument processing so that argument errors
         // (e.g. ToIndex(Symbol) → TypeError) are thrown before accessing
         // newTarget.prototype.
-        if (result != null && !result.isError() && !result.isProxy()) {
+        if (result != null && !result.isProxy()) {
             JSObject resolvedPrototype = null;
             if (newTarget instanceof JSObject newTargetObject) {
                 JSValue proto = newTargetObject.get(context, PropertyKey.PROTOTYPE);

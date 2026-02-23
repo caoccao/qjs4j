@@ -45,7 +45,7 @@ public final class JSDisposableStack extends JSObject {
 
     public JSValue adopt(JSContext context, JSValue value, JSValue onDispose) {
         if (disposed) {
-            return context.throwTypeError("Cannot add to a disposed DisposableStack");
+            return context.throwReferenceError("Cannot add to a disposed DisposableStack");
         }
         if (!(onDispose instanceof JSFunction disposeCallback)) {
             return context.throwTypeError("DisposableStack.adopt requires a function");
@@ -60,7 +60,7 @@ public final class JSDisposableStack extends JSObject {
 
     public JSValue defer(JSContext context, JSValue onDispose) {
         if (disposed) {
-            return context.throwTypeError("Cannot add to a disposed DisposableStack");
+            return context.throwReferenceError("Cannot add to a disposed DisposableStack");
         }
         if (!(onDispose instanceof JSFunction disposeCallback)) {
             return context.throwTypeError("DisposableStack.defer requires a function");
@@ -137,11 +137,10 @@ public final class JSDisposableStack extends JSObject {
 
     public JSValue move(JSContext context) {
         if (disposed) {
-            return context.throwTypeError("Cannot move a disposed DisposableStack");
+            return context.throwReferenceError("Cannot move a disposed DisposableStack");
         }
-        JSDisposableStack newStack = new JSDisposableStack();
+        JSDisposableStack newStack = context.createJSDisposableStack();
         newStack.disposeRecords.addAll(disposeRecords);
-        newStack.setPrototype(getPrototype());
         disposeRecords.clear();
         disposed = true;
         return newStack;
@@ -149,7 +148,7 @@ public final class JSDisposableStack extends JSObject {
 
     public JSValue use(JSContext context, JSValue value) {
         if (disposed) {
-            return context.throwTypeError("Cannot add to a disposed DisposableStack");
+            return context.throwReferenceError("Cannot add to a disposed DisposableStack");
         }
         if (value.isNullOrUndefined()) {
             return value;

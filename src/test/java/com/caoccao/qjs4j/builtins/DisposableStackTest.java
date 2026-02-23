@@ -62,7 +62,7 @@ public class DisposableStackTest extends BaseTest {
                 try {
                     stack1.defer(() => {});
                 } catch (e) {
-                    throwsOnOld = e instanceof TypeError;
+                    throwsOnOld = e instanceof ReferenceError;
                 }
                 stack2.dispose();
                 String(moved) + "|" + String(throwsOnOld) + "|" + JSON.stringify(log);"""))
