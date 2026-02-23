@@ -307,6 +307,10 @@ public final class JSDataView extends JSObject {
         return getInt8(byteOffset) & 0xFF;
     }
 
+    public boolean isImmutable() {
+        return buffer.isImmutable();
+    }
+
     public boolean isOutOfBounds() {
         if (buffer.isDetached()) {
             return true;
@@ -339,7 +343,7 @@ public final class JSDataView extends JSObject {
         buf.order(originalOrder);
     }
 
-    public void setFloat16(int byteOffset, float value, boolean littleEndian) {
+    public void setFloat16(int byteOffset, double value, boolean littleEndian) {
         setUint16(byteOffset, Float16.toHalf(value), littleEndian);
     }
 

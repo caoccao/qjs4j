@@ -44,6 +44,13 @@ public sealed interface IJSArrayBuffer permits JSArrayBuffer, JSSharedArrayBuffe
     boolean isDetached();
 
     /**
+     * Check if this ArrayBuffer is immutable.
+     *
+     * @return true if immutable, false otherwise
+     */
+    boolean isImmutable();
+
+    /**
      * Check if this buffer is shared.
      *
      * @return true if shared, false otherwise

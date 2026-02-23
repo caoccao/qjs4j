@@ -286,6 +286,9 @@ public final class DataViewPrototype {
         if (dataView == null) {
             return context.getPendingException();
         }
+        if (dataView.isImmutable()) {
+            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
+        }
         Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (byteOffset == null) {
             return context.getPendingException();
@@ -307,6 +310,9 @@ public final class DataViewPrototype {
         JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setBigUint64 called on non-DataView");
         if (dataView == null) {
             return context.getPendingException();
+        }
+        if (dataView.isImmutable()) {
+            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
         }
         Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (byteOffset == null) {
@@ -330,6 +336,9 @@ public final class DataViewPrototype {
         if (dataView == null) {
             return context.getPendingException();
         }
+        if (dataView.isImmutable()) {
+            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
+        }
         Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (byteOffset == null) {
             return context.getPendingException();
@@ -340,7 +349,7 @@ public final class DataViewPrototype {
         }
         boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
         try {
-            dataView.setFloat16(byteOffset, (float) numberValue.value(), littleEndian);
+            dataView.setFloat16(byteOffset, numberValue.value(), littleEndian);
             return JSUndefined.INSTANCE;
         } catch (RuntimeException e) {
             return convertDataViewException(context, e);
@@ -351,6 +360,9 @@ public final class DataViewPrototype {
         JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setFloat32 called on non-DataView");
         if (dataView == null) {
             return context.getPendingException();
+        }
+        if (dataView.isImmutable()) {
+            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
         }
         Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (byteOffset == null) {
@@ -374,6 +386,9 @@ public final class DataViewPrototype {
         if (dataView == null) {
             return context.getPendingException();
         }
+        if (dataView.isImmutable()) {
+            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
+        }
         Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (byteOffset == null) {
             return context.getPendingException();
@@ -395,6 +410,9 @@ public final class DataViewPrototype {
         JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setInt16 called on non-DataView");
         if (dataView == null) {
             return context.getPendingException();
+        }
+        if (dataView.isImmutable()) {
+            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
         }
         Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (byteOffset == null) {
@@ -418,6 +436,9 @@ public final class DataViewPrototype {
         if (dataView == null) {
             return context.getPendingException();
         }
+        if (dataView.isImmutable()) {
+            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
+        }
         Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (byteOffset == null) {
             return context.getPendingException();
@@ -440,6 +461,9 @@ public final class DataViewPrototype {
         if (dataView == null) {
             return context.getPendingException();
         }
+        if (dataView.isImmutable()) {
+            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
+        }
         Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (byteOffset == null) {
             return context.getPendingException();
@@ -460,6 +484,9 @@ public final class DataViewPrototype {
         JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setUint16 called on non-DataView");
         if (dataView == null) {
             return context.getPendingException();
+        }
+        if (dataView.isImmutable()) {
+            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
         }
         Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (byteOffset == null) {
@@ -483,6 +510,9 @@ public final class DataViewPrototype {
         if (dataView == null) {
             return context.getPendingException();
         }
+        if (dataView.isImmutable()) {
+            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
+        }
         Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (byteOffset == null) {
             return context.getPendingException();
@@ -504,6 +534,9 @@ public final class DataViewPrototype {
         JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setUint8 called on non-DataView");
         if (dataView == null) {
             return context.getPendingException();
+        }
+        if (dataView.isImmutable()) {
+            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
         }
         Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (byteOffset == null) {

@@ -187,6 +187,11 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         return growable;
     }
 
+    @Override
+    public boolean isImmutable() {
+        return false;
+    }
+
     /**
      * Check if this buffer is a SharedArrayBuffer.
      * Used to distinguish from regular ArrayBuffer.

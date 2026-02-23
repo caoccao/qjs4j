@@ -231,11 +231,7 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         return detached;
     }
 
-    /**
-     * Check if this ArrayBuffer is immutable.
-     *
-     * @return true if immutable, false otherwise
-     */
+    @Override
     public boolean isImmutable() {
         return immutable;
     }
