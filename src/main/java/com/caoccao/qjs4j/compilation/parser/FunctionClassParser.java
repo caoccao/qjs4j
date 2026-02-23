@@ -22,13 +22,58 @@ import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Delegate parser for function declarations/expressions and class declarations/expressions.
  * Extracted from the monolithic Parser class as part of the parser refactoring.
  */
 record FunctionClassParser(ParserContext ctx, ParserDelegates delegates) {
+
+    /**
+     * Validate function parameters for strict mode rules.
+     * Following QuickJS js_parse_function_check_names:
+     * - No parameter named 'eval' or 'arguments'
+     * - No duplicate parameter names
+     *
+     * @param funcParams The function parameters to validate
+     * @param funcName   The function name (or null for anonymous)
+     */
+    private void checkStrictModeParameters(FunctionParams funcParams, Identifier funcName) {
+        // Check function name
+        if (funcName != null) {
+            String name = funcName.name();
+            if ("eval".equals(name) || "arguments".equals(name)) {
+                throw new JSSyntaxErrorException("invalid function name in strict code");
+            }
+        }
+
+        // Check parameter names
+        Set<String> seen = new HashSet<>();
+        for (Identifier param : funcParams.params()) {
+            String paramName = param.name();
+            // Check for reserved names
+            if ("eval".equals(paramName) || "arguments".equals(paramName)) {
+                throw new JSSyntaxErrorException("invalid argument name in strict code");
+            }
+            // Check for duplicates
+            if (!seen.add(paramName)) {
+                throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
+            }
+        }
+        // Check rest parameter
+        if (funcParams.restParameter() != null) {
+            String restName = funcParams.restParameter().argument().name();
+            if ("eval".equals(restName) || "arguments".equals(restName)) {
+                throw new JSSyntaxErrorException("invalid argument name in strict code");
+            }
+            if (!seen.add(restName)) {
+                throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
+            }
+        }
+    }
 
     /**
      * Parse a class declaration or expression.
@@ -259,6 +304,51 @@ record FunctionClassParser(ParserContext ctx, ParserDelegates delegates) {
         return new ClassExpression(id, superClass, body, location);
     }
 
+    /**
+     * Parse a function body with "use strict" directive detection and parameter validation.
+     * Following QuickJS: after parsing '{', check for directives, then validate parameters
+     * if strict mode was detected (js_parse_function_check_names).
+     *
+     * @param funcParams The already-parsed function parameters
+     * @param funcName   The function name (or null for anonymous)
+     * @return The parsed BlockStatement
+     */
+    BlockStatement parseFunctionBody(FunctionParams funcParams, Identifier funcName) {
+        SourceLocation location = ctx.getLocation();
+        ctx.expect(TokenType.LBRACE);
+
+        List<Statement> body = new ArrayList<>();
+
+        // Save outer strict mode so we can restore it after parsing the function body
+        boolean savedStrictMode = ctx.strictMode;
+
+        // Parse directives (like "use strict") at the beginning of the function body
+        boolean hasUseStrict = ctx.parseDirectives(body);
+
+        // If "use strict" directive found, retroactively validate parameters
+        // Following QuickJS js_parse_function_check_names
+        if (hasUseStrict) {
+            ctx.strictMode = true;
+            ctx.lexer.setStrictMode(true);
+            checkStrictModeParameters(funcParams, funcName);
+        }
+
+        // Parse remaining body statements
+        while (!ctx.match(TokenType.RBRACE) && !ctx.match(TokenType.EOF)) {
+            Statement stmt = delegates.statements.parseStatement();
+            if (stmt != null) {
+                body.add(stmt);
+            }
+        }
+
+        // Restore outer strict mode
+        ctx.strictMode = savedStrictMode;
+        ctx.lexer.setStrictMode(savedStrictMode);
+
+        ctx.expect(TokenType.RBRACE);
+        return new BlockStatement(body, location);
+    }
+
     FunctionDeclaration parseFunctionDeclaration(boolean isAsync, boolean isGenerator) {
         return parseFunctionDeclaration(isAsync, isGenerator, null);
     }
@@ -291,7 +381,8 @@ record FunctionClassParser(ParserContext ctx, ParserDelegates delegates) {
 
             ctx.inFunctionBody = savedInFunctionBody;
 
-            BlockStatement body = delegates.statements.parseBlockStatement();
+            // Parse body with "use strict" detection and parameter validation
+            BlockStatement body = parseFunctionBody(funcParams, id);
 
             // Update location to include end offset (current token offset after parsing body)
             SourceLocation fullLocation = new SourceLocation(
@@ -342,7 +433,8 @@ record FunctionClassParser(ParserContext ctx, ParserDelegates delegates) {
 
             ctx.inFunctionBody = savedInFunctionBody;
 
-            BlockStatement body = delegates.statements.parseBlockStatement();
+            // Parse body with "use strict" detection and parameter validation
+            BlockStatement body = parseFunctionBody(funcParams, id);
 
             // Update location to include end offset (current token offset after parsing body)
             SourceLocation fullLocation = new SourceLocation(

@@ -1692,6 +1692,10 @@ public final class VirtualMachine {
                                 stack[sp++] = result;
                             }
                         } else {
+                            // Per ES spec / QuickJS: property access on null/undefined throws TypeError
+                            String typeName = obj instanceof JSNull ? "null" : "undefined";
+                            pendingException = context.throwTypeError(
+                                    "cannot read property '" + fieldName + "' of " + typeName);
                             resetPropertyAccessTracking();
                             stack[sp++] = JSUndefined.INSTANCE;
                         }
@@ -1710,6 +1714,10 @@ public final class VirtualMachine {
                                 stack[sp++] = result;
                             }
                         } else {
+                            // Per ES spec / QuickJS: property access on null/undefined throws TypeError
+                            String typeName = objectValue instanceof JSNull ? "null" : "undefined";
+                            pendingException = context.throwTypeError(
+                                    "cannot read property 'length' of " + typeName);
                             stack[sp++] = JSUndefined.INSTANCE;
                         }
                         pc += op.getSize();

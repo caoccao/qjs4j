@@ -1144,17 +1144,30 @@ public final class JSGlobalObject {
         functionPrototype.definePropertyWritableConfigurable("call", new JSNativeFunction("call", 1, FunctionPrototype::call));
         functionPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, FunctionPrototype::toString_));
 
-        // Add 'arguments' and 'caller' as accessor properties that throw TypeError
-        // These properties exist for backwards compatibility but throw when accessed
-        JSNativeFunction throwTypeError = new JSNativeFunction(
+        // Add 'arguments' and 'caller' as accessor properties per QuickJS js_throw_type_error.
+        // Getter: for non-strict bytecode functions with prototype, return undefined (ES5 compat).
+        // For strict, arrow, native, or setter calls, throw TypeError.
+        JSNativeFunction callerArgumentsGetter = new JSNativeFunction(
                 "throwTypeError",
                 0,
+                (childContext, thisObj, args) -> {
+                    if (thisObj instanceof JSBytecodeFunction bytecodeFunc) {
+                        if (!bytecodeFunc.isStrict() && !bytecodeFunc.isArrow()) {
+                            return JSUndefined.INSTANCE;
+                        }
+                    }
+                    return childContext.throwTypeError(
+                            "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them");
+                });
+        JSNativeFunction callerArgumentsSetter = new JSNativeFunction(
+                "throwTypeError",
+                1,
                 (childContext, thisObj, args) ->
                         childContext.throwTypeError(
                                 "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"));
 
-        functionPrototype.defineGetterSetterConfigurable("arguments", throwTypeError, throwTypeError);
-        functionPrototype.defineGetterSetterConfigurable("caller", throwTypeError, throwTypeError);
+        functionPrototype.defineGetterSetterConfigurable("arguments", callerArgumentsGetter, callerArgumentsSetter);
+        functionPrototype.defineGetterSetterConfigurable("caller", callerArgumentsGetter, callerArgumentsSetter);
 
         // Add 'length' and 'name' data properties
         functionPrototype.definePropertyConfigurable("length", JSNumber.of(0));
