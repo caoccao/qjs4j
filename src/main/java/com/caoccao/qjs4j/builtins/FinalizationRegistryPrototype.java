@@ -27,6 +27,21 @@ public final class FinalizationRegistryPrototype {
     }
 
     /**
+     * CanBeHeldWeakly check per ES spec / QuickJS js_weakref_is_target.
+     * Objects and non-registered symbols can be held weakly.
+     * Registered symbols (Symbol.for()) cannot.
+     */
+    static boolean canBeHeldWeakly(JSValue value) {
+        if (value instanceof JSObject) {
+            return true;
+        }
+        if (value instanceof JSSymbol symbol) {
+            return !symbol.isRegistered();
+        }
+        return false;
+    }
+
+    /**
      * FinalizationRegistry.prototype.register(target, heldValue [, unregisterToken])
      */
     public static JSValue register(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -37,18 +52,18 @@ public final class FinalizationRegistryPrototype {
         JSValue heldValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         JSValue token = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
 
-        if (!(target instanceof JSObject targetObj)) {
+        if (!canBeHeldWeakly(target)) {
             return context.throwTypeError("invalid target");
         }
         if (target == heldValue) {
             return context.throwTypeError("held value cannot be the target");
         }
-        if (!(token instanceof JSUndefined) && !(token instanceof JSObject) && !(token instanceof JSSymbol)) {
+        if (!(token instanceof JSUndefined) && !canBeHeldWeakly(token)) {
             return context.throwTypeError("invalid unregister token");
         }
 
         JSValue tokenToStore = token instanceof JSUndefined ? null : token;
-        registry.register(targetObj, heldValue, tokenToStore);
+        registry.register(target, heldValue, tokenToStore);
         return JSUndefined.INSTANCE;
     }
 
@@ -60,7 +75,7 @@ public final class FinalizationRegistryPrototype {
             return context.throwTypeError("FinalizationRegistry value expected");
         }
         JSValue token = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        if (!(token instanceof JSObject) && !(token instanceof JSSymbol)) {
+        if (!canBeHeldWeakly(token)) {
             return context.throwTypeError("invalid unregister token");
         }
         return JSBoolean.valueOf(registry.unregister(token));

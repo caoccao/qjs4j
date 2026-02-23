@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import java.lang.ref.PhantomReference;
+import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,8 +37,8 @@ public final class JSFinalizationRegistry extends JSObject {
     private final JSFunction cleanupCallback;
     private final Thread cleanupThread;
     private final JSContext context;
-    private final ReferenceQueue<JSObject> referenceQueue;
-    private final Map<PhantomReference<JSObject>, RegistrationRecord> registrations;
+    private final ReferenceQueue<Object> referenceQueue;
+    private final Map<PhantomReference<Object>, RegistrationRecord> registrations;
     private volatile boolean running;
 
     /**
@@ -78,7 +79,7 @@ public final class JSFinalizationRegistry extends JSObject {
         while (running) {
             try {
                 // Wait for a reference to be enqueued (blocking)
-                PhantomReference<?> ref = (PhantomReference<?>) referenceQueue.remove();
+                Reference<?> ref = referenceQueue.remove();
 
                 // Get the registration record
                 RegistrationRecord record = registrations.remove(ref);
@@ -119,16 +120,18 @@ public final class JSFinalizationRegistry extends JSObject {
     }
 
     /**
-     * Register an object for finalization.
+     * Register a target for finalization.
      * Called by FinalizationRegistryPrototype.register() after validation.
+     * Target can be a JSObject or a non-registered JSSymbol (CanBeHeldWeakly).
      *
-     * @param target          The object to monitor
+     * @param target          The value to monitor (JSObject or JSSymbol)
      * @param heldValue       Value passed to cleanup callback
      * @param unregisterToken Optional token for manual unregistration (null if none)
      */
-    public void register(JSObject target, JSValue heldValue, JSValue unregisterToken) {
+    public void register(JSValue target, JSValue heldValue, JSValue unregisterToken) {
         // Create phantom reference to track when target is collected
-        PhantomReference<JSObject> phantomRef = new PhantomReference<>(target, referenceQueue);
+        // Both JSObject and JSSymbol are Java objects that can be tracked by PhantomReference
+        PhantomReference<Object> phantomRef = new PhantomReference<>(target, referenceQueue);
 
         // Store registration
         RegistrationRecord record = new RegistrationRecord(heldValue, unregisterToken);
