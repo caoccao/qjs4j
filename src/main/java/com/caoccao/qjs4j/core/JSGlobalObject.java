@@ -1810,6 +1810,8 @@ public final class JSGlobalObject {
 
         // Symbol.species getter - ES2024 22.2.4.2 get RegExp[@@species]
         regexpConstructor.defineGetterConfigurable(JSSymbol.SPECIES, RegExpConstructor::getSpecies);
+        // ES2024 RegExp.escape static method
+        regexpConstructor.definePropertyWritableConfigurable("escape", new JSNativeFunction("escape", 1, RegExpConstructor::escape));
 
         global.definePropertyWritableConfigurable(JSRegExp.NAME, regexpConstructor);
     }

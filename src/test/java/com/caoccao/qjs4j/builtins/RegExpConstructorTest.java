@@ -397,6 +397,55 @@ public class RegExpConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    void testRegExpEscape() {
+        assertStringWithJavet("typeof RegExp.escape");
+        assertIntegerWithJavet("RegExp.escape.length");
+        assertStringWithJavet("RegExp.escape.name");
+
+        assertBooleanWithJavet("""
+                (() => {
+                    const desc = Object.getOwnPropertyDescriptor(RegExp, 'escape');
+                    return desc.writable === true
+                        && desc.enumerable === false
+                        && desc.configurable === true;
+                })()""");
+        assertBooleanWithJavet("""
+                (() => {
+                    const lengthDesc = Object.getOwnPropertyDescriptor(RegExp.escape, 'length');
+                    return lengthDesc.value === 1
+                        && lengthDesc.writable === false
+                        && lengthDesc.enumerable === false
+                        && lengthDesc.configurable === true;
+                })()""");
+        assertBooleanWithJavet("""
+                (() => {
+                    const nameDesc = Object.getOwnPropertyDescriptor(RegExp.escape, 'name');
+                    return nameDesc.value === 'escape'
+                        && nameDesc.writable === false
+                        && nameDesc.enumerable === false
+                        && nameDesc.configurable === true;
+                })()""");
+
+        assertStringWithJavet("RegExp.escape('')");
+        assertStringWithJavet("RegExp.escape('.')");
+        assertStringWithJavet("RegExp.escape('/')");
+        assertStringWithJavet("RegExp.escape('abc')");
+        assertStringWithJavet("RegExp.escape('1+1')");
+        assertStringWithJavet("RegExp.escape('\\t\\n\\v\\f\\r')");
+        assertStringWithJavet("RegExp.escape(' ,-')", "RegExp.escape(' ,-')");
+        assertStringWithJavet("RegExp.escape('\\u2028\\u2029')");
+        assertStringWithJavet("RegExp.escape('\\uD800')");
+        assertStringWithJavet("RegExp.escape('hello_world')");
+        assertStringWithJavet("RegExp.escape('Γειά σου')");
+
+        assertErrorWithJavet("RegExp.escape(123)");
+        assertErrorWithJavet("RegExp.escape({})");
+        assertErrorWithJavet("RegExp.escape([])");
+        assertErrorWithJavet("RegExp.escape(null)");
+        assertErrorWithJavet("RegExp.escape(undefined)");
+    }
+
+    @Test
     void testRegExpLiteralVsConstructor() {
         // Literals and constructor should be equivalent
         assertStringWithJavet("/test/.source", "new RegExp('test').source");

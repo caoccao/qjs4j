@@ -244,6 +244,24 @@ public final class JSDate extends JSObject {
     }
 
     /**
+     * Parse exactly between minDigits and maxDigits decimal digits from str starting at pos.
+     *
+     * @return int[]{value, newPos} or null if not enough digits
+     */
+    private static int[] parseDigits(String str, int pos, int minDigits, int maxDigits) {
+        int start = pos;
+        int value = 0;
+        while (pos < str.length() && pos - start < maxDigits && Character.isDigit(str.charAt(pos))) {
+            value = value * 10 + (str.charAt(pos) - '0');
+            pos++;
+        }
+        if (pos - start < minDigits) {
+            return null;
+        }
+        return new int[]{value, pos};
+    }
+
+    /**
      * Parse ISO 8601 date-time string format following QuickJS js_date_parse_isostring.
      * Handles partial ISO strings: YYYY, YYYY-MM, YYYY-MM-DD, YYYY-MM-DDTHH:mm[:ss[.sss]][Z|±HH:mm]
      * Also supports extended years: ±YYYYYY
@@ -426,24 +444,6 @@ public final class JSDate extends JSObject {
             dateFields[i] = fields[i];
         }
         return setDateFields(dateFields, isLocal) - (double) fields[8] * 60000;
-    }
-
-    /**
-     * Parse exactly between minDigits and maxDigits decimal digits from str starting at pos.
-     *
-     * @return int[]{value, newPos} or null if not enough digits
-     */
-    private static int[] parseDigits(String str, int pos, int minDigits, int maxDigits) {
-        int start = pos;
-        int value = 0;
-        while (pos < str.length() && pos - start < maxDigits && Character.isDigit(str.charAt(pos))) {
-            value = value * 10 + (str.charAt(pos) - '0');
-            pos++;
-        }
-        if (pos - start < minDigits) {
-            return null;
-        }
-        return new int[]{value, pos};
     }
 
     public static double setDateFields(double[] fields, boolean isLocal) {
