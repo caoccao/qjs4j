@@ -93,6 +93,12 @@ public final class JSUint8ClampedArray extends JSTypedArray {
         return context.createJSUint8ClampedArray(length);
     }
 
+    @Override
+    public double getElement(int index) {
+        checkIndex(index);
+        ByteBuffer buf = getByteBuffer();
+        return buf.get(index) & 0xFF; // Convert to unsigned
+    }
 
     @Override
     public String getObjectTag() {
@@ -107,13 +113,6 @@ public final class JSUint8ClampedArray extends JSTypedArray {
     @Override
     public boolean isAtomicsWriteable() {
         return false;
-    }
-
-    @Override
-    public double getElement(int index) {
-        checkIndex(index);
-        ByteBuffer buf = getByteBuffer();
-        return buf.get(index) & 0xFF; // Convert to unsigned
     }
 
     @Override

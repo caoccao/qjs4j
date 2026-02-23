@@ -38,16 +38,16 @@ public final class JSGeneratorState {
     private final JSBytecodeFunction function;
     private final List<ResumeRecord> resumeRecords;
     private final JSValue thisArg;
-    private JSValue pendingResumeValue;
-    private ResumeKind pendingResumeKind;
     private boolean awaitSuspended;
-    private StackFrame suspendedFrame;
-    private JSStackValue[] suspendedStackValues;
-    private int suspendedProgramCounter;
     // Execution state that needs to be preserved across yields
     // TODO: Add full state preservation (PC, stack, locals) for proper resumption
     private boolean isCompleted;
+    private ResumeKind pendingResumeKind;
+    private JSValue pendingResumeValue;
     private State state;
+    private StackFrame suspendedFrame;
+    private int suspendedProgramCounter;
+    private JSStackValue[] suspendedStackValues;
     private int yieldCount;  // Track how many times we've yielded (workaround for no PC saving)
 
     public JSGeneratorState(JSBytecodeFunction function, JSValue thisArg, JSValue[] args) {
@@ -66,6 +66,22 @@ public final class JSGeneratorState {
         this.suspendedProgramCounter = 0;
     }
 
+    public void clearSuspendedExecutionState() {
+        this.suspendedFrame = null;
+        this.suspendedProgramCounter = 0;
+        this.suspendedStackValues = null;
+    }
+
+    public ResumeRecord consumePendingResumeRecord() {
+        if (pendingResumeKind == null) {
+            return null;
+        }
+        ResumeRecord resumeRecord = new ResumeRecord(pendingResumeKind, pendingResumeValue);
+        pendingResumeKind = null;
+        pendingResumeValue = null;
+        return resumeRecord;
+    }
+
     public JSValue[] getArgs() {
         return args;
     }
@@ -82,14 +98,6 @@ public final class JSGeneratorState {
         return state;
     }
 
-    public JSValue getThisArg() {
-        return thisArg;
-    }
-
-    public JSStackValue[] getSuspendedStackValues() {
-        return suspendedStackValues;
-    }
-
     public StackFrame getSuspendedFrame() {
         return suspendedFrame;
     }
@@ -98,16 +106,16 @@ public final class JSGeneratorState {
         return suspendedProgramCounter;
     }
 
+    public JSStackValue[] getSuspendedStackValues() {
+        return suspendedStackValues;
+    }
+
+    public JSValue getThisArg() {
+        return thisArg;
+    }
+
     public int getYieldCount() {
         return yieldCount;
-    }
-
-    public void incrementYieldCount() {
-        this.yieldCount++;
-    }
-
-    public boolean isCompleted() {
-        return isCompleted;
     }
 
     public boolean hasPendingResumeRecord() {
@@ -118,39 +126,26 @@ public final class JSGeneratorState {
         return suspendedFrame != null && suspendedStackValues != null;
     }
 
+    public void incrementYieldCount() {
+        this.yieldCount++;
+    }
+
     public boolean isAwaitSuspended() {
         return awaitSuspended;
+    }
+
+    public boolean isCompleted() {
+        return isCompleted;
     }
 
     public void recordResume(ResumeKind kind, JSValue value) {
         resumeRecords.add(new ResumeRecord(kind, value));
     }
 
-    public ResumeRecord consumePendingResumeRecord() {
-        if (pendingResumeKind == null) {
-            return null;
-        }
-        ResumeRecord resumeRecord = new ResumeRecord(pendingResumeKind, pendingResumeValue);
-        pendingResumeKind = null;
-        pendingResumeValue = null;
-        return resumeRecord;
-    }
-
     public void saveSuspendedExecutionState(StackFrame frame, int programCounter, JSStackValue[] stackValues) {
         this.suspendedFrame = frame;
         this.suspendedProgramCounter = programCounter;
         this.suspendedStackValues = stackValues;
-    }
-
-    public void clearSuspendedExecutionState() {
-        this.suspendedFrame = null;
-        this.suspendedProgramCounter = 0;
-        this.suspendedStackValues = null;
-    }
-
-    public void setPendingResumeRecord(ResumeKind kind, JSValue value) {
-        this.pendingResumeKind = kind;
-        this.pendingResumeValue = value;
     }
 
     public void setAwaitSuspended(boolean awaitSuspended) {
@@ -166,6 +161,11 @@ public final class JSGeneratorState {
             pendingResumeValue = null;
             awaitSuspended = false;
         }
+    }
+
+    public void setPendingResumeRecord(ResumeKind kind, JSValue value) {
+        this.pendingResumeKind = kind;
+        this.pendingResumeValue = value;
     }
 
     public void setState(State state) {

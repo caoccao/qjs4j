@@ -16,7 +16,6 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.memory.GarbageCollector;
 import com.caoccao.qjs4j.utils.AtomTable;
 

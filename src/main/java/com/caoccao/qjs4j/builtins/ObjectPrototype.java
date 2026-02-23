@@ -27,27 +27,6 @@ import java.util.List;
  * @see <a href="https://tc39.es/ecma262/#sec-object-objects">ECMAScript Object Objects</a>
  */
 public final class ObjectPrototype {
-    private static JSValue getValueWithReceiver(JSContext context, JSObject object, PropertyKey key, JSValue receiver) {
-        JSObject currentObject = object;
-        while (currentObject != null) {
-            PropertyDescriptor descriptor = currentObject.getOwnPropertyDescriptor(key);
-            if (descriptor != null) {
-                if (descriptor.isAccessorDescriptor()) {
-                    JSFunction getter = descriptor.getGetter();
-                    if (getter == null) {
-                        return JSUndefined.INSTANCE;
-                    }
-                    return getter.call(context, receiver, new JSValue[0]);
-                }
-                JSValue value = descriptor.getValue();
-                return value != null ? value : JSUndefined.INSTANCE;
-            }
-            currentObject = currentObject.getPrototype();
-        }
-        return JSUndefined.INSTANCE;
-    }
-
-
     /**
      * Object.prototype.__defineGetter__(prop, func)
      * Legacy method for defining getter
@@ -465,6 +444,26 @@ public final class ObjectPrototype {
 
         obj.freeze();
         return arg;
+    }
+
+    private static JSValue getValueWithReceiver(JSContext context, JSObject object, PropertyKey key, JSValue receiver) {
+        JSObject currentObject = object;
+        while (currentObject != null) {
+            PropertyDescriptor descriptor = currentObject.getOwnPropertyDescriptor(key);
+            if (descriptor != null) {
+                if (descriptor.isAccessorDescriptor()) {
+                    JSFunction getter = descriptor.getGetter();
+                    if (getter == null) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    return getter.call(context, receiver, new JSValue[0]);
+                }
+                JSValue value = descriptor.getValue();
+                return value != null ? value : JSUndefined.INSTANCE;
+            }
+            currentObject = currentObject.getPrototype();
+        }
+        return JSUndefined.INSTANCE;
     }
 
     /**

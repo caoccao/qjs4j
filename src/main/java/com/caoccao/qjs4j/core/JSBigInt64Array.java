@@ -103,21 +103,6 @@ public final class JSBigInt64Array extends JSTypedArray {
     }
 
     @Override
-    public String getObjectTag() {
-        return "[object " + NAME + "]";
-    }
-
-    @Override
-    public boolean isAtomicsReadableAndWriteable() {
-        return true;
-    }
-
-    @Override
-    public boolean isAtomicsWriteable() {
-        return true;
-    }
-
-    @Override
     public double getElement(int index) {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
@@ -132,12 +117,27 @@ public final class JSBigInt64Array extends JSTypedArray {
     }
 
     @Override
+    public String getObjectTag() {
+        return "[object " + NAME + "]";
+    }
+
+    @Override
     protected void integerIndexedElementSet(int index, JSValue value, JSContext context) {
         long longVal = JSTypeConversions.toBigInt64(context, value);
         if (!buffer.isDetached() && index >= 0 && index < getLength()) {
             ByteBuffer buf = getByteBuffer();
             buf.putLong(index * BYTES_PER_ELEMENT, longVal);
         }
+    }
+
+    @Override
+    public boolean isAtomicsReadableAndWriteable() {
+        return true;
+    }
+
+    @Override
+    public boolean isAtomicsWriteable() {
+        return true;
     }
 
     @Override

@@ -479,7 +479,7 @@ public class JSAsyncIterator extends JSObject {
                         null,
                         context
                 ),
-                    new JSPromise.ReactionRecord(
+                new JSPromise.ReactionRecord(
                         new JSNativeFunction("onNextRejected", 1, (childContext, thisArg, args) -> {
                             // If next() fails, reject completion promise
                             JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;

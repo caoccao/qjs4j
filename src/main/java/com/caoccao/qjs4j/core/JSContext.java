@@ -59,13 +59,12 @@ public final class JSContext implements AutoCloseable {
     private final VirtualMachine virtualMachine;
     // Internal constructor references (not exposed in global scope)
     private JSObject asyncFunctionConstructor;
+    private JSObject asyncGeneratorFunctionPrototype;
     // Async generator prototype chain (not exposed in global scope)
     private JSObject asyncGeneratorPrototype;
-    private JSObject asyncGeneratorFunctionPrototype;
     private JSValue currentThis;
     // Generator prototype chain (not exposed in global scope)
     private JSObject generatorFunctionPrototype;
-    private boolean waitable;
     private boolean inCatchHandler;
     private int maxStackDepth;
     // Exception state
@@ -75,6 +74,7 @@ public final class JSContext implements AutoCloseable {
     private int stackDepth;
     // Execution state
     private boolean strictMode;
+    private boolean waitable;
 
     /**
      * Create a new execution context.
@@ -166,10 +166,6 @@ public final class JSContext implements AutoCloseable {
      */
     public void clearPendingException() {
         this.pendingException = null;
-    }
-
-    public boolean isWaitable() {
-        return waitable;
     }
 
     /**
@@ -663,10 +659,6 @@ public final class JSContext implements AutoCloseable {
         this.strictMode = true;
     }
 
-    public void setWaitable(boolean waitable) {
-        this.waitable = waitable;
-    }
-
     /**
      * Evaluate JavaScript code in this context.
      * <p>
@@ -1021,6 +1013,10 @@ public final class JSContext implements AutoCloseable {
         return strictMode;
     }
 
+    public boolean isWaitable() {
+        return waitable;
+    }
+
     /**
      * Load and cache a JavaScript module.
      *
@@ -1145,6 +1141,10 @@ public final class JSContext implements AutoCloseable {
      */
     public void setPromiseRejectCallback(IJSPromiseRejectCallback callback) {
         this.promiseRejectCallback = callback;
+    }
+
+    public void setWaitable(boolean waitable) {
+        this.waitable = waitable;
     }
 
     /**

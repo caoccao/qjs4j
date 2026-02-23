@@ -93,6 +93,13 @@ public final class JSUint32Array extends JSTypedArray {
     }
 
     @Override
+    public double getElement(int index) {
+        checkIndex(index);
+        ByteBuffer buf = getByteBuffer();
+        return buf.getInt(index * BYTES_PER_ELEMENT) & 0xFFFFFFFFL; // Convert to unsigned
+    }
+
+    @Override
     public String getObjectTag() {
         return "[object " + NAME + "]";
     }
@@ -105,13 +112,6 @@ public final class JSUint32Array extends JSTypedArray {
     @Override
     public boolean isAtomicsWriteable() {
         return false;
-    }
-
-    @Override
-    public double getElement(int index) {
-        checkIndex(index);
-        ByteBuffer buf = getByteBuffer();
-        return buf.getInt(index * BYTES_PER_ELEMENT) & 0xFFFFFFFFL; // Convert to unsigned
     }
 
     @Override

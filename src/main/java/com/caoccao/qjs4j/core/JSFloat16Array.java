@@ -94,6 +94,13 @@ public final class JSFloat16Array extends JSTypedArray {
         return context.createJSFloat16Array(length);
     }
 
+    @Override
+    public double getElement(int index) {
+        checkIndex(index);
+        ByteBuffer buf = getByteBuffer();
+        short halfFloat = buf.getShort(index * BYTES_PER_ELEMENT);
+        return Float16.toFloat(halfFloat);
+    }
 
     @Override
     public String getObjectTag() {
@@ -108,14 +115,6 @@ public final class JSFloat16Array extends JSTypedArray {
     @Override
     public boolean isAtomicsWriteable() {
         return false;
-    }
-
-    @Override
-    public double getElement(int index) {
-        checkIndex(index);
-        ByteBuffer buf = getByteBuffer();
-        short halfFloat = buf.getShort(index * BYTES_PER_ELEMENT);
-        return Float16.toFloat(halfFloat);
     }
 
     @Override

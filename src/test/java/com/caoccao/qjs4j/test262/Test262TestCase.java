@@ -74,12 +74,12 @@ public class Test262TestCase {
         return flags;
     }
 
-    public int getIndex() {
-        return index;
-    }
-
     public Set<String> getIncludes() {
         return includes;
+    }
+
+    public int getIndex() {
+        return index;
     }
 
     public NegativeInfo getNegative() {
@@ -119,12 +119,12 @@ public class Test262TestCase {
         this.flags = flags;
     }
 
-    public void setIndex(int index) {
-        this.index = index;
-    }
-
     public void setIncludes(Set<String> includes) {
         this.includes = includes;
+    }
+
+    public void setIndex(int index) {
+        this.index = index;
     }
 
     public void setNegative(NegativeInfo negative) {

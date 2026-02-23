@@ -36,6 +36,113 @@ final class ExpressionAssignmentParser {
         this.expressions = expressions;
     }
 
+    private ArrayPattern convertArrowArrayExpressionToPattern(ArrayExpression arrayExpression) {
+        List<Pattern> elements = new ArrayList<>();
+        for (Expression elementExpression : arrayExpression.elements()) {
+            if (elementExpression == null) {
+                elements.add(null);
+            } else if (elementExpression instanceof SpreadElement spreadElement) {
+                Pattern restArgumentPattern = convertArrowExpressionToPattern(spreadElement.argument());
+                elements.add(new RestElement(restArgumentPattern, spreadElement.getLocation()));
+            } else {
+                elements.add(convertArrowExpressionToPattern(elementExpression));
+            }
+        }
+        return new ArrayPattern(elements, arrayExpression.getLocation());
+    }
+
+    private Pattern convertArrowExpressionToPattern(Expression expression) {
+        if (expression instanceof Identifier identifier) {
+            return identifier;
+        }
+        if (expression instanceof ObjectExpression objectExpression) {
+            return convertArrowObjectExpressionToPattern(objectExpression);
+        }
+        if (expression instanceof ArrayExpression arrayExpression) {
+            return convertArrowArrayExpressionToPattern(arrayExpression);
+        }
+        if (expression instanceof AssignmentExpression assignmentExpression
+                && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+            Pattern leftPattern = convertArrowExpressionToPattern(assignmentExpression.left());
+            return new AssignmentPattern(leftPattern, assignmentExpression.right(), assignmentExpression.getLocation());
+        }
+        throw new RuntimeException("Invalid arrow function parameter at line " +
+                ctx.currentToken.line() + ", column " + ctx.currentToken.column());
+    }
+
+    private ObjectPattern convertArrowObjectExpressionToPattern(ObjectExpression objectExpression) {
+        List<ObjectPattern.Property> properties = new ArrayList<>();
+        for (ObjectExpression.Property property : objectExpression.properties()) {
+            if (!"init".equals(property.kind()) || property.computed()) {
+                throw new RuntimeException("Invalid arrow function parameter at line " +
+                        ctx.currentToken.line() + ", column " + ctx.currentToken.column());
+            }
+            if (!(property.key() instanceof Identifier)) {
+                throw new RuntimeException("Invalid arrow function parameter at line " +
+                        ctx.currentToken.line() + ", column " + ctx.currentToken.column());
+            }
+            Pattern valuePattern = convertArrowExpressionToPattern(property.value());
+            properties.add(new ObjectPattern.Property(property.key(), valuePattern, property.shorthand()));
+        }
+        return new ObjectPattern(properties, objectExpression.getLocation());
+    }
+
+    private Identifier createSyntheticArrowParameterIdentifier(SourceLocation location, int syntheticParameterCount) {
+        String name = "$qjs4j$arrowParam$" + syntheticParameterCount + "$" + location.offset();
+        return new Identifier(name, location);
+    }
+
+    private VariableDeclaration createSyntheticArrowParameterPreludeStatement(
+            Pattern pattern,
+            Identifier sourceIdentifier,
+            SourceLocation location) {
+        VariableDeclaration.VariableDeclarator variableDeclarator =
+                new VariableDeclaration.VariableDeclarator(pattern, sourceIdentifier);
+        return new VariableDeclaration(List.of(variableDeclarator), VariableKind.LET, location);
+    }
+
+    private boolean isArrowDestructuringParameterExpression(Expression expression) {
+        if (expression instanceof ObjectExpression || expression instanceof ArrayExpression) {
+            return true;
+        }
+        if (expression instanceof AssignmentExpression assignmentExpression
+                && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+            return assignmentExpression.left() instanceof ObjectExpression
+                    || assignmentExpression.left() instanceof ArrayExpression;
+        }
+        return false;
+    }
+
+    private int parseArrowParameterExpression(
+            Expression expression,
+            List<Identifier> params,
+            List<Expression> defaults,
+            List<Statement> parameterPreludeStatements,
+            int syntheticParameterCount) {
+        if (expression instanceof Identifier identifier) {
+            params.add(identifier);
+            defaults.add(null);
+            return syntheticParameterCount;
+        }
+        if (expression instanceof AssignmentExpression assignmentExpression
+                && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN
+                && assignmentExpression.left() instanceof Identifier parameterIdentifier) {
+            params.add(parameterIdentifier);
+            defaults.add(assignmentExpression.right());
+            return syntheticParameterCount;
+        }
+        if (isArrowDestructuringParameterExpression(expression)) {
+            return parseDestructuringArrowParameter(
+                    expression,
+                    params,
+                    defaults,
+                    parameterPreludeStatements,
+                    syntheticParameterCount);
+        }
+        throw new RuntimeException("Invalid arrow function parameter at line " +
+                ctx.currentToken.line() + ", column " + ctx.currentToken.column());
+    }
+
     Expression parseAssignmentExpression() {
         SourceLocation location = ctx.getLocation();
 
@@ -258,113 +365,6 @@ final class ExpressionAssignmentParser {
         return left;
     }
 
-    private ArrayPattern convertArrowArrayExpressionToPattern(ArrayExpression arrayExpression) {
-        List<Pattern> elements = new ArrayList<>();
-        for (Expression elementExpression : arrayExpression.elements()) {
-            if (elementExpression == null) {
-                elements.add(null);
-            } else if (elementExpression instanceof SpreadElement spreadElement) {
-                Pattern restArgumentPattern = convertArrowExpressionToPattern(spreadElement.argument());
-                elements.add(new RestElement(restArgumentPattern, spreadElement.getLocation()));
-            } else {
-                elements.add(convertArrowExpressionToPattern(elementExpression));
-            }
-        }
-        return new ArrayPattern(elements, arrayExpression.getLocation());
-    }
-
-    private Pattern convertArrowExpressionToPattern(Expression expression) {
-        if (expression instanceof Identifier identifier) {
-            return identifier;
-        }
-        if (expression instanceof ObjectExpression objectExpression) {
-            return convertArrowObjectExpressionToPattern(objectExpression);
-        }
-        if (expression instanceof ArrayExpression arrayExpression) {
-            return convertArrowArrayExpressionToPattern(arrayExpression);
-        }
-        if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
-            Pattern leftPattern = convertArrowExpressionToPattern(assignmentExpression.left());
-            return new AssignmentPattern(leftPattern, assignmentExpression.right(), assignmentExpression.getLocation());
-        }
-        throw new RuntimeException("Invalid arrow function parameter at line " +
-                ctx.currentToken.line() + ", column " + ctx.currentToken.column());
-    }
-
-    private ObjectPattern convertArrowObjectExpressionToPattern(ObjectExpression objectExpression) {
-        List<ObjectPattern.Property> properties = new ArrayList<>();
-        for (ObjectExpression.Property property : objectExpression.properties()) {
-            if (!"init".equals(property.kind()) || property.computed()) {
-                throw new RuntimeException("Invalid arrow function parameter at line " +
-                        ctx.currentToken.line() + ", column " + ctx.currentToken.column());
-            }
-            if (!(property.key() instanceof Identifier)) {
-                throw new RuntimeException("Invalid arrow function parameter at line " +
-                        ctx.currentToken.line() + ", column " + ctx.currentToken.column());
-            }
-            Pattern valuePattern = convertArrowExpressionToPattern(property.value());
-            properties.add(new ObjectPattern.Property(property.key(), valuePattern, property.shorthand()));
-        }
-        return new ObjectPattern(properties, objectExpression.getLocation());
-    }
-
-    private Identifier createSyntheticArrowParameterIdentifier(SourceLocation location, int syntheticParameterCount) {
-        String name = "$qjs4j$arrowParam$" + syntheticParameterCount + "$" + location.offset();
-        return new Identifier(name, location);
-    }
-
-    private VariableDeclaration createSyntheticArrowParameterPreludeStatement(
-            Pattern pattern,
-            Identifier sourceIdentifier,
-            SourceLocation location) {
-        VariableDeclaration.VariableDeclarator variableDeclarator =
-                new VariableDeclaration.VariableDeclarator(pattern, sourceIdentifier);
-        return new VariableDeclaration(List.of(variableDeclarator), VariableKind.LET, location);
-    }
-
-    private boolean isArrowDestructuringParameterExpression(Expression expression) {
-        if (expression instanceof ObjectExpression || expression instanceof ArrayExpression) {
-            return true;
-        }
-        if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
-            return assignmentExpression.left() instanceof ObjectExpression
-                    || assignmentExpression.left() instanceof ArrayExpression;
-        }
-        return false;
-    }
-
-    private int parseArrowParameterExpression(
-            Expression expression,
-            List<Identifier> params,
-            List<Expression> defaults,
-            List<Statement> parameterPreludeStatements,
-            int syntheticParameterCount) {
-        if (expression instanceof Identifier identifier) {
-            params.add(identifier);
-            defaults.add(null);
-            return syntheticParameterCount;
-        }
-        if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN
-                && assignmentExpression.left() instanceof Identifier parameterIdentifier) {
-            params.add(parameterIdentifier);
-            defaults.add(assignmentExpression.right());
-            return syntheticParameterCount;
-        }
-        if (isArrowDestructuringParameterExpression(expression)) {
-            return parseDestructuringArrowParameter(
-                    expression,
-                    params,
-                    defaults,
-                    parameterPreludeStatements,
-                    syntheticParameterCount);
-        }
-        throw new RuntimeException("Invalid arrow function parameter at line " +
-                ctx.currentToken.line() + ", column " + ctx.currentToken.column());
-    }
-
     private int parseDestructuringArrowParameter(
             Expression expression,
             List<Identifier> params,
@@ -395,6 +395,24 @@ final class ExpressionAssignmentParser {
         return syntheticParameterCount + 1;
     }
 
+    Expression parseExpression() {
+        SourceLocation location = ctx.getLocation();
+        List<Expression> expressionsList = new ArrayList<>();
+
+        expressionsList.add(parseAssignmentExpression());
+
+        while (ctx.match(TokenType.COMMA)) {
+            ctx.advance();
+            expressionsList.add(parseAssignmentExpression());
+        }
+
+        if (expressionsList.size() == 1) {
+            return expressionsList.get(0);
+        }
+
+        return new SequenceExpression(expressionsList, location);
+    }
+
     private ASTNode wrapArrowBodyWithParameterPrelude(ASTNode body, List<Statement> parameterPreludeStatements) {
         if (parameterPreludeStatements.isEmpty()) {
             return body;
@@ -412,23 +430,5 @@ final class ExpressionAssignmentParser {
             return new BlockStatement(statements, expression.getLocation());
         }
         return body;
-    }
-
-    Expression parseExpression() {
-        SourceLocation location = ctx.getLocation();
-        List<Expression> expressionsList = new ArrayList<>();
-
-        expressionsList.add(parseAssignmentExpression());
-
-        while (ctx.match(TokenType.COMMA)) {
-            ctx.advance();
-            expressionsList.add(parseAssignmentExpression());
-        }
-
-        if (expressionsList.size() == 1) {
-            return expressionsList.get(0);
-        }
-
-        return new SequenceExpression(expressionsList, location);
     }
 }

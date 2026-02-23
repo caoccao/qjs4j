@@ -43,58 +43,6 @@ public final class AtomicsObject {
     // Global wait lists indexed by SharedArrayBuffer + index
     private static final Map<String, WaitList> waitLists = new ConcurrentHashMap<>();
 
-    private static JSValue createBigUint64(long value) {
-        BigInteger unsigned = value >= 0
-                ? BigInteger.valueOf(value)
-                : BigInteger.valueOf(value).add(BigInteger.ONE.shiftLeft(64));
-        return new JSBigInt(unsigned);
-    }
-
-    private static int getAtomicIndex(JSContext context, JSTypedArray typedArray, JSValue indexValue) {
-        if (typedArray.getBuffer().isDetached()) {
-            throw new JSTypeErrorException("TypedArray buffer is detached");
-        }
-        int typedArrayLength = typedArray.getLength();
-        final long indexLong;
-        try {
-            indexLong = JSTypeConversions.toIndex(context, indexValue);
-        } catch (JSRangeErrorException e) {
-            throw e;
-        } catch (JSErrorException e) {
-            throw e;
-        }
-        if (indexLong >= typedArrayLength) {
-            throw new JSRangeErrorException("Index out of bounds");
-        }
-        return (int) indexLong;
-    }
-
-    private static double getAtomicsWaitTimeout(JSContext context, JSValue[] args, int timeoutArgIndex) {
-        JSValue timeoutValue = args.length > timeoutArgIndex ? args[timeoutArgIndex] : JSUndefined.INSTANCE;
-        double timeoutNumber = JSTypeConversions.toNumber(context, timeoutValue).value();
-        if (Double.isNaN(timeoutNumber)) {
-            return Double.POSITIVE_INFINITY;
-        }
-        return Math.max(timeoutNumber, 0.0);
-    }
-
-    private static JSValue rethrowAsJSValue(JSContext context, JSErrorException errorException) {
-        return switch (errorException.getErrorType()) {
-            case RangeError -> context.throwRangeError(errorException.getMessage());
-            case TypeError -> context.throwTypeError(errorException.getMessage());
-            case SyntaxError -> context.throwSyntaxError(errorException.getMessage());
-            default -> context.throwError(errorException.getMessage());
-        };
-    }
-
-    private static ByteBuffer requireAtomicBuffer(JSTypedArray typedArray) {
-        ByteBuffer byteBuffer = typedArray.getBuffer().getBuffer();
-        if (byteBuffer == null) {
-            throw new JSTypeErrorException("TypedArray buffer is detached");
-        }
-        return byteBuffer;
-    }
-
     /**
      * Atomics.add(typedArray, index, value)
      * ES2017 24.4.3
@@ -397,6 +345,20 @@ public final class AtomicsObject {
         return context.throwTypeError("Atomics.compareExchange invalid typed array");
     }
 
+    private static JSValue createBigUint64(long value) {
+        BigInteger unsigned = value >= 0
+                ? BigInteger.valueOf(value)
+                : BigInteger.valueOf(value).add(BigInteger.ONE.shiftLeft(64));
+        return new JSBigInt(unsigned);
+    }
+
+    private static JSObject createWaitAsyncSyncResult(JSContext context, String value) {
+        JSObject result = context.createJSObject();
+        result.set(PropertyKey.ASYNC, JSBoolean.FALSE);
+        result.set(PropertyKey.VALUE, new JSString(value));
+        return result;
+    }
+
     /**
      * Atomics.exchange(typedArray, index, value)
      * ES2017 24.4.6
@@ -488,6 +450,34 @@ public final class AtomicsObject {
             return rethrowAsJSValue(context, e);
         }
         return context.throwTypeError("Atomics.exchange invalid typed array");
+    }
+
+    private static int getAtomicIndex(JSContext context, JSTypedArray typedArray, JSValue indexValue) {
+        if (typedArray.getBuffer().isDetached()) {
+            throw new JSTypeErrorException("TypedArray buffer is detached");
+        }
+        int typedArrayLength = typedArray.getLength();
+        final long indexLong;
+        try {
+            indexLong = JSTypeConversions.toIndex(context, indexValue);
+        } catch (JSRangeErrorException e) {
+            throw e;
+        } catch (JSErrorException e) {
+            throw e;
+        }
+        if (indexLong >= typedArrayLength) {
+            throw new JSRangeErrorException("Index out of bounds");
+        }
+        return (int) indexLong;
+    }
+
+    private static double getAtomicsWaitTimeout(JSContext context, JSValue[] args, int timeoutArgIndex) {
+        JSValue timeoutValue = args.length > timeoutArgIndex ? args[timeoutArgIndex] : JSUndefined.INSTANCE;
+        double timeoutNumber = JSTypeConversions.toNumber(context, timeoutValue).value();
+        if (Double.isNaN(timeoutNumber)) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return Math.max(timeoutNumber, 0.0);
     }
 
     private static String getWaitKey(IJSArrayBuffer buffer, int index) {
@@ -748,6 +738,23 @@ public final class AtomicsObject {
         // Java 9+ Thread.onSpinWait() provides a hint to the JVM that we're in a spin-wait loop
         Thread.onSpinWait();
         return JSUndefined.INSTANCE;
+    }
+
+    private static ByteBuffer requireAtomicBuffer(JSTypedArray typedArray) {
+        ByteBuffer byteBuffer = typedArray.getBuffer().getBuffer();
+        if (byteBuffer == null) {
+            throw new JSTypeErrorException("TypedArray buffer is detached");
+        }
+        return byteBuffer;
+    }
+
+    private static JSValue rethrowAsJSValue(JSContext context, JSErrorException errorException) {
+        return switch (errorException.getErrorType()) {
+            case RangeError -> context.throwRangeError(errorException.getMessage());
+            case TypeError -> context.throwTypeError(errorException.getMessage());
+            case SyntaxError -> context.throwSyntaxError(errorException.getMessage());
+            default -> context.throwError(errorException.getMessage());
+        };
     }
 
     /**
@@ -1106,13 +1113,6 @@ public final class AtomicsObject {
         } catch (JSErrorException e) {
             return rethrowAsJSValue(context, e);
         }
-    }
-
-    private static JSObject createWaitAsyncSyncResult(JSContext context, String value) {
-        JSObject result = context.createJSObject();
-        result.set(PropertyKey.ASYNC, JSBoolean.FALSE);
-        result.set(PropertyKey.VALUE, new JSString(value));
-        return result;
     }
 
     /**

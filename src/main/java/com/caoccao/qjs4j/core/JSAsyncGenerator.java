@@ -112,6 +112,13 @@ public final class JSAsyncGenerator extends JSObject {
         return promise;
     }
 
+    private JSObject createIteratorResultObject(JSValue value, boolean done) {
+        JSObject result = context.createJSObject();
+        result.set(PropertyKey.VALUE, value);
+        result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+        return result;
+    }
+
     /**
      * Create an iterator result promise.
      *
@@ -126,59 +133,6 @@ public final class JSAsyncGenerator extends JSObject {
         result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
         promise.fulfill(result);
         return promise;
-    }
-
-    /**
-     * Get the current state of the async generator.
-     */
-    public AsyncGeneratorState getState() {
-        return state;
-    }
-
-    /**
-     * Get the next value from the async generator.
-     * ES2018 AsyncGenerator.prototype.next()
-     *
-     * @param value Value to send into the generator
-     * @return A promise that resolves to {value, done}
-     */
-    public JSPromise next(JSValue value) {
-        return enqueueRequest(AsyncGeneratorRequestKind.NEXT, value);
-    }
-
-    private void processResult(JSValue result) {
-        if (result instanceof JSObject resultObj) {
-            JSValue doneValue = resultObj.get("done");
-            boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
-            if (done) {
-                state = AsyncGeneratorState.COMPLETED;
-                returnValue = resultObj.get(PropertyKey.VALUE);
-            } else {
-                state = AsyncGeneratorState.SUSPENDED_YIELD;
-            }
-        }
-    }
-
-    /**
-     * Return a value from the async generator and close it.
-     * ES2018 AsyncGenerator.prototype.return()
-     *
-     * @param value The return value
-     * @return A promise that resolves to {value, done: true}
-     */
-    public JSPromise return_(JSValue value) {
-        return enqueueRequest(AsyncGeneratorRequestKind.RETURN, value);
-    }
-
-    /**
-     * Throw an exception into the async generator.
-     * ES2018 AsyncGenerator.prototype.throw()
-     *
-     * @param exception The exception to throw
-     * @return A promise that resolves to the next value or rejects
-     */
-    public JSPromise throw_(JSValue exception) {
-        return enqueueRequest(AsyncGeneratorRequestKind.THROW, exception);
     }
 
     private void drainRequestQueue() {
@@ -216,6 +170,12 @@ public final class JSAsyncGenerator extends JSObject {
             context.clearAllPendingExceptions();
         }
         return promise;
+    }
+
+    private void executeRequest(AsyncGeneratorRequest request) {
+        switch (request.kind()) {
+            case NEXT, THROW, RETURN -> executeRequestWithGeneratorFunction(request);
+        }
     }
 
     private void executeRequestWithGeneratorFunction(AsyncGeneratorRequest request) {
@@ -328,17 +288,46 @@ public final class JSAsyncGenerator extends JSObject {
         }
     }
 
-    private void executeRequest(AsyncGeneratorRequest request) {
-        switch (request.kind()) {
-            case NEXT, THROW, RETURN -> executeRequestWithGeneratorFunction(request);
+    /**
+     * Get the current state of the async generator.
+     */
+    public AsyncGeneratorState getState() {
+        return state;
+    }
+
+    /**
+     * Get the next value from the async generator.
+     * ES2018 AsyncGenerator.prototype.next()
+     *
+     * @param value Value to send into the generator
+     * @return A promise that resolves to {value, done}
+     */
+    public JSPromise next(JSValue value) {
+        return enqueueRequest(AsyncGeneratorRequestKind.NEXT, value);
+    }
+
+    private void processResult(JSValue result) {
+        if (result instanceof JSObject resultObj) {
+            JSValue doneValue = resultObj.get("done");
+            boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
+            if (done) {
+                state = AsyncGeneratorState.COMPLETED;
+                returnValue = resultObj.get(PropertyKey.VALUE);
+            } else {
+                state = AsyncGeneratorState.SUSPENDED_YIELD;
+            }
         }
     }
 
-    private JSObject createIteratorResultObject(JSValue value, boolean done) {
-        JSObject result = context.createJSObject();
-        result.set(PropertyKey.VALUE, value);
-        result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
-        return result;
+    /**
+     * Return a value from the async generator and close it.
+     * ES2018 AsyncGenerator.prototype.return()
+     *
+     * @param value The return value
+     * @return A promise that resolves to {value, done: true}
+     */
+    public JSPromise return_(JSValue value) {
+        return enqueueRequest(AsyncGeneratorRequestKind.RETURN, value);
     }
 
     private void scheduleDrainRequestQueue() {
@@ -352,9 +341,26 @@ public final class JSAsyncGenerator extends JSObject {
         });
     }
 
+    /**
+     * Throw an exception into the async generator.
+     * ES2018 AsyncGenerator.prototype.throw()
+     *
+     * @param exception The exception to throw
+     * @return A promise that resolves to the next value or rejects
+     */
+    public JSPromise throw_(JSValue exception) {
+        return enqueueRequest(AsyncGeneratorRequestKind.THROW, exception);
+    }
+
     @Override
     public String toString() {
         return "[object AsyncGenerator]";
+    }
+
+    public enum AsyncGeneratorRequestKind {
+        NEXT,
+        RETURN,
+        THROW
     }
 
     /**
@@ -376,8 +382,8 @@ public final class JSAsyncGenerator extends JSObject {
         /**
          * Execute the next step of the generator.
          *
-         * @param inputValue   Value passed to next()/return()/throw()
-         * @param requestKind  The async generator request kind
+         * @param inputValue  Value passed to next()/return()/throw()
+         * @param requestKind The async generator request kind
          * @return A promise that resolves to {value, done}
          */
         JSPromise executeNext(JSValue inputValue, AsyncGeneratorRequestKind requestKind);
@@ -396,12 +402,7 @@ public final class JSAsyncGenerator extends JSObject {
          */
         JSPromise yieldNext(JSValue inputValue);
     }
-    private record AsyncGeneratorRequest(AsyncGeneratorRequestKind kind, JSValue value, JSPromise promise) {
-    }
 
-    public enum AsyncGeneratorRequestKind {
-        NEXT,
-        RETURN,
-        THROW
+    private record AsyncGeneratorRequest(AsyncGeneratorRequestKind kind, JSValue value, JSPromise promise) {
     }
 }

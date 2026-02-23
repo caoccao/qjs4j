@@ -92,6 +92,12 @@ public final class JSInt16Array extends JSTypedArray {
         return context.createJSInt16Array(length);
     }
 
+    @Override
+    public double getElement(int index) {
+        checkIndex(index);
+        ByteBuffer buf = getByteBuffer();
+        return buf.getShort(index * BYTES_PER_ELEMENT);
+    }
 
     @Override
     public String getObjectTag() {
@@ -106,13 +112,6 @@ public final class JSInt16Array extends JSTypedArray {
     @Override
     public boolean isAtomicsWriteable() {
         return false;
-    }
-
-    @Override
-    public double getElement(int index) {
-        checkIndex(index);
-        ByteBuffer buf = getByteBuffer();
-        return buf.getShort(index * BYTES_PER_ELEMENT);
     }
 
     @Override

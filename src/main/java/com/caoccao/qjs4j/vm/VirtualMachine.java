@@ -37,12 +37,14 @@ public final class VirtualMachine {
     private static final JSValue[] EMPTY_ARGS = new JSValue[0];
     private static final int INTERRUPT_CHECK_INTERVAL = 0xFFFF; // Check every ~65K opcodes
     private static final JSObject UNINITIALIZED_MARKER = new JSObject();
-    private JSGeneratorState activeGeneratorState;
     private final JSContext context;
     private final Set<JSObject> initializedConstantObjects;
     private final StringBuilder propertyAccessChain;  // Track last property access for better error messages
     private final boolean trackPropertyAccess;
     private final CallStack valueStack;
+    private JSGeneratorState activeGeneratorState;
+    private boolean awaitSuspensionEnabled;
+    private JSPromise awaitSuspensionPromise;
     private StackFrame currentFrame;
     private long executionDeadline;  // 0 = no deadline
     private long executionDeadlineNanos; // 0 = no deadline
@@ -52,8 +54,6 @@ public final class VirtualMachine {
     private int interruptCounter;
     private JSValue pendingException;
     private boolean propertyAccessLock;  // When true, don't update lastPropertyAccess (during argument evaluation)
-    private boolean awaitSuspensionEnabled;
-    private JSPromise awaitSuspensionPromise;
     private YieldResult yieldResult;  // Set when generator yields
     private int yieldSkipCount;  // How many yields to skip (for resuming generators)
 
@@ -188,33 +188,18 @@ public final class VirtualMachine {
         context.clearPendingException();
     }
 
+    private void clearActiveGeneratorSuspendedExecutionState() {
+        if (activeGeneratorState != null) {
+            activeGeneratorState.clearSuspendedExecutionState();
+        }
+    }
+
     /**
      * Clear the pending exception in the VM.
      * This is needed when an async function catches an exception.
      */
     public void clearPendingException() {
         this.pendingException = null;
-    }
-
-    public JSPromise consumeAwaitSuspensionPromise() {
-        JSPromise promise = awaitSuspensionPromise;
-        awaitSuspensionPromise = null;
-        return promise;
-    }
-
-    public JSValue executeAsyncFunction(JSGeneratorState state, JSContext context) {
-        yieldResult = null;
-        awaitSuspensionPromise = null;
-        JSGeneratorState previousActiveGeneratorState = activeGeneratorState;
-        boolean previousAwaitSuspensionEnabled = awaitSuspensionEnabled;
-        activeGeneratorState = state;
-        awaitSuspensionEnabled = true;
-        try {
-            return execute(state.getFunction(), state.getThisArg(), state.getArgs());
-        } finally {
-            activeGeneratorState = previousActiveGeneratorState;
-            awaitSuspensionEnabled = previousAwaitSuspensionEnabled;
-        }
     }
 
     private JSValue constructFunction(JSFunction function, JSValue[] args, JSValue newTarget) {
@@ -311,6 +296,12 @@ public final class VirtualMachine {
             }
         }
         return result != null ? result : JSUndefined.INSTANCE;
+    }
+
+    public JSPromise consumeAwaitSuspensionPromise() {
+        JSPromise promise = awaitSuspensionPromise;
+        awaitSuspensionPromise = null;
+        return promise;
     }
 
     private void copyDataProperties(JSValue targetValue, JSValue sourceValue, JSValue excludeListValue) {
@@ -3060,6 +3051,21 @@ public final class VirtualMachine {
         }
     }
 
+    public JSValue executeAsyncFunction(JSGeneratorState state, JSContext context) {
+        yieldResult = null;
+        awaitSuspensionPromise = null;
+        JSGeneratorState previousActiveGeneratorState = activeGeneratorState;
+        boolean previousAwaitSuspensionEnabled = awaitSuspensionEnabled;
+        activeGeneratorState = state;
+        awaitSuspensionEnabled = true;
+        try {
+            return execute(state.getFunction(), state.getThisArg(), state.getArgs());
+        } finally {
+            activeGeneratorState = previousActiveGeneratorState;
+            awaitSuspensionEnabled = previousAwaitSuspensionEnabled;
+        }
+    }
+
     /**
      * Execute a generator function with state management.
      * Resumes from saved state if generator was previously yielded.
@@ -3118,29 +3124,6 @@ public final class VirtualMachine {
             state.setCompleted(true);
             return result;
         }
-    }
-
-    private void clearActiveGeneratorSuspendedExecutionState() {
-        if (activeGeneratorState != null) {
-            activeGeneratorState.clearSuspendedExecutionState();
-        }
-    }
-
-    private void saveActiveGeneratorSuspendedExecutionState(
-            StackFrame frame,
-            int programCounter,
-            JSStackValue[] stack,
-            int stackTop,
-            int stackBase) {
-        if (activeGeneratorState == null) {
-            return;
-        }
-        int stackLength = Math.max(0, stackTop - stackBase);
-        JSStackValue[] suspendedStackValues = new JSStackValue[stackLength];
-        if (stackLength > 0) {
-            System.arraycopy(stack, stackBase, suspendedStackValues, 0, stackLength);
-        }
-        activeGeneratorState.saveSuspendedExecutionState(frame, programCounter, suspendedStackValues);
     }
 
     private JSValue getArgumentValue(int index) {
@@ -4906,6 +4889,23 @@ public final class VirtualMachine {
 
         // Fall back to Java toString
         return exceptionObj.toString();
+    }
+
+    private void saveActiveGeneratorSuspendedExecutionState(
+            StackFrame frame,
+            int programCounter,
+            JSStackValue[] stack,
+            int stackTop,
+            int stackBase) {
+        if (activeGeneratorState == null) {
+            return;
+        }
+        int stackLength = Math.max(0, stackTop - stackBase);
+        JSStackValue[] suspendedStackValues = new JSStackValue[stackLength];
+        if (stackLength > 0) {
+            System.arraycopy(stack, stackBase, suspendedStackValues, 0, stackLength);
+        }
+        activeGeneratorState.saveSuspendedExecutionState(frame, programCounter, suspendedStackValues);
     }
 
     private void setArgumentValue(int index, JSValue value) {

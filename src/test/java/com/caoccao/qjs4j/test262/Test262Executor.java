@@ -407,6 +407,114 @@ public class Test262Executor {
         global.set("$262", host262);
     }
 
+    private String prepareCode(Test262TestCase test) {
+        String code = test.getCode();
+
+        // Handle strict mode flags
+        if (test.hasFlag("onlyStrict") && !code.trim().startsWith("\"use strict\"")
+                && !code.trim().startsWith("'use strict'")) {
+            code = "\"use strict\";\n" + code;
+        }
+
+        return code;
+    }
+
+    private final class Test262Agent implements AutoCloseable {
+        private final BlockingQueue<JSValue> broadcasts;
+        private final Test262AgentHost host;
+        private final String script;
+        private final Thread thread;
+        private volatile boolean closed;
+        private volatile JSRuntime runtime;
+
+        private Test262Agent(String script, List<JSRuntime> realmRuntimes, Test262AgentHost host) {
+            this.script = script;
+            this.host = host;
+            broadcasts = new LinkedBlockingQueue<>();
+            closed = false;
+            runtime = null;
+            thread = new Thread(this::run, "qjs4j-test262-agent");
+            thread.setDaemon(true);
+        }
+
+        private JSValue awaitBroadcast() {
+            while (!closed) {
+                try {
+                    JSValue value = broadcasts.poll(100, TimeUnit.MILLISECONDS);
+                    if (value != null) {
+                        return value;
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        private void awaitClosed() {
+            try {
+                thread.join(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+            thread.interrupt();
+        }
+
+        private void markLeaving() {
+            closed = true;
+        }
+
+        private void run() {
+            List<JSRuntime> agentRealmRuntimes = new ArrayList<>();
+            try (JSRuntime agentRuntime = new JSRuntime();
+                 JSContext agentContext = agentRuntime.createContext()) {
+                runtime = agentRuntime;
+                install262Object(agentContext, agentRealmRuntimes, host, this);
+                agentContext.eval(script, "<test262-agent>", false);
+                long deadline = System.currentTimeMillis() + Math.max(asyncTimeoutMs, 1000);
+                while (!closed && System.currentTimeMillis() <= deadline) {
+                    synchronized (agentRuntime) {
+                        agentRuntime.runJobs();
+                    }
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+                synchronized (agentRuntime) {
+                    agentRuntime.runJobs();
+                }
+            } catch (Exception e) {
+                String message = e.getMessage();
+                if (message == null || message.isEmpty()) {
+                    message = e.getClass().getSimpleName();
+                }
+                host.reports.offer("Agent error: " + message);
+            } finally {
+                runtime = null;
+                for (JSRuntime realmRuntime : agentRealmRuntimes) {
+                    realmRuntime.close();
+                }
+            }
+        }
+
+        private void sendBroadcast(JSValue sharedValue) {
+            broadcasts.offer(sharedValue);
+        }
+
+        private void start() {
+            thread.start();
+        }
+    }
+
     private final class Test262AgentHost implements AutoCloseable {
         private final CopyOnWriteArrayList<Test262Agent> agents;
         private final BlockingQueue<String> reports;
@@ -428,6 +536,17 @@ public class Test262Executor {
             }
             agents.clear();
             reports.clear();
+        }
+
+        private JSNativeFunction createAgentFunction(
+                JSContext context,
+                String name,
+                int length,
+                JSNativeFunction.NativeCallback callback
+        ) {
+            JSNativeFunction function = new JSNativeFunction(name, length, callback);
+            context.transferPrototype(function, JSFunction.NAME);
+            return function;
         }
 
         private JSObject createAgentObject(JSContext context, List<JSRuntime> realmRuntimes, Test262Agent agent) {
@@ -515,11 +634,6 @@ public class Test262Executor {
             return agentObject;
         }
 
-        private void installAtomicsHelperOverrides(JSContext context) {
-            // Keep helper-provided getReportAsync()/tryYield()/trySleep(). The runtime now supports
-            // named function expressions used in atomicsHelper.js, so no post-load override is needed.
-        }
-
         private JSNativeFunction createSetTimeoutFunction(JSContext context) {
             return createAgentFunction(context, "setTimeout", 2,
                     (ctx, thisArg, args) -> {
@@ -562,123 +676,9 @@ public class Test262Executor {
                     });
         }
 
-        private JSNativeFunction createAgentFunction(
-                JSContext context,
-                String name,
-                int length,
-                JSNativeFunction.NativeCallback callback
-        ) {
-            JSNativeFunction function = new JSNativeFunction(name, length, callback);
-            context.transferPrototype(function, JSFunction.NAME);
-            return function;
+        private void installAtomicsHelperOverrides(JSContext context) {
+            // Keep helper-provided getReportAsync()/tryYield()/trySleep(). The runtime now supports
+            // named function expressions used in atomicsHelper.js, so no post-load override is needed.
         }
-    }
-
-    private final class Test262Agent implements AutoCloseable {
-        private final BlockingQueue<JSValue> broadcasts;
-        private final Test262AgentHost host;
-        private final String script;
-        private volatile boolean closed;
-        private volatile JSRuntime runtime;
-        private final Thread thread;
-
-        private Test262Agent(String script, List<JSRuntime> realmRuntimes, Test262AgentHost host) {
-            this.script = script;
-            this.host = host;
-            broadcasts = new LinkedBlockingQueue<>();
-            closed = false;
-            runtime = null;
-            thread = new Thread(this::run, "qjs4j-test262-agent");
-            thread.setDaemon(true);
-        }
-
-        @Override
-        public void close() {
-            closed = true;
-            thread.interrupt();
-        }
-
-        private void awaitClosed() {
-            try {
-                thread.join(1000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        private JSValue awaitBroadcast() {
-            while (!closed) {
-                try {
-                    JSValue value = broadcasts.poll(100, TimeUnit.MILLISECONDS);
-                    if (value != null) {
-                        return value;
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return null;
-                }
-            }
-            return null;
-        }
-
-        private void markLeaving() {
-            closed = true;
-        }
-
-        private void run() {
-            List<JSRuntime> agentRealmRuntimes = new ArrayList<>();
-            try (JSRuntime agentRuntime = new JSRuntime();
-                 JSContext agentContext = agentRuntime.createContext()) {
-                runtime = agentRuntime;
-                install262Object(agentContext, agentRealmRuntimes, host, this);
-                agentContext.eval(script, "<test262-agent>", false);
-                long deadline = System.currentTimeMillis() + Math.max(asyncTimeoutMs, 1000);
-                while (!closed && System.currentTimeMillis() <= deadline) {
-                    synchronized (agentRuntime) {
-                        agentRuntime.runJobs();
-                    }
-                    try {
-                        Thread.sleep(1);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
-                synchronized (agentRuntime) {
-                    agentRuntime.runJobs();
-                }
-            } catch (Exception e) {
-                String message = e.getMessage();
-                if (message == null || message.isEmpty()) {
-                    message = e.getClass().getSimpleName();
-                }
-                host.reports.offer("Agent error: " + message);
-            } finally {
-                runtime = null;
-                for (JSRuntime realmRuntime : agentRealmRuntimes) {
-                    realmRuntime.close();
-                }
-            }
-        }
-
-        private void sendBroadcast(JSValue sharedValue) {
-            broadcasts.offer(sharedValue);
-        }
-
-        private void start() {
-            thread.start();
-        }
-    }
-
-    private String prepareCode(Test262TestCase test) {
-        String code = test.getCode();
-
-        // Handle strict mode flags
-        if (test.hasFlag("onlyStrict") && !code.trim().startsWith("\"use strict\"")
-                && !code.trim().startsWith("'use strict'")) {
-            code = "\"use strict\";\n" + code;
-        }
-
-        return code;
     }
 }

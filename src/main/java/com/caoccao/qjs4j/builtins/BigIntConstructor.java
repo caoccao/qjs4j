@@ -26,62 +26,6 @@ import java.math.BigInteger;
  * Based on ES2020 BigInt specification.
  */
 public final class BigIntConstructor {
-    private static JSValue rethrowError(JSContext context, JSErrorException errorException) {
-        return switch (errorException.getErrorType()) {
-            case RangeError -> context.throwRangeError(errorException.getMessage());
-            case SyntaxError -> context.throwSyntaxError(errorException.getMessage());
-            case TypeError -> context.throwTypeError(errorException.getMessage());
-            default -> context.throwError(errorException.getMessage());
-        };
-    }
-
-    private static JSBigInt wrapBigIntSigned(long bitsLong, JSBigInt bigInt) {
-        if (bitsLong == 0) {
-            return new JSBigInt(BigInteger.ZERO);
-        }
-        if (bitsLong > Integer.MAX_VALUE) {
-            BigInteger value = bigInt.value();
-            if (value.signum() >= 0) {
-                if ((long) value.bitLength() < bitsLong) {
-                    return bigInt;
-                }
-            } else {
-                BigInteger minAbs = value.negate().subtract(BigInteger.ONE);
-                if ((long) minAbs.bitLength() < bitsLong) {
-                    return bigInt;
-                }
-            }
-        }
-        int bits = (int) bitsLong;
-        BigInteger modulus = BigInteger.ONE.shiftLeft(bits);
-        BigInteger result = bigInt.value().mod(modulus);
-        BigInteger halfModulus = BigInteger.ONE.shiftLeft(bits - 1);
-        if (result.compareTo(halfModulus) >= 0) {
-            result = result.subtract(modulus);
-        }
-        return new JSBigInt(result);
-    }
-
-    private static JSBigInt wrapBigIntUnsigned(long bitsLong, JSBigInt bigInt) {
-        if (bitsLong == 0) {
-            return new JSBigInt(BigInteger.ZERO);
-        }
-        if (bitsLong > Integer.MAX_VALUE) {
-            BigInteger value = bigInt.value();
-            if (value.signum() >= 0 && (long) value.bitLength() <= bitsLong) {
-                return bigInt;
-            }
-        }
-        int bits = (int) bitsLong;
-        BigInteger modulus = BigInteger.ONE.shiftLeft(bits);
-        BigInteger result = bigInt.value().mod(modulus);
-        if (result.signum() < 0) {
-            result = result.add(modulus);
-        }
-        return new JSBigInt(result);
-    }
-
-
     /**
      * BigInt.asIntN(bits, bigint)
      * ES2020 20.2.2.1
@@ -172,5 +116,60 @@ public final class BigIntConstructor {
         } else {
             return context.throwTypeError("Cannot convert value to BigInt");
         }
+    }
+
+    private static JSValue rethrowError(JSContext context, JSErrorException errorException) {
+        return switch (errorException.getErrorType()) {
+            case RangeError -> context.throwRangeError(errorException.getMessage());
+            case SyntaxError -> context.throwSyntaxError(errorException.getMessage());
+            case TypeError -> context.throwTypeError(errorException.getMessage());
+            default -> context.throwError(errorException.getMessage());
+        };
+    }
+
+    private static JSBigInt wrapBigIntSigned(long bitsLong, JSBigInt bigInt) {
+        if (bitsLong == 0) {
+            return new JSBigInt(BigInteger.ZERO);
+        }
+        if (bitsLong > Integer.MAX_VALUE) {
+            BigInteger value = bigInt.value();
+            if (value.signum() >= 0) {
+                if ((long) value.bitLength() < bitsLong) {
+                    return bigInt;
+                }
+            } else {
+                BigInteger minAbs = value.negate().subtract(BigInteger.ONE);
+                if ((long) minAbs.bitLength() < bitsLong) {
+                    return bigInt;
+                }
+            }
+        }
+        int bits = (int) bitsLong;
+        BigInteger modulus = BigInteger.ONE.shiftLeft(bits);
+        BigInteger result = bigInt.value().mod(modulus);
+        BigInteger halfModulus = BigInteger.ONE.shiftLeft(bits - 1);
+        if (result.compareTo(halfModulus) >= 0) {
+            result = result.subtract(modulus);
+        }
+        return new JSBigInt(result);
+    }
+
+    private static JSBigInt wrapBigIntUnsigned(long bitsLong, JSBigInt bigInt) {
+        if (bitsLong == 0) {
+            return new JSBigInt(BigInteger.ZERO);
+        }
+        if (bitsLong > Integer.MAX_VALUE) {
+            BigInteger value = bigInt.value();
+            if (value.signum() >= 0 && (long) value.bitLength() <= bitsLong) {
+                return bigInt;
+            }
+        }
+        int bits = (int) bitsLong;
+        BigInteger modulus = BigInteger.ONE.shiftLeft(bits);
+        BigInteger result = bigInt.value().mod(modulus);
+        if (result.signum() < 0) {
+            result = result.add(modulus);
+        }
+        return new JSBigInt(result);
     }
 }

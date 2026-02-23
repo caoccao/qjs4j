@@ -92,6 +92,12 @@ public final class JSInt8Array extends JSTypedArray {
         return context.createJSInt8Array(length);
     }
 
+    @Override
+    public double getElement(int index) {
+        checkIndex(index);
+        ByteBuffer buf = getByteBuffer();
+        return buf.get(index);
+    }
 
     @Override
     public String getObjectTag() {
@@ -106,13 +112,6 @@ public final class JSInt8Array extends JSTypedArray {
     @Override
     public boolean isAtomicsWriteable() {
         return false;
-    }
-
-    @Override
-    public double getElement(int index) {
-        checkIndex(index);
-        ByteBuffer buf = getByteBuffer();
-        return buf.get(index);
     }
 
     @Override

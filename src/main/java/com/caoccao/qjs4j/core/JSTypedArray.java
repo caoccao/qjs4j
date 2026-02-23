@@ -482,12 +482,6 @@ public abstract class JSTypedArray extends JSObject {
      */
     public abstract double getElement(int index);
 
-    public abstract String getObjectTag();
-
-    public abstract boolean isAtomicsReadableAndWriteable();
-
-    public abstract boolean isAtomicsWriteable();
-
     /**
      * Get an element as the appropriate JSValue type.
      * Regular typed arrays return JSNumber, BigInt typed arrays override to return JSBigInt.
@@ -517,6 +511,8 @@ public abstract class JSTypedArray extends JSObject {
         }
         return length;
     }
+
+    public abstract String getObjectTag();
 
     /**
      * Integer-Indexed exotic object [[GetOwnProperty]].
@@ -589,12 +585,6 @@ public abstract class JSTypedArray extends JSObject {
     }
 
     /**
-     * Integer-Indexed exotic object [[OwnPropertyKeys]].
-     * Following QuickJS JS_GetOwnPropertyNamesInternal for fast arrays (lines 8334-8354).
-     * Returns integer indices first (in ascending order), then string keys, then symbol keys.
-     */
-
-    /**
      * IntegerIndexedElementSet per ES spec.
      * Converts value to the appropriate type (ToNumber or ToBigInt), then writes
      * to the buffer only if it is still valid (not detached and index in bounds).
@@ -607,6 +597,16 @@ public abstract class JSTypedArray extends JSObject {
             setElement(index, numValue);
         }
     }
+
+    public abstract boolean isAtomicsReadableAndWriteable();
+
+    /**
+     * Integer-Indexed exotic object [[OwnPropertyKeys]].
+     * Following QuickJS JS_GetOwnPropertyNamesInternal for fast arrays (lines 8334-8354).
+     * Returns integer indices first (in ascending order), then string keys, then symbol keys.
+     */
+
+    public abstract boolean isAtomicsWriteable();
 
     /**
      * Check if this TypedArray is out of bounds due to buffer resize or detach.

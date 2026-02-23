@@ -478,62 +478,6 @@ final class StatementCompiler {
         ctx.emitter.emitOpcode(Opcode.THROW);
     }
 
-    /**
-     * Compile a block for try/catch/finally, preserving the value of the last expression.
-     */
-    void compileTryFinallyBlock(BlockStatement block) {
-        ctx.enterScope();
-        List<Statement> body = block.body();
-        for (int i = 0; i < body.size(); i++) {
-            boolean isLast = (i == body.size() - 1);
-            Statement stmt = body.get(i);
-
-            if (stmt instanceof ExpressionStatement exprStmt) {
-                delegates.expressions.compileExpression(exprStmt.expression());
-                // Keep the value on stack for the last expression, drop otherwise
-                if (!isLast) {
-                    ctx.emitter.emitOpcode(Opcode.DROP);
-                }
-            } else {
-                compileStatement(stmt, false);
-                // If last statement is not an expression, push undefined
-                if (isLast) {
-                    ctx.emitter.emitOpcode(Opcode.UNDEFINED);
-                }
-            }
-        }
-        // If block is empty, push undefined
-        if (body.isEmpty()) {
-            ctx.emitter.emitOpcode(Opcode.UNDEFINED);
-        }
-        delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        ctx.exitScope();
-    }
-
-    void compileTryStatement(TryStatement tryStmt) {
-        if (tryStmt.finalizer() == null) {
-            compileTryCatchPart(tryStmt);
-            return;
-        }
-
-        int finallyCatchJump = ctx.emitter.emitJump(Opcode.CATCH);
-        compileTryCatchPart(tryStmt);
-        ctx.emitter.emitOpcode(Opcode.NIP_CATCH);
-        ctx.emitter.emitOpcode(Opcode.DROP);
-        compileTryFinallyBlock(tryStmt.finalizer());
-        int jumpAfterFinallyExceptionPath = ctx.emitter.emitJump(Opcode.GOTO);
-
-        ctx.emitter.patchJump(finallyCatchJump, ctx.emitter.currentOffset());
-        int finallyExceptionLocalIndex = ctx.currentScope().declareLocal("$finally_exception_" + ctx.emitter.currentOffset());
-        ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, finallyExceptionLocalIndex);
-        compileTryFinallyBlock(tryStmt.finalizer());
-        ctx.emitter.emitOpcode(Opcode.DROP);
-        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, finallyExceptionLocalIndex);
-        ctx.emitter.emitOpcode(Opcode.THROW);
-
-        ctx.emitter.patchJump(jumpAfterFinallyExceptionPath, ctx.emitter.currentOffset());
-    }
-
     private void compileTryCatchPart(TryStatement tryStmt) {
         // Mark catch handler location
         int catchJump = -1;
@@ -618,6 +562,62 @@ final class StatementCompiler {
 
         // Patch jump over catch
         ctx.emitter.patchJump(jumpOverCatch, ctx.emitter.currentOffset());
+    }
+
+    /**
+     * Compile a block for try/catch/finally, preserving the value of the last expression.
+     */
+    void compileTryFinallyBlock(BlockStatement block) {
+        ctx.enterScope();
+        List<Statement> body = block.body();
+        for (int i = 0; i < body.size(); i++) {
+            boolean isLast = (i == body.size() - 1);
+            Statement stmt = body.get(i);
+
+            if (stmt instanceof ExpressionStatement exprStmt) {
+                delegates.expressions.compileExpression(exprStmt.expression());
+                // Keep the value on stack for the last expression, drop otherwise
+                if (!isLast) {
+                    ctx.emitter.emitOpcode(Opcode.DROP);
+                }
+            } else {
+                compileStatement(stmt, false);
+                // If last statement is not an expression, push undefined
+                if (isLast) {
+                    ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+                }
+            }
+        }
+        // If block is empty, push undefined
+        if (body.isEmpty()) {
+            ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+        }
+        delegates.emitHelpers.emitCurrentScopeUsingDisposal();
+        ctx.exitScope();
+    }
+
+    void compileTryStatement(TryStatement tryStmt) {
+        if (tryStmt.finalizer() == null) {
+            compileTryCatchPart(tryStmt);
+            return;
+        }
+
+        int finallyCatchJump = ctx.emitter.emitJump(Opcode.CATCH);
+        compileTryCatchPart(tryStmt);
+        ctx.emitter.emitOpcode(Opcode.NIP_CATCH);
+        ctx.emitter.emitOpcode(Opcode.DROP);
+        compileTryFinallyBlock(tryStmt.finalizer());
+        int jumpAfterFinallyExceptionPath = ctx.emitter.emitJump(Opcode.GOTO);
+
+        ctx.emitter.patchJump(finallyCatchJump, ctx.emitter.currentOffset());
+        int finallyExceptionLocalIndex = ctx.currentScope().declareLocal("$finally_exception_" + ctx.emitter.currentOffset());
+        ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, finallyExceptionLocalIndex);
+        compileTryFinallyBlock(tryStmt.finalizer());
+        ctx.emitter.emitOpcode(Opcode.DROP);
+        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, finallyExceptionLocalIndex);
+        ctx.emitter.emitOpcode(Opcode.THROW);
+
+        ctx.emitter.patchJump(jumpAfterFinallyExceptionPath, ctx.emitter.currentOffset());
     }
 
     void compileVariableDeclaration(VariableDeclaration varDecl) {

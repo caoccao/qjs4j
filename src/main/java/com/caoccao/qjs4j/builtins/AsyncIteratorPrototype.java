@@ -25,26 +25,6 @@ public final class AsyncIteratorPrototype {
     private AsyncIteratorPrototype() {
     }
 
-    private static JSPromise createPromiseResolve(JSContext context, JSValue value) {
-        JSPromise wrapperPromise = context.createJSPromise();
-        if (value instanceof JSPromise promiseValue) {
-            promiseValue.get(context, PropertyKey.CONSTRUCTOR);
-            if (context.hasPendingException()) {
-                JSValue exception = context.getPendingException();
-                context.clearAllPendingExceptions();
-                wrapperPromise.reject(exception);
-                return wrapperPromise;
-            }
-        }
-        wrapperPromise.resolve(context, value);
-        if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearAllPendingExceptions();
-            wrapperPromise.reject(exception);
-        }
-        return wrapperPromise;
-    }
-
     /**
      * %AsyncIteratorPrototype%[@@asyncDispose]().
      * Calls `this.return?.(undefined)` and resolves to `undefined`.
@@ -126,5 +106,25 @@ public final class AsyncIteratorPrototype {
                 )
         );
         return resultPromise;
+    }
+
+    private static JSPromise createPromiseResolve(JSContext context, JSValue value) {
+        JSPromise wrapperPromise = context.createJSPromise();
+        if (value instanceof JSPromise promiseValue) {
+            promiseValue.get(context, PropertyKey.CONSTRUCTOR);
+            if (context.hasPendingException()) {
+                JSValue exception = context.getPendingException();
+                context.clearAllPendingExceptions();
+                wrapperPromise.reject(exception);
+                return wrapperPromise;
+            }
+        }
+        wrapperPromise.resolve(context, value);
+        if (context.hasPendingException()) {
+            JSValue exception = context.getPendingException();
+            context.clearAllPendingExceptions();
+            wrapperPromise.reject(exception);
+        }
+        return wrapperPromise;
     }
 }

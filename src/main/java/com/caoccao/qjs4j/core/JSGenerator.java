@@ -89,6 +89,16 @@ public final class JSGenerator extends JSObject {
         return new JSGenerator(context, iteratorFunction);
     }
 
+    public JSObject completeReturnWithoutResume(JSValue value) {
+        JSValue returnValue = value != null ? value : JSUndefined.INSTANCE;
+        state = State.COMPLETED;
+        done = true;
+        if (generatorState != null) {
+            generatorState.setCompleted(true);
+        }
+        return createIteratorResult(returnValue, true);
+    }
+
     /**
      * Create an iterator result object: { value: any, done: boolean }
      */
@@ -104,16 +114,6 @@ public final class JSGenerator extends JSObject {
      */
     public State getState() {
         return state;
-    }
-
-    public JSObject completeReturnWithoutResume(JSValue value) {
-        JSValue returnValue = value != null ? value : JSUndefined.INSTANCE;
-        state = State.COMPLETED;
-        done = true;
-        if (generatorState != null) {
-            generatorState.setCompleted(true);
-        }
-        return createIteratorResult(returnValue, true);
     }
 
     /**
