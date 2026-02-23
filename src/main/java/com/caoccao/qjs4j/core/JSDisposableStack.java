@@ -45,7 +45,7 @@ public final class JSDisposableStack extends JSObject {
 
     public JSValue adopt(JSContext context, JSValue value, JSValue onDispose) {
         if (disposed) {
-            return context.throwReferenceError("Cannot add to a disposed DisposableStack");
+            return context.throwReferenceError("Cannot call DisposableStack.prototype.adopt on an already-disposed DisposableStack");
         }
         if (!(onDispose instanceof JSFunction disposeCallback)) {
             return context.throwTypeError("DisposableStack.adopt requires a function");
@@ -60,7 +60,7 @@ public final class JSDisposableStack extends JSObject {
 
     public JSValue defer(JSContext context, JSValue onDispose) {
         if (disposed) {
-            return context.throwReferenceError("Cannot add to a disposed DisposableStack");
+            return context.throwReferenceError("Cannot call DisposableStack.prototype.defer on an already-disposed DisposableStack");
         }
         if (!(onDispose instanceof JSFunction disposeCallback)) {
             return context.throwTypeError("DisposableStack.defer requires a function");
@@ -137,7 +137,7 @@ public final class JSDisposableStack extends JSObject {
 
     public JSValue move(JSContext context) {
         if (disposed) {
-            return context.throwReferenceError("Cannot move a disposed DisposableStack");
+            return context.throwReferenceError("Cannot call DisposableStack.prototype.move on an already-disposed DisposableStack");
         }
         JSDisposableStack newStack = context.createJSDisposableStack();
         newStack.disposeRecords.addAll(disposeRecords);
@@ -148,13 +148,13 @@ public final class JSDisposableStack extends JSObject {
 
     public JSValue use(JSContext context, JSValue value) {
         if (disposed) {
-            return context.throwReferenceError("Cannot add to a disposed DisposableStack");
+            return context.throwReferenceError("Cannot call DisposableStack.prototype.use on an already-disposed DisposableStack");
         }
         if (value.isNullOrUndefined()) {
             return value;
         }
         if (!(value instanceof JSObject objectValue)) {
-            return context.throwTypeError("DisposableStack.use requires an object or null/undefined");
+            return context.throwTypeError("An object is expected with `using` declarations");
         }
 
         JSValue disposeMethodValue = objectValue.get(context, PropertyKey.SYMBOL_DISPOSE);
