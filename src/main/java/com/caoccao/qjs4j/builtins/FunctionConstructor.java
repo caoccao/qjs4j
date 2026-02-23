@@ -62,6 +62,16 @@ public final class FunctionConstructor {
                 "<AsyncFunction>", "Failed to create async function: ");
     }
 
+    public static JSValue callAsyncGenerator(JSContext context, JSValue thisArg, JSValue[] args) {
+        return callWithWrapper(context, args, "(async function* anonymous(", "\n) {\n", "\n})",
+                "<AsyncGeneratorFunction>", "Failed to create async generator function: ");
+    }
+
+    public static JSValue callGenerator(JSContext context, JSValue thisArg, JSValue[] args) {
+        return callWithWrapper(context, args, "(function* anonymous(", "\n) {\n", "\n})",
+                "<GeneratorFunction>", "Failed to create generator function: ");
+    }
+
     private static JSValue callWithWrapper(
             JSContext context,
             JSValue[] args,
@@ -112,7 +122,7 @@ public final class FunctionConstructor {
         // Build the function source code
         StringBuilder functionSource = new StringBuilder(sourcePrefix);
         if (!paramNames.isEmpty()) {
-            functionSource.append(String.join(", ", paramNames));
+            functionSource.append(String.join(",", paramNames));
         }
         functionSource.append(parameterSuffix);
         functionSource.append(body);

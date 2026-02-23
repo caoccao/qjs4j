@@ -40,6 +40,54 @@ final class FunctionClassCompiler {
         fieldCompiler = new FunctionClassFieldCompiler(ctx, delegates);
     }
 
+    /**
+     * Convert a pattern to a string representation for source generation.
+     * Used when generating synthetic source for Function constructor.
+     */
+    private static String patternToString(Pattern pattern) {
+        if (pattern instanceof Identifier id) {
+            return id.name();
+        } else if (pattern instanceof ObjectPattern objPattern) {
+            StringBuilder sb = new StringBuilder("{");
+            for (int i = 0; i < objPattern.properties().size(); i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                ObjectPattern.Property prop = objPattern.properties().get(i);
+                if (prop.shorthand()) {
+                    sb.append(patternToString(prop.value()));
+                } else {
+                    if (prop.key() instanceof Identifier keyId) {
+                        sb.append(keyId.name());
+                    } else {
+                        sb.append("?");
+                    }
+                    sb.append(": ").append(patternToString(prop.value()));
+                }
+            }
+            sb.append("}");
+            return sb.toString();
+        } else if (pattern instanceof ArrayPattern arrPattern) {
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < arrPattern.elements().size(); i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                Pattern element = arrPattern.elements().get(i);
+                if (element != null) {
+                    sb.append(patternToString(element));
+                }
+            }
+            sb.append("]");
+            return sb.toString();
+        } else if (pattern instanceof AssignmentPattern assignPattern) {
+            return patternToString(assignPattern.left()) + " = ...";
+        } else if (pattern instanceof RestElement restElement) {
+            return "..." + patternToString(restElement.argument());
+        }
+        return "?";
+    }
+
     void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
@@ -68,9 +116,7 @@ final class FunctionClassCompiler {
             functionContext.strictMode = true;
         }
 
-        for (Identifier param : arrowExpr.params()) {
-            functionContext.currentScope().declareParameter(param.name());
-        }
+        List<int[]> destructuringParams = declareParameters(arrowExpr.params(), functionContext, funcDelegates);
 
         // Pre-declare 'arguments' as a local when the arrow function has parameter expressions
         // and the body contains 'var arguments'. This is needed so that:
@@ -108,6 +154,9 @@ final class FunctionClassCompiler {
             functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
             functionContext.emitter.emitU16(restLocalIndex);
         }
+
+        // Emit destructuring for pattern parameters after defaults and rest
+        emitParameterDestructuring(arrowExpr.params(), destructuringParams, functionContext, funcDelegates);
 
         // Compile function body
         // Arrow functions can have expression body or block statement body
@@ -168,7 +217,7 @@ final class FunctionClassCompiler {
                 functionContext.strictMode,  // strict - inherit from enclosing scope
                 functionSource   // source code for toString()
         );
-        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(arrowExpr.defaults(), arrowExpr.restParameter()));
+        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(arrowExpr.params(), arrowExpr.defaults(), arrowExpr.restParameter()));
 
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
@@ -676,9 +725,7 @@ final class FunctionClassCompiler {
             functionContext.strictMode = true;
         }
 
-        for (Identifier param : funcDecl.params()) {
-            functionContext.currentScope().declareParameter(param.name());
-        }
+        List<int[]> destructuringParams = declareParameters(funcDecl.params(), functionContext, funcDelegates);
 
         // Emit default parameter initialization following QuickJS pattern
         if (funcDecl.defaults() != null) {
@@ -703,6 +750,9 @@ final class FunctionClassCompiler {
             functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
             functionContext.emitter.emitU16(restLocalIndex);
         }
+
+        // Emit destructuring for pattern parameters after defaults and rest
+        emitParameterDestructuring(funcDecl.params(), destructuringParams, functionContext, funcDelegates);
 
         // If this is a generator function, emit INITIAL_YIELD at the start
         if (funcDecl.isGenerator()) {
@@ -787,7 +837,7 @@ final class FunctionClassCompiler {
                 if (i > 0) {
                     funcSource.append(", ");
                 }
-                funcSource.append(funcDecl.params().get(i).name());
+                funcSource.append(patternToString(funcDecl.params().get(i)));
             }
             if (funcDecl.restParameter() != null) {
                 if (!funcDecl.params().isEmpty()) {
@@ -809,8 +859,9 @@ final class FunctionClassCompiler {
 
         // Create JSBytecodeFunction
         int definedArgCount = CompilerContext.computeDefinedArgCount(funcDecl.params(), funcDecl.defaults(), funcDecl.restParameter() != null);
-        // Per ES spec FunctionAllocate: async functions and async generators are NOT constructable
-        boolean isFuncConstructor = !funcDecl.isAsync();
+        // Per ES spec FunctionAllocate: async functions, generator functions,
+        // async generators are NOT constructable
+        boolean isFuncConstructor = !funcDecl.isAsync() && !funcDecl.isGenerator();
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
                 functionName,
@@ -825,7 +876,7 @@ final class FunctionClassCompiler {
                 functionSource,  // source code for toString()
                 selfCaptureIndex // closure self-reference index (-1 if none)
         );
-        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(funcDecl.defaults(), funcDecl.restParameter()));
+        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(funcDecl.params(), funcDecl.defaults(), funcDecl.restParameter()));
 
         delegates.emitHelpers.emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool
@@ -894,18 +945,15 @@ final class FunctionClassCompiler {
             functionContext.strictMode = true;
         }
 
-        for (Identifier param : functionExpression.params()) {
-            functionContext.currentScope().declareParameter(param.name());
-        }
+        List<int[]> destructuringParams = declareParameters(functionExpression.params(), functionContext, funcDelegates);
 
         if (functionExpression.id() != null) {
             boolean conflictsWithParameter = false;
-            for (Identifier param : functionExpression.params()) {
-                if (functionExpression.id().name().equals(param.name())) {
-                    conflictsWithParameter = true;
-                    break;
-                }
+            Set<String> allParamNames = new HashSet<>();
+            for (Pattern param : functionExpression.params()) {
+                allParamNames.addAll(CompilerContext.extractBoundNames(param));
             }
+            conflictsWithParameter = allParamNames.contains(functionExpression.id().name());
             if (!conflictsWithParameter && (functionExpression.restParameter() == null
                     || !functionExpression.id().name().equals(functionExpression.restParameter().argument().name()))) {
                 functionContext.currentScope().declareLocal(functionExpression.id().name());
@@ -935,6 +983,9 @@ final class FunctionClassCompiler {
             functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
             functionContext.emitter.emitU16(restLocalIndex);
         }
+
+        // Emit destructuring for pattern parameters after defaults and rest
+        emitParameterDestructuring(functionExpression.params(), destructuringParams, functionContext, funcDelegates);
 
         // If this is a generator function, emit INITIAL_YIELD at the start
         if (functionExpression.isGenerator()) {
@@ -1006,9 +1057,11 @@ final class FunctionClassCompiler {
 
         // Create JSBytecodeFunction
         int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter() != null);
-        // Per ES spec FunctionAllocate: async functions, async generators, and
-        // getter/setter methods are NOT constructable
-        boolean isFuncConstructor = !forceNonConstructor && !functionExpression.isAsync();
+        // Per ES spec FunctionAllocate: async functions, generator functions,
+        // async generators, and getter/setter methods are NOT constructable
+        boolean isFuncConstructor = !forceNonConstructor
+                && !functionExpression.isAsync()
+                && !functionExpression.isGenerator();
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
                 functionName,
@@ -1022,7 +1075,7 @@ final class FunctionClassCompiler {
                 isStrict,        // strict - detected from "use strict" directive in function body
                 functionSource   // source code for toString()
         );
-        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.defaults(), functionExpression.restParameter()));
+        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter()));
         if (functionExpressionSelfLocalIndex != null) {
             function.setSelfLocalIndex(functionExpressionSelfLocalIndex);
         }
@@ -1062,14 +1115,15 @@ final class FunctionClassCompiler {
         methodCtx.inGlobalScope = false;
         methodCtx.isInAsyncFunction = functionExpression.isAsync();
 
-        for (Identifier param : functionExpression.params()) {
-            methodCtx.currentScope().declareParameter(param.name());
-        }
+        List<int[]> methodDestructuringParams = declareParameters(functionExpression.params(), methodCtx, methodDelegates);
 
         // Emit default parameter initialization following QuickJS pattern
         if (functionExpression.defaults() != null) {
             delegates.emitHelpers.emitDefaultParameterInit(methodCompiler, functionExpression.defaults());
         }
+
+        // Emit destructuring for pattern parameters after defaults
+        emitParameterDestructuring(functionExpression.params(), methodDestructuringParams, methodCtx, methodDelegates);
 
         // If this is a generator method, emit INITIAL_YIELD at the start
         if (functionExpression.isGenerator()) {
@@ -1117,6 +1171,10 @@ final class FunctionClassCompiler {
 
         // Create JSBytecodeFunction for the method
         int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter() != null);
+
+        // Extract method source code from original source for Function.prototype.toString
+        String methodSource = ctx.extractSourceCode(functionExpression.getLocation());
+
         JSBytecodeFunction methodFunc = new JSBytecodeFunction(
                 methodBytecode,
                 methodName,
@@ -1128,9 +1186,9 @@ final class FunctionClassCompiler {
                 functionExpression.isGenerator(),
                 false,           // isArrow - methods are not arrow functions
                 true,            // strict - classes are always strict mode
-                "method " + methodName + "() { [method body] }"  // source for toString
+                methodSource     // source code for toString()
         );
-        methodFunc.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.defaults(), functionExpression.restParameter()));
+        methodFunc.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter()));
         return methodFunc;
     }
 
@@ -1422,6 +1480,51 @@ final class FunctionClassCompiler {
         rawArray.freeze();
         templateObject.freeze();
         return templateObject;
+    }
+
+    /**
+     * Declare function parameters and emit destructuring for pattern params.
+     * For Identifier params, declares as a named parameter slot.
+     * For destructuring Pattern params (ObjectPattern, ArrayPattern), declares
+     * a synthetic parameter slot and emits destructuring code after defaults/rest.
+     *
+     * @return list of (index, pattern) pairs for destructuring params that need
+     * post-processing after default/rest initialization
+     */
+    private List<int[]> declareParameters(List<Pattern> params, CompilerContext functionContext,
+                                          CompilerDelegates funcDelegates) {
+        List<int[]> destructuringParams = new ArrayList<>();
+        for (int i = 0; i < params.size(); i++) {
+            Pattern param = params.get(i);
+            if (param instanceof Identifier id) {
+                functionContext.currentScope().declareParameter(id.name());
+            } else {
+                // Destructuring parameter: declare a synthetic slot for the argument
+                int slotIndex = functionContext.currentScope().declareParameter("$param_" + i);
+                // Declare local variables for all bound names in the pattern
+                funcDelegates.patterns.declarePatternVariables(param);
+                destructuringParams.add(new int[]{slotIndex, i});
+            }
+        }
+        return destructuringParams;
+    }
+
+    /**
+     * Emit destructuring code for pattern parameters after defaults and rest handling.
+     * Reads the argument value from the synthetic parameter slot and destructures it.
+     */
+    private void emitParameterDestructuring(List<Pattern> params, List<int[]> destructuringParams,
+                                            CompilerContext functionContext,
+                                            CompilerDelegates funcDelegates) {
+        for (int[] entry : destructuringParams) {
+            int slotIndex = entry[0];
+            int paramIndex = entry[1];
+            Pattern pattern = params.get(paramIndex);
+            // Push the argument value onto the stack
+            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, slotIndex);
+            // Destructure and assign to local variables
+            funcDelegates.patterns.compilePatternAssignment(pattern);
+        }
     }
 
     void installPrivateStaticMethods(

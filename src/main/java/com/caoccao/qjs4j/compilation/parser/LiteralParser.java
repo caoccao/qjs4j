@@ -29,57 +29,57 @@ import java.util.List;
  * Also contains template scanning utility methods for finding expression boundaries
  * and processing escape sequences within template strings.
  */
-record LiteralParser(ParserContext ctx, ParserDelegates delegates) {
+record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
 
     private int findTemplateExpressionEnd(String templateStr, int expressionStart) {
         int braceDepth = 1;
-        int pos = expressionStart;
+        int position = expressionStart;
         boolean regexAllowed = true;
 
-        while (pos < templateStr.length()) {
-            char c = templateStr.charAt(pos);
+        while (position < templateStr.length()) {
+            char c = templateStr.charAt(position);
 
             if (Character.isWhitespace(c)) {
-                pos++;
+                position++;
                 continue;
             }
 
             if (c == '\'' || c == '"') {
-                pos = skipQuotedString(templateStr, pos, c);
+                position = skipQuotedString(templateStr, position, c);
                 regexAllowed = false;
                 continue;
             }
 
             if (c == '`') {
-                pos = skipNestedTemplateLiteral(templateStr, pos);
+                position = skipNestedTemplateLiteral(templateStr, position);
                 regexAllowed = false;
                 continue;
             }
 
             if (c == '/') {
-                if (pos + 1 < templateStr.length()) {
-                    char next = templateStr.charAt(pos + 1);
+                if (position + 1 < templateStr.length()) {
+                    char next = templateStr.charAt(position + 1);
                     if (next == '/') {
-                        pos = skipLineComment(templateStr, pos + 2);
+                        position = skipLineComment(templateStr, position + 2);
                         regexAllowed = true;
                         continue;
                     }
                     if (next == '*') {
-                        pos = skipBlockComment(templateStr, pos + 2);
+                        position = skipBlockComment(templateStr, position + 2);
                         regexAllowed = true;
                         continue;
                     }
                 }
 
                 if (regexAllowed) {
-                    pos = skipRegexLiteral(templateStr, pos);
+                    position = skipRegexLiteral(templateStr, position);
                     regexAllowed = false;
                     continue;
                 }
 
-                pos++;
-                if (pos < templateStr.length() && templateStr.charAt(pos) == '=') {
-                    pos++;
+                position++;
+                if (position < templateStr.length() && templateStr.charAt(position) == '=') {
+                    position++;
                 }
                 regexAllowed = true;
                 continue;
@@ -87,7 +87,7 @@ record LiteralParser(ParserContext ctx, ParserDelegates delegates) {
 
             if (c == '{') {
                 braceDepth++;
-                pos++;
+                position++;
                 regexAllowed = true;
                 continue;
             }
@@ -95,47 +95,47 @@ record LiteralParser(ParserContext ctx, ParserDelegates delegates) {
             if (c == '}') {
                 braceDepth--;
                 if (braceDepth == 0) {
-                    return pos;
+                    return position;
                 }
-                pos++;
+                position++;
                 regexAllowed = false;
                 continue;
             }
 
             if (c == '(' || c == '[' || c == ',' || c == ';' || c == ':') {
-                pos++;
+                position++;
                 regexAllowed = true;
                 continue;
             }
 
             if (c == ')' || c == ']') {
-                pos++;
+                position++;
                 regexAllowed = false;
                 continue;
             }
 
             if (c == '.') {
-                if (pos + 2 < templateStr.length()
-                        && templateStr.charAt(pos + 1) == '.'
-                        && templateStr.charAt(pos + 2) == '.') {
-                    pos += 3;
+                if (position + 2 < templateStr.length()
+                        && templateStr.charAt(position + 1) == '.'
+                        && templateStr.charAt(position + 2) == '.') {
+                    position += 3;
                     regexAllowed = true;
-                } else if (pos + 1 < templateStr.length() && Character.isDigit(templateStr.charAt(pos + 1))) {
-                    pos = skipNumberLiteral(templateStr, pos);
+                } else if (position + 1 < templateStr.length() && Character.isDigit(templateStr.charAt(position + 1))) {
+                    position = skipNumberLiteral(templateStr, position);
                     regexAllowed = false;
                 } else {
-                    pos++;
+                    position++;
                     regexAllowed = false;
                 }
                 continue;
             }
 
-            if (ctx.isIdentifierStartChar(c)) {
-                int start = pos++;
-                while (pos < templateStr.length() && ctx.isIdentifierPartChar(templateStr.charAt(pos))) {
-                    pos++;
+            if (parserContext.isIdentifierStartChar(c)) {
+                int start = position++;
+                while (position < templateStr.length() && parserContext.isIdentifierPartChar(templateStr.charAt(position))) {
+                    position++;
                 }
-                String identifier = templateStr.substring(start, pos);
+                String identifier = templateStr.substring(start, position);
                 regexAllowed = switch (identifier) {
                     case "return", "throw", "case", "delete", "void", "typeof",
                          "instanceof", "in", "of", "new", "do", "else", "yield", "await" -> true;
@@ -145,35 +145,35 @@ record LiteralParser(ParserContext ctx, ParserDelegates delegates) {
             }
 
             if (Character.isDigit(c)) {
-                pos = skipNumberLiteral(templateStr, pos);
+                position = skipNumberLiteral(templateStr, position);
                 regexAllowed = false;
                 continue;
             }
 
             if ("+-*%&|^!~<>=?".indexOf(c) >= 0) {
-                pos++;
-                if (pos < templateStr.length()) {
-                    char next = templateStr.charAt(pos);
+                position++;
+                if (position < templateStr.length()) {
+                    char next = templateStr.charAt(position);
                     if (next == '=' || (next == c && "&|+-<>?".indexOf(c) >= 0)) {
-                        pos++;
+                        position++;
                     } else if (c == '=' && next == '>') {
-                        pos++;
+                        position++;
                     }
                 }
-                if (c == '>' && pos < templateStr.length() && templateStr.charAt(pos) == '>') {
-                    pos++;
-                    if (pos < templateStr.length() && templateStr.charAt(pos) == '>') {
-                        pos++;
+                if (c == '>' && position < templateStr.length() && templateStr.charAt(position) == '>') {
+                    position++;
+                    if (position < templateStr.length() && templateStr.charAt(position) == '>') {
+                        position++;
                     }
-                    if (pos < templateStr.length() && templateStr.charAt(pos) == '=') {
-                        pos++;
+                    if (position < templateStr.length() && templateStr.charAt(position) == '=') {
+                        position++;
                     }
                 }
                 regexAllowed = true;
                 continue;
             }
 
-            pos++;
+            position++;
             regexAllowed = false;
         }
 
@@ -197,95 +197,98 @@ record LiteralParser(ParserContext ctx, ParserDelegates delegates) {
     }
 
     Expression parseArrayExpression() {
-        SourceLocation location = ctx.getLocation();
-        ctx.expect(TokenType.LBRACKET);
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.LBRACKET);
 
         List<Expression> elements = new ArrayList<>();
 
-        if (!ctx.match(TokenType.RBRACKET)) {
+        if (!parserContext.match(TokenType.RBRACKET)) {
             do {
-                if (ctx.match(TokenType.COMMA)) {
-                    ctx.advance();
+                if (parserContext.match(TokenType.COMMA)) {
+                    parserContext.advance();
                     elements.add(null); // hole in array
-                } else if (ctx.match(TokenType.ELLIPSIS)) {
+                } else if (parserContext.match(TokenType.ELLIPSIS)) {
                     // Spread element: ...expr
-                    SourceLocation spreadLocation = ctx.getLocation();
-                    ctx.advance(); // consume ELLIPSIS
+                    SourceLocation spreadLocation = parserContext.getLocation();
+                    parserContext.advance(); // consume ELLIPSIS
                     Expression argument = delegates.expressions.parseAssignmentExpression();
                     elements.add(new SpreadElement(argument, spreadLocation));
-                    if (ctx.match(TokenType.COMMA)) {
-                        ctx.advance();
-                    } else if (!ctx.match(TokenType.RBRACKET)) {
+                    if (parserContext.match(TokenType.COMMA)) {
+                        parserContext.advance();
+                    } else if (!parserContext.match(TokenType.RBRACKET)) {
                         // After a spread element, expect comma or closing bracket
-                        ctx.expect(TokenType.RBRACKET);
+                        parserContext.expect(TokenType.RBRACKET);
                     }
                 } else {
                     elements.add(delegates.expressions.parseAssignmentExpression());
-                    if (ctx.match(TokenType.COMMA)) {
-                        ctx.advance();
-                    } else if (!ctx.match(TokenType.RBRACKET)) {
+                    if (parserContext.match(TokenType.COMMA)) {
+                        parserContext.advance();
+                    } else if (!parserContext.match(TokenType.RBRACKET)) {
                         // After an element, expect comma or closing bracket
                         // This catches cases like [a b] which should be a SyntaxError
-                        ctx.expect(TokenType.RBRACKET);
+                        parserContext.expect(TokenType.RBRACKET);
                     }
                 }
-            } while (!ctx.match(TokenType.RBRACKET) && !ctx.match(TokenType.EOF));
+            } while (!parserContext.match(TokenType.RBRACKET) && !parserContext.match(TokenType.EOF));
         }
 
-        ctx.expect(TokenType.RBRACKET);
+        parserContext.expect(TokenType.RBRACKET);
         return new ArrayExpression(elements, location);
     }
 
     Expression parseObjectExpression() {
-        SourceLocation location = ctx.getLocation();
-        ctx.expect(TokenType.LBRACE);
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.LBRACE);
 
         List<ObjectExpression.Property> properties = new ArrayList<>();
 
-        while (!ctx.match(TokenType.RBRACE) && !ctx.match(TokenType.EOF)) {
+        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
             boolean isAsync = false;
             boolean isGenerator = false;
 
+            // Capture the method start location before any modifiers (async, *)
+            SourceLocation methodStartLocation = parserContext.getLocation();
+
             // Check for 'async' modifier (only if NOT followed by colon or comma)
-            if (ctx.match(TokenType.ASYNC)) {
+            if (parserContext.match(TokenType.ASYNC)) {
                 // Peek ahead to determine if this is a modifier or property name
-                if (ctx.nextToken.type() == TokenType.COLON || ctx.nextToken.type() == TokenType.COMMA) {
+                if (parserContext.nextToken.type() == TokenType.COLON || parserContext.nextToken.type() == TokenType.COMMA) {
                     // { async: value } or { async, ... } - async is property name
                     // Don't advance, let parsePropertyName handle it
                 } else {
                     // async is likely a modifier for method
                     isAsync = true;
-                    ctx.advance();
+                    parserContext.advance();
                 }
             }
 
             // Check for generator *
-            if (ctx.match(TokenType.MUL)) {
+            if (parserContext.match(TokenType.MUL)) {
                 isGenerator = true;
-                ctx.advance();
+                parserContext.advance();
             }
 
             // Check for getter/setter: get name() {} or set name(v) {}
             // Similar to parseClassElement logic
-            if (!isAsync && !isGenerator && ctx.match(TokenType.IDENTIFIER)) {
-                String name = ctx.currentToken.value();
+            if (!isAsync && !isGenerator && parserContext.match(TokenType.IDENTIFIER)) {
+                String name = parserContext.currentToken.value();
                 if (("get".equals(name) || "set".equals(name)) &&
-                        ctx.nextToken.type() != TokenType.COLON &&
-                        ctx.nextToken.type() != TokenType.COMMA &&
-                        ctx.nextToken.type() != TokenType.LPAREN &&
-                        ctx.nextToken.type() != TokenType.RBRACE) {
+                        parserContext.nextToken.type() != TokenType.COLON &&
+                        parserContext.nextToken.type() != TokenType.COMMA &&
+                        parserContext.nextToken.type() != TokenType.LPAREN &&
+                        parserContext.nextToken.type() != TokenType.RBRACE) {
                     String kind = name;
-                    ctx.advance(); // consume 'get' or 'set'
+                    parserContext.advance(); // consume 'get' or 'set'
 
                     // Parse property name after get/set (may be computed)
-                    boolean computed = ctx.match(TokenType.LBRACKET);
+                    boolean computed = parserContext.match(TokenType.LBRACKET);
                     Expression key = delegates.expressions.parsePropertyName();
 
-                    FunctionExpression value = delegates.functions.parseMethod(kind);
+                    FunctionExpression value = delegates.functions.parseMethod(kind, methodStartLocation, false, false);
                     properties.add(new ObjectExpression.Property(key, value, kind, computed, false));
 
-                    if (ctx.match(TokenType.COMMA)) {
-                        ctx.advance();
+                    if (parserContext.match(TokenType.COMMA)) {
+                        parserContext.advance();
                     } else {
                         break;
                     }
@@ -293,36 +296,31 @@ record LiteralParser(ParserContext ctx, ParserDelegates delegates) {
                 }
             }
 
+            // If no async/generator prefix, update methodStartLocation to the property name position
+            if (!isAsync && !isGenerator) {
+                methodStartLocation = parserContext.getLocation();
+            }
+
             // Parse property name (can be identifier, string, number, or computed [expr])
-            boolean computed = ctx.match(TokenType.LBRACKET);
+            boolean computed = parserContext.match(TokenType.LBRACKET);
             Expression key = delegates.expressions.parsePropertyName();
 
             // Determine if this is a method or regular property
-            if (ctx.match(TokenType.LPAREN)) {
+            if (parserContext.match(TokenType.LPAREN)) {
                 // Method shorthand: name() {} or async name() {} or *name() {} or async *name() {}
-                SourceLocation funcLocation = ctx.getLocation();
-                ctx.enterFunctionContext(isAsync);
-                Expression value;
-                try {
-                    ctx.expect(TokenType.LPAREN);
-                    FunctionParams funcParams = delegates.functions.parseFunctionParameters();
-                    BlockStatement body = delegates.statements.parseBlockStatement();
-                    value = new FunctionExpression(null, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, funcLocation);
-                } finally {
-                    ctx.exitFunctionContext(isAsync);
-                }
+                FunctionExpression value = delegates.functions.parseMethod("method", methodStartLocation, isAsync, isGenerator);
                 properties.add(new ObjectExpression.Property(key, value, "init", computed, false));
-            } else if (ctx.match(TokenType.COLON)) {
+            } else if (parserContext.match(TokenType.COLON)) {
                 // Regular property: key: value
-                ctx.advance();
+                parserContext.advance();
                 Expression value = delegates.expressions.parseAssignmentExpression();
                 properties.add(new ObjectExpression.Property(key, value, "init", computed, false));
             } else if (!computed && key instanceof Identifier keyId
-                    && (ctx.match(TokenType.COMMA) || ctx.match(TokenType.RBRACE) || ctx.match(TokenType.ASSIGN))) {
+                    && (parserContext.match(TokenType.COMMA) || parserContext.match(TokenType.RBRACE) || parserContext.match(TokenType.ASSIGN))) {
                 // Shorthand property: {x} or CoverInitializedName: {x = defaultExpr}
                 Expression value;
-                if (ctx.match(TokenType.ASSIGN)) {
-                    ctx.advance();
+                if (parserContext.match(TokenType.ASSIGN)) {
+                    parserContext.advance();
                     Expression defaultValue = delegates.expressions.parseAssignmentExpression();
                     value = new AssignmentExpression(keyId,
                             AssignmentExpression.AssignmentOperator.ASSIGN,
@@ -333,19 +331,19 @@ record LiteralParser(ParserContext ctx, ParserDelegates delegates) {
                 properties.add(new ObjectExpression.Property(key, value, "init", false, true));
             } else {
                 // Fallback: expect colon
-                ctx.expect(TokenType.COLON);
+                parserContext.expect(TokenType.COLON);
                 Expression value = delegates.expressions.parseAssignmentExpression();
                 properties.add(new ObjectExpression.Property(key, value, "init", computed, false));
             }
 
-            if (ctx.match(TokenType.COMMA)) {
-                ctx.advance();
+            if (parserContext.match(TokenType.COMMA)) {
+                parserContext.advance();
             } else {
                 break;
             }
         }
 
-        ctx.expect(TokenType.RBRACE);
+        parserContext.expect(TokenType.RBRACE);
         return new ObjectExpression(properties, location);
     }
 
@@ -355,13 +353,13 @@ record LiteralParser(ParserContext ctx, ParserDelegates delegates) {
         }
 
         Lexer expressionLexer = new Lexer(expressionSource);
-        expressionLexer.setStrictMode(ctx.strictMode);
+        expressionLexer.setStrictMode(parserContext.strictMode);
         Parser expressionParser = new Parser(
                 expressionLexer,
-                ctx.moduleMode,
-                ctx.isEval,
-                ctx.functionNesting,
-                ctx.asyncFunctionNesting);
+                parserContext.moduleMode,
+                parserContext.isEval,
+                parserContext.functionNesting,
+                parserContext.asyncFunctionNesting);
         Expression expression = expressionParser.parseExpression();
         if (expressionParser.currentToken().type() != TokenType.EOF) {
             throw new JSSyntaxErrorException("Invalid template expression");
@@ -370,37 +368,37 @@ record LiteralParser(ParserContext ctx, ParserDelegates delegates) {
     }
 
     TemplateLiteral parseTemplateLiteral(boolean tagged) {
-        SourceLocation location = ctx.getLocation();
-        String templateStr = ctx.currentToken.value();
-        ctx.advance();
+        SourceLocation location = parserContext.getLocation();
+        String templateStr = parserContext.currentToken.value();
+        parserContext.advance();
 
         List<String> quasis = new ArrayList<>();
         List<String> rawQuasis = new ArrayList<>();
         List<Expression> expressions = new ArrayList<>();
 
         int quasiStart = 0;
-        int pos = 0;
-        while (pos < templateStr.length()) {
-            char c = templateStr.charAt(pos);
-            if (c == '\\' && pos + 1 < templateStr.length()) {
+        int position = 0;
+        while (position < templateStr.length()) {
+            char c = templateStr.charAt(position);
+            if (c == '\\' && position + 1 < templateStr.length()) {
                 // Skip escaped character so \${ does not trigger interpolation.
-                pos += 2;
+                position += 2;
                 continue;
             }
-            if (c == '$' && pos + 1 < templateStr.length() && templateStr.charAt(pos + 1) == '{') {
-                String rawQuasi = normalizeTemplateLineTerminators(templateStr.substring(quasiStart, pos));
+            if (c == '$' && position + 1 < templateStr.length() && templateStr.charAt(position + 1) == '{') {
+                String rawQuasi = normalizeTemplateLineTerminators(templateStr.substring(quasiStart, position));
                 rawQuasis.add(rawQuasi);
                 quasis.add(processTemplateEscapeSequences(rawQuasi, tagged));
 
-                int exprStart = pos + 2;
+                int exprStart = position + 2;
                 int exprEnd = findTemplateExpressionEnd(templateStr, exprStart);
                 String expressionSource = templateStr.substring(exprStart, exprEnd);
                 expressions.add(parseTemplateExpression(expressionSource));
 
-                pos = exprEnd + 1; // skip closing }
-                quasiStart = pos;
+                position = exprEnd + 1; // skip closing }
+                quasiStart = position;
             } else {
-                pos++;
+                position++;
             }
         }
 
@@ -561,131 +559,131 @@ record LiteralParser(ParserContext ctx, ParserDelegates delegates) {
         return result.toString();
     }
 
-    private int skipBlockComment(String source, int pos) {
-        while (pos + 1 < source.length()) {
-            if (source.charAt(pos) == '*' && source.charAt(pos + 1) == '/') {
-                return pos + 2;
+    private int skipBlockComment(String source, int position) {
+        while (position + 1 < source.length()) {
+            if (source.charAt(position) == '*' && source.charAt(position + 1) == '/') {
+                return position + 2;
             }
-            pos++;
+            position++;
         }
         throw new JSSyntaxErrorException("Unterminated block comment in template expression");
     }
 
-    private int skipLineComment(String source, int pos) {
-        while (pos < source.length() && source.charAt(pos) != '\n' && source.charAt(pos) != '\r') {
-            pos++;
+    private int skipLineComment(String source, int position) {
+        while (position < source.length() && source.charAt(position) != '\n' && source.charAt(position) != '\r') {
+            position++;
         }
-        return pos;
+        return position;
     }
 
     private int skipNestedTemplateLiteral(String source, int backtickPos) {
-        int pos = backtickPos + 1;
-        while (pos < source.length()) {
-            char c = source.charAt(pos);
+        int position = backtickPos + 1;
+        while (position < source.length()) {
+            char c = source.charAt(position);
             if (c == '\\') {
-                pos = Math.min(pos + 2, source.length());
+                position = Math.min(position + 2, source.length());
                 continue;
             }
             if (c == '`') {
-                return pos + 1;
+                return position + 1;
             }
-            if (c == '$' && pos + 1 < source.length() && source.charAt(pos + 1) == '{') {
-                int exprEnd = findTemplateExpressionEnd(source, pos + 2);
-                pos = exprEnd + 1;
+            if (c == '$' && position + 1 < source.length() && source.charAt(position + 1) == '{') {
+                int exprEnd = findTemplateExpressionEnd(source, position + 2);
+                position = exprEnd + 1;
                 continue;
             }
-            pos++;
+            position++;
         }
         throw new JSSyntaxErrorException("Unterminated nested template literal");
     }
 
-    private int skipNumberLiteral(String source, int pos) {
-        int start = pos;
-        if (source.charAt(pos) == '0' && pos + 1 < source.length()) {
-            char prefix = source.charAt(pos + 1);
+    private int skipNumberLiteral(String source, int position) {
+        int start = position;
+        if (source.charAt(position) == '0' && position + 1 < source.length()) {
+            char prefix = source.charAt(position + 1);
             if (prefix == 'x' || prefix == 'X' || prefix == 'b' || prefix == 'B' || prefix == 'o' || prefix == 'O') {
-                pos += 2;
-                while (pos < source.length() && ctx.isIdentifierPartChar(source.charAt(pos))) {
-                    pos++;
+                position += 2;
+                while (position < source.length() && parserContext.isIdentifierPartChar(source.charAt(position))) {
+                    position++;
                 }
-                return pos;
+                return position;
             }
         }
 
-        while (pos < source.length() && Character.isDigit(source.charAt(pos))) {
-            pos++;
+        while (position < source.length() && Character.isDigit(source.charAt(position))) {
+            position++;
         }
-        if (pos < source.length() && source.charAt(pos) == '.') {
-            pos++;
-            while (pos < source.length() && Character.isDigit(source.charAt(pos))) {
-                pos++;
+        if (position < source.length() && source.charAt(position) == '.') {
+            position++;
+            while (position < source.length() && Character.isDigit(source.charAt(position))) {
+                position++;
             }
         }
-        if (pos < source.length() && (source.charAt(pos) == 'e' || source.charAt(pos) == 'E')) {
-            int expPos = pos + 1;
+        if (position < source.length() && (source.charAt(position) == 'e' || source.charAt(position) == 'E')) {
+            int expPos = position + 1;
             if (expPos < source.length() && (source.charAt(expPos) == '+' || source.charAt(expPos) == '-')) {
                 expPos++;
             }
             while (expPos < source.length() && Character.isDigit(source.charAt(expPos))) {
                 expPos++;
             }
-            pos = expPos;
+            position = expPos;
         }
-        if (pos < source.length() && source.charAt(pos) == 'n') {
-            pos++;
+        if (position < source.length() && source.charAt(position) == 'n') {
+            position++;
         }
-        return pos == start ? start + 1 : pos;
+        return position == start ? start + 1 : position;
     }
 
     private int skipQuotedString(String source, int quotePos, char quote) {
-        int pos = quotePos + 1;
-        while (pos < source.length()) {
-            char c = source.charAt(pos);
+        int position = quotePos + 1;
+        while (position < source.length()) {
+            char c = source.charAt(position);
             if (c == '\\') {
-                pos = Math.min(pos + 2, source.length());
+                position = Math.min(position + 2, source.length());
                 continue;
             }
             if (c == quote) {
-                return pos + 1;
+                return position + 1;
             }
             if (c == '\n' || c == '\r') {
                 throw new JSSyntaxErrorException("Unterminated string in template expression");
             }
-            pos++;
+            position++;
         }
         throw new JSSyntaxErrorException("Unterminated string in template expression");
     }
 
     private int skipRegexLiteral(String source, int slashPos) {
-        int pos = slashPos + 1;
+        int position = slashPos + 1;
         boolean inCharacterClass = false;
-        while (pos < source.length()) {
-            char c = source.charAt(pos);
+        while (position < source.length()) {
+            char c = source.charAt(position);
             if (c == '\\') {
-                pos = Math.min(pos + 2, source.length());
+                position = Math.min(position + 2, source.length());
                 continue;
             }
             if (c == '[') {
                 inCharacterClass = true;
-                pos++;
+                position++;
                 continue;
             }
             if (c == ']' && inCharacterClass) {
                 inCharacterClass = false;
-                pos++;
+                position++;
                 continue;
             }
             if (c == '/' && !inCharacterClass) {
-                pos++;
-                while (pos < source.length() && ctx.isIdentifierPartChar(source.charAt(pos))) {
-                    pos++;
+                position++;
+                while (position < source.length() && parserContext.isIdentifierPartChar(source.charAt(position))) {
+                    position++;
                 }
-                return pos;
+                return position;
             }
             if (c == '\n' || c == '\r') {
                 throw new JSSyntaxErrorException("Unterminated regex literal in template expression");
             }
-            pos++;
+            position++;
         }
         throw new JSSyntaxErrorException("Unterminated regex literal in template expression");
     }

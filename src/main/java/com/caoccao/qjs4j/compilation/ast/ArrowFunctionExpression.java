@@ -22,7 +22,7 @@ import java.util.List;
  * Represents an arrow function expression.
  */
 public record ArrowFunctionExpression(
-        List<Identifier> params,
+        List<Pattern> params,
         List<Expression> defaults,  // Default values for params (null entries = no default)
         RestParameter restParameter,  // Optional rest parameter (...args)
         ASTNode body,

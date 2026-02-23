@@ -332,6 +332,89 @@ public final class RegExpPrototype {
     }
 
     /**
+     * RegExp.prototype[@@match](string)
+     * ES2024 22.2.5.6
+     */
+    public static JSValue symbolMatch(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSObject rxObj)) {
+            return context.throwTypeError("RegExp.prototype[@@match] called on non-object");
+        }
+
+        JSString str = JSTypeConversions.toString(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        // Check global flag
+        JSValue globalValue = rxObj.get(context, PropertyKey.fromString("global"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean global = JSTypeConversions.toBoolean(globalValue).value();
+
+        if (!global) {
+            // Non-global: return RegExpExec(rx, S)
+            return exec(context, thisArg, new JSValue[]{str});
+        }
+
+        // Global match
+        JSValue unicodeValue = rxObj.get(context, PropertyKey.fromString("unicode"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean fullUnicode = JSTypeConversions.toBoolean(unicodeValue).value();
+
+        // Set lastIndex to 0
+        rxObj.set(context, PropertyKey.fromString("lastIndex"), JSNumber.of(0));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSArray resultArray = context.createJSArray();
+        int n = 0;
+        String s = str.value();
+
+        while (true) {
+            JSValue result = exec(context, thisArg, new JSValue[]{str});
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (result instanceof JSNull || result instanceof JSUndefined) {
+                if (n == 0) {
+                    return JSNull.INSTANCE;
+                }
+                return resultArray;
+            }
+            if (!(result instanceof JSObject resultObj)) {
+                return context.throwTypeError("RegExpExec must return an Object or null");
+            }
+            JSValue matchValue = resultObj.get(context, PropertyKey.fromString("0"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            JSString matchStr = JSTypeConversions.toString(context, matchValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            resultArray.push(matchStr);
+            n++;
+
+            if (matchStr.value().isEmpty()) {
+                JSValue lastIndexValue = rxObj.get(context, PropertyKey.fromString("lastIndex"));
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                long thisIndex = JSTypeConversions.toLength(context, lastIndexValue);
+                long nextIndex = fullUnicode ? advanceStringIndexUnicode(s, (int) thisIndex) : thisIndex + 1;
+                rxObj.set(context, PropertyKey.fromString("lastIndex"), JSNumber.of(nextIndex));
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            }
+        }
+    }
+
+    /**
      * RegExp.prototype[@@split](string, limit)
      * ES2024 22.2.6.14
      */

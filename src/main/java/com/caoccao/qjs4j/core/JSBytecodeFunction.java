@@ -1047,6 +1047,13 @@ public final class JSBytecodeFunction extends JSFunction {
     }
 
     /**
+     * Get the source code for this function.
+     */
+    public String getSourceCode() {
+        return sourceCode;
+    }
+
+    /**
      * Get the VarRef array for closure variables (reference-based capture).
      * Returns null if this function uses value-based closureVars instead.
      */
@@ -1078,9 +1085,6 @@ public final class JSBytecodeFunction extends JSFunction {
     }
 
     /**
-     * Check if this function can be used as a constructor.
-     */
-    /**
      * Check if this is a class constructor.
      * Class constructors throw TypeError when called without 'new'.
      */
@@ -1088,6 +1092,9 @@ public final class JSBytecodeFunction extends JSFunction {
         return classConstructor;
     }
 
+    /**
+     * Check if this function can be used as a constructor.
+     */
     public boolean isConstructor() {
         return isConstructor;
     }
@@ -1123,9 +1130,6 @@ public final class JSBytecodeFunction extends JSFunction {
     }
 
     /**
-     * Set whether this function has parameter expressions.
-     */
-    /**
      * Mark this function as a class constructor.
      * Called during DEFINE_CLASS opcode execution.
      */
@@ -1141,6 +1145,9 @@ public final class JSBytecodeFunction extends JSFunction {
         this.derivedConstructor = derivedConstructor;
     }
 
+    /**
+     * Set whether this function has parameter expressions.
+     */
     public void setHasParameterExpressions(boolean hasParameterExpressions) {
         this.hasParameterExpressions = hasParameterExpressions;
     }
@@ -1164,26 +1171,24 @@ public final class JSBytecodeFunction extends JSFunction {
 
     @Override
     public String toString() {
-        // If source code is available, return it
+        // If source code is available, return it (QuickJS: b->debug.source)
         if (sourceCode != null) {
             return sourceCode;
         }
 
-        // Otherwise, return a default representation
-        StringBuilder sb = new StringBuilder();
-        if (isAsync) {
-            sb.append("async ");
+        // QuickJS format: "[prefix]name() {\n    [native code]\n}"
+        String prefix;
+        if (isAsync && isGenerator) {
+            prefix = "async function *";
+        } else if (isAsync) {
+            prefix = "async function ";
+        } else if (isGenerator) {
+            prefix = "function *";
+        } else {
+            prefix = "function ";
         }
-        sb.append("function");
-        if (isGenerator) {
-            sb.append("*");
-        }
-        sb.append(" ");
-        if (!name.isEmpty()) {
-            sb.append(name);
-        }
-        sb.append("() { [bytecode] }");
-        return sb.toString();
+        String displayName = name != null ? name : "";
+        return prefix + displayName + "() {\n    [native code]\n}";
     }
 
     @Override

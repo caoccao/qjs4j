@@ -115,7 +115,7 @@ final class ExpressionAssignmentParser {
 
     private int parseArrowParameterExpression(
             Expression expression,
-            List<Identifier> params,
+            List<Pattern> params,
             List<Expression> defaults,
             List<Statement> parameterPreludeStatements,
             int syntheticParameterCount) {
@@ -181,7 +181,7 @@ final class ExpressionAssignmentParser {
                             asyncLocation.line(),
                             asyncLocation.column(),
                             asyncLocation.offset(),
-                            ctx.currentToken.offset()
+                            ctx.previousTokenEndOffset
                     );
                     return new ArrowFunctionExpression(List.of(param), null, null, body, true, fullLocation);
                 }
@@ -204,7 +204,7 @@ final class ExpressionAssignmentParser {
                                 location.line(),
                                 location.column(),
                                 location.offset(),
-                                ctx.currentToken.offset()
+                                ctx.previousTokenEndOffset
                         );
                         return new ArrowFunctionExpression(
                                 funcParams.params(),
@@ -228,7 +228,7 @@ final class ExpressionAssignmentParser {
         Expression left = expressions.parseConditionalExpression();
 
         if (ctx.match(TokenType.ARROW)) {
-            List<Identifier> params = new ArrayList<>();
+            List<Pattern> params = new ArrayList<>();
             List<Expression> defaults = new ArrayList<>();
             RestParameter restParameter = null;
             List<Statement> parameterPreludeStatements = new ArrayList<>();
@@ -319,7 +319,7 @@ final class ExpressionAssignmentParser {
                     location.line(),
                     location.column(),
                     location.offset(),
-                    ctx.currentToken.offset()
+                    ctx.previousTokenEndOffset
             );
 
             return new ArrowFunctionExpression(params, defaults, restParameter, body, false, fullLocation);
@@ -367,7 +367,7 @@ final class ExpressionAssignmentParser {
 
     private int parseDestructuringArrowParameter(
             Expression expression,
-            List<Identifier> params,
+            List<Pattern> params,
             List<Expression> defaults,
             List<Statement> parameterPreludeStatements,
             int syntheticParameterCount) {

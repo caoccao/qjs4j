@@ -459,9 +459,12 @@ public class FunctionPrototypeTest extends BaseJavetTest {
                 // Test that length is configurable
                 "Object.getOwnPropertyDescriptor(Function.prototype, 'length').configurable");
 
-        // Test that length is not writable
         assertIntegerWithJavet(
                 "Function.prototype.length = 5; Function.prototype.length");
+
+        // Test that length is not writable
+        assertBooleanWithJavet(
+                "Object.getOwnPropertyDescriptor(Function.prototype, 'length').writable");
     }
 
     @Test
@@ -469,7 +472,6 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         assertStringWithJavet(
                 // Test that 'name' property value is empty string
                 "Function.prototype.name",
-                // Test that name is not writable
                 "Function.prototype.name = 'test';");
 
         // Test property descriptor
@@ -485,15 +487,15 @@ public class FunctionPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToString() {
-        // Normal case: function with name
+        // Normal case: function with name (QuickJS format)
         JSFunction testFunc = new JSNativeFunction("testFunction", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         JSValue result = FunctionPrototype.toString_(context, testFunc, new JSValue[]{});
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("function testFunction() { [native code] }"));
 
-        // Normal case: function without name (anonymous)
+        // Normal case: function without name
         JSFunction anonFunc = new JSNativeFunction("", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         result = FunctionPrototype.toString_(context, anonFunc, new JSValue[]{});
-        assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("function anonymous() { [native code] }"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("function () { [native code] }"));
 
         // Edge case: called on non-function
         result = FunctionPrototype.toString_(context, new JSString("not a function"), new JSValue[]{});

@@ -979,6 +979,10 @@ public final class JSContext implements AutoCloseable {
         return iteratorPrototypes.get(tag);
     }
 
+    public java.util.Collection<JSObject> getIteratorPrototypes() {
+        return iteratorPrototypes.values();
+    }
+
     public JSGlobalObject getJSGlobalObject() {
         return jsGlobalObject;
     }

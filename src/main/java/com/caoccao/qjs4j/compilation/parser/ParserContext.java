@@ -42,6 +42,7 @@ final class ParserContext {
     boolean inOperatorAllowed = true;
     Token nextToken;
     boolean parsingClassWithSuper;
+    int previousTokenEndOffset;
     int previousTokenLine;
     boolean strictMode;
     boolean superPropertyAllowed;
@@ -61,6 +62,7 @@ final class ParserContext {
 
     void advance() {
         previousTokenLine = currentToken.line();
+        previousTokenEndOffset = currentToken.offset() + currentToken.value().length();
         currentToken = nextToken;
         nextToken = lexer.nextToken();
     }
@@ -315,6 +317,7 @@ final class ParserContext {
         Token savedCurrent = currentToken;
         Token savedNext = nextToken;
         int savedPrevLine = previousTokenLine;
+        int savedPrevEndOffset = previousTokenEndOffset;
         LexerState savedLexer = lexer.saveState();
         try {
             advance(); // consume '('
@@ -338,6 +341,7 @@ final class ParserContext {
             currentToken = savedCurrent;
             nextToken = savedNext;
             previousTokenLine = savedPrevLine;
+            previousTokenEndOffset = savedPrevEndOffset;
             lexer.restoreState(savedLexer);
         }
     }

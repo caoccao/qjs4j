@@ -17,13 +17,14 @@
 package com.caoccao.qjs4j.compilation.parser;
 
 import com.caoccao.qjs4j.compilation.ast.Expression;
-import com.caoccao.qjs4j.compilation.ast.Identifier;
+import com.caoccao.qjs4j.compilation.ast.Pattern;
 import com.caoccao.qjs4j.compilation.ast.RestParameter;
 
 import java.util.List;
 
 /**
  * Helper record to hold the result of parsing function parameters.
+ * Parameters can be Identifiers (simple params) or destructuring Patterns (object/array patterns).
  */
-record FunctionParams(List<Identifier> params, List<Expression> defaults, RestParameter restParameter) {
+record FunctionParams(List<Pattern> params, List<Expression> defaults, RestParameter restParameter) {
 }

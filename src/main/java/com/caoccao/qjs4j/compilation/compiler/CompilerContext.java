@@ -81,10 +81,10 @@ final class CompilerContext {
 
     // ---- Scope management ----
 
-    static Set<String> buildParameterNames(List<Identifier> params, List<Statement> body) {
+    static Set<String> buildParameterNames(List<Pattern> params, List<Statement> body) {
         Set<String> paramNames = new HashSet<>();
-        for (Identifier param : params) {
-            paramNames.add(param.name());
+        for (Pattern param : params) {
+            paramNames.addAll(extractBoundNames(param));
         }
         if (!paramNames.contains("arguments")) {
             boolean hasVarArguments = false;
@@ -108,7 +108,7 @@ final class CompilerContext {
         return paramNames;
     }
 
-    static int computeDefinedArgCount(List<Identifier> params, List<Expression> defaults, boolean hasRest) {
+    static int computeDefinedArgCount(List<Pattern> params, List<Expression> defaults, boolean hasRest) {
         if (defaults == null) {
             return params.size();
         }
@@ -131,6 +131,35 @@ final class CompilerContext {
         return false;
     }
 
+    /**
+     * Extract all bound identifier names from a pattern.
+     * Handles Identifier, ObjectPattern, ArrayPattern, AssignmentPattern, and RestElement.
+     */
+    static List<String> extractBoundNames(Pattern pattern) {
+        if (pattern instanceof Identifier id) {
+            return List.of(id.name());
+        } else if (pattern instanceof ObjectPattern objPattern) {
+            List<String> names = new ArrayList<>();
+            for (ObjectPattern.Property prop : objPattern.properties()) {
+                names.addAll(extractBoundNames(prop.value()));
+            }
+            return names;
+        } else if (pattern instanceof ArrayPattern arrPattern) {
+            List<String> names = new ArrayList<>();
+            for (Pattern element : arrPattern.elements()) {
+                if (element != null) {
+                    names.addAll(extractBoundNames(element));
+                }
+            }
+            return names;
+        } else if (pattern instanceof AssignmentPattern assignPattern) {
+            return extractBoundNames(assignPattern.left());
+        } else if (pattern instanceof RestElement restElement) {
+            return extractBoundNames(restElement.argument());
+        }
+        return List.of();
+    }
+
     static String[] extractLocalVarNames(CompilerScope scope) {
         int count = scope.getLocalCount();
         if (count == 0) {
@@ -147,13 +176,21 @@ final class CompilerContext {
         return names;
     }
 
-    static boolean hasNonSimpleParameters(List<Expression> defaults, RestParameter restParameter) {
+    static boolean hasNonSimpleParameters(List<Pattern> params, List<Expression> defaults, RestParameter restParameter) {
         if (restParameter != null) {
             return true;
         }
         if (defaults != null) {
             for (Expression d : defaults) {
                 if (d != null) {
+                    return true;
+                }
+            }
+        }
+        // Destructuring parameters make the parameter list non-simple
+        if (params != null) {
+            for (Pattern param : params) {
+                if (!(param instanceof Identifier)) {
                     return true;
                 }
             }

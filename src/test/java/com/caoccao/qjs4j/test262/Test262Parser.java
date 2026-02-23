@@ -117,7 +117,7 @@ public class Test262Parser {
     }
 
     private void parseYaml(String yaml, Test262TestCase testCase) {
-        String[] lines = yaml.split("\n");
+        String[] lines = yaml.split("\\r\\n?|\\n");
 
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i].trim();

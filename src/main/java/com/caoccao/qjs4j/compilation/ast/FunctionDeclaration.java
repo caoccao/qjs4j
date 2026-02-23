@@ -23,7 +23,7 @@ import java.util.List;
  */
 public record FunctionDeclaration(
         Identifier id,
-        List<Identifier> params,
+        List<Pattern> params,
         List<Expression> defaults,  // Default values for params (null entries = no default)
         RestParameter restParameter,  // Optional rest parameter (...args)
         BlockStatement body,

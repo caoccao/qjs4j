@@ -579,8 +579,23 @@ public final class JSGlobalObject {
         // Error constructors
         initializeErrorConstructors(context, global);
 
-        // Initialize function prototype chains after all built-ins are set up
-        initializeFunctionPrototypeChains(context, global, new HashSet<>());
+        // Initialize function prototype chains after all built-ins are set up.
+        // Walk global properties AND context-stored objects not reachable from global
+        // (iterator prototypes, generator/async-generator function prototypes).
+        Set<JSObject> visited = new HashSet<>();
+        initializeFunctionPrototypeChains(context, global, visited);
+        for (JSObject iterProto : context.getIteratorPrototypes()) {
+            initializeFunctionPrototypeChains(context, iterProto, visited);
+        }
+        if (context.getGeneratorFunctionPrototype() != null) {
+            initializeFunctionPrototypeChains(context, context.getGeneratorFunctionPrototype(), visited);
+        }
+        if (context.getAsyncGeneratorFunctionPrototype() != null) {
+            initializeFunctionPrototypeChains(context, context.getAsyncGeneratorFunctionPrototype(), visited);
+        }
+        if (context.getAsyncGeneratorPrototype() != null) {
+            initializeFunctionPrototypeChains(context, context.getAsyncGeneratorPrototype(), visited);
+        }
 
         // Set the global object's prototype to Object.prototype so inherited
         // methods like propertyIsEnumerable, hasOwnProperty, toString are available.
@@ -814,39 +829,7 @@ public final class JSGlobalObject {
         // Create AsyncGeneratorFunction constructor (uses dynamic function construction)
         JSNativeFunction asyncGeneratorFunctionConstructor = new JSNativeFunction(
                 "AsyncGeneratorFunction", 1,
-                (ctx, thisArg, args) -> {
-                    // Build source: (async function* anonymous(...) { ... })
-                    StringBuilder src = new StringBuilder("(async function* anonymous(");
-                    String body = "";
-                    if (args.length == 0) {
-                        // no args
-                    } else if (args.length == 1) {
-                        body = JSTypeConversions.toString(ctx, args[0]).value();
-                    } else {
-                        for (int i = 0; i < args.length - 1; i++) {
-                            if (i > 0) {
-                                src.append(",");
-                            }
-                            src.append(JSTypeConversions.toString(ctx, args[i]).value());
-                        }
-                        body = JSTypeConversions.toString(ctx, args[args.length - 1]).value();
-                    }
-                    src.append("\n) {\n").append(body).append("\n})");
-                    try {
-                        JSBytecodeFunction wrapper = new com.caoccao.qjs4j.compilation.compiler.Compiler(
-                                src.toString(), "<AsyncGeneratorFunction>").compile(false).function();
-                        wrapper.initializePrototypeChain(ctx);
-                        return ctx.getVirtualMachine().execute(wrapper, ctx.getGlobalObject(), new JSValue[0]);
-                    } catch (com.caoccao.qjs4j.exceptions.JSCompilerException e) {
-                        return ctx.throwSyntaxError(e.getMessage());
-                    } catch (com.caoccao.qjs4j.exceptions.JSSyntaxErrorException e) {
-                        return ctx.throwSyntaxError(e.getMessage());
-                    } catch (com.caoccao.qjs4j.exceptions.JSException e) {
-                        return e.getErrorValue();
-                    } catch (Exception e) {
-                        return ctx.throwError("Failed to create async generator function: " + e.getMessage());
-                    }
-                },
+                FunctionConstructor::callAsyncGenerator,
                 true);
         asyncGeneratorFunctionConstructor.definePropertyReadonlyNonConfigurable("prototype", asyncGeneratorFunctionPrototype);
         asyncGeneratorFunctionPrototype.definePropertyConfigurable("constructor", asyncGeneratorFunctionConstructor);
@@ -1144,22 +1127,14 @@ public final class JSGlobalObject {
         functionPrototype.definePropertyWritableConfigurable("call", new JSNativeFunction("call", 1, FunctionPrototype::call));
         functionPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, FunctionPrototype::toString_));
 
-        // Add 'arguments' and 'caller' as accessor properties per QuickJS js_throw_type_error.
-        // Single function used for both getter and setter per ES spec %ThrowTypeError%.
-        // When called as getter (args.length == 0): non-strict bytecode functions return undefined (ES5 compat).
-        // When called as setter (args.length >= 1) or for strict/arrow/native: throw TypeError.
+        // Add 'arguments' and 'caller' as accessor properties per ES2024 %ThrowTypeError%.
+        // Per ES2024 20.2.3.1/20.2.3.2: Function.prototype.arguments and .caller are
+        // accessor properties that unconditionally throw TypeError when accessed.
         JSNativeFunction throwTypeError = new JSNativeFunction(
                 "throwTypeError",
                 0,
-                (childContext, thisObj, args) -> {
-                    if (args.length == 0 && thisObj instanceof JSBytecodeFunction bytecodeFunc) {
-                        if (!bytecodeFunc.isStrict() && !bytecodeFunc.isArrow()) {
-                            return JSUndefined.INSTANCE;
-                        }
-                    }
-                    return childContext.throwTypeError(
-                            "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them");
-                });
+                (childContext, thisObj, args) -> childContext.throwTypeError(
+                        "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"));
         // Store as the %ThrowTypeError% intrinsic for sharing with strict arguments.callee
         context.setThrowTypeErrorIntrinsic(throwTypeError);
 
@@ -1285,6 +1260,17 @@ public final class JSGlobalObject {
 
         // Link: Generator.prototype.constructor = GeneratorFunction.prototype (configurable)
         generatorPrototype.definePropertyConfigurable("constructor", generatorFunctionPrototype);
+
+        // Create GeneratorFunction constructor (uses dynamic function construction)
+        // Following QuickJS JS_AddIntrinsicGenerator pattern
+        JSNativeFunction generatorFunctionConstructor = new JSNativeFunction(
+                "GeneratorFunction", 1,
+                FunctionConstructor::callGenerator,
+                true);
+        generatorFunctionConstructor.definePropertyReadonlyNonConfigurable("prototype", generatorFunctionPrototype);
+        generatorFunctionPrototype.defineProperty(
+                PropertyKey.CONSTRUCTOR,
+                PropertyDescriptor.dataDescriptor(generatorFunctionConstructor, false, false, true));
 
         // Store in context for generator function prototype chain setup
         context.setGeneratorFunctionPrototype(generatorFunctionPrototype);
@@ -1785,6 +1771,7 @@ public final class JSGlobalObject {
         regexpPrototype.definePropertyWritableConfigurable("compile", new JSNativeFunction("compile", 2, RegExpPrototype::compile));
         regexpPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, RegExpPrototype::toStringMethod));
         regexpPrototype.definePropertyWritableConfigurable(JSSymbol.SPLIT, new JSNativeFunction("[Symbol.split]", 2, RegExpPrototype::symbolSplit));
+        regexpPrototype.definePropertyWritableConfigurable(JSSymbol.MATCH, new JSNativeFunction("[Symbol.match]", 1, RegExpPrototype::symbolMatch));
 
         // Accessor properties
         regexpPrototype.defineGetterConfigurable("dotAll", RegExpPrototype::getDotAll);

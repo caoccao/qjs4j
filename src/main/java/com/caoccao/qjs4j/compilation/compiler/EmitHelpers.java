@@ -143,14 +143,27 @@ final class EmitHelpers {
     void emitClassMethodDefinition(ClassDeclaration.MethodDefinition method,
                                    JSBytecodeFunction methodFunc, String methodName) {
         String kind = method.kind();
+        boolean isComputedKey = method.computed() && !(method.key() instanceof Literal);
+
         if ("get".equals(kind) || "set".equals(kind)) {
             // Getter/setter: use DEFINE_METHOD_COMPUTED with accessor flags
             // Stack: ... obj -> ... obj key method -> ... obj
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
+            if (isComputedKey) {
+                delegates.expressions.compileExpression(method.key());
+            } else {
+                ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
+            }
             ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
             int methodKind = "get".equals(kind) ? 1 : 2;
             // Class properties are not enumerable (no enumerable flag)
             ctx.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind);
+        } else if (isComputedKey) {
+            // Computed key method: evaluate key expression and use DEFINE_METHOD_COMPUTED
+            // Stack: ... obj -> ... obj key method -> ... obj
+            delegates.expressions.compileExpression(method.key());
+            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
+            // flags = 0 for regular method (not getter/setter), not enumerable
+            ctx.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 0);
         } else {
             // Regular method: use DEFINE_METHOD with atom name
             // Stack: ... obj -> ... obj method -> ... obj

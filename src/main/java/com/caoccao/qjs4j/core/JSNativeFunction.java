@@ -113,15 +113,9 @@ public final class JSNativeFunction extends JSFunction {
 
     @Override
     public String toString() {
-        // null name means no name at all (e.g., Function.prototype)
-        // empty string name means use "anonymous" (e.g., unnamed functions)
-        if (name == null) {
-            return "function () { [native code] }";
-        } else if (name.isEmpty()) {
-            return "function anonymous() { [native code] }";
-        } else {
-            return "function " + name + "() { [native code] }";
-        }
+        // QuickJS/V8 native function string form is single-line.
+        String displayName = (name != null) ? name : "";
+        return "function " + displayName + "() { [native code] }";
     }
 
     @Override

@@ -233,6 +233,32 @@ public final class FunctionPrototype {
     }
 
     /**
+     * Check if a string is a valid ECMAScript IdentifierName.
+     * Also accepts bracket-wrapped names like "[Symbol.match]".
+     */
+    private static boolean isValidIdentifierName(String name) {
+        if (name.isEmpty()) {
+            return false;
+        }
+        // Bracket-wrapped names like [Symbol.match] are valid in NativeFunction syntax
+        if (name.startsWith("[") && name.endsWith("]")) {
+            return true;
+        }
+        // First character must be valid ID start: $, _, or letter
+        char first = name.charAt(0);
+        if (!Character.isJavaIdentifierStart(first)) {
+            return false;
+        }
+        // Remaining characters must be valid ID continue: $, _, digit, or letter
+        for (int i = 1; i < name.length(); i++) {
+            if (!Character.isJavaIdentifierPart(name.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * OrdinaryHasInstance(C, O) - ES2024 7.3.21
      */
     private static JSValue ordinaryHasInstance(JSContext context, JSValue constructor, JSValue objectValue) {
@@ -294,14 +320,63 @@ public final class FunctionPrototype {
 
     /**
      * Function.prototype.toString()
-     * ES2020 19.2.3.5
+     * Following QuickJS js_function_toString.
      */
     public static JSValue toString_(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSFunction func)) {
-            return context.throwTypeError("Function.prototype.toString called on non-function");
+        // QuickJS check_function: accept JSFunction and callable JSProxy
+        if (!JSTypeChecking.isCallable(thisArg)) {
+            return context.throwTypeError("Function.prototype.toString requires that 'this' be a Function");
         }
 
-        // Use the function's own toString() implementation which handles async, generator, etc.
-        return new JSString(func.toString());
+        // For bytecode functions with source code, return the original source
+        // (QuickJS: b->has_debug && b->debug.source)
+        if (thisArg instanceof JSBytecodeFunction bytecodeFunc) {
+            String source = bytecodeFunc.getSourceCode();
+            if (source != null && !source.isEmpty()) {
+                return new JSString(source);
+            }
+        }
+
+        // QuickJS: for all other cases (native, bound, proxy, bytecode without source),
+        // return single-line native source form: "[prefix]name() { [native code] }"
+        String prefix;
+        if (thisArg instanceof JSBytecodeFunction bytecodeFunc) {
+            if (bytecodeFunc.isAsync() && bytecodeFunc.isGenerator()) {
+                prefix = "async function *";
+            } else if (bytecodeFunc.isAsync()) {
+                prefix = "async function ";
+            } else if (bytecodeFunc.isGenerator()) {
+                prefix = "function *";
+            } else {
+                prefix = "function ";
+            }
+        } else {
+            prefix = "function ";
+        }
+
+        // QuickJS: name = JS_GetProperty(ctx, this_val, JS_ATOM_name)
+        // Read the JS "name" property (may differ from internal getName())
+        String name = "";
+        if (thisArg instanceof JSObject funcObj) {
+            JSValue nameValue = funcObj.get(context, PropertyKey.NAME);
+            if (nameValue instanceof JSString nameStr) {
+                name = nameStr.value();
+            }
+        }
+
+        // Per NativeFunction syntax, the name must be a valid IdentifierName or
+        // optionally prefixed with "get "/"set " (NativeFunctionAccessor).
+        // Names like "$&" are not valid IdentifierNames and must be omitted.
+        String accessor = "";
+        String identName = name;
+        if (name.startsWith("get ") || name.startsWith("set ")) {
+            accessor = name.substring(0, 4);
+            identName = name.substring(4);
+        }
+        if (!identName.isEmpty() && !isValidIdentifierName(identName)) {
+            identName = "";
+        }
+
+        return new JSString(prefix + accessor + identName + "() { [native code] }");
     }
 }
