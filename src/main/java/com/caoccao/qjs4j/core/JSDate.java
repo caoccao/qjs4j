@@ -86,7 +86,7 @@ public final class JSDate extends JSObject {
             } else {
                 JSValue primitive = JSTypeConversions.toPrimitive(context, arg, JSTypeConversions.PreferredType.DEFAULT);
                 if (context.hasPendingException()) {
-                    return context.throwTypeError("cannot convert to primitive");
+                    return (JSObject) context.getPendingException();
                 }
                 if (primitive instanceof JSString str) {
                     timeValue = parseDateString(str.value());
@@ -184,6 +184,19 @@ public final class JSDate extends JSObject {
         fields[FIELD_DAY] = wd;
         fields[FIELD_TIMEZONE_OFFSET] = tz;
         return 1;
+    }
+
+    public static String getTimezoneName(long epochMillis, boolean longFormat) {
+        ZoneId zone = ZoneId.systemDefault();
+        Instant instant = Instant.ofEpochMilli(epochMillis);
+        ZonedDateTime zdt = ZonedDateTime.ofInstant(instant, zone);
+        // Use DateTimeFormatter pattern to get DST-aware timezone name
+        // "zzzz" gives full name like "Central European Standard Time"
+        // "z" gives short name like "CET"
+        DateTimeFormatter formatter = longFormat
+                ? DateTimeFormatter.ofPattern("zzzz", Locale.ENGLISH)
+                : DateTimeFormatter.ofPattern("z", Locale.ENGLISH);
+        return zdt.format(formatter);
     }
 
     public static int getTimezoneOffset(long epochMillis) {

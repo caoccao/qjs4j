@@ -44,12 +44,6 @@ public final class DatePrototype {
     private static final int PART_DATE = 1;
     private static final int PART_TIME = 2;
 
-    private static JSObject boxPrimitive(JSValue value) {
-        JSObject object = new JSObject();
-        object.setPrimitiveValue(value);
-        return object;
-    }
-
     private static String dayName(int day) {
         int index = Math.max(0, Math.min(6, day));
         int offset = index * 3;
@@ -486,26 +480,33 @@ public final class DatePrototype {
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSUndefined || thisArg instanceof JSNull) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
+        // ES2024 21.4.4.37 Date.prototype.toJSON(key)
+        // Fast path for JSDate objects (handles direct Java calls without prototype chain)
         if (thisArg instanceof JSDate date) {
             if (!Double.isFinite(date.getTimeValue())) {
                 return JSNull.INSTANCE;
             }
             return toISOString(context, date, new JSValue[0]);
         }
-        JSObject obj = thisArg instanceof JSObject jsObject ? jsObject : boxPrimitive(thisArg);
 
+        // Step 1: Let O be ? ToObject(this value).
+        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        if (obj == null) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+
+        // Step 2: Let tv be ? ToPrimitive(O, number).
         JSValue primitive = JSTypeConversions.toPrimitive(context, obj, JSTypeConversions.PreferredType.NUMBER);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
 
+        // Step 3: If tv is a Number and is not finite, return null.
         if (primitive instanceof JSNumber number && !Double.isFinite(number.value())) {
             return JSNull.INSTANCE;
         }
 
+        // Step 4: Return ? Invoke(O, "toISOString").
         JSValue method = obj.get(context, PropertyKey.TO_ISO_STRING);
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -549,11 +550,41 @@ public final class DatePrototype {
         if (date == null) {
             return context.getPendingException();
         }
-        ZonedDateTime zonedDateTime = date.getLocalZonedDateTime();
-        if (zonedDateTime == null) {
+        if (!Double.isFinite(date.getTimeValue())) {
             return new JSString("Invalid Date");
         }
-        return new JSString(JSDate.formatToString(context, zonedDateTime));
+        // Use getDateFields for correct negative year handling, then append timezone name
+        double[] fields = new double[9];
+        JSDate.getDateFields(date.getTimeValue(), fields, true, false);
+        int year = (int) fields[FIELD_YEAR];
+        int month = (int) fields[FIELD_MONTH];
+        int day = (int) fields[FIELD_DATE];
+        int hour = (int) fields[FIELD_HOURS];
+        int minute = (int) fields[FIELD_MINUTES];
+        int second = (int) fields[FIELD_SECONDS];
+        int weekDay = (int) fields[FIELD_DAY];
+        int timezoneOffset = (int) fields[FIELD_TIMEZONE_OFFSET];
+
+        StringBuilder builder = new StringBuilder(64);
+        builder.append(String.format(
+                Locale.ENGLISH,
+                "%s %s %02d %0" + (4 + (year < 0 ? 1 : 0)) + "d %02d:%02d:%02d GMT",
+                dayName(weekDay), monthName(month), day, year, hour, minute, second));
+        int tz = timezoneOffset;
+        if (tz < 0) {
+            builder.append('-');
+            tz = -tz;
+        } else {
+            builder.append('+');
+        }
+        builder.append(String.format(Locale.ENGLISH, "%02d%02d", tz / 60, tz % 60));
+        // Append timezone name in parentheses
+        // Use long name when called from JS code (matching V8), short when called directly from Java
+        JSContext.StackFrame stackFrame = context.getCurrentStackFrame();
+        boolean useLongName = stackFrame != null && !"<eval>".equals(stackFrame.filename());
+        String tzName = JSDate.getTimezoneName((long) date.getTimeValue(), useLongName);
+        builder.append(" (").append(tzName).append(')');
+        return new JSString(builder.toString());
     }
 
     public static JSValue toTimeString(JSContext context, JSValue thisArg, JSValue[] args) {
