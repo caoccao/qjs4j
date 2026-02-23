@@ -203,6 +203,25 @@ final class CompilerAnalysis {
     }
 
     /**
+     * Pre-declare top-level function declaration names as locals in the current function scope
+     * before compiling any hoisted function declarations.
+     * <p>
+     * This ensures sibling function declarations are visible to closure capture resolution while
+     * compiling earlier hoisted functions (e.g. function A capturing function B declared later in
+     * the same function body).
+     */
+    void hoistTopLevelFunctionDeclarationNamesAsLocals(List<Statement> body) {
+        for (Statement stmt : body) {
+            if (stmt instanceof FunctionDeclaration functionDeclaration && functionDeclaration.id() != null) {
+                String functionName = functionDeclaration.id().name();
+                if (ctx.currentScope().getLocal(functionName) == null) {
+                    ctx.currentScope().declareLocal(functionName);
+                }
+            }
+        }
+    }
+
+    /**
      * Pre-declare all variable names as locals in the current scope.
      * This ensures bindings are visible during Phase 1 (function declaration hoisting),
      * so nested function declarations can properly capture outer variables via VarRef.

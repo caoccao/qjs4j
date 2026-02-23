@@ -57,6 +57,7 @@ public final class RegExpEngine {
                 input,
                 bytecode.instructions(),
                 bytecode.captureCount(),
+                bytecode.groupNames(),
                 bytecode.isIgnoreCase(),
                 bytecode.isMultiline(),
                 bytecode.isDotAll(),
@@ -527,7 +528,7 @@ public final class RegExpEngine {
     private ExecutionContext executeLookbehindAssertion(ExecutionContext outerContext, byte[] assertionBytecode) {
         int endPos = outerContext.pos;
         String prefixInput = outerContext.input.substring(0, outerContext.toCharIndex(endPos));
-        for (int startPos = endPos; startPos >= 0; startPos--) {
+        for (int startPos = 0; startPos <= endPos; startPos++) {
             ExecutionContext assertionContext = executeStandalone(outerContext, prefixInput, assertionBytecode, startPos);
             if (assertionContext != null && assertionContext.pos == endPos) {
                 return assertionContext;
@@ -545,6 +546,7 @@ public final class RegExpEngine {
                 input,
                 bytecode,
                 outerContext.captureCount,
+                outerContext.groupNames,
                 outerContext.ignoreCase,
                 outerContext.multiline,
                 outerContext.dotAll,
@@ -606,6 +608,7 @@ public final class RegExpEngine {
         final int captureCount;
         final int[] codePoints;
         final boolean dotAll;
+        final String[] groupNames;
         final boolean ignoreCase;
         final String input;
         final boolean multiline;
@@ -616,11 +619,13 @@ public final class RegExpEngine {
         int pos;  // Current position in code points
 
         ExecutionContext(String input, byte[] bytecode, int captureCount,
+                         String[] groupNames,
                          boolean ignoreCase, boolean multiline, boolean dotAll, boolean unicode) {
             this.input = input;
             this.bytecode = bytecode;
-            this.codePoints = input.codePoints().toArray();
+            this.codePoints = unicode ? input.codePoints().toArray() : input.chars().toArray();
             this.captureCount = captureCount;
+            this.groupNames = groupNames;
             this.ignoreCase = ignoreCase;
             this.multiline = multiline;
             this.dotAll = dotAll;
@@ -662,15 +667,23 @@ public final class RegExpEngine {
                     int start = captureStarts[i];
                     int end = captureEnds[i];
 
-                    // Convert code point indices to character indices
-                    int charStart = 0;
-                    for (int j = 0; j < start && j < codePoints.length; j++) {
-                        charStart += Character.charCount(codePoints[j]);
-                    }
+                    int charStart;
+                    int charEnd;
+                    if (unicode) {
+                        // Convert code point indices to UTF-16 indices in /u mode.
+                        charStart = 0;
+                        for (int j = 0; j < start && j < codePoints.length; j++) {
+                            charStart += Character.charCount(codePoints[j]);
+                        }
 
-                    int charEnd = charStart;
-                    for (int j = start; j < end && j < codePoints.length; j++) {
-                        charEnd += Character.charCount(codePoints[j]);
+                        charEnd = charStart;
+                        for (int j = start; j < end && j < codePoints.length; j++) {
+                            charEnd += Character.charCount(codePoints[j]);
+                        }
+                    } else {
+                        // In non-/u mode, positions are already UTF-16 code unit indices.
+                        charStart = start;
+                        charEnd = end;
                     }
 
                     captures[i] = input.substring(charStart, charEnd);
@@ -704,17 +717,12 @@ public final class RegExpEngine {
             if (pos >= codePoints.length) {
                 return false;
             }
-            // In non-unicode mode, dot/any matches a single UTF-16 code unit.
-            // Supplementary characters (> 0xFFFF) are two code units, so they
-            // should not be matched by a single dot.
-            if (!unicode && codePoints[pos] > 0xFFFF) {
-                return false;
-            }
             pos++;
             return true;
         }
 
         boolean matchBackReference(int groupNum, boolean ignoreCase) {
+            groupNum = resolveNamedBackReferenceGroup(groupNum);
             // Check if the capture group has been captured
             if (groupNum >= captureCount || captureStarts[groupNum] == -1 || captureEnds[groupNum] == -1) {
                 // Group not captured yet - match empty string (succeeds)
@@ -755,6 +763,17 @@ public final class RegExpEngine {
             if (pos >= codePoints.length) {
                 return false;
             }
+            if (!unicode && ch > 0xFFFF) {
+                if (pos + 1 >= codePoints.length) {
+                    return false;
+                }
+                char[] surrogatePair = Character.toChars(ch);
+                if (codePoints[pos] == surrogatePair[0] && codePoints[pos + 1] == surrogatePair[1]) {
+                    pos += 2;
+                    return true;
+                }
+                return false;
+            }
             if (codePoints[pos] == ch) {
                 pos++;
                 return true;
@@ -764,6 +783,17 @@ public final class RegExpEngine {
 
         boolean matchCharIgnoreCase(int ch) {
             if (pos >= codePoints.length) {
+                return false;
+            }
+            if (!unicode && ch > 0xFFFF) {
+                if (pos + 1 >= codePoints.length) {
+                    return false;
+                }
+                char[] surrogatePair = Character.toChars(ch);
+                if (codePoints[pos] == surrogatePair[0] && codePoints[pos + 1] == surrogatePair[1]) {
+                    pos += 2;
+                    return true;
+                }
                 return false;
             }
             int current = codePoints[pos];
@@ -781,12 +811,6 @@ public final class RegExpEngine {
                 return false;
             }
             int ch = codePoints[pos];
-            // In non-unicode mode, dot matches a single UTF-16 code unit.
-            // Supplementary characters (> 0xFFFF) are two code units, so they
-            // should not be matched by a single dot.
-            if (!unicode && ch > 0xFFFF) {
-                return false;
-            }
             // Dot matches everything except line terminators
             if (ch == '\n' || ch == '\r' || ch == 0x2028 || ch == 0x2029) {
                 return false;
@@ -965,6 +989,37 @@ public final class RegExpEngine {
             }
         }
 
+        private int resolveNamedBackReferenceGroup(int groupNum) {
+            if (groupNames == null || groupNum <= 0 || groupNum >= captureCount || groupNum >= groupNames.length) {
+                return groupNum;
+            }
+            String groupName = groupNames[groupNum];
+            if (groupName == null) {
+                return groupNum;
+            }
+            int resolvedGroupNum = groupNum;
+            for (int captureIndex = groupNum + 1; captureIndex < captureCount && captureIndex < groupNames.length; captureIndex++) {
+                if (!groupName.equals(groupNames[captureIndex])) {
+                    continue;
+                }
+                if (captureStarts[captureIndex] >= 0 && captureEnds[captureIndex] >= 0) {
+                    resolvedGroupNum = captureIndex;
+                }
+            }
+            if (captureStarts[resolvedGroupNum] >= 0 && captureEnds[resolvedGroupNum] >= 0) {
+                return resolvedGroupNum;
+            }
+            for (int captureIndex = groupNum - 1; captureIndex > 0 && captureIndex < groupNames.length; captureIndex--) {
+                if (!groupName.equals(groupNames[captureIndex])) {
+                    continue;
+                }
+                if (captureStarts[captureIndex] >= 0 && captureEnds[captureIndex] >= 0) {
+                    return captureIndex;
+                }
+            }
+            return groupNum;
+        }
+
         void restoreState(BacktrackPoint bp) {
             this.pos = bp.pos;
             this.captureStarts = bp.captureStarts.clone();
@@ -986,6 +1041,9 @@ public final class RegExpEngine {
 
         int toCharIndex(int codePointIndex) {
             int bounded = Math.max(0, Math.min(codePointIndex, codePoints.length));
+            if (!unicode) {
+                return bounded;
+            }
             int charIndex = 0;
             for (int i = 0; i < bounded; i++) {
                 charIndex += Character.charCount(codePoints[i]);

@@ -715,6 +715,7 @@ final class FunctionClassCompiler {
         // would fail to resolve captured var references (e.g., inner functions referencing
         // outer var variables would emit GET_VAR instead of GET_VAR_REF).
         funcDelegates.analysis.hoistVarDeclarationsAsLocals(funcDecl.body().body());
+        funcDelegates.analysis.hoistTopLevelFunctionDeclarationNamesAsLocals(funcDecl.body().body());
 
         // Phase 1: Hoist top-level function declarations (ES spec requires function
         // declarations to be initialized before any code executes).
@@ -938,6 +939,7 @@ final class FunctionClassCompiler {
         // would fail to resolve captured var references (e.g., inner functions referencing
         // outer var variables would emit GET_VAR instead of GET_VAR_REF).
         funcDelegates.analysis.hoistVarDeclarationsAsLocals(functionExpression.body().body());
+        funcDelegates.analysis.hoistTopLevelFunctionDeclarationNamesAsLocals(functionExpression.body().body());
 
         // Phase 1: Hoist top-level function declarations (ES spec requires function
         // declarations to be initialized before any code executes).

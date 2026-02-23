@@ -877,6 +877,7 @@ public final class RegExpCompiler {
         // iteration leak into the current one.
         boolean hasCapturesInAtom = captureCountBeforeAtom != captureCount;
         boolean needCaptureReset = hasCapturesInAtom && needCaptureInit(atomCode);
+        boolean needInitialCaptureResetBeforeQuantifier = false;
         if (needCaptureReset) {
             // Prepend SAVE_RESET to the atom code so captures are cleared at each iteration
             byte[] resetPrefix = new byte[3];
@@ -888,19 +889,20 @@ public final class RegExpCompiler {
             System.arraycopy(atomCode, 0, newAtomCode, resetPrefix.length, atomCode.length);
             atomCode = newAtomCode;
             atomSize = atomCode.length;
-        } else if (hasCapturesInAtom && min == 0) {
+        }
+        if (hasCapturesInAtom && min == 0) {
             // When quant_min == 0 and all captures are always initialized in the atom,
             // we still need a one-time reset before the SPLIT for the case where the
-            // atom is not executed at all (following QuickJS).
-            byte[] resetPrefix = new byte[3];
-            resetPrefix[0] = (byte) RegExpOpcode.SAVE_RESET.getCode();
-            resetPrefix[1] = (byte) captureCountBeforeAtom;
-            resetPrefix[2] = (byte) (captureCount - 1);
-            byte[] newAtomCode = new byte[resetPrefix.length + atomCode.length];
-            System.arraycopy(resetPrefix, 0, newAtomCode, 0, resetPrefix.length);
-            System.arraycopy(atomCode, 0, newAtomCode, resetPrefix.length, atomCode.length);
-            atomCode = newAtomCode;
-            atomSize = atomCode.length;
+            // atom is not executed at all (following QuickJS). This is also needed when
+            // per-iteration resets are injected, because the zero-iteration branch skips
+            // the atom bytecode entirely.
+            needInitialCaptureResetBeforeQuantifier = true;
+        }
+
+        if (needInitialCaptureResetBeforeQuantifier) {
+            context.buffer.appendU8(RegExpOpcode.SAVE_RESET.getCode());
+            context.buffer.appendU8(captureCountBeforeAtom);
+            context.buffer.appendU8(captureCount - 1);
         }
 
         // Implement quantifier using SPLIT opcodes
@@ -908,10 +910,18 @@ public final class RegExpCompiler {
             // ? quantifier: SPLIT then atom
             // Greedy: try atom first, then skip
             // Non-greedy: try skip first, then atom
+            if (addZeroAdvanceCheck) {
+                context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
+                context.buffer.appendU8(0);
+            }
             context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
                     RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
-            context.buffer.appendU32(atomSize);
+            context.buffer.appendU32(atomSize + (addZeroAdvanceCheck ? 2 : 0));
             context.buffer.append(atomCode);
+            if (addZeroAdvanceCheck) {
+                context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
+                context.buffer.appendU8(0);
+            }
         } else if (min == 0 && max == Integer.MAX_VALUE) {
             // * quantifier: SPLIT (skip or continue), SET_CHAR_POS?, atom, CHECK_ADVANCE?, GOTO back
             // Following QuickJS: if atom can match empty, insert SET_CHAR_POS before atom and
@@ -990,10 +1000,18 @@ public final class RegExpCompiler {
                 } else {
                     int remaining = max - min;
                     for (int i = 0; i < remaining; i++) {
+                        if (addZeroAdvanceCheck) {
+                            context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
+                            context.buffer.appendU8(0);
+                        }
                         context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
                                 RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
-                        context.buffer.appendU32(atomSize);
+                        context.buffer.appendU32(atomSize + (addZeroAdvanceCheck ? 2 : 0));
                         context.buffer.append(atomCode);
+                        if (addZeroAdvanceCheck) {
+                            context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
+                            context.buffer.appendU8(0);
+                        }
                     }
                 }
             }

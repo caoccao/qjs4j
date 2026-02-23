@@ -103,16 +103,22 @@ public final class StringPrototype {
                 continue;
             }
             if (nextChar == '<') {
+                if (!hasNamedCaptures(groupNames)) {
+                    // Per GetSubstitution, when namedCaptures is undefined, "$<" is treated
+                    // as a literal and parsing continues after '<' (do not consume to '>').
+                    resultBuilder.append("$<");
+                    replacementIndex += 2;
+                    continue;
+                }
                 int closeIndex = replacementTemplate.indexOf('>', replacementIndex + 2);
                 if (closeIndex >= 0) {
                     String groupName = replacementTemplate.substring(replacementIndex + 2, closeIndex);
-                    boolean hasNamedCaptures = hasNamedCaptures(groupNames);
                     String namedCaptureValue = getNamedCaptureReplacement(groupName, captures, groupNames);
                     if (namedCaptureValue != null) {
                         resultBuilder.append(namedCaptureValue);
-                    } else if (hasNamedCaptures) {
                     } else {
-                        resultBuilder.append(replacementTemplate, replacementIndex, closeIndex + 1);
+                        // namedCaptures exists but property lookup produced undefined
+                        // => substitute empty string.
                     }
                     replacementIndex = closeIndex + 1;
                     continue;
@@ -141,6 +147,136 @@ public final class StringPrototype {
             replacementIndex++;
         }
         return resultBuilder.toString();
+    }
+
+    private static String applyRegExpReplacementPatternWithNamedCapturesObject(
+            JSContext context,
+            String replacementTemplate,
+            String input,
+            int matchStart,
+            int matchEnd,
+            String[] captures,
+            JSValue namedCapturesValue
+    ) {
+        StringBuilder resultBuilder = new StringBuilder(replacementTemplate.length() + 16);
+        int replacementIndex = 0;
+        while (replacementIndex < replacementTemplate.length()) {
+            char currentChar = replacementTemplate.charAt(replacementIndex);
+            if (currentChar != '$' || replacementIndex + 1 >= replacementTemplate.length()) {
+                resultBuilder.append(currentChar);
+                replacementIndex++;
+                continue;
+            }
+            char nextChar = replacementTemplate.charAt(replacementIndex + 1);
+            if (nextChar == '$') {
+                resultBuilder.append('$');
+                replacementIndex += 2;
+                continue;
+            }
+            if (nextChar == '&') {
+                resultBuilder.append(captures != null && captures.length > 0 && captures[0] != null ? captures[0] : "");
+                replacementIndex += 2;
+                continue;
+            }
+            if (nextChar == '`') {
+                resultBuilder.append(input, 0, matchStart);
+                replacementIndex += 2;
+                continue;
+            }
+            if (nextChar == '\'') {
+                resultBuilder.append(input.substring(matchEnd));
+                replacementIndex += 2;
+                continue;
+            }
+            if (nextChar == '<') {
+                if (namedCapturesValue == null
+                        || namedCapturesValue instanceof JSUndefined
+                        || namedCapturesValue instanceof JSNull) {
+                    resultBuilder.append("$<");
+                    replacementIndex += 2;
+                    continue;
+                }
+                int closeIndex = replacementTemplate.indexOf('>', replacementIndex + 2);
+                if (closeIndex >= 0) {
+                    String groupName = replacementTemplate.substring(replacementIndex + 2, closeIndex);
+                    JSObject namedCapturesObject = JSTypeConversions.toObject(context, namedCapturesValue);
+                    if (namedCapturesObject == null) {
+                        resultBuilder.append("$<");
+                        replacementIndex += 2;
+                        continue;
+                    }
+                    JSValue groupValue = namedCapturesObject.get(context, PropertyKey.fromString(groupName));
+                    if (context.hasPendingException()) {
+                        return null;
+                    }
+                    if (!(groupValue instanceof JSUndefined)) {
+                        String replacement = JSTypeConversions.toString(context, groupValue).value();
+                        if (context.hasPendingException()) {
+                            return null;
+                        }
+                        resultBuilder.append(replacement);
+                    }
+                    replacementIndex = closeIndex + 1;
+                    continue;
+                }
+            }
+            if (nextChar >= '1' && nextChar <= '9') {
+                int captureIndex = nextChar - '0';
+                int consumedDigits = 1;
+                if (replacementIndex + 2 < replacementTemplate.length()) {
+                    char secondDigit = replacementTemplate.charAt(replacementIndex + 2);
+                    if (secondDigit >= '0' && secondDigit <= '9') {
+                        int twoDigitCaptureIndex = captureIndex * 10 + (secondDigit - '0');
+                        if (captures != null && twoDigitCaptureIndex < captures.length) {
+                            captureIndex = twoDigitCaptureIndex;
+                            consumedDigits = 2;
+                        }
+                    }
+                }
+                if (captures != null && captureIndex < captures.length) {
+                    resultBuilder.append(captures[captureIndex] != null ? captures[captureIndex] : "");
+                    replacementIndex += 1 + consumedDigits;
+                    continue;
+                }
+            }
+            resultBuilder.append('$');
+            replacementIndex++;
+        }
+        return resultBuilder.toString();
+    }
+
+    private static String applyRegExpReplacementWithNamedCapturesObject(
+            JSContext context,
+            JSValue replaceValue,
+            String input,
+            int matchStart,
+            int matchEnd,
+            String[] captures,
+            JSValue namedCapturesValue
+    ) {
+        if (replaceValue instanceof JSFunction replaceFunction) {
+            JSValue[] callbackArgs = buildRegExpReplaceCallbackArgs(context, input, matchStart, captures, namedCapturesValue);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            JSValue callbackResult = replaceFunction.call(context, JSUndefined.INSTANCE, callbackArgs);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            return JSTypeConversions.toString(context, callbackResult).value();
+        }
+        String replacementTemplate = JSTypeConversions.toString(context, replaceValue).value();
+        if (context.hasPendingException()) {
+            return null;
+        }
+        return applyRegExpReplacementPatternWithNamedCapturesObject(
+                context,
+                replacementTemplate,
+                input,
+                matchStart,
+                matchEnd,
+                captures,
+                namedCapturesValue);
     }
 
     /**
@@ -215,6 +351,30 @@ public final class StringPrototype {
         callbackArgs[matchCaptures.length + 1] = new JSString(input);
         if (hasNamedCaptures) {
             callbackArgs[matchCaptures.length + 2] = createNamedGroupsObject(captures, groupNames);
+        }
+        return callbackArgs;
+    }
+
+    private static JSValue[] buildRegExpReplaceCallbackArgs(
+            JSContext context,
+            String input,
+            int matchStart,
+            String[] captures,
+            JSValue namedCapturesValue
+    ) {
+        String[] matchCaptures = captures != null ? captures : new String[]{""};
+        boolean hasNamedCaptures = !(namedCapturesValue instanceof JSUndefined)
+                && !(namedCapturesValue instanceof JSNull);
+        int callbackArgCount = matchCaptures.length + 2 + (hasNamedCaptures ? 1 : 0);
+        JSValue[] callbackArgs = new JSValue[callbackArgCount];
+        for (int captureIndex = 0; captureIndex < matchCaptures.length; captureIndex++) {
+            String captureValue = matchCaptures[captureIndex];
+            callbackArgs[captureIndex] = captureValue != null ? new JSString(captureValue) : JSUndefined.INSTANCE;
+        }
+        callbackArgs[matchCaptures.length] = JSNumber.of(matchStart);
+        callbackArgs[matchCaptures.length + 1] = new JSString(input);
+        if (hasNamedCaptures) {
+            callbackArgs[matchCaptures.length + 2] = namedCapturesValue;
         }
         return callbackArgs;
     }
@@ -972,36 +1132,7 @@ public final class StringPrototype {
             if (regexp.isGlobal()) {
                 return replaceAll(context, thisArg, args);
             } else {
-                RegExpEngine engine = regexp.getEngine();
-                RegExpEngine.MatchResult result = engine.exec(s, 0);
-
-                if (result == null || !result.matched()) {
-                    return str;
-                }
-
-                int[][] indices = result.indices();
-                if (indices == null || indices.length == 0) {
-                    return str;
-                }
-
-                int matchStart = indices[0][0];
-                int matchEnd = indices[0][1];
-
-                String[] captures = result.captures();
-                String replacement = applyRegExpReplacement(
-                        context,
-                        replaceValue,
-                        s,
-                        matchStart,
-                        matchEnd,
-                        captures,
-                        regexp.getBytecode().groupNames());
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-
-                String resultStr = s.substring(0, matchStart) + replacement + s.substring(matchEnd);
-                return new JSString(resultStr);
+                return replaceRegExpSubclassOnce(context, regexp, replaceValue, str);
             }
         }
 
@@ -1140,6 +1271,90 @@ public final class StringPrototype {
         }
         result.append(s.substring(pos));
         return new JSString(result.toString());
+    }
+
+    private static JSValue replaceRegExpSubclassOnce(JSContext context, JSRegExp regexp, JSValue replaceValue, JSString inputString) {
+        JSValue execValue = regexp.get(context, PropertyKey.fromString("exec"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(execValue instanceof JSFunction execFunction)) {
+            return context.throwTypeError("exec is not a function");
+        }
+
+        String input = inputString.value();
+        JSValue execResult = execFunction.call(context, regexp, new JSValue[]{inputString});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (execResult instanceof JSNull) {
+            return inputString;
+        }
+        if (!(execResult instanceof JSObject resultObject)) {
+            return context.throwTypeError("RegExp exec method returned non-object");
+        }
+
+        JSValue matchValue = resultObject.get(context, PropertyKey.fromIndex(0));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String matchedString = JSTypeConversions.toString(context, matchValue).value();
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue indexValue = resultObject.get(context, PropertyKey.INDEX);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        int matchStart = (int) JSTypeConversions.toInteger(context, indexValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        int matchEnd = Math.max(matchStart, Math.min(input.length(), matchStart + matchedString.length()));
+        matchStart = Math.max(0, Math.min(matchStart, input.length()));
+
+        JSValue lengthValue = resultObject.get(context, PropertyKey.LENGTH);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        long resultLengthLong = JSTypeConversions.toLength(context, lengthValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        int resultLength = (int) Math.min(resultLengthLong, Integer.MAX_VALUE);
+        String[] captures = new String[resultLength];
+        for (int captureIndex = 0; captureIndex < resultLength; captureIndex++) {
+            JSValue captureValue = resultObject.get(context, PropertyKey.fromIndex(captureIndex));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (captureValue instanceof JSUndefined) {
+                captures[captureIndex] = null;
+            } else {
+                captures[captureIndex] = JSTypeConversions.toString(context, captureValue).value();
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            }
+        }
+
+        JSValue namedCapturesValue = resultObject.get(context, PropertyKey.GROUPS);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String replacement = applyRegExpReplacementWithNamedCapturesObject(
+                context,
+                replaceValue,
+                input,
+                matchStart,
+                matchEnd,
+                captures,
+                namedCapturesValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return new JSString(input.substring(0, matchStart) + replacement + input.substring(matchEnd));
     }
 
     /**
