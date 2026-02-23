@@ -1127,14 +1127,22 @@ public final class JSGlobalObject {
         functionPrototype.definePropertyWritableConfigurable("call", new JSNativeFunction("call", 1, FunctionPrototype::call));
         functionPrototype.definePropertyWritableConfigurable("toString", new JSNativeFunction("toString", 0, FunctionPrototype::toString_));
 
-        // Add 'arguments' and 'caller' as accessor properties per ES2024 %ThrowTypeError%.
-        // Per ES2024 20.2.3.1/20.2.3.2: Function.prototype.arguments and .caller are
-        // accessor properties that unconditionally throw TypeError when accessed.
+        // Add 'arguments' and 'caller' as accessor properties per QuickJS js_throw_type_error.
+        // For non-strict bytecode functions with prototype (regular sloppy functions),
+        // the getter returns undefined. For strict, arrow, async, generator functions
+        // or setter calls, it throws TypeError.
         JSNativeFunction throwTypeError = new JSNativeFunction(
                 "throwTypeError",
                 0,
-                (childContext, thisObj, args) -> childContext.throwTypeError(
-                        "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"));
+                (childContext, thisObj, args) -> {
+                    if (thisObj instanceof JSBytecodeFunction bytecodeFunc) {
+                        if (!bytecodeFunc.isStrict() && bytecodeFunc.isConstructor() && args.length == 0) {
+                            return JSUndefined.INSTANCE;
+                        }
+                    }
+                    return childContext.throwTypeError(
+                            "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them");
+                });
         // Store as the %ThrowTypeError% intrinsic for sharing with strict arguments.callee
         context.setThrowTypeErrorIntrinsic(throwTypeError);
 

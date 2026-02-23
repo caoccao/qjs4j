@@ -413,6 +413,21 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testCallerAndArgumentsAccessOnNonStrictFunction() {
+        // Non-strict function accessing .caller and .arguments should not throw (returns undefined per QuickJS)
+        assertBooleanWithJavet(
+                "(function f() { f.caller; return true; })()",
+                "(function f() { f.arguments; return true; })()");
+
+        // Strict function .caller and .arguments access should throw TypeError
+        assertErrorWithJavet(
+                "(() => {}).caller",
+                "(() => {}).arguments",
+                "(function() { 'use strict'; }).caller",
+                "(function() { 'use strict'; }).arguments");
+    }
+
+    @Test
     public void testPrototypeArguments() {
         // Test that 'arguments' property exists
         assertBooleanWithJavet("'arguments' in Function.prototype");
