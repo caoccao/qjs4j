@@ -604,7 +604,10 @@ final class ExpressionCompiler {
             // Compile the expression
             compileExpression(expressions.get(i));
 
-            // Concatenate using ADD opcode (JavaScript + operator)
+            // Template substitutions use ToString coercion (not + operator default hint).
+            ctx.emitter.emitOpcode(Opcode.TO_STRING);
+
+            // Concatenate using ADD after explicit ToString on the substitution.
             ctx.emitter.emitOpcode(Opcode.ADD);
 
             // Add the next quasi if it exists
@@ -874,4 +877,3 @@ final class ExpressionCompiler {
         }
     }
 }
-

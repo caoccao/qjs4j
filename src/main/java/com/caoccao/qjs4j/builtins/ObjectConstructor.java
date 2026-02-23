@@ -89,7 +89,7 @@ public final class ObjectConstructor {
         // Wrap primitive values in their respective object wrappers
         if (value instanceof JSNumber num) {
             JSNumberObject jsNumberObject = new JSNumberObject(num);
-            context.transferPrototype(jsNumberObject, JSNumber.NAME);
+            context.transferPrototype(jsNumberObject, JSNumberObject.NAME);
             return jsNumberObject;
         }
 

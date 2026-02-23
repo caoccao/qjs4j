@@ -562,24 +562,6 @@ public final class JSTypeConversions {
             return JSNumber.of(Double.NaN);
         }
 
-        // Handle wrapper objects (String, Number, Boolean, BigInt objects)
-        if (value instanceof JSObject obj) {
-            JSValue primitiveValue = obj.getPrimitiveValue();
-            if (primitiveValue instanceof JSNumber num) {
-                return num;
-            } else if (primitiveValue instanceof JSString str) {
-                return stringToNumber(str.value());
-            } else if (primitiveValue instanceof JSBoolean bool) {
-                return JSNumber.of(bool.value() ? 1.0 : 0.0);
-            } else if (primitiveValue instanceof JSBigInt) {
-                // Per ES spec, ToNumber(BigInt) throws TypeError
-                if (context != null) {
-                    context.throwTypeError("Cannot convert a BigInt value to a number");
-                }
-                return JSNumber.of(Double.NaN);
-            }
-        }
-
         // For objects, call ToPrimitive with NUMBER hint
         JSValue primitive = toPrimitive(context, value, PreferredType.NUMBER);
         if (primitive == value) {
@@ -634,12 +616,6 @@ public final class JSTypeConversions {
             // IsHTMLDDA objects emulate undefined - return undefined for ToPrimitive
             if (obj.isHTMLDDA()) {
                 return JSUndefined.INSTANCE;
-            }
-
-            // Check for [[PrimitiveValue]] internal slot (wrapper objects)
-            JSValue primitiveValue = obj.getPrimitiveValue();
-            if (primitiveValue != null && !(primitiveValue instanceof JSUndefined)) {
-                return primitiveValue;
             }
 
             JSValue toPrimitiveMethod = obj.get(context, PropertyKey.SYMBOL_TO_PRIMITIVE);
@@ -706,33 +682,14 @@ public final class JSTypeConversions {
             return new JSString("null");
         } else if (value.isNullOrUndefined()
                 || value.isBigInt()
-                || value.isBigIntObject()
                 || value.isBoolean()
-                || value.isBooleanObject()
                 || value.isNumber()
-                || value.isNumberObject()
                 || value.isTypedArray()) {
             return new JSString(value.toString());
         } else if (value instanceof JSString s) {
             return s;
-        } else if (value instanceof JSStringObject s) {
-            return s.getValue();
         } else if (value instanceof JSSymbol s) {
             return new JSString(s.toString(context));
-        }
-
-        // Handle wrapper objects (String, Number, Boolean, BigInt objects)
-        if (value instanceof JSObject obj) {
-            JSValue primitiveValue = obj.getPrimitiveValue();
-            if (primitiveValue instanceof JSString str) {
-                return str;
-            } else if (primitiveValue instanceof JSNumber num) {
-                return new JSString(num.toString());
-            } else if (primitiveValue instanceof JSBoolean bool) {
-                return new JSString(bool.toString());
-            } else if (primitiveValue instanceof JSBigInt bigInt) {
-                return new JSString(bigInt.toString());
-            }
         }
 
         // For objects, call ToPrimitive with STRING hint
