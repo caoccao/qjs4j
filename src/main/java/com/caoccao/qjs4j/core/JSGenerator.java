@@ -166,7 +166,7 @@ public final class JSGenerator extends JSObject {
                 state = State.SUSPENDED_YIELD;
                 // Check if this was a yield* - if so, return the raw iterator result without wrapping
                 // This matches QuickJS behavior where *pdone = 2 signals not to wrap the result
-                YieldResult lastYield = context.getVirtualMachine().getLastYieldResult();
+                YieldResult lastYield = generatorState.getLastYieldResult();
                 if (lastYield != null && lastYield.isYieldStar() && yieldValue instanceof JSObject resultObj) {
                     return resultObj;
                 }
@@ -247,7 +247,7 @@ public final class JSGenerator extends JSObject {
             // Following QuickJS js_generator_next with GEN_MAGIC_RETURN:
             // For SUSPENDED_YIELD_STAR, the return value and magic are pushed on the stack,
             // and the yield* bytecode calls iterator.return(value).
-            com.caoccao.qjs4j.vm.YieldResult lastYield = context.getVirtualMachine().getLastYieldResult();
+            YieldResult lastYield = generatorState.getLastYieldResult();
             if (lastYield != null && lastYield.isYieldStar()) {
                 JSObject delegateIterator = lastYield.delegateIterator();
                 if (delegateIterator != null) {
@@ -336,7 +336,7 @@ public final class JSGenerator extends JSObject {
                     } else {
                         // Inner iterator returned done:false - continue delegation
                         state = State.SUSPENDED_YIELD;
-                        com.caoccao.qjs4j.vm.YieldResult newYield = context.getVirtualMachine().getLastYieldResult();
+                        YieldResult newYield = generatorState.getLastYieldResult();
                         if (newYield != null && newYield.isYieldStar() && yieldValue instanceof JSObject resultObj) {
                             return resultObj;
                         }

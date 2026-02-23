@@ -3230,6 +3230,8 @@ public final class VirtualMachine {
             // Generator yielded - increment count and update state
             state.incrementYieldCount();
             state.setState(JSGeneratorState.State.SUSPENDED_YIELD);
+            // Save yield result per-generator so each generator tracks its own yield* state
+            state.setLastYieldResult(yieldResult);
             return yieldResult.value();
         } else if (awaitSuspensionPromise != null) {
             state.setAwaitSuspended(true);
@@ -3237,6 +3239,7 @@ public final class VirtualMachine {
             return JSUndefined.INSTANCE;
         } else {
             // Generator completed (returned)
+            state.setLastYieldResult(null);
             state.setCompleted(true);
             return result;
         }

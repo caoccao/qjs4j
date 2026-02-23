@@ -717,7 +717,7 @@ public final class JSBytecodeFunction extends JSFunction {
                                 fulfillAsyncYield(context, promise, completedValue, true);
                             } else {
                                 delegatedYieldStarIteratorHolder[0] = null;
-                                YieldResult lastYield = context.getVirtualMachine().getLastYieldResult();
+                                YieldResult lastYield = generatorState.getLastYieldResult();
                                 if (lastYield != null && lastYield.isYieldStar()) {
                                     delegatedYieldStarIteratorHolder[0] = lastYield.delegateIterator();
                                     fulfillAsyncYieldStarResult(context, promise, iteratorResult, lastYield.delegateIterator());
@@ -837,7 +837,7 @@ public final class JSBytecodeFunction extends JSFunction {
                         fulfillAsyncYield(context, promise, completedValue, true);
                     } else {
                         // Generator yielded - check if yield* (already has {value, done})
-                        YieldResult lastYield = context.getVirtualMachine().getLastYieldResult();
+                        YieldResult lastYield = generatorState.getLastYieldResult();
                         if (lastYield != null && lastYield.isYieldStar()) {
                             delegatedYieldStarIteratorHolder[0] = lastYield.delegateIterator();
                             // ASYNC_YIELD_STAR currently returns a raw sync iterator result object.

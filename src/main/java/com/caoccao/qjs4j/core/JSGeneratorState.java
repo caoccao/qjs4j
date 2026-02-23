@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.vm.StackFrame;
+import com.caoccao.qjs4j.vm.YieldResult;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -42,6 +43,7 @@ public final class JSGeneratorState {
     // Execution state that needs to be preserved across yields
     // TODO: Add full state preservation (PC, stack, locals) for proper resumption
     private boolean isCompleted;
+    private YieldResult lastYieldResult;
     private ResumeKind pendingResumeKind;
     private JSValue pendingResumeValue;
     private State state;
@@ -88,6 +90,10 @@ public final class JSGeneratorState {
 
     public JSBytecodeFunction getFunction() {
         return function;
+    }
+
+    public YieldResult getLastYieldResult() {
+        return lastYieldResult;
     }
 
     public List<ResumeRecord> getResumeRecords() {
@@ -152,6 +158,10 @@ public final class JSGeneratorState {
         this.awaitSuspended = awaitSuspended;
     }
 
+    public void setLastYieldResult(YieldResult lastYieldResult) {
+        this.lastYieldResult = lastYieldResult;
+    }
+
     public void setCompleted(boolean completed) {
         this.isCompleted = completed;
         if (completed) {
@@ -160,6 +170,7 @@ public final class JSGeneratorState {
             pendingResumeKind = null;
             pendingResumeValue = null;
             awaitSuspended = false;
+            lastYieldResult = null;
         }
     }
 
