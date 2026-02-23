@@ -207,14 +207,10 @@ public final class JSDate extends JSObject {
             return Double.NaN;
         }
 
-        try {
-            return Instant.parse(str).toEpochMilli();
-        } catch (DateTimeParseException ignored) {
-        }
-
-        try {
-            return OffsetDateTime.parse(str).toInstant().toEpochMilli();
-        } catch (DateTimeParseException ignored) {
+        // Try ISO 8601 date-time string format first (following QuickJS js_date_parse_isostring)
+        double isoResult = parseISODateString(str);
+        if (!Double.isNaN(isoResult)) {
+            return isoResult;
         }
 
         try {
@@ -245,6 +241,209 @@ public final class JSDate extends JSObject {
         }
 
         return Double.NaN;
+    }
+
+    /**
+     * Parse ISO 8601 date-time string format following QuickJS js_date_parse_isostring.
+     * Handles partial ISO strings: YYYY, YYYY-MM, YYYY-MM-DD, YYYY-MM-DDTHH:mm[:ss[.sss]][Z|±HH:mm]
+     * Also supports extended years: ±YYYYYY
+     * Date-only forms are treated as UTC; date-time forms without timezone are local.
+     */
+    private static double parseISODateString(String str) {
+        int len = str.length();
+        int pos = 0;
+
+        // fields: year, month(0-based), day(1-based), hours, minutes, seconds, ms, (unused), tzOffset
+        int[] fields = {0, 0, 1, 0, 0, 0, 0, 0, 0};
+        boolean isLocal = false;
+
+        // Parse year: yyyy or [+-]yyyyyy
+        if (pos < len && (str.charAt(pos) == '+' || str.charAt(pos) == '-')) {
+            int sign = str.charAt(pos) == '-' ? -1 : 1;
+            pos++;
+            int[] result = parseDigits(str, pos, 6, 6);
+            if (result == null) {
+                return Double.NaN;
+            }
+            fields[0] = result[0] * sign;
+            pos = result[1];
+            if (sign == -1 && fields[0] == 0) {
+                return Double.NaN; // reject -000000
+            }
+        } else {
+            int[] result = parseDigits(str, pos, 4, 4);
+            if (result == null) {
+                return Double.NaN;
+            }
+            fields[0] = result[0];
+            pos = result[1];
+        }
+
+        // Optional month: -MM
+        if (pos < len && str.charAt(pos) == '-') {
+            pos++;
+            int[] monthResult = parseDigits(str, pos, 2, 2);
+            if (monthResult == null) {
+                return Double.NaN;
+            }
+            fields[1] = monthResult[0];
+            pos = monthResult[1];
+            if (fields[1] < 1) {
+                return Double.NaN;
+            }
+            fields[1] -= 1; // convert to 0-based
+
+            // Optional day: -DD
+            if (pos < len && str.charAt(pos) == '-') {
+                pos++;
+                int[] dayResult = parseDigits(str, pos, 2, 2);
+                if (dayResult == null) {
+                    return Double.NaN;
+                }
+                fields[2] = dayResult[0];
+                pos = dayResult[1];
+                if (fields[2] < 1) {
+                    return Double.NaN;
+                }
+            }
+        }
+
+        // Optional time: THH:mm[:ss[.sss]]
+        if (pos < len && str.charAt(pos) == 'T') {
+            pos++;
+            isLocal = true;
+
+            int[] hourResult = parseDigits(str, pos, 2, 2);
+            if (hourResult == null) {
+                fields[3] = 100; // reject unconditionally in validation
+            } else {
+                pos = hourResult[1];
+                if (pos >= len || str.charAt(pos) != ':') {
+                    fields[3] = 100;
+                } else {
+                    fields[3] = hourResult[0];
+                    pos++; // skip ':'
+                    int[] minResult = parseDigits(str, pos, 2, 2);
+                    if (minResult == null) {
+                        fields[3] = 100;
+                    } else {
+                        fields[4] = minResult[0];
+                        pos = minResult[1];
+
+                        // Optional seconds: :ss
+                        if (pos < len && str.charAt(pos) == ':') {
+                            pos++;
+                            int[] secResult = parseDigits(str, pos, 2, 2);
+                            if (secResult == null) {
+                                return Double.NaN;
+                            }
+                            fields[5] = secResult[0];
+                            pos = secResult[1];
+
+                            // Optional milliseconds: .sss (up to 9 fractional digits)
+                            if (pos < len && (str.charAt(pos) == '.' || str.charAt(pos) == ',')) {
+                                pos++;
+                                int msStart = pos;
+                                int msValue = 0;
+                                int msDigits = 0;
+                                while (pos < len && msDigits < 9 && Character.isDigit(str.charAt(pos))) {
+                                    msValue = msValue * 10 + (str.charAt(pos) - '0');
+                                    msDigits++;
+                                    pos++;
+                                }
+                                if (msDigits == 0) {
+                                    return Double.NaN;
+                                }
+                                while (msDigits < 3) {
+                                    msValue *= 10;
+                                    msDigits++;
+                                }
+                                while (msDigits > 3) {
+                                    msValue /= 10;
+                                    msDigits--;
+                                }
+                                fields[6] = msValue;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Parse timezone offset if present: Z or [+-]HH:mm or [+-]HHmm
+        if (pos < len) {
+            isLocal = false;
+            char tzChar = str.charAt(pos);
+            if (tzChar == 'Z') {
+                pos++;
+                fields[8] = 0;
+            } else if (tzChar == '+' || tzChar == '-') {
+                int tzSign = tzChar == '-' ? -1 : 1;
+                pos++;
+                int[] tzHourResult = parseDigits(str, pos, 2, 2);
+                if (tzHourResult == null) {
+                    return Double.NaN;
+                }
+                pos = tzHourResult[1];
+                int tzMinutes = 0;
+                if (pos < len && str.charAt(pos) == ':') {
+                    pos++;
+                }
+                if (pos < len && Character.isDigit(str.charAt(pos))) {
+                    int[] tzMinResult = parseDigits(str, pos, 2, 2);
+                    if (tzMinResult == null) {
+                        return Double.NaN;
+                    }
+                    tzMinutes = tzMinResult[0];
+                    pos = tzMinResult[1];
+                }
+                fields[8] = tzSign * (tzHourResult[0] * 60 + tzMinutes);
+            } else {
+                return Double.NaN; // extraneous characters
+            }
+        }
+
+        // Error if extraneous characters remain
+        if (pos != len) {
+            return Double.NaN;
+        }
+
+        // Validate fields (following QuickJS js_Date_parse)
+        int[] fieldMax = {0, 11, 31, 24, 59, 59};
+        for (int i = 1; i < 6; i++) {
+            if (fields[i] > fieldMax[i]) {
+                return Double.NaN;
+            }
+        }
+        // Special case: 24:00:00.000 is only valid with zero minutes/seconds/ms
+        if (fields[3] == 24 && (fields[4] | fields[5] | fields[6]) != 0) {
+            return Double.NaN;
+        }
+
+        // Convert to epoch milliseconds
+        double[] dateFields = new double[7];
+        for (int i = 0; i < 7; i++) {
+            dateFields[i] = fields[i];
+        }
+        return setDateFields(dateFields, isLocal) - (double) fields[8] * 60000;
+    }
+
+    /**
+     * Parse exactly between minDigits and maxDigits decimal digits from str starting at pos.
+     *
+     * @return int[]{value, newPos} or null if not enough digits
+     */
+    private static int[] parseDigits(String str, int pos, int minDigits, int maxDigits) {
+        int start = pos;
+        int value = 0;
+        while (pos < str.length() && pos - start < maxDigits && Character.isDigit(str.charAt(pos))) {
+            value = value * 10 + (str.charAt(pos) - '0');
+            pos++;
+        }
+        if (pos - start < minDigits) {
+            return null;
+        }
+        return new int[]{value, pos};
     }
 
     public static double setDateFields(double[] fields, boolean isLocal) {
