@@ -871,6 +871,38 @@ public final class RegExpCompiler {
         // If so, we need to add SET_CHAR_POS/CHECK_ADVANCE to prevent infinite loops.
         boolean addZeroAdvanceCheck = needCheckAdvance(atomCode);
 
+        // Following QuickJS: reset captures inside the quantifier body at each iteration.
+        // This is needed when the atom contains optional captures (via SPLIT/GOTO) that
+        // might not be set on every iteration. Without resetting, captures from a previous
+        // iteration leak into the current one.
+        boolean hasCapturesInAtom = captureCountBeforeAtom != captureCount;
+        boolean needCaptureReset = hasCapturesInAtom && needCaptureInit(atomCode);
+        if (needCaptureReset) {
+            // Prepend SAVE_RESET to the atom code so captures are cleared at each iteration
+            byte[] resetPrefix = new byte[3];
+            resetPrefix[0] = (byte) RegExpOpcode.SAVE_RESET.getCode();
+            resetPrefix[1] = (byte) captureCountBeforeAtom;
+            resetPrefix[2] = (byte) (captureCount - 1);
+            byte[] newAtomCode = new byte[resetPrefix.length + atomCode.length];
+            System.arraycopy(resetPrefix, 0, newAtomCode, 0, resetPrefix.length);
+            System.arraycopy(atomCode, 0, newAtomCode, resetPrefix.length, atomCode.length);
+            atomCode = newAtomCode;
+            atomSize = atomCode.length;
+        } else if (hasCapturesInAtom && min == 0) {
+            // When quant_min == 0 and all captures are always initialized in the atom,
+            // we still need a one-time reset before the SPLIT for the case where the
+            // atom is not executed at all (following QuickJS).
+            byte[] resetPrefix = new byte[3];
+            resetPrefix[0] = (byte) RegExpOpcode.SAVE_RESET.getCode();
+            resetPrefix[1] = (byte) captureCountBeforeAtom;
+            resetPrefix[2] = (byte) (captureCount - 1);
+            byte[] newAtomCode = new byte[resetPrefix.length + atomCode.length];
+            System.arraycopy(resetPrefix, 0, newAtomCode, 0, resetPrefix.length);
+            System.arraycopy(atomCode, 0, newAtomCode, resetPrefix.length, atomCode.length);
+            atomCode = newAtomCode;
+            atomSize = atomCode.length;
+        }
+
         // Implement quantifier using SPLIT opcodes
         if (min == 0 && max == 1) {
             // ? quantifier: SPLIT then atom
@@ -1225,6 +1257,40 @@ public final class RegExpCompiler {
                 (ch >= 'A' && ch <= 'Z') ||
                 (ch >= 'a' && ch <= 'z') ||
                 ch == '_';
+    }
+
+    /**
+     * Following QuickJS re_need_check_adv_and_capture_init: determines if captures
+     * inside a quantifier body need explicit resetting at each iteration.
+     * Returns true if the atom contains complex opcodes (SPLIT, GOTO, back references)
+     * that might cause some captures to not be initialized on every iteration.
+     */
+    private boolean needCaptureInit(byte[] atomCode) {
+        int pos = 0;
+        while (pos < atomCode.length) {
+            int opcode = atomCode[pos] & 0xFF;
+            RegExpOpcode op = RegExpOpcode.fromCode(opcode);
+            switch (op) {
+                case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE:
+                    break;
+                case RANGE, RANGE_I, RANGE32, RANGE32_I, NOT_RANGE, NOT_RANGE_I: {
+                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
+                    pos += 3 + rangeLen;
+                    continue;
+                }
+                case LINE_START, LINE_START_M, LINE_END, LINE_END_M,
+                     WORD_BOUNDARY, WORD_BOUNDARY_I, NOT_WORD_BOUNDARY, NOT_WORD_BOUNDARY_I,
+                     SAVE_START, SAVE_END, SAVE_RESET, SET_CHAR_POS, SET_I32:
+                    break;
+                case BACK_REFERENCE, BACK_REFERENCE_I:
+                    return true;
+                default:
+                    // Complex opcode (SPLIT, GOTO, etc.) - captures may not be initialized
+                    return true;
+            }
+            pos += op.getLength();
+        }
+        return false;
     }
 
     /**
