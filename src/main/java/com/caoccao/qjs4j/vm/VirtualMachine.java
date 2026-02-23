@@ -294,6 +294,10 @@ public final class VirtualMachine {
             } else {
                 context.transferPrototype(result, function);
             }
+            if (result instanceof JSDataView dataView && !dataView.validateConstructorState(context)) {
+                throw new JSVirtualMachineException(context.getPendingException().toString(),
+                        context.getPendingException());
+            }
         }
         return result != null ? result : JSUndefined.INSTANCE;
     }

@@ -55,6 +55,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private int selfLocalIndex;
     private String sourceCode;
     private VarRef[] varRefs;
+
     /**
      * Create a bytecode function.
      *

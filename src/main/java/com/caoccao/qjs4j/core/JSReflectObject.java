@@ -207,6 +207,9 @@ public final class JSReflectObject {
             } else {
                 context.transferPrototype(result, function);
             }
+            if (result instanceof JSDataView dataView && !dataView.validateConstructorState(context)) {
+                return context.getPendingException();
+            }
         }
         return result != null ? result : JSUndefined.INSTANCE;
     }

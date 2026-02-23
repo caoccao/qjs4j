@@ -369,7 +369,7 @@ public final class JSContext implements AutoCloseable {
      * @param byteLength The length in bytes
      * @return A new JSDataView instance with prototype set
      */
-    public JSDataView createJSDataView(JSArrayBuffer buffer, int byteOffset, int byteLength) {
+    public JSDataView createJSDataView(IJSArrayBuffer buffer, int byteOffset, int byteLength) {
         JSDataView jsDataView = new JSDataView(buffer, byteOffset, byteLength);
         transferPrototype(jsDataView, JSDataView.NAME);
         return jsDataView;
