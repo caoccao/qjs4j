@@ -79,6 +79,23 @@ public final class JSArray extends JSObject {
     }
 
     /**
+     * Create an array from values taking ownership of the provided dense storage.
+     * Internal fast path: caller must not reuse or mutate {@code ownedValues}.
+     */
+    JSArray(JSValue[] ownedValues, boolean takeOwnership) {
+        super();
+        this.length = ownedValues.length;
+        if (takeOwnership) {
+            this.denseArray = ownedValues;
+        } else {
+            this.denseArray = Arrays.copyOf(ownedValues, Math.max(ownedValues.length, INITIAL_CAPACITY));
+        }
+        // Mark as array class (equivalent to QuickJS class_id == JS_CLASS_ARRAY)
+        this.arrayObject = true;
+        initializeLengthProperty();
+    }
+
+    /**
      * Array constructor implementation.
      * new Array() - creates an empty array
      * new Array(len) - creates an array with specified length (if len is a number)

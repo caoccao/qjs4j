@@ -245,6 +245,16 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Create a new JSArray taking ownership of a freshly allocated values array.
+     * Internal fast path to avoid an extra defensive copy in hot built-in paths.
+     */
+    public JSArray createJSArray(JSValue[] values, boolean takeOwnership) {
+        JSArray jsArray = new JSArray(values, takeOwnership);
+        transferPrototype(jsArray, JSArray.NAME);
+        return jsArray;
+    }
+
+    /**
      * Create a new JSArrayBuffer with proper prototype chain.
      *
      * @param byteLength The length in bytes

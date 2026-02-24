@@ -542,7 +542,7 @@ public final class JSONObject {
             int isArray = JSTypeChecking.isArray(context, val);
             if (isArray < 0) {
                 stringifyContext.stack.remove(val);
-                stringifyContext.cyclePath.removeLast();
+                stringifyContext.cyclePath.remove(stringifyContext.cyclePath.size() - 1);
                 return false; // exception
             }
 
@@ -554,7 +554,7 @@ public final class JSONObject {
             }
 
             stringifyContext.stack.remove(val);
-            stringifyContext.cyclePath.removeLast();
+            stringifyContext.cyclePath.remove(stringifyContext.cyclePath.size() - 1);
             return result;
         }
 

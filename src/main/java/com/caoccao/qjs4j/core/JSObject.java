@@ -445,6 +445,85 @@ public non-sealed class JSObject implements JSValue {
         return getOrderedOwnKeys(true).toArray(new PropertyKey[0]);
     }
 
+    /**
+     * Fast path for own enumerable string property names as JS strings.
+     * Returns null when generic property ordering or accessor semantics are required.
+     */
+    public JSValue[] enumerableStringKeyValuesFastPath() {
+        if (getClass() != JSObject.class) {
+            return null;
+        }
+        if (sparseProperties != null || shape.getDeletedPropCount() != 0) {
+            return null;
+        }
+        int propertyCount = shape.getPropertyCount();
+        JSValue[] keyValues = new JSValue[propertyCount];
+        int keyCount = 0;
+        for (int index = 0; index < propertyCount; index++) {
+            PropertyKey propertyKey = shape.getPropertyKeyAt(index);
+            if (propertyKey == null) {
+                return null;
+            }
+            if (propertyKey.isSymbol() || getCanonicalArrayIndex(propertyKey) >= 0) {
+                return null;
+            }
+            PropertyDescriptor descriptor = shape.getDescriptorAt(index);
+            if (descriptor == null) {
+                return null;
+            }
+            if (descriptor.isAccessorDescriptor()) {
+                return null;
+            }
+            if (descriptor.isEnumerable()) {
+                keyValues[keyCount++] = new JSString(propertyKey.asString());
+            }
+        }
+        if (keyCount == keyValues.length) {
+            return keyValues;
+        }
+        return Arrays.copyOf(keyValues, keyCount);
+    }
+
+    /**
+     * Fast path for own enumerable string property values.
+     * Returns null when generic property ordering or accessor semantics are required.
+     */
+    public JSValue[] enumerableStringPropertyValuesFastPath() {
+        if (getClass() != JSObject.class) {
+            return null;
+        }
+        if (sparseProperties != null || shape.getDeletedPropCount() != 0) {
+            return null;
+        }
+        int propertyCount = shape.getPropertyCount();
+        JSValue[] values = new JSValue[propertyCount];
+        int valueCount = 0;
+        for (int index = 0; index < propertyCount; index++) {
+            PropertyKey propertyKey = shape.getPropertyKeyAt(index);
+            if (propertyKey == null) {
+                return null;
+            }
+            if (propertyKey.isSymbol() || getCanonicalArrayIndex(propertyKey) >= 0) {
+                return null;
+            }
+            PropertyDescriptor descriptor = shape.getDescriptorAt(index);
+            if (descriptor == null) {
+                return null;
+            }
+            if (descriptor.isAccessorDescriptor()) {
+                return null;
+            }
+            if (descriptor.isEnumerable()) {
+                JSValue propertyValue = index < propertyValues.length ? propertyValues[index] : null;
+                values[valueCount++] = propertyValue != null ? propertyValue : JSUndefined.INSTANCE;
+            }
+        }
+        if (valueCount == values.length) {
+            return values;
+        }
+        return Arrays.copyOf(values, valueCount);
+    }
+
     private boolean failSet(PropertyKey key, JSContext context, boolean throwOnFailure) {
         if (throwOnFailure && context != null && context.isStrictMode()) {
             context.throwTypeError(

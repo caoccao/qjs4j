@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -28,6 +29,7 @@ import java.util.List;
  */
 public final class IteratorPrototype {
     private static final PropertyKey[] ITERATOR_RESULT_KEYS = {PropertyKey.VALUE, PropertyKey.DONE};
+    private static final List<PropertyKey> ITERATOR_RESULT_KEY_LIST = List.of(PropertyKey.VALUE, PropertyKey.DONE);
     private static final JSValue[] NO_ARGS = new JSValue[0];
 
     private IteratorPrototype() {
@@ -110,10 +112,17 @@ public final class IteratorPrototype {
     /**
      * Build the result value for a zip iteration step.
      */
-    private static JSValue buildZipResult(JSContext context, JSValue[] results, int iterCount, PropertyKey[] keyArray) {
+    private static JSValue buildZipResult(
+            JSContext context,
+            JSValue[] results,
+            int iterCount,
+            PropertyKey[] keyArray,
+            JSValue[] cachedZipKeyStrings) {
         if (keyArray != null) {
             // zipKeyed: create null-prototype object with bulk property initialization
-            JSObject resultObject = new JSObject();
+            JSObject resultObject = cachedZipKeyStrings != null
+                    ? new JSZipKeyedResultObject(keyArray, cachedZipKeyStrings)
+                    : new JSObject();
             PropertyKey[] keys = keyArray.clone();
             PropertyDescriptor[] descriptors = new PropertyDescriptor[iterCount];
             JSValue[] values = new JSValue[iterCount];
@@ -125,11 +134,7 @@ public final class IteratorPrototype {
             return resultObject;
         } else {
             // zip: create packed array
-            JSArray resultArray = context.createJSArray();
-            for (int i = 0; i < iterCount; i++) {
-                resultArray.push(results[i]);
-            }
-            return resultArray;
+            return context.createJSArray(Arrays.copyOf(results, iterCount), true);
         }
     }
 
@@ -450,11 +455,48 @@ public final class IteratorPrototype {
             PropertyKey[] keyArray) {
 
         int iterCount = iters.size();
+        final boolean isShortestMode = "shortest".equals(mode);
+        final boolean isStrictMode = "strict".equals(mode);
+        final boolean isLongestMode = "longest".equals(mode);
+        final JSValue[] cachedZipKeyStrings;
+        if (keyArray != null) {
+            JSValue[] candidateCachedZipKeyStrings = new JSValue[keyArray.length];
+            boolean allStringKeys = true;
+            for (int index = 0; index < keyArray.length; index++) {
+                if (!keyArray[index].isString()) {
+                    allStringKeys = false;
+                    break;
+                }
+                candidateCachedZipKeyStrings[index] = new JSString(keyArray[index].asString());
+            }
+            if (allStringKeys) {
+                cachedZipKeyStrings = candidateCachedZipKeyStrings;
+            } else {
+                cachedZipKeyStrings = null;
+            }
+        } else {
+            cachedZipKeyStrings = null;
+        }
+        final JSValue[] paddingValues;
+        if (padding != null) {
+            paddingValues = new JSValue[iterCount];
+            for (int index = 0; index < iterCount; index++) {
+                if (index < padding.size()) {
+                    paddingValues[index] = padding.get(index);
+                } else {
+                    paddingValues[index] = JSUndefined.INSTANCE;
+                }
+            }
+        } else {
+            paddingValues = null;
+        }
         // Track which iterators are still open (by index)
         boolean[] open = new boolean[iterCount];
         for (int i = 0; i < iterCount; i++) {
             open[i] = true;
         }
+        int[] openIteratorCount = {iterCount};
+        JSValue[] stepResults = new JSValue[iterCount];
 
         // Generator state: 0 = suspended-start, 1 = suspended-yield, 2 = executing, 3 = completed
         int[] generatorState = {0};
@@ -469,22 +511,24 @@ public final class IteratorPrototype {
 
             generatorState[0] = 2; // executing
             try {
-                JSValue[] results = new JSValue[iterCount];
-                boolean allAlreadyClosed = true;
+                if (openIteratorCount[0] == 0) {
+                    generatorState[0] = 3;
+                    return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+                }
 
                 for (int i = 0; i < iterCount; i++) {
                     if (!open[i]) {
                         // Already exhausted, use padding
-                        results[i] = (padding != null && i < padding.size()) ? padding.get(i) : JSUndefined.INSTANCE;
+                        stepResults[i] = paddingValues != null ? paddingValues[i] : JSUndefined.INSTANCE;
                         continue;
                     }
-                    allAlreadyClosed = false;
 
                     IteratorRecord iterRecord = iters.get(i);
                     IteratorStep step = iteratorStep(childContext, iterRecord.iterator(), iterRecord.nextMethod());
                     if (step == null) {
                         // Abrupt completion: remove this iter from openIters, close remaining
                         open[i] = false;
+                        openIteratorCount[0]--;
                         generatorState[0] = 3;
                         JSValue error = childContext.getPendingException();
                         closeOpenIteratorsWithError(childContext, iters, open, error);
@@ -493,8 +537,9 @@ public final class IteratorPrototype {
 
                     if (step.done()) {
                         open[i] = false;
+                        openIteratorCount[0]--;
 
-                        if ("shortest".equals(mode)) {
+                        if (isShortestMode) {
                             // Close all remaining open iterators with ReturnCompletion
                             generatorState[0] = 3;
                             closeOpenIteratorsWithReturn(childContext, iters, open);
@@ -504,7 +549,7 @@ public final class IteratorPrototype {
                             return iteratorResult(childContext, JSUndefined.INSTANCE, true);
                         }
 
-                        if ("strict".equals(mode)) {
+                        if (isStrictMode) {
                             if (i != 0) {
                                 // Non-first iterator done: immediately close and throw TypeError
                                 generatorState[0] = 3;
@@ -517,35 +562,22 @@ public final class IteratorPrototype {
                         }
 
                         // "longest" mode: use padding value
-                        results[i] = (padding != null && i < padding.size()) ? padding.get(i) : JSUndefined.INSTANCE;
+                        stepResults[i] = paddingValues != null ? paddingValues[i] : JSUndefined.INSTANCE;
                     } else {
-                        results[i] = step.value();
+                        stepResults[i] = step.value();
                     }
-                }
-
-                // If all iterators were already closed before this round
-                if (allAlreadyClosed) {
-                    generatorState[0] = 3;
-                    return iteratorResult(childContext, JSUndefined.INSTANCE, true);
                 }
 
                 // "longest" mode: check if all iterators are now done
-                if ("longest".equals(mode)) {
-                    boolean anyOpen = false;
-                    for (int i = 0; i < iterCount; i++) {
-                        if (open[i]) {
-                            anyOpen = true;
-                            break;
-                        }
-                    }
-                    if (!anyOpen) {
+                if (isLongestMode) {
+                    if (openIteratorCount[0] == 0) {
                         generatorState[0] = 3;
                         return iteratorResult(childContext, JSUndefined.INSTANCE, true);
                     }
                 }
 
                 // Build result
-                JSValue resultValue = buildZipResult(childContext, results, iterCount, keyArray);
+                JSValue resultValue = buildZipResult(childContext, stepResults, iterCount, keyArray, cachedZipKeyStrings);
 
                 generatorState[0] = 1; // suspended-yield
                 return iteratorResult(childContext, resultValue, false);
@@ -583,6 +615,262 @@ public final class IteratorPrototype {
         });
 
         return createIteratorObject(context, nextFunction, returnFunction, "Iterator Helper");
+    }
+
+    /**
+     * Specialized zipKeyed result object that caches key strings for Object.keys().
+     * It falls back automatically if the object shape becomes non-trivial.
+     */
+    private static final class JSZipKeyedResultObject extends JSObject {
+        private final JSValue[] cachedKeyStrings;
+        private final PropertyKey[] expectedKeys;
+        private boolean pristine;
+
+        private JSZipKeyedResultObject(PropertyKey[] expectedKeys, JSValue[] cachedKeyStrings) {
+            super();
+            this.expectedKeys = expectedKeys;
+            this.cachedKeyStrings = cachedKeyStrings;
+            this.pristine = true;
+        }
+
+        @Override
+        public JSValue[] enumerableStringKeyValuesFastPath() {
+            if (!pristine) {
+                return null;
+            }
+            return cachedKeyStrings;
+        }
+
+        @Override
+        public JSValue[] enumerableStringPropertyValuesFastPath() {
+            if (!pristine) {
+                return null;
+            }
+            return propertyValues.length == expectedKeys.length
+                    ? propertyValues
+                    : Arrays.copyOf(propertyValues, expectedKeys.length);
+        }
+
+        @Override
+        public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
+            pristine = false;
+            return super.defineOwnProperty(key, descriptor, context);
+        }
+
+        @Override
+        public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
+            pristine = false;
+            super.defineProperty(key, descriptor);
+        }
+
+        @Override
+        public boolean delete(JSContext context, PropertyKey key) {
+            pristine = false;
+            return super.delete(context, key);
+        }
+
+        @Override
+        public boolean delete(PropertyKey key) {
+            pristine = false;
+            return super.delete(key);
+        }
+
+        @Override
+        public boolean delete(String propertyName) {
+            pristine = false;
+            return super.delete(propertyName);
+        }
+
+        @Override
+        public void set(String propertyName, JSValue value) {
+            pristine = false;
+            super.set(propertyName, value);
+        }
+
+        @Override
+        public void set(int index, JSValue value) {
+            pristine = false;
+            super.set(index, value);
+        }
+
+        @Override
+        public void set(PropertyKey key, JSValue value) {
+            pristine = false;
+            super.set(key, value);
+        }
+
+        @Override
+        public void set(JSContext context, PropertyKey key, JSValue value) {
+            pristine = false;
+            super.set(context, key, value);
+        }
+
+        @Override
+        public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
+            pristine = false;
+            super.set(context, key, value, receiver);
+        }
+    }
+
+    /**
+     * Specialized CreateIteratorResultObject for iterator helper hot paths.
+     * It lazily materializes to a normal object when mutated.
+     */
+    private static final class JSIteratorResultObject extends JSObject {
+        private JSValue doneValue;
+        private boolean pristine;
+        private JSValue valueValue;
+
+        private JSIteratorResultObject(JSValue valueValue, JSValue doneValue) {
+            super();
+            this.valueValue = valueValue;
+            this.doneValue = doneValue;
+            this.pristine = true;
+        }
+
+        @Override
+        public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
+            materialize();
+            return super.defineOwnProperty(key, descriptor, context);
+        }
+
+        @Override
+        public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
+            materialize();
+            super.defineProperty(key, descriptor);
+        }
+
+        @Override
+        public boolean delete(JSContext context, PropertyKey key) {
+            materialize();
+            return super.delete(context, key);
+        }
+
+        @Override
+        public boolean delete(PropertyKey key) {
+            materialize();
+            return super.delete(key);
+        }
+
+        @Override
+        public boolean delete(String propertyName) {
+            materialize();
+            return super.delete(propertyName);
+        }
+
+        @Override
+        public JSValue get(JSContext context, PropertyKey key) {
+            if (pristine) {
+                if (PropertyKey.VALUE.equals(key)) {
+                    return valueValue;
+                }
+                if (PropertyKey.DONE.equals(key)) {
+                    return doneValue;
+                }
+            }
+            return super.get(context, key);
+        }
+
+        @Override
+        public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+            if (pristine) {
+                if (PropertyKey.VALUE.equals(key)) {
+                    return PropertyDescriptor.defaultData(valueValue);
+                }
+                if (PropertyKey.DONE.equals(key)) {
+                    return PropertyDescriptor.defaultData(doneValue);
+                }
+                return null;
+            }
+            return super.getOwnPropertyDescriptor(key);
+        }
+
+        @Override
+        public boolean hasOwnProperty(String propertyName) {
+            if (pristine && ("value".equals(propertyName) || "done".equals(propertyName))) {
+                return true;
+            }
+            return super.hasOwnProperty(propertyName);
+        }
+
+        @Override
+        public boolean hasOwnProperty(PropertyKey key) {
+            if (pristine && (PropertyKey.VALUE.equals(key) || PropertyKey.DONE.equals(key))) {
+                return true;
+            }
+            return super.hasOwnProperty(key);
+        }
+
+        @Override
+        public List<PropertyKey> getOwnPropertyKeys() {
+            if (pristine) {
+                return ITERATOR_RESULT_KEY_LIST;
+            }
+            return super.getOwnPropertyKeys();
+        }
+
+        @Override
+        public PropertyKey[] enumerableKeys() {
+            if (pristine) {
+                return ITERATOR_RESULT_KEYS.clone();
+            }
+            return super.enumerableKeys();
+        }
+
+        @Override
+        public PropertyKey[] ownPropertyKeys() {
+            if (pristine) {
+                return ITERATOR_RESULT_KEYS.clone();
+            }
+            return super.ownPropertyKeys();
+        }
+
+        @Override
+        public void set(String propertyName, JSValue value) {
+            materialize();
+            super.set(propertyName, value);
+        }
+
+        @Override
+        public void set(int index, JSValue value) {
+            materialize();
+            super.set(index, value);
+        }
+
+        @Override
+        public void set(PropertyKey key, JSValue value) {
+            materialize();
+            super.set(key, value);
+        }
+
+        @Override
+        public void set(JSContext context, PropertyKey key, JSValue value) {
+            materialize();
+            super.set(context, key, value);
+        }
+
+        @Override
+        public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
+            materialize();
+            super.set(context, key, value, receiver);
+        }
+
+        private void materialize() {
+            if (!pristine) {
+                return;
+            }
+            initProperties(
+                    ITERATOR_RESULT_KEYS.clone(),
+                    new PropertyDescriptor[]{
+                            PropertyDescriptor.defaultData(valueValue),
+                            PropertyDescriptor.defaultData(doneValue)
+                    },
+                    new JSValue[]{valueValue, doneValue}
+            );
+            pristine = false;
+            valueValue = JSUndefined.INSTANCE;
+            doneValue = JSUndefined.INSTANCE;
+        }
     }
 
     /**
@@ -1274,15 +1562,8 @@ public final class IteratorPrototype {
     private static JSObject iteratorResult(JSContext context, JSValue value, boolean done) {
         JSValue actualValue = value != null ? value : JSUndefined.INSTANCE;
         JSValue doneValue = JSBoolean.valueOf(done);
-        JSObject result = context.createJSObject();
-        result.initProperties(
-                ITERATOR_RESULT_KEYS.clone(),
-                new PropertyDescriptor[]{
-                        PropertyDescriptor.defaultData(actualValue),
-                        PropertyDescriptor.defaultData(doneValue)
-                },
-                new JSValue[]{actualValue, doneValue}
-        );
+        JSObject result = new JSIteratorResultObject(actualValue, doneValue);
+        context.transferPrototype(result, JSObject.NAME);
         return result;
     }
 

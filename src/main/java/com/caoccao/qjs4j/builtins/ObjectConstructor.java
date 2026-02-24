@@ -855,20 +855,35 @@ public final class ObjectConstructor {
             return context.createJSArray();
         }
 
-        List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
-        JSArray result = context.createJSArray();
+        JSValue[] fastPathKeyStrings = obj.enumerableStringKeyValuesFastPath();
+        if (fastPathKeyStrings != null) {
+            if (obj.getClass() == JSObject.class) {
+                return context.createJSArray(fastPathKeyStrings, true);
+            }
+            return context.createJSArray(fastPathKeyStrings);
+        }
 
+        List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
+        int stringKeyCount = 0;
         for (PropertyKey key : propertyKeys) {
             if (key.isString()) {
-                // Check if property is enumerable
-                PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
-                if (desc != null && desc.isEnumerable()) {
-                    result.push(new JSString(key.asString()));
+                PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
+                if (descriptor != null && descriptor.isEnumerable()) {
+                    stringKeyCount++;
                 }
             }
         }
-
-        return result;
+        JSValue[] keyStrings = new JSValue[stringKeyCount];
+        int keyStringIndex = 0;
+        for (PropertyKey key : propertyKeys) {
+            if (key.isString()) {
+                PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
+                if (descriptor != null && descriptor.isEnumerable()) {
+                    keyStrings[keyStringIndex++] = new JSString(key.asString());
+                }
+            }
+        }
+        return context.createJSArray(keyStrings, true);
     }
 
     /**
@@ -1000,16 +1015,34 @@ public final class ObjectConstructor {
             return context.createJSArray();
         }
 
-        List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
-        JSArray result = context.createJSArray();
-
-        for (PropertyKey key : propertyKeys) {
-            if (key.isString()) {
-                JSValue value = obj.get(key);
-                result.push(value);
+        JSValue[] fastPathValues = obj.enumerableStringPropertyValuesFastPath();
+        if (fastPathValues != null) {
+            if (obj.getClass() == JSObject.class) {
+                return context.createJSArray(fastPathValues, true);
             }
+            return context.createJSArray(fastPathValues);
         }
 
-        return result;
+        List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
+        int stringKeyCount = 0;
+        for (PropertyKey key : propertyKeys) {
+            if (key.isString()) {
+                PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
+                if (descriptor != null && descriptor.isEnumerable()) {
+                    stringKeyCount++;
+                }
+            }
+        }
+        JSValue[] values = new JSValue[stringKeyCount];
+        int valueIndex = 0;
+        for (PropertyKey key : propertyKeys) {
+            if (key.isString()) {
+                PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
+                if (descriptor != null && descriptor.isEnumerable()) {
+                    values[valueIndex++] = obj.get(key);
+                }
+            }
+        }
+        return context.createJSArray(values, true);
     }
 }

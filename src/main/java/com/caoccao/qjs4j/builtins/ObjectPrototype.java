@@ -529,7 +529,7 @@ public final class ObjectPrototype {
             keyStrings[i] = new JSString(enumerableKeys[i].toPropertyString());
         }
 
-        return context.createJSArray(keyStrings);
+        return context.createJSArray(keyStrings, true);
     }
 
     /**
@@ -754,6 +754,6 @@ public final class ObjectPrototype {
             values[i] = obj.get(enumerableKeys[i]);
         }
 
-        return context.createJSArray(values);
+        return context.createJSArray(values, true);
     }
 }
