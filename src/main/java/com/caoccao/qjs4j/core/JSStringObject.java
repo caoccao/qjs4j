@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.core;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Represents a JavaScript String object (wrapper) as opposed to a string primitive.
  * <p>
@@ -161,6 +164,23 @@ public final class JSStringObject extends JSObject {
 
         // For non-indexed properties, use default behavior
         return super.getOwnPropertyDescriptor(key);
+    }
+
+    /**
+     * Override getOwnPropertyKeys for String exotic [[OwnPropertyKeys]] (ES2024 10.4.3.2).
+     * Character indices 0..length-1 are listed first in ascending order,
+     * followed by any other own property keys from the parent.
+     */
+    @Override
+    public List<PropertyKey> getOwnPropertyKeys() {
+        int len = value.value().length();
+        List<PropertyKey> superKeys = super.getOwnPropertyKeys();
+        List<PropertyKey> keys = new ArrayList<>(len + superKeys.size());
+        for (int i = 0; i < len; i++) {
+            keys.add(PropertyKey.fromString(String.valueOf(i)));
+        }
+        keys.addAll(superKeys);
+        return keys;
     }
 
     /**

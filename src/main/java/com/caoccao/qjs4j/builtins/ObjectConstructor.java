@@ -28,7 +28,7 @@ public final class ObjectConstructor {
 
     /**
      * Object.assign(target, ...sources)
-     * ES2020 19.1.2.1
+     * ES2024 19.1.2.1
      * Copies all enumerable own properties from one or more source objects to a target object.
      */
     public static JSValue assign(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -36,25 +36,57 @@ public final class ObjectConstructor {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
+        // Step 1: Let to be ToObject(target)
         JSValue targetValue = args[0];
-        if (!(targetValue instanceof JSObject target)) {
+        if (targetValue.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        JSObject target = JSTypeConversions.toObject(context, targetValue);
+        if (target == null) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
-        // Copy properties from each source object
+        // Step 4: For each source
         for (int i = 1; i < args.length; i++) {
             JSValue source = args[i];
             if (source.isNullOrUndefined()) {
                 continue;
             }
 
-            if (source instanceof JSObject sourceObj) {
-                List<PropertyKey> keys = sourceObj.getOwnPropertyKeys();
-                for (PropertyKey key : keys) {
-                    if (key.isString()) {
-                        JSValue value = sourceObj.get(key);
-                        target.set(key, value);
-                    }
+            // Step 4b: Let from be ToObject(nextSource)
+            JSObject sourceObj = JSTypeConversions.toObject(context, source);
+            if (sourceObj == null) {
+                continue;
+            }
+
+            // Step 4b.ii: Let keys be from.[[OwnPropertyKeys]]()
+            List<PropertyKey> keys = sourceObj.getOwnPropertyKeys();
+            for (PropertyKey key : keys) {
+                // Step 4c.i: Let desc be from.[[GetOwnProperty]](nextKey)
+                PropertyDescriptor desc = sourceObj.getOwnPropertyDescriptor(key);
+                if (desc == null) {
+                    continue;
+                }
+
+                // Step 4c.iii: If desc is not undefined and desc.[[Enumerable]] is true
+                if (!desc.isEnumerable()) {
+                    continue;
+                }
+
+                // Step 4c.iii.1: Let propValue be Get(from, nextKey)
+                JSValue propValue = sourceObj.get(context, key);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+
+                // Step 4c.iii.3: Perform ? Set(to, nextKey, propValue, true)
+                boolean setSuccess = target.setWithResult(context, key, propValue);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                if (!setSuccess) {
+                    return context.throwTypeError("Cannot assign to read only property '"
+                            + key.toPropertyString() + "' of object '#<Object>'");
                 }
             }
         }
@@ -145,64 +177,36 @@ public final class ObjectConstructor {
         // null prototype is allowed - object stays with null prototype
 
         // Handle propertiesObject parameter (args[1]) if present
+        // ES2024 19.1.2.2 step 3: ObjectDefineProperties(obj, Properties)
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            if (!(args[1] instanceof JSObject propsObj)) {
-                return context.throwTypeError("Properties must be an object");
+            JSObject propsObj = JSTypeConversions.toObject(context, args[1]);
+            if (propsObj == null) {
+                return context.throwTypeError("Cannot convert undefined or null to object");
             }
 
-            // Get all own property keys from properties object
+            // ObjectDefineProperties: get all own property keys
             List<PropertyKey> propKeys = propsObj.getOwnPropertyKeys();
 
             for (PropertyKey key : propKeys) {
-                // Get the descriptor for this property
-                JSValue descValue = propsObj.get(key);
+                // Only process enumerable own properties (ES5.1 15.2.3.7 step 5a-b)
+                PropertyDescriptor propDesc = propsObj.getOwnPropertyDescriptor(key);
+                if (propDesc == null || !propDesc.isEnumerable()) {
+                    continue;
+                }
+
+                // Get the descriptor value (triggers getters)
+                JSValue descValue = propsObj.get(context, key);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
                 if (!(descValue instanceof JSObject descObj)) {
                     return context.throwTypeError("Property descriptor must be an object");
                 }
 
-                // Build property descriptor
-                PropertyDescriptor descriptor = new PropertyDescriptor();
-
-                // Check for value
-                JSValue value = descObj.get(PropertyKey.VALUE);
-                if (!(value instanceof JSUndefined)) {
-                    descriptor.setValue(value);
-                }
-
-                // Check for writable
-                JSValue writable = descObj.get(PropertyKey.WRITABLE);
-                if (!(writable instanceof JSUndefined)) {
-                    descriptor.setWritable(JSTypeConversions.toBoolean(writable) == JSBoolean.TRUE);
-                }
-
-                // Check for enumerable
-                JSValue enumerable = descObj.get(PropertyKey.ENUMERABLE);
-                if (!(enumerable instanceof JSUndefined)) {
-                    descriptor.setEnumerable(JSTypeConversions.toBoolean(enumerable) == JSBoolean.TRUE);
-                }
-
-                // Check for configurable
-                JSValue configurable = descObj.get(PropertyKey.CONFIGURABLE);
-                if (!(configurable instanceof JSUndefined)) {
-                    descriptor.setConfigurable(JSTypeConversions.toBoolean(configurable) == JSBoolean.TRUE);
-                }
-
-                // Check for getter
-                JSValue getter = descObj.get(PropertyKey.GET);
-                if (!(getter instanceof JSUndefined)) {
-                    if (!(getter instanceof JSFunction)) {
-                        return context.throwTypeError("Getter must be a function");
-                    }
-                    descriptor.setGetter((JSFunction) getter);
-                }
-
-                // Check for setter
-                JSValue setter = descObj.get(PropertyKey.SET);
-                if (!(setter instanceof JSUndefined)) {
-                    if (!(setter instanceof JSFunction)) {
-                        return context.throwTypeError("Setter must be a function");
-                    }
-                    descriptor.setSetter((JSFunction) setter);
+                // ToPropertyDescriptor(descObj) - use get(context,...) to trigger getters
+                PropertyDescriptor descriptor = toPropertyDescriptor(context, descObj);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
                 }
 
                 // Define the property on the new object
@@ -238,55 +242,18 @@ public final class ObjectConstructor {
             // Only process enumerable properties
             PropertyDescriptor keyDesc = props.getOwnPropertyDescriptor(key);
             if (keyDesc != null && keyDesc.isEnumerable()) {
-                JSValue descValue = props.get(key);
+                JSValue descValue = props.get(context, key);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
 
                 if (!(descValue instanceof JSObject descObj)) {
                     return context.throwTypeError("Property descriptor must be an object");
                 }
 
-                // Parse the descriptor object
-                PropertyDescriptor desc = new PropertyDescriptor();
-
-                // Check for value
-                JSValue value = descObj.get(PropertyKey.VALUE);
-                if (value != null && !(value instanceof JSUndefined)) {
-                    desc.setValue(value);
-                }
-
-                // Check for writable
-                JSValue writable = descObj.get(PropertyKey.WRITABLE);
-                if (writable != null && !(writable instanceof JSUndefined)) {
-                    desc.setWritable(JSTypeChecking.isTruthy(writable));
-                }
-
-                // Check for enumerable
-                JSValue enumerable = descObj.get(PropertyKey.ENUMERABLE);
-                if (enumerable != null && !(enumerable instanceof JSUndefined)) {
-                    desc.setEnumerable(JSTypeChecking.isTruthy(enumerable));
-                }
-
-                // Check for configurable
-                JSValue configurable = descObj.get(PropertyKey.CONFIGURABLE);
-                if (configurable != null && !(configurable instanceof JSUndefined)) {
-                    desc.setConfigurable(JSTypeChecking.isTruthy(configurable));
-                }
-
-                // Check for getter
-                JSValue getter = descObj.get(PropertyKey.GET);
-                if (getter != null && !(getter instanceof JSUndefined)) {
-                    if (!(getter instanceof JSFunction)) {
-                        return context.throwTypeError("Getter must be a function");
-                    }
-                    desc.setGetter((JSFunction) getter);
-                }
-
-                // Check for setter
-                JSValue setter = descObj.get(PropertyKey.SET);
-                if (setter != null && !(setter instanceof JSUndefined)) {
-                    if (!(setter instanceof JSFunction)) {
-                        return context.throwTypeError("Setter must be a function");
-                    }
-                    desc.setSetter((JSFunction) setter);
+                PropertyDescriptor desc = toPropertyDescriptor(context, descObj);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
                 }
 
                 obj.defineProperty(key, desc);
@@ -992,6 +959,57 @@ public final class ObjectConstructor {
         }
 
         return obj;
+    }
+
+    /**
+     * ToPropertyDescriptor(Obj)
+     * ES2024 6.2.6.5
+     * Converts a descriptor object to a PropertyDescriptor, using Get() to trigger getters.
+     */
+    static PropertyDescriptor toPropertyDescriptor(JSContext context, JSObject descObj) {
+        PropertyDescriptor desc = new PropertyDescriptor();
+
+        // Check for enumerable
+        JSValue enumerable = descObj.get(context, PropertyKey.ENUMERABLE);
+        if (enumerable != null && !(enumerable instanceof JSUndefined)) {
+            desc.setEnumerable(JSTypeChecking.isTruthy(enumerable));
+        }
+
+        // Check for configurable
+        JSValue configurable = descObj.get(context, PropertyKey.CONFIGURABLE);
+        if (configurable != null && !(configurable instanceof JSUndefined)) {
+            desc.setConfigurable(JSTypeChecking.isTruthy(configurable));
+        }
+
+        // Check for value
+        JSValue value = descObj.get(context, PropertyKey.VALUE);
+        if (value != null && !(value instanceof JSUndefined)) {
+            desc.setValue(value);
+        }
+
+        // Check for writable
+        JSValue writable = descObj.get(context, PropertyKey.WRITABLE);
+        if (writable != null && !(writable instanceof JSUndefined)) {
+            desc.setWritable(JSTypeChecking.isTruthy(writable));
+        }
+
+        // Check for getter
+        JSValue getter = descObj.get(context, PropertyKey.GET);
+        if (getter != null && !(getter instanceof JSUndefined)) {
+            if (getter instanceof JSFunction getterFn) {
+                desc.setGetter(getterFn);
+            }
+        }
+
+        // Check for setter
+        JSValue setter = descObj.get(context, PropertyKey.SET);
+        if (setter != null && !(setter instanceof JSUndefined)) {
+            if (setter instanceof JSFunction setterFn) {
+                desc.setSetter(setterFn);
+            }
+        }
+
+        return desc;
     }
 
     /**
