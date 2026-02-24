@@ -210,7 +210,11 @@ tasks {
     }
     withType<Test> {
         systemProperty("file.encoding", "UTF-8")
-        maxParallelForks = maxOf(1, Runtime.getRuntime().availableProcessors() / 2)
+        val cpuCount = Runtime.getRuntime().availableProcessors()
+        maxParallelForks = maxOf(
+            1,
+            if (os.isMacOsX) cpuCount * 2 / 3 else cpuCount / 2
+        )
     }
 }
 

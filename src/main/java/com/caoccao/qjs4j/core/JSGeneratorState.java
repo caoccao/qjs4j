@@ -158,10 +158,6 @@ public final class JSGeneratorState {
         this.awaitSuspended = awaitSuspended;
     }
 
-    public void setLastYieldResult(YieldResult lastYieldResult) {
-        this.lastYieldResult = lastYieldResult;
-    }
-
     public void setCompleted(boolean completed) {
         this.isCompleted = completed;
         if (completed) {
@@ -172,6 +168,10 @@ public final class JSGeneratorState {
             awaitSuspended = false;
             lastYieldResult = null;
         }
+    }
+
+    public void setLastYieldResult(YieldResult lastYieldResult) {
+        this.lastYieldResult = lastYieldResult;
     }
 
     public void setPendingResumeRecord(ResumeKind kind, JSValue value) {
