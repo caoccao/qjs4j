@@ -267,7 +267,13 @@ public final class ObjectConstructor {
                     return JSUndefined.INSTANCE;
                 }
 
-                obj.defineProperty(key, desc);
+                // DefinePropertyOrThrow(O, P, desc)
+                if (!obj.defineOwnProperty(key, desc, context)) {
+                    if (!context.hasPendingException()) {
+                        context.throwTypeError("Cannot redefine property: " + key.toPropertyString());
+                    }
+                    return JSUndefined.INSTANCE;
+                }
             }
         }
 
@@ -1033,6 +1039,9 @@ public final class ObjectConstructor {
             }
             if (getter instanceof JSFunction getterFn) {
                 desc.setGetter(getterFn);
+            } else {
+                // get: undefined — mark [[Get]] as present but undefined
+                desc.setGetter(null);
             }
             hasAccessor = true;
         }
@@ -1050,6 +1059,9 @@ public final class ObjectConstructor {
             }
             if (setter instanceof JSFunction setterFn) {
                 desc.setSetter(setterFn);
+            } else {
+                // set: undefined — mark [[Set]] as present but undefined
+                desc.setSetter(null);
             }
             hasAccessor = true;
         }

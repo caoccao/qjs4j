@@ -183,37 +183,75 @@ public final class JSArray extends JSObject {
 
     @Override
     public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
-        // Per ES spec ArraySetLength / QuickJS JS_DefineProperty:
+        // Per ES spec ArraySetLength (10.4.2.4) / QuickJS set_array_length:
         // When defining "length" with a value, coerce BEFORE descriptor validation
         if (key.isString() && "length".equals(key.asString()) && descriptor.hasValue() && context != null) {
             Long newLength = toArrayLengthForLengthProperty(context, descriptor.getValue());
             if (newLength == null) {
-                return false; // coercion error
+                return false; // coercion error (RangeError pending)
             }
-            // Replace raw value with coerced number; re-check property state
-            // (coercion callback may have changed writable flag)
             descriptor.setValue(JSNumber.of(newLength));
 
+            // Step 7-9: Get old length descriptor
             PropertyDescriptor oldLenDesc = getOwnPropertyDescriptor(key);
+
+            // Step 12: If oldLenDesc.[[Writable]] is false, return false
             if (oldLenDesc != null && !oldLenDesc.isWritable()) {
-                // Current writable is false (may have been changed during coercion)
                 if (descriptor.hasWritable() && descriptor.isWritable()) {
-                    // Cannot change writable from false to true
                     return false;
                 }
                 long oldLen = this.length;
                 if (newLength != oldLen) {
                     return false;
                 }
-                // Value is same, no writable change needed - just apply the descriptor
                 super.defineProperty(key, descriptor);
                 return true;
             }
 
-            // Apply the length change
-            setLength(newLength);
-            // Apply any other descriptor attributes (e.g., writable: false)
-            super.defineProperty(key, descriptor);
+            long oldLength = this.length;
+
+            // Step 11: If newLen >= oldLen, just apply
+            if (newLength >= oldLength) {
+                setLength(newLength);
+                super.defineProperty(key, descriptor);
+                return true;
+            }
+
+            // Step 13-14: Defer writable:false
+            boolean newWritable = !descriptor.hasWritable() || descriptor.isWritable();
+
+            // Step 17: Delete elements from oldLen-1 down to newLen.
+            // Non-configurable elements stop deletion (QuickJS set_array_length).
+            // Scan shape properties to find the highest non-configurable index >= newLen.
+            long actualNewLength = newLength;
+            for (PropertyKey shapeKey : shape.getPropertyKeys()) {
+                long idx = getArrayIndex(shapeKey);
+                if (idx >= newLength && idx < oldLength) {
+                    PropertyDescriptor elemDesc = super.getOwnPropertyDescriptor(shapeKey);
+                    if (elemDesc != null && !elemDesc.isConfigurable()) {
+                        actualNewLength = Math.max(actualNewLength, idx + 1);
+                    }
+                }
+            }
+
+            // Truncate to the actual achievable length
+            setLength(actualNewLength);
+
+            // Apply the length descriptor with the actual length
+            PropertyDescriptor lengthDesc = new PropertyDescriptor();
+            lengthDesc.setValue(JSNumber.of(actualNewLength));
+            if (!newWritable) {
+                lengthDesc.setWritable(false);
+            }
+            super.defineProperty(key, lengthDesc);
+
+            // Step 17.b: If non-configurable element prevented full truncation, return false
+            if (actualNewLength > newLength) {
+                return false;
+            }
+
+            // Step 18: If newWritable is false, apply writable:false
+            // (already applied above in lengthDesc)
             return true;
         }
         // Per ES spec 10.4.2.1 [[DefineOwnProperty]] / QuickJS JS_CreateProperty:
