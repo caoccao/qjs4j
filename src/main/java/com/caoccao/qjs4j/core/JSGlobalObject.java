@@ -1518,6 +1518,8 @@ public final class JSGlobalObject {
         JSObject json = context.createJSObject();
         json.definePropertyWritableConfigurable("parse", new JSNativeFunction("parse", 2, JSONObject::parse));
         json.definePropertyWritableConfigurable("stringify", new JSNativeFunction("stringify", 3, JSONObject::stringify));
+        json.definePropertyWritableConfigurable("rawJSON", new JSNativeFunction("rawJSON", 1, JSONObject::rawJSON));
+        json.definePropertyWritableConfigurable("isRawJSON", new JSNativeFunction("isRawJSON", 1, JSONObject::isRawJSON));
         json.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("JSON"));
 
         global.definePropertyWritableConfigurable("JSON", json);

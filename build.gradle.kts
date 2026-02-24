@@ -213,7 +213,7 @@ tasks {
         val cpuCount = Runtime.getRuntime().availableProcessors()
         maxParallelForks = maxOf(
             1,
-            if (os.isMacOsX) cpuCount * 2 / 3 else cpuCount / 2
+            if (os.isMacOsX) cpuCount * 3 / 4 else cpuCount / 2
         )
     }
 }

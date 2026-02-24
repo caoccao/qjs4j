@@ -305,6 +305,14 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testParseWithProtoPropertyUsesDataProperty() {
+        assertBooleanWithJavet("""
+                var o = JSON.parse('{"__proto__":{"x":1}}');
+                Object.getPrototypeOf(o) === Object.prototype
+                    && Object.getOwnPropertyDescriptor(o, '__proto__').value.x === 1""");
+    }
+
+    @Test
     public void testParseWithReviver() {
         // Test basic reviver functionality
         String json = "{\"a\":1,\"b\":2,\"c\":3}";
@@ -444,6 +452,45 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testParseWithReviverSourceForPrimitiveProperty() {
+        assertStringWithJavet("""
+                var source;
+                JSON.parse('{"a":123}', function (key, value, context) {
+                    if (key === 'a') {
+                        source = context.source;
+                    }
+                    return value;
+                });
+                source""");
+    }
+
+    @Test
+    public void testParseWithReviverSourceForRootPrimitive() {
+        assertStringWithJavet("""
+                var source;
+                JSON.parse('123', function (key, value, context) {
+                    if (key === '') {
+                        source = context.source;
+                    }
+                    return value;
+                });
+                source""");
+    }
+
+    @Test
+    public void testParseWithReviverSourceUndefinedForStructuredValue() {
+        assertBooleanWithJavet("""
+                var source;
+                JSON.parse('{"o":{}}', function (key, value, context) {
+                    if (key === 'o') {
+                        source = context.source;
+                    }
+                    return value;
+                });
+                source === undefined""");
+    }
+
+    @Test
     public void testParseWithReviverTransform() {
         assertStringWithJavet("""
                 JSON.parse('{"date":"2023-01-01"}', function(key, value) {
@@ -481,6 +528,39 @@ public class JSONObjectTest extends BaseJavetTest {
                     return e instanceof SyntaxError;
                   }
                 })()""");
+    }
+
+    @Test
+    public void testRawJSONAndIsRawJSON() {
+        assertBooleanWithJavet("""
+                var raw = JSON.rawJSON('1');
+                JSON.isRawJSON(raw) && !JSON.isRawJSON(1) && !JSON.isRawJSON({rawJSON: '1'})""");
+    }
+
+    @Test
+    public void testRawJSONEmptyStringErrorMessage() {
+        assertErrorWithJavet("JSON.rawJSON('')");
+    }
+
+    @Test
+    public void testRawJSONInvalidOrMultipleValuesErrorMessage() {
+        assertErrorWithJavet("JSON.rawJSON('1 2')");
+    }
+
+    @Test
+    public void testRawJSONMissingArgumentErrorMessage() {
+        assertErrorWithJavet("JSON.rawJSON()");
+    }
+
+    @Test
+    public void testRawJSONObjectAndArrayErrorMessage() {
+        assertErrorWithJavet("JSON.rawJSON('{}')");
+        assertErrorWithJavet("JSON.rawJSON('[]')");
+    }
+
+    @Test
+    public void testRawJSONWhitespaceErrorMessage() {
+        assertErrorWithJavet("JSON.rawJSON(' 1')");
     }
 
     @Test
@@ -650,9 +730,13 @@ public class JSONObjectTest extends BaseJavetTest {
         assertStringWithJavet("""
                 var parseDesc = Object.getOwnPropertyDescriptor(JSON, 'parse');
                 var stringifyDesc = Object.getOwnPropertyDescriptor(JSON, 'stringify');
+                var rawJSONDesc = Object.getOwnPropertyDescriptor(JSON, 'rawJSON');
+                var isRawJSONDesc = Object.getOwnPropertyDescriptor(JSON, 'isRawJSON');
                 JSON.stringify([
                   [typeof parseDesc.value, parseDesc.writable, parseDesc.enumerable, parseDesc.configurable, parseDesc.value.length],
                   [typeof stringifyDesc.value, stringifyDesc.writable, stringifyDesc.enumerable, stringifyDesc.configurable, stringifyDesc.value.length],
+                  [typeof rawJSONDesc.value, rawJSONDesc.writable, rawJSONDesc.enumerable, rawJSONDesc.configurable, rawJSONDesc.value.length],
+                  [typeof isRawJSONDesc.value, isRawJSONDesc.writable, isRawJSONDesc.enumerable, isRawJSONDesc.configurable, isRawJSONDesc.value.length],
                   JSON[Symbol.toStringTag],
                   Object.keys(JSON).length
                 ])""");
@@ -1003,6 +1087,16 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testStringifyWithNumberSpace() {
         assertStringWithJavet("JSON.stringify({a: 1, b: 2}, null, 2)");
+    }
+
+    @Test
+    public void testStringifyWithRawJSON() {
+        assertStringWithJavet("JSON.stringify({a: JSON.rawJSON('1'), b: JSON.rawJSON('true')})");
+    }
+
+    @Test
+    public void testStringifyWithRawJSONInArray() {
+        assertStringWithJavet("JSON.stringify([JSON.rawJSON('1'), JSON.rawJSON('2'), 3])");
     }
 
     @Test
