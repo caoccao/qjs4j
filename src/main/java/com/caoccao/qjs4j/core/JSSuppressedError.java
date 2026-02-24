@@ -66,8 +66,8 @@ public final class JSSuppressedError extends JSError {
         context.transferPrototype(errorPrototype, JSError.NAME);
 
         // Properties: writable, non-enumerable, configurable
-        errorPrototype.definePropertyWritableConfigurable("name", new JSString(NAME));
-        errorPrototype.definePropertyWritableConfigurable("message", new JSString(""));
+        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME), PropertyDescriptor.DataState.ConfigurableWritable);
+        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // SuppressedError(error, suppressed, message)
         int length = 3;
@@ -77,10 +77,10 @@ public final class JSSuppressedError extends JSError {
                 length,
                 (childContext, thisObj, childArgs) -> create(childContext, childArgs),
                 true);
-        errorConstructor.definePropertyReadonlyNonConfigurable("prototype", errorPrototype);
+        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype, PropertyDescriptor.DataState.None);
 
         // Set constructor property on prototype (writable, non-enumerable, configurable)
-        errorPrototype.definePropertyWritableConfigurable("constructor", errorConstructor);
+        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         return errorConstructor;
     }

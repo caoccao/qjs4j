@@ -296,9 +296,9 @@ public abstract class JSTypedArray extends JSObject {
      * For non-numeric keys: delegates to ordinary defineOwnProperty.
      */
     @Override
-    public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
+    public boolean defineOwnProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
         if (!isCanonicalNumericIndex(key)) {
-            return super.defineOwnProperty(key, descriptor, context);
+            return super.defineOwnProperty(context, key, descriptor);
         }
         String str = key.toPropertyString();
         // -0 is never a valid integer index

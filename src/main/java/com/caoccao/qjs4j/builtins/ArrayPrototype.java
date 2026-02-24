@@ -156,7 +156,7 @@ public final class ArrayPrototype {
                         }
                         if (resultArr != null) {
                             resultArr.set(resultIndex, val);
-                        } else if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), val)) {
+                        } else if (!resultObj.defineOwnProperty(context, PropertyKey.fromString(Long.toString(resultIndex)), PropertyDescriptor.dataDescriptor(val, PropertyDescriptor.DataState.All))) {
                             return context.throwTypeError("Cannot define property " + resultIndex);
                         }
                     }
@@ -168,7 +168,7 @@ public final class ArrayPrototype {
                 }
                 if (resultArr != null) {
                     resultArr.set(resultIndex, element);
-                } else if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), element)) {
+                } else if (!resultObj.defineOwnProperty(context, PropertyKey.fromString(Long.toString(resultIndex)), PropertyDescriptor.dataDescriptor(element, PropertyDescriptor.DataState.All))) {
                     return context.throwTypeError("Cannot define property " + resultIndex);
                 }
                 resultIndex++;
@@ -508,7 +508,7 @@ public final class ArrayPrototype {
 
             if (JSTypeConversions.toBoolean(keep) == JSBoolean.TRUE) {
                 // Step 7.c.iii.1: Perform ? CreateDataPropertyOrThrow(A, ! ToString(to), kValue).
-                if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), element)) {
+                if (!resultObj.defineOwnProperty(context, PropertyKey.fromString(Long.toString(resultIndex)), PropertyDescriptor.dataDescriptor(element, PropertyDescriptor.DataState.All))) {
                     return context.throwTypeError("Cannot define property " + resultIndex);
                 }
                 resultIndex++;
@@ -829,7 +829,7 @@ public final class ArrayPrototype {
                             if (context.hasPendingException()) {
                                 return context.getPendingException();
                             }
-                            if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), val)) {
+                            if (!resultObj.defineOwnProperty(context, PropertyKey.fromString(Long.toString(resultIndex)), PropertyDescriptor.dataDescriptor(val, PropertyDescriptor.DataState.All))) {
                                 return context.throwTypeError("Cannot define property " + resultIndex);
                             }
                             resultIndex++;
@@ -838,7 +838,7 @@ public final class ArrayPrototype {
                     continue;
                 }
             }
-            if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), mapped)) {
+            if (!resultObj.defineOwnProperty(context, PropertyKey.fromString(Long.toString(resultIndex)), PropertyDescriptor.dataDescriptor(mapped, PropertyDescriptor.DataState.All))) {
                 return context.throwTypeError("Cannot define property " + resultIndex);
             }
             resultIndex++;
@@ -1065,7 +1065,7 @@ public final class ArrayPrototype {
                     continue;
                 }
             }
-            if (!target.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(targetIndex[0])), element)) {
+            if (!target.defineOwnProperty(context, PropertyKey.fromString(Long.toString(targetIndex[0])), PropertyDescriptor.dataDescriptor(element, PropertyDescriptor.DataState.All))) {
                 context.throwTypeError("Cannot define property " + targetIndex[0]);
                 return;
             }
@@ -1258,7 +1258,7 @@ public final class ArrayPrototype {
                 return context.getPendingException();
             }
             // Step 7.c.iii.1: Perform ? CreateDataPropertyOrThrow(A, ! ToString(k), mappedValue).
-            if (!resultObj.definePropertyWritableEnumerableConfigurable(key, mapped)) {
+            if (!resultObj.defineOwnProperty(context, key, PropertyDescriptor.dataDescriptor(mapped, PropertyDescriptor.DataState.All))) {
                 return context.throwTypeError("Cannot define property " + i);
             }
         }
@@ -1735,7 +1735,7 @@ public final class ArrayPrototype {
                     return context.getPendingException();
                 }
                 // Step 8.b.iii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(resultIndex), kValue).
-                if (!resultObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(resultIndex)), element)) {
+                if (!resultObj.defineOwnProperty(context, PropertyKey.fromString(Long.toString(resultIndex)), PropertyDescriptor.dataDescriptor(element, PropertyDescriptor.DataState.All))) {
                     return context.throwTypeError("Cannot define property " + resultIndex);
                 }
             }
@@ -1971,7 +1971,7 @@ public final class ArrayPrototype {
                     return context.getPendingException();
                 }
                 // Step 10.c.ii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(k), fromValue).
-                if (!deletedObj.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(Long.toString(i)), val)) {
+                if (!deletedObj.defineOwnProperty(context, PropertyKey.fromString(Long.toString(i)), PropertyDescriptor.dataDescriptor(val, PropertyDescriptor.DataState.All))) {
                     return context.throwTypeError("Cannot define property " + i);
                 }
             }

@@ -2472,7 +2472,7 @@ public final class VirtualMachine {
                         JSValue propObj = (JSValue) stack[sp - 1];
                         if (propObj instanceof JSObject jsObj) {
                             PropertyKey key = PropertyKey.fromValue(context, propKey);
-                            jsObj.definePropertyWritableEnumerableConfigurable(key, propValue);
+                            jsObj.defineOwnProperty(context, key, PropertyDescriptor.dataDescriptor(propValue, PropertyDescriptor.DataState.All));
                         }
                         pc += op.getSize();
                     }
@@ -2555,7 +2555,7 @@ public final class VirtualMachine {
                         }
                         // Set constructor.prototype = prototype (non-writable, non-enumerable, non-configurable per ES2024 15.7.14)
                         if (constructorFunc instanceof JSObject) {
-                            constructorFunc.definePropertyReadonlyNonConfigurable("prototype", prototype);
+                            constructorFunc.defineProperty(PropertyKey.fromString("prototype"), prototype, PropertyDescriptor.DataState.None);
                         }
 
                         // Set prototype.constructor = constructor
@@ -2603,7 +2603,7 @@ public final class VirtualMachine {
                         }
 
                         // Class prototype is non-writable, non-enumerable, non-configurable per ES2024 15.7.14
-                        constructorFunc.definePropertyReadonlyNonConfigurable("prototype", prototype);
+                        constructorFunc.defineProperty(PropertyKey.fromString("prototype"), prototype, PropertyDescriptor.DataState.None);
                         prototype.set(PropertyKey.CONSTRUCTOR, constructor);
                         JSString computedClassName = getComputedNameString(computedClassNameValue);
                         if (computedClassName.value().isEmpty()) {
@@ -5088,7 +5088,7 @@ public final class VirtualMachine {
         if (!(objectValue instanceof JSObject object)) {
             return;
         }
-        object.definePropertyConfigurable("name", nameValue);
+        object.defineProperty(PropertyKey.fromString("name"), nameValue, PropertyDescriptor.DataState.Configurable);
     }
 
     private JSValue shiftBigInt(JSBigInt value, JSBigInt shiftCount, boolean leftShiftOperator) {
@@ -5164,7 +5164,7 @@ public final class VirtualMachine {
                     wrapper.setPrimitiveValue(str);
                     // Add length property as own property (shadows prototype's length)
                     // This is a data property with the actual string length
-                    wrapper.definePropertyReadonlyNonConfigurable("length", JSNumber.of(str.value().length()));
+                    wrapper.defineProperty(PropertyKey.fromString("length"), JSNumber.of(str.value().length()), PropertyDescriptor.DataState.None);
                     return wrapper;
                 }
             }

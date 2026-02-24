@@ -393,9 +393,9 @@ public final class IteratorPrototype {
         } else {
             context.transferPrototype(iteratorObject, JSIterator.NAME);
         }
-        iteratorObject.definePropertyWritableConfigurable("next", nextFunction);
+        iteratorObject.defineProperty(PropertyKey.fromString("next"), nextFunction, PropertyDescriptor.DataState.ConfigurableWritable);
         if (returnFunction != null) {
-            iteratorObject.definePropertyWritableConfigurable("return", returnFunction);
+            iteratorObject.defineProperty(PropertyKey.fromString("return"), returnFunction, PropertyDescriptor.DataState.ConfigurableWritable);
         }
         // Only set own toStringTag if no shared prototype provides it
         if (toStringTag != null && iterProto == null) {
@@ -2027,9 +2027,9 @@ public final class IteratorPrototype {
         }
 
         @Override
-        public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
+        public boolean defineOwnProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
             materialize();
-            return super.defineOwnProperty(key, descriptor, context);
+            return super.defineOwnProperty(context, key, descriptor);
         }
 
         @Override
@@ -2188,9 +2188,9 @@ public final class IteratorPrototype {
         }
 
         @Override
-        public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
+        public boolean defineOwnProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
             pristine = false;
-            return super.defineOwnProperty(key, descriptor, context);
+            return super.defineOwnProperty(context, key, descriptor);
         }
 
         @Override

@@ -164,7 +164,7 @@ public final class JSProxy extends JSObject {
      * ES2020 9.5.6 [[DefineOwnProperty]]
      */
     @Override
-    public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
+    public boolean defineOwnProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
         try {
             return definePropertyWithResult(key, descriptor);
         } catch (JSException e) {
@@ -194,7 +194,7 @@ public final class JSProxy extends JSObject {
 
         JSValue trap = getTrapMethod("defineProperty");
         if (trap instanceof JSUndefined) {
-            return targetObj.defineOwnProperty(key, descriptor, context);
+            return targetObj.defineOwnProperty(context, key, descriptor);
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {

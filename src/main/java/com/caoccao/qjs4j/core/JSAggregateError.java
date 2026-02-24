@@ -80,7 +80,7 @@ public final class JSAggregateError extends JSError {
                 length,
                 (childContext, thisObj, childArgs) -> create(childContext, childArgs),
                 true);
-        errorConstructor.definePropertyReadonlyNonConfigurable("prototype", errorPrototype);
+        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype, PropertyDescriptor.DataState.None);
 
         // AggregateError.[[Prototype]] = Error (the constructor inherits from Error)
         JSValue errorCtor = context.getGlobalObject().get(JSError.NAME);

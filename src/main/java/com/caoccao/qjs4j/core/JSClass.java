@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.PropertyDescriptor.DataState;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -71,7 +73,7 @@ public final class JSClass extends JSFunction {
         this.prototype.set(PropertyKey.CONSTRUCTOR, this);
 
         // Set prototype property on class
-        this.definePropertyReadonlyNonConfigurable("prototype", prototype);
+        this.defineProperty(PropertyKey.fromString("prototype"), prototype, DataState.None);
     }
 
     /**

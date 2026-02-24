@@ -74,7 +74,7 @@ public class JSIterator extends JSObject {
 
         // Make the iterator iterable by adding [Symbol.iterator] method
         JSNativeFunction iteratorMethod = new JSNativeFunction("@@iterator", 0, (childContext, thisArg, args) -> thisArg);
-        definePropertyWritableConfigurable(JSSymbol.ITERATOR, iteratorMethod);
+        defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR), iteratorMethod, PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Only set own toStringTag if no shared prototype provides it
         if (toStringTag != null && iterProto == null) {

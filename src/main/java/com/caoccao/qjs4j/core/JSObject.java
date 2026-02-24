@@ -135,69 +135,14 @@ public non-sealed class JSObject implements JSValue {
         this.propertyValues = newValues;
     }
 
-    /**
-     * Define a non-enumerable, configurable getter accessor property.
-     */
-    public void defineGetterConfigurable(String name, JSNativeFunction.NativeCallback callback) {
-        defineProperty(PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get " + name, 0, callback), null, PropertyDescriptor.AccessorState.Configurable));
-    }
-
-    /**
-     * Define a non-enumerable, configurable getter accessor property with a symbol key.
-     */
-    public void defineGetterConfigurable(JSSymbol symbol, JSNativeFunction.NativeCallback callback) {
-        String symbolName = symbol.getDescription() == null ? "" : symbol.getDescription();
-        defineProperty(PropertyKey.fromSymbol(symbol),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get [" + symbolName + "]", 0, callback), null, PropertyDescriptor.AccessorState.Configurable));
-    }
-
-    public void defineGetterConfigurable(String name) {
-        JSObject thisObject = this;
-        JSNativeFunction getter = new JSNativeFunction("get " + name, 0, (ctx, thisArg, args) -> {
-            if (thisArg != thisObject) {
-                return ctx.throwTypeError("Generic static accessor property access is not supported");
-            }
-            return new JSString("");
-        }, false);
-        defineProperty(
-                PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(getter, null, PropertyDescriptor.AccessorState.Configurable));
-    }
-
-    public void defineGetterSetterConfigurable(String name) {
-        JSObject thisObject = this;
-        JSNativeFunction getter = new JSNativeFunction("get " + name, 0, (ctx, thisArg, args) -> {
-            if (thisArg != thisObject) {
-                return ctx.throwTypeError("Generic static accessor property access is not supported");
-            }
-            return new JSString("");
-        }, false);
-        JSNativeFunction setter = new JSNativeFunction("set " + name, 1, (ctx, thisArg, args) -> {
-            if (thisArg != thisObject) {
-                return ctx.throwTypeError("Generic static accessor property access is not supported");
-            }
-            return JSUndefined.INSTANCE;
-        }, false);
-        defineProperty(
-                PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(getter, setter, PropertyDescriptor.AccessorState.Configurable));
-    }
-
     // Property operations
-
-    public void defineGetterSetterConfigurable(String name, JSNativeFunction getter, JSNativeFunction setter) {
-        defineProperty(
-                PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(getter, setter, PropertyDescriptor.AccessorState.Configurable));
-    }
 
     /**
      * [[DefineOwnProperty]] per ES spec.
      * Returns true if the property was successfully defined, false if the object
      * is not extensible and the property does not already exist.
      */
-    public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
+    public boolean defineOwnProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
         if (!extensible && !hasOwnProperty(key)) {
             return false;
         }
@@ -277,6 +222,27 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
+     * Define a data property with the given key, value, and data state.
+     */
+    public void defineProperty(PropertyKey key, JSValue value, PropertyDescriptor.DataState state) {
+        defineProperty(key, PropertyDescriptor.dataDescriptor(value, state));
+    }
+
+    /**
+     * Define an accessor property with a getter and no setter.
+     */
+    public void defineProperty(PropertyKey key, JSFunction getter, PropertyDescriptor.AccessorState state) {
+        defineProperty(key, PropertyDescriptor.accessorDescriptor(getter, null, state));
+    }
+
+    /**
+     * Define an accessor property with a getter and a setter.
+     */
+    public void defineProperty(PropertyKey key, JSFunction getter, JSFunction setter, PropertyDescriptor.AccessorState state) {
+        defineProperty(key, PropertyDescriptor.accessorDescriptor(getter, setter, state));
+    }
+
+    /**
      * Define a new property with a descriptor.
      * This is the internal method that always succeeds (used by freeze, seal, etc.).
      */
@@ -318,51 +284,6 @@ public non-sealed class JSObject implements JSValue {
         this.propertyValues = newValues;
     }
 
-    public void definePropertyConfigurable(JSSymbol jsSymbol, JSValue value) {
-        defineProperty(PropertyKey.fromSymbol(jsSymbol),
-                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.Configurable));
-    }
-
-    public void definePropertyConfigurable(String name, JSValue value) {
-        defineProperty(PropertyKey.fromString(name),
-                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.Configurable));
-    }
-
-    public void definePropertyReadonlyNonConfigurable(JSSymbol jsSymbol, JSValue value) {
-        defineProperty(PropertyKey.fromSymbol(jsSymbol),
-                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.None));
-    }
-
-    public void definePropertyReadonlyNonConfigurable(String name, JSValue value) {
-        defineProperty(PropertyKey.fromString(name),
-                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.None));
-    }
-
-    /**
-     * Define a writable, non-enumerable, configurable data property.
-     */
-    public void definePropertyWritableConfigurable(JSSymbol jsSymbol, JSValue value) {
-        defineProperty(PropertyKey.fromSymbol(jsSymbol),
-                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.ConfigurableWritable));
-    }
-
-    /**
-     * Define a writable, non-enumerable, configurable data property.
-     */
-    public void definePropertyWritableConfigurable(String name, JSValue value) {
-        defineProperty(PropertyKey.fromString(name),
-                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.ConfigurableWritable));
-    }
-
-    /**
-     * CreateDataProperty (ES2024 7.3.6).
-     * Calls [[DefineOwnProperty]] with {writable: true, enumerable: true, configurable: true}.
-     * Returns false if the property cannot be defined (e.g., existing non-configurable property
-     * with incompatible attributes, or non-extensible object for new properties).
-     */
-    public boolean definePropertyWritableEnumerableConfigurable(PropertyKey key, JSValue value) {
-        return defineOwnProperty(key, PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.All), null);
-    }
 
     /**
      * Delete a property.
@@ -1243,7 +1164,7 @@ public non-sealed class JSObject implements JSValue {
             // Return ? Receiver.[[DefineOwnProperty]](P, valueDesc).
             PropertyDescriptor valueDescriptor = new PropertyDescriptor();
             valueDescriptor.setValue(value);
-            return receiver.defineOwnProperty(key, valueDescriptor, context);
+            return receiver.defineOwnProperty(context, key, valueDescriptor);
         }
 
         // Step 2e: CreateDataProperty(Receiver, P, V).
@@ -1259,7 +1180,7 @@ public non-sealed class JSObject implements JSValue {
             }
             return false;
         }
-        return receiver.definePropertyWritableEnumerableConfigurable(key, value);
+        return receiver.defineOwnProperty(context, key, PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.All));
     }
 
     /**

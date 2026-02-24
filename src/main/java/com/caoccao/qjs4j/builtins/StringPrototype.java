@@ -490,7 +490,7 @@ public final class StringPrototype {
                 continue;
             }
             JSValue captureValue = captures[captureIndex] != null ? new JSString(captures[captureIndex]) : JSUndefined.INSTANCE;
-            groupsObject.definePropertyWritableEnumerableConfigurable(PropertyKey.fromString(groupName), captureValue);
+            groupsObject.defineOwnProperty(null, PropertyKey.fromString(groupName), PropertyDescriptor.dataDescriptor(captureValue, PropertyDescriptor.DataState.All));
         }
         return groupsObject;
     }

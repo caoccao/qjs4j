@@ -71,7 +71,7 @@ public final class ObjectPrototype {
         desc.setConfigurable(true);
 
         // Step 5: Perform ? DefinePropertyOrThrow(O, key, desc)
-        if (!obj.defineOwnProperty(key, desc, context)) {
+        if (!obj.defineOwnProperty(context, key, desc)) {
             if (!context.hasPendingException()) {
                 context.throwTypeError("Cannot define property: " + key.toPropertyString());
             }
@@ -124,7 +124,7 @@ public final class ObjectPrototype {
         desc.setConfigurable(true);
 
         // Step 5: Perform ? DefinePropertyOrThrow(O, key, desc)
-        if (!obj.defineOwnProperty(key, desc, context)) {
+        if (!obj.defineOwnProperty(context, key, desc)) {
             if (!context.hasPendingException()) {
                 context.throwTypeError("Cannot define property: " + key.toPropertyString());
             }
@@ -490,7 +490,7 @@ public final class ObjectPrototype {
                     "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute, #<Object>");
         }
 
-        if (!obj.defineOwnProperty(key, desc, context)) {
+        if (!obj.defineOwnProperty(context, key, desc)) {
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }

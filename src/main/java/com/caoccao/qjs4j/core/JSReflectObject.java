@@ -243,7 +243,7 @@ public final class JSReflectObject {
         if (target instanceof JSProxy proxy) {
             return JSBoolean.valueOf(proxy.definePropertyWithResult(key, descriptor));
         }
-        return JSBoolean.valueOf(target.defineOwnProperty(key, descriptor, context));
+        return JSBoolean.valueOf(target.defineOwnProperty(context, key, descriptor));
     }
 
     /**

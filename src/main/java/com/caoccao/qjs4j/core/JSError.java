@@ -63,10 +63,10 @@ public sealed class JSError extends JSObject permits
         context.transferPrototype(errorPrototype, JSObject.NAME);
 
         // All prototype properties: writable, non-enumerable, configurable
-        errorPrototype.definePropertyWritableConfigurable("name", new JSString(NAME));
-        errorPrototype.definePropertyWritableConfigurable("message", new JSString(""));
-        errorPrototype.definePropertyWritableConfigurable("toString",
-                new JSNativeFunction("toString", 0, JSError::errorToString));
+        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME), PropertyDescriptor.DataState.ConfigurableWritable);
+        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""), PropertyDescriptor.DataState.ConfigurableWritable);
+        errorPrototype.defineProperty(PropertyKey.fromString("toString"),
+                new JSNativeFunction("toString", 0, JSError::errorToString), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Standard Error(message, options) — length = 1
         JSNativeFunction errorConstructor = new JSNativeFunction(
@@ -74,14 +74,14 @@ public sealed class JSError extends JSObject permits
                 1,
                 (childContext, thisObj, childArgs) -> create(childContext, childArgs),
                 true);
-        errorConstructor.definePropertyReadonlyNonConfigurable("prototype", errorPrototype);
+        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype, PropertyDescriptor.DataState.None);
 
         // Error.isError static method (ES2024)
-        errorConstructor.definePropertyWritableConfigurable("isError",
-                new JSNativeFunction("isError", 1, JSError::isError));
+        errorConstructor.defineProperty(PropertyKey.fromString("isError"),
+                new JSNativeFunction("isError", 1, JSError::isError), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Constructor property on prototype (writable, non-enumerable, configurable)
-        errorPrototype.definePropertyWritableConfigurable("constructor", errorConstructor);
+        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         return errorConstructor;
     }

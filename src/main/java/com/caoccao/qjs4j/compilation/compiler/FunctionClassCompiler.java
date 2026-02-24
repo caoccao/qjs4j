@@ -1477,9 +1477,9 @@ final class FunctionClassCompiler {
         }
 
         // QuickJS/spec attributes for template objects.
-        rawArray.definePropertyReadonlyNonConfigurable("length", JSNumber.of(segmentCount));
-        templateObject.definePropertyReadonlyNonConfigurable("length", JSNumber.of(segmentCount));
-        templateObject.definePropertyReadonlyNonConfigurable("raw", rawArray);
+        rawArray.defineProperty(PropertyKey.fromString("length"), JSNumber.of(segmentCount), PropertyDescriptor.DataState.None);
+        templateObject.defineProperty(PropertyKey.fromString("length"), JSNumber.of(segmentCount), PropertyDescriptor.DataState.None);
+        templateObject.defineProperty(PropertyKey.fromString("raw"), rawArray, PropertyDescriptor.DataState.None);
 
         rawArray.freeze();
         templateObject.freeze();

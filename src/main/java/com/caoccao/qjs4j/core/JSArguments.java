@@ -87,7 +87,7 @@ public final class JSArguments extends JSObject {
         this.parameterVarRefs = mappedVarRefs;
 
         // Set length property (writable, non-enumerable, configurable per ES spec)
-        definePropertyWritableConfigurable("length", JSNumber.of(argumentValues.length));
+        defineProperty(PropertyKey.fromString("length"), JSNumber.of(argumentValues.length), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Set indexed properties for each argument
         for (int i = 0; i < argumentValues.length; i++) {
@@ -152,7 +152,7 @@ public final class JSArguments extends JSObject {
         } else {
             // In non-strict mode, callee is a data property referencing the function
             if (callee != null) {
-                definePropertyWritableConfigurable("callee", callee);
+                defineProperty(PropertyKey.fromString("callee"), callee, PropertyDescriptor.DataState.ConfigurableWritable);
             }
 
             // Note: arguments.caller is NOT defined (returns undefined when accessed)
@@ -173,7 +173,7 @@ public final class JSArguments extends JSObject {
                         if (arrayProto instanceof JSObject arrayProtoObj) {
                             JSValue arrayIterator = arrayProtoObj.get(PropertyKey.fromSymbol(sym));
                             if (arrayIterator != null && !(arrayIterator instanceof JSUndefined)) {
-                                definePropertyWritableConfigurable(sym, arrayIterator);
+                                defineProperty(PropertyKey.fromSymbol(sym), arrayIterator, PropertyDescriptor.DataState.ConfigurableWritable);
                             }
                         }
                     }
@@ -194,7 +194,7 @@ public final class JSArguments extends JSObject {
      * - Unmap on accessor descriptor or writable:false
      */
     @Override
-    public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
+    public boolean defineOwnProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
         int index = getArgumentIndex(key);
         boolean isMapped = index >= 0 && mappedIndices.contains(index);
 
@@ -212,7 +212,7 @@ public final class JSArguments extends JSObject {
             }
         }
 
-        boolean result = super.defineOwnProperty(key, descriptor, context);
+        boolean result = super.defineOwnProperty(context, key, descriptor);
 
         // ES2024 10.4.4.2 step 7: post-define mapping updates
         if (result && isMapped) {
