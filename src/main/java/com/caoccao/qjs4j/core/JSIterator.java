@@ -231,6 +231,7 @@ public class JSIterator extends JSObject {
      * Represents an iterator result: { value: any, done: boolean }
      */
     public static class IteratorResult {
+        private static final PropertyKey[] RESULT_KEYS = {PropertyKey.VALUE, PropertyKey.DONE};
         public final boolean done;
         public final JSValue value;
         private final JSContext context;
@@ -250,9 +251,16 @@ public class JSIterator extends JSObject {
         }
 
         public JSObject toObject() {
+            JSValue doneValue = JSBoolean.valueOf(done);
             JSObject obj = context.createJSObject();
-            obj.set(PropertyKey.VALUE, value);
-            obj.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+            obj.initProperties(
+                    RESULT_KEYS.clone(),
+                    new PropertyDescriptor[]{
+                            PropertyDescriptor.defaultData(value),
+                            PropertyDescriptor.defaultData(doneValue)
+                    },
+                    new JSValue[]{value, doneValue}
+            );
             return obj;
         }
     }

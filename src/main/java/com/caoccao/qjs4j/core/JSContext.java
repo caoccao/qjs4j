@@ -62,6 +62,8 @@ public final class JSContext implements AutoCloseable {
     private JSObject asyncGeneratorFunctionPrototype;
     // Async generator prototype chain (not exposed in global scope)
     private JSObject asyncGeneratorPrototype;
+    // Cached Object.prototype for fast internal object creation
+    private JSObject cachedObjectPrototype;
     // Temporarily holds new.target during native constructor calls
     // so native constructors can check if called directly vs from subclass
     private JSValue constructorNewTarget;
@@ -525,7 +527,11 @@ public final class JSContext implements AutoCloseable {
      */
     public JSObject createJSObject() {
         JSObject jsObject = new JSObject();
-        transferPrototype(jsObject, JSObject.NAME);
+        if (cachedObjectPrototype != null) {
+            jsObject.setPrototype(cachedObjectPrototype);
+        } else {
+            transferPrototype(jsObject, JSObject.NAME);
+        }
         return jsObject;
     }
 
@@ -1011,6 +1017,10 @@ public final class JSContext implements AutoCloseable {
         return moduleCache.get(specifier);
     }
 
+    public JSObject getObjectPrototype() {
+        return cachedObjectPrototype;
+    }
+
     public JSValue getPendingException() {
         return pendingException;
     }
@@ -1059,6 +1069,14 @@ public final class JSContext implements AutoCloseable {
      */
     private void initializeGlobalObject() {
         jsGlobalObject.initialize(this, globalObject);
+        // Cache Object.prototype for fast access in hot paths (e.g., iteratorResult, createJSObject)
+        JSValue objectCtor = globalObject.get(JSObject.NAME);
+        if (objectCtor instanceof JSObject objCtorObj) {
+            JSValue proto = objCtorObj.get(PropertyKey.PROTOTYPE);
+            if (proto instanceof JSObject protoObj) {
+                this.cachedObjectPrototype = protoObj;
+            }
+        }
     }
 
     private <T extends JSTypedArray> T initializeTypedArray(T typedArray, String constructorName) {

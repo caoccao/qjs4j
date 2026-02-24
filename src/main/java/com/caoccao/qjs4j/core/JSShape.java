@@ -17,7 +17,9 @@
 package com.caoccao.qjs4j.core;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Represents the shape (structure) of a JavaScript object.
@@ -28,11 +30,17 @@ import java.util.List;
  * - Deleted properties are tracked and shape is compacted when threshold is reached
  * - Each object has its own shape instance (no sharing)
  * - Supports property addition, removal, and compaction
+ * <p>
+ * For shapes with more than INDEX_THRESHOLD properties, a HashMap index is maintained
+ * for O(1) property offset lookups instead of O(N) linear scans.
  */
 public final class JSShape {
+    private static final int INDEX_THRESHOLD = 6;
+
     private int deletedPropCount;
     private PropertyDescriptor[] descriptors;
     private int propertyCount;
+    private Map<PropertyKey, Integer> propertyIndex;
     private PropertyKey[] propertyKeys;
 
     /**
@@ -53,6 +61,23 @@ public final class JSShape {
         this.descriptors = other.descriptors.clone();
         this.propertyCount = other.propertyCount;
         this.deletedPropCount = other.deletedPropCount;
+        if (other.propertyIndex != null) {
+            this.propertyIndex = new HashMap<>(other.propertyIndex);
+        }
+    }
+
+    /**
+     * Create a shape with pre-defined properties in bulk.
+     * Avoids the O(N²) cost of calling addProperty repeatedly on a fresh shape.
+     */
+    JSShape(PropertyKey[] keys, PropertyDescriptor[] descriptors) {
+        this.propertyKeys = keys;
+        this.descriptors = descriptors;
+        this.propertyCount = keys.length;
+        this.deletedPropCount = 0;
+        if (propertyCount > INDEX_THRESHOLD) {
+            buildIndex();
+        }
     }
 
     /**
@@ -82,7 +107,26 @@ public final class JSShape {
 
         this.propertyKeys = newKeys;
         this.descriptors = newDescriptors;
+
+        // Update index
+        if (propertyIndex != null) {
+            propertyIndex.put(key, propertyCount);
+        } else if (propertyCount + 1 > INDEX_THRESHOLD) {
+            this.propertyCount++;
+            buildIndex();
+            return;
+        }
+
         this.propertyCount++;
+    }
+
+    private void buildIndex() {
+        propertyIndex = new HashMap<>(propertyCount * 4 / 3 + 1);
+        for (int i = 0; i < propertyCount; i++) {
+            if (propertyKeys[i] != null) {
+                propertyIndex.put(propertyKeys[i], i);
+            }
+        }
     }
 
     /**
@@ -111,6 +155,13 @@ public final class JSShape {
         this.descriptors = newDescriptors.toArray(new PropertyDescriptor[0]);
         this.propertyCount = newKeys.size();
         this.deletedPropCount = 0;
+
+        // Rebuild index if needed
+        if (propertyCount > INDEX_THRESHOLD) {
+            buildIndex();
+        } else {
+            propertyIndex = null;
+        }
     }
 
     /**
@@ -172,6 +223,17 @@ public final class JSShape {
     }
 
     /**
+     * Get the property key at a specific offset.
+     * Returns null if offset is invalid or property is deleted.
+     */
+    public PropertyKey getPropertyKeyAt(int offset) {
+        if (offset < 0 || offset >= propertyCount) {
+            return null;
+        }
+        return propertyKeys[offset];
+    }
+
+    /**
      * Get all property keys in this shape (excluding deleted).
      */
     public PropertyKey[] getPropertyKeys() {
@@ -187,8 +249,13 @@ public final class JSShape {
     /**
      * Get the offset of a property in the property array.
      * Returns -1 if property not found or deleted.
+     * Uses HashMap index for shapes with more than INDEX_THRESHOLD properties.
      */
     public int getPropertyOffset(PropertyKey key) {
+        if (propertyIndex != null) {
+            Integer offset = propertyIndex.get(key);
+            return offset != null ? offset : -1;
+        }
         for (int i = 0; i < propertyCount; i++) {
             if (propertyKeys[i] != null && propertyKeys[i].equals(key)) {
                 return i;
@@ -227,6 +294,11 @@ public final class JSShape {
         propertyKeys[offset] = null;
         descriptors[offset] = null;
         deletedPropCount++;
+
+        // Remove from index
+        if (propertyIndex != null) {
+            propertyIndex.remove(key);
+        }
 
         return true;
     }

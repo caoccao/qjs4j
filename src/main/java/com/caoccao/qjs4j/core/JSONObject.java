@@ -340,18 +340,6 @@ public final class JSONObject {
         return true;
     }
 
-    private static JSValue throwRawJSONInvalidJson(JSContext context, String text) {
-        return context.throwSyntaxError("\"" + text + "\" is not valid JSON");
-    }
-
-    private static JSValue throwRawJSONInvalidValue(JSContext context) {
-        return context.throwSyntaxError("Invalid value for JSON.rawJSON");
-    }
-
-    private static JSValue throwRawJSONUnexpectedToken(JSContext context, char token, String text) {
-        return context.throwSyntaxError("Unexpected token '" + token + "', \"" + text + "\" is not valid JSON");
-    }
-
     /**
      * JSON.isRawJSON(O)
      * ES2024 proposal: json-parse-with-source
@@ -367,8 +355,6 @@ public final class JSONObject {
         }
         return JSBoolean.valueOf(isRawJSONObject(obj));
     }
-
-    // ========== JSON Parsing Helper Methods ==========
 
     /**
      * Check if an object was created by JSON.rawJSON
@@ -446,6 +432,8 @@ public final class JSONObject {
         // Symbols, undefined, etc. become undefined
         return JSUndefined.INSTANCE;
     }
+
+    // ========== JSON Parsing Helper Methods ==========
 
     /**
      * Convert value to JSON string representation.
@@ -861,8 +849,6 @@ public final class JSONObject {
         throw new JSONParseException("Unterminated property name in JSON " + ctx.getPositionInfo(i));
     }
 
-    // ========== JSON.stringify ==========
-
     private static ParseResult parseString(ParseContext parseContext, int start) {
         if (parseContext.text.charAt(start) != '"') {
             throw new JSONParseException("Expected '\"' " + parseContext.getPositionInfo(start));
@@ -921,8 +907,6 @@ public final class JSONObject {
         throw new JSONParseException("Unterminated string in JSON " + parseContext.getPositionInfo(i));
     }
 
-    // ========== JSON.rawJSON and JSON.isRawJSON ==========
-
     private static ParseResult parseTrue(ParseContext parseContext, int start) {
         if (parseContext.text.startsWith("true", start)) {
             return new ParseResult(JSBoolean.TRUE, start + 4, start, start + 4);
@@ -950,6 +934,8 @@ public final class JSONObject {
             default -> throw new JSONParseException("Unexpected character: " + ch + parseContext.getPositionInfo(i));
         };
     }
+
+    // ========== JSON.stringify ==========
 
     /**
      * JSON.rawJSON(text)
@@ -1022,6 +1008,8 @@ public final class JSONObject {
         return obj;
     }
 
+    // ========== JSON.rawJSON and JSON.isRawJSON ==========
+
     private static int skipWhitespace(String text, int start) {
         int i = start;
         while (i < text.length()) {
@@ -1034,8 +1022,6 @@ public final class JSONObject {
         }
         return i;
     }
-
-    // ========== Stringify Helper Methods ==========
 
     /**
      * JSON.stringify(value[, replacer[, space]])
@@ -1336,6 +1322,8 @@ public final class JSONObject {
         return true;
     }
 
+    // ========== Stringify Helper Methods ==========
+
     /**
      * Escape a string for JSON output.
      * Based on QuickJS JS_ToQuotedString.
@@ -1376,6 +1364,18 @@ public final class JSONObject {
         }
         sb.append("\"");
         return sb.toString();
+    }
+
+    private static JSValue throwRawJSONInvalidJson(JSContext context, String text) {
+        return context.throwSyntaxError("\"" + text + "\" is not valid JSON");
+    }
+
+    private static JSValue throwRawJSONInvalidValue(JSContext context) {
+        return context.throwSyntaxError("Invalid value for JSON.rawJSON");
+    }
+
+    private static JSValue throwRawJSONUnexpectedToken(JSContext context, char token, String text) {
+        return context.throwSyntaxError("Unexpected token '" + token + "', \"" + text + "\" is not valid JSON");
     }
 
     // ========== Inner Classes ==========

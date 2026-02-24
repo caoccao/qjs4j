@@ -27,6 +27,7 @@ import java.util.List;
  * Based on ES2020 iteration protocols.
  */
 public final class IteratorPrototype {
+    private static final PropertyKey[] ITERATOR_RESULT_KEYS = {PropertyKey.VALUE, PropertyKey.DONE};
     private static final JSValue[] NO_ARGS = new JSValue[0];
 
     private IteratorPrototype() {
@@ -109,15 +110,18 @@ public final class IteratorPrototype {
     /**
      * Build the result value for a zip iteration step.
      */
-    private static JSValue buildZipResult(JSContext context, JSValue[] results, int iterCount, List<PropertyKey> keys) {
-        if (keys != null) {
-            // zipKeyed: create null-prototype object
-            JSObject resultObject = context.createJSObject();
-            resultObject.setPrototype(null);
+    private static JSValue buildZipResult(JSContext context, JSValue[] results, int iterCount, PropertyKey[] keyArray) {
+        if (keyArray != null) {
+            // zipKeyed: create null-prototype object with bulk property initialization
+            JSObject resultObject = new JSObject();
+            PropertyKey[] keys = keyArray.clone();
+            PropertyDescriptor[] descriptors = new PropertyDescriptor[iterCount];
+            JSValue[] values = new JSValue[iterCount];
             for (int i = 0; i < iterCount; i++) {
-                resultObject.defineProperty(keys.get(i),
-                        PropertyDescriptor.dataDescriptor(results[i], true, true, true));
+                descriptors[i] = PropertyDescriptor.defaultData(results[i]);
+                values[i] = results[i];
             }
+            resultObject.initProperties(keys, descriptors, values);
             return resultObject;
         } else {
             // zip: create packed array
@@ -443,7 +447,7 @@ public final class IteratorPrototype {
             List<IteratorRecord> iters,
             String mode,
             List<JSValue> padding,
-            List<PropertyKey> keys) {
+            PropertyKey[] keyArray) {
 
         int iterCount = iters.size();
         // Track which iterators are still open (by index)
@@ -541,7 +545,7 @@ public final class IteratorPrototype {
                 }
 
                 // Build result
-                JSValue resultValue = buildZipResult(childContext, results, iterCount, keys);
+                JSValue resultValue = buildZipResult(childContext, results, iterCount, keyArray);
 
                 generatorState[0] = 1; // suspended-yield
                 return iteratorResult(childContext, resultValue, false);
@@ -1268,9 +1272,17 @@ public final class IteratorPrototype {
     }
 
     private static JSObject iteratorResult(JSContext context, JSValue value, boolean done) {
+        JSValue actualValue = value != null ? value : JSUndefined.INSTANCE;
+        JSValue doneValue = JSBoolean.valueOf(done);
         JSObject result = context.createJSObject();
-        result.set(PropertyKey.VALUE, value != null ? value : JSUndefined.INSTANCE);
-        result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+        result.initProperties(
+                ITERATOR_RESULT_KEYS.clone(),
+                new PropertyDescriptor[]{
+                        PropertyDescriptor.defaultData(actualValue),
+                        PropertyDescriptor.defaultData(doneValue)
+                },
+                new JSValue[]{actualValue, doneValue}
+        );
         return result;
     }
 
@@ -1961,7 +1973,7 @@ public final class IteratorPrototype {
         }
 
         // Create the zip iterator
-        return createZipIterator(context, iters, mode, paddingValues, keys);
+        return createZipIterator(context, iters, mode, paddingValues, keys.toArray(new PropertyKey[0]));
     }
 
     private record ConcatSource(JSObject sourceObject, JSFunction iteratorMethod) {

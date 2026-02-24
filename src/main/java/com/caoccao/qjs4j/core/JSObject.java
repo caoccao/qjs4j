@@ -277,14 +277,13 @@ public non-sealed class JSObject implements JSValue {
             }
         }
 
-        // Use getOwnShapeKey to handle integer/string key equivalence (e.g., 0 vs "0")
-        PropertyKey shapeKey = getOwnShapeKey(key);
-        if (shapeKey != null) {
-            int offset = shape.getPropertyOffset(shapeKey);
-            // Property exists, update descriptor and value
-            shape.addProperty(shapeKey, descriptor);
+        // Use getOwnPropertyOffset to handle integer/string key equivalence (e.g., 0 vs "0")
+        int existingOffset = getOwnPropertyOffset(key);
+        if (existingOffset >= 0) {
+            // Property exists, merge descriptor and update value
+            shape.getDescriptorAt(existingOffset).mergeFrom(descriptor);
             if (descriptor.hasValue()) {
-                propertyValues[offset] = descriptor.getValue();
+                propertyValues[existingOffset] = descriptor.getValue();
             }
             return;
         }
@@ -596,14 +595,17 @@ public non-sealed class JSObject implements JSValue {
         Set<Long> seenNumericIndices = new HashSet<>();
         Set<PropertyKey> seenPropertyKeys = new HashSet<>();
 
-        PropertyKey[] shapeKeys = shape.getPropertyKeys();
-        for (PropertyKey shapeKey : shapeKeys) {
-            PropertyDescriptor descriptor = shape.getDescriptor(shapeKey);
-            if (descriptor == null) {
-                continue;
+        int propCount = shape.getPropertyCount();
+        for (int i = 0; i < propCount; i++) {
+            PropertyKey shapeKey = shape.getPropertyKeyAt(i);
+            if (shapeKey == null) {
+                continue; // deleted property
             }
-            if (enumerableOnly && !descriptor.isEnumerable()) {
-                continue;
+            if (enumerableOnly) {
+                PropertyDescriptor descriptor = shape.getDescriptorAt(i);
+                if (descriptor == null || !descriptor.isEnumerable()) {
+                    continue;
+                }
             }
             long index = getCanonicalArrayIndex(shapeKey);
             if (index >= 0) {
@@ -643,15 +645,14 @@ public non-sealed class JSObject implements JSValue {
      * Get the property descriptor for a property.
      */
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
-        PropertyKey shapeKey = getOwnShapeKey(key);
-        if (shapeKey != null) {
-            PropertyDescriptor desc = shape.getDescriptor(shapeKey);
+        int offset = getOwnPropertyOffset(key);
+        if (offset >= 0) {
+            PropertyDescriptor desc = shape.getDescriptorAt(offset);
             // Sync descriptor value with current propertyValues for data properties.
             // propertyValues[offset] is the source of truth for current values,
             // while the descriptor may hold a stale value from initialization.
             if (desc != null && desc.isDataDescriptor()) {
-                int offset = shape.getPropertyOffset(shapeKey);
-                if (offset >= 0 && offset < propertyValues.length && propertyValues[offset] != null) {
+                if (offset < propertyValues.length && propertyValues[offset] != null) {
                     desc.setValue(propertyValues[offset]);
                 }
             }
@@ -674,6 +675,26 @@ public non-sealed class JSObject implements JSValue {
      */
     public List<PropertyKey> getOwnPropertyKeys() {
         return getOrderedOwnKeys(false);
+    }
+
+    /**
+     * Get the offset of an own property in the shape, handling integer/string key equivalence.
+     * Returns -1 if the property is not found. This avoids the redundant scans
+     * of getOwnShapeKey + getPropertyOffset by returning the offset directly.
+     */
+    protected int getOwnPropertyOffset(PropertyKey key) {
+        int offset = shape.getPropertyOffset(key);
+        if (offset >= 0) {
+            return offset;
+        }
+        long index = getCanonicalArrayIndex(key);
+        if (index < 0 || index > Integer.MAX_VALUE) {
+            return -1;
+        }
+        PropertyKey alternateKey = key.isIndex()
+                ? PropertyKey.fromString(Long.toString(index))
+                : PropertyKey.fromIndex((int) index);
+        return shape.getPropertyOffset(alternateKey);
     }
 
     protected PropertyKey getOwnShapeKey(PropertyKey key) {
@@ -724,11 +745,10 @@ public non-sealed class JSObject implements JSValue {
         }
 
         // Look in own properties
-        PropertyKey shapeKey = getOwnShapeKey(key);
-        int offset = shapeKey != null ? shape.getPropertyOffset(shapeKey) : -1;
+        int offset = getOwnPropertyOffset(key);
         if (offset >= 0) {
             // Check if property has a getter
-            PropertyDescriptor desc = shape.getDescriptor(shapeKey);
+            PropertyDescriptor desc = shape.getDescriptorAt(offset);
             if (desc != null && desc.hasGetter()) {
                 JSFunction getter = desc.getGetter();
                 if (getter != null && context != null) {
@@ -844,7 +864,7 @@ public non-sealed class JSObject implements JSValue {
      * Check if object has an own property by key.
      */
     public boolean hasOwnProperty(PropertyKey key) {
-        if (getOwnShapeKey(key) != null) {
+        if (getOwnPropertyOffset(key) >= 0) {
             return true;
         }
         long arrayIndex = getCanonicalArrayIndex(key);
@@ -858,7 +878,18 @@ public non-sealed class JSObject implements JSValue {
      * Check if a key has a property in the shape (handles integer/string key equivalence).
      */
     protected boolean hasOwnShapeProperty(PropertyKey key) {
-        return getOwnShapeKey(key) != null;
+        return getOwnPropertyOffset(key) >= 0;
+    }
+
+    /**
+     * Initialize properties in bulk on a freshly created object with no existing properties.
+     * This is more efficient than calling defineProperty repeatedly because it avoids
+     * the O(N²) cost of incremental shape growth (linear scans + array copies per property).
+     * The keys, descriptors, and values arrays must all have the same length.
+     */
+    public void initProperties(PropertyKey[] keys, PropertyDescriptor[] descriptors, JSValue[] values) {
+        this.shape = new JSShape(keys, descriptors);
+        this.propertyValues = values;
     }
 
     /**
@@ -997,9 +1028,8 @@ public non-sealed class JSObject implements JSValue {
 
     private boolean setInternal(JSContext context, PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
         // Check if property already exists
-        PropertyKey ownShapeKey = getOwnShapeKey(key);
-        if (ownShapeKey != null) {
-            int offset = shape.getPropertyOffset(ownShapeKey);
+        int offset = getOwnPropertyOffset(key);
+        if (offset >= 0) {
             PropertyDescriptor descriptor = shape.getDescriptorAt(offset);
 
             if (descriptor != null && descriptor.isAccessorDescriptor()) {
@@ -1037,9 +1067,8 @@ public non-sealed class JSObject implements JSValue {
                 return typedArray.setWithResult(context, key, value, (JSValue) receiver);
             }
             visited.add(proto);
-            PropertyKey protoShapeKey = proto.getOwnShapeKey(key);
-            if (protoShapeKey != null) {
-                int protoOffset = proto.shape.getPropertyOffset(protoShapeKey);
+            int protoOffset = proto.getOwnPropertyOffset(key);
+            if (protoOffset >= 0) {
                 PropertyDescriptor protoDescriptor = proto.shape.getDescriptorAt(protoOffset);
                 if (protoDescriptor != null && protoDescriptor.isAccessorDescriptor()) {
                     JSFunction setter = protoDescriptor.getSetter();
