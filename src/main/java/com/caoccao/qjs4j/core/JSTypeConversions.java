@@ -222,6 +222,22 @@ public final class JSTypeConversions {
     }
 
     /**
+     * Parse a radix literal string (digits after the 0x/0b/0o prefix) into a JSNumber.
+     * Handles values that overflow long by using Double.
+     */
+    private static JSNumber parseRadixLiteral(String digits, int radix) {
+        if (digits.isEmpty()) {
+            return JSNumber.of(Double.NaN);
+        }
+        try {
+            return JSNumber.of(Long.parseLong(digits, radix));
+        } catch (NumberFormatException e) {
+            // Value too large for long; parse via BigInteger then convert to double
+            return JSNumber.of(new java.math.BigInteger(digits, radix).doubleValue());
+        }
+    }
+
+    /**
      * Strict Equality Comparison (===).
      * ES2020 7.2.15
      */
@@ -348,15 +364,23 @@ public final class JSTypeConversions {
 
         // Try to parse as number
         try {
-            // Handle hex numbers
+            // Handle hex numbers (0x / 0X)
             if (str.startsWith("0x") || str.startsWith("0X")) {
-                return JSNumber.of(Long.parseLong(str.substring(2), 16));
+                return parseRadixLiteral(str.substring(2), 16);
             }
 
-            // Handle octal (legacy)
-            if (str.startsWith("0") && str.length() > 1 && str.matches("0[0-7]+")) {
-                return JSNumber.of(Long.parseLong(str, 8));
+            // Handle binary numbers (0b / 0B) - ES2015
+            if (str.startsWith("0b") || str.startsWith("0B")) {
+                return parseRadixLiteral(str.substring(2), 2);
             }
+
+            // Handle octal numbers (0o / 0O) - ES2015
+            if (str.startsWith("0o") || str.startsWith("0O")) {
+                return parseRadixLiteral(str.substring(2), 8);
+            }
+
+            // Handle legacy octal (e.g., "010" is NOT octal in ToNumber, it's decimal 10)
+            // Per ES spec, ToNumber does not support legacy octal - only 0o/0O prefix.
 
             // Parse as decimal
             return JSNumber.of(Double.parseDouble(str));
