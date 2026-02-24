@@ -246,13 +246,10 @@ public final class JSArray extends JSObject {
             super.defineProperty(key, lengthDesc);
 
             // Step 17.b: If non-configurable element prevented full truncation, return false
-            if (actualNewLength > newLength) {
-                return false;
-            }
+            return actualNewLength <= newLength;
 
             // Step 18: If newWritable is false, apply writable:false
             // (already applied above in lengthDesc)
-            return true;
         }
         // Per ES spec 10.4.2.1 [[DefineOwnProperty]] / QuickJS JS_CreateProperty:
         // When defining a property at an array index >= current length,

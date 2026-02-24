@@ -258,7 +258,19 @@ public non-sealed class JSObject implements JSValue {
             merged.mergeFrom(descriptor);
             defineProperty(key, merged);
         } else {
-            defineProperty(key, descriptor);
+            // New property: apply default attribute values per ES2024 10.1.6.3 step 5.
+            // "If IsGenericDescriptor(Desc) or IsDataDescriptor(Desc), create an own data
+            //  property [...] with default attribute values."
+            // "Else, Desc must be an accessor Property Descriptor so, create an own accessor
+            //  property [...] with default attribute values."
+            PropertyDescriptor completed = new PropertyDescriptor();
+            completed.mergeFrom(descriptor);
+            if (completed.isAccessorDescriptor()) {
+                completed.completeAsAccessor();
+            } else {
+                completed.completeAsData();
+            }
+            defineProperty(key, completed);
         }
         return true;
     }

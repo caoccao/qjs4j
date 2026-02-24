@@ -18,6 +18,9 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.vm.VarRef;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Represents the arguments object available in functions.
  * Based on QuickJS JS_CLASS_ARGUMENTS implementation.
@@ -37,6 +40,7 @@ public final class JSArguments extends JSObject {
     public static final String NAME = "arguments";
     private final JSValue[] argumentValues;
     private final boolean isStrict;
+    private final Set<Integer> mappedIndices = new HashSet<>();
 
     /**
      * Create an arguments object.
@@ -86,6 +90,7 @@ public final class JSArguments extends JSObject {
         // Set indexed properties for each argument
         for (int i = 0; i < argumentValues.length; i++) {
             if (mappedVarRefs != null && i < mappedVarRefs.length && mappedVarRefs[i] != null) {
+                mappedIndices.add(i);
                 final VarRef mappedVarRef = mappedVarRefs[i];
                 final int mappedIndex = i;
                 JSNativeFunction getter = new JSNativeFunction(
@@ -181,6 +186,44 @@ public final class JSArguments extends JSObject {
     }
 
     /**
+     * Override [[DefineOwnProperty]] per ES2024 10.4.4.2.
+     * Mapped parameters are stored as accessor properties for VarRef synchronization,
+     * but the spec treats them as data properties. When an accessor descriptor is applied
+     * to a mapped parameter, we must first "unmap" it by converting from accessor to data,
+     * so that the data→accessor conversion in super.defineOwnProperty properly sets
+     * [[Set]] to undefined (the default) instead of preserving the mapped setter.
+     */
+    @Override
+    public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
+        int index = getArgumentIndex(key);
+        if (index >= 0 && mappedIndices.contains(index) && descriptor.isAccessorDescriptor()) {
+            // Only unmap if the property still exists and is an accessor (mapped).
+            // The property may have been deleted (e.g., "delete arg[0]").
+            PropertyDescriptor current = getOwnPropertyDescriptor(key);
+            if (current != null && current.isAccessorDescriptor()) {
+                unmapParameter(key, index, context);
+            } else {
+                mappedIndices.remove(index);
+            }
+        }
+        return super.defineOwnProperty(key, descriptor, context);
+    }
+
+    private int getArgumentIndex(PropertyKey key) {
+        if (key.isIndex()) {
+            return key.asIndex();
+        }
+        if (key.isString()) {
+            try {
+                return Integer.parseInt(key.asString());
+            } catch (NumberFormatException e) {
+                return -1;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * Get the argument values array.
      */
     public JSValue[] getArgumentValues() {
@@ -224,5 +267,23 @@ public final class JSArguments extends JSObject {
     @Override
     public String toString() {
         return "[object Arguments]";
+    }
+
+    private void unmapParameter(PropertyKey key, int index, JSContext context) {
+        // Get the current value from the mapped getter
+        PropertyDescriptor current = getOwnPropertyDescriptor(key);
+        JSValue currentValue = JSUndefined.INSTANCE;
+        if (current != null && current.getGetter() != null) {
+            currentValue = current.getGetter().call(context, this, new JSValue[0]);
+        }
+
+        // Replace the accessor with a data property, preserving enumerable/configurable
+        boolean enumerable = current != null && current.isEnumerable();
+        boolean configurable = current != null && current.isConfigurable();
+        defineProperty(key, PropertyDescriptor.dataDescriptor(
+                currentValue, true, enumerable, configurable));
+
+        // Mark as unmapped
+        mappedIndices.remove(index);
     }
 }
