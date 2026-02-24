@@ -58,9 +58,7 @@ public final class JSBoundFunction extends JSFunction {
                 PropertyKey.LENGTH,
                 PropertyDescriptor.dataDescriptor(
                         lengthValue,
-                        false, // writable
-                        false, // enumerable
-                        true   // configurable
+                        PropertyDescriptor.DataState.Configurable
                 )
         );
 
@@ -68,9 +66,7 @@ public final class JSBoundFunction extends JSFunction {
                 PropertyKey.NAME,
                 PropertyDescriptor.dataDescriptor(
                         new JSString(this.computedName),
-                        false, // writable
-                        false, // enumerable
-                        true   // configurable
+                        PropertyDescriptor.DataState.Configurable
                 )
         );
     }

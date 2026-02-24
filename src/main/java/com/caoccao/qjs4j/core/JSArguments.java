@@ -112,13 +112,11 @@ public final class JSArguments extends JSObject {
                         });
                 defineProperty(
                         PropertyKey.fromIndex(i),
-                        PropertyDescriptor.accessorDescriptor(getter, setter, true, true));
+                        PropertyDescriptor.accessorDescriptor(getter, setter, PropertyDescriptor.AccessorState.All));
             } else {
                 PropertyDescriptor argDesc = PropertyDescriptor.dataDescriptor(
                         argumentValues[i],
-                        true,  // writable
-                        true,  // enumerable
-                        true   // configurable
+                        PropertyDescriptor.DataState.All
                 );
                 defineProperty(PropertyKey.fromIndex(i), argDesc);
             }
@@ -145,8 +143,7 @@ public final class JSArguments extends JSObject {
             PropertyDescriptor calleeDesc = PropertyDescriptor.accessorDescriptor(
                     thrower,  // getter throws
                     thrower,  // setter throws
-                    false,    // non-enumerable
-                    false     // non-configurable
+                    PropertyDescriptor.AccessorState.None
             );
             defineProperty(PropertyKey.CALLEE, calleeDesc);
 
@@ -309,8 +306,10 @@ public final class JSArguments extends JSObject {
         // Replace the accessor with a data property, preserving enumerable/configurable
         boolean enumerable = current != null && current.isEnumerable();
         boolean configurable = current != null && current.isConfigurable();
-        defineProperty(key, PropertyDescriptor.dataDescriptor(
-                currentValue, true, enumerable, configurable));
+        PropertyDescriptor.DataState state = enumerable
+                ? (configurable ? PropertyDescriptor.DataState.All : PropertyDescriptor.DataState.EnumerableWritable)
+                : (configurable ? PropertyDescriptor.DataState.ConfigurableWritable : PropertyDescriptor.DataState.Writable);
+        defineProperty(key, PropertyDescriptor.dataDescriptor(currentValue, state));
 
         // Mark as unmapped
         mappedIndices.remove(index);

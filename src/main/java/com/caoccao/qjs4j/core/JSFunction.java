@@ -74,7 +74,7 @@ public abstract sealed class JSFunction extends JSObject
                         JSObject funcPrototype = new JSObject();
                         funcPrototype.setPrototype(asyncGenProtoObj);
                         this.defineProperty(PropertyKey.PROTOTYPE,
-                                PropertyDescriptor.dataDescriptor(funcPrototype, true, false, false));
+                                PropertyDescriptor.dataDescriptor(funcPrototype, PropertyDescriptor.DataState.Writable));
                     }
                     return;
                 }
@@ -92,7 +92,7 @@ public abstract sealed class JSFunction extends JSObject
                         JSObject funcPrototype = new JSObject();
                         funcPrototype.setPrototype(genProtoObj);
                         this.defineProperty(PropertyKey.PROTOTYPE,
-                                PropertyDescriptor.dataDescriptor(funcPrototype, true, false, false));
+                                PropertyDescriptor.dataDescriptor(funcPrototype, PropertyDescriptor.DataState.Writable));
                     }
                     return;
                 }

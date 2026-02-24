@@ -53,9 +53,7 @@ public final class JSNativeFunction extends JSFunction {
                 PropertyKey.LENGTH,
                 PropertyDescriptor.dataDescriptor(
                         JSNumber.of(this.length),
-                        false, // writable
-                        false, // enumerable
-                        true   // configurable
+                        PropertyDescriptor.DataState.Configurable
                 )
         );
 
@@ -66,9 +64,7 @@ public final class JSNativeFunction extends JSFunction {
                 PropertyKey.NAME,
                 PropertyDescriptor.dataDescriptor(
                         new JSString(this.name != null ? this.name : ""),
-                        false, // writable
-                        false, // enumerable
-                        true   // configurable
+                        PropertyDescriptor.DataState.Configurable
                 )
         );
 
@@ -78,7 +74,7 @@ public final class JSNativeFunction extends JSFunction {
             funcPrototype.set(PropertyKey.CONSTRUCTOR, this);
             // Default prototype is configurable so it can be deleted (Proxy) or overridden by explicit setup
             this.defineProperty(PropertyKey.PROTOTYPE,
-                    PropertyDescriptor.dataDescriptor(funcPrototype, true, false, true));
+                    PropertyDescriptor.dataDescriptor(funcPrototype, PropertyDescriptor.DataState.ConfigurableWritable));
         }
     }
 

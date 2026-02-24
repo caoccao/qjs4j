@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import java.util.Optional;
+
 /**
  * Represents a JavaScript property descriptor.
  * Based on ECMAScript specification and QuickJS implementation.
@@ -25,25 +27,84 @@ package com.caoccao.qjs4j.core;
  * - Accessor descriptor: has getter and/or setter
  * <p>
  * Both types can have enumerable and configurable attributes.
+ * <p>
+ * Optional fields use empty vs present to distinguish "not specified" from "specified".
+ * Getter/setter use JSUndefined sentinel for "not specified", null for "explicitly undefined",
+ * and a JSFunction instance for a real accessor.
+ * All fields are initialized and never null.
  */
 public final class PropertyDescriptor {
-    private static final int FLAG_CONFIGURABLE = 1 << 2;
-    private static final int FLAG_ENUMERABLE = 1 << 1;
-    private static final int FLAG_HAS_CONFIGURABLE = 1 << 6;
-    private static final int FLAG_HAS_ENUMERABLE = 1 << 5;
-    private static final int FLAG_HAS_GET = 1 << 7;
-    private static final int FLAG_HAS_SET = 1 << 8;
-    private static final int FLAG_HAS_VALUE = 1 << 3;
-    private static final int FLAG_HAS_WRITABLE = 1 << 4;
-    // Attribute flags
-    private static final int FLAG_WRITABLE = 1 << 0;
-    private int flags;
-    private JSFunction getter;
-    private JSFunction setter;
-    private JSValue value;
+    public enum AccessorState {
+        None(false, false),
+        Enumerable(true, false),
+        Configurable(false, true),
+        All(true, true);
+
+        private final boolean enumerable;
+        private final boolean configurable;
+
+        AccessorState(boolean enumerable, boolean configurable) {
+            this.enumerable = enumerable;
+            this.configurable = configurable;
+        }
+
+        public boolean isConfigurable() {
+            return configurable;
+        }
+
+        public boolean isEnumerable() {
+            return enumerable;
+        }
+    }
+
+    public enum DataState {
+        None(false, false, false),
+        Enumerable(false, true, false),
+        EnumerableConfigurable(false, true, true),
+        Configurable(false, false, true),
+        ConfigurableWritable(true, false, true),
+        Writable(true, false, false),
+        EnumerableWritable(true, true, false),
+        All(true, true, true);
+
+        private final boolean writable;
+        private final boolean enumerable;
+        private final boolean configurable;
+
+        DataState(boolean writable, boolean enumerable, boolean configurable) {
+            this.writable = writable;
+            this.enumerable = enumerable;
+            this.configurable = configurable;
+        }
+
+        public boolean isConfigurable() {
+            return configurable;
+        }
+
+        public boolean isEnumerable() {
+            return enumerable;
+        }
+
+        public boolean isWritable() {
+            return writable;
+        }
+
+    }
+
+    private Optional<Boolean> configurable;
+    private Optional<Boolean> enumerable;
+    private JSValue getter;
+    private JSValue setter;
+    private Optional<JSValue> value;
+    private Optional<Boolean> writable;
 
     public PropertyDescriptor() {
-        this.flags = 0;
+        this.configurable = Optional.empty();
+        this.enumerable = Optional.empty();
+        this.getter = JSUndefined.INSTANCE;
+        this.setter = JSUndefined.INSTANCE;
+        this.value = Optional.empty();
+        this.writable = Optional.empty();
     }
 
     /**
@@ -52,8 +113,7 @@ public final class PropertyDescriptor {
     public static PropertyDescriptor accessorDescriptor(
             JSFunction getter,
             JSFunction setter,
-            boolean enumerable,
-            boolean configurable) {
+            AccessorState state) {
         PropertyDescriptor desc = new PropertyDescriptor();
         if (getter != null) {
             desc.setGetter(getter);
@@ -61,24 +121,20 @@ public final class PropertyDescriptor {
         if (setter != null) {
             desc.setSetter(setter);
         }
-        desc.setEnumerable(enumerable);
-        desc.setConfigurable(configurable);
+        desc.setEnumerable(state.isEnumerable());
+        desc.setConfigurable(state.isConfigurable());
         return desc;
     }
 
     /**
      * Create a data descriptor.
      */
-    public static PropertyDescriptor dataDescriptor(
-            JSValue value,
-            boolean writable,
-            boolean enumerable,
-            boolean configurable) {
+    public static PropertyDescriptor dataDescriptor(JSValue value, DataState state) {
         PropertyDescriptor desc = new PropertyDescriptor();
         desc.setValue(value);
-        desc.setWritable(writable);
-        desc.setEnumerable(enumerable);
-        desc.setConfigurable(configurable);
+        desc.setWritable(state.isWritable());
+        desc.setEnumerable(state.isEnumerable());
+        desc.setConfigurable(state.isConfigurable());
         return desc;
     }
 
@@ -86,7 +142,7 @@ public final class PropertyDescriptor {
      * Create a default data descriptor (writable, enumerable, configurable).
      */
     public static PropertyDescriptor defaultData(JSValue value) {
-        return dataDescriptor(value, true, true, true);
+        return dataDescriptor(value, DataState.All);
     }
 
     // Getters
@@ -95,16 +151,16 @@ public final class PropertyDescriptor {
      * Complete this descriptor with default values for accessor.
      */
     public void completeAsAccessor() {
-        if (!hasGetter()) {
-            setGetter(null);
+        if (getter instanceof JSUndefined) {
+            getter = null;
         }
-        if (!hasSetter()) {
-            setSetter(null);
+        if (setter instanceof JSUndefined) {
+            setter = null;
         }
-        if (!hasEnumerable()) {
+        if (enumerable.isEmpty()) {
             setEnumerable(false);
         }
-        if (!hasConfigurable()) {
+        if (configurable.isEmpty()) {
             setConfigurable(false);
         }
     }
@@ -114,56 +170,56 @@ public final class PropertyDescriptor {
      * Used when defining a new property.
      */
     public void completeAsData() {
-        if (!hasValue()) {
+        if (value.isEmpty()) {
             setValue(JSUndefined.INSTANCE);
         }
-        if (!hasWritable()) {
+        if (writable.isEmpty()) {
             setWritable(false);
         }
-        if (!hasEnumerable()) {
+        if (enumerable.isEmpty()) {
             setEnumerable(false);
         }
-        if (!hasConfigurable()) {
+        if (configurable.isEmpty()) {
             setConfigurable(false);
         }
     }
 
     public JSFunction getGetter() {
-        return getter;
+        return getter instanceof JSFunction f ? f : null;
     }
 
     public JSFunction getSetter() {
-        return setter;
+        return setter instanceof JSFunction f ? f : null;
     }
 
     public JSValue getValue() {
-        return value;
+        return value.orElse(null);
     }
 
     public boolean hasConfigurable() {
-        return (flags & FLAG_HAS_CONFIGURABLE) != 0;
+        return configurable.isPresent();
     }
 
     // "Has" checks for partial descriptors
 
     public boolean hasEnumerable() {
-        return (flags & FLAG_HAS_ENUMERABLE) != 0;
+        return enumerable.isPresent();
     }
 
     public boolean hasGetter() {
-        return (flags & FLAG_HAS_GET) != 0;
+        return !(getter instanceof JSUndefined);
     }
 
     public boolean hasSetter() {
-        return (flags & FLAG_HAS_SET) != 0;
+        return !(setter instanceof JSUndefined);
     }
 
     public boolean hasValue() {
-        return (flags & FLAG_HAS_VALUE) != 0;
+        return value.isPresent();
     }
 
     public boolean hasWritable() {
-        return (flags & FLAG_HAS_WRITABLE) != 0;
+        return writable.isPresent();
     }
 
     /**
@@ -171,13 +227,13 @@ public final class PropertyDescriptor {
      * An accessor descriptor has getter or setter attributes.
      */
     public boolean isAccessorDescriptor() {
-        return hasGetter() || hasSetter();
+        return !(getter instanceof JSUndefined) || !(setter instanceof JSUndefined);
     }
 
     // Setters
 
     public boolean isConfigurable() {
-        return (flags & FLAG_CONFIGURABLE) != 0;
+        return configurable.orElse(false);
     }
 
     /**
@@ -185,18 +241,19 @@ public final class PropertyDescriptor {
      * A data descriptor has value or writable attributes.
      */
     public boolean isDataDescriptor() {
-        return hasValue() || hasWritable();
+        return value.isPresent() || writable.isPresent();
     }
 
     /**
      * Check if descriptor is empty (no attributes set).
      */
     public boolean isEmpty() {
-        return flags == 0;
+        return value.isEmpty() && writable.isEmpty() && enumerable.isEmpty()
+                && configurable.isEmpty() && getter instanceof JSUndefined && setter instanceof JSUndefined;
     }
 
     public boolean isEnumerable() {
-        return (flags & FLAG_ENUMERABLE) != 0;
+        return enumerable.orElse(false);
     }
 
     /**
@@ -208,7 +265,7 @@ public final class PropertyDescriptor {
     }
 
     public boolean isWritable() {
-        return (flags & FLAG_WRITABLE) != 0;
+        return writable.orElse(false);
     }
 
     /**
@@ -221,14 +278,13 @@ public final class PropertyDescriptor {
     public void mergeFrom(PropertyDescriptor other) {
         // Handle data → accessor conversion: clear data attributes
         if ((other.hasGetter() || other.hasSetter()) && isDataDescriptor()) {
-            flags &= ~(FLAG_HAS_VALUE | FLAG_HAS_WRITABLE | FLAG_WRITABLE);
-            value = null;
+            value = Optional.empty();
+            writable = Optional.empty();
         }
         // Handle accessor → data conversion: clear accessor attributes
         if ((other.hasValue() || other.hasWritable()) && isAccessorDescriptor()) {
-            flags &= ~(FLAG_HAS_GET | FLAG_HAS_SET);
-            getter = null;
-            setter = null;
+            getter = JSUndefined.INSTANCE;
+            setter = JSUndefined.INSTANCE;
         }
         if (other.hasValue()) {
             setValue(other.getValue());
@@ -253,67 +309,49 @@ public final class PropertyDescriptor {
     // Type checks
 
     public void setConfigurable(boolean configurable) {
-        flags |= FLAG_HAS_CONFIGURABLE;
-        if (configurable) {
-            flags |= FLAG_CONFIGURABLE;
-        } else {
-            flags &= ~FLAG_CONFIGURABLE;
-        }
+        this.configurable = Optional.of(configurable);
     }
 
     public void setEnumerable(boolean enumerable) {
-        flags |= FLAG_HAS_ENUMERABLE;
-        if (enumerable) {
-            flags |= FLAG_ENUMERABLE;
-        } else {
-            flags &= ~FLAG_ENUMERABLE;
-        }
+        this.enumerable = Optional.of(enumerable);
     }
 
     public void setGetter(JSFunction getter) {
         this.getter = getter;
-        flags |= FLAG_HAS_GET;
     }
 
     public void setSetter(JSFunction setter) {
         this.setter = setter;
-        flags |= FLAG_HAS_SET;
     }
 
     public void setValue(JSValue value) {
-        this.value = value;
-        flags |= FLAG_HAS_VALUE;
+        this.value = Optional.ofNullable(value);
     }
 
     public void setWritable(boolean writable) {
-        flags |= FLAG_HAS_WRITABLE;
-        if (writable) {
-            flags |= FLAG_WRITABLE;
-        } else {
-            flags &= ~FLAG_WRITABLE;
-        }
+        this.writable = Optional.of(writable);
     }
 
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("PropertyDescriptor{");
-        if (hasValue()) {
-            sb.append("value=").append(value).append(", ");
+        if (value.isPresent()) {
+            sb.append("value=").append(getValue()).append(", ");
         }
-        if (hasWritable()) {
+        if (writable.isPresent()) {
             sb.append("writable=").append(isWritable()).append(", ");
         }
-        if (hasEnumerable()) {
+        if (enumerable.isPresent()) {
             sb.append("enumerable=").append(isEnumerable()).append(", ");
         }
-        if (hasConfigurable()) {
+        if (configurable.isPresent()) {
             sb.append("configurable=").append(isConfigurable()).append(", ");
         }
-        if (hasGetter()) {
-            sb.append("get=").append(getter != null ? "function" : "undefined").append(", ");
+        if (!(getter instanceof JSUndefined)) {
+            sb.append("get=").append(getter instanceof JSFunction ? "function" : "undefined").append(", ");
         }
-        if (hasSetter()) {
-            sb.append("set=").append(setter != null ? "function" : "undefined").append(", ");
+        if (!(setter instanceof JSUndefined)) {
+            sb.append("set=").append(setter instanceof JSFunction ? "function" : "undefined").append(", ");
         }
         if (sb.length() > 19) {
             sb.setLength(sb.length() - 2);

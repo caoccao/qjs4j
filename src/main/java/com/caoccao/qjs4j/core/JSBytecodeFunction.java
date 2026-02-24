@@ -147,9 +147,9 @@ public final class JSBytecodeFunction extends JSFunction {
         // Per ES spec, length comes before name in property order
         // Both are {writable: false, enumerable: false, configurable: true}
         this.defineProperty(PropertyKey.LENGTH,
-                PropertyDescriptor.dataDescriptor(JSNumber.of(this.length), false, false, true));
+                PropertyDescriptor.dataDescriptor(JSNumber.of(this.length), PropertyDescriptor.DataState.Configurable));
         this.defineProperty(PropertyKey.NAME,
-                PropertyDescriptor.dataDescriptor(new JSString(this.name), false, false, true));
+                PropertyDescriptor.dataDescriptor(new JSString(this.name), PropertyDescriptor.DataState.Configurable));
 
         // Every function (except arrow functions) has a prototype property
         if (prototype != null) {
@@ -160,7 +160,7 @@ public final class JSBytecodeFunction extends JSFunction {
             JSObject funcPrototype = new JSObject();
             funcPrototype.set(PropertyKey.CONSTRUCTOR, this);
             this.defineProperty(PropertyKey.PROTOTYPE,
-                    PropertyDescriptor.dataDescriptor(funcPrototype, true, false, false));
+                    PropertyDescriptor.dataDescriptor(funcPrototype, PropertyDescriptor.DataState.Writable));
         }
     }
 

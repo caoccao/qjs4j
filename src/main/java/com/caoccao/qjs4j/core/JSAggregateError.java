@@ -58,7 +58,7 @@ public final class JSAggregateError extends JSError {
             return JSUndefined.INSTANCE;
         }
         jsAggregateError.defineProperty(PropertyKey.ERRORS,
-                PropertyDescriptor.dataDescriptor(errorsList, true, false, true));
+                PropertyDescriptor.dataDescriptor(errorsList, PropertyDescriptor.DataState.ConfigurableWritable));
 
         return jsAggregateError;
     }
@@ -68,9 +68,9 @@ public final class JSAggregateError extends JSError {
         JSObject errorPrototype = new JSObject();
         context.transferPrototype(errorPrototype, JSError.NAME);
         errorPrototype.defineProperty(PropertyKey.fromString("name"),
-                PropertyDescriptor.dataDescriptor(new JSString(NAME), true, false, true));
+                PropertyDescriptor.dataDescriptor(new JSString(NAME), PropertyDescriptor.DataState.ConfigurableWritable));
         errorPrototype.defineProperty(PropertyKey.MESSAGE,
-                PropertyDescriptor.dataDescriptor(new JSString(""), true, false, true));
+                PropertyDescriptor.dataDescriptor(new JSString(""), PropertyDescriptor.DataState.ConfigurableWritable));
 
         // AggregateError(errors, message)
         int length = 2;
@@ -90,7 +90,7 @@ public final class JSAggregateError extends JSError {
 
         // Set constructor property on prototype (non-enumerable per spec)
         errorPrototype.defineProperty(PropertyKey.CONSTRUCTOR,
-                PropertyDescriptor.dataDescriptor(errorConstructor, true, false, true));
+                PropertyDescriptor.dataDescriptor(errorConstructor, PropertyDescriptor.DataState.ConfigurableWritable));
 
         return errorConstructor;
     }

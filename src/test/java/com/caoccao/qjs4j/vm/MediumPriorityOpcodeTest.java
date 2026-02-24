@@ -65,11 +65,11 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         source.set("b", new JSNumber(2));
         source.defineProperty(
                 PropertyKey.fromString("hidden"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(99), true, false, true));
+                PropertyDescriptor.dataDescriptor(new JSNumber(99), PropertyDescriptor.DataState.ConfigurableWritable));
         JSSymbol symbol = new JSSymbol("sym");
         source.defineProperty(
                 PropertyKey.fromSymbol(symbol),
-                PropertyDescriptor.dataDescriptor(new JSNumber(7), true, true, true));
+                PropertyDescriptor.dataDescriptor(new JSNumber(7), PropertyDescriptor.DataState.All));
 
         JSArray excludeList = context.createJSArray();
         excludeList.push(new JSString("a"));
@@ -394,7 +394,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
 
         context.getGlobalObject().defineProperty(
                 PropertyKey.fromString("lockedDeleteVar"),
-                PropertyDescriptor.dataDescriptor(new JSNumber(2), true, true, false));
+                PropertyDescriptor.dataDescriptor(new JSNumber(2), PropertyDescriptor.DataState.EnumerableWritable));
         BytecodeEmitter deleteLockedVarEmitter = new BytecodeEmitter();
         deleteLockedVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "lockedDeleteVar");
         deleteLockedVarEmitter.emitOpcode(Opcode.RETURN);

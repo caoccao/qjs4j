@@ -454,7 +454,7 @@ public final class VirtualMachine {
 
         referenceObject.defineProperty(
                 key,
-                PropertyDescriptor.accessorDescriptor(getter, setter, true, true));
+                PropertyDescriptor.accessorDescriptor(getter, setter, PropertyDescriptor.AccessorState.All));
         return referenceObject;
     }
 
@@ -2663,7 +2663,7 @@ public final class VirtualMachine {
                             switch (methodKind) {
                                 case 0 -> jsObj.defineProperty(
                                         key,
-                                        PropertyDescriptor.dataDescriptor(methodValue, true, enumerable, true));
+                                        PropertyDescriptor.dataDescriptor(methodValue, enumerable ? PropertyDescriptor.DataState.All : PropertyDescriptor.DataState.ConfigurableWritable));
                                 case 1 -> {
                                     JSFunction getter = methodValue instanceof JSFunction jsFunction ? jsFunction : null;
                                     JSFunction setter = null;
@@ -2673,7 +2673,7 @@ public final class VirtualMachine {
                                     }
                                     jsObj.defineProperty(
                                             key,
-                                            PropertyDescriptor.accessorDescriptor(getter, setter, enumerable, true));
+                                            PropertyDescriptor.accessorDescriptor(getter, setter, enumerable ? PropertyDescriptor.AccessorState.All : PropertyDescriptor.AccessorState.Configurable));
                                 }
                                 case 2 -> {
                                     JSFunction setter = methodValue instanceof JSFunction jsFunction ? jsFunction : null;
@@ -2684,7 +2684,7 @@ public final class VirtualMachine {
                                     }
                                     jsObj.defineProperty(
                                             key,
-                                            PropertyDescriptor.accessorDescriptor(getter, setter, enumerable, true));
+                                            PropertyDescriptor.accessorDescriptor(getter, setter, enumerable ? PropertyDescriptor.AccessorState.All : PropertyDescriptor.AccessorState.Configurable));
                                 }
                                 default ->
                                         throw new JSVirtualMachineException("DEFINE_METHOD_COMPUTED: unsupported method flags " + methodFlags);

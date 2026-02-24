@@ -80,7 +80,7 @@ public class JSIterator extends JSObject {
         if (toStringTag != null && iterProto == null) {
             defineProperty(
                     PropertyKey.SYMBOL_TO_STRING_TAG,
-                    PropertyDescriptor.dataDescriptor(new JSString(toStringTag), false, false, true));
+                    PropertyDescriptor.dataDescriptor(new JSString(toStringTag), PropertyDescriptor.DataState.Configurable));
         }
     }
 

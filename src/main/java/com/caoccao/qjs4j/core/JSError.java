@@ -35,7 +35,7 @@ public sealed class JSError extends JSObject permits
         this.context = context;
         if (message != null && !message.isEmpty()) {
             defineProperty(PropertyKey.MESSAGE,
-                    PropertyDescriptor.dataDescriptor(new JSString(message), true, false, true));
+                    PropertyDescriptor.dataDescriptor(new JSString(message), PropertyDescriptor.DataState.ConfigurableWritable));
         }
     }
 
@@ -146,7 +146,7 @@ public sealed class JSError extends JSObject permits
                     return false;
                 }
                 obj.defineProperty(PropertyKey.CAUSE,
-                        PropertyDescriptor.dataDescriptor(cause, true, false, true));
+                        PropertyDescriptor.dataDescriptor(cause, PropertyDescriptor.DataState.ConfigurableWritable));
             }
         }
         return true;

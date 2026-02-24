@@ -253,7 +253,7 @@ public final class JSONObject {
                         } else {
                             // Use CreateDataProperty (defineProperty), not [[Set]]
                             obj.defineOwnProperty(PropertyKey.fromString(Long.toString(i)),
-                                    PropertyDescriptor.dataDescriptor(newElement, true, true, true), context);
+                                    PropertyDescriptor.dataDescriptor(newElement, PropertyDescriptor.DataState.All), context);
                         }
                     } catch (JSVirtualMachineException e) {
                         convertVMException(context, e);
@@ -289,7 +289,7 @@ public final class JSONObject {
                         } else {
                             // Use CreateDataProperty, not [[Set]]
                             obj.defineOwnProperty(PropertyKey.fromString(prop),
-                                    PropertyDescriptor.dataDescriptor(newElement, true, true, true), context);
+                                    PropertyDescriptor.dataDescriptor(newElement, PropertyDescriptor.DataState.All), context);
                         }
                     } catch (JSVirtualMachineException e) {
                         convertVMException(context, e);
@@ -760,7 +760,7 @@ public final class JSONObject {
             // Use DefineOwnProperty (CreateDataProperty), NOT [[Set]]
             // This ensures __proto__ is treated as a regular property
             obj.defineOwnProperty(PropertyKey.fromString(key),
-                    PropertyDescriptor.dataDescriptor(valueResult.value, true, true, true), null);
+                    PropertyDescriptor.dataDescriptor(valueResult.value, PropertyDescriptor.DataState.All), null);
             // Record source for object properties
             parseContext.recordElementSource(obj, key, valueResult.value, valueResult.sourceStart, valueResult.sourceEnd);
             propertyCount++;

@@ -693,7 +693,7 @@ public final class ArrayConstructor {
 
         // Step 4-5: CreateDataPropertyOrThrow for each item.
         for (int index = 0; index < len; index++) {
-            PropertyDescriptor descriptor = PropertyDescriptor.dataDescriptor(args[index], true, true, true);
+            PropertyDescriptor descriptor = PropertyDescriptor.dataDescriptor(args[index], PropertyDescriptor.DataState.All);
             if (!array.defineOwnProperty(PropertyKey.fromString(Integer.toString(index)), descriptor, context)) {
                 if (context.hasPendingException()) {
                     return context.getPendingException();

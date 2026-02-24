@@ -53,7 +53,7 @@ public final class JSRegExp extends JSObject {
         // writable, non-enumerable, non-configurable.
         this.defineProperty(
                 PropertyKey.LAST_INDEX,
-                PropertyDescriptor.dataDescriptor(JSNumber.of(0), true, false, false)
+                PropertyDescriptor.dataDescriptor(JSNumber.of(0), PropertyDescriptor.DataState.Writable)
         );
     }
 

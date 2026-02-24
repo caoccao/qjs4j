@@ -140,7 +140,7 @@ public non-sealed class JSObject implements JSValue {
      */
     public void defineGetterConfigurable(String name, JSNativeFunction.NativeCallback callback) {
         defineProperty(PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get " + name, 0, callback), null, false, true));
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get " + name, 0, callback), null, PropertyDescriptor.AccessorState.Configurable));
     }
 
     /**
@@ -149,7 +149,7 @@ public non-sealed class JSObject implements JSValue {
     public void defineGetterConfigurable(JSSymbol symbol, JSNativeFunction.NativeCallback callback) {
         String symbolName = symbol.getDescription() == null ? "" : symbol.getDescription();
         defineProperty(PropertyKey.fromSymbol(symbol),
-                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get [" + symbolName + "]", 0, callback), null, false, true));
+                PropertyDescriptor.accessorDescriptor(new JSNativeFunction("get [" + symbolName + "]", 0, callback), null, PropertyDescriptor.AccessorState.Configurable));
     }
 
     public void defineGetterConfigurable(String name) {
@@ -162,7 +162,7 @@ public non-sealed class JSObject implements JSValue {
         }, false);
         defineProperty(
                 PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(getter, null, false, true));
+                PropertyDescriptor.accessorDescriptor(getter, null, PropertyDescriptor.AccessorState.Configurable));
     }
 
     public void defineGetterSetterConfigurable(String name) {
@@ -181,7 +181,7 @@ public non-sealed class JSObject implements JSValue {
         }, false);
         defineProperty(
                 PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
+                PropertyDescriptor.accessorDescriptor(getter, setter, PropertyDescriptor.AccessorState.Configurable));
     }
 
     // Property operations
@@ -189,7 +189,7 @@ public non-sealed class JSObject implements JSValue {
     public void defineGetterSetterConfigurable(String name, JSNativeFunction getter, JSNativeFunction setter) {
         defineProperty(
                 PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(getter, setter, false, true));
+                PropertyDescriptor.accessorDescriptor(getter, setter, PropertyDescriptor.AccessorState.Configurable));
     }
 
     /**
@@ -320,22 +320,22 @@ public non-sealed class JSObject implements JSValue {
 
     public void definePropertyConfigurable(JSSymbol jsSymbol, JSValue value) {
         defineProperty(PropertyKey.fromSymbol(jsSymbol),
-                PropertyDescriptor.dataDescriptor(value, false, false, true));
+                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.Configurable));
     }
 
     public void definePropertyConfigurable(String name, JSValue value) {
         defineProperty(PropertyKey.fromString(name),
-                PropertyDescriptor.dataDescriptor(value, false, false, true));
+                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.Configurable));
     }
 
     public void definePropertyReadonlyNonConfigurable(JSSymbol jsSymbol, JSValue value) {
         defineProperty(PropertyKey.fromSymbol(jsSymbol),
-                PropertyDescriptor.dataDescriptor(value, false, false, false));
+                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.None));
     }
 
     public void definePropertyReadonlyNonConfigurable(String name, JSValue value) {
         defineProperty(PropertyKey.fromString(name),
-                PropertyDescriptor.dataDescriptor(value, false, false, false));
+                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.None));
     }
 
     /**
@@ -343,7 +343,7 @@ public non-sealed class JSObject implements JSValue {
      */
     public void definePropertyWritableConfigurable(JSSymbol jsSymbol, JSValue value) {
         defineProperty(PropertyKey.fromSymbol(jsSymbol),
-                PropertyDescriptor.dataDescriptor(value, true, false, true));
+                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.ConfigurableWritable));
     }
 
     /**
@@ -351,7 +351,7 @@ public non-sealed class JSObject implements JSValue {
      */
     public void definePropertyWritableConfigurable(String name, JSValue value) {
         defineProperty(PropertyKey.fromString(name),
-                PropertyDescriptor.dataDescriptor(value, true, false, true));
+                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.ConfigurableWritable));
     }
 
     /**
@@ -361,7 +361,7 @@ public non-sealed class JSObject implements JSValue {
      * with incompatible attributes, or non-extensible object for new properties).
      */
     public boolean definePropertyWritableEnumerableConfigurable(PropertyKey key, JSValue value) {
-        return defineOwnProperty(key, PropertyDescriptor.dataDescriptor(value, true, true, true), null);
+        return defineOwnProperty(key, PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.All), null);
     }
 
     /**

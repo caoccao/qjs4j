@@ -834,9 +834,7 @@ public final class JSContext implements AutoCloseable {
                         globalObject.defineProperty(key,
                                 PropertyDescriptor.dataDescriptor(
                                         JSUndefined.INSTANCE,
-                                        true,   // writable
-                                        true,   // enumerable
-                                        false   // configurable
+                                        PropertyDescriptor.DataState.EnumerableWritable
                                 ));
                     }
                 }

@@ -510,12 +510,12 @@ public final class JSArray extends JSObject {
         if (index <= Integer.MAX_VALUE) {
             int intIndex = (int) index;
             if (intIndex < denseArray.length && denseArray[intIndex] != null) {
-                return PropertyDescriptor.dataDescriptor(denseArray[intIndex], true, true, true);
+                return PropertyDescriptor.dataDescriptor(denseArray[intIndex], PropertyDescriptor.DataState.All);
             }
             if (sparseProperties != null) {
                 JSValue sparseValue = sparseProperties.get(intIndex);
                 if (sparseValue != null) {
-                    return PropertyDescriptor.dataDescriptor(sparseValue, true, true, true);
+                    return PropertyDescriptor.dataDescriptor(sparseValue, PropertyDescriptor.DataState.All);
                 }
             }
         } else {
@@ -647,9 +647,7 @@ public final class JSArray extends JSObject {
         // The length property is special - it's writable but not enumerable or configurable
         PropertyDescriptor lengthDesc = PropertyDescriptor.dataDescriptor(
                 JSNumber.of(length),
-                true,  // writable
-                false, // not enumerable
-                false  // not configurable
+                PropertyDescriptor.DataState.Writable
         );
         super.defineProperty(PropertyKey.LENGTH, lengthDesc);
     }

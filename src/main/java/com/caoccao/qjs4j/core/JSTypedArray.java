@@ -516,7 +516,7 @@ public abstract class JSTypedArray extends JSObject {
         if (buffer.isDetached() || index >= getLength()) {
             return null;
         }
-        return PropertyDescriptor.dataDescriptor(getJSElement(index), true, true, true);
+        return PropertyDescriptor.dataDescriptor(getJSElement(index), PropertyDescriptor.DataState.All);
     }
 
     /**

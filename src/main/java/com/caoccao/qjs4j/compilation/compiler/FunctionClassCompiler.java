@@ -1466,14 +1466,14 @@ final class FunctionClassCompiler {
             rawArray.set(i, rawValue);
             rawArray.defineProperty(
                     PropertyKey.fromIndex(i),
-                    PropertyDescriptor.dataDescriptor(rawValue, false, true, false));
+                    PropertyDescriptor.dataDescriptor(rawValue, PropertyDescriptor.DataState.Enumerable));
 
             String cookedQuasi = cookedQuasis.get(i);
             JSValue cookedValue = cookedQuasi == null ? JSUndefined.INSTANCE : new JSString(cookedQuasi);
             templateObject.set(i, cookedValue);
             templateObject.defineProperty(
                     PropertyKey.fromIndex(i),
-                    PropertyDescriptor.dataDescriptor(cookedValue, false, true, false));
+                    PropertyDescriptor.dataDescriptor(cookedValue, PropertyDescriptor.DataState.Enumerable));
         }
 
         // QuickJS/spec attributes for template objects.

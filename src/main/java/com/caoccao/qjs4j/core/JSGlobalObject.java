@@ -755,7 +755,7 @@ public final class JSGlobalObject {
         asyncIteratorMethod.initializePrototypeChain(context);
         asyncIteratorPrototype.defineProperty(
                 PropertyKey.fromSymbol(JSSymbol.ASYNC_ITERATOR),
-                PropertyDescriptor.dataDescriptor(asyncIteratorMethod, true, false, true));
+                PropertyDescriptor.dataDescriptor(asyncIteratorMethod, PropertyDescriptor.DataState.ConfigurableWritable));
         JSNativeFunction asyncDisposeMethod = new JSNativeFunction(
                 "[Symbol.asyncDispose]",
                 0,
@@ -763,7 +763,7 @@ public final class JSGlobalObject {
         asyncDisposeMethod.initializePrototypeChain(context);
         asyncIteratorPrototype.defineProperty(
                 PropertyKey.fromSymbol(JSSymbol.ASYNC_DISPOSE),
-                PropertyDescriptor.dataDescriptor(asyncDisposeMethod, true, false, true));
+                PropertyDescriptor.dataDescriptor(asyncDisposeMethod, PropertyDescriptor.DataState.ConfigurableWritable));
 
         // Create AsyncGenerator.prototype inheriting from AsyncIteratorPrototype
         JSObject asyncGeneratorPrototype = context.createJSObject();
@@ -1128,7 +1128,7 @@ public final class JSGlobalObject {
                 FunctionPrototype::symbolHasInstance);
         functionPrototype.defineProperty(
                 PropertyKey.SYMBOL_HAS_INSTANCE,
-                PropertyDescriptor.dataDescriptor(hasInstanceFunc, false, false, false));
+                PropertyDescriptor.dataDescriptor(hasInstanceFunc, PropertyDescriptor.DataState.None));
 
         // Add 'length' and 'name' data properties
         functionPrototype.definePropertyConfigurable("length", JSNumber.of(0));
@@ -1251,7 +1251,7 @@ public final class JSGlobalObject {
         generatorFunctionConstructor.definePropertyReadonlyNonConfigurable("prototype", generatorFunctionPrototype);
         generatorFunctionPrototype.defineProperty(
                 PropertyKey.CONSTRUCTOR,
-                PropertyDescriptor.dataDescriptor(generatorFunctionConstructor, false, false, true));
+                PropertyDescriptor.dataDescriptor(generatorFunctionConstructor, PropertyDescriptor.DataState.Configurable));
 
         // Store in context for generator function prototype chain setup
         context.setGeneratorFunctionPrototype(generatorFunctionPrototype);
@@ -1441,7 +1441,7 @@ public final class JSGlobalObject {
         JSNativeFunction iteratorConstructor = new JSNativeFunction(JSIterator.NAME, 0, IteratorConstructor::call, true, true);
         iteratorConstructor.defineProperty(
                 PropertyKey.PROTOTYPE,
-                PropertyDescriptor.dataDescriptor(iteratorPrototype, false, false, false));
+                PropertyDescriptor.dataDescriptor(iteratorPrototype, PropertyDescriptor.DataState.None));
         iteratorConstructor.definePropertyWritableConfigurable("concat", new JSNativeFunction("concat", 0, IteratorPrototype::concat));
         iteratorConstructor.definePropertyWritableConfigurable("from", new JSNativeFunction("from", 1, IteratorPrototype::from));
         iteratorConstructor.definePropertyWritableConfigurable("zip", new JSNativeFunction("zip", 1, IteratorPrototype::zip));
@@ -1457,14 +1457,14 @@ public final class JSGlobalObject {
                 }
                 thisObject.defineProperty(
                         PropertyKey.CONSTRUCTOR,
-                        PropertyDescriptor.dataDescriptor(valueObject, true, false, true));
+                        PropertyDescriptor.dataDescriptor(valueObject, PropertyDescriptor.DataState.ConfigurableWritable));
                 return JSUndefined.INSTANCE;
             }
             return iteratorConstructor;
         });
         iteratorPrototype.defineProperty(
                 PropertyKey.CONSTRUCTOR,
-                PropertyDescriptor.accessorDescriptor(constructorAccessor, constructorAccessor, false, true));
+                PropertyDescriptor.accessorDescriptor(constructorAccessor, constructorAccessor, PropertyDescriptor.AccessorState.Configurable));
 
         JSNativeFunction toStringTagGetter = new JSNativeFunction(
                 "get [Symbol.toStringTag]",
@@ -1489,14 +1489,14 @@ public final class JSGlobalObject {
                     } else {
                         thisObject.defineProperty(
                                 toStringTagKey,
-                                PropertyDescriptor.dataDescriptor(value, true, true, true));
+                                PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.All));
                     }
                     return JSUndefined.INSTANCE;
                 },
                 false);
         iteratorPrototype.defineProperty(
                 PropertyKey.SYMBOL_TO_STRING_TAG,
-                PropertyDescriptor.accessorDescriptor(toStringTagGetter, toStringTagSetter, false, true));
+                PropertyDescriptor.accessorDescriptor(toStringTagGetter, toStringTagSetter, PropertyDescriptor.AccessorState.Configurable));
 
         // Create shared iterator-type-specific prototypes inheriting from Iterator.prototype
         // Each has its own 'next' (writable, configurable) and Symbol.toStringTag per ES2024 spec
@@ -1506,7 +1506,7 @@ public final class JSGlobalObject {
             proto.definePropertyWritableConfigurable("next", new JSNativeFunction("next", 0, IteratorPrototype::next));
             proto.defineProperty(
                     PropertyKey.SYMBOL_TO_STRING_TAG,
-                    PropertyDescriptor.dataDescriptor(new JSString(tag), false, false, true));
+                    PropertyDescriptor.dataDescriptor(new JSString(tag), PropertyDescriptor.DataState.Configurable));
             context.registerIteratorPrototype(tag, proto);
         }
 
@@ -1716,8 +1716,7 @@ public final class JSGlobalObject {
         PropertyDescriptor protoDesc = PropertyDescriptor.accessorDescriptor(
                 new JSNativeFunction("get __proto__", 0, ObjectPrototype::__proto__Getter),
                 new JSNativeFunction("set __proto__", 1, ObjectPrototype::__proto__Setter),
-                false,
-                true
+                PropertyDescriptor.AccessorState.Configurable
         );
         objectPrototype.defineProperty(PropertyKey.PROTO, protoDesc);
 

@@ -69,7 +69,7 @@ public final class JSStringObject extends JSObject {
         this.setPrimitiveValue(value);
         // String objects have a non-writable, non-enumerable, non-configurable length property
         defineProperty(PropertyKey.fromString("length"),
-                PropertyDescriptor.dataDescriptor(JSNumber.of(value.value().length()), false, false, false));
+                PropertyDescriptor.dataDescriptor(JSNumber.of(value.value().length()), PropertyDescriptor.DataState.None));
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -137,10 +137,8 @@ public final class JSStringObject extends JSObject {
                 // Return descriptor for character at index
                 JSValue charValue = new JSString(String.valueOf(value.value().charAt(index)));
                 return PropertyDescriptor.dataDescriptor(
-                        charValue,  // value
-                        false,      // writable
-                        true,       // enumerable
-                        false       // configurable
+                        charValue,
+                        PropertyDescriptor.DataState.Enumerable
                 );
             }
         } else if (key.isString()) {
@@ -151,10 +149,8 @@ public final class JSStringObject extends JSObject {
                     // Return descriptor for character at index
                     JSValue charValue = new JSString(String.valueOf(value.value().charAt(index)));
                     return PropertyDescriptor.dataDescriptor(
-                            charValue,  // value
-                            false,      // writable
-                            true,       // enumerable
-                            false       // configurable
+                            charValue,
+                            PropertyDescriptor.DataState.Enumerable
                     );
                 }
             } catch (NumberFormatException e) {
