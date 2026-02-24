@@ -61,7 +61,10 @@ public final class JSMap extends JSObject {
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
 
-            JSValue adder = mapObj.get(PropertyKey.SET);
+            JSValue adder = mapObj.get(context, PropertyKey.SET);
+            if (context.hasPendingException()) {
+                return mapObj;
+            }
             if (!(adder instanceof JSFunction adderFunction)) {
                 return context.throwTypeError("set/add is not a function");
             }

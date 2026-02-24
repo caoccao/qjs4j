@@ -377,19 +377,25 @@ final class ExpressionPrimaryParser {
                             break;
                         }
 
-                        if (!parserContext.match(TokenType.IDENTIFIER)) {
-                            throw new RuntimeException("Complex arrow function parameters not yet supported at line " +
+                        Expression paramExpr;
+                        if (parserContext.match(TokenType.IDENTIFIER)) {
+                            paramExpr = parserContext.parseIdentifier();
+                        } else if (parserContext.match(TokenType.LBRACE)) {
+                            paramExpr = delegates.literals.parseObjectExpression();
+                        } else if (parserContext.match(TokenType.LBRACKET)) {
+                            paramExpr = delegates.literals.parseArrayExpression();
+                        } else {
+                            throw new RuntimeException("Unexpected token in arrow function parameters at line " +
                                     parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
                         }
-                        Identifier param = parserContext.parseIdentifier();
                         if (parserContext.match(TokenType.ASSIGN)) {
                             SourceLocation assignLoc = parserContext.getLocation();
                             parserContext.advance();
                             Expression defaultExpr = expressions.parseAssignmentExpression();
-                            potentialParams.add(new AssignmentExpression(param,
+                            potentialParams.add(new AssignmentExpression(paramExpr,
                                     AssignmentExpression.AssignmentOperator.ASSIGN, defaultExpr, assignLoc));
                         } else {
-                            potentialParams.add(param);
+                            potentialParams.add(paramExpr);
                         }
                     }
 

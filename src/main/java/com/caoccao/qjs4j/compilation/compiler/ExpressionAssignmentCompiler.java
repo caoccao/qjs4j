@@ -180,6 +180,8 @@ final class ExpressionAssignmentCompiler {
                         ctx.emitter.emitOpcode(Opcode.DROP);
                     }
                 } else if (memberExpr.property() instanceof Identifier propId) {
+                    // Stack: [obj, newValue] — need [newValue, obj] for PUT_FIELD
+                    ctx.emitter.emitOpcode(Opcode.SWAP);
                     ctx.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
                 }
             }
