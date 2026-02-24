@@ -24,21 +24,21 @@ import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
 
 final class ExpressionBinaryParser {
-    private final ParserContext ctx;
     private final ExpressionParser expressions;
+    private final ParserContext parserContext;
 
-    ExpressionBinaryParser(ParserContext ctx, ExpressionParser expressions) {
-        this.ctx = ctx;
+    ExpressionBinaryParser(ParserContext parserContext, ExpressionParser expressions) {
+        this.parserContext = parserContext;
         this.expressions = expressions;
     }
 
     Expression parseAdditiveExpression() {
         Expression left = expressions.parseMultiplicativeExpression();
 
-        while (ctx.match(TokenType.PLUS) || ctx.match(TokenType.MINUS)) {
-            BinaryOperator op = ctx.match(TokenType.PLUS) ? BinaryOperator.ADD : BinaryOperator.SUB;
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+        while (parserContext.match(TokenType.PLUS) || parserContext.match(TokenType.MINUS)) {
+            BinaryOperator op = parserContext.match(TokenType.PLUS) ? BinaryOperator.ADD : BinaryOperator.SUB;
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression right = expressions.parseMultiplicativeExpression();
             left = new BinaryExpression(op, left, right, location);
         }
@@ -49,9 +49,9 @@ final class ExpressionBinaryParser {
     Expression parseBitwiseAndExpression() {
         Expression left = expressions.parseEqualityExpression();
 
-        while (ctx.match(TokenType.BIT_AND)) {
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+        while (parserContext.match(TokenType.BIT_AND)) {
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression right = expressions.parseEqualityExpression();
             left = new BinaryExpression(BinaryOperator.BIT_AND, left, right, location);
         }
@@ -62,9 +62,9 @@ final class ExpressionBinaryParser {
     Expression parseBitwiseOrExpression() {
         Expression left = expressions.parseBitwiseXorExpression();
 
-        while (ctx.match(TokenType.BIT_OR)) {
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+        while (parserContext.match(TokenType.BIT_OR)) {
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression right = expressions.parseBitwiseXorExpression();
             left = new BinaryExpression(BinaryOperator.BIT_OR, left, right, location);
         }
@@ -75,9 +75,9 @@ final class ExpressionBinaryParser {
     Expression parseBitwiseXorExpression() {
         Expression left = expressions.parseBitwiseAndExpression();
 
-        while (ctx.match(TokenType.BIT_XOR)) {
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+        while (parserContext.match(TokenType.BIT_XOR)) {
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression right = expressions.parseBitwiseAndExpression();
             left = new BinaryExpression(BinaryOperator.BIT_XOR, left, right, location);
         }
@@ -88,11 +88,11 @@ final class ExpressionBinaryParser {
     Expression parseConditionalExpression() {
         Expression test = expressions.parseLogicalOrExpression();
 
-        if (ctx.match(TokenType.QUESTION)) {
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+        if (parserContext.match(TokenType.QUESTION)) {
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression consequent = expressions.parseAssignmentExpression();
-            ctx.expect(TokenType.COLON);
+            parserContext.expect(TokenType.COLON);
             Expression alternate = expressions.parseAssignmentExpression();
 
             return new ConditionalExpression(test, consequent, alternate, location);
@@ -104,17 +104,17 @@ final class ExpressionBinaryParser {
     Expression parseEqualityExpression() {
         Expression left = expressions.parseRelationalExpression();
 
-        while (ctx.match(TokenType.EQ) || ctx.match(TokenType.NE) ||
-                ctx.match(TokenType.STRICT_EQ) || ctx.match(TokenType.STRICT_NE)) {
-            BinaryOperator op = switch (ctx.currentToken.type()) {
+        while (parserContext.match(TokenType.EQ) || parserContext.match(TokenType.NE) ||
+                parserContext.match(TokenType.STRICT_EQ) || parserContext.match(TokenType.STRICT_NE)) {
+            BinaryOperator op = switch (parserContext.currentToken.type()) {
                 case EQ -> BinaryOperator.EQ;
                 case NE -> BinaryOperator.NE;
                 case STRICT_EQ -> BinaryOperator.STRICT_EQ;
                 case STRICT_NE -> BinaryOperator.STRICT_NE;
                 default -> null;
             };
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression right = expressions.parseRelationalExpression();
             left = new BinaryExpression(op, left, right, location);
         }
@@ -125,9 +125,9 @@ final class ExpressionBinaryParser {
     Expression parseExponentiationExpression() {
         Expression left = expressions.parseUnaryExpression();
 
-        if (ctx.match(TokenType.EXP)) {
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+        if (parserContext.match(TokenType.EXP)) {
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression right = parseExponentiationExpression();
             return new BinaryExpression(BinaryOperator.EXP, left, right, location);
         }
@@ -138,9 +138,9 @@ final class ExpressionBinaryParser {
     Expression parseLogicalAndExpression() {
         Expression left = expressions.parseBitwiseOrExpression();
 
-        while (ctx.match(TokenType.LOGICAL_AND)) {
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+        while (parserContext.match(TokenType.LOGICAL_AND)) {
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression right = expressions.parseBitwiseOrExpression();
             left = new BinaryExpression(BinaryOperator.LOGICAL_AND, left, right, location);
         }
@@ -151,12 +151,12 @@ final class ExpressionBinaryParser {
     Expression parseLogicalOrExpression() {
         Expression left = expressions.parseLogicalAndExpression();
 
-        while (ctx.match(TokenType.LOGICAL_OR) || ctx.match(TokenType.NULLISH_COALESCING)) {
-            BinaryOperator op = ctx.match(TokenType.LOGICAL_OR)
+        while (parserContext.match(TokenType.LOGICAL_OR) || parserContext.match(TokenType.NULLISH_COALESCING)) {
+            BinaryOperator op = parserContext.match(TokenType.LOGICAL_OR)
                     ? BinaryOperator.LOGICAL_OR
                     : BinaryOperator.NULLISH_COALESCING;
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression right = expressions.parseLogicalAndExpression();
             left = new BinaryExpression(op, left, right, location);
         }
@@ -167,15 +167,15 @@ final class ExpressionBinaryParser {
     Expression parseMultiplicativeExpression() {
         Expression left = expressions.parseExponentiationExpression();
 
-        while (ctx.match(TokenType.MUL) || ctx.match(TokenType.DIV) || ctx.match(TokenType.MOD)) {
-            BinaryOperator op = switch (ctx.currentToken.type()) {
+        while (parserContext.match(TokenType.MUL) || parserContext.match(TokenType.DIV) || parserContext.match(TokenType.MOD)) {
+            BinaryOperator op = switch (parserContext.currentToken.type()) {
                 case DIV -> BinaryOperator.DIV;
                 case MOD -> BinaryOperator.MOD;
                 case MUL -> BinaryOperator.MUL;
                 default -> null;
             };
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression right = expressions.parseExponentiationExpression();
             left = new BinaryExpression(op, left, right, location);
         }
@@ -186,10 +186,10 @@ final class ExpressionBinaryParser {
     Expression parseRelationalExpression() {
         Expression left = expressions.parseShiftExpression();
 
-        while (ctx.match(TokenType.LT) || ctx.match(TokenType.LE) ||
-                ctx.match(TokenType.GT) || ctx.match(TokenType.GE) ||
-                (ctx.inOperatorAllowed && ctx.match(TokenType.IN)) || ctx.match(TokenType.INSTANCEOF)) {
-            BinaryOperator op = switch (ctx.currentToken.type()) {
+        while (parserContext.match(TokenType.LT) || parserContext.match(TokenType.LE) ||
+                parserContext.match(TokenType.GT) || parserContext.match(TokenType.GE) ||
+                (parserContext.inOperatorAllowed && parserContext.match(TokenType.IN)) || parserContext.match(TokenType.INSTANCEOF)) {
+            BinaryOperator op = switch (parserContext.currentToken.type()) {
                 case LT -> BinaryOperator.LT;
                 case LE -> BinaryOperator.LE;
                 case GT -> BinaryOperator.GT;
@@ -198,8 +198,8 @@ final class ExpressionBinaryParser {
                 case INSTANCEOF -> BinaryOperator.INSTANCEOF;
                 default -> null;
             };
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression right = expressions.parseShiftExpression();
             left = new BinaryExpression(op, left, right, location);
         }
@@ -210,15 +210,15 @@ final class ExpressionBinaryParser {
     Expression parseShiftExpression() {
         Expression left = expressions.parseAdditiveExpression();
 
-        while (ctx.match(TokenType.LSHIFT) || ctx.match(TokenType.RSHIFT) || ctx.match(TokenType.URSHIFT)) {
-            BinaryOperator op = switch (ctx.currentToken.type()) {
+        while (parserContext.match(TokenType.LSHIFT) || parserContext.match(TokenType.RSHIFT) || parserContext.match(TokenType.URSHIFT)) {
+            BinaryOperator op = switch (parserContext.currentToken.type()) {
                 case LSHIFT -> BinaryOperator.LSHIFT;
                 case RSHIFT -> BinaryOperator.RSHIFT;
                 case URSHIFT -> BinaryOperator.URSHIFT;
                 default -> null;
             };
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression right = expressions.parseAdditiveExpression();
             left = new BinaryExpression(op, left, right, location);
         }

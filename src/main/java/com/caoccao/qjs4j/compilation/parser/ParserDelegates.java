@@ -27,11 +27,11 @@ final class ParserDelegates {
     final PatternParser patterns;
     final StatementParser statements;
 
-    ParserDelegates(ParserContext ctx) {
-        this.expressions = new ExpressionParser(ctx, this);
-        this.statements = new StatementParser(ctx, this);
-        this.functions = new FunctionClassParser(ctx, this);
-        this.patterns = new PatternParser(ctx, this);
-        this.literals = new LiteralParser(ctx, this);
+    ParserDelegates(ParserContext parserContext) {
+        this.expressions = new ExpressionParser(parserContext, this);
+        this.statements = new StatementParser(parserContext, this);
+        this.functions = new FunctionClassParser(parserContext, this);
+        this.patterns = new PatternParser(parserContext, this);
+        this.literals = new LiteralParser(parserContext, this);
     }
 }

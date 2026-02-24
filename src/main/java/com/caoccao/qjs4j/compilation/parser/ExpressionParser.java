@@ -29,10 +29,10 @@ final class ExpressionParser {
     private final ExpressionBinaryParser binaryParser;
     private final ExpressionPrimaryParser primaryParser;
 
-    ExpressionParser(ParserContext ctx, ParserDelegates delegates) {
-        this.primaryParser = new ExpressionPrimaryParser(ctx, delegates, this);
-        this.binaryParser = new ExpressionBinaryParser(ctx, this);
-        this.assignmentParser = new ExpressionAssignmentParser(ctx, delegates, this);
+    ExpressionParser(ParserContext parserContext, ParserDelegates delegates) {
+        this.primaryParser = new ExpressionPrimaryParser(parserContext, delegates, this);
+        this.binaryParser = new ExpressionBinaryParser(parserContext, this);
+        this.assignmentParser = new ExpressionAssignmentParser(parserContext, delegates, this);
     }
 
     Expression parseAdditiveExpression() {

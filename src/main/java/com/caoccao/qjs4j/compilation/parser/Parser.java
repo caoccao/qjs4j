@@ -37,8 +37,8 @@ import java.util.List;
  * All shared mutable state is held in {@link ParserContext}.
  */
 public final class Parser {
-    private final ParserContext ctx;
     private final ParserDelegates delegates;
+    private final ParserContext parserContext;
 
     public Parser(Lexer lexer) {
         this(lexer, false);
@@ -55,14 +55,14 @@ public final class Parser {
     // Package-private: used by LiteralParser for nested template expression parsing
     Parser(Lexer lexer, boolean moduleMode, boolean isEval,
            int functionNesting, int asyncFunctionNesting) {
-        this.ctx = new ParserContext(lexer, moduleMode, isEval,
+        this.parserContext = new ParserContext(lexer, moduleMode, isEval,
                 functionNesting, asyncFunctionNesting);
-        this.delegates = new ParserDelegates(ctx);
+        this.delegates = new ParserDelegates(parserContext);
     }
 
     // Package-private: used by LiteralParser for nested template expression parsing
     Token currentToken() {
-        return ctx.currentToken;
+        return parserContext.currentToken;
     }
 
     /**
@@ -70,23 +70,23 @@ public final class Parser {
      */
     public Program parse() {
         List<Statement> body = new ArrayList<>();
-        SourceLocation location = ctx.getLocation();
+        SourceLocation location = parserContext.getLocation();
 
         // Parse directives (like "use strict") at the beginning
         // Pass body so directive strings are also added as expression statements
         // (required for eval completion value per ES spec)
-        boolean strict = ctx.parseDirectives(body);
-        ctx.strictMode = strict || ctx.moduleMode;
-        ctx.lexer.setStrictMode(ctx.strictMode);
+        boolean strict = parserContext.parseDirectives(body);
+        parserContext.strictMode = strict || parserContext.moduleMode;
+        parserContext.lexer.setStrictMode(parserContext.strictMode);
 
-        while (!ctx.match(TokenType.EOF)) {
+        while (!parserContext.match(TokenType.EOF)) {
             Statement stmt = delegates.statements.parseStatement();
             if (stmt != null) {
                 body.add(stmt);
             }
         }
 
-        return new Program(body, ctx.moduleMode, strict || ctx.moduleMode, location);
+        return new Program(body, parserContext.moduleMode, strict || parserContext.moduleMode, location);
     }
 
     // Package-private: used by LiteralParser for nested template expression parsing

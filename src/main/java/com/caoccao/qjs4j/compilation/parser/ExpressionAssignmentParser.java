@@ -26,12 +26,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 final class ExpressionAssignmentParser {
-    private final ParserContext ctx;
     private final ParserDelegates delegates;
     private final ExpressionParser expressions;
+    private final ParserContext parserContext;
 
-    ExpressionAssignmentParser(ParserContext ctx, ParserDelegates delegates, ExpressionParser expressions) {
-        this.ctx = ctx;
+    ExpressionAssignmentParser(ParserContext parserContext, ParserDelegates delegates, ExpressionParser expressions) {
+        this.parserContext = parserContext;
         this.delegates = delegates;
         this.expressions = expressions;
     }
@@ -67,7 +67,7 @@ final class ExpressionAssignmentParser {
             return new AssignmentPattern(leftPattern, assignmentExpression.right(), assignmentExpression.getLocation());
         }
         throw new RuntimeException("Invalid arrow function parameter at line " +
-                ctx.currentToken.line() + ", column " + ctx.currentToken.column());
+                parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
     }
 
     private ObjectPattern convertArrowObjectExpressionToPattern(ObjectExpression objectExpression) {
@@ -75,11 +75,11 @@ final class ExpressionAssignmentParser {
         for (ObjectExpression.Property property : objectExpression.properties()) {
             if (!"init".equals(property.kind()) || property.computed()) {
                 throw new RuntimeException("Invalid arrow function parameter at line " +
-                        ctx.currentToken.line() + ", column " + ctx.currentToken.column());
+                        parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
             if (!(property.key() instanceof Identifier)) {
                 throw new RuntimeException("Invalid arrow function parameter at line " +
-                        ctx.currentToken.line() + ", column " + ctx.currentToken.column());
+                        parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
             Pattern valuePattern = convertArrowExpressionToPattern(property.value());
             properties.add(new ObjectPattern.Property(property.key(), valuePattern, property.shorthand()));
@@ -140,61 +140,61 @@ final class ExpressionAssignmentParser {
                     syntheticParameterCount);
         }
         throw new RuntimeException("Invalid arrow function parameter at line " +
-                ctx.currentToken.line() + ", column " + ctx.currentToken.column());
+                parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
     }
 
     Expression parseAssignmentExpression() {
-        SourceLocation location = ctx.getLocation();
+        SourceLocation location = parserContext.getLocation();
 
-        if (ctx.match(TokenType.ASYNC)) {
+        if (parserContext.match(TokenType.ASYNC)) {
             SourceLocation asyncLocation = location;
-            Token savedCurrent = ctx.currentToken;
-            Token savedNext = ctx.nextToken;
-            int savedPrevLine = ctx.previousTokenLine;
-            LexerState savedLexer = ctx.lexer.saveState();
+            Token savedCurrent = parserContext.currentToken;
+            Token savedNext = parserContext.nextToken;
+            int savedPrevLine = parserContext.previousTokenLine;
+            LexerState savedLexer = parserContext.lexer.saveState();
 
-            ctx.advance();
+            parserContext.advance();
 
-            if (!ctx.hasNewlineBefore()) {
-                if (ctx.match(TokenType.FUNCTION)) {
+            if (!parserContext.hasNewlineBefore()) {
+                if (parserContext.match(TokenType.FUNCTION)) {
                     Expression asyncFunc = delegates.functions.parseFunctionExpression(true, asyncLocation);
                     return expressions.parsePostPrimaryExpression(asyncFunc, location);
                 }
 
-                if (ctx.match(TokenType.IDENTIFIER) && ctx.nextToken.type() == TokenType.ARROW) {
-                    Identifier param = ctx.parseIdentifier();
-                    ctx.expect(TokenType.ARROW);
+                if (parserContext.match(TokenType.IDENTIFIER) && parserContext.nextToken.type() == TokenType.ARROW) {
+                    Identifier param = parserContext.parseIdentifier();
+                    parserContext.expect(TokenType.ARROW);
 
                     ASTNode body;
-                    ctx.enterFunctionContext(true);
+                    parserContext.enterFunctionContext(true);
                     try {
-                        if (ctx.match(TokenType.LBRACE)) {
+                        if (parserContext.match(TokenType.LBRACE)) {
                             body = delegates.statements.parseBlockStatement();
                         } else {
                             body = parseAssignmentExpression();
                         }
                     } finally {
-                        ctx.exitFunctionContext(true);
+                        parserContext.exitFunctionContext(true);
                     }
 
                     SourceLocation fullLocation = new SourceLocation(
                             asyncLocation.line(),
                             asyncLocation.column(),
                             asyncLocation.offset(),
-                            ctx.previousTokenEndOffset
+                            parserContext.previousTokenEndOffset
                     );
                     return new ArrowFunctionExpression(List.of(param), null, null, body, true, fullLocation);
                 }
 
-                if (ctx.match(TokenType.LPAREN) && ctx.peekPastParensIsArrow()) {
-                    ctx.enterFunctionContext(true);
+                if (parserContext.match(TokenType.LPAREN) && parserContext.peekPastParensIsArrow()) {
+                    parserContext.enterFunctionContext(true);
                     try {
-                        ctx.advance();
+                        parserContext.advance();
                         FunctionParams funcParams = delegates.functions.parseFunctionParameters();
-                        ctx.advance();
+                        parserContext.advance();
 
                         ASTNode body;
-                        if (ctx.match(TokenType.LBRACE)) {
+                        if (parserContext.match(TokenType.LBRACE)) {
                             body = delegates.statements.parseBlockStatement();
                         } else {
                             body = parseAssignmentExpression();
@@ -204,7 +204,7 @@ final class ExpressionAssignmentParser {
                                 location.line(),
                                 location.column(),
                                 location.offset(),
-                                ctx.previousTokenEndOffset
+                                parserContext.previousTokenEndOffset
                         );
                         return new ArrowFunctionExpression(
                                 funcParams.params(),
@@ -214,20 +214,20 @@ final class ExpressionAssignmentParser {
                                 true,
                                 fullLocation);
                     } finally {
-                        ctx.exitFunctionContext(true);
+                        parserContext.exitFunctionContext(true);
                     }
                 }
             }
 
-            ctx.currentToken = savedCurrent;
-            ctx.nextToken = savedNext;
-            ctx.previousTokenLine = savedPrevLine;
-            ctx.lexer.restoreState(savedLexer);
+            parserContext.currentToken = savedCurrent;
+            parserContext.nextToken = savedNext;
+            parserContext.previousTokenLine = savedPrevLine;
+            parserContext.lexer.restoreState(savedLexer);
         }
 
         Expression left = expressions.parseConditionalExpression();
 
-        if (ctx.match(TokenType.ARROW)) {
+        if (parserContext.match(TokenType.ARROW)) {
             List<Pattern> params = new ArrayList<>();
             List<Expression> defaults = new ArrayList<>();
             RestParameter restParameter = null;
@@ -283,7 +283,7 @@ final class ExpressionAssignmentParser {
                                 }
                             } else {
                                 throw new RuntimeException("Invalid rest parameter at line " +
-                                        ctx.currentToken.line() + ", column " + ctx.currentToken.column());
+                                        parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
                             }
                         } else {
                             syntheticParameterCount = parseArrowParameterExpression(
@@ -297,21 +297,21 @@ final class ExpressionAssignmentParser {
                 }
             } else {
                 throw new RuntimeException("Unsupported arrow function parameters at line " +
-                        ctx.currentToken.line() + ", column " + ctx.currentToken.column());
+                        parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
 
-            ctx.advance();
+            parserContext.advance();
 
             ASTNode body;
-            ctx.enterFunctionContext(false);
+            parserContext.enterFunctionContext(false);
             try {
-                if (ctx.match(TokenType.LBRACE)) {
+                if (parserContext.match(TokenType.LBRACE)) {
                     body = delegates.statements.parseBlockStatement();
                 } else {
                     body = parseAssignmentExpression();
                 }
             } finally {
-                ctx.exitFunctionContext(false);
+                parserContext.exitFunctionContext(false);
             }
             body = wrapArrowBodyWithParameterPrelude(body, parameterPreludeStatements);
 
@@ -319,13 +319,13 @@ final class ExpressionAssignmentParser {
                     location.line(),
                     location.column(),
                     location.offset(),
-                    ctx.previousTokenEndOffset
+                    parserContext.previousTokenEndOffset
             );
 
             return new ArrowFunctionExpression(params, defaults, restParameter, body, false, fullLocation);
         }
 
-        if (ctx.isAssignmentOperator(ctx.currentToken.type())) {
+        if (parserContext.isAssignmentOperator(parserContext.currentToken.type())) {
             if (!(left instanceof Identifier)
                     && !(left instanceof MemberExpression)
                     && !(left instanceof ArrayExpression)
@@ -334,9 +334,9 @@ final class ExpressionAssignmentParser {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
 
-            TokenType op = ctx.currentToken.type();
-            location = ctx.getLocation();
-            ctx.advance();
+            TokenType op = parserContext.currentToken.type();
+            location = parserContext.getLocation();
+            parserContext.advance();
             Expression right = parseAssignmentExpression();
 
             AssignmentExpression.AssignmentOperator operator = switch (op) {
@@ -396,13 +396,13 @@ final class ExpressionAssignmentParser {
     }
 
     Expression parseExpression() {
-        SourceLocation location = ctx.getLocation();
+        SourceLocation location = parserContext.getLocation();
         List<Expression> expressionsList = new ArrayList<>();
 
         expressionsList.add(parseAssignmentExpression());
 
-        while (ctx.match(TokenType.COMMA)) {
-            ctx.advance();
+        while (parserContext.match(TokenType.COMMA)) {
+            parserContext.advance();
             expressionsList.add(parseAssignmentExpression());
         }
 

@@ -27,12 +27,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 final class ExpressionPrimaryParser {
-    private final ParserContext ctx;
     private final ParserDelegates delegates;
     private final ExpressionParser expressions;
+    private final ParserContext parserContext;
 
-    ExpressionPrimaryParser(ParserContext ctx, ParserDelegates delegates, ExpressionParser expressions) {
-        this.ctx = ctx;
+    ExpressionPrimaryParser(ParserContext parserContext, ParserDelegates delegates, ExpressionParser expressions) {
+        this.parserContext = parserContext;
         this.delegates = delegates;
         this.expressions = expressions;
     }
@@ -41,46 +41,46 @@ final class ExpressionPrimaryParser {
         Expression expr = expressions.parseMemberExpression();
 
         while (true) {
-            if (ctx.match(TokenType.TEMPLATE)) {
-                SourceLocation location = ctx.getLocation();
+            if (parserContext.match(TokenType.TEMPLATE)) {
+                SourceLocation location = parserContext.getLocation();
                 TemplateLiteral template = delegates.literals.parseTemplateLiteral(true);
                 expr = new TaggedTemplateExpression(expr, template, location);
-            } else if (ctx.match(TokenType.LPAREN)) {
-                SourceLocation location = ctx.getLocation();
-                ctx.advance();
+            } else if (parserContext.match(TokenType.LPAREN)) {
+                SourceLocation location = parserContext.getLocation();
+                parserContext.advance();
                 List<Expression> args = new ArrayList<>();
 
-                if (!ctx.match(TokenType.RPAREN)) {
+                if (!parserContext.match(TokenType.RPAREN)) {
                     do {
-                        if (ctx.match(TokenType.COMMA)) {
-                            ctx.advance();
-                            if (ctx.match(TokenType.RPAREN)) {
+                        if (parserContext.match(TokenType.COMMA)) {
+                            parserContext.advance();
+                            if (parserContext.match(TokenType.RPAREN)) {
                                 break;
                             }
                         }
-                        if (ctx.match(TokenType.ELLIPSIS)) {
-                            SourceLocation spreadLocation = ctx.getLocation();
-                            ctx.advance();
+                        if (parserContext.match(TokenType.ELLIPSIS)) {
+                            SourceLocation spreadLocation = parserContext.getLocation();
+                            parserContext.advance();
                             Expression argument = expressions.parseAssignmentExpression();
                             args.add(new SpreadElement(argument, spreadLocation));
                         } else {
                             args.add(expressions.parseAssignmentExpression());
                         }
-                    } while (ctx.match(TokenType.COMMA));
+                    } while (parserContext.match(TokenType.COMMA));
                 }
 
-                ctx.expect(TokenType.RPAREN);
+                parserContext.expect(TokenType.RPAREN);
                 expr = new CallExpression(expr, args, location);
-            } else if (ctx.match(TokenType.DOT)) {
-                SourceLocation location = ctx.getLocation();
-                ctx.advance();
+            } else if (parserContext.match(TokenType.DOT)) {
+                SourceLocation location = parserContext.getLocation();
+                parserContext.advance();
                 Expression property = expressions.parsePropertyName();
                 expr = new MemberExpression(expr, property, false, location);
-            } else if (ctx.match(TokenType.LBRACKET)) {
-                SourceLocation location = ctx.getLocation();
-                ctx.advance();
+            } else if (parserContext.match(TokenType.LBRACKET)) {
+                SourceLocation location = parserContext.getLocation();
+                parserContext.advance();
                 Expression property = expressions.parseAssignmentExpression();
-                ctx.expect(TokenType.RBRACKET);
+                parserContext.expect(TokenType.RBRACKET);
                 expr = new MemberExpression(expr, property, true, location);
             } else {
                 break;
@@ -91,31 +91,31 @@ final class ExpressionPrimaryParser {
     }
 
     Expression parseMemberExpression() {
-        if (ctx.match(TokenType.NEW)) {
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+        if (parserContext.match(TokenType.NEW)) {
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
 
             // Handle new.target meta-property
-            if (ctx.match(TokenType.DOT) && ctx.nextToken.type() == TokenType.IDENTIFIER
-                    && "target".equals(ctx.nextToken.value())) {
-                ctx.advance(); // consume '.'
-                ctx.advance(); // consume 'target'
+            if (parserContext.match(TokenType.DOT) && parserContext.nextToken.type() == TokenType.IDENTIFIER
+                    && "target".equals(parserContext.nextToken.value())) {
+                parserContext.advance(); // consume '.'
+                parserContext.advance(); // consume 'target'
                 return new Identifier("new.target", location);
             }
 
             Expression callee = parseMemberExpression();
 
             while (true) {
-                if (ctx.match(TokenType.DOT)) {
-                    ctx.advance();
-                    SourceLocation memberLocation = ctx.getLocation();
+                if (parserContext.match(TokenType.DOT)) {
+                    parserContext.advance();
+                    SourceLocation memberLocation = parserContext.getLocation();
                     Expression property = expressions.parsePropertyName();
                     callee = new MemberExpression(callee, property, false, memberLocation);
-                } else if (ctx.match(TokenType.LBRACKET)) {
-                    ctx.advance();
-                    SourceLocation memberLocation = ctx.getLocation();
+                } else if (parserContext.match(TokenType.LBRACKET)) {
+                    parserContext.advance();
+                    SourceLocation memberLocation = parserContext.getLocation();
                     Expression property = expressions.parseExpression();
-                    ctx.expect(TokenType.RBRACKET);
+                    parserContext.expect(TokenType.RBRACKET);
                     callee = new MemberExpression(callee, property, true, memberLocation);
                 } else {
                     break;
@@ -123,27 +123,27 @@ final class ExpressionPrimaryParser {
             }
 
             List<Expression> args = new ArrayList<>();
-            if (ctx.match(TokenType.LPAREN)) {
-                ctx.advance();
-                if (!ctx.match(TokenType.RPAREN)) {
+            if (parserContext.match(TokenType.LPAREN)) {
+                parserContext.advance();
+                if (!parserContext.match(TokenType.RPAREN)) {
                     do {
-                        if (ctx.match(TokenType.COMMA)) {
-                            ctx.advance();
-                            if (ctx.match(TokenType.RPAREN)) {
+                        if (parserContext.match(TokenType.COMMA)) {
+                            parserContext.advance();
+                            if (parserContext.match(TokenType.RPAREN)) {
                                 break;
                             }
                         }
-                        if (ctx.match(TokenType.ELLIPSIS)) {
-                            SourceLocation spreadLocation = ctx.getLocation();
-                            ctx.advance();
+                        if (parserContext.match(TokenType.ELLIPSIS)) {
+                            SourceLocation spreadLocation = parserContext.getLocation();
+                            parserContext.advance();
                             Expression argument = expressions.parseAssignmentExpression();
                             args.add(new SpreadElement(argument, spreadLocation));
                         } else {
                             args.add(expressions.parseAssignmentExpression());
                         }
-                    } while (ctx.match(TokenType.COMMA));
+                    } while (parserContext.match(TokenType.COMMA));
                 }
-                ctx.expect(TokenType.RPAREN);
+                parserContext.expect(TokenType.RPAREN);
             }
 
             return new NewExpression(callee, args, location);
@@ -154,54 +154,54 @@ final class ExpressionPrimaryParser {
 
     Expression parsePostPrimaryExpression(Expression expr, SourceLocation location) {
         while (true) {
-            if (ctx.match(TokenType.TEMPLATE)) {
-                SourceLocation loc = ctx.getLocation();
+            if (parserContext.match(TokenType.TEMPLATE)) {
+                SourceLocation loc = parserContext.getLocation();
                 TemplateLiteral template = delegates.literals.parseTemplateLiteral(true);
                 expr = new TaggedTemplateExpression(expr, template, loc);
-            } else if (ctx.match(TokenType.LPAREN)) {
-                SourceLocation loc = ctx.getLocation();
-                ctx.advance();
+            } else if (parserContext.match(TokenType.LPAREN)) {
+                SourceLocation loc = parserContext.getLocation();
+                parserContext.advance();
                 List<Expression> args = new ArrayList<>();
-                if (!ctx.match(TokenType.RPAREN)) {
+                if (!parserContext.match(TokenType.RPAREN)) {
                     do {
-                        if (ctx.match(TokenType.COMMA)) {
-                            ctx.advance();
-                            if (ctx.match(TokenType.RPAREN)) {
+                        if (parserContext.match(TokenType.COMMA)) {
+                            parserContext.advance();
+                            if (parserContext.match(TokenType.RPAREN)) {
                                 break;
                             }
                         }
-                        if (ctx.match(TokenType.ELLIPSIS)) {
-                            SourceLocation spreadLoc = ctx.getLocation();
-                            ctx.advance();
+                        if (parserContext.match(TokenType.ELLIPSIS)) {
+                            SourceLocation spreadLoc = parserContext.getLocation();
+                            parserContext.advance();
                             Expression argument = expressions.parseAssignmentExpression();
                             args.add(new SpreadElement(argument, spreadLoc));
                         } else {
                             args.add(expressions.parseAssignmentExpression());
                         }
-                    } while (ctx.match(TokenType.COMMA));
+                    } while (parserContext.match(TokenType.COMMA));
                 }
-                ctx.expect(TokenType.RPAREN);
+                parserContext.expect(TokenType.RPAREN);
                 expr = new CallExpression(expr, args, loc);
-            } else if (ctx.match(TokenType.DOT)) {
-                SourceLocation loc = ctx.getLocation();
-                ctx.advance();
+            } else if (parserContext.match(TokenType.DOT)) {
+                SourceLocation loc = parserContext.getLocation();
+                parserContext.advance();
                 Expression property = expressions.parsePropertyName();
                 expr = new MemberExpression(expr, property, false, loc);
-            } else if (ctx.match(TokenType.LBRACKET)) {
-                SourceLocation loc = ctx.getLocation();
-                ctx.advance();
+            } else if (parserContext.match(TokenType.LBRACKET)) {
+                SourceLocation loc = parserContext.getLocation();
+                parserContext.advance();
                 Expression property = expressions.parseAssignmentExpression();
-                ctx.expect(TokenType.RBRACKET);
+                parserContext.expect(TokenType.RBRACKET);
                 expr = new MemberExpression(expr, property, true, loc);
             } else {
                 break;
             }
         }
 
-        if (ctx.isAssignmentOperator(ctx.currentToken.type())) {
-            TokenType op = ctx.currentToken.type();
-            SourceLocation loc = ctx.getLocation();
-            ctx.advance();
+        if (parserContext.isAssignmentOperator(parserContext.currentToken.type())) {
+            TokenType op = parserContext.currentToken.type();
+            SourceLocation loc = parserContext.getLocation();
+            parserContext.advance();
             Expression right = expressions.parseAssignmentExpression();
             AssignmentExpression.AssignmentOperator operator = switch (op) {
                 case ASSIGN -> AssignmentExpression.AssignmentOperator.ASSIGN;
@@ -231,10 +231,10 @@ final class ExpressionPrimaryParser {
     Expression parsePostfixExpression() {
         Expression expr = expressions.parseCallExpression();
 
-        if (!ctx.hasNewlineBefore() && (ctx.match(TokenType.INC) || ctx.match(TokenType.DEC))) {
-            UnaryOperator op = ctx.match(TokenType.INC) ? UnaryOperator.INC : UnaryOperator.DEC;
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+        if (!parserContext.hasNewlineBefore() && (parserContext.match(TokenType.INC) || parserContext.match(TokenType.DEC))) {
+            UnaryOperator op = parserContext.match(TokenType.INC) ? UnaryOperator.INC : UnaryOperator.DEC;
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             return new UnaryExpression(op, expr, false, location);
         }
 
@@ -242,12 +242,12 @@ final class ExpressionPrimaryParser {
     }
 
     Expression parsePrimaryExpression() {
-        SourceLocation location = ctx.getLocation();
+        SourceLocation location = parserContext.getLocation();
 
-        return switch (ctx.currentToken.type()) {
+        return switch (parserContext.currentToken.type()) {
             case NUMBER -> {
-                String value = ctx.currentToken.value();
-                ctx.advance();
+                String value = parserContext.currentToken.value();
+                parserContext.advance();
                 String normalizedValue = value.replace("_", "");
                 Object numValue;
                 if (normalizedValue.startsWith("0x") || normalizedValue.startsWith("0X")) {
@@ -274,8 +274,8 @@ final class ExpressionPrimaryParser {
                 yield new Literal(numValue, location);
             }
             case BIGINT -> {
-                String value = ctx.currentToken.value();
-                ctx.advance();
+                String value = parserContext.currentToken.value();
+                parserContext.advance();
                 String normalizedValue = value.replace("_", "");
                 BigInteger bigIntValue;
                 if (normalizedValue.startsWith("0x") || normalizedValue.startsWith("0X")) {
@@ -290,75 +290,75 @@ final class ExpressionPrimaryParser {
                 yield new Literal(bigIntValue, location);
             }
             case STRING -> {
-                String value = ctx.currentToken.value();
-                ctx.advance();
+                String value = parserContext.currentToken.value();
+                parserContext.advance();
                 yield new Literal(value, location);
             }
             case REGEX -> {
-                String value = ctx.currentToken.value();
-                ctx.advance();
+                String value = parserContext.currentToken.value();
+                parserContext.advance();
                 yield new Literal(new RegExpLiteralValue(value), location);
             }
             case TEMPLATE -> delegates.literals.parseTemplateLiteral(false);
             case TRUE -> {
-                ctx.advance();
+                parserContext.advance();
                 yield new Literal(true, location);
             }
             case FALSE -> {
-                ctx.advance();
+                parserContext.advance();
                 yield new Literal(false, location);
             }
             case NULL -> {
-                ctx.advance();
+                parserContext.advance();
                 yield new Literal(null, location);
             }
-            case IDENTIFIER -> ctx.parseIdentifier();
-            case ASYNC -> ctx.parseIdentifier();
-            case AWAIT -> ctx.parseIdentifier();
+            case IDENTIFIER -> parserContext.parseIdentifier();
+            case ASYNC -> parserContext.parseIdentifier();
+            case AWAIT -> parserContext.parseIdentifier();
             case PRIVATE_NAME -> {
-                String name = ctx.currentToken.value();
+                String name = parserContext.currentToken.value();
                 String fieldName = name.substring(1);
-                ctx.advance();
+                parserContext.advance();
                 yield new PrivateIdentifier(fieldName, location);
             }
             case THIS -> {
-                ctx.advance();
+                parserContext.advance();
                 yield new Identifier("this", location);
             }
             case LPAREN -> {
-                ctx.advance();
+                parserContext.advance();
 
-                if (ctx.match(TokenType.RPAREN)) {
-                    ctx.advance();
+                if (parserContext.match(TokenType.RPAREN)) {
+                    parserContext.advance();
                     yield new ArrayExpression(new ArrayList<>(), location);
                 }
 
-                if (ctx.match(TokenType.IDENTIFIER) || ctx.match(TokenType.ELLIPSIS)) {
-                    if (ctx.match(TokenType.ELLIPSIS)) {
-                        SourceLocation restLocation = ctx.getLocation();
-                        ctx.advance();
-                        Identifier restArg = ctx.parseIdentifier();
+                if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.ELLIPSIS)) {
+                    if (parserContext.match(TokenType.ELLIPSIS)) {
+                        SourceLocation restLocation = parserContext.getLocation();
+                        parserContext.advance();
+                        Identifier restArg = parserContext.parseIdentifier();
                         RestParameter restParam = new RestParameter(restArg, restLocation);
-                        ctx.expect(TokenType.RPAREN);
+                        parserContext.expect(TokenType.RPAREN);
                         yield new ArrayExpression(List.of(new SpreadElement(restArg, restParam.getLocation())), location);
                     }
 
-                    if (ctx.nextToken.type() != TokenType.COMMA &&
-                            ctx.nextToken.type() != TokenType.RPAREN &&
-                            ctx.nextToken.type() != TokenType.ARROW) {
-                        boolean savedIn = ctx.inOperatorAllowed;
-                        ctx.inOperatorAllowed = true;
+                    if (parserContext.nextToken.type() != TokenType.COMMA &&
+                            parserContext.nextToken.type() != TokenType.RPAREN &&
+                            parserContext.nextToken.type() != TokenType.ARROW) {
+                        boolean savedIn = parserContext.inOperatorAllowed;
+                        parserContext.inOperatorAllowed = true;
                         Expression expr = expressions.parseExpression();
-                        ctx.inOperatorAllowed = savedIn;
-                        ctx.expect(TokenType.RPAREN);
+                        parserContext.inOperatorAllowed = savedIn;
+                        parserContext.expect(TokenType.RPAREN);
                         yield expr;
                     }
 
                     List<Expression> potentialParams = new ArrayList<>();
-                    Identifier firstParam = ctx.parseIdentifier();
-                    if (ctx.match(TokenType.ASSIGN)) {
-                        SourceLocation assignLoc = ctx.getLocation();
-                        ctx.advance();
+                    Identifier firstParam = parserContext.parseIdentifier();
+                    if (parserContext.match(TokenType.ASSIGN)) {
+                        SourceLocation assignLoc = parserContext.getLocation();
+                        parserContext.advance();
                         Expression defaultExpr = expressions.parseAssignmentExpression();
                         potentialParams.add(new AssignmentExpression(firstParam,
                                 AssignmentExpression.AssignmentOperator.ASSIGN, defaultExpr, assignLoc));
@@ -366,25 +366,25 @@ final class ExpressionPrimaryParser {
                         potentialParams.add(firstParam);
                     }
 
-                    while (ctx.match(TokenType.COMMA)) {
-                        ctx.advance();
+                    while (parserContext.match(TokenType.COMMA)) {
+                        parserContext.advance();
 
-                        if (ctx.match(TokenType.ELLIPSIS)) {
-                            SourceLocation restLocation = ctx.getLocation();
-                            ctx.advance();
-                            Identifier restArg = ctx.parseIdentifier();
+                        if (parserContext.match(TokenType.ELLIPSIS)) {
+                            SourceLocation restLocation = parserContext.getLocation();
+                            parserContext.advance();
+                            Identifier restArg = parserContext.parseIdentifier();
                             potentialParams.add(new SpreadElement(restArg, restLocation));
                             break;
                         }
 
-                        if (!ctx.match(TokenType.IDENTIFIER)) {
+                        if (!parserContext.match(TokenType.IDENTIFIER)) {
                             throw new RuntimeException("Complex arrow function parameters not yet supported at line " +
-                                    ctx.currentToken.line() + ", column " + ctx.currentToken.column());
+                                    parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
                         }
-                        Identifier param = ctx.parseIdentifier();
-                        if (ctx.match(TokenType.ASSIGN)) {
-                            SourceLocation assignLoc = ctx.getLocation();
-                            ctx.advance();
+                        Identifier param = parserContext.parseIdentifier();
+                        if (parserContext.match(TokenType.ASSIGN)) {
+                            SourceLocation assignLoc = parserContext.getLocation();
+                            parserContext.advance();
                             Expression defaultExpr = expressions.parseAssignmentExpression();
                             potentialParams.add(new AssignmentExpression(param,
                                     AssignmentExpression.AssignmentOperator.ASSIGN, defaultExpr, assignLoc));
@@ -393,7 +393,7 @@ final class ExpressionPrimaryParser {
                         }
                     }
 
-                    ctx.expect(TokenType.RPAREN);
+                    parserContext.expect(TokenType.RPAREN);
 
                     if (potentialParams.size() == 1 && !(potentialParams.get(0) instanceof SpreadElement)) {
                         yield potentialParams.get(0);
@@ -401,11 +401,11 @@ final class ExpressionPrimaryParser {
                         yield new ArrayExpression(potentialParams, location);
                     }
                 } else {
-                    boolean savedIn = ctx.inOperatorAllowed;
-                    ctx.inOperatorAllowed = true;
+                    boolean savedIn = parserContext.inOperatorAllowed;
+                    parserContext.inOperatorAllowed = true;
                     Expression expr = expressions.parseExpression();
-                    ctx.inOperatorAllowed = savedIn;
-                    ctx.expect(TokenType.RPAREN);
+                    parserContext.inOperatorAllowed = savedIn;
+                    parserContext.expect(TokenType.RPAREN);
                     yield expr;
                 }
             }
@@ -414,53 +414,53 @@ final class ExpressionPrimaryParser {
             case FUNCTION -> delegates.functions.parseFunctionExpression();
             case CLASS -> delegates.functions.parseClassExpression();
             case SUPER -> {
-                ctx.advance();
-                if (ctx.match(TokenType.LPAREN)) {
-                    if (ctx.inDerivedConstructor) {
+                parserContext.advance();
+                if (parserContext.match(TokenType.LPAREN)) {
+                    if (parserContext.inDerivedConstructor) {
                         yield new Identifier("super", location);
                     }
                     throw new JSSyntaxErrorException("'super' keyword unexpected here");
                 }
-                if (ctx.superPropertyAllowed && (ctx.match(TokenType.DOT) || ctx.match(TokenType.LBRACKET))) {
+                if (parserContext.superPropertyAllowed && (parserContext.match(TokenType.DOT) || parserContext.match(TokenType.LBRACKET))) {
                     yield new Identifier("super", location);
                 }
                 throw new JSSyntaxErrorException("'super' keyword unexpected here");
             }
             default -> {
-                ctx.advance();
+                parserContext.advance();
                 yield new Literal(null, location);
             }
         };
     }
 
     Expression parsePropertyName() {
-        SourceLocation location = ctx.getLocation();
-        return switch (ctx.currentToken.type()) {
+        SourceLocation location = parserContext.getLocation();
+        return switch (parserContext.currentToken.type()) {
             case IDENTIFIER -> {
-                String name = ctx.currentToken.value();
-                ctx.advance();
+                String name = parserContext.currentToken.value();
+                parserContext.advance();
                 yield new Identifier(name, location);
             }
             case PRIVATE_NAME -> {
-                String name = ctx.currentToken.value();
+                String name = parserContext.currentToken.value();
                 String fieldName = name.substring(1);
-                ctx.advance();
+                parserContext.advance();
                 yield new PrivateIdentifier(fieldName, location);
             }
             case STRING -> {
-                String value = ctx.currentToken.value();
-                ctx.advance();
+                String value = parserContext.currentToken.value();
+                parserContext.advance();
                 yield new Literal(value, location);
             }
             case NUMBER -> {
-                String value = ctx.currentToken.value();
-                ctx.advance();
+                String value = parserContext.currentToken.value();
+                parserContext.advance();
                 yield new Literal(value, location);
             }
             case LBRACKET -> {
-                ctx.advance();
+                parserContext.advance();
                 Expression expr = expressions.parseAssignmentExpression();
-                ctx.expect(TokenType.RBRACKET);
+                parserContext.expect(TokenType.RBRACKET);
                 yield expr;
             }
             case AS, ASYNC, AWAIT, BREAK, CASE, CATCH, CLASS, CONST, CONTINUE,
@@ -468,8 +468,8 @@ final class ExpressionPrimaryParser {
                  FOR, FROM, FUNCTION, IF, IMPORT, IN, INSTANCEOF, LET, NEW,
                  NULL, OF, RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY,
                  TYPEOF, VAR, VOID, WHILE, YIELD -> {
-                String name = ctx.currentToken.value();
-                ctx.advance();
+                String name = parserContext.currentToken.value();
+                parserContext.advance();
                 yield new Identifier(name, location);
             }
             default -> throw new JSSyntaxErrorException("Unexpected end of input");
@@ -477,55 +477,55 @@ final class ExpressionPrimaryParser {
     }
 
     Expression parseUnaryExpression() {
-        if (ctx.match(TokenType.AWAIT)) {
-            if (!ctx.inFunctionBody && ctx.isAwaitExpressionAllowed()) {
+        if (parserContext.match(TokenType.AWAIT)) {
+            if (!parserContext.inFunctionBody && parserContext.isAwaitExpressionAllowed()) {
                 throw new JSSyntaxErrorException("'await' expression not allowed in formal parameters of an async function");
             }
-            if (!ctx.isAwaitExpressionAllowed()) {
-                if (ctx.isAwaitIdentifierAllowed() && ctx.isValidContinuationAfterAwaitIdentifier()) {
+            if (!parserContext.isAwaitExpressionAllowed()) {
+                if (parserContext.isAwaitIdentifierAllowed() && parserContext.isValidContinuationAfterAwaitIdentifier()) {
                     return parsePostfixExpression();
                 }
                 throw new JSSyntaxErrorException("Unexpected 'await' keyword");
             }
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression argument = parseUnaryExpression();
             return new AwaitExpression(argument, location);
         }
 
-        if (ctx.match(TokenType.YIELD)) {
-            if (!ctx.inFunctionBody) {
+        if (parserContext.match(TokenType.YIELD)) {
+            if (!parserContext.inFunctionBody) {
                 throw new JSSyntaxErrorException("'yield' expression not allowed in formal parameters of a generator function");
             }
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
 
             boolean delegate = false;
-            if (ctx.match(TokenType.MUL)) {
+            if (parserContext.match(TokenType.MUL)) {
                 delegate = true;
-                ctx.advance();
+                parserContext.advance();
             }
 
             Expression argument = null;
-            if (!ctx.match(TokenType.SEMICOLON) && !ctx.match(TokenType.RBRACE) && !ctx.match(TokenType.EOF)) {
+            if (!parserContext.match(TokenType.SEMICOLON) && !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                 argument = expressions.parseAssignmentExpression();
             }
 
             return new YieldExpression(argument, delegate, location);
         }
 
-        if (ctx.match(TokenType.INC) || ctx.match(TokenType.DEC)) {
-            UnaryOperator op = ctx.match(TokenType.INC) ? UnaryOperator.INC : UnaryOperator.DEC;
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+        if (parserContext.match(TokenType.INC) || parserContext.match(TokenType.DEC)) {
+            UnaryOperator op = parserContext.match(TokenType.INC) ? UnaryOperator.INC : UnaryOperator.DEC;
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression operand = parseUnaryExpression();
             return new UnaryExpression(op, operand, true, location);
         }
 
-        if (ctx.match(TokenType.PLUS) || ctx.match(TokenType.MINUS) || ctx.match(TokenType.NOT) ||
-                ctx.match(TokenType.BIT_NOT) || ctx.match(TokenType.TYPEOF) ||
-                ctx.match(TokenType.VOID) || ctx.match(TokenType.DELETE)) {
-            UnaryOperator op = switch (ctx.currentToken.type()) {
+        if (parserContext.match(TokenType.PLUS) || parserContext.match(TokenType.MINUS) || parserContext.match(TokenType.NOT) ||
+                parserContext.match(TokenType.BIT_NOT) || parserContext.match(TokenType.TYPEOF) ||
+                parserContext.match(TokenType.VOID) || parserContext.match(TokenType.DELETE)) {
+            UnaryOperator op = switch (parserContext.currentToken.type()) {
                 case PLUS -> UnaryOperator.PLUS;
                 case MINUS -> UnaryOperator.MINUS;
                 case NOT -> UnaryOperator.NOT;
@@ -535,8 +535,8 @@ final class ExpressionPrimaryParser {
                 case DELETE -> UnaryOperator.DELETE;
                 default -> null;
             };
-            SourceLocation location = ctx.getLocation();
-            ctx.advance();
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
             Expression operand = parseUnaryExpression();
             return new UnaryExpression(op, operand, true, location);
         }

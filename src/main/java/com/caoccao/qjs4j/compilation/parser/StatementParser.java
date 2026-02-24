@@ -28,12 +28,12 @@ import java.util.List;
  * Handles control flow (if, while, for, switch, try), declarations (var, let, const, using),
  * and statement-level constructs (block, labeled, return, break, continue, throw).
  */
-record StatementParser(ParserContext ctx, ParserDelegates delegates) {
+record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
     Statement parseAsyncDeclaration() {
-        if (ctx.nextToken.type() == TokenType.FUNCTION) {
-            SourceLocation asyncLocation = ctx.getLocation();
-            ctx.advance(); // consume async
+        if (parserContext.nextToken.type() == TokenType.FUNCTION) {
+            SourceLocation asyncLocation = parserContext.getLocation();
+            parserContext.advance(); // consume async
             return delegates.functions.parseFunctionDeclaration(true, false, asyncLocation);
         } else {
             // Otherwise parse as an expression statement (e.g. async () => 1).
@@ -42,67 +42,67 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
     }
 
     BlockStatement parseBlockStatement() {
-        SourceLocation location = ctx.getLocation();
-        ctx.expect(TokenType.LBRACE);
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.LBRACE);
 
         List<Statement> body = new ArrayList<>();
-        while (!ctx.match(TokenType.RBRACE) && !ctx.match(TokenType.EOF)) {
+        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
             Statement stmt = parseStatement();
             if (stmt != null) {
                 body.add(stmt);
             }
         }
 
-        ctx.expect(TokenType.RBRACE);
+        parserContext.expect(TokenType.RBRACE);
         return new BlockStatement(body, location);
     }
 
     Statement parseBreakStatement() {
-        SourceLocation location = ctx.getLocation();
-        ctx.expect(TokenType.BREAK);
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.BREAK);
         // Check for optional label (identifier on same line, no ASI)
         Identifier label = null;
-        if (ctx.match(TokenType.IDENTIFIER) && !ctx.hasNewlineBefore()) {
-            label = ctx.parseIdentifier();
+        if (parserContext.match(TokenType.IDENTIFIER) && !parserContext.hasNewlineBefore()) {
+            label = parserContext.parseIdentifier();
         }
-        ctx.consumeSemicolon();
+        parserContext.consumeSemicolon();
         return new BreakStatement(label, location);
     }
 
     Statement parseContinueStatement() {
-        SourceLocation location = ctx.getLocation();
-        ctx.expect(TokenType.CONTINUE);
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.CONTINUE);
         // Check for optional label (identifier on same line, no ASI)
         Identifier label = null;
-        if (ctx.match(TokenType.IDENTIFIER) && !ctx.hasNewlineBefore()) {
-            label = ctx.parseIdentifier();
+        if (parserContext.match(TokenType.IDENTIFIER) && !parserContext.hasNewlineBefore()) {
+            label = parserContext.parseIdentifier();
         }
-        ctx.consumeSemicolon();
+        parserContext.consumeSemicolon();
         return new ContinueStatement(label, location);
     }
 
     Statement parseExpressionStatement() {
-        SourceLocation location = ctx.getLocation();
+        SourceLocation location = parserContext.getLocation();
         Expression expression = delegates.expressions.parseExpression();
-        ctx.consumeSemicolon();
+        parserContext.consumeSemicolon();
         return new ExpressionStatement(expression, location);
     }
 
     Statement parseForStatement() {
-        SourceLocation location = ctx.getLocation();
-        ctx.expect(TokenType.FOR);
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.FOR);
 
         // Check for 'await' keyword (for await...of)
         boolean isAwait = false;
-        if (ctx.match(TokenType.AWAIT)) {
-            if (!ctx.isAwaitExpressionAllowed()) {
+        if (parserContext.match(TokenType.AWAIT)) {
+            if (!parserContext.isAwaitExpressionAllowed()) {
                 throw new JSSyntaxErrorException("Unexpected 'await' keyword");
             }
             isAwait = true;
-            ctx.advance();
+            parserContext.advance();
         }
 
-        ctx.expect(TokenType.LPAREN);
+        parserContext.expect(TokenType.LPAREN);
 
         // Check if this is a for-of or for-in loop
         // We need to peek ahead to see if there's 'of' or 'in' after the variable declaration
@@ -112,44 +112,44 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
 
         // Try to parse as variable declaration (without consuming semicolon,
         // since we need to check for 'of' or 'in' first)
-        if (ctx.match(TokenType.VAR) || ctx.match(TokenType.LET) || ctx.match(TokenType.CONST)
-                || ctx.isUsingDeclarationStart() || ctx.isAwaitUsingDeclarationStart()) {
+        if (parserContext.match(TokenType.VAR) || parserContext.match(TokenType.LET) || parserContext.match(TokenType.CONST)
+                || parserContext.isUsingDeclarationStart() || parserContext.isAwaitUsingDeclarationStart()) {
             // Annex B: suppress 'in' as binary operator only for 'var' in non-strict mode
             // (allows for-in initializers: for (var a = expr in obj))
-            boolean savedInOperatorAllowed = ctx.inOperatorAllowed;
-            boolean isVar = ctx.match(TokenType.VAR);
-            if (isVar && !ctx.strictMode) {
-                ctx.inOperatorAllowed = false;
+            boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
+            boolean isVar = parserContext.match(TokenType.VAR);
+            if (isVar && !parserContext.strictMode) {
+                parserContext.inOperatorAllowed = false;
             }
-            if (ctx.isAwaitUsingDeclarationStart()) {
-                SourceLocation declLocation = ctx.getLocation();
-                ctx.expect(TokenType.AWAIT);
-                ctx.advance(); // consume 'using'
+            if (parserContext.isAwaitUsingDeclarationStart()) {
+                SourceLocation declLocation = parserContext.getLocation();
+                parserContext.expect(TokenType.AWAIT);
+                parserContext.advance(); // consume 'using'
                 parsedDecl = parseVariableDeclarationBody(VariableKind.AWAIT_USING, declLocation, false);
-            } else if (ctx.isUsingDeclarationStart()) {
-                SourceLocation declLocation = ctx.getLocation();
-                ctx.advance(); // consume 'using'
+            } else if (parserContext.isUsingDeclarationStart()) {
+                SourceLocation declLocation = parserContext.getLocation();
+                parserContext.advance(); // consume 'using'
                 parsedDecl = parseVariableDeclarationBody(VariableKind.USING, declLocation, false);
             } else {
-                SourceLocation declLocation = ctx.getLocation();
-                VariableKind kind = VariableKind.fromKeyword(ctx.currentToken.value());
-                ctx.advance();
+                SourceLocation declLocation = parserContext.getLocation();
+                VariableKind kind = VariableKind.fromKeyword(parserContext.currentToken.value());
+                parserContext.advance();
                 parsedDecl = parseVariableDeclarationBody(kind, declLocation, false);
             }
-            ctx.inOperatorAllowed = savedInOperatorAllowed;
+            parserContext.inOperatorAllowed = savedInOperatorAllowed;
             // Check if next token is 'of' or 'in'
-            if (ctx.match(TokenType.OF)) {
+            if (parserContext.match(TokenType.OF)) {
                 isForOf = true;
-            } else if (ctx.match(TokenType.IN)) {
+            } else if (parserContext.match(TokenType.IN)) {
                 isForIn = true;
             }
         }
 
         if (isForOf) {
             // This is a for-of loop: for (let x of iterable)
-            ctx.expect(TokenType.OF);
+            parserContext.expect(TokenType.OF);
             Expression iterable = delegates.expressions.parseExpression();
-            ctx.expect(TokenType.RPAREN);
+            parserContext.expect(TokenType.RPAREN);
             Statement body = parseStatement();
 
             // parsedDecl should be a VariableDeclaration
@@ -162,9 +162,9 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
 
         if (isForIn) {
             // This is a for-in loop: for (var x in obj)
-            ctx.expect(TokenType.IN);
+            parserContext.expect(TokenType.IN);
             Expression object = delegates.expressions.parseExpression();
-            ctx.expect(TokenType.RPAREN);
+            parserContext.expect(TokenType.RPAREN);
             Statement body = parseStatement();
 
             // parsedDecl should be a VariableDeclaration
@@ -184,13 +184,13 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
         Statement init = null;
         if (parsedDecl != null) {
             init = parsedDecl;
-            ctx.expect(TokenType.SEMICOLON); // consume ; after init declaration
-        } else if (!ctx.match(TokenType.SEMICOLON)) {
-            if (ctx.match(TokenType.VAR) || ctx.match(TokenType.LET) || ctx.match(TokenType.CONST)
-                    || ctx.isUsingDeclarationStart() || ctx.isAwaitUsingDeclarationStart()) {
-                if (ctx.isAwaitUsingDeclarationStart()) {
+            parserContext.expect(TokenType.SEMICOLON); // consume ; after init declaration
+        } else if (!parserContext.match(TokenType.SEMICOLON)) {
+            if (parserContext.match(TokenType.VAR) || parserContext.match(TokenType.LET) || parserContext.match(TokenType.CONST)
+                    || parserContext.isUsingDeclarationStart() || parserContext.isAwaitUsingDeclarationStart()) {
+                if (parserContext.isAwaitUsingDeclarationStart()) {
                     init = parseUsingDeclaration(true);
-                } else if (ctx.isUsingDeclarationStart()) {
+                } else if (parserContext.isUsingDeclarationStart()) {
                     init = parseUsingDeclaration(false);
                 } else {
                     init = parseVariableDeclaration();
@@ -199,58 +199,58 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
                 // Parse expression -- could be for-in/for-of left side or traditional for init.
                 // Parse as assignment expression first, then check for 'in' or 'of'.
                 // Suppress 'in' as binary operator per ES spec [~In] grammar parameter.
-                boolean savedInOperatorAllowed = ctx.inOperatorAllowed;
-                ctx.inOperatorAllowed = false;
+                boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
+                parserContext.inOperatorAllowed = false;
                 Expression expr = delegates.expressions.parseAssignmentExpression();
-                ctx.inOperatorAllowed = savedInOperatorAllowed;
-                if (ctx.match(TokenType.IN)) {
+                parserContext.inOperatorAllowed = savedInOperatorAllowed;
+                if (parserContext.match(TokenType.IN)) {
                     // for (expr in obj) -- expression-based for-in
                     // Validate: left side must be a valid LeftHandSideExpression
-                    if (!ctx.isValidForInOfTarget(expr)) {
+                    if (!parserContext.isValidForInOfTarget(expr)) {
                         throw new JSSyntaxErrorException("invalid for in/of left hand-side");
                     }
-                    ctx.advance(); // consume 'in'
+                    parserContext.advance(); // consume 'in'
                     Expression object = delegates.expressions.parseExpression();
-                    ctx.expect(TokenType.RPAREN);
+                    parserContext.expect(TokenType.RPAREN);
                     Statement body = parseStatement();
                     return new ForInStatement(expr, object, body, location);
-                } else if (ctx.match(TokenType.OF)) {
+                } else if (parserContext.match(TokenType.OF)) {
                     // for (expr of iterable) -- expression-based for-of
-                    if (!ctx.isValidForInOfTarget(expr)) {
+                    if (!parserContext.isValidForInOfTarget(expr)) {
                         throw new JSSyntaxErrorException("invalid for in/of left hand-side");
                     }
-                    ctx.advance(); // consume 'of'
+                    parserContext.advance(); // consume 'of'
                     Expression iterable = delegates.expressions.parseExpression();
-                    ctx.expect(TokenType.RPAREN);
+                    parserContext.expect(TokenType.RPAREN);
                     Statement body = parseStatement();
                     return new ForOfStatement(expr, iterable, body, isAwait, location);
                 }
                 // Traditional for loop init -- handle comma expressions
-                while (ctx.match(TokenType.COMMA)) {
-                    ctx.advance();
+                while (parserContext.match(TokenType.COMMA)) {
+                    parserContext.advance();
                     Expression right = delegates.expressions.parseAssignmentExpression();
                     expr = new SequenceExpression(List.of(expr, right), expr.getLocation());
                 }
                 init = new ExpressionStatement(expr, expr.getLocation());
-                ctx.consumeSemicolon();
+                parserContext.consumeSemicolon();
             }
         } else {
-            ctx.advance(); // consume semicolon
+            parserContext.advance(); // consume semicolon
         }
 
         // Test
         Expression test = null;
-        if (!ctx.match(TokenType.SEMICOLON)) {
+        if (!parserContext.match(TokenType.SEMICOLON)) {
             test = delegates.expressions.parseExpression();
         }
-        ctx.expect(TokenType.SEMICOLON);
+        parserContext.expect(TokenType.SEMICOLON);
 
         // Update
         Expression update = null;
-        if (!ctx.match(TokenType.RPAREN)) {
+        if (!parserContext.match(TokenType.RPAREN)) {
             update = delegates.expressions.parseExpression();
         }
-        ctx.expect(TokenType.RPAREN);
+        parserContext.expect(TokenType.RPAREN);
 
         Statement body = parseStatement();
 
@@ -258,17 +258,17 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
     }
 
     Statement parseIfStatement() {
-        SourceLocation location = ctx.getLocation();
-        ctx.expect(TokenType.IF);
-        ctx.expect(TokenType.LPAREN);
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.IF);
+        parserContext.expect(TokenType.LPAREN);
         Expression test = delegates.expressions.parseExpression();
-        ctx.expect(TokenType.RPAREN);
+        parserContext.expect(TokenType.RPAREN);
 
         Statement consequent = parseStatement();
         Statement alternate = null;
 
-        if (ctx.match(TokenType.ELSE)) {
-            ctx.advance();
+        if (parserContext.match(TokenType.ELSE)) {
+            parserContext.advance();
             alternate = parseStatement();
         }
 
@@ -281,43 +281,43 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
      * In non-strict mode, labeled function declarations are allowed (Annex B).
      */
     Statement parseLabeledStatement() {
-        SourceLocation location = ctx.getLocation();
-        Identifier label = ctx.parseIdentifier();
-        ctx.expect(TokenType.COLON);
+        SourceLocation location = parserContext.getLocation();
+        Identifier label = parserContext.parseIdentifier();
+        parserContext.expect(TokenType.COLON);
         Statement body = parseStatement();
         return new LabeledStatement(label, body, location);
     }
 
     Statement parseReturnStatement() {
-        SourceLocation location = ctx.getLocation();
+        SourceLocation location = parserContext.getLocation();
         // QuickJS: "return not in a function" error when return is in eval code at top level
-        if (ctx.isEval && ctx.functionNesting == 0) {
+        if (parserContext.isEval && parserContext.functionNesting == 0) {
             throw new JSSyntaxErrorException("return not in a function");
         }
-        ctx.expect(TokenType.RETURN);
+        parserContext.expect(TokenType.RETURN);
 
         Expression argument = null;
-        if (!ctx.match(TokenType.SEMICOLON) && !ctx.match(TokenType.RBRACE) && !ctx.match(TokenType.EOF)) {
+        if (!parserContext.match(TokenType.SEMICOLON) && !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
             argument = delegates.expressions.parseExpression();
         }
 
-        ctx.consumeSemicolon();
+        parserContext.consumeSemicolon();
         return new ReturnStatement(argument, location);
     }
 
     Statement parseStatement() {
-        if (ctx.isAwaitUsingDeclarationStart()) {
+        if (parserContext.isAwaitUsingDeclarationStart()) {
             return parseUsingDeclaration(true);
         }
-        if (ctx.isUsingDeclarationStart()) {
+        if (parserContext.isUsingDeclarationStart()) {
             return parseUsingDeclaration(false);
         }
         // Check for labeled statement: identifier followed by ':'
         // Following QuickJS is_label() check
-        if (ctx.currentToken.type() == TokenType.IDENTIFIER && ctx.peek() != null && ctx.peek().type() == TokenType.COLON) {
+        if (parserContext.currentToken.type() == TokenType.IDENTIFIER && parserContext.peek() != null && parserContext.peek().type() == TokenType.COLON) {
             return parseLabeledStatement();
         }
-        return switch (ctx.currentToken.type()) {
+        return switch (parserContext.currentToken.type()) {
             case IF -> parseIfStatement();
             case WHILE -> parseWhileStatement();
             case FOR -> parseForStatement();
@@ -336,7 +336,7 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
             case CLASS -> // Class declarations are treated as statements in JavaScript
                     delegates.functions.parseClassDeclaration();
             case SEMICOLON -> {
-                ctx.advance(); // consume semicolon
+                parserContext.advance(); // consume semicolon
                 yield null; // empty statement
             }
             default -> parseExpressionStatement();
@@ -344,24 +344,24 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
     }
 
     Statement parseSwitchStatement() {
-        SourceLocation location = ctx.getLocation();
-        ctx.expect(TokenType.SWITCH);
-        ctx.expect(TokenType.LPAREN);
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.SWITCH);
+        parserContext.expect(TokenType.LPAREN);
         Expression discriminant = delegates.expressions.parseExpression();
-        ctx.expect(TokenType.RPAREN);
-        ctx.expect(TokenType.LBRACE);
+        parserContext.expect(TokenType.RPAREN);
+        parserContext.expect(TokenType.LBRACE);
 
         List<SwitchStatement.SwitchCase> cases = new ArrayList<>();
 
-        while (!ctx.match(TokenType.RBRACE) && !ctx.match(TokenType.EOF)) {
-            if (ctx.match(TokenType.CASE)) {
-                ctx.advance();
+        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+            if (parserContext.match(TokenType.CASE)) {
+                parserContext.advance();
                 Expression test = delegates.expressions.parseExpression();
-                ctx.expect(TokenType.COLON);
+                parserContext.expect(TokenType.COLON);
 
                 List<Statement> consequent = new ArrayList<>();
-                while (!ctx.match(TokenType.CASE) && !ctx.match(TokenType.DEFAULT) &&
-                        !ctx.match(TokenType.RBRACE) && !ctx.match(TokenType.EOF)) {
+                while (!parserContext.match(TokenType.CASE) && !parserContext.match(TokenType.DEFAULT) &&
+                        !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                     Statement stmt = parseStatement();
                     if (stmt != null) {
                         consequent.add(stmt);
@@ -369,13 +369,13 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
                 }
 
                 cases.add(new SwitchStatement.SwitchCase(test, consequent));
-            } else if (ctx.match(TokenType.DEFAULT)) {
-                ctx.advance();
-                ctx.expect(TokenType.COLON);
+            } else if (parserContext.match(TokenType.DEFAULT)) {
+                parserContext.advance();
+                parserContext.expect(TokenType.COLON);
 
                 List<Statement> consequent = new ArrayList<>();
-                while (!ctx.match(TokenType.CASE) && !ctx.match(TokenType.DEFAULT) &&
-                        !ctx.match(TokenType.RBRACE) && !ctx.match(TokenType.EOF)) {
+                while (!parserContext.match(TokenType.CASE) && !parserContext.match(TokenType.DEFAULT) &&
+                        !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                     Statement stmt = parseStatement();
                     if (stmt != null) {
                         consequent.add(stmt);
@@ -384,43 +384,43 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
 
                 cases.add(new SwitchStatement.SwitchCase(null, consequent));
             } else {
-                ctx.advance(); // skip unexpected token
+                parserContext.advance(); // skip unexpected token
             }
         }
 
-        ctx.expect(TokenType.RBRACE);
+        parserContext.expect(TokenType.RBRACE);
         return new SwitchStatement(discriminant, cases, location);
     }
 
     Statement parseThrowStatement() {
-        SourceLocation location = ctx.getLocation();
-        ctx.expect(TokenType.THROW);
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.THROW);
         Expression argument = delegates.expressions.parseExpression();
-        ctx.consumeSemicolon();
+        parserContext.consumeSemicolon();
         return new ThrowStatement(argument, location);
     }
 
     Statement parseTryStatement() {
-        SourceLocation location = ctx.getLocation();
-        ctx.expect(TokenType.TRY);
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.TRY);
         BlockStatement block = parseBlockStatement();
 
         TryStatement.CatchClause handler = null;
-        if (ctx.match(TokenType.CATCH)) {
-            ctx.advance();
+        if (parserContext.match(TokenType.CATCH)) {
+            parserContext.advance();
             Pattern param = null;
-            if (ctx.match(TokenType.LPAREN)) {
-                ctx.advance();
+            if (parserContext.match(TokenType.LPAREN)) {
+                parserContext.advance();
                 param = delegates.patterns.parsePattern();
-                ctx.expect(TokenType.RPAREN);
+                parserContext.expect(TokenType.RPAREN);
             }
             BlockStatement catchBody = parseBlockStatement();
             handler = new TryStatement.CatchClause(param, catchBody);
         }
 
         BlockStatement finalizer = null;
-        if (ctx.match(TokenType.FINALLY)) {
-            ctx.advance();
+        if (parserContext.match(TokenType.FINALLY)) {
+            parserContext.advance();
             finalizer = parseBlockStatement();
         }
 
@@ -428,32 +428,32 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
     }
 
     Statement parseUsingDeclaration(boolean isAwaitUsing) {
-        SourceLocation location = ctx.getLocation();
+        SourceLocation location = parserContext.getLocation();
         VariableKind kind;
         if (isAwaitUsing) {
-            if (!ctx.isAwaitExpressionAllowed()) {
+            if (!parserContext.isAwaitExpressionAllowed()) {
                 throw new JSSyntaxErrorException("Unexpected 'await' keyword");
             }
-            ctx.expect(TokenType.AWAIT);
-            if (!ctx.isUsingIdentifierToken(ctx.currentToken)) {
+            parserContext.expect(TokenType.AWAIT);
+            if (!parserContext.isUsingIdentifierToken(parserContext.currentToken)) {
                 throw new RuntimeException("Expected using declaration after await");
             }
-            ctx.advance();
+            parserContext.advance();
             kind = VariableKind.AWAIT_USING;
         } else {
-            if (!ctx.isUsingIdentifierToken(ctx.currentToken)) {
+            if (!parserContext.isUsingIdentifierToken(parserContext.currentToken)) {
                 throw new RuntimeException("Expected using declaration");
             }
-            ctx.advance();
+            parserContext.advance();
             kind = VariableKind.USING;
         }
         return parseVariableDeclarationBody(kind, location);
     }
 
     Statement parseVariableDeclaration() {
-        SourceLocation location = ctx.getLocation();
-        VariableKind kind = VariableKind.fromKeyword(ctx.currentToken.value()); // VAR, LET, or CONST
-        ctx.advance();
+        SourceLocation location = parserContext.getLocation();
+        VariableKind kind = VariableKind.fromKeyword(parserContext.currentToken.value()); // VAR, LET, or CONST
+        parserContext.advance();
         return parseVariableDeclarationBody(kind, location);
     }
 
@@ -465,33 +465,33 @@ record StatementParser(ParserContext ctx, ParserDelegates delegates) {
         List<VariableDeclaration.VariableDeclarator> declarations = new ArrayList<>();
 
         do {
-            if (ctx.match(TokenType.COMMA)) {
-                ctx.advance();
+            if (parserContext.match(TokenType.COMMA)) {
+                parserContext.advance();
             }
 
             Pattern id = delegates.patterns.parsePattern();
             Expression init = null;
 
-            if (ctx.match(TokenType.ASSIGN)) {
-                ctx.advance();
+            if (parserContext.match(TokenType.ASSIGN)) {
+                parserContext.advance();
                 init = delegates.expressions.parseAssignmentExpression();
             }
 
             declarations.add(new VariableDeclaration.VariableDeclarator(id, init));
-        } while (ctx.match(TokenType.COMMA));
+        } while (parserContext.match(TokenType.COMMA));
 
         if (consumeSemi) {
-            ctx.consumeSemicolon();
+            parserContext.consumeSemicolon();
         }
         return new VariableDeclaration(declarations, kind, location);
     }
 
     Statement parseWhileStatement() {
-        SourceLocation location = ctx.getLocation();
-        ctx.expect(TokenType.WHILE);
-        ctx.expect(TokenType.LPAREN);
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.WHILE);
+        parserContext.expect(TokenType.LPAREN);
         Expression test = delegates.expressions.parseExpression();
-        ctx.expect(TokenType.RPAREN);
+        parserContext.expect(TokenType.RPAREN);
         Statement body = parseStatement();
 
         return new WhileStatement(test, body, location);
