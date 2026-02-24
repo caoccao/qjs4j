@@ -963,50 +963,90 @@ public final class ObjectConstructor {
 
     /**
      * ToPropertyDescriptor(Obj)
-     * ES2024 6.2.6.5
-     * Converts a descriptor object to a PropertyDescriptor, using Get() to trigger getters.
+     * ES2024 6.2.6.5 / QuickJS js_obj_to_desc
+     * Converts a descriptor object to a PropertyDescriptor, using HasProperty + Get.
      */
     static PropertyDescriptor toPropertyDescriptor(JSContext context, JSObject descObj) {
         PropertyDescriptor desc = new PropertyDescriptor();
+        boolean hasAccessor = false;
+        boolean hasData = false;
 
-        // Check for enumerable
-        JSValue enumerable = descObj.get(context, PropertyKey.ENUMERABLE);
-        if (enumerable != null && !(enumerable instanceof JSUndefined)) {
+        // Step 2: If HasProperty(Obj, "enumerable"), set [[Enumerable]] to ToBoolean(Get(Obj, "enumerable"))
+        if (descObj.has(PropertyKey.ENUMERABLE)) {
+            JSValue enumerable = descObj.get(context, PropertyKey.ENUMERABLE);
+            if (context.hasPendingException()) {
+                return null;
+            }
             desc.setEnumerable(JSTypeChecking.isTruthy(enumerable));
         }
 
-        // Check for configurable
-        JSValue configurable = descObj.get(context, PropertyKey.CONFIGURABLE);
-        if (configurable != null && !(configurable instanceof JSUndefined)) {
+        // Step 3: If HasProperty(Obj, "configurable"), set [[Configurable]] to ToBoolean(Get(Obj, "configurable"))
+        if (descObj.has(PropertyKey.CONFIGURABLE)) {
+            JSValue configurable = descObj.get(context, PropertyKey.CONFIGURABLE);
+            if (context.hasPendingException()) {
+                return null;
+            }
             desc.setConfigurable(JSTypeChecking.isTruthy(configurable));
         }
 
-        // Check for value
-        JSValue value = descObj.get(context, PropertyKey.VALUE);
-        if (value != null && !(value instanceof JSUndefined)) {
+        // Step 4: If HasProperty(Obj, "value"), set [[Value]] to Get(Obj, "value")
+        if (descObj.has(PropertyKey.VALUE)) {
+            JSValue value = descObj.get(context, PropertyKey.VALUE);
+            if (context.hasPendingException()) {
+                return null;
+            }
             desc.setValue(value);
+            hasData = true;
         }
 
-        // Check for writable
-        JSValue writable = descObj.get(context, PropertyKey.WRITABLE);
-        if (writable != null && !(writable instanceof JSUndefined)) {
+        // Step 5: If HasProperty(Obj, "writable"), set [[Writable]] to ToBoolean(Get(Obj, "writable"))
+        if (descObj.has(PropertyKey.WRITABLE)) {
+            JSValue writable = descObj.get(context, PropertyKey.WRITABLE);
+            if (context.hasPendingException()) {
+                return null;
+            }
             desc.setWritable(JSTypeChecking.isTruthy(writable));
+            hasData = true;
         }
 
-        // Check for getter
-        JSValue getter = descObj.get(context, PropertyKey.GET);
-        if (getter != null && !(getter instanceof JSUndefined)) {
+        // Step 6: If HasProperty(Obj, "get"), validate and set [[Get]]
+        if (descObj.has(PropertyKey.GET)) {
+            JSValue getter = descObj.get(context, PropertyKey.GET);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            // Step 7b: If IsCallable(getter) is false and getter is not undefined, throw TypeError
+            if (!(getter instanceof JSUndefined) && !JSTypeChecking.isCallable(getter)) {
+                context.throwTypeError("Getter must be a function: " + JSTypeConversions.toString(context, getter).value());
+                return null;
+            }
             if (getter instanceof JSFunction getterFn) {
                 desc.setGetter(getterFn);
             }
+            hasAccessor = true;
         }
 
-        // Check for setter
-        JSValue setter = descObj.get(context, PropertyKey.SET);
-        if (setter != null && !(setter instanceof JSUndefined)) {
+        // Step 7: If HasProperty(Obj, "set"), validate and set [[Set]]
+        if (descObj.has(PropertyKey.SET)) {
+            JSValue setter = descObj.get(context, PropertyKey.SET);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            // Step 8b: If IsCallable(setter) is false and setter is not undefined, throw TypeError
+            if (!(setter instanceof JSUndefined) && !JSTypeChecking.isCallable(setter)) {
+                context.throwTypeError("Setter must be a function: " + JSTypeConversions.toString(context, setter).value());
+                return null;
+            }
             if (setter instanceof JSFunction setterFn) {
                 desc.setSetter(setterFn);
             }
+            hasAccessor = true;
+        }
+
+        // Step 8: If accessor and data properties are both present, throw TypeError
+        if (hasAccessor && hasData) {
+            context.throwTypeError("Invalid property descriptor. Cannot both specify accessors and a value or writable attribute, #<Object>");
+            return null;
         }
 
         return desc;
