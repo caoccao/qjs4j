@@ -235,9 +235,9 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         result = ObjectPrototype.hasOwnProperty(context, obj, new JSValue[]{});
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
-        // Edge case: called on non-object
+        // Edge case: called on non-object primitive (should ToObject per spec)
         result = ObjectPrototype.hasOwnProperty(context, new JSString("string"), new JSValue[]{new JSString("length")});
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        assertThat(result).isEqualTo(JSBoolean.TRUE); // String wrapper has "length" own property
 
         assertBooleanWithJavet(
                 "var obj = {foo: 'bar'}; obj.hasOwnProperty('foo')",
@@ -446,9 +446,9 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
         assertThat(obj.getPrototype()).isNull();
 
-        // Edge case: get __proto__ on non-object
+        // Edge case: get __proto__ on non-object primitive (should ToObject per spec)
         result = ObjectPrototype.__proto__Getter(context, new JSString("test"), new JSValue[]{});
-        assertThat(result).isEqualTo(JSNull.INSTANCE);
+        assertThat(result).isInstanceOf(JSObject.class); // Returns String.prototype
 
         // Edge case: set __proto__ on non-object
         result = ObjectPrototype.__proto__Setter(context, new JSString("test"), new JSValue[]{proto});
@@ -547,14 +547,14 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         JSValue result = ObjectPrototype.valueOf(context, obj, new JSValue[]{});
         assertThat(result).isEqualTo(obj);
 
-        // Normal case: primitive
+        // Normal case: primitive (should ToObject - return a wrapper)
         JSString str = new JSString("hello");
         result = ObjectPrototype.valueOf(context, str, new JSValue[]{});
-        assertThat(result).isEqualTo(str);
+        assertThat(result).isInstanceOf(JSObject.class);
 
-        // Normal case: null
-        result = ObjectPrototype.valueOf(context, JSNull.INSTANCE, new JSValue[]{});
-        assertThat(result).isEqualTo(JSNull.INSTANCE);
+        // Normal case: null (should throw TypeError per spec)
+        assertTypeError(ObjectPrototype.valueOf(context, JSNull.INSTANCE, new JSValue[]{}));
+        assertPendingException(context);
     }
 
     @Test

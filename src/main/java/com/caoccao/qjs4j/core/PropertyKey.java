@@ -141,6 +141,20 @@ public final class PropertyKey {
                 return fromIndex((int) d);
             }
         }
+        // ES2024 ToPropertyKey: step 1 - ToPrimitive(argument, string)
+        // If result is a symbol, use it directly as property key
+        if (value instanceof JSObject) {
+            JSValue primitive = JSTypeConversions.toPrimitive(context, value, JSTypeConversions.PreferredType.STRING);
+            if (primitive instanceof JSSymbol sym) {
+                return fromSymbol(sym);
+            }
+            if (primitive instanceof JSString s) {
+                return fromString(s.value());
+            }
+            // Continue with toString for other primitive results
+            JSString str = JSTypeConversions.toString(context, primitive);
+            return fromString(str.value());
+        }
         // Convert to string for other types
         JSString str = JSTypeConversions.toString(context, value);
         return fromString(str.value());

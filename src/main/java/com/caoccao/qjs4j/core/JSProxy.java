@@ -550,7 +550,7 @@ public final class JSProxy extends JSObject {
             }
 
             // Get the length property
-            JSValue lengthValue = resultObj.get("length");
+            JSValue lengthValue = resultObj.get(context, PropertyKey.LENGTH);
             long lengthLong = JSTypeConversions.toLength(context, lengthValue);
             if (context.hasPendingException()) {
                 throw new JSException(context.getPendingException());
@@ -561,9 +561,9 @@ public final class JSProxy extends JSObject {
             int length = (int) lengthLong;
             List<PropertyKey> keys = new ArrayList<>(length);
 
-            // Convert result to PropertyKey list
+            // Convert result to PropertyKey list - CreateListFromArrayLike
             for (int i = 0; i < length; i++) {
-                JSValue keyValue = resultObj.get(i);
+                JSValue keyValue = resultObj.get(context, PropertyKey.fromIndex(i));
                 if (keyValue instanceof JSString str) {
                     keys.add(PropertyKey.fromString(str.value()));
                 } else if (keyValue instanceof JSSymbol sym) {
@@ -583,29 +583,49 @@ public final class JSProxy extends JSObject {
                 }
             }
 
-            // Validate invariants
+            // Validate invariants per ES2024 10.5.11
             JSObject targetObj = (JSObject) target;
             List<PropertyKey> targetKeys = targetObj.getOwnPropertyKeys();
             boolean targetExtensible = targetObj.isExtensible();
 
-            // Check that all non-configurable own properties are included
+            // Step 16: Classify target keys as configurable or non-configurable
+            List<PropertyKey> targetNonconfigurableKeys = new ArrayList<>();
+            List<PropertyKey> targetConfigurableKeys = new ArrayList<>();
             for (PropertyKey targetKey : targetKeys) {
                 PropertyDescriptor desc = targetObj.getOwnPropertyDescriptor(targetKey);
                 if (desc != null && !desc.isConfigurable()) {
-                    if (!keys.contains(targetKey)) {
-                        throw new JSException(context.throwTypeError(
-                                "'ownKeys' on proxy: trap result did not include '" + targetKey.toPropertyString() + "'"));
-                    }
+                    targetNonconfigurableKeys.add(targetKey);
+                } else {
+                    targetConfigurableKeys.add(targetKey);
                 }
             }
 
-            // If target is not extensible, result must not include extra keys
+            // Step 18: uncheckedResultKeys = copy of trapResult
+            Set<PropertyKey> uncheckedResultKeys = new HashSet<>(keys);
+
+            // Step 19: For each non-configurable key, must be in trap result
+            for (PropertyKey nonconfigurableKey : targetNonconfigurableKeys) {
+                if (!uncheckedResultKeys.remove(nonconfigurableKey)) {
+                    throw new JSException(context.throwTypeError(
+                            "'ownKeys' on proxy: trap result did not include '" + nonconfigurableKey.toPropertyString() + "'"));
+                }
+            }
+
+            // Step 20: If target is extensible, return trapResult
             if (!targetExtensible) {
-                for (PropertyKey key : keys) {
-                    if (!targetKeys.contains(key)) {
+                // Step 21: For each configurable key, must also be in trap result
+                for (PropertyKey configurableKey : targetConfigurableKeys) {
+                    if (!uncheckedResultKeys.remove(configurableKey)) {
                         throw new JSException(context.throwTypeError(
-                                "'ownKeys' on proxy: trap returned extra key '" + key.toPropertyString() + "'"));
+                                "'ownKeys' on proxy: trap result did not include '" + configurableKey.toPropertyString() + "'"));
                     }
+                }
+
+                // Step 22: If uncheckedResultKeys is not empty, throw TypeError
+                if (!uncheckedResultKeys.isEmpty()) {
+                    PropertyKey extraKey = uncheckedResultKeys.iterator().next();
+                    throw new JSException(context.throwTypeError(
+                            "'ownKeys' on proxy: trap returned extra key '" + extraKey.toPropertyString() + "'"));
                 }
             }
 
@@ -686,7 +706,7 @@ public final class JSProxy extends JSObject {
             throw new JSException(context.throwTypeError("Cannot perform 'getTrapMethod' on a proxy that has been revoked"));
         }
 
-        JSValue method = handler.get(trapName);
+        JSValue method = handler.get(context, PropertyKey.fromString(trapName));
         // Treat null as undefined
         if (method instanceof JSNull) {
             return JSUndefined.INSTANCE;

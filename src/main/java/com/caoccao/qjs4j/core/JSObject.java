@@ -41,6 +41,7 @@ public non-sealed class JSObject implements JSValue {
     protected boolean extensible = true;
     protected boolean frozen = false;
     protected boolean htmlDDA; // Internal slot for [IsHTMLDDA] (Annex B test262 host object)
+    protected boolean immutablePrototype; // Internal slot for [[SetPrototypeOf]] immutable prototype exotic objects
     protected JSValue primitiveValue; // Internal slot for [[PrimitiveValue]] (not accessible from JS)
     protected JSValue[] propertyValues;
     protected JSObject prototype;
@@ -1077,6 +1078,16 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
+     * Mark this object as an immutable prototype exotic object.
+     * Per ES2024 9.4.7, [[SetPrototypeOf]] always returns false unless
+     * the new prototype is the same as the current one.
+     * Used for Object.prototype.
+     */
+    public void setImmutablePrototype() {
+        this.immutablePrototype = true;
+    }
+
+    /**
      * Set a property value by string name.
      */
     public void set(String propertyName, JSValue value) {
@@ -1274,6 +1285,11 @@ public non-sealed class JSObject implements JSValue {
         // Same prototype - no change needed
         if (this.prototype == proto) {
             return SetPrototypeResult.SUCCESS;
+        }
+
+        // Immutable prototype exotic objects (e.g., Object.prototype) always reject
+        if (this.immutablePrototype) {
+            return SetPrototypeResult.NOT_EXTENSIBLE;
         }
 
         // Non-extensible objects cannot have their prototype changed

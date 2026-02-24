@@ -36,26 +36,47 @@ public final class ObjectPrototype {
             return context.throwTypeError("__defineGetter__ requires 2 arguments");
         }
 
-        if (!(thisArg instanceof JSObject obj)) {
+        // ES B.2.2.2: Step 1: Let O be ? ToObject(this)
+        if (thisArg.isNullOrUndefined()) {
             return context.throwTypeError("__defineGetter__ called on null or undefined");
         }
+        JSObject obj;
+        if (thisArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, thisArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
 
-        JSValue prop = args[0];
         JSValue getter = args[1];
 
+        // Step 2: If IsCallable(getter) is false, throw TypeError
         if (!(getter instanceof JSFunction)) {
             return context.throwTypeError("Getter must be a function");
         }
 
+        // Step 4: Let key be ? ToPropertyKey(P)
+        JSValue prop = args[0];
         PropertyKey key = PropertyKey.fromValue(context, prop);
-        PropertyDescriptor desc = PropertyDescriptor.accessorDescriptor(
-                (JSFunction) getter,
-                null,
-                true,
-                true
-        );
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
 
-        obj.defineProperty(key, desc);
+        // Step 3: Let desc be { [[Get]]: getter, [[Enumerable]]: true, [[Configurable]]: true }
+        PropertyDescriptor desc = new PropertyDescriptor();
+        desc.setGetter((JSFunction) getter);
+        desc.setEnumerable(true);
+        desc.setConfigurable(true);
+
+        // Step 5: Perform ? DefinePropertyOrThrow(O, key, desc)
+        if (!obj.defineOwnProperty(key, desc, context)) {
+            if (!context.hasPendingException()) {
+                context.throwTypeError("Cannot define property: " + key.toPropertyString());
+            }
+            return JSUndefined.INSTANCE;
+        }
         return JSUndefined.INSTANCE;
     }
 
@@ -68,26 +89,47 @@ public final class ObjectPrototype {
             return context.throwTypeError("__defineSetter__ requires 2 arguments");
         }
 
-        if (!(thisArg instanceof JSObject obj)) {
+        // ES B.2.2.3: Step 1: Let O be ? ToObject(this)
+        if (thisArg.isNullOrUndefined()) {
             return context.throwTypeError("__defineSetter__ called on null or undefined");
         }
+        JSObject obj;
+        if (thisArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, thisArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
 
-        JSValue prop = args[0];
         JSValue setter = args[1];
 
+        // Step 2: If IsCallable(setter) is false, throw TypeError
         if (!(setter instanceof JSFunction)) {
             return context.throwTypeError("Setter must be a function");
         }
 
+        // Step 4: Let key be ? ToPropertyKey(P)
+        JSValue prop = args[0];
         PropertyKey key = PropertyKey.fromValue(context, prop);
-        PropertyDescriptor desc = PropertyDescriptor.accessorDescriptor(
-                null,
-                (JSFunction) setter,
-                true,
-                true
-        );
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
 
-        obj.defineProperty(key, desc);
+        // Step 3: Let desc be { [[Set]]: setter, [[Enumerable]]: true, [[Configurable]]: true }
+        PropertyDescriptor desc = new PropertyDescriptor();
+        desc.setSetter((JSFunction) setter);
+        desc.setEnumerable(true);
+        desc.setConfigurable(true);
+
+        // Step 5: Perform ? DefinePropertyOrThrow(O, key, desc)
+        if (!obj.defineOwnProperty(key, desc, context)) {
+            if (!context.hasPendingException()) {
+                context.throwTypeError("Cannot define property: " + key.toPropertyString());
+            }
+            return JSUndefined.INSTANCE;
+        }
         return JSUndefined.INSTANCE;
     }
 
@@ -100,19 +142,35 @@ public final class ObjectPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        if (!(thisArg instanceof JSObject obj)) {
+        // ES B.2.2.4: Step 1: Let O be ? ToObject(this)
+        if (thisArg.isNullOrUndefined()) {
             return context.throwTypeError("__lookupGetter__ called on null or undefined");
+        }
+        JSObject obj;
+        if (thisArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, thisArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         JSValue prop = args[0];
         PropertyKey key = PropertyKey.fromValue(context, prop);
 
-        // Walk up the prototype chain
+        // Walk up the prototype chain per spec B.2.2.4
         JSObject current = obj;
         while (current != null) {
             PropertyDescriptor desc = current.getOwnPropertyDescriptor(key);
-            if (desc != null && desc.getGetter() != null) {
-                return desc.getGetter();
+            if (desc != null) {
+                // Step 3.b.i: If IsAccessorDescriptor(desc), return desc.[[Get]]
+                if (desc.isAccessorDescriptor()) {
+                    JSFunction getter = desc.getGetter();
+                    return getter != null ? getter : JSUndefined.INSTANCE;
+                }
+                // Step 3.b.ii: Return undefined (data property found - stop)
+                return JSUndefined.INSTANCE;
             }
             current = current.getPrototype();
         }
@@ -129,19 +187,35 @@ public final class ObjectPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        if (!(thisArg instanceof JSObject obj)) {
+        // ES B.2.2.5: Step 1: Let O be ? ToObject(this)
+        if (thisArg.isNullOrUndefined()) {
             return context.throwTypeError("__lookupSetter__ called on null or undefined");
+        }
+        JSObject obj;
+        if (thisArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, thisArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         JSValue prop = args[0];
         PropertyKey key = PropertyKey.fromValue(context, prop);
 
-        // Walk up the prototype chain
+        // Walk up the prototype chain per spec B.2.2.5
         JSObject current = obj;
         while (current != null) {
             PropertyDescriptor desc = current.getOwnPropertyDescriptor(key);
-            if (desc != null && desc.getSetter() != null) {
-                return desc.getSetter();
+            if (desc != null) {
+                // Step 3.b.i: If IsAccessorDescriptor(desc), return desc.[[Set]]
+                if (desc.isAccessorDescriptor()) {
+                    JSFunction setter = desc.getSetter();
+                    return setter != null ? setter : JSUndefined.INSTANCE;
+                }
+                // Step 3.b.ii: Return undefined (data property found - stop)
+                return JSUndefined.INSTANCE;
             }
             current = current.getPrototype();
         }
@@ -153,8 +227,18 @@ public final class ObjectPrototype {
      * Object.prototype.__proto__ getter
      */
     public static JSValue __proto__Getter(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSObject obj)) {
-            return JSNull.INSTANCE;
+        // ES B.2.2.1.1: Step 1: Let O be ? ToObject(this value)
+        if (thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        JSObject obj;
+        if (thisArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, thisArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         JSObject proto = obj.getPrototype();
@@ -165,12 +249,18 @@ public final class ObjectPrototype {
      * Object.prototype.__proto__ setter
      */
     public static JSValue __proto__Setter(JSContext context, JSValue thisArg, JSValue[] args) {
+        // ES B.2.2.1.2: Step 1: Let O be ? RequireObjectCoercible(this value)
+        if (thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+
         if (args.length < 1) {
             return JSUndefined.INSTANCE;
         }
 
         JSValue proto = args[0];
 
+        // Step 3: If Type(O) is not Object, return undefined (primitives)
         if (!(thisArg instanceof JSObject obj)) {
             return JSUndefined.INSTANCE;
         }
@@ -476,15 +566,28 @@ public final class ObjectPrototype {
      * Object.prototype.hasOwnProperty(prop)
      */
     public static JSValue hasOwnProperty(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSObject obj)) {
-            return JSBoolean.FALSE;
+        // ES2024 20.1.3.2:
+        // Step 1: Let P be ? ToPropertyKey(V) - BEFORE ToObject
+        JSValue prop = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        PropertyKey key = PropertyKey.fromValue(context, prop);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
 
-        if (args.length == 0) {
-            return JSBoolean.FALSE;
+        // Step 2: Let O be ? ToObject(this value)
+        if (thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        JSObject obj;
+        if (thisArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, thisArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
-        PropertyKey key = PropertyKey.fromValue(context, args[0]);
         return JSBoolean.valueOf(obj.hasOwnProperty(key));
     }
 
@@ -542,13 +645,28 @@ public final class ObjectPrototype {
      * Object.prototype.propertyIsEnumerable(V)
      */
     public static JSValue propertyIsEnumerable(JSContext context, JSValue thisArg, JSValue[] args) {
+        // ES2024 20.1.3.4:
+        // Step 1: Let P be ? ToPropertyKey(V)
         JSValue prop = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-
-        if (!(thisArg instanceof JSObject obj)) {
-            return context.throwTypeError("Object.prototype.propertyIsEnumerable called on null or undefined");
+        PropertyKey key = PropertyKey.fromValue(context, prop);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
 
-        PropertyKey key = PropertyKey.fromValue(context, prop);
+        // Step 2: Let O be ? ToObject(this value)
+        if (thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        JSObject obj;
+        if (thisArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, thisArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
         PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
 
         if (desc == null) {
@@ -591,152 +709,99 @@ public final class ObjectPrototype {
      * Returns a string representing the object with Symbol.toStringTag support.
      */
     public static JSValue toString(JSContext context, JSValue thisArg, JSValue[] args) {
-        // Handle primitives
+        // ES2024 20.1.3.6 Object.prototype.toString()
+        // Step 1: If this is undefined, return "[object Undefined]"
         if (thisArg instanceof JSUndefined) {
             return new JSString("[object Undefined]");
         }
+        // Step 2: If this is null, return "[object Null]"
         if (thisArg instanceof JSNull) {
             return new JSString("[object Null]");
         }
 
-        // Check for Function before Object (functions may not extend JSObject)
-        if (thisArg instanceof JSFunction) {
-            return new JSString("[object Function]");
+        // Step 3: Let O be ToObject(this)
+        JSObject obj;
+        if (thisArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, thisArg);
+            if (obj == null || context.hasPendingException()) {
+                return new JSString("[object Object]");
+            }
         }
 
-        // For objects, check Symbol.toStringTag first
-        if (thisArg instanceof JSObject obj) {
-            // Try to get Symbol.toStringTag
-            PropertyKey toStringTagKey = PropertyKey.SYMBOL_TO_STRING_TAG;
-            JSValue tag = obj.get(context, toStringTagKey);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-
-            if (tag instanceof JSString tagStr) {
-                return new JSString("[object " + tagStr.value() + "]");
-            }
-
-            // Determine built-in type
-            int isArrayResult = JSTypeChecking.isArray(context, thisArg);
-            if (isArrayResult < 0) {
-                return context.getPendingException();
-            }
-            if (isArrayResult > 0) {
-                return new JSString("[object Array]");
-            }
-            if (JSTypeChecking.isFunction(thisArg)) {
-                return new JSString("[object Function]");
-            }
-            if (thisArg instanceof JSArguments) {
-                return new JSString("[object Arguments]");
-            }
-            if (thisArg instanceof JSPromise) {
-                return new JSString("[object Promise]");
-            }
-            if (thisArg instanceof JSMap) {
-                return new JSString("[object Map]");
-            }
-            if (thisArg instanceof JSWeakMap) {
-                return new JSString("[object WeakMap]");
-            }
-            if (thisArg instanceof JSWeakSet) {
-                return new JSString("[object WeakSet]");
-            }
-            if (thisArg instanceof JSSharedArrayBuffer) {
-                return new JSString("[object SharedArrayBuffer]");
-            }
-            if (thisArg instanceof JSArrayBuffer) {
-                return new JSString("[object ArrayBuffer]");
-            }
-            if (thisArg instanceof JSDataView) {
-                return new JSString("[object DataView]");
-            }
-            // TypedArray instances - check specific types
-            if (thisArg instanceof JSInt8Array) {
-                return new JSString("[object Int8Array]");
-            }
-            if (thisArg instanceof JSUint8Array) {
-                return new JSString("[object Uint8Array]");
-            }
-            if (thisArg instanceof JSUint8ClampedArray) {
-                return new JSString("[object Uint8ClampedArray]");
-            }
-            if (thisArg instanceof JSInt16Array) {
-                return new JSString("[object Int16Array]");
-            }
-            if (thisArg instanceof JSUint16Array) {
-                return new JSString("[object Uint16Array]");
-            }
-            if (thisArg instanceof JSInt32Array) {
-                return new JSString("[object Int32Array]");
-            }
-            if (thisArg instanceof JSUint32Array) {
-                return new JSString("[object Uint32Array]");
-            }
-            if (thisArg instanceof JSFloat16Array) {
-                return new JSString("[object Float16Array]");
-            }
-            if (thisArg instanceof JSFloat32Array) {
-                return new JSString("[object Float32Array]");
-            }
-            if (thisArg instanceof JSFloat64Array) {
-                return new JSString("[object Float64Array]");
-            }
-            if (thisArg instanceof JSRegExp) {
-                return new JSString("[object RegExp]");
-            }
-            if (thisArg instanceof JSDate) {
-                return new JSString("[object Date]");
-            }
-            if (thisArg instanceof JSError) {
-                return new JSString("[object Error]");
-            }
-            if (thisArg instanceof JSBooleanObject) {
-                return new JSString("[object Boolean]");
-            }
-            if (thisArg instanceof JSNumberObject) {
-                return new JSString("[object Number]");
-            }
-            if (thisArg instanceof JSStringObject) {
-                return new JSString("[object String]");
-            }
-            if (thisArg instanceof JSBigIntObject) {
-                return new JSString("[object BigInt]");
-            }
-            if (thisArg instanceof JSSymbolObject) {
-                return new JSString("[object Symbol]");
-            }
-
-            // Default for generic objects
-            return new JSString("[object Object]");
+        // Steps 4-14: Determine builtinTag based on internal slots per spec
+        String builtinTag;
+        // Step 4: Let isArray be ? IsArray(O)
+        int isArrayResult = JSTypeChecking.isArray(context, obj);
+        if (isArrayResult < 0) {
+            return context.getPendingException();
+        }
+        if (isArrayResult > 0) {
+            builtinTag = JSArray.NAME;
+        } else if (obj instanceof JSArguments) {
+            // Step 6: has [[ParameterMap]]
+            builtinTag = "Arguments";
+        } else if (JSTypeChecking.isFunction(obj)) {
+            // Step 7: is callable
+            builtinTag = JSFunction.NAME;
+        } else if (obj instanceof JSError) {
+            // Step 8: has [[ErrorData]] - always "Error" per spec
+            builtinTag = JSError.NAME;
+        } else if (obj instanceof JSBooleanObject) {
+            // Step 9: has [[BooleanData]]
+            builtinTag = JSBooleanObject.NAME;
+        } else if (obj instanceof JSNumberObject) {
+            // Step 10: has [[NumberData]]
+            builtinTag = JSNumberObject.NAME;
+        } else if (obj instanceof JSStringObject) {
+            // Step 11: has [[StringData]]
+            builtinTag = JSStringObject.NAME;
+        } else if (obj instanceof JSDate) {
+            // Step 12: has [[DateValue]]
+            builtinTag = JSDate.NAME;
+        } else if (obj instanceof JSRegExp) {
+            // Step 13: has [[RegExpMatcher]]
+            builtinTag = JSRegExp.NAME;
+        } else {
+            // Step 14: builtinTag is "Object"
+            builtinTag = JSObject.NAME;
         }
 
-        // Primitives (when boxed)
-        if (thisArg instanceof JSString) {
-            return new JSString("[object String]");
-        }
-        if (thisArg instanceof JSNumber) {
-            return new JSString("[object Number]");
-        }
-        if (thisArg instanceof JSBoolean) {
-            return new JSString("[object Boolean]");
-        }
-        if (thisArg instanceof JSSymbol) {
-            return new JSString("[object Symbol]");
-        }
-        if (thisArg instanceof JSBigInt) {
-            return new JSString("[object BigInt]");
+        // Step 15: Let tag be ? Get(O, @@toStringTag)
+        JSValue tag = obj.get(context, PropertyKey.SYMBOL_TO_STRING_TAG);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
 
-        return new JSString("[object Object]");
+        // Step 16: If tag is not a String, set tag to builtinTag
+        String tagStr;
+        if (tag instanceof JSString jsTagStr) {
+            tagStr = jsTagStr.value();
+        } else {
+            tagStr = builtinTag;
+        }
+
+        // Step 17: Return "[object " + tag + "]"
+        return new JSString("[object " + tagStr + "]");
     }
 
     /**
      * Object.prototype.valueOf()
      */
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg;
+        // ES2024 20.1.3.7: Return ? ToObject(this value)
+        if (thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        if (thisArg instanceof JSObject) {
+            return thisArg;
+        }
+        JSObject result = JSTypeConversions.toObject(context, thisArg);
+        if (result == null || context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return result;
     }
 
     /**

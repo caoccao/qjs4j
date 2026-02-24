@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -596,12 +597,22 @@ public final class ObjectConstructor {
      */
     public static JSValue getOwnPropertyDescriptors(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return context.throwTypeError("Object.getOwnPropertyDescriptors called on non-object");
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
+        // ES2017 19.1.2.7 step 1: Let obj be ? ToObject(O)
         JSValue objArg = args[0];
-        if (!(objArg instanceof JSObject obj)) {
-            return context.throwTypeError("Object.getOwnPropertyDescriptors called on non-object");
+        if (objArg.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        JSObject obj;
+        if (objArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, objArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         JSObject result = context.createJSObject();
@@ -636,23 +647,34 @@ public final class ObjectConstructor {
      * Returns an array of all own property names (including non-enumerable).
      */
     public static JSValue getOwnPropertyNames(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length > 0) {
-            JSValue objArg = args[0];
-            if (objArg instanceof JSObject jsObject) {
-                JSArray result = context.createJSArray();
-                List<PropertyKey> keys = jsObject.getOwnPropertyKeys();
-                for (PropertyKey key : keys) {
-                    // Only include string keys (not symbols)
-                    if (!key.isSymbol()) {
-                        result.push(new JSString(key.toPropertyString()));
-                    }
-                }
-                return result;
-            } else {
-                return context.throwTypeError("Cannot convert undefined or null to object");
+        if (args.length == 0) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+
+        // ES2015 19.1.2.8 step 1: Let obj be ? ToObject(O)
+        JSValue objArg = args[0];
+        if (objArg.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        JSObject obj;
+        if (objArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, objArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
         }
-        return context.throwTypeError("Cannot convert undefined or null to object");
+
+        JSArray result = context.createJSArray();
+        List<PropertyKey> keys = obj.getOwnPropertyKeys();
+        for (PropertyKey key : keys) {
+            // Only include string keys (not symbols)
+            if (!key.isSymbol()) {
+                result.push(new JSString(key.toPropertyString()));
+            }
+        }
+        return result;
     }
 
     /**
@@ -662,12 +684,22 @@ public final class ObjectConstructor {
      */
     public static JSValue getOwnPropertySymbols(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return context.createJSArray();
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
+        // ES2015 19.1.2.9 step 1: Let obj be ? ToObject(O)
         JSValue objArg = args[0];
-        if (!(objArg instanceof JSObject obj)) {
-            return context.createJSArray();
+        if (objArg.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        JSObject obj;
+        if (objArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, objArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         List<PropertyKey> keys = obj.getOwnPropertyKeys();
@@ -693,12 +725,22 @@ public final class ObjectConstructor {
      */
     public static JSValue getPrototypeOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return context.throwTypeError("Object.getPrototypeOf called on non-object");
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
+        // ES2015 19.1.2.9 step 1: Let obj be ? ToObject(O)
         JSValue arg = args[0];
-        if (!(arg instanceof JSObject obj)) {
-            return context.throwTypeError("Object.getPrototypeOf called on non-object");
+        if (arg.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        JSObject obj;
+        if (arg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, arg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         JSObject prototype = obj.getPrototype();
@@ -716,38 +758,95 @@ public final class ObjectConstructor {
         }
 
         JSValue items = args[0];
-        if (!(items instanceof JSArray arr)) {
-            return context.throwTypeError("First argument must be an array");
+        if (items.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot read properties of " +
+                    (items instanceof JSNull ? "null" : "undefined") + " (reading 'Symbol(Symbol.iterator)')");
         }
 
         if (!(args[1] instanceof JSFunction callback)) {
             return context.throwTypeError("Second argument must be a function");
         }
 
-        JSObject result = context.createJSObject();
+        // Step 1: Get iterator from items (any iterable, not just arrays)
+        JSValue iterator = JSIteratorHelper.getIterator(context, items);
+        if (iterator == null) {
+            if (!context.hasPendingException()) {
+                return context.throwTypeError("object is not iterable");
+            }
+            return JSUndefined.INSTANCE;
+        }
 
-        long length = arr.getLength();
-        for (long i = 0; i < length; i++) {
-            JSValue element = arr.get(i);
-            JSValue[] callbackArgs = {element, JSNumber.of(i)};
-            JSValue keyValue = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
+        // Result object has null prototype per spec
+        JSObject result = new JSObject();
+        result.setPrototype(null);
 
-            // Convert key to string
-            JSString keyString = JSTypeConversions.toString(context, keyValue);
-            String key = keyString.value();
+        long index = 0;
+        while (true) {
+            JSObject iterResult = JSIteratorHelper.iteratorNext(iterator, context);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (iterResult == null) {
+                return context.throwTypeError("Iterator result is not an object");
+            }
+
+            JSValue doneValue = iterResult.get(context, PropertyKey.DONE);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
+                break;
+            }
+
+            JSValue element = iterResult.get(context, PropertyKey.VALUE);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+
+            // Call callback - errors close iterator
+            JSValue keyValue;
+            try {
+                keyValue = callback.call(context, JSUndefined.INSTANCE, new JSValue[]{element, JSNumber.of(index)});
+                if (context.hasPendingException()) {
+                    closeIteratorPreserveError(context, iterator);
+                    return JSUndefined.INSTANCE;
+                }
+            } catch (Exception e) {
+                JSValue savedError = context.getPendingException();
+                context.clearPendingException();
+                try {
+                    JSIteratorHelper.closeIterator(context, iterator);
+                } catch (Exception ignored) {
+                    // ignore close errors
+                }
+                if (context.hasPendingException()) {
+                    context.clearPendingException();
+                }
+                if (savedError != null) {
+                    context.setPendingException(savedError);
+                }
+                throw e;
+            }
+
+            // Convert key to property key
+            PropertyKey key = PropertyKey.fromValue(context, keyValue);
+            if (context.hasPendingException()) {
+                closeIteratorPreserveError(context, iterator);
+                return JSUndefined.INSTANCE;
+            }
 
             // Get or create array for this key
             JSValue existingGroup = result.get(key);
             JSArray group;
-            if (existingGroup instanceof JSArray) {
-                group = (JSArray) existingGroup;
+            if (existingGroup instanceof JSArray existingArray) {
+                group = existingArray;
             } else {
                 group = context.createJSArray();
                 result.set(key, group);
             }
 
-            // Add element to group
             group.push(element);
+            index++;
         }
 
         return result;
@@ -760,20 +859,33 @@ public final class ObjectConstructor {
      */
     public static JSValue hasOwn(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return context.throwTypeError("Object.hasOwn requires at least 1 argument");
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
+        // ES2022 step 1: Let obj be ? ToObject(O)
         JSValue objValue = args[0];
-        if (!(objValue instanceof JSObject obj)) {
-            return context.throwTypeError("Object.hasOwn called on non-object");
+        if (objValue.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        JSObject obj;
+        if (objValue instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, objValue);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         if (args.length < 2) {
             return JSBoolean.FALSE;
         }
 
-        JSString propName = JSTypeConversions.toString(context, args[1]);
-        PropertyKey key = PropertyKey.fromString(propName.value());
+        // Step 2: Let P be ? ToPropertyKey(property) - supports symbols
+        PropertyKey key = PropertyKey.fromValue(context, args[1]);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
 
         return JSBoolean.valueOf(obj.hasOwnProperty(key));
     }
@@ -877,7 +989,7 @@ public final class ObjectConstructor {
             return JSBoolean.TRUE; // Primitives are always frozen
         }
 
-        return JSBoolean.valueOf(obj.isFrozen());
+        return JSBoolean.valueOf(testIntegrityLevel(context, obj, true));
     }
 
     /**
@@ -894,7 +1006,7 @@ public final class ObjectConstructor {
             return JSBoolean.TRUE; // Primitives are always sealed
         }
 
-        return JSBoolean.valueOf(obj.isSealed());
+        return JSBoolean.valueOf(testIntegrityLevel(context, obj, false));
     }
 
     /**
@@ -904,50 +1016,46 @@ public final class ObjectConstructor {
      */
     public static JSValue keys(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return context.throwTypeError("Object.keys called on non-object");
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
         JSValue arg = args[0];
 
         // Null and undefined throw TypeError
-        if (arg instanceof JSNull || arg instanceof JSUndefined) {
+        if (arg.isNullOrUndefined()) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
-        if (!(arg instanceof JSObject obj)) {
-            // Other primitive values are coerced to objects (return empty array)
-            return context.createJSArray();
-        }
-
-        JSValue[] fastPathKeyStrings = obj.enumerableStringKeyValuesFastPath();
-        if (fastPathKeyStrings != null) {
-            if (obj.getClass() == JSObject.class) {
-                return context.createJSArray(fastPathKeyStrings, true);
+        // Step 1: Let obj be ? ToObject(O)
+        JSObject obj;
+        if (arg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, arg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
-            return context.createJSArray(fastPathKeyStrings);
         }
 
+        // Step 2: EnumerableOwnProperties(obj, key) - single pass per spec
         List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
-        int stringKeyCount = 0;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        List<JSValue> keyList = new ArrayList<>();
         for (PropertyKey key : propertyKeys) {
-            if (key.isString()) {
+            // Include both string and index keys (not symbols)
+            if (!key.isSymbol()) {
                 PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
                 if (descriptor != null && descriptor.isEnumerable()) {
-                    stringKeyCount++;
+                    keyList.add(new JSString(key.toPropertyString()));
                 }
             }
         }
-        JSValue[] keyStrings = new JSValue[stringKeyCount];
-        int keyStringIndex = 0;
-        for (PropertyKey key : propertyKeys) {
-            if (key.isString()) {
-                PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
-                if (descriptor != null && descriptor.isEnumerable()) {
-                    keyStrings[keyStringIndex++] = new JSString(key.asString());
-                }
-            }
-        }
-        return context.createJSArray(keyStrings, true);
+        return context.createJSArray(keyList.toArray(new JSValue[0]), true);
     }
 
     /**
@@ -987,29 +1095,32 @@ public final class ObjectConstructor {
             return arg; // Primitives are returned as-is
         }
 
-        // Step 1: Prevent extensions
+        // Step 2: Set the [[Extensible]] internal slot of O to false
         obj.preventExtensions();
 
-        // Step 2: Get all own property keys (string, symbol, and array indices)
+        // Step 4: Let keys be ? O.[[OwnPropertyKeys]]()
         List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
 
-        // Step 3: For each property, set configurable=false (but keep writable unchanged)
+        // Step 6: For each property, set configurable=false via DefinePropertyOrThrow
         for (PropertyKey key : propertyKeys) {
-            PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
-            if (desc == null) {
-                continue; // Skip if property doesn't exist (shouldn't happen)
+            PropertyDescriptor currentDesc = obj.getOwnPropertyDescriptor(key);
+            if (currentDesc == null) {
+                continue;
             }
 
-            // Modify the existing descriptor:
-            // - Set configurable to false
-            // - Do NOT modify writable (this is the difference from freeze)
-            desc.setConfigurable(false);
+            // Per spec 7.3.16 step 7.a: { [[Configurable]]: false } partial descriptor
+            PropertyDescriptor sealDesc = new PropertyDescriptor();
+            sealDesc.setConfigurable(false);
 
-            // Update the property with the modified descriptor
-            obj.defineProperty(key, desc);
+            if (!obj.defineOwnProperty(key, sealDesc, context)) {
+                if (!context.hasPendingException()) {
+                    context.throwTypeError("Cannot seal property: " + key.toPropertyString());
+                }
+                return JSUndefined.INSTANCE;
+            }
         }
 
-        // Step 4: Mark the object as sealed (sets sealed and extensible flags)
+        // Mark the object as sealed
         obj.seal();
 
         return arg;
@@ -1025,19 +1136,28 @@ public final class ObjectConstructor {
             return context.throwTypeError("Object.setPrototypeOf requires 2 arguments");
         }
 
+        // ES2024 step 1: RequireObjectCoercible(O) - throw for null/undefined
         JSValue objValue = args[0];
-        if (!(objValue instanceof JSObject obj)) {
+        if (objValue.isNullOrUndefined()) {
             return context.throwTypeError("Object.setPrototypeOf called on non-object");
         }
 
         JSValue protoValue = args[1];
+        // Step 2: If proto is not Object and not null, throw TypeError
+        if (!(protoValue instanceof JSObject) && !(protoValue instanceof JSNull)) {
+            return context.throwTypeError("Object prototype may only be an Object or null");
+        }
+
+        // Step 3: If O is not Object, return O (primitives)
+        if (!(objValue instanceof JSObject obj)) {
+            return objValue;
+        }
+
         JSObject proto;
         if (protoValue instanceof JSObject protoObj) {
             proto = protoObj;
-        } else if (protoValue instanceof JSNull) {
-            proto = null;
         } else {
-            return context.throwTypeError("Object prototype may only be an Object or null");
+            proto = null;
         }
 
         // Proxies have their own setPrototype logic with trap handling
@@ -1056,6 +1176,42 @@ public final class ObjectConstructor {
         }
 
         return obj;
+    }
+
+    /**
+     * TestIntegrityLevel(O, level)
+     * ES2024 7.3.17
+     * Tests whether all own properties of an object are non-configurable
+     * (sealed) and additionally non-writable (frozen).
+     */
+    private static boolean testIntegrityLevel(JSContext context, JSObject obj, boolean frozen) {
+        // Step 1: If IsExtensible(O), return false
+        if (obj.isExtensible()) {
+            return false;
+        }
+
+        // Step 3: Let keys be ? O.[[OwnPropertyKeys]]()
+        List<PropertyKey> keys = obj.getOwnPropertyKeys();
+
+        // Step 4: For each element k of keys
+        for (PropertyKey key : keys) {
+            PropertyDescriptor currentDesc = obj.getOwnPropertyDescriptor(key);
+            if (context.hasPendingException()) {
+                return false;
+            }
+            if (currentDesc != null) {
+                // Step 4.b.i: If currentDesc.[[Configurable]] is true, return false
+                if (currentDesc.isConfigurable()) {
+                    return false;
+                }
+                // Step 4.b.ii: If level is frozen and IsDataDescriptor(currentDesc)
+                //   and currentDesc.[[Writable]] is true, return false
+                if (frozen && currentDesc.isDataDescriptor() && currentDesc.isWritable()) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /**

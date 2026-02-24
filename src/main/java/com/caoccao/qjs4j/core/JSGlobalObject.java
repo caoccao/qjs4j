@@ -1721,6 +1721,9 @@ public final class JSGlobalObject {
         );
         objectPrototype.defineProperty(PropertyKey.PROTO, protoDesc);
 
+        // Object.prototype is an immutable prototype exotic object per ES2024 9.4.7
+        objectPrototype.setImmutablePrototype();
+
         // Create Object constructor
         JSNativeFunction objectConstructor = new JSNativeFunction(JSObject.NAME, 1, ObjectConstructor::call, true);
         objectConstructor.definePropertyReadonlyNonConfigurable("prototype", objectPrototype);

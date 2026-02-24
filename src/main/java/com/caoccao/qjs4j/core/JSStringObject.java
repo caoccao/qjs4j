@@ -184,6 +184,24 @@ public final class JSStringObject extends JSObject {
     }
 
     /**
+     * Override enumerableKeys to include character index properties for for-in enumeration.
+     * String exotic objects have enumerable index properties for each character.
+     */
+    @Override
+    public PropertyKey[] enumerableKeys() {
+        int len = value.value().length();
+        PropertyKey[] superKeys = super.enumerableKeys();
+        List<PropertyKey> keys = new ArrayList<>(len + superKeys.length);
+        for (int i = 0; i < len; i++) {
+            keys.add(PropertyKey.fromString(String.valueOf(i)));
+        }
+        for (PropertyKey key : superKeys) {
+            keys.add(key);
+        }
+        return keys.toArray(new PropertyKey[0]);
+    }
+
+    /**
      * Get the JSString value wrapped by this String object.
      *
      * @return the JSString value
