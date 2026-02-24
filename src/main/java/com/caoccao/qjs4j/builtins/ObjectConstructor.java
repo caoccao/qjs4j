@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.util.List;
 
@@ -154,6 +155,32 @@ public final class ObjectConstructor {
     }
 
     /**
+     * Close iterator and throw a TypeError.
+     */
+    private static void closeIteratorAndThrow(JSContext context, JSValue iterator, String message) {
+        JSIteratorHelper.closeIterator(context, iterator);
+        // Clear any exception from closeIterator, throw our TypeError
+        context.clearPendingException();
+        context.throwTypeError(message);
+    }
+
+    /**
+     * Close iterator while preserving the current pending exception.
+     * Per spec, the original error takes precedence over any error from return().
+     */
+    private static JSValue closeIteratorPreserveError(JSContext context, JSValue iterator) {
+        JSValue savedError = context.getPendingException();
+        context.clearPendingException();
+        JSIteratorHelper.closeIterator(context, iterator);
+        // Restore the original error
+        if (context.hasPendingException()) {
+            context.clearPendingException();
+        }
+        context.setPendingException(savedError);
+        return JSUndefined.INSTANCE;
+    }
+
+    /**
      * Object.create(proto, propertiesObject)
      * ES2020 19.1.2.2
      * Creates a new object with the specified prototype object.
@@ -282,28 +309,54 @@ public final class ObjectConstructor {
 
     /**
      * Object.entries(obj)
-     * ES2020 19.1.2.5
-     * Returns an array of a given object's own enumerable property [key, value] pairs.
+     * ES2024 20.1.2.5 / EnumerableOwnProperties (7.3.25)
+     * Returns an array of a given object's own enumerable string-keyed [key, value] pairs.
      */
     public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return context.throwTypeError("Object.entries called on non-object");
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
         JSValue arg = args[0];
-        // Null and undefined throw TypeError
         if (arg.isNullOrUndefined()) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
+
+        // Step 1: Let obj be ? ToObject(O)
+        JSObject obj;
+        if (arg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, arg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        // Step 2: Let ownKeys be ? obj.[[OwnPropertyKeys]]()
+        List<PropertyKey> ownKeys = obj.getOwnPropertyKeys();
+
+        // Step 3: For each key, check enumerability and collect [key, value] pairs
         JSArray result = context.createJSArray();
-        if (arg instanceof JSObject jsObject) {
-            List<PropertyKey> propertyKeys = jsObject.getOwnPropertyKeys();
-            for (PropertyKey key : propertyKeys) {
-                if (key.isString()) {
-                    JSArray entry = context.createJSArray();
-                    entry.push(new JSString(key.asString()));
-                    entry.push(jsObject.get(key));
-                    result.push(entry);
+        for (PropertyKey key : ownKeys) {
+            // Only string keys (not symbols). Index keys are also "string" keys per spec.
+            if (key.isSymbol()) {
+                continue;
+            }
+            // Step 3a: Let desc be ? obj.[[GetOwnProperty]](key)
+            PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            // Step 3b: If desc is not undefined and desc.[[Enumerable]] is true
+            if (desc != null && desc.isEnumerable()) {
+                JSValue value = obj.get(context, key);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
                 }
+                JSArray entry = context.createJSArray(2);
+                entry.set(0, new JSString(key.toPropertyString()));
+                entry.set(1, value);
+                result.push(entry);
             }
         }
         return result;
@@ -311,8 +364,7 @@ public final class ObjectConstructor {
 
     /**
      * Object.freeze(obj)
-     * ES2020 19.1.2.6
-     * Freezes an object.
+     * ES2024 20.1.2.6 / SetIntegrityLevel (7.3.16) with level "frozen".
      * Following QuickJS js_object_seal() implementation with freeze_flag=1.
      */
     public static JSValue freeze(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -325,34 +377,50 @@ public final class ObjectConstructor {
             return arg; // Primitives are returned as-is
         }
 
-        // Step 1: Prevent extensions
-        obj.preventExtensions();
-
-        // Step 2: Get all own property keys (string, symbol, and array indices)
-        List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
-
-        // Step 3: For each property, set configurable=false and (for data properties) writable=false
-        for (PropertyKey key : propertyKeys) {
-            PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
-            if (desc == null) {
-                continue; // Skip if property doesn't exist (shouldn't happen)
+        // TypedArrays backed by resizable buffers cannot be frozen because their
+        // elements could change due to buffer resizing, which violates frozen semantics.
+        if (obj instanceof JSTypedArray ta) {
+            IJSArrayBuffer buf = ta.getBuffer();
+            if (buf instanceof JSArrayBuffer ab && ab.isResizable()) {
+                return context.throwTypeError("Cannot freeze a TypedArray backed by a resizable buffer");
             }
-
-            // Modify the existing descriptor:
-            // - Always set configurable to false
-            // - For data properties, also set writable to false
-            desc.setConfigurable(false);
-
-            if (desc.isDataDescriptor()) {
-                // Only modify writable if it's a data property
-                desc.setWritable(false);
-            }
-
-            // Update the property with the modified descriptor
-            obj.defineProperty(key, desc);
         }
 
-        // Step 4: Mark the object as frozen (sets frozen, sealed, and extensible flags)
+        // Step 3: Set the [[Extensible]] internal slot of O to false
+        obj.preventExtensions();
+
+        // Step 5: Let keys be ? O.[[OwnPropertyKeys]]()
+        List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
+
+        // Step 7: For each element k of keys, freeze each property
+        for (PropertyKey key : propertyKeys) {
+            PropertyDescriptor currentDesc = obj.getOwnPropertyDescriptor(key);
+            if (currentDesc == null) {
+                continue;
+            }
+
+            // Per spec 7.3.16 step 7.b.ii: create a PARTIAL descriptor
+            // For accessor properties: { [[Configurable]]: false }
+            // For data properties: { [[Configurable]]: false, [[Writable]]: false }
+            PropertyDescriptor freezeDesc = new PropertyDescriptor();
+            freezeDesc.setConfigurable(false);
+            if (currentDesc.isAccessorDescriptor()) {
+                // Accessor: only set configurable
+            } else {
+                // Data or generic: also set writable
+                freezeDesc.setWritable(false);
+            }
+
+            // DefinePropertyOrThrow(O, k, desc)
+            if (!obj.defineOwnProperty(key, freezeDesc, context)) {
+                if (!context.hasPendingException()) {
+                    context.throwTypeError("Cannot freeze property: " + key.toPropertyString());
+                }
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        // Mark the object as frozen (sets frozen, sealed, and extensible flags)
         obj.freeze();
 
         return arg;
@@ -360,7 +428,7 @@ public final class ObjectConstructor {
 
     /**
      * Object.fromEntries(iterable)
-     * ES2019 19.1.2.5
+     * ES2024 20.1.2.8 / AddEntriesFromIterable (7.4.38)
      * Creates an object from an iterable of key-value pairs.
      */
     public static JSValue fromEntries(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -369,102 +437,104 @@ public final class ObjectConstructor {
         }
 
         JSValue iterable = args[0];
+        if (iterable.isNullOrUndefined()) {
+            return context.throwTypeError("Object.fromEntries requires an iterable argument");
+        }
 
-        // Special case: if it's a JSArray, iterate directly for efficiency
-        if (iterable instanceof JSArray arr) {
-            JSObject result = context.createJSObject();
-
-            for (int i = 0; i < arr.getLength(); i++) {
-                JSValue entry = arr.get(i);
-
-                // Each entry should be an array-like object with [key, value]
-                if (!(entry instanceof JSObject entryObj)) {
-                    return context.throwTypeError("Iterator value must be an object");
-                }
-
-                // Get key (element 0) and value (element 1)
-                JSValue keyValue;
-                JSValue entryValue;
-
-                // If it's an array, use integer index access
-                if (entryObj instanceof JSArray entryArr) {
-                    keyValue = entryArr.get(0);
-                    entryValue = entryArr.get(1);
-                } else {
-                    // Otherwise use property key access
-                    keyValue = entryObj.get("0");
-                    entryValue = entryObj.get("1");
-                }
-
-                // Convert key to string
-                JSString keyString = JSTypeConversions.toString(context, keyValue);
-                PropertyKey key = PropertyKey.fromString(keyString.value());
-
-                // Set property
-                result.set(key, entryValue);
+        // GetIterator(iterable, sync)
+        JSValue iterator = JSIteratorHelper.getIterator(context, iterable);
+        if (iterator == null) {
+            if (!context.hasPendingException()) {
+                return context.throwTypeError("object is not iterable");
             }
-
-            return result;
+            return JSUndefined.INSTANCE;
         }
 
-        // General case: use iterator protocol
-        // Get the iterator method
-        JSValue iteratorMethod = null;
-        if (iterable instanceof JSObject obj) {
-            PropertyKey iteratorKey = PropertyKey.SYMBOL_ITERATOR;
-            iteratorMethod = obj.get(iteratorKey);
-        }
-
-        if (!(iteratorMethod instanceof JSFunction iterFunc)) {
-            return context.throwTypeError("Object.fromEntries requires an iterable");
-        }
-
-        // Call the iterator method to get the iterator
-        JSValue iteratorValue = iterFunc.call(context, iterable, new JSValue[0]);
-        if (!(iteratorValue instanceof JSIterator iterator)) {
-            return context.throwTypeError("Iterator method must return an iterator");
-        }
-
-        // Create result object
         JSObject result = context.createJSObject();
 
-        // Iterate over entries
+        // AddEntriesFromIterable step 4: Repeat
         while (true) {
-            JSObject iterResult = iterator.next();
-            JSValue doneValue = iterResult.get("done");
-            boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
+            // Step 4a: IteratorStep - errors here propagate WITHOUT IteratorClose
+            // IteratorNext step 3: if result is not an Object, throw TypeError (no IteratorClose)
+            JSObject iterResult;
+            try {
+                iterResult = JSIteratorHelper.iteratorNext(iterator, context);
+            } catch (JSVirtualMachineException e) {
+                // IteratorStep errors propagate without IteratorClose
+                throw e;
+            }
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (iterResult == null) {
+                // next() returned a non-object: IteratorNext step 3 throws TypeError
+                // Per spec, do NOT close the iterator for IteratorStep errors
+                return context.throwTypeError("Iterator result is not an object");
+            }
 
-            if (done) {
+            JSValue doneValue = iterResult.get(context, PropertyKey.DONE);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
                 break;
             }
 
-            JSValue value = iterResult.get(PropertyKey.VALUE);
-
-            // Each entry must be an object with at least 2 elements
-            if (!(value instanceof JSObject entryObj)) {
-                return context.throwTypeError("Iterator value must be an object");
+            // Step 4c: IteratorValue - errors propagate WITHOUT IteratorClose
+            JSValue nextItem = iterResult.get(context, PropertyKey.VALUE);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
 
-            // Get key (element 0) and value (element 1)
-            JSValue keyValue;
-            JSValue entryValue;
+            // Steps 4d-4k: errors from here on CLOSE the iterator
+            try {
+                // Step 4d: If nextItem is not an Object, close iterator and throw TypeError
+                if (!(nextItem instanceof JSObject entryObj)) {
+                    closeIteratorAndThrow(context, iterator,
+                            "Iterator value " + JSTypeConversions.toString(context, nextItem).value() + " is not an entry object");
+                    return JSUndefined.INSTANCE;
+                }
 
-            // If it's an array, use integer index access
-            if (entryObj instanceof JSArray entryArr) {
-                keyValue = entryArr.get(0);
-                entryValue = entryArr.get(1);
-            } else {
-                // Otherwise use property key access
-                keyValue = entryObj.get("0");
-                entryValue = entryObj.get("1");
+                // Step 4e: Get(nextItem, "0") — key. Errors close the iterator.
+                JSValue keyValue = entryObj.get(context, PropertyKey.fromString("0"));
+                if (context.hasPendingException()) {
+                    return closeIteratorPreserveError(context, iterator);
+                }
+
+                // Step 4g: Get(nextItem, "1") — value. Errors close the iterator.
+                JSValue entryValue = entryObj.get(context, PropertyKey.fromString("1"));
+                if (context.hasPendingException()) {
+                    return closeIteratorPreserveError(context, iterator);
+                }
+
+                // Step 4k: adder = CreateDataPropertyOnObject: ToPropertyKey + CreateDataProperty
+                // ToPropertyKey supports symbols. Errors close the iterator.
+                PropertyKey key = PropertyKey.fromValue(context, keyValue);
+                if (context.hasPendingException()) {
+                    return closeIteratorPreserveError(context, iterator);
+                }
+
+                // CreateDataProperty (defineProperty semantics, not Set)
+                result.defineProperty(key, PropertyDescriptor.defaultData(entryValue));
+            } catch (JSVirtualMachineException e) {
+                // A bytecode function called during key/value processing threw.
+                // Close the iterator, preserving the original error, then re-throw.
+                JSValue savedError = context.getPendingException();
+                context.clearPendingException();
+                try {
+                    JSIteratorHelper.closeIterator(context, iterator);
+                } catch (JSVirtualMachineException ignored) {
+                    // Ignore errors from closing
+                }
+                // Restore the original error
+                if (context.hasPendingException()) {
+                    context.clearPendingException();
+                }
+                if (savedError != null) {
+                    context.setPendingException(savedError);
+                }
+                throw e;
             }
-
-            // Convert key to string
-            JSString keyString = JSTypeConversions.toString(context, keyValue);
-            PropertyKey key = PropertyKey.fromString(keyString.value());
-
-            // Set property
-            result.set(key, entryValue);
         }
 
         return result;
@@ -480,9 +550,19 @@ public final class ObjectConstructor {
             return JSUndefined.INSTANCE;
         }
 
+        // ES2015 19.1.2.6 step 1: Let obj be ? ToObject(O)
         JSValue objArg = args[0];
-        if (!(objArg instanceof JSObject obj)) {
-            return context.throwTypeError("Object.getOwnPropertyDescriptor called on non-object");
+        if (objArg.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        JSObject obj;
+        if (objArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, objArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         PropertyKey key = PropertyKey.fromValue(context, args[1]);

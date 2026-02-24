@@ -394,6 +394,12 @@ public final class ObjectPrototype {
             desc.setSetter(setter instanceof JSFunction ? (JSFunction) setter : null);
         }
 
+        // ToPropertyDescriptor step 10: accessor + data conflict check
+        if (desc.isAccessorDescriptor() && desc.isDataDescriptor()) {
+            return context.throwTypeError(
+                    "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute, #<Object>");
+        }
+
         if (!obj.defineOwnProperty(key, desc, context)) {
             if (context.hasPendingException()) {
                 return context.getPendingException();

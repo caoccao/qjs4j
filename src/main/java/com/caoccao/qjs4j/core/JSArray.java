@@ -195,6 +195,17 @@ public final class JSArray extends JSObject {
             // Step 7-9: Get old length descriptor
             PropertyDescriptor oldLenDesc = getOwnPropertyDescriptor(key);
 
+            // Validate non-value attributes against non-configurable length property.
+            // Array length is always non-configurable (ES2024 10.4.2.4 step 9).
+            if (oldLenDesc != null && !oldLenDesc.isConfigurable()) {
+                if (descriptor.hasConfigurable() && descriptor.isConfigurable()) {
+                    return false;
+                }
+                if (descriptor.hasEnumerable() && descriptor.isEnumerable() != oldLenDesc.isEnumerable()) {
+                    return false;
+                }
+            }
+
             // Step 12: If oldLenDesc.[[Writable]] is false, return false
             if (oldLenDesc != null && !oldLenDesc.isWritable()) {
                 if (descriptor.hasWritable() && descriptor.isWritable()) {

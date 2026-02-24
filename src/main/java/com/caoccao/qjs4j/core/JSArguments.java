@@ -41,6 +41,7 @@ public final class JSArguments extends JSObject {
     private final JSValue[] argumentValues;
     private final boolean isStrict;
     private final Set<Integer> mappedIndices = new HashSet<>();
+    private final VarRef[] parameterVarRefs;
 
     /**
      * Create an arguments object.
@@ -83,6 +84,7 @@ public final class JSArguments extends JSObject {
         super();
         this.argumentValues = args != null ? args : new JSValue[0];
         this.isStrict = isStrict;
+        this.parameterVarRefs = mappedVarRefs;
 
         // Set length property (writable, non-enumerable, configurable per ES spec)
         definePropertyWritableConfigurable("length", JSNumber.of(argumentValues.length));
@@ -188,25 +190,52 @@ public final class JSArguments extends JSObject {
     /**
      * Override [[DefineOwnProperty]] per ES2024 10.4.4.2.
      * Mapped parameters are stored as accessor properties for VarRef synchronization,
-     * but the spec treats them as data properties. When an accessor descriptor is applied
-     * to a mapped parameter, we must first "unmap" it by converting from accessor to data,
-     * so that the data→accessor conversion in super.defineOwnProperty properly sets
-     * [[Set]] to undefined (the default) instead of preserving the mapped setter.
+     * but the spec treats them as data properties. This override implements ES2024
+     * 10.4.4.2 [[DefineOwnProperty]] for arguments objects:
+     * - Before applying, unmap the accessor so OrdinaryDefineOwnProperty sees a data property
+     * - After applying, sync VarRef if descriptor has [[Value]]
+     * - Unmap on accessor descriptor or writable:false
      */
     @Override
     public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
         int index = getArgumentIndex(key);
-        if (index >= 0 && mappedIndices.contains(index) && descriptor.isAccessorDescriptor()) {
-            // Only unmap if the property still exists and is an accessor (mapped).
-            // The property may have been deleted (e.g., "delete arg[0]").
+        boolean isMapped = index >= 0 && mappedIndices.contains(index);
+
+        if (isMapped) {
+            // Check if the property still exists as a mapped accessor
             PropertyDescriptor current = getOwnPropertyDescriptor(key);
-            if (current != null && current.isAccessorDescriptor()) {
-                unmapParameter(key, index, context);
-            } else {
+            if (current == null || !current.isAccessorDescriptor()) {
+                // Property was deleted or already converted; clear stale mapping
                 mappedIndices.remove(index);
+                isMapped = false;
+            } else {
+                // Unmap: convert the stored accessor to a data property so that
+                // OrdinaryDefineOwnProperty sees the correct property type.
+                unmapParameter(key, index, context);
             }
         }
-        return super.defineOwnProperty(key, descriptor, context);
+
+        boolean result = super.defineOwnProperty(key, descriptor, context);
+
+        // ES2024 10.4.4.2 step 7: post-define mapping updates
+        if (result && isMapped) {
+            if (descriptor.isAccessorDescriptor()) {
+                // Step 7a: accessor descriptor removes mapping (already unmapped above)
+                // mappedIndices already cleared in unmapParameter
+            } else {
+                // Step 7b.i: sync VarRef with new value
+                if (descriptor.hasValue() && parameterVarRefs != null
+                        && index < parameterVarRefs.length && parameterVarRefs[index] != null) {
+                    parameterVarRefs[index].set(descriptor.getValue());
+                }
+                // Step 7b.ii: writable:false removes mapping
+                if (descriptor.hasWritable() && !descriptor.isWritable()) {
+                    mappedIndices.remove(index);
+                }
+            }
+        }
+
+        return result;
     }
 
     private int getArgumentIndex(PropertyKey key) {

@@ -770,8 +770,15 @@ public final class JSProxy extends JSObject {
             }
         }
 
-        // Check if converting between data and accessor
+        // Step 5: If desc is a generic descriptor (no [[Value]], [[Writable]], [[Get]], [[Set]]),
+        // no further validation is required per ES2024 10.1.6.3.
+        boolean descIsData = desc.hasValue() || desc.hasWritable();
         boolean descIsAccessor = desc.hasGetter() || desc.hasSetter();
+        if (!descIsData && !descIsAccessor) {
+            return true;
+        }
+
+        // Step 6: Check if converting between data and accessor
         boolean currentIsAccessor = current.hasGetter() || current.hasSetter();
 
         if (descIsAccessor != currentIsAccessor) {

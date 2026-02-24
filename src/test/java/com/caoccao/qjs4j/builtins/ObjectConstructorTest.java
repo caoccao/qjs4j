@@ -423,9 +423,9 @@ public class ObjectConstructorTest extends BaseJavetTest {
         result = ObjectConstructor.getOwnPropertyDescriptor(context, JSUndefined.INSTANCE, new JSValue[]{obj});
         assertThat(result.isUndefined()).isTrue();
 
-        // Edge case: non-object
-        assertTypeError(ObjectConstructor.getOwnPropertyDescriptor(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not object"), new JSString("prop")}));
-        assertPendingException(context);
+        // Edge case: primitive (ToObject wraps it, then property lookup returns undefined)
+        result = ObjectConstructor.getOwnPropertyDescriptor(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not object"), new JSString("prop")});
+        assertThat(result.isUndefined()).isTrue();
     }
 
     @Test

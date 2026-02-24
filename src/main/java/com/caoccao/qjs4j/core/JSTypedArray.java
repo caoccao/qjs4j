@@ -323,12 +323,13 @@ public abstract class JSTypedArray extends JSObject {
         if (buffer.isDetached() || index >= getLength()) {
             return false;
         }
-        // Typed array elements are always {configurable: true, enumerable: true, writable: true}
+        // IntegerIndexedObjectDefineOwnProperty per ES2024 10.4.5.3
         // Accessor descriptors are not allowed
         if (descriptor.isAccessorDescriptor()) {
             return false;
         }
-        if (descriptor.hasConfigurable() && !descriptor.isConfigurable()) {
+        // Step 2a: If Desc has [[Configurable]] and it's true, return false
+        if (descriptor.hasConfigurable() && descriptor.isConfigurable()) {
             return false;
         }
         if (descriptor.hasEnumerable() && !descriptor.isEnumerable()) {
