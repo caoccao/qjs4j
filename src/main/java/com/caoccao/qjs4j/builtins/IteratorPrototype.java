@@ -107,6 +107,29 @@ public final class IteratorPrototype {
     }
 
     /**
+     * Build the result value for a zip iteration step.
+     */
+    private static JSValue buildZipResult(JSContext context, JSValue[] results, int iterCount, List<PropertyKey> keys) {
+        if (keys != null) {
+            // zipKeyed: create null-prototype object
+            JSObject resultObject = context.createJSObject();
+            resultObject.setPrototype(null);
+            for (int i = 0; i < iterCount; i++) {
+                resultObject.defineProperty(keys.get(i),
+                        PropertyDescriptor.dataDescriptor(results[i], true, true, true));
+            }
+            return resultObject;
+        } else {
+            // zip: create packed array
+            JSArray resultArray = context.createJSArray();
+            for (int i = 0; i < iterCount; i++) {
+                resultArray.push(results[i]);
+            }
+            return resultArray;
+        }
+    }
+
+    /**
      * Safely call a function from within a native callback.
      * When a bytecode function throws, the Java exception propagates out,
      * skipping the native callback's error handling. This method catches
@@ -149,6 +172,49 @@ public final class IteratorPrototype {
         if (pendingException != null) {
             context.setPendingException(pendingException);
         }
+    }
+
+    /**
+     * Close all open iterators with a throw completion (error).
+     * Marks all as closed and calls IteratorCloseAll in reverse order.
+     */
+    private static void closeOpenIteratorsWithError(
+            JSContext context,
+            List<IteratorRecord> iters,
+            boolean[] open,
+            JSValue error) {
+
+        List<IteratorRecord> openIters = new ArrayList<>();
+        for (int i = 0; i < open.length; i++) {
+            if (open[i]) {
+                openIters.add(iters.get(i));
+                open[i] = false;
+            }
+        }
+        // Clear any pending exception before calling IteratorCloseAll
+        if (context.hasPendingException()) {
+            context.clearPendingException();
+        }
+        iteratorCloseAll(openIters, error, context);
+    }
+
+    /**
+     * Close all open iterators with a return completion.
+     * Marks all as closed and calls IteratorCloseAll in reverse order.
+     */
+    private static void closeOpenIteratorsWithReturn(
+            JSContext context,
+            List<IteratorRecord> iters,
+            boolean[] open) {
+
+        List<IteratorRecord> openIters = new ArrayList<>();
+        for (int i = 0; i < open.length; i++) {
+            if (open[i]) {
+                openIters.add(iters.get(i));
+                open[i] = false;
+            }
+        }
+        iteratorCloseAll(openIters, null, context);
     }
 
     /**
@@ -366,6 +432,153 @@ public final class IteratorPrototype {
         });
 
         return createIteratorObject(context, nextFunction, returnFunction, "Iterator Wrap");
+    }
+
+    /**
+     * Shared IteratorZip implementation for both zip and zipKeyed.
+     * When keys is null, produces arrays (zip). When keys is non-null, produces null-proto objects (zipKeyed).
+     */
+    private static JSValue createZipIterator(
+            JSContext context,
+            List<IteratorRecord> iters,
+            String mode,
+            List<JSValue> padding,
+            List<PropertyKey> keys) {
+
+        int iterCount = iters.size();
+        // Track which iterators are still open (by index)
+        boolean[] open = new boolean[iterCount];
+        for (int i = 0; i < iterCount; i++) {
+            open[i] = true;
+        }
+
+        // Generator state: 0 = suspended-start, 1 = suspended-yield, 2 = executing, 3 = completed
+        int[] generatorState = {0};
+
+        JSNativeFunction nextFunction = new JSNativeFunction("next", 0, (childContext, childThisArg, childArgs) -> {
+            if (generatorState[0] == 2) {
+                return childContext.throwTypeError("generator is already running");
+            }
+            if (generatorState[0] == 3) {
+                return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+            }
+
+            generatorState[0] = 2; // executing
+            try {
+                JSValue[] results = new JSValue[iterCount];
+                boolean allAlreadyClosed = true;
+
+                for (int i = 0; i < iterCount; i++) {
+                    if (!open[i]) {
+                        // Already exhausted, use padding
+                        results[i] = (padding != null && i < padding.size()) ? padding.get(i) : JSUndefined.INSTANCE;
+                        continue;
+                    }
+                    allAlreadyClosed = false;
+
+                    IteratorRecord iterRecord = iters.get(i);
+                    IteratorStep step = iteratorStep(childContext, iterRecord.iterator(), iterRecord.nextMethod());
+                    if (step == null) {
+                        // Abrupt completion: remove this iter from openIters, close remaining
+                        open[i] = false;
+                        generatorState[0] = 3;
+                        JSValue error = childContext.getPendingException();
+                        closeOpenIteratorsWithError(childContext, iters, open, error);
+                        return childContext.getPendingException();
+                    }
+
+                    if (step.done()) {
+                        open[i] = false;
+
+                        if ("shortest".equals(mode)) {
+                            // Close all remaining open iterators with ReturnCompletion
+                            generatorState[0] = 3;
+                            closeOpenIteratorsWithReturn(childContext, iters, open);
+                            if (childContext.hasPendingException()) {
+                                return childContext.getPendingException();
+                            }
+                            return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+                        }
+
+                        if ("strict".equals(mode)) {
+                            if (i != 0) {
+                                // Non-first iterator done: immediately close and throw TypeError
+                                generatorState[0] = 3;
+                                JSValue error = childContext.throwTypeError("iterators have different lengths");
+                                closeOpenIteratorsWithError(childContext, iters, open, error);
+                                return childContext.getPendingException();
+                            }
+                            // First iterator (i==0) is done: check remaining with IteratorStep
+                            return handleStrictFirstDone(childContext, iters, open, iterCount, generatorState);
+                        }
+
+                        // "longest" mode: use padding value
+                        results[i] = (padding != null && i < padding.size()) ? padding.get(i) : JSUndefined.INSTANCE;
+                    } else {
+                        results[i] = step.value();
+                    }
+                }
+
+                // If all iterators were already closed before this round
+                if (allAlreadyClosed) {
+                    generatorState[0] = 3;
+                    return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+                }
+
+                // "longest" mode: check if all iterators are now done
+                if ("longest".equals(mode)) {
+                    boolean anyOpen = false;
+                    for (int i = 0; i < iterCount; i++) {
+                        if (open[i]) {
+                            anyOpen = true;
+                            break;
+                        }
+                    }
+                    if (!anyOpen) {
+                        generatorState[0] = 3;
+                        return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+                    }
+                }
+
+                // Build result
+                JSValue resultValue = buildZipResult(childContext, results, iterCount, keys);
+
+                generatorState[0] = 1; // suspended-yield
+                return iteratorResult(childContext, resultValue, false);
+            } catch (Exception e) {
+                generatorState[0] = 3;
+                throw e;
+            }
+        });
+
+        JSNativeFunction returnFunction = new JSNativeFunction("return", 0, (childContext, childThisArg, childArgs) -> {
+            if (generatorState[0] == 2) {
+                return childContext.throwTypeError("generator is already running");
+            }
+            if (generatorState[0] == 3) {
+                return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+            }
+
+            if (generatorState[0] == 0) {
+                // suspended-start: set to completed, then close
+                generatorState[0] = 3;
+            } else {
+                // suspended-yield: set to executing during close
+                generatorState[0] = 2;
+            }
+
+            closeOpenIteratorsWithReturn(childContext, iters, open);
+
+            // After close, set to completed
+            generatorState[0] = 3;
+
+            if (childContext.hasPendingException()) {
+                return childContext.getPendingException();
+            }
+            return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+        });
+
+        return createIteratorObject(context, nextFunction, returnFunction, "Iterator Helper");
     }
 
     /**
@@ -634,7 +847,6 @@ public final class IteratorPrototype {
                         if (!innerStep.done()) {
                             return iteratorResult(childContext, innerStep.value(), false);
                         }
-                        closeIteratorIgnoringResult(childContext, innerIterator[0]);
                         innerIterator[0] = null;
                         innerNextMethod[0] = JSUndefined.INSTANCE;
                         continue;
@@ -650,8 +862,7 @@ public final class IteratorPrototype {
                         return iteratorResult(childContext, JSUndefined.INSTANCE, true);
                     }
 
-                    JSValue mapped = mapper.call(
-                            childContext,
+                    JSValue mapped = callSafe(childContext, mapper,
                             JSUndefined.INSTANCE,
                             new JSValue[]{step.value(), JSNumber.of(index[0]++)});
                     if (childContext.hasPendingException()) {
@@ -710,6 +921,9 @@ public final class IteratorPrototype {
             if (running[0]) {
                 return childContext.throwTypeError("cannot invoke a running iterator");
             }
+            if (done[0]) {
+                return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+            }
             done[0] = true;
             if (innerIterator[0] != null) {
                 closeIteratorIgnoringResult(childContext, innerIterator[0]);
@@ -726,7 +940,7 @@ public final class IteratorPrototype {
             if (!(returnMethod instanceof JSFunction returnFunctionValue)) {
                 return childContext.throwTypeError("not a function");
             }
-            JSValue result = returnFunctionValue.call(childContext, iteratorObject, NO_ARGS);
+            JSValue result = callSafe(childContext, returnFunctionValue, iteratorObject, NO_ARGS);
             if (childContext.hasPendingException()) {
                 return childContext.getPendingException();
             }
@@ -750,6 +964,7 @@ public final class IteratorPrototype {
         }
         JSFunction callback = requireFunction(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (callback == null) {
+            closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
         JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
@@ -766,7 +981,7 @@ public final class IteratorPrototype {
             if (step.done()) {
                 return JSUndefined.INSTANCE;
             }
-            callback.call(context, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
+            callSafe(context, callback, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
             if (context.hasPendingException()) {
                 closeIteratorIgnoringResult(context, iteratorObject);
                 return context.getPendingException();
@@ -830,12 +1045,133 @@ public final class IteratorPrototype {
         return createIteratorWrap(context, iteratorObject, nextMethod);
     }
 
+    /**
+     * Get and validate the "mode" option. Returns "shortest", "longest", or "strict".
+     */
+    private static String getAndValidateMode(JSContext context, JSObject options) {
+        JSValue modeValue = options.get(context, PropertyKey.fromString("mode"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (modeValue instanceof JSUndefined) {
+            return "shortest";
+        }
+        // Must be a string primitive (not a String wrapper), no coercion
+        if (!(modeValue instanceof JSString modeStr)) {
+            context.throwTypeError("mode must be a string");
+            return null;
+        }
+        String mode = modeStr.value();
+        if (!"shortest".equals(mode) && !"longest".equals(mode) && !"strict".equals(mode)) {
+            context.throwTypeError("mode must be 'shortest', 'longest', or 'strict'");
+            return null;
+        }
+        return mode;
+    }
+
     private static long getArrayLikeLength(JSContext context, JSObject arrayLike) {
         return JSTypeConversions.toLength(context, arrayLike.get(context, PropertyKey.LENGTH));
     }
 
     private static JSValue getArrayLikeValue(JSContext context, JSObject arrayLike, long index) {
         return arrayLike.get(context, PropertyKey.fromString(Long.toString(index)));
+    }
+
+    /**
+     * GetIteratorFlattenable(obj, reject-strings)
+     */
+    private static IteratorRecord getIteratorFlattenable(JSContext context, JSValue obj) {
+        if (!(obj instanceof JSObject objObject)) {
+            context.throwTypeError("value is not an object");
+            return null;
+        }
+
+        JSValue iteratorMethod = objObject.get(context, PropertyKey.SYMBOL_ITERATOR);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
+        JSObject iterator;
+        if (iteratorMethod instanceof JSUndefined || iteratorMethod instanceof JSNull) {
+            // Use the object itself as the iterator
+            iterator = objObject;
+        } else {
+            if (!(iteratorMethod instanceof JSFunction iterFunc)) {
+                context.throwTypeError("Symbol.iterator is not a function");
+                return null;
+            }
+            JSValue iterValue = callSafe(context, iterFunc, objObject, NO_ARGS);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (!(iterValue instanceof JSObject iterObj)) {
+                context.throwTypeError("iterator is not an object");
+                return null;
+            }
+            iterator = iterObj;
+        }
+
+        JSValue nextMethod = iterator.get(context, PropertyKey.NEXT);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        return new IteratorRecord(iterator, nextMethod);
+    }
+
+    /**
+     * GetOptionsObject(options) - ES2024 spec
+     */
+    private static JSObject getOptionsObject(JSContext context, JSValue options) {
+        if (options instanceof JSUndefined) {
+            JSObject nullProto = context.createJSObject();
+            nullProto.setPrototype(null);
+            return nullProto;
+        }
+        if (options instanceof JSObject obj) {
+            return obj;
+        }
+        context.throwTypeError("options must be an object or undefined");
+        return null;
+    }
+
+    /**
+     * Handle strict mode when first iterator (i==0) is done.
+     * Check remaining iterators (k=1..iterCount-1) with IteratorStep.
+     */
+    private static JSValue handleStrictFirstDone(
+            JSContext context,
+            List<IteratorRecord> iters,
+            boolean[] open,
+            int iterCount,
+            int[] generatorState) {
+
+        for (int k = 1; k < iterCount; k++) {
+            if (!open[k]) {
+                continue;
+            }
+            IteratorRecord iterRecord = iters.get(k);
+            IteratorStep step = iteratorStep(context, iterRecord.iterator(), iterRecord.nextMethod());
+            if (step == null) {
+                // Abrupt completion during IteratorStep
+                open[k] = false;
+                generatorState[0] = 3;
+                JSValue error = context.getPendingException();
+                closeOpenIteratorsWithError(context, iters, open, error);
+                return context.getPendingException();
+            }
+            if (step.done()) {
+                open[k] = false;
+            } else {
+                // Not done: TypeError, close all remaining open
+                generatorState[0] = 3;
+                JSValue error = context.throwTypeError("iterators have different lengths");
+                closeOpenIteratorsWithError(context, iters, open, error);
+                return context.getPendingException();
+            }
+        }
+        // All done at same time
+        generatorState[0] = 3;
+        return iteratorResult(context, JSUndefined.INSTANCE, true);
     }
 
     private static boolean isIteratorInstance(JSContext context, JSObject object) {
@@ -857,6 +1193,80 @@ public final class IteratorPrototype {
         return false;
     }
 
+    /**
+     * IteratorCloseAll(iters, completion) - closes iterators in reverse order.
+     * If originalError is non-null, it's a throw completion; otherwise it's a return completion.
+     */
+    private static void iteratorCloseAll(List<IteratorRecord> iters, JSValue originalError, JSContext context) {
+        boolean isThrow = (originalError != null);
+        JSValue pendingError = originalError;
+
+        for (int i = iters.size() - 1; i >= 0; i--) {
+            JSObject iterator = iters.get(i).iterator();
+
+            // Clear any pending exception before each IteratorClose
+            if (context.hasPendingException()) {
+                context.clearPendingException();
+            }
+
+            // GetMethod(iterator, "return") - may throw via getter/proxy
+            JSValue returnMethod;
+            try {
+                returnMethod = iterator.get(context, PropertyKey.RETURN);
+            } catch (JSVirtualMachineException e) {
+                convertVMException(context, e);
+                if (!isThrow) {
+                    pendingError = context.getPendingException();
+                    isThrow = true;
+                }
+                if (context.hasPendingException()) {
+                    context.clearPendingException();
+                }
+                continue;
+            }
+            if (context.hasPendingException()) {
+                if (!isThrow) {
+                    pendingError = context.getPendingException();
+                    isThrow = true;
+                }
+                context.clearPendingException();
+                continue;
+            }
+            if (returnMethod instanceof JSUndefined || returnMethod instanceof JSNull) {
+                // No return method, skip
+                continue;
+            }
+            if (!(returnMethod instanceof JSFunction returnFunc)) {
+                if (!isThrow) {
+                    pendingError = context.throwTypeError("return is not a function");
+                    isThrow = true;
+                    context.clearPendingException();
+                }
+                continue;
+            }
+            JSValue innerResult = callSafe(context, returnFunc, iterator, NO_ARGS);
+            if (context.hasPendingException()) {
+                if (!isThrow) {
+                    pendingError = context.getPendingException();
+                    isThrow = true;
+                }
+                context.clearPendingException();
+            } else if (!isThrow && !(innerResult instanceof JSObject)) {
+                pendingError = context.throwTypeError("return did not return an object");
+                isThrow = true;
+                context.clearPendingException();
+            }
+        }
+
+        // Restore the final error
+        if (context.hasPendingException()) {
+            context.clearPendingException();
+        }
+        if (pendingError != null) {
+            context.setPendingException(pendingError);
+        }
+    }
+
     private static JSObject iteratorResult(JSContext context, JSValue value, boolean done) {
         JSObject result = context.createJSObject();
         result.set(PropertyKey.VALUE, value != null ? value : JSUndefined.INSTANCE);
@@ -869,7 +1279,7 @@ public final class IteratorPrototype {
             context.throwTypeError("not a function");
             return null;
         }
-        JSValue resultValue = function.call(context, iteratorObject, NO_ARGS);
+        JSValue resultValue = callSafe(context, function, iteratorObject, NO_ARGS);
         if (context.hasPendingException()) {
             return null;
         }
@@ -936,8 +1346,7 @@ public final class IteratorPrototype {
                     done[0] = true;
                     return iteratorResult(childContext, JSUndefined.INSTANCE, true);
                 }
-                JSValue mapped = mapper.call(
-                        childContext,
+                JSValue mapped = callSafe(childContext, mapper,
                         JSUndefined.INSTANCE,
                         new JSValue[]{step.value(), JSNumber.of(index[0]++)});
                 if (childContext.hasPendingException()) {
@@ -1014,6 +1423,7 @@ public final class IteratorPrototype {
         }
         JSFunction reducer = requireFunction(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (reducer == null) {
+            closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
         JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
@@ -1046,7 +1456,7 @@ public final class IteratorPrototype {
             if (step.done()) {
                 return accumulator;
             }
-            JSValue reduced = reducer.call(context, JSUndefined.INSTANCE, new JSValue[]{
+            JSValue reduced = callSafe(context, reducer, JSUndefined.INSTANCE, new JSValue[]{
                     accumulator,
                     step.value(),
                     JSNumber.of(index++),
@@ -1117,6 +1527,7 @@ public final class IteratorPrototype {
         }
         JSFunction predicate = requireFunction(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (predicate == null) {
+            closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
         JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
@@ -1133,7 +1544,7 @@ public final class IteratorPrototype {
             if (step.done()) {
                 return JSBoolean.FALSE;
             }
-            JSValue result = predicate.call(context, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
+            JSValue result = callSafe(context, predicate, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
             if (context.hasPendingException()) {
                 closeIteratorIgnoringResult(context, iteratorObject);
                 return context.getPendingException();
@@ -1208,7 +1619,10 @@ public final class IteratorPrototype {
             try {
                 if (remaining[0] <= 0) {
                     done[0] = true;
-                    closeIteratorIgnoringResult(childContext, iteratorObject);
+                    closeIterator(childContext, iteratorObject);
+                    if (childContext.hasPendingException()) {
+                        return childContext.getPendingException();
+                    }
                     return iteratorResult(childContext, JSUndefined.INSTANCE, true);
                 }
                 remaining[0]--;
@@ -1283,7 +1697,277 @@ public final class IteratorPrototype {
         return limit;
     }
 
+    /**
+     * Iterator.zip(iterables [, options])
+     * Creates an iterator that zips multiple iterables together.
+     */
+    public static JSValue zip(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSValue iterablesArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+
+        // Step 1: If iterables is not an Object, throw a TypeError exception.
+        if (!(iterablesArg instanceof JSObject iterablesObject)) {
+            return context.throwTypeError("iterables is not an object");
+        }
+
+        // Step 2: GetOptionsObject
+        JSObject options = getOptionsObject(context, optionsArg);
+        if (options == null) {
+            return context.getPendingException();
+        }
+
+        // Step 3-5: Get and validate mode
+        String mode = getAndValidateMode(context, options);
+        if (mode == null) {
+            return context.getPendingException();
+        }
+
+        // Step 6-8: Handle padding for "longest" mode
+        JSValue paddingOption = JSUndefined.INSTANCE;
+        if ("longest".equals(mode)) {
+            paddingOption = options.get(context, PropertyKey.fromString("padding"));
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (!(paddingOption instanceof JSUndefined) && !(paddingOption instanceof JSObject)) {
+                return context.throwTypeError("padding must be an object or undefined");
+            }
+        }
+
+        // Step 10: GetIterator(iterables, sync)
+        JSValue iteratorMethod = iterablesObject.get(context, PropertyKey.SYMBOL_ITERATOR);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (!(iteratorMethod instanceof JSFunction iteratorFunction)) {
+            return context.throwTypeError("iterables is not iterable");
+        }
+        JSValue inputIterValue = callSafe(context, iteratorFunction, iterablesObject, NO_ARGS);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (!(inputIterValue instanceof JSObject inputIter)) {
+            return context.throwTypeError("iterator result is not an object");
+        }
+        JSValue inputNextMethod = inputIter.get(context, PropertyKey.NEXT);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        // Step 11-12: Iterate through iterables, collecting iterator records
+        List<IteratorRecord> iters = new ArrayList<>();
+        IteratorRecord inputIterRecord = new IteratorRecord(inputIter, inputNextMethod);
+        while (true) {
+            IteratorStep inputStep = iteratorStep(context, inputIter, inputNextMethod);
+            if (inputStep == null) {
+                // IfAbruptCloseIterators(next, iters) — only close iters, not inputIter
+                iteratorCloseAll(iters, context.getPendingException(), context);
+                return context.getPendingException();
+            }
+            if (inputStep.done()) {
+                break;
+            }
+
+            // GetIteratorFlattenable(next, reject-strings)
+            IteratorRecord iterRecord = getIteratorFlattenable(context, inputStep.value());
+            if (iterRecord == null) {
+                // IfAbruptCloseIterators(iter, « inputIter » ⧺ iters)
+                // Combined list: [inputIter, iters[0], iters[1], ...]; close in reverse
+                JSValue error = context.getPendingException();
+                List<IteratorRecord> combined = new ArrayList<>();
+                combined.add(inputIterRecord);
+                combined.addAll(iters);
+                iteratorCloseAll(combined, error, context);
+                return context.getPendingException();
+            }
+            iters.add(iterRecord);
+        }
+
+        int iterCount = iters.size();
+
+        // Step 14: Handle padding for "longest" mode
+        List<JSValue> paddingValues = null;
+        if ("longest".equals(mode)) {
+            paddingValues = new ArrayList<>(iterCount);
+            if (paddingOption instanceof JSUndefined) {
+                for (int i = 0; i < iterCount; i++) {
+                    paddingValues.add(JSUndefined.INSTANCE);
+                }
+            } else {
+                JSObject paddingObject = (JSObject) paddingOption;
+                JSValue padIterMethod = paddingObject.get(context, PropertyKey.SYMBOL_ITERATOR);
+                if (context.hasPendingException()) {
+                    iteratorCloseAll(iters, context.getPendingException(), context);
+                    return context.getPendingException();
+                }
+                if (!(padIterMethod instanceof JSFunction padIterFunc)) {
+                    JSValue error = context.throwTypeError("padding is not iterable");
+                    iteratorCloseAll(iters, error, context);
+                    return context.getPendingException();
+                }
+                JSValue padIterValue = callSafe(context, padIterFunc, paddingObject, NO_ARGS);
+                if (context.hasPendingException()) {
+                    iteratorCloseAll(iters, context.getPendingException(), context);
+                    return context.getPendingException();
+                }
+                if (!(padIterValue instanceof JSObject padIter)) {
+                    JSValue error = context.throwTypeError("padding iterator is not an object");
+                    iteratorCloseAll(iters, error, context);
+                    return context.getPendingException();
+                }
+                JSValue padNextMethod = padIter.get(context, PropertyKey.NEXT);
+                if (context.hasPendingException()) {
+                    iteratorCloseAll(iters, context.getPendingException(), context);
+                    return context.getPendingException();
+                }
+
+                boolean usingIterator = true;
+                for (int i = 0; i < iterCount; i++) {
+                    if (usingIterator) {
+                        IteratorStep padStep = iteratorStep(context, padIter, padNextMethod);
+                        if (padStep == null) {
+                            // IfAbruptCloseIterators(next, iters)
+                            iteratorCloseAll(iters, context.getPendingException(), context);
+                            return context.getPendingException();
+                        }
+                        if (padStep.done()) {
+                            usingIterator = false;
+                            paddingValues.add(JSUndefined.INSTANCE);
+                        } else {
+                            paddingValues.add(padStep.value());
+                        }
+                    } else {
+                        paddingValues.add(JSUndefined.INSTANCE);
+                    }
+                }
+                // Close padding iterator if not exhausted
+                if (usingIterator) {
+                    closeIterator(context, padIter);
+                    if (context.hasPendingException()) {
+                        iteratorCloseAll(iters, context.getPendingException(), context);
+                        return context.getPendingException();
+                    }
+                }
+            }
+        }
+
+        // Create the zip iterator
+        return createZipIterator(context, iters, mode, paddingValues, null);
+    }
+
+    /**
+     * Iterator.zipKeyed(iterables [, options])
+     * Creates an iterator that zips named iterables together, producing objects.
+     */
+    public static JSValue zipKeyed(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSValue iterablesArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+
+        // Step 1: If iterables is not an Object, throw a TypeError exception.
+        if (!(iterablesArg instanceof JSObject iterablesObject)) {
+            return context.throwTypeError("iterables is not an object");
+        }
+
+        // Step 2: GetOptionsObject
+        JSObject options = getOptionsObject(context, optionsArg);
+        if (options == null) {
+            return context.getPendingException();
+        }
+
+        // Step 3-5: Get and validate mode
+        String mode = getAndValidateMode(context, options);
+        if (mode == null) {
+            return context.getPendingException();
+        }
+
+        // Step 6-8: Handle padding for "longest" mode
+        JSObject paddingObject = null;
+        if ("longest".equals(mode)) {
+            JSValue paddingOption = options.get(context, PropertyKey.fromString("padding"));
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (!(paddingOption instanceof JSUndefined) && !(paddingOption instanceof JSObject)) {
+                return context.throwTypeError("padding must be an object or undefined");
+            }
+            if (paddingOption instanceof JSObject padObj) {
+                paddingObject = padObj;
+            }
+        }
+
+        // Step 10-12: Get own property keys and iterate
+        List<PropertyKey> allKeys = iterablesObject.getOwnPropertyKeys();
+        List<PropertyKey> keys = new ArrayList<>();
+        List<IteratorRecord> iters = new ArrayList<>();
+
+        for (PropertyKey key : allKeys) {
+            PropertyDescriptor desc;
+            try {
+                desc = iterablesObject.getOwnPropertyDescriptor(key);
+            } catch (JSVirtualMachineException e) {
+                convertVMException(context, e);
+                iteratorCloseAll(iters, context.getPendingException(), context);
+                return context.getPendingException();
+            }
+            if (context.hasPendingException()) {
+                iteratorCloseAll(iters, context.getPendingException(), context);
+                return context.getPendingException();
+            }
+            if (desc == null || !desc.isEnumerable()) {
+                continue;
+            }
+            JSValue value;
+            try {
+                value = iterablesObject.get(context, key);
+            } catch (JSVirtualMachineException e) {
+                convertVMException(context, e);
+                iteratorCloseAll(iters, context.getPendingException(), context);
+                return context.getPendingException();
+            }
+            if (context.hasPendingException()) {
+                iteratorCloseAll(iters, context.getPendingException(), context);
+                return context.getPendingException();
+            }
+            if (value instanceof JSUndefined) {
+                continue;
+            }
+            IteratorRecord iterRecord = getIteratorFlattenable(context, value);
+            if (iterRecord == null) {
+                iteratorCloseAll(iters, context.getPendingException(), context);
+                return context.getPendingException();
+            }
+            keys.add(key);
+            iters.add(iterRecord);
+        }
+
+        // Step 14: Handle padding for "longest" mode
+        List<JSValue> paddingValues = null;
+        if ("longest".equals(mode)) {
+            paddingValues = new ArrayList<>(keys.size());
+            if (paddingObject == null) {
+                for (int i = 0; i < keys.size(); i++) {
+                    paddingValues.add(JSUndefined.INSTANCE);
+                }
+            } else {
+                for (PropertyKey key : keys) {
+                    JSValue padValue = paddingObject.get(context, key);
+                    if (context.hasPendingException()) {
+                        iteratorCloseAll(iters, context.getPendingException(), context);
+                        return context.getPendingException();
+                    }
+                    paddingValues.add(padValue != null ? padValue : JSUndefined.INSTANCE);
+                }
+            }
+        }
+
+        // Create the zip iterator
+        return createZipIterator(context, iters, mode, paddingValues, keys);
+    }
+
     private record ConcatSource(JSObject sourceObject, JSFunction iteratorMethod) {
+    }
+
+    private record IteratorRecord(JSObject iterator, JSValue nextMethod) {
     }
 
     private record IteratorStep(JSValue value, boolean done) {

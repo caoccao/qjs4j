@@ -456,6 +456,10 @@ final class FunctionClassCompiler {
                 Integer localIndex = ctx.findLocalInScopes(varName);
                 if (localIndex != null) {
                     ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    // Also store as global variable so class methods (compiled with separate
+                    // BytecodeCompiler contexts) can access this class via GET_VAR
+                    ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
                 }
             } else {
                 ctx.nonDeletableGlobalBindings.add(varName);

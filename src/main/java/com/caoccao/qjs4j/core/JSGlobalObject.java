@@ -1431,9 +1431,13 @@ public final class JSGlobalObject {
         }));
 
         JSNativeFunction iteratorConstructor = new JSNativeFunction(JSIterator.NAME, 0, IteratorConstructor::call, true, true);
-        iteratorConstructor.definePropertyWritableConfigurable("prototype", iteratorPrototype);
+        iteratorConstructor.defineProperty(
+                PropertyKey.PROTOTYPE,
+                PropertyDescriptor.dataDescriptor(iteratorPrototype, false, false, false));
         iteratorConstructor.definePropertyWritableConfigurable("concat", new JSNativeFunction("concat", 0, IteratorPrototype::concat));
         iteratorConstructor.definePropertyWritableConfigurable("from", new JSNativeFunction("from", 1, IteratorPrototype::from));
+        iteratorConstructor.definePropertyWritableConfigurable("zip", new JSNativeFunction("zip", 1, IteratorPrototype::zip));
+        iteratorConstructor.definePropertyWritableConfigurable("zipKeyed", new JSNativeFunction("zipKeyed", 1, IteratorPrototype::zipKeyed));
 
         JSNativeFunction constructorAccessor = new JSNativeFunction("constructor", 0, (childContext, thisArg, args) -> {
             if (args.length > 0) {
