@@ -121,6 +121,21 @@ public final class JSTypeConversions {
     }
 
     /**
+     * Check if a character is ECMAScript whitespace (StrWhiteSpaceChar).
+     * Includes all characters from the ES spec's WhiteSpace and LineTerminator productions.
+     */
+    private static boolean isEcmaWhitespace(char c) {
+        if (c <= 0x20) {
+            return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\u000B';
+        }
+        return c == '\u00A0' || c == '\u1680' ||
+                (c >= '\u2000' && c <= '\u200A') ||
+                c == '\u2028' || c == '\u2029' ||
+                c == '\u202F' || c == '\u205F' ||
+                c == '\u3000' || c == '\uFEFF';
+    }
+
+    /**
      * Check if a value is primitive.
      */
     public static boolean isPrimitive(JSValue value) {
@@ -316,8 +331,8 @@ public final class JSTypeConversions {
      * Convert string to number following ES2020 rules.
      */
     private static JSNumber stringToNumber(String str) {
-        // Trim whitespace
-        str = str.strip();
+        // Trim whitespace using ES spec whitespace definition (includes U+00A0, U+2007, U+202F, etc.)
+        str = stripEcmaWhitespace(str);
 
         if (str.isEmpty()) {
             return JSNumber.of(0.0);
@@ -348,6 +363,21 @@ public final class JSTypeConversions {
         } catch (NumberFormatException e) {
             return JSNumber.of(Double.NaN);
         }
+    }
+
+    /**
+     * Strip leading and trailing ECMAScript whitespace from a string.
+     */
+    private static String stripEcmaWhitespace(String str) {
+        int start = 0;
+        int end = str.length();
+        while (start < end && isEcmaWhitespace(str.charAt(start))) {
+            start++;
+        }
+        while (end > start && isEcmaWhitespace(str.charAt(end - 1))) {
+            end--;
+        }
+        return (start == 0 && end == str.length()) ? str : str.substring(start, end);
     }
 
     /**

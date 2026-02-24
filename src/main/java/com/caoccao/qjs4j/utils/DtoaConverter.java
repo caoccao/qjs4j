@@ -459,6 +459,13 @@ public final class DtoaConverter {
         // Round to the desired number of fraction digits
         mantissa = mantissa.setScale(fractionDigits, RoundingMode.HALF_UP);
 
+        // After rounding, mantissa may have carried (e.g., 9.999 -> 10.0).
+        // Renormalize: if mantissa >= 10, divide by 10 and increment exponent.
+        if (mantissa.abs().compareTo(BigDecimal.TEN) >= 0) {
+            mantissa = mantissa.movePointLeft(1).setScale(fractionDigits, RoundingMode.HALF_UP);
+            exponent++;
+        }
+
         // Format the result - keep the exact precision as specified by fractionDigits
         String mantissaStr = mantissa.toPlainString();
 
@@ -475,12 +482,28 @@ public final class DtoaConverter {
      * fractionDigits is the number of digits after the decimal point in the mantissa.
      */
     private static String formatExponentialPrecision(double value, int fractionDigits) {
-        // Use String.format for exponential notation
-        String format = "%." + fractionDigits + "e";
-        String result = String.format(Locale.US, format, value);
+        // Use BigDecimal to preserve the exact binary representation, matching formatExponential.
+        boolean negative = value < 0;
+        double absValue = Math.abs(value);
 
-        // Clean up the exponent part (remove leading zeros after e+ or e-)
-        result = result.replaceAll("e([+-])0+(\\d)", "e$1$2");
+        BigDecimal bd = new BigDecimal(absValue);
+        int exponent = bd.precision() - bd.scale() - 1;
+
+        BigDecimal mantissa = bd.scaleByPowerOfTen(-exponent);
+        mantissa = mantissa.setScale(fractionDigits, RoundingMode.HALF_UP);
+
+        // Renormalize after rounding carry
+        if (mantissa.compareTo(BigDecimal.TEN) >= 0) {
+            mantissa = mantissa.movePointLeft(1).setScale(fractionDigits, RoundingMode.HALF_UP);
+            exponent++;
+        }
+
+        String mantissaStr = mantissa.toPlainString();
+        String result = (negative ? "-" : "") +
+                mantissaStr +
+                'e' +
+                (exponent >= 0 ? "+" : "") +
+                exponent;
 
         return result;
     }

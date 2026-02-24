@@ -1656,8 +1656,9 @@ public final class JSGlobalObject {
      * Initialize Number constructor and prototype.
      */
     private void initializeNumberConstructor(JSContext context, JSObject global) {
-        // Create Number.prototype
-        JSObject numberPrototype = context.createJSObject();
+        // Create Number.prototype as a Number object with [[NumberData]] = +0 (ES2024 20.1.3)
+        JSNumberObject numberPrototype = new JSNumberObject(0.0);
+        context.transferPrototype(numberPrototype, JSObject.NAME);
         numberPrototype.definePropertyWritableConfigurable("toExponential", new JSNativeFunction("toExponential", 1, NumberPrototype::toExponential));
         numberPrototype.definePropertyWritableConfigurable("toFixed", new JSNativeFunction("toFixed", 1, NumberPrototype::toFixed));
         numberPrototype.definePropertyWritableConfigurable("toLocaleString", new JSNativeFunction("toLocaleString", 0, NumberPrototype::toLocaleString));

@@ -110,13 +110,21 @@ public final class NumberPrototype {
         return thisArg.asNumberWithDownCast()
                 .map(jsNumber -> {
                     double value = jsNumber.value();
-                    // Get fractionDigits
-                    if (args.length == 0 || args[0].isUndefined()) {
-                        // No argument: use automatic precision (minimal digits to uniquely represent the value)
+                    // Per ES spec: compute f (step 2), check NaN (step 4),
+                    // check Infinity (step 7), then validate range (step 8)
+                    boolean hasDigitsArg = args.length > 0 && !args[0].isUndefined();
+                    double fractionDigitsRaw = hasDigitsArg
+                            ? JSTypeConversions.toInteger(context, args[0]) : 0;
+                    if (Double.isNaN(value)) {
+                        return new JSString("NaN");
+                    }
+                    if (Double.isInfinite(value)) {
+                        return new JSString(value > 0 ? "Infinity" : "-Infinity");
+                    }
+                    if (!hasDigitsArg) {
                         return new JSString(DtoaConverter.convertExponentialWithoutFractionDigits(value));
                     }
-                    int fractionDigits = (int) JSTypeConversions.toInteger(context, args[0]);
-                    // RangeError if out of bounds [0, 100]
+                    int fractionDigits = (int) fractionDigitsRaw;
                     if (fractionDigits < 0 || fractionDigits > DtoaConverter.MAX_DIGITS) {
                         return context.throwRangeError("toExponential() argument must be between 0 and 100");
                     }
@@ -168,12 +176,23 @@ public final class NumberPrototype {
         return thisArg.asNumberWithDownCast()
                 .map(jsNumber -> {
                     double value = jsNumber.value();
-                    // If precision is undefined, use toString
+                    // Per ES spec: if precision is undefined, use toString (step 2)
                     if (args.length == 0 || args[0] instanceof JSUndefined) {
                         return new JSString(DtoaConverter.convert(value));
                     }
-                    int precision = (int) JSTypeConversions.toInteger(context, args[0]);
-                    // RangeError if out of bounds [1, 100]
+                    // Compute p (step 3), then check NaN (step 4), Infinity (step 7),
+                    // then validate range (step 8)
+                    double precisionRaw = JSTypeConversions.toInteger(context, args[0]);
+                    if (context.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    if (Double.isNaN(value)) {
+                        return new JSString("NaN");
+                    }
+                    if (Double.isInfinite(value)) {
+                        return new JSString(value > 0 ? "Infinity" : "-Infinity");
+                    }
+                    int precision = (int) precisionRaw;
                     if (precision < 1 || precision > DtoaConverter.MAX_PRECISION) {
                         return context.throwRangeError("toPrecision() precision must be between 1 and 100");
                     }
@@ -190,24 +209,22 @@ public final class NumberPrototype {
         return thisArg.asNumberWithDownCast()
                 .map(jsNumber -> {
                     double value = jsNumber.value();
-                    // Handle special cases
+                    // Per ES spec: compute radix (step 2-3), validate range (step 4),
+                    // then handle special values (steps 6+)
+                    int radix = args.length > 0 && !(args[0] instanceof JSUndefined)
+                            ? (int) JSTypeConversions.toInteger(context, args[0]) : 10;
+                    if (radix < 2 || radix > 36) {
+                        return context.throwRangeError("toString() radix must be between 2 and 36");
+                    }
                     if (Double.isNaN(value)) {
                         return new JSString("NaN");
                     }
                     if (Double.isInfinite(value)) {
                         return new JSString(value > 0 ? "Infinity" : "-Infinity");
                     }
-                    // Get radix (default 10)
-                    int radix = args.length > 0 ? (int) JSTypeConversions.toInteger(context, args[0]) : 10;
-                    // RangeError if radix out of bounds [2, 36]
-                    if (radix < 2 || radix > 36) {
-                        return context.throwRangeError("toString() radix must be between 2 and 36");
-                    }
-                    // For radix 10, use default conversion
                     if (radix == 10) {
                         return new JSString(DtoaConverter.convert(value));
                     }
-                    // For other radixes, convert using the radix conversion method
                     return new JSString(DtoaConverter.convertToRadix(value, radix));
                 })
                 .orElseGet(() -> context.throwTypeError("Number.prototype.toString requires that 'this' be a Number"));

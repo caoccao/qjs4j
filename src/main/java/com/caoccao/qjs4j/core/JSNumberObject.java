@@ -70,6 +70,9 @@ public final class JSNumberObject extends JSObject {
         JSNumber numValue;
         if (args.length == 0) {
             numValue = JSNumber.of(0.0);
+        } else if (args[0] instanceof JSBigInt bigInt) {
+            // ES2024 20.1.1.1: If prim is a BigInt, let n be 𝔽(ℝ(prim))
+            numValue = JSNumber.of(bigInt.value().doubleValue());
         } else {
             numValue = JSTypeConversions.toNumber(context, args[0]);
         }

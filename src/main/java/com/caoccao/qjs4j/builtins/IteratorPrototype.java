@@ -618,262 +618,6 @@ public final class IteratorPrototype {
     }
 
     /**
-     * Specialized zipKeyed result object that caches key strings for Object.keys().
-     * It falls back automatically if the object shape becomes non-trivial.
-     */
-    private static final class JSZipKeyedResultObject extends JSObject {
-        private final JSValue[] cachedKeyStrings;
-        private final PropertyKey[] expectedKeys;
-        private boolean pristine;
-
-        private JSZipKeyedResultObject(PropertyKey[] expectedKeys, JSValue[] cachedKeyStrings) {
-            super();
-            this.expectedKeys = expectedKeys;
-            this.cachedKeyStrings = cachedKeyStrings;
-            this.pristine = true;
-        }
-
-        @Override
-        public JSValue[] enumerableStringKeyValuesFastPath() {
-            if (!pristine) {
-                return null;
-            }
-            return cachedKeyStrings;
-        }
-
-        @Override
-        public JSValue[] enumerableStringPropertyValuesFastPath() {
-            if (!pristine) {
-                return null;
-            }
-            return propertyValues.length == expectedKeys.length
-                    ? propertyValues
-                    : Arrays.copyOf(propertyValues, expectedKeys.length);
-        }
-
-        @Override
-        public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
-            pristine = false;
-            return super.defineOwnProperty(key, descriptor, context);
-        }
-
-        @Override
-        public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
-            pristine = false;
-            super.defineProperty(key, descriptor);
-        }
-
-        @Override
-        public boolean delete(JSContext context, PropertyKey key) {
-            pristine = false;
-            return super.delete(context, key);
-        }
-
-        @Override
-        public boolean delete(PropertyKey key) {
-            pristine = false;
-            return super.delete(key);
-        }
-
-        @Override
-        public boolean delete(String propertyName) {
-            pristine = false;
-            return super.delete(propertyName);
-        }
-
-        @Override
-        public void set(String propertyName, JSValue value) {
-            pristine = false;
-            super.set(propertyName, value);
-        }
-
-        @Override
-        public void set(int index, JSValue value) {
-            pristine = false;
-            super.set(index, value);
-        }
-
-        @Override
-        public void set(PropertyKey key, JSValue value) {
-            pristine = false;
-            super.set(key, value);
-        }
-
-        @Override
-        public void set(JSContext context, PropertyKey key, JSValue value) {
-            pristine = false;
-            super.set(context, key, value);
-        }
-
-        @Override
-        public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-            pristine = false;
-            super.set(context, key, value, receiver);
-        }
-    }
-
-    /**
-     * Specialized CreateIteratorResultObject for iterator helper hot paths.
-     * It lazily materializes to a normal object when mutated.
-     */
-    private static final class JSIteratorResultObject extends JSObject {
-        private JSValue doneValue;
-        private boolean pristine;
-        private JSValue valueValue;
-
-        private JSIteratorResultObject(JSValue valueValue, JSValue doneValue) {
-            super();
-            this.valueValue = valueValue;
-            this.doneValue = doneValue;
-            this.pristine = true;
-        }
-
-        @Override
-        public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
-            materialize();
-            return super.defineOwnProperty(key, descriptor, context);
-        }
-
-        @Override
-        public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
-            materialize();
-            super.defineProperty(key, descriptor);
-        }
-
-        @Override
-        public boolean delete(JSContext context, PropertyKey key) {
-            materialize();
-            return super.delete(context, key);
-        }
-
-        @Override
-        public boolean delete(PropertyKey key) {
-            materialize();
-            return super.delete(key);
-        }
-
-        @Override
-        public boolean delete(String propertyName) {
-            materialize();
-            return super.delete(propertyName);
-        }
-
-        @Override
-        public JSValue get(JSContext context, PropertyKey key) {
-            if (pristine) {
-                if (PropertyKey.VALUE.equals(key)) {
-                    return valueValue;
-                }
-                if (PropertyKey.DONE.equals(key)) {
-                    return doneValue;
-                }
-            }
-            return super.get(context, key);
-        }
-
-        @Override
-        public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
-            if (pristine) {
-                if (PropertyKey.VALUE.equals(key)) {
-                    return PropertyDescriptor.defaultData(valueValue);
-                }
-                if (PropertyKey.DONE.equals(key)) {
-                    return PropertyDescriptor.defaultData(doneValue);
-                }
-                return null;
-            }
-            return super.getOwnPropertyDescriptor(key);
-        }
-
-        @Override
-        public boolean hasOwnProperty(String propertyName) {
-            if (pristine && ("value".equals(propertyName) || "done".equals(propertyName))) {
-                return true;
-            }
-            return super.hasOwnProperty(propertyName);
-        }
-
-        @Override
-        public boolean hasOwnProperty(PropertyKey key) {
-            if (pristine && (PropertyKey.VALUE.equals(key) || PropertyKey.DONE.equals(key))) {
-                return true;
-            }
-            return super.hasOwnProperty(key);
-        }
-
-        @Override
-        public List<PropertyKey> getOwnPropertyKeys() {
-            if (pristine) {
-                return ITERATOR_RESULT_KEY_LIST;
-            }
-            return super.getOwnPropertyKeys();
-        }
-
-        @Override
-        public PropertyKey[] enumerableKeys() {
-            if (pristine) {
-                return ITERATOR_RESULT_KEYS.clone();
-            }
-            return super.enumerableKeys();
-        }
-
-        @Override
-        public PropertyKey[] ownPropertyKeys() {
-            if (pristine) {
-                return ITERATOR_RESULT_KEYS.clone();
-            }
-            return super.ownPropertyKeys();
-        }
-
-        @Override
-        public void set(String propertyName, JSValue value) {
-            materialize();
-            super.set(propertyName, value);
-        }
-
-        @Override
-        public void set(int index, JSValue value) {
-            materialize();
-            super.set(index, value);
-        }
-
-        @Override
-        public void set(PropertyKey key, JSValue value) {
-            materialize();
-            super.set(key, value);
-        }
-
-        @Override
-        public void set(JSContext context, PropertyKey key, JSValue value) {
-            materialize();
-            super.set(context, key, value);
-        }
-
-        @Override
-        public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-            materialize();
-            super.set(context, key, value, receiver);
-        }
-
-        private void materialize() {
-            if (!pristine) {
-                return;
-            }
-            initProperties(
-                    ITERATOR_RESULT_KEYS.clone(),
-                    new PropertyDescriptor[]{
-                            PropertyDescriptor.defaultData(valueValue),
-                            PropertyDescriptor.defaultData(doneValue)
-                    },
-                    new JSValue[]{valueValue, doneValue}
-            );
-            pristine = false;
-            valueValue = JSUndefined.INSTANCE;
-            doneValue = JSUndefined.INSTANCE;
-        }
-    }
-
-    /**
      * Iterator.prototype.drop(limit)
      * Returns an iterator that skips the first limit elements.
      */
@@ -2264,5 +2008,261 @@ public final class IteratorPrototype {
     }
 
     private record IteratorStep(JSValue value, boolean done) {
+    }
+
+    /**
+     * Specialized CreateIteratorResultObject for iterator helper hot paths.
+     * It lazily materializes to a normal object when mutated.
+     */
+    private static final class JSIteratorResultObject extends JSObject {
+        private JSValue doneValue;
+        private boolean pristine;
+        private JSValue valueValue;
+
+        private JSIteratorResultObject(JSValue valueValue, JSValue doneValue) {
+            super();
+            this.valueValue = valueValue;
+            this.doneValue = doneValue;
+            this.pristine = true;
+        }
+
+        @Override
+        public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
+            materialize();
+            return super.defineOwnProperty(key, descriptor, context);
+        }
+
+        @Override
+        public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
+            materialize();
+            super.defineProperty(key, descriptor);
+        }
+
+        @Override
+        public boolean delete(JSContext context, PropertyKey key) {
+            materialize();
+            return super.delete(context, key);
+        }
+
+        @Override
+        public boolean delete(PropertyKey key) {
+            materialize();
+            return super.delete(key);
+        }
+
+        @Override
+        public boolean delete(String propertyName) {
+            materialize();
+            return super.delete(propertyName);
+        }
+
+        @Override
+        public PropertyKey[] enumerableKeys() {
+            if (pristine) {
+                return ITERATOR_RESULT_KEYS.clone();
+            }
+            return super.enumerableKeys();
+        }
+
+        @Override
+        public JSValue get(JSContext context, PropertyKey key) {
+            if (pristine) {
+                if (PropertyKey.VALUE.equals(key)) {
+                    return valueValue;
+                }
+                if (PropertyKey.DONE.equals(key)) {
+                    return doneValue;
+                }
+            }
+            return super.get(context, key);
+        }
+
+        @Override
+        public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+            if (pristine) {
+                if (PropertyKey.VALUE.equals(key)) {
+                    return PropertyDescriptor.defaultData(valueValue);
+                }
+                if (PropertyKey.DONE.equals(key)) {
+                    return PropertyDescriptor.defaultData(doneValue);
+                }
+                return null;
+            }
+            return super.getOwnPropertyDescriptor(key);
+        }
+
+        @Override
+        public List<PropertyKey> getOwnPropertyKeys() {
+            if (pristine) {
+                return ITERATOR_RESULT_KEY_LIST;
+            }
+            return super.getOwnPropertyKeys();
+        }
+
+        @Override
+        public boolean hasOwnProperty(String propertyName) {
+            if (pristine && ("value".equals(propertyName) || "done".equals(propertyName))) {
+                return true;
+            }
+            return super.hasOwnProperty(propertyName);
+        }
+
+        @Override
+        public boolean hasOwnProperty(PropertyKey key) {
+            if (pristine && (PropertyKey.VALUE.equals(key) || PropertyKey.DONE.equals(key))) {
+                return true;
+            }
+            return super.hasOwnProperty(key);
+        }
+
+        private void materialize() {
+            if (!pristine) {
+                return;
+            }
+            initProperties(
+                    ITERATOR_RESULT_KEYS.clone(),
+                    new PropertyDescriptor[]{
+                            PropertyDescriptor.defaultData(valueValue),
+                            PropertyDescriptor.defaultData(doneValue)
+                    },
+                    new JSValue[]{valueValue, doneValue}
+            );
+            pristine = false;
+            valueValue = JSUndefined.INSTANCE;
+            doneValue = JSUndefined.INSTANCE;
+        }
+
+        @Override
+        public PropertyKey[] ownPropertyKeys() {
+            if (pristine) {
+                return ITERATOR_RESULT_KEYS.clone();
+            }
+            return super.ownPropertyKeys();
+        }
+
+        @Override
+        public void set(String propertyName, JSValue value) {
+            materialize();
+            super.set(propertyName, value);
+        }
+
+        @Override
+        public void set(int index, JSValue value) {
+            materialize();
+            super.set(index, value);
+        }
+
+        @Override
+        public void set(PropertyKey key, JSValue value) {
+            materialize();
+            super.set(key, value);
+        }
+
+        @Override
+        public void set(JSContext context, PropertyKey key, JSValue value) {
+            materialize();
+            super.set(context, key, value);
+        }
+
+        @Override
+        public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
+            materialize();
+            super.set(context, key, value, receiver);
+        }
+    }
+
+    /**
+     * Specialized zipKeyed result object that caches key strings for Object.keys().
+     * It falls back automatically if the object shape becomes non-trivial.
+     */
+    private static final class JSZipKeyedResultObject extends JSObject {
+        private final JSValue[] cachedKeyStrings;
+        private final PropertyKey[] expectedKeys;
+        private boolean pristine;
+
+        private JSZipKeyedResultObject(PropertyKey[] expectedKeys, JSValue[] cachedKeyStrings) {
+            super();
+            this.expectedKeys = expectedKeys;
+            this.cachedKeyStrings = cachedKeyStrings;
+            this.pristine = true;
+        }
+
+        @Override
+        public boolean defineOwnProperty(PropertyKey key, PropertyDescriptor descriptor, JSContext context) {
+            pristine = false;
+            return super.defineOwnProperty(key, descriptor, context);
+        }
+
+        @Override
+        public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
+            pristine = false;
+            super.defineProperty(key, descriptor);
+        }
+
+        @Override
+        public boolean delete(JSContext context, PropertyKey key) {
+            pristine = false;
+            return super.delete(context, key);
+        }
+
+        @Override
+        public boolean delete(PropertyKey key) {
+            pristine = false;
+            return super.delete(key);
+        }
+
+        @Override
+        public boolean delete(String propertyName) {
+            pristine = false;
+            return super.delete(propertyName);
+        }
+
+        @Override
+        public JSValue[] enumerableStringKeyValuesFastPath() {
+            if (!pristine) {
+                return null;
+            }
+            return cachedKeyStrings;
+        }
+
+        @Override
+        public JSValue[] enumerableStringPropertyValuesFastPath() {
+            if (!pristine) {
+                return null;
+            }
+            return propertyValues.length == expectedKeys.length
+                    ? propertyValues
+                    : Arrays.copyOf(propertyValues, expectedKeys.length);
+        }
+
+        @Override
+        public void set(String propertyName, JSValue value) {
+            pristine = false;
+            super.set(propertyName, value);
+        }
+
+        @Override
+        public void set(int index, JSValue value) {
+            pristine = false;
+            super.set(index, value);
+        }
+
+        @Override
+        public void set(PropertyKey key, JSValue value) {
+            pristine = false;
+            super.set(key, value);
+        }
+
+        @Override
+        public void set(JSContext context, PropertyKey key, JSValue value) {
+            pristine = false;
+            super.set(context, key, value);
+        }
+
+        @Override
+        public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
+            pristine = false;
+            super.set(context, key, value, receiver);
+        }
     }
 }
