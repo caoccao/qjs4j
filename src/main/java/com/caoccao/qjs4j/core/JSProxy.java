@@ -365,14 +365,6 @@ public final class JSProxy extends JSObject {
         return get(context, key, this);
     }
 
-    /**
-     * Override get method with receiver tracking for prototype chain support.
-     */
-    @Override
-    protected JSValue get(JSContext context, PropertyKey key, JSObject receiver) {
-        return getInternal(key, context, receiver);
-    }
-
     public JSObject getHandler() {
         return handler;
     }
@@ -380,7 +372,7 @@ public final class JSProxy extends JSObject {
     /**
      * Internal get implementation that accepts a receiver parameter for prototype chain support.
      */
-    private JSValue getInternal(PropertyKey key, JSContext context, JSObject receiver) {
+    private JSValue getInternal(PropertyKey key, JSContext context, JSValue receiver) {
         if (revoked) {
             throw new JSException(this.context.throwTypeError("Cannot perform 'get' on a proxy that has been revoked"));
         }
@@ -700,6 +692,14 @@ public final class JSProxy extends JSObject {
             return JSUndefined.INSTANCE;
         }
         return method;
+    }
+
+    /**
+     * Override get method with receiver tracking for prototype chain support.
+     */
+    @Override
+    protected JSValue getWithReceiver(JSContext context, PropertyKey key, JSValue receiver) {
+        return getInternal(key, context, receiver);
     }
 
     /**

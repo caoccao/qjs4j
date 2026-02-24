@@ -305,11 +305,8 @@ record FunctionClassParser(ParserContext ctx, ParserDelegates delegates) {
                     key = delegates.expressions.parseAssignmentExpression();
                     ctx.expect(TokenType.RBRACKET);
                     computed = true;
-                } else if (ctx.match(TokenType.IDENTIFIER) || ctx.match(TokenType.STRING)) {
-                    key = new Identifier(ctx.currentToken.value(), ctx.getLocation());
-                    ctx.advance();
                 } else {
-                    throw new RuntimeException("Expected property name after '" + kind + "'");
+                    key = delegates.expressions.parsePropertyName();
                 }
 
                 FunctionExpression method = parseMethod(kind, methodStartLocation, false, false);
@@ -317,22 +314,9 @@ record FunctionClassParser(ParserContext ctx, ParserDelegates delegates) {
             }
         }
 
-        // Regular property name (identifier, string, number)
-        Expression key;
-        boolean computed = false;
-
-        if (ctx.match(TokenType.IDENTIFIER)) {
-            key = new Identifier(ctx.currentToken.value(), methodStartLocation);
-            ctx.advance();
-        } else if (ctx.match(TokenType.STRING)) {
-            key = new Literal(ctx.currentToken.value(), methodStartLocation);
-            ctx.advance();
-        } else if (ctx.match(TokenType.NUMBER)) {
-            key = new Literal(Double.parseDouble(ctx.currentToken.value()), methodStartLocation);
-            ctx.advance();
-        } else {
-            throw new RuntimeException("Expected property name");
-        }
+        // Regular property name (identifier, string, number, or reserved keyword)
+        boolean computed = ctx.match(TokenType.LBRACKET);
+        Expression key = delegates.expressions.parsePropertyName();
 
         return parseMethodOrField(key, isStatic, isPrivate, computed, methodStartLocation);
     }

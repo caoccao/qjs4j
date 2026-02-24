@@ -1412,6 +1412,24 @@ public final class JSGlobalObject {
         iteratorPrototype.definePropertyWritableConfigurable("toArray", new JSNativeFunction("toArray", 0, IteratorPrototype::toArray));
         iteratorPrototype.definePropertyWritableConfigurable(JSSymbol.ITERATOR, new JSNativeFunction("[Symbol.iterator]", 0, (childContext, thisArg, args) -> thisArg));
 
+        // Iterator.prototype[Symbol.dispose] - calls this.return() per explicit-resource-management spec
+        iteratorPrototype.definePropertyWritableConfigurable(JSSymbol.DISPOSE, new JSNativeFunction("[Symbol.dispose]", 0, (childContext, thisArg, args) -> {
+            if (!(thisArg instanceof JSObject thisObject)) {
+                return childContext.throwTypeError("not an object");
+            }
+            JSValue returnMethod = thisObject.get(childContext, PropertyKey.RETURN);
+            if (childContext.hasPendingException()) {
+                return childContext.getPendingException();
+            }
+            if (returnMethod instanceof JSUndefined || returnMethod instanceof JSNull) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(returnMethod instanceof JSFunction returnFunction)) {
+                return childContext.throwTypeError("not a function");
+            }
+            return returnFunction.call(childContext, thisObject, new JSValue[0]);
+        }));
+
         JSNativeFunction iteratorConstructor = new JSNativeFunction(JSIterator.NAME, 0, IteratorConstructor::call, true, true);
         iteratorConstructor.definePropertyWritableConfigurable("prototype", iteratorPrototype);
         iteratorConstructor.definePropertyWritableConfigurable("concat", new JSNativeFunction("concat", 0, IteratorPrototype::concat));
@@ -1479,6 +1497,12 @@ public final class JSGlobalObject {
                     PropertyDescriptor.dataDescriptor(new JSString(tag), false, false, true));
             context.registerIteratorPrototype(tag, proto);
         }
+
+        // Create %WrapForValidIteratorPrototype% for Iterator.from wrapper objects
+        // This prototype inherits from Iterator.prototype and provides next/return methods
+        JSObject wrapForValidIteratorPrototype = new JSObject();
+        wrapForValidIteratorPrototype.setPrototype(iteratorPrototype);
+        context.registerIteratorPrototype("Iterator Wrap", wrapForValidIteratorPrototype);
 
         global.definePropertyWritableConfigurable(JSIterator.NAME, iteratorConstructor);
     }

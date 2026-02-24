@@ -77,6 +77,7 @@ public final class ArrayConstructor {
         JSValue mapThisArg = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
 
         // Step 5: Let usingIterator be ? GetMethod(items, @@iterator).
+        // ES spec uses GetV which auto-boxes primitives to find Symbol.iterator
         boolean hasIterator = false;
         if (items instanceof JSObject itemsObj) {
             JSValue iterMethod = itemsObj.get(context, PropertyKey.SYMBOL_ITERATOR);
@@ -89,6 +90,19 @@ public final class ArrayConstructor {
         } else if (items instanceof JSString) {
             // Strings are iterable (have @@iterator)
             hasIterator = true;
+        } else if (!(items instanceof JSNull) && !(items instanceof JSUndefined)) {
+            // Auto-box other primitives (Number, Boolean, BigInt, Symbol) to find Symbol.iterator
+            JSObject boxed = JSTypeConversions.toObject(context, items);
+            if (boxed != null) {
+                JSValue iterMethod = boxed.get(context, PropertyKey.SYMBOL_ITERATOR);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (iterMethod != null && !(iterMethod instanceof JSUndefined) && !(iterMethod instanceof JSNull)) {
+                    hasIterator = true;
+                    items = boxed;
+                }
+            }
         }
 
         // Step 6: If usingIterator is not undefined, then

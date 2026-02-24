@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -105,6 +106,22 @@ public final class IteratorPrototype {
         }, "Array Iterator", false);
     }
 
+    /**
+     * Safely call a function from within a native callback.
+     * When a bytecode function throws, the Java exception propagates out,
+     * skipping the native callback's error handling. This method catches
+     * JSVirtualMachineException and converts it to a pending exception
+     * so the caller can handle it normally via context.hasPendingException().
+     */
+    private static JSValue callSafe(JSContext context, JSFunction function, JSValue thisArg, JSValue[] args) {
+        try {
+            return function.call(context, thisArg, args);
+        } catch (JSVirtualMachineException e) {
+            convertVMException(context, e);
+            return JSUndefined.INSTANCE;
+        }
+    }
+
     private static JSValue closeIterator(JSContext context, JSObject iteratorObject) {
         JSValue returnMethod = iteratorObject.get(context, PropertyKey.RETURN);
         if (context.hasPendingException()) {
@@ -116,7 +133,7 @@ public final class IteratorPrototype {
         if (!(returnMethod instanceof JSFunction returnFunction)) {
             return context.throwTypeError("not a function");
         }
-        JSValue result = returnFunction.call(context, iteratorObject, NO_ARGS);
+        JSValue result = callSafe(context, returnFunction, iteratorObject, NO_ARGS);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -125,6 +142,9 @@ public final class IteratorPrototype {
 
     private static void closeIteratorIgnoringResult(JSContext context, JSObject iteratorObject) {
         JSValue pendingException = context.getPendingException();
+        if (pendingException != null) {
+            context.clearPendingException();
+        }
         closeIterator(context, iteratorObject);
         if (pendingException != null) {
             context.setPendingException(pendingException);
@@ -207,34 +227,52 @@ public final class IteratorPrototype {
 
         JSNativeFunction returnFunction = new JSNativeFunction("return", 0, (childContext, childThisArg, childArgs) -> {
             if (running[0]) {
-                return childContext.throwTypeError("already running");
+                return childContext.throwTypeError("cannot invoke a running iterator");
             }
-            done[0] = true;
-            sourceIndex[0] = sources.size();
-            if (currentIterator[0] == null) {
-                return JSUndefined.INSTANCE;
+            running[0] = true;
+            try {
+                done[0] = true;
+                sourceIndex[0] = sources.size();
+                if (currentIterator[0] == null) {
+                    return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+                }
+                JSValue returnMethod = currentIterator[0].get(childContext, PropertyKey.RETURN);
+                currentNextMethod[0] = JSUndefined.INSTANCE;
+                JSObject iter = currentIterator[0];
+                currentIterator[0] = null;
+                if (childContext.hasPendingException()) {
+                    return childContext.getPendingException();
+                }
+                if (returnMethod instanceof JSUndefined || returnMethod instanceof JSNull) {
+                    return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+                }
+                if (!(returnMethod instanceof JSFunction returnFunctionValue)) {
+                    return childContext.throwTypeError("not a function");
+                }
+                JSValue result = returnFunctionValue.call(childContext, iter, NO_ARGS);
+                if (childContext.hasPendingException()) {
+                    return childContext.getPendingException();
+                }
+                return result;
+            } finally {
+                running[0] = false;
             }
-            JSValue returnMethod = currentIterator[0].get(childContext, PropertyKey.RETURN);
-            currentNextMethod[0] = JSUndefined.INSTANCE;
-            JSObject iter = currentIterator[0];
-            currentIterator[0] = null;
-            if (childContext.hasPendingException()) {
-                return childContext.getPendingException();
-            }
-            if (returnMethod instanceof JSUndefined || returnMethod instanceof JSNull) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!(returnMethod instanceof JSFunction returnFunctionValue)) {
-                return childContext.throwTypeError("not a function");
-            }
-            JSValue result = returnFunctionValue.call(childContext, iter, NO_ARGS);
-            if (childContext.hasPendingException()) {
-                return childContext.getPendingException();
-            }
-            return result;
         });
 
         return createIteratorObject(context, nextFunction, returnFunction, "Iterator Concat");
+    }
+
+    /**
+     * Convert a JSVirtualMachineException to a pending exception on the context.
+     */
+    private static void convertVMException(JSContext context, JSVirtualMachineException e) {
+        if (e.getJsValue() != null) {
+            context.setPendingException(e.getJsValue());
+        } else if (e.getJsError() != null) {
+            context.setPendingException(e.getJsError());
+        } else if (!context.hasPendingException()) {
+            context.throwError("Error", e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+        }
     }
 
     private static JSNativeFunction createHelperReturnFunction(JSObject iteratorObject, boolean[] running, boolean[] done) {
@@ -242,10 +280,16 @@ public final class IteratorPrototype {
             if (running[0]) {
                 return childContext.throwTypeError("cannot invoke a running iterator");
             }
+            if (done[0]) {
+                return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+            }
             done[0] = true;
             JSValue returnMethod = iteratorObject.get(childContext, PropertyKey.RETURN);
             if (childContext.hasPendingException()) {
                 return childContext.getPendingException();
+            }
+            if (returnMethod instanceof JSUndefined || returnMethod instanceof JSNull) {
+                return iteratorResult(childContext, JSUndefined.INSTANCE, true);
             }
             if (!(returnMethod instanceof JSFunction returnFunctionValue)) {
                 return childContext.throwTypeError("not a function");
@@ -315,14 +359,13 @@ public final class IteratorPrototype {
             if (returnMethod instanceof JSUndefined || returnMethod instanceof JSNull) {
                 return iteratorResult(childContext, JSUndefined.INSTANCE, true);
             }
-            IteratorStep step = iteratorStep(childContext, wrappedIterator, returnMethod);
-            if (step == null) {
-                return childContext.getPendingException();
+            if (!(returnMethod instanceof JSFunction returnFunc)) {
+                return childContext.throwTypeError("not a function");
             }
-            return iteratorResult(childContext, step.value(), step.done());
+            return returnFunc.call(childContext, wrappedIterator, NO_ARGS);
         });
 
-        return createIteratorObject(context, nextFunction, returnFunction, null);
+        return createIteratorObject(context, nextFunction, returnFunction, "Iterator Wrap");
     }
 
     /**
@@ -334,7 +377,14 @@ public final class IteratorPrototype {
         if (iteratorObject == null) {
             return context.getPendingException();
         }
-        Long limit = toPositiveLimit(context, args);
+        Long limit;
+        try {
+            limit = toPositiveLimit(context, args);
+        } catch (JSVirtualMachineException e) {
+            convertVMException(context, e);
+            closeIteratorIgnoringResult(context, iteratorObject);
+            return context.getPendingException();
+        }
         if (limit == null) {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
@@ -399,6 +449,7 @@ public final class IteratorPrototype {
         }
         JSFunction predicate = requireFunction(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (predicate == null) {
+            closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
         JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
@@ -415,7 +466,7 @@ public final class IteratorPrototype {
             if (step.done()) {
                 return JSBoolean.TRUE;
             }
-            JSValue result = predicate.call(context, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
+            JSValue result = callSafe(context, predicate, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
             if (context.hasPendingException()) {
                 closeIteratorIgnoringResult(context, iteratorObject);
                 return context.getPendingException();
@@ -472,8 +523,7 @@ public final class IteratorPrototype {
                         done[0] = true;
                         return iteratorResult(childContext, JSUndefined.INSTANCE, true);
                     }
-                    JSValue selected = predicate.call(
-                            childContext,
+                    JSValue selected = callSafe(childContext, predicate,
                             JSUndefined.INSTANCE,
                             new JSValue[]{step.value(), JSNumber.of(index[0]++)});
                     if (childContext.hasPendingException()) {
@@ -505,6 +555,7 @@ public final class IteratorPrototype {
         }
         JSFunction predicate = requireFunction(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (predicate == null) {
+            closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
         JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
@@ -521,7 +572,7 @@ public final class IteratorPrototype {
             if (step.done()) {
                 return JSUndefined.INSTANCE;
             }
-            JSValue selected = predicate.call(context, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
+            JSValue selected = callSafe(context, predicate, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
             if (context.hasPendingException()) {
                 closeIteratorIgnoringResult(context, iteratorObject);
                 return context.getPendingException();
@@ -669,6 +720,9 @@ public final class IteratorPrototype {
             if (childContext.hasPendingException()) {
                 return childContext.getPendingException();
             }
+            if (returnMethod instanceof JSUndefined || returnMethod instanceof JSNull) {
+                return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+            }
             if (!(returnMethod instanceof JSFunction returnFunctionValue)) {
                 return childContext.throwTypeError("not a function");
             }
@@ -684,8 +738,6 @@ public final class IteratorPrototype {
 
         return createIteratorObject(context, nextFunction, returnFunction, "Iterator Helper");
     }
-
-    // Iterator helper methods (ES2024) - Placeholders for now
 
     /**
      * Iterator.prototype.forEach(fn)
@@ -728,15 +780,27 @@ public final class IteratorPrototype {
      */
     public static JSValue from(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue sourceValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        if (sourceValue instanceof JSString jsString) {
-            return JSIterator.stringIterator(context, jsString);
-        }
-        if (!(sourceValue instanceof JSObject sourceObject)) {
+        // QuickJS: for strings, look up Symbol.iterator on the primitive (not boxed)
+        // then call it with the primitive as this. For non-string non-objects, throw.
+        boolean isString = sourceValue instanceof JSString;
+        if (!isString && !(sourceValue instanceof JSObject)) {
             return context.throwTypeError("Iterator.from called on non-object");
         }
 
-        JSObject iteratorObject = sourceObject;
-        JSValue iteratorMethod = sourceObject.get(context, PropertyKey.SYMBOL_ITERATOR);
+        // For strings, auto-box to find Symbol.iterator but keep raw string for this
+        JSValue callThis = sourceValue;
+        JSObject lookupObject;
+        if (isString) {
+            lookupObject = JSTypeConversions.toObject(context, sourceValue);
+        } else {
+            lookupObject = (JSObject) sourceValue;
+        }
+
+        JSObject iteratorObject = lookupObject;
+        // For strings, use primitive receiver so strict-mode getters see typeof this === 'string'
+        JSValue iteratorMethod = isString
+                ? lookupObject.get(context, PropertyKey.SYMBOL_ITERATOR, sourceValue)
+                : lookupObject.get(context, PropertyKey.SYMBOL_ITERATOR);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -744,7 +808,7 @@ public final class IteratorPrototype {
             if (!(iteratorMethod instanceof JSFunction iteratorFunction)) {
                 return context.throwTypeError("not a function");
             }
-            JSValue iterValue = iteratorFunction.call(context, sourceObject, NO_ARGS);
+            JSValue iterValue = iteratorFunction.call(context, callThis, NO_ARGS);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -817,6 +881,10 @@ public final class IteratorPrototype {
         if (context.hasPendingException()) {
             return null;
         }
+        boolean isDone = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
+        if (isDone) {
+            return new IteratorStep(JSUndefined.INSTANCE, true);
+        }
         JSValue value = resultObject.get(context, PropertyKey.VALUE);
         if (context.hasPendingException()) {
             return null;
@@ -824,7 +892,7 @@ public final class IteratorPrototype {
         if (value == null) {
             value = JSUndefined.INSTANCE;
         }
-        return new IteratorStep(value, JSTypeConversions.toBoolean(doneValue).isBooleanTrue());
+        return new IteratorStep(value, false);
     }
 
     /**
@@ -1108,7 +1176,14 @@ public final class IteratorPrototype {
         if (iteratorObject == null) {
             return context.getPendingException();
         }
-        Long limit = toPositiveLimit(context, args);
+        Long limit;
+        try {
+            limit = toPositiveLimit(context, args);
+        } catch (JSVirtualMachineException e) {
+            convertVMException(context, e);
+            closeIteratorIgnoringResult(context, iteratorObject);
+            return context.getPendingException();
+        }
         if (limit == null) {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
@@ -1186,6 +1261,9 @@ public final class IteratorPrototype {
     private static Long toPositiveLimit(JSContext context, JSValue[] args) {
         JSValue limitValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         double number = JSTypeConversions.toNumber(context, limitValue).value();
+        if (context.hasPendingException()) {
+            return null;
+        }
         if (Double.isNaN(number)) {
             context.throwRangeError("must be positive");
             return null;

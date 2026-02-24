@@ -17,34 +17,44 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.PropertyKey;
 
 /**
  * Implementation of Iterator constructor.
  * Based on ES2024 Iterator specification.
  * <p>
  * Iterator is an abstract class that cannot be directly constructed,
- * but serves as the base for iterator objects.
+ * but serves as the base for iterator objects via subclassing.
  */
 public final class IteratorConstructor {
 
     /**
      * Iterator constructor call handler.
      * <p>
-     * According to the ES2024 spec and quickjs implementation:
+     * According to the ES2024 spec and QuickJS implementation:
      * - Iterator requires 'new' (throws if called as a function)
      * - Iterator cannot be directly constructed (throws "abstract class not constructable")
      * - Only subclasses of Iterator can be constructed
      *
      * @param context The execution context
-     * @param thisArg The this value (new.target for constructor calls)
+     * @param thisArg The this value (the newly constructed object)
      * @param args    The arguments array
-     * @return Never returns normally, always throws TypeError
+     * @return JSUndefined for subclass construction, or throws TypeError for direct construction
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
-        // Iterator is an abstract class and cannot be directly constructed
-        // This matches quickjs behavior: js_iterator_constructor throws
-        // "abstract class not constructable" when called directly
-        return context.throwTypeError("Abstract class Iterator not directly constructable");
+        // Check new.target to determine if this is direct construction or subclass construction.
+        // Following QuickJS js_iterator_constructor: if new_target IS the Iterator constructor
+        // itself, throw "abstract class not constructable". Otherwise allow subclass construction.
+        JSValue newTarget = context.getConstructorNewTarget();
+        if (newTarget != null) {
+            JSValue iteratorCtor = context.getGlobalObject().get(context, PropertyKey.ITERATOR_CAP);
+            if (newTarget == iteratorCtor) {
+                return context.throwTypeError("Abstract class Iterator not directly constructable");
+            }
+        }
+        // Subclass construction - return undefined so constructFunction returns thisArg
+        return JSUndefined.INSTANCE;
     }
 }

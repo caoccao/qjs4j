@@ -474,18 +474,27 @@ final class ExpressionCompiler {
                 ctx.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, flags);
             } else {
                 // Regular property: key: value
-                // Push key
-                if (prop.key() instanceof Identifier id && !prop.computed()) {
-                    ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+                // ES2015 B.3.1: __proto__ in object literal sets prototype
+                if (!prop.computed() && !prop.shorthand()
+                        && prop.key() instanceof Identifier id
+                        && "__proto__".equals(id.name())) {
+                    // Stack: obj -> obj proto -> obj
+                    compileExpression(prop.value());
+                    ctx.emitter.emitOpcode(Opcode.SET_PROTO);
                 } else {
-                    compileExpression(prop.key());
+                    // Push key
+                    if (prop.key() instanceof Identifier id && !prop.computed()) {
+                        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+                    } else {
+                        compileExpression(prop.key());
+                    }
+
+                    // Push value
+                    compileExpression(prop.value());
+
+                    // Define property
+                    ctx.emitter.emitOpcode(Opcode.DEFINE_PROP);
                 }
-
-                // Push value
-                compileExpression(prop.value());
-
-                // Define property
-                ctx.emitter.emitOpcode(Opcode.DEFINE_PROP);
             }
         }
     }

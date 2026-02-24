@@ -504,110 +504,16 @@ public non-sealed class JSObject implements JSValue {
      * Get a property value by property key with context for getter functions.
      */
     public JSValue get(JSContext context, PropertyKey key) {
-        return get(context, key, this);  // Pass original receiver
+        return getWithReceiver(context, key, this);  // Pass original receiver
     }
 
     /**
-     * Internal get method with receiver tracking for prototype chain getter invocation.
-     * Protected to allow JSProxy to override with proper trap handling.
+     * Get a property with an explicit receiver for getter invocation.
+     * The receiver is used as 'this' when calling property getters,
+     * allowing primitive receivers in strict mode.
      */
-    protected JSValue get(JSContext context, PropertyKey key, JSObject receiver) {
-        long arrayIndex = getCanonicalArrayIndex(key);
-        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
-            JSValue sparseValue = sparseProperties.get((int) arrayIndex);
-            if (sparseValue != null) {
-                return sparseValue;
-            }
-        }
-
-        // String primitive wrapper: return character at numeric index
-        if (primitiveValue instanceof JSString str && arrayIndex >= 0) {
-            String s = str.value();
-            if (arrayIndex < s.length()) {
-                return new JSString(String.valueOf(s.charAt((int) arrayIndex)));
-            }
-        }
-
-        // Look in own properties
-        PropertyKey shapeKey = getOwnShapeKey(key);
-        int offset = shapeKey != null ? shape.getPropertyOffset(shapeKey) : -1;
-        if (offset >= 0) {
-            // Check if property has a getter
-            PropertyDescriptor desc = shape.getDescriptor(shapeKey);
-            if (desc != null && desc.hasGetter()) {
-                JSFunction getter = desc.getGetter();
-                if (getter != null && context != null) {
-                    // Save and clear the prototype-chain visited set so that
-                    // re-entrant property lookups inside the getter start with
-                    // a fresh cycle-detection state (prevents false positives).
-                    Set<JSObject> outerVisited = visitedObjects.get();
-                    Set<JSObject> savedVisited = outerVisited.isEmpty() ? null : new HashSet<>(outerVisited);
-                    if (savedVisited != null) {
-                        outerVisited.clear();
-                    }
-                    try {
-                        // Call the getter with the ORIGINAL receiver as 'this', not the prototype
-                        JSValue result = getter.call(context, receiver, new JSValue[0]);
-                        // Check if getter threw an exception - return the error value or undefined
-                        if (context.hasPendingException()) {
-                            return result != null ? result : context.getPendingException();
-                        }
-                        return result;
-                    } catch (JSVirtualMachineException e) {
-                        // Getter threw - convert to pending exception so callers can handle it
-                        JSValue exception = e.getJsError() != null ? e.getJsError()
-                                : e.getJsValue() != null ? e.getJsValue()
-                                : context.throwError("Error", e.getMessage());
-                        context.setPendingException(exception);
-                        return JSUndefined.INSTANCE;
-                    } finally {
-                        // Restore the outer visited set for the caller's prototype walk
-                        if (savedVisited != null) {
-                            outerVisited.clear();
-                            outerVisited.addAll(savedVisited);
-                        }
-                    }
-                }
-                // Getter is explicitly undefined or no context available
-                return JSUndefined.INSTANCE;
-            }
-            // Regular property with value
-            return propertyValues[offset];
-        }
-
-        // Look in prototype chain with cycle detection
-        if (prototype != null) {
-            Set<JSObject> visited = visitedObjects.get();
-            boolean isTopLevel = visited.isEmpty();
-
-            boolean added = false;
-            try {
-                // Check for circular reference
-                if (visited.contains(prototype)) {
-                    return JSUndefined.INSTANCE;
-                }
-
-                // Add current prototype to visited set
-                visited.add(prototype);
-                added = true;
-
-                // Recurse into prototype chain, passing along the original receiver
-                return prototype.get(context, key, receiver);
-            } finally {
-                // Only remove if we added it — early return from cycle detection
-                // must not remove a prototype added by an outer walk
-                if (added) {
-                    visited.remove(prototype);
-                }
-
-                // If this was the top-level call, clear the ThreadLocal
-                if (isTopLevel) {
-                    visited.clear();
-                }
-            }
-        }
-
-        return JSUndefined.INSTANCE;
+    public JSValue get(JSContext context, PropertyKey key, JSValue receiver) {
+        return getWithReceiver(context, key, receiver);
     }
 
     protected long getCanonicalArrayIndex(PropertyKey key) {
@@ -794,6 +700,109 @@ public non-sealed class JSObject implements JSValue {
 
     public JSObject getPrototype() {
         return prototype;
+    }
+
+    /**
+     * Internal get method with receiver tracking for prototype chain getter invocation.
+     * Protected to allow JSProxy to override with proper trap handling.
+     */
+    protected JSValue getWithReceiver(JSContext context, PropertyKey key, JSValue receiver) {
+        long arrayIndex = getCanonicalArrayIndex(key);
+        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
+            JSValue sparseValue = sparseProperties.get((int) arrayIndex);
+            if (sparseValue != null) {
+                return sparseValue;
+            }
+        }
+
+        // String primitive wrapper: return character at numeric index
+        if (primitiveValue instanceof JSString str && arrayIndex >= 0) {
+            String s = str.value();
+            if (arrayIndex < s.length()) {
+                return new JSString(String.valueOf(s.charAt((int) arrayIndex)));
+            }
+        }
+
+        // Look in own properties
+        PropertyKey shapeKey = getOwnShapeKey(key);
+        int offset = shapeKey != null ? shape.getPropertyOffset(shapeKey) : -1;
+        if (offset >= 0) {
+            // Check if property has a getter
+            PropertyDescriptor desc = shape.getDescriptor(shapeKey);
+            if (desc != null && desc.hasGetter()) {
+                JSFunction getter = desc.getGetter();
+                if (getter != null && context != null) {
+                    // Save and clear the prototype-chain visited set so that
+                    // re-entrant property lookups inside the getter start with
+                    // a fresh cycle-detection state (prevents false positives).
+                    Set<JSObject> outerVisited = visitedObjects.get();
+                    Set<JSObject> savedVisited = outerVisited.isEmpty() ? null : new HashSet<>(outerVisited);
+                    if (savedVisited != null) {
+                        outerVisited.clear();
+                    }
+                    try {
+                        // Call the getter with the ORIGINAL receiver as 'this', not the prototype
+                        JSValue result = getter.call(context, receiver, new JSValue[0]);
+                        // Check if getter threw an exception - return the error value or undefined
+                        if (context.hasPendingException()) {
+                            return result != null ? result : context.getPendingException();
+                        }
+                        return result;
+                    } catch (JSVirtualMachineException e) {
+                        // Getter threw - convert to pending exception so callers can handle it
+                        JSValue exception = e.getJsError() != null ? e.getJsError()
+                                : e.getJsValue() != null ? e.getJsValue()
+                                : context.throwError("Error", e.getMessage());
+                        context.setPendingException(exception);
+                        return JSUndefined.INSTANCE;
+                    } finally {
+                        // Restore the outer visited set for the caller's prototype walk
+                        if (savedVisited != null) {
+                            outerVisited.clear();
+                            outerVisited.addAll(savedVisited);
+                        }
+                    }
+                }
+                // Getter is explicitly undefined or no context available
+                return JSUndefined.INSTANCE;
+            }
+            // Regular property with value
+            return propertyValues[offset];
+        }
+
+        // Look in prototype chain with cycle detection
+        if (prototype != null) {
+            Set<JSObject> visited = visitedObjects.get();
+            boolean isTopLevel = visited.isEmpty();
+
+            boolean added = false;
+            try {
+                // Check for circular reference
+                if (visited.contains(prototype)) {
+                    return JSUndefined.INSTANCE;
+                }
+
+                // Add current prototype to visited set
+                visited.add(prototype);
+                added = true;
+
+                // Recurse into prototype chain, passing along the original receiver
+                return prototype.getWithReceiver(context, key, receiver);
+            } finally {
+                // Only remove if we added it — early return from cycle detection
+                // must not remove a prototype added by an outer walk
+                if (added) {
+                    visited.remove(prototype);
+                }
+
+                // If this was the top-level call, clear the ThreadLocal
+                if (isTopLevel) {
+                    visited.clear();
+                }
+            }
+        }
+
+        return JSUndefined.INSTANCE;
     }
 
     /**

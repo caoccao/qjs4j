@@ -258,7 +258,13 @@ public final class VirtualMachine {
 
             JSValue result;
             if (function instanceof JSNativeFunction nativeFunc) {
-                result = nativeFunc.call(context, constructThis, args);
+                JSValue savedNewTarget = context.getConstructorNewTarget();
+                context.setConstructorNewTarget(newTarget);
+                try {
+                    result = nativeFunc.call(context, constructThis, args);
+                } finally {
+                    context.setConstructorNewTarget(savedNewTarget);
+                }
                 if (context.hasPendingException()) {
                     JSValue exception = context.getPendingException();
                     String errorMessage = "Unhandled exception in constructor";

@@ -397,32 +397,6 @@ public abstract class JSTypedArray extends JSObject {
     }
 
     /**
-     * Integer-Indexed exotic object [[Get]].
-     * For canonical numeric index strings, return the element or undefined
-     * without walking the prototype chain.
-     */
-    @Override
-    protected JSValue get(JSContext context, PropertyKey key, JSObject receiver) {
-        if (isCanonicalNumericIndex(key)) {
-            // For canonical numeric indices, never fall through to prototype chain.
-            String str = key.toPropertyString();
-            if ("-0".equals(str)) {
-                return JSUndefined.INSTANCE;
-            }
-            double numericIndex = Double.parseDouble(str);
-            if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
-                return JSUndefined.INSTANCE;
-            }
-            int index = (int) numericIndex;
-            if (index != numericIndex || buffer.isDetached() || isOutOfBounds() || index >= getLength()) {
-                return JSUndefined.INSTANCE;
-            }
-            return getJSElement(index);
-        }
-        return super.get(context, key, receiver);
-    }
-
-    /**
      * Get the underlying ArrayBuffer or SharedArrayBuffer.
      */
     public IJSArrayBuffer getBuffer() {
@@ -562,6 +536,32 @@ public abstract class JSTypedArray extends JSObject {
         // Add non-index own properties from the shape (string keys, then symbols)
         result.addAll(super.getOwnPropertyKeys());
         return result;
+    }
+
+    /**
+     * Integer-Indexed exotic object [[Get]].
+     * For canonical numeric index strings, return the element or undefined
+     * without walking the prototype chain.
+     */
+    @Override
+    protected JSValue getWithReceiver(JSContext context, PropertyKey key, JSValue receiver) {
+        if (isCanonicalNumericIndex(key)) {
+            // For canonical numeric indices, never fall through to prototype chain.
+            String str = key.toPropertyString();
+            if ("-0".equals(str)) {
+                return JSUndefined.INSTANCE;
+            }
+            double numericIndex = Double.parseDouble(str);
+            if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
+                return JSUndefined.INSTANCE;
+            }
+            int index = (int) numericIndex;
+            if (index != numericIndex || buffer.isDetached() || isOutOfBounds() || index >= getLength()) {
+                return JSUndefined.INSTANCE;
+            }
+            return getJSElement(index);
+        }
+        return super.getWithReceiver(context, key, receiver);
     }
 
     @Override

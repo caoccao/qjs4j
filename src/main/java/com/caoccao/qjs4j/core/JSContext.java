@@ -62,6 +62,9 @@ public final class JSContext implements AutoCloseable {
     private JSObject asyncGeneratorFunctionPrototype;
     // Async generator prototype chain (not exposed in global scope)
     private JSObject asyncGeneratorPrototype;
+    // Temporarily holds new.target during native constructor calls
+    // so native constructors can check if called directly vs from subclass
+    private JSValue constructorNewTarget;
     private JSValue currentThis;
     // Generator prototype chain (not exposed in global scope)
     private JSObject generatorFunctionPrototype;
@@ -943,6 +946,13 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Get the pending exception.
+     */
+    public JSValue getConstructorNewTarget() {
+        return constructorNewTarget;
+    }
+
+    /**
      * Get the current stack frame.
      */
     public StackFrame getCurrentStackFrame() {
@@ -1001,9 +1011,6 @@ public final class JSContext implements AutoCloseable {
         return moduleCache.get(specifier);
     }
 
-    /**
-     * Get the pending exception.
-     */
     public JSValue getPendingException() {
         return pendingException;
     }
@@ -1156,6 +1163,10 @@ public final class JSContext implements AutoCloseable {
 
     public void setAsyncGeneratorPrototype(JSObject asyncGeneratorPrototype) {
         this.asyncGeneratorPrototype = asyncGeneratorPrototype;
+    }
+
+    public void setConstructorNewTarget(JSValue newTarget) {
+        this.constructorNewTarget = newTarget;
     }
 
     /**
