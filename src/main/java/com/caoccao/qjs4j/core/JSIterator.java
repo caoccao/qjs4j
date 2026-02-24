@@ -112,7 +112,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, pair);
             }
             return IteratorResult.done(context);
-        }, "Map Iterator");
+        }, "Map Iterator", false);
     }
 
     /**
@@ -126,7 +126,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, entry.key());
             }
             return IteratorResult.done(context);
-        }, "Map Iterator");
+        }, "Map Iterator", false);
     }
 
     /**
@@ -140,7 +140,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, entry.value());
             }
             return IteratorResult.done(context);
-        }, "Map Iterator");
+        }, "Map Iterator", false);
     }
 
     /**

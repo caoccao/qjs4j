@@ -146,6 +146,10 @@ public final class MapPrototype {
             return context.throwTypeError("not a function");
         }
         JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        // CanonicalizeKeyedCollectionKey: -0 → +0
+        if (key instanceof JSNumber number && number.value() == 0.0) {
+            key = JSNumber.of(0.0);
+        }
         if (map.mapHas(key)) {
             return map.mapGet(key);
         }

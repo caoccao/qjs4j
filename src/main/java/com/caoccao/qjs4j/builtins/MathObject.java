@@ -97,6 +97,9 @@ public final class MathObject {
             return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
+        if (x == 0.0 || Double.isNaN(x) || Double.isInfinite(x)) {
+            return JSNumber.of(x);
+        }
         // asinh(x) = ln(x + sqrt(x*x + 1))
         return JSNumber.of(Math.log(x + Math.sqrt(x * x + 1)));
     }
@@ -132,6 +135,9 @@ public final class MathObject {
             return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
+        if (x == 0.0) {
+            return JSNumber.of(x);
+        }
         // atanh(x) = 0.5 * ln((1+x)/(1-x))
         return JSNumber.of(0.5 * Math.log((1 + x) / (1 - x)));
     }
