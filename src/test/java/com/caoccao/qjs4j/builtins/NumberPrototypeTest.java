@@ -418,6 +418,31 @@ public class NumberPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testToExponentialShortestRepresentationWithJavet() {
+        // Test toExponential() without arguments (shortest representation in exponential form)
+        assertStringWithJavet(
+                "(0).toExponential()",
+                "(-0).toExponential()",
+                "(1).toExponential()",
+                "(-1).toExponential()",
+                "(123).toExponential()",
+                "(123.456).toExponential()",
+                "(-123.456).toExponential()",
+                "(0.001).toExponential()",
+                "(0.0001).toExponential()",
+                "(-0.0001).toExponential()",
+                "(1e20).toExponential()",
+                "(1e-20).toExponential()",
+                "(1000000000000000128).toExponential()",
+                "(9007199254740992).toExponential()",
+                "(1.7976931348623157e+308).toExponential()",
+                "(5e-324).toExponential()",
+                "(3.141592653589793).toExponential()",
+                "(999999999999999).toExponential()",
+                "(12345678.9).toExponential()");
+    }
+
+    @Test
     public void testToExponentialWithJavet() {
         List<Double> testNumbers = List.of(
                 0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D, -123456789.123456789D,
@@ -478,6 +503,23 @@ public class NumberPrototypeTest extends BaseJavetTest {
         // Edge case: precision too high - skip error check due to JSObject implementation
         assertRangeError(NumberPrototype.toFixed(context, num, new JSValue[]{new JSNumber(101)}));
         assertPendingException(context);
+    }
+
+    @Test
+    public void testToFixedExactnessWithJavet() {
+        // Test that toFixed uses exact binary value, not shortest representation
+        assertStringWithJavet(
+                "(1000000000000000128).toString()",
+                "(1000000000000000128).toFixed(0)",
+                "(0.1).toFixed(20)",
+                "(0.2).toFixed(20)",
+                "(0.1 + 0.2).toFixed(20)",
+                "(1e20).toFixed(0)",
+                "(-1e20).toFixed(0)",
+                "(1.005).toFixed(2)",
+                "(0.5).toFixed(0)",
+                "(1.5).toFixed(0)",
+                "(2.5).toFixed(0)");
     }
 
     @Test
@@ -616,6 +658,74 @@ public class NumberPrototypeTest extends BaseJavetTest {
         // Edge case: non-integer with non-10 radix (now supported for floating-point conversion)
         result = NumberPrototype.toString(context, new JSNumber(42.5), new JSValue[]{new JSNumber(16)});
         assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("2a.8");
+    }
+
+    @Test
+    public void testToStringShortestRepresentationWithJavet() {
+        // Test that Number.prototype.toString() produces the shortest decimal representation
+        // matching V8/ES spec across all JDK versions (JDK 17+).
+        // Covers: large integers near precision boundary, small decimals,
+        // exponential notation boundaries, and special IEEE 754 values.
+        assertStringWithJavet(
+                // Large integers where exact binary value differs from shortest representation
+                "(1000000000000000128).toString()",
+                "(-1000000000000000128).toString()",
+                "(9007199254740992).toString()",
+                "(9007199254740994).toString()",
+                // Integers at various magnitudes
+                "(1e15).toString()",
+                "(1e16).toString()",
+                "(1e17).toString()",
+                "(1e18).toString()",
+                "(1e19).toString()",
+                "(1e20).toString()",
+                "(-1e20).toString()",
+                // Boundary: decimal vs exponential notation (exponent 20 vs 21)
+                "(1e21).toString()",
+                "(1e22).toString()",
+                "(-1e21).toString()",
+                "(9.999999999999998e20).toString()",
+                "(1.5e20).toString()",
+                // Small numbers: boundary at 1e-7 (decimal) vs 1e-7 (exponential)
+                "(0.000001).toString()",
+                "(0.0000001).toString()",
+                "(0.00000015).toString()",
+                "(-0.000001).toString()",
+                "(-0.0000001).toString()",
+                "(1e-6).toString()",
+                "(1e-7).toString()",
+                "(1e-8).toString()",
+                "(5e-324).toString()",
+                // Regular decimals
+                "(0.1).toString()",
+                "(0.2).toString()",
+                "(0.3).toString()",
+                "(1.5).toString()",
+                "(-1.5).toString()",
+                "(3.141592653589793).toString()",
+                "(0.1 + 0.2).toString()",
+                // Integers that are exactly representable
+                "(42).toString()",
+                "(-42).toString()",
+                "(100).toString()",
+                "(999999999999999).toString()",
+                "(9999999999999998).toString()",
+                // Large values in exponential notation
+                "(1.7976931348623157e+308).toString()",
+                "(1.5e+308).toString()",
+                "(1e+100).toString()",
+                "(-1.7976931348623157e+308).toString()",
+                // Small subnormals
+                "(5e-324).toString()",
+                "(2.2250738585072014e-308).toString()",
+                "(2.2250738585072e-308).toString()",
+                // Zero
+                "(0).toString()",
+                "(-0).toString()",
+                // NaN and Infinity
+                "NaN.toString()",
+                "Infinity.toString()",
+                "(-Infinity).toString()");
     }
 
     @Test

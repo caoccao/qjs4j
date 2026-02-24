@@ -70,6 +70,8 @@ public final class DtoaConverter {
 
     /**
      * Convert a double to string with optional minus zero handling.
+     * Implements the ES2024 Number::toString algorithm using BigDecimal
+     * to find the shortest decimal representation, independent of JDK version.
      *
      * @param value         The value to convert
      * @param showMinusZero If true, show "-0" for negative zero
@@ -90,62 +92,68 @@ public final class DtoaConverter {
             return "0";
         }
 
-        // JavaScript uses exponential notation when exponent < -6 or >= 21
-        // Java's Double.toString uses different rules, so we need custom logic
-
-        // Calculate the exponent
+        boolean negative = value < 0;
         double absValue = Math.abs(value);
-        int exponent = 0;
-        if (absValue != 0) {
-            exponent = (int) Math.floor(Math.log10(absValue));
-        }
 
-        // Use exponential notation for very small or very large numbers
-        if (absValue != 0 && (exponent < -6 || exponent >= 21)) {
-            // Use exponential notation
-            String result = Double.toString(value);
-            // Convert uppercase 'E' to lowercase 'e' for JavaScript standard
-            result = result.replace('E', 'e');
-
-            // Clean up mantissa: remove trailing zeros and unnecessary decimal point
-            // Split by 'e' to get mantissa and exponent parts
-            int eIndex = result.indexOf('e');
-            if (eIndex != -1) {
-                String mantissa = result.substring(0, eIndex);
-                String exp = result.substring(eIndex);
-
-                // Remove trailing zeros and decimal point from mantissa
-                if (mantissa.contains(".")) {
-                    mantissa = mantissa.replaceAll("0+$", "").replaceAll("\\.$", "");
-                }
-
-                result = mantissa + exp;
+        // Find the shortest decimal representation using BigDecimal.
+        // ES2024 spec: find s,k,n where k>=1, 10^(k-1) <= s < 10^k,
+        // s * 10^(n-k) == value as double, and k is as small as possible.
+        BigDecimal exact = new BigDecimal(absValue);
+        BigDecimal shortest = exact;
+        int significantDigits = exact.precision();
+        for (int k = 1; k <= 21; k++) {
+            BigDecimal candidate = exact.round(new MathContext(k, RoundingMode.HALF_EVEN));
+            if (candidate.doubleValue() == absValue) {
+                shortest = candidate;
+                significantDigits = k;
+                break;
             }
-
-            return result;
         }
 
-        // Use decimal notation
-        // For numbers in the safe range, use BigDecimal for accurate representation
-        String result;
-        if (value == Math.floor(value) && absValue < 1e15) {
-            // Integer value - no decimal point
-            result = String.format("%.0f", value);
+        // Strip trailing zeros to get canonical digit string
+        shortest = shortest.stripTrailingZeros();
+        String digits = shortest.unscaledValue().abs().toString();
+        int k = digits.length();
+        // n = exponent + 1 (position count of the most significant digit)
+        int n = shortest.precision() - shortest.scale();
+
+        // Format according to ES2024 Number::toString (7.1.12.1)
+        StringBuilder result = new StringBuilder();
+        if (negative) {
+            result.append('-');
+        }
+
+        if (k <= n && n <= 21) {
+            // Case: integer form with trailing zeros (e.g., 1200)
+            result.append(digits);
+            for (int i = 0; i < n - k; i++) {
+                result.append('0');
+            }
+        } else if (0 < n && n <= 21) {
+            // Case: decimal form (e.g., 12.34)
+            result.append(digits, 0, n);
+            result.append('.');
+            result.append(digits, n, k);
+        } else if (-6 < n && n <= 0) {
+            // Case: small decimal (e.g., 0.001234)
+            result.append("0.");
+            for (int i = 0; i < -n; i++) {
+                result.append('0');
+            }
+            result.append(digits);
         } else {
-            // Use BigDecimal to avoid precision issues
-            result = Double.toString(value);
-            // If Java's toString used exponential notation, we need to convert it
-            if (result.contains("E") || result.contains("e")) {
-                // Convert from exponential to decimal
-                result = String.format("%.15f", value).replaceAll("0+$", "").replaceAll("\\.$", "");
+            // Case: exponential notation
+            result.append(digits.charAt(0));
+            if (k > 1) {
+                result.append('.');
+                result.append(digits, 1, k);
             }
-            // Remove trailing zeros after decimal point
-            if (result.contains(".")) {
-                result = result.replaceAll("0+$", "").replaceAll("\\.$", "");
-            }
+            result.append('e');
+            result.append(n - 1 >= 0 ? '+' : '-');
+            result.append(Math.abs(n - 1));
         }
 
-        return result;
+        return result.toString();
     }
 
     /**
@@ -277,11 +285,44 @@ public final class DtoaConverter {
             return value > 0 ? "Infinity" : "-Infinity";
         }
 
-        // Get the string representation which has the minimal precision
-        String str = Double.toString(value);
+        if (value == 0.0) {
+            return "0e+0";
+        }
 
-        // Convert to exponential notation from the decimal string
-        return convertDecimalToExponential(str);
+        boolean negative = value < 0;
+        double absValue = Math.abs(value);
+
+        // Find shortest representation using BigDecimal
+        BigDecimal exact = new BigDecimal(absValue);
+        BigDecimal shortest = exact;
+        for (int k = 1; k <= 21; k++) {
+            BigDecimal candidate = exact.round(new MathContext(k, RoundingMode.HALF_EVEN));
+            if (candidate.doubleValue() == absValue) {
+                shortest = candidate;
+                break;
+            }
+        }
+
+        shortest = shortest.stripTrailingZeros();
+        String digits = shortest.unscaledValue().abs().toString();
+        int k = digits.length();
+        int n = shortest.precision() - shortest.scale();
+        int exponent = n - 1;
+
+        StringBuilder result = new StringBuilder();
+        if (negative) {
+            result.append('-');
+        }
+        result.append(digits.charAt(0));
+        if (k > 1) {
+            result.append('.');
+            result.append(digits, 1, k);
+        }
+        result.append('e');
+        result.append(exponent >= 0 ? '+' : '-');
+        result.append(Math.abs(exponent));
+
+        return result.toString();
     }
 
     /**
