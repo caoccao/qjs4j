@@ -231,8 +231,19 @@ public final class ObjectConstructor {
             return context.throwTypeError("Object.defineProperties called on non-object");
         }
 
-        if (!(args[1] instanceof JSObject props)) {
-            return context.throwTypeError("Properties argument must be an object");
+        // Step 2: Let props be ? ToObject(Properties)
+        JSValue propsArg = args[1];
+        if (propsArg.isNullOrUndefined()) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
+        }
+        JSObject props;
+        if (propsArg instanceof JSObject propsObj) {
+            props = propsObj;
+        } else {
+            props = JSTypeConversions.toObject(context, propsArg);
+            if (props == null) {
+                return context.throwTypeError("Cannot convert to object");
+            }
         }
 
         // Get all enumerable properties from the props object
