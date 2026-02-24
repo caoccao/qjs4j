@@ -26,6 +26,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Tracks and reports test262 execution results.
  */
 public class Test262Reporter {
+    private static final int TOP_SLOW_TEST_COUNT = 5;
+
+    private final List<TestResult> allResults = Collections.synchronizedList(new ArrayList<>());
     private final AtomicInteger failed = new AtomicInteger(0);
     private final List<TestResult> failures = Collections.synchronizedList(new ArrayList<>());
     private final AtomicInteger passed = new AtomicInteger(0);
@@ -106,10 +109,29 @@ public class Test262Reporter {
         }
 
         System.out.printf("Skipped:       %d%n", skipped.get());
+        System.out.println();
+
+        if (!allResults.isEmpty()) {
+            List<TestResult> sortedByTime = new ArrayList<>(allResults);
+            sortedByTime.sort((a, b) -> Long.compare(
+                    b.getTestCase().getTimeElapsed(),
+                    a.getTestCase().getTimeElapsed()));
+
+            int topCount = Math.min(TOP_SLOW_TEST_COUNT, sortedByTime.size());
+            if (topCount > 0) {
+                System.out.println("Top " + topCount + " Slowest Tests:");
+                for (int i = 0; i < topCount; i++) {
+                    Test262TestCase testCase = sortedByTime.get(i).getTestCase();
+                    System.out.printf("  %d. %s (%d ms)%n", i + 1, testCase.getPath(), testCase.getTimeElapsed());
+                }
+            }
+        }
+
         System.out.println("=".repeat(40));
     }
 
     public void recordResult(TestResult result) {
+        allResults.add(result);
         switch (result.getStatus()) {
             case PASS:
                 passed.incrementAndGet();
@@ -137,6 +159,7 @@ public class Test262Reporter {
         failed.set(0);
         skipped.set(0);
         timeout.set(0);
+        allResults.clear();
         failures.clear();
         timeouts.clear();
     }

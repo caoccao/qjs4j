@@ -63,8 +63,10 @@ public class Test262Executor {
     }
 
     public TestResult execute(Test262TestCase test) {
+        long startTime = System.currentTimeMillis();
         List<JSRuntime> realmRuntimes = new ArrayList<>();
         Test262AgentHost agentHost = new Test262AgentHost();
+        TestResult result;
         try (JSRuntime runtime = new JSRuntime();
              JSContext context = runtime.createContext()) {
             context.setWaitable(!test.hasFlag("CanBlockIsFalse"));
@@ -98,21 +100,23 @@ public class Test262Executor {
 
             // Execute based on flags
             if (test.hasFlag("async")) {
-                return executeAsync(context, runtime, code, test);
+                result = executeAsync(context, runtime, code, test);
             } else if (test.hasFlag("module")) {
-                return executeModule(context, runtime, code, test);
+                result = executeModule(context, runtime, code, test);
             } else {
-                return executeScript(context, runtime, code, test);
+                result = executeScript(context, runtime, code, test);
             }
 
         } catch (Exception e) {
-            return handleException(e, test);
+            result = handleException(e, test);
         } finally {
             agentHost.close();
             for (JSRuntime realmRuntime : realmRuntimes) {
                 realmRuntime.close();
             }
         }
+        test.setTimeElapsed(System.currentTimeMillis() - startTime);
+        return result;
     }
 
     private TestResult executeAsync(JSContext context, JSRuntime runtime,

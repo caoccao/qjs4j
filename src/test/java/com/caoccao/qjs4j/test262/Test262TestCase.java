@@ -34,9 +34,7 @@ public class Test262TestCase {
     private int index;
     private NegativeInfo negative;
     private Path path;
-
-    public Test262TestCase() {
-    }
+    private long timeElapsed;
 
     public Test262TestCase(Path path) {
         this.path = path;
@@ -90,6 +88,10 @@ public class Test262TestCase {
         return path;
     }
 
+    public long getTimeElapsed() {
+        return timeElapsed;
+    }
+
     public boolean hasFlag(String flag) {
         return flags.contains(flag);
     }
@@ -133,6 +135,10 @@ public class Test262TestCase {
 
     public void setPath(Path path) {
         this.path = path;
+    }
+
+    public void setTimeElapsed(long timeElapsed) {
+        this.timeElapsed = timeElapsed;
     }
 
     @Override
