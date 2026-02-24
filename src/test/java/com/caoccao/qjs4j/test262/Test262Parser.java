@@ -46,9 +46,9 @@ public class Test262Parser {
         return value;
     }
 
-    public Test262TestCase parse(Path testFile) throws IOException {
+    public void parse(Test262TestCase testCase) throws IOException {
+        Path testFile = testCase.getPath();
         String content = Files.readString(testFile);
-        Test262TestCase testCase = new Test262TestCase(testFile);
 
         Matcher matcher = FRONTMATTER_PATTERN.matcher(content);
 
@@ -64,7 +64,6 @@ public class Test262Parser {
             testCase.setCode(content);
         }
 
-        return testCase;
     }
 
     private Set<String> parseArray(String line, int currentIndex, String[] lines) {

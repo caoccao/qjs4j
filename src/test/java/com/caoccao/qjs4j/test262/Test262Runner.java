@@ -117,15 +117,20 @@ public class Test262Runner {
         ThreadPoolExecutor executorService = new ThreadPoolExecutor(
                 threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         AtomicInteger testCount = new AtomicInteger(0);
-        List<Future<?>> futures = new ArrayList<>(testFiles.size());
-
+        List<Test262TestCase> testCases = new ArrayList<>(testFiles.size());
         for (int i = 0; i < testFiles.size(); i++) {
-            final Path testFile = testFiles.get(i);
+            Test262TestCase testCase = new Test262TestCase(testFiles.get(i));
+            testCase.setIndex(i);
+            testCases.add(testCase);
+        }
+        List<Future<?>> futures = new ArrayList<>(testCases.size());
+
+        for (int i = 0; i < testCases.size(); i++) {
             final int fileIndex = i;
             Future<?> future = executorService.submit(() -> {
+                Test262TestCase testCase = testCases.get(fileIndex);
                 try {
-                    Test262TestCase testCase = parser.parse(testFile);
-                    testCase.setIndex(fileIndex);
+                    parser.parse(testCase);
 
                     // Apply filters
                     if (config.shouldSkipTest(testCase)) {
@@ -143,9 +148,7 @@ public class Test262Runner {
                         reporter.printProgress();
                     }
                 } catch (Throwable t) {
-                    Test262TestCase failedTestCase = new Test262TestCase(testFile);
-                    failedTestCase.setIndex(fileIndex);
-                    reporter.recordResult(TestResult.fail(failedTestCase,
+                    reporter.recordResult(TestResult.fail(testCase,
                             "Unexpected runner error: " + t.getClass().getSimpleName()
                                     + (t.getMessage() != null ? " - " + t.getMessage() : "")));
                 }
@@ -157,19 +160,17 @@ public class Test262Runner {
         executorService.shutdown();
 
         // Ensure any failure swallowed by submit() Future is surfaced and counted.
-        for (int i = 0; i < futures.size(); i++) {
+        for (int i = 0; i < testCases.size(); i++) {
             try {
                 futures.get(i).get();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
             } catch (ExecutionException e) {
-                Path testFile = testFiles.get(i);
+                Test262TestCase testCase = testCases.get(i);
                 Throwable cause = e.getCause() == null ? e : e.getCause();
-                System.err.println("Error processing test " + testFile + ": " + cause.getMessage());
-                Test262TestCase failedTestCase = new Test262TestCase(testFile);
-                failedTestCase.setIndex(i);
-                reporter.recordResult(TestResult.fail(failedTestCase,
+                System.err.println("Error processing test " + testCase.getPath() + ": " + cause.getMessage());
+                reporter.recordResult(TestResult.fail(testCase,
                         "Internal runner error: " + cause.getClass().getSimpleName()
                                 + (cause.getMessage() != null ? " - " + cause.getMessage() : "")));
             }

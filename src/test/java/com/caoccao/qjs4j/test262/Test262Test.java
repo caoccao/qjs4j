@@ -89,7 +89,8 @@ public class Test262Test {
                 .map(testFile -> DynamicTest.dynamicTest(
                         getTestName(testFile),
                         () -> {
-                            Test262TestCase testCase = parser.parse(testFile);
+                            Test262TestCase testCase = new Test262TestCase(testFile);
+                            parser.parse(testCase);
 
                             // Skip if necessary
                             if (config.shouldSkipTest(testCase)) {
