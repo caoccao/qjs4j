@@ -296,7 +296,7 @@ public final class ObjectConstructor {
                 }
 
                 // DefinePropertyOrThrow(O, P, desc)
-                if (!obj.defineOwnProperty(context, key, desc)) {
+                if (!obj.defineProperty(context, key, desc)) {
                     if (!context.hasPendingException()) {
                         context.throwTypeError("Cannot redefine property: " + key.toPropertyString());
                     }
@@ -413,7 +413,7 @@ public final class ObjectConstructor {
             }
 
             // DefinePropertyOrThrow(O, k, desc)
-            if (!obj.defineOwnProperty(context, key, freezeDesc)) {
+            if (!obj.defineProperty(context, key, freezeDesc)) {
                 if (!context.hasPendingException()) {
                     context.throwTypeError("Cannot freeze property: " + key.toPropertyString());
                 }
@@ -1112,7 +1112,7 @@ public final class ObjectConstructor {
             PropertyDescriptor sealDesc = new PropertyDescriptor();
             sealDesc.setConfigurable(false);
 
-            if (!obj.defineOwnProperty(context, key, sealDesc)) {
+            if (!obj.defineProperty(context, key, sealDesc)) {
                 if (!context.hasPendingException()) {
                     context.throwTypeError("Cannot seal property: " + key.toPropertyString());
                 }

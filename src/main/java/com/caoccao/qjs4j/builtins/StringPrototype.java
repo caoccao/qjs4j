@@ -490,7 +490,7 @@ public final class StringPrototype {
                 continue;
             }
             JSValue captureValue = captures[captureIndex] != null ? new JSString(captures[captureIndex]) : JSUndefined.INSTANCE;
-            groupsObject.defineOwnProperty(null, PropertyKey.fromString(groupName), PropertyDescriptor.dataDescriptor(captureValue, PropertyDescriptor.DataState.All));
+            groupsObject.defineProperty(null, PropertyKey.fromString(groupName), captureValue, PropertyDescriptor.DataState.All);
         }
         return groupsObject;
     }

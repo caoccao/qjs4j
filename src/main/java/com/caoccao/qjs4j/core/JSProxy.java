@@ -160,11 +160,11 @@ public final class JSProxy extends JSObject {
     }
 
     /**
-     * Override defineOwnProperty to route through proxy trap mechanism.
+     * Override defineProperty to route through proxy trap mechanism.
      * ES2020 9.5.6 [[DefineOwnProperty]]
      */
     @Override
-    public boolean defineOwnProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+    public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
         try {
             return definePropertyWithResult(key, descriptor);
         } catch (JSException e) {
@@ -194,7 +194,7 @@ public final class JSProxy extends JSObject {
 
         JSValue trap = getTrapMethod("defineProperty");
         if (trap instanceof JSUndefined) {
-            return targetObj.defineOwnProperty(context, key, descriptor);
+            return targetObj.defineProperty(context, key, descriptor);
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {

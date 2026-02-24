@@ -182,7 +182,7 @@ public final class JSArray extends JSObject {
     }
 
     @Override
-    public boolean defineOwnProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+    public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
         // Per ES spec ArraySetLength (10.4.2.4) / QuickJS set_array_length:
         // When defining "length" with a value, coerce BEFORE descriptor validation
         if (key.isString() && "length".equals(key.asString()) && descriptor.hasValue() && context != null) {
@@ -273,13 +273,13 @@ public final class JSArray extends JSObject {
                 }
                 return false;
             }
-            boolean result = super.defineOwnProperty(context, key, descriptor);
+            boolean result = super.defineProperty(context, key, descriptor);
             if (result) {
                 setLength(index + 1);
             }
             return result;
         }
-        return super.defineOwnProperty(context, key, descriptor);
+        return super.defineProperty(context, key, descriptor);
     }
 
     @Override

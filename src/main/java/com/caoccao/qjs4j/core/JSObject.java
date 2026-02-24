@@ -142,7 +142,7 @@ public non-sealed class JSObject implements JSValue {
      * Returns true if the property was successfully defined, false if the object
      * is not extensible and the property does not already exist.
      */
-    public boolean defineOwnProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+    public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
         if (!extensible && !hasOwnProperty(key)) {
             return false;
         }
@@ -219,6 +219,14 @@ public non-sealed class JSObject implements JSValue {
             defineProperty(key, completed);
         }
         return true;
+    }
+
+    /**
+     * [[DefineOwnProperty]] for a data descriptor, delegating to the full spec-compliant overload.
+     * Equivalent to defineProperty(context, key, PropertyDescriptor.dataDescriptor(value, state)).
+     */
+    public boolean defineProperty(JSContext context, PropertyKey key, JSValue value, PropertyDescriptor.DataState state) {
+        return defineProperty(context, key, PropertyDescriptor.dataDescriptor(value, state));
     }
 
     /**
@@ -1164,7 +1172,7 @@ public non-sealed class JSObject implements JSValue {
             // Return ? Receiver.[[DefineOwnProperty]](P, valueDesc).
             PropertyDescriptor valueDescriptor = new PropertyDescriptor();
             valueDescriptor.setValue(value);
-            return receiver.defineOwnProperty(context, key, valueDescriptor);
+            return receiver.defineProperty(context, key, valueDescriptor);
         }
 
         // Step 2e: CreateDataProperty(Receiver, P, V).
@@ -1172,7 +1180,7 @@ public non-sealed class JSObject implements JSValue {
         // isExtensible() method, because for Proxy receivers that would
         // trigger an isExtensible trap not required by the spec here.
         // For normal objects the field is authoritative; for proxies the
-        // wrapper field is always true so the defineOwnProperty trap handles
+        // wrapper field is always true so the defineProperty trap handles
         // extensibility validation instead.
         if (!receiver.extensible) {
             if (throwOnFailure && context != null && context.isStrictMode()) {
@@ -1180,7 +1188,7 @@ public non-sealed class JSObject implements JSValue {
             }
             return false;
         }
-        return receiver.defineOwnProperty(context, key, PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.All));
+        return receiver.defineProperty(context, key, value, PropertyDescriptor.DataState.All);
     }
 
     /**

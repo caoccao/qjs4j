@@ -194,7 +194,7 @@ public final class JSArguments extends JSObject {
      * - Unmap on accessor descriptor or writable:false
      */
     @Override
-    public boolean defineOwnProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+    public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
         int index = getArgumentIndex(key);
         boolean isMapped = index >= 0 && mappedIndices.contains(index);
 
@@ -212,7 +212,7 @@ public final class JSArguments extends JSObject {
             }
         }
 
-        boolean result = super.defineOwnProperty(context, key, descriptor);
+        boolean result = super.defineProperty(context, key, descriptor);
 
         // ES2024 10.4.4.2 step 7: post-define mapping updates
         if (result && isMapped) {

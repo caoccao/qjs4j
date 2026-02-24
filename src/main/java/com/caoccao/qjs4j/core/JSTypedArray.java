@@ -293,12 +293,12 @@ public abstract class JSTypedArray extends JSObject {
      * Following QuickJS JS_DefineProperty for typed arrays (lines 10176-10221).
      * For canonical numeric index strings: validates the index and descriptor,
      * sets the value if provided, and returns true/false per the spec.
-     * For non-numeric keys: delegates to ordinary defineOwnProperty.
+     * For non-numeric keys: delegates to ordinary defineProperty.
      */
     @Override
-    public boolean defineOwnProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+    public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
         if (!isCanonicalNumericIndex(key)) {
-            return super.defineOwnProperty(context, key, descriptor);
+            return super.defineProperty(context, key, descriptor);
         }
         String str = key.toPropertyString();
         // -0 is never a valid integer index

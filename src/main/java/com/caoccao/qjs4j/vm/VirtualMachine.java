@@ -2472,7 +2472,7 @@ public final class VirtualMachine {
                         JSValue propObj = (JSValue) stack[sp - 1];
                         if (propObj instanceof JSObject jsObj) {
                             PropertyKey key = PropertyKey.fromValue(context, propKey);
-                            jsObj.defineOwnProperty(context, key, PropertyDescriptor.dataDescriptor(propValue, PropertyDescriptor.DataState.All));
+                            jsObj.defineProperty(context, key, propValue, PropertyDescriptor.DataState.All);
                         }
                         pc += op.getSize();
                     }
