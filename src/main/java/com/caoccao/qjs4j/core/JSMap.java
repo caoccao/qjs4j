@@ -38,6 +38,11 @@ public final class JSMap extends JSObject {
         this.nextEntryId = 1;
     }
 
+    /**
+     * Close an iterator, preserving the pending exception.
+     * Based on QuickJS JS_IteratorClose which preserves the original error
+     * even if iterator.return() throws a different error.
+     */
     private static void closeIterator(JSContext context, JSValue iterator) {
         if (!(iterator instanceof JSObject iteratorObject)) {
             return;
@@ -48,9 +53,15 @@ public final class JSMap extends JSObject {
         }
         JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunction) {
-            returnFunction.call(context, iterator, new JSValue[0]);
+            try {
+                returnFunction.call(context, iterator, new JSValue[0]);
+            } catch (RuntimeException ignored) {
+                // Per spec, the original error takes precedence over iterator close errors
+            }
         }
+        // Clear any exception set by the return call, then restore the original
         if (pendingException != null) {
+            context.clearPendingException();
             context.setPendingException(pendingException);
         }
     }
@@ -103,14 +114,38 @@ public final class JSMap extends JSObject {
                     break;
                 }
 
-                JSValue entry = nextResult.get(PropertyKey.VALUE);
+                JSValue entry = nextResult.get(context, PropertyKey.VALUE);
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    JSValue pendingException = context.getPendingException();
+                    if (pendingException instanceof JSObject pendingObject) {
+                        return pendingObject;
+                    }
+                    return context.throwTypeError("Map constructor failed");
+                }
                 if (!(entry instanceof JSObject entryObj)) {
                     closeIterator(context, iterator);
                     return context.throwTypeError("Iterator value must be an object");
                 }
 
-                JSValue key = entryObj.get(0);
-                JSValue value = entryObj.get(1);
+                JSValue key = entryObj.get(context, PropertyKey.fromIndex(0));
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    JSValue pendingException = context.getPendingException();
+                    if (pendingException instanceof JSObject pendingObject) {
+                        return pendingObject;
+                    }
+                    return context.throwTypeError("Map constructor failed");
+                }
+                JSValue value = entryObj.get(context, PropertyKey.fromIndex(1));
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    JSValue pendingException = context.getPendingException();
+                    if (pendingException instanceof JSObject pendingObject) {
+                        return pendingObject;
+                    }
+                    return context.throwTypeError("Map constructor failed");
+                }
                 JSValue adderResult;
                 try {
                     adderResult = adderFunction.call(context, mapObj, new JSValue[]{key, value});
