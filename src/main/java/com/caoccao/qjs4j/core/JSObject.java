@@ -589,6 +589,33 @@ public non-sealed class JSObject implements JSValue {
     }
 
     private List<PropertyKey> getOrderedOwnKeys(boolean enumerableOnly) {
+        if (sparseProperties == null && shape.getDeletedPropCount() == 0) {
+            List<PropertyKey> fastPathKeys = null;
+            int propertyCount = shape.getPropertyCount();
+            boolean fastPathEligible = true;
+            for (int index = 0; index < propertyCount; index++) {
+                PropertyKey propertyKey = shape.getPropertyKeyAt(index);
+                if (propertyKey == null || propertyKey.isSymbol() || getCanonicalArrayIndex(propertyKey) >= 0) {
+                    fastPathEligible = false;
+                    break;
+                }
+                if (enumerableOnly) {
+                    PropertyDescriptor descriptor = shape.getDescriptorAt(index);
+                    if (descriptor == null || !descriptor.isEnumerable()) {
+                        fastPathEligible = false;
+                        break;
+                    }
+                }
+                if (fastPathKeys == null) {
+                    fastPathKeys = new ArrayList<>(propertyCount);
+                }
+                fastPathKeys.add(propertyKey);
+            }
+            if (fastPathEligible) {
+                return fastPathKeys != null ? fastPathKeys : new ArrayList<>(0);
+            }
+        }
+
         List<PropertyKey> stringKeys = new ArrayList<>();
         List<PropertyKey> symbolKeys = new ArrayList<>();
         List<Map.Entry<Long, PropertyKey>> numericKeys = new ArrayList<>();
