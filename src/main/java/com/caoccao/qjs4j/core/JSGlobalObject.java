@@ -506,38 +506,7 @@ public final class JSGlobalObject {
      * Initialize the global object with all built-in global properties and functions.
      */
     public void initialize(JSContext context, JSObject global) {
-        // Global value properties (non-writable, non-enumerable, non-configurable)
-        global.definePropertyReadonlyNonConfigurable("Infinity", JSNumber.of(Double.POSITIVE_INFINITY));
-        global.definePropertyReadonlyNonConfigurable("NaN", JSNumber.of(Double.NaN));
-        global.definePropertyReadonlyNonConfigurable("undefined", JSUndefined.INSTANCE);
-
-        // Global function properties
-        // Capture the realm context so that eval code runs in the correct realm
-        // even when called cross-realm (e.g., other.eval('code')).
-        final JSContext realmContext = context;
-        global.definePropertyWritableConfigurable("eval", new JSNativeFunction("eval", 1,
-                (callerCtx, thisArg, args) -> eval(realmContext, callerCtx, thisArg, args)));
-        global.definePropertyWritableConfigurable("isFinite", new JSNativeFunction("isFinite", 1, this::isFinite));
-        global.definePropertyWritableConfigurable("isNaN", new JSNativeFunction("isNaN", 1, this::isNaN));
-        global.definePropertyWritableConfigurable("parseFloat", new JSNativeFunction("parseFloat", 1, this::parseFloat));
-        global.definePropertyWritableConfigurable("parseInt", new JSNativeFunction("parseInt", 2, this::parseInt));
-
-        // URI handling functions
-        global.definePropertyWritableConfigurable("decodeURI", new JSNativeFunction("decodeURI", 1, this::decodeURI));
-        global.definePropertyWritableConfigurable("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, this::decodeURIComponent));
-        global.definePropertyWritableConfigurable("encodeURI", new JSNativeFunction("encodeURI", 1, this::encodeURI));
-        global.definePropertyWritableConfigurable("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, this::encodeURIComponent));
-        global.definePropertyWritableConfigurable("escape", new JSNativeFunction("escape", 1, this::escape));
-        global.definePropertyWritableConfigurable("unescape", new JSNativeFunction("unescape", 1, this::unescape));
-
-        // Console object for debugging
-        initializeConsoleObject(context, global);
-
-        // Global this reference
-        global.definePropertyWritableConfigurable("globalThis", global);
-
-        // Object.prototype.toString.call(globalThis) -> [object global]
-        global.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("global"));
+        initializeGlobalObject(context, global);
 
         // Built-in constructors and their prototypes
         initializeObjectConstructor(context, global);
@@ -596,6 +565,10 @@ public final class JSGlobalObject {
         if (context.getAsyncGeneratorPrototype() != null) {
             initializeFunctionPrototypeChains(context, context.getAsyncGeneratorPrototype(), visited);
         }
+
+        // Per ES2024 20.5.6.2: The [[Prototype]] of each NativeError constructor is Error.
+        // This must run after initializeFunctionPrototypeChains which sets all to Function.prototype.
+        initializeNativeErrorPrototypeChains(context, global);
 
         // Set the global object's prototype to Object.prototype so inherited
         // methods like propertyIsEnumerable, hasOwnProperty, toString are available.
@@ -1284,6 +1257,41 @@ public final class JSGlobalObject {
         context.setGeneratorFunctionPrototype(generatorFunctionPrototype);
     }
 
+    private void initializeGlobalObject(JSContext context, JSObject global) {
+        // Global value properties (non-writable, non-enumerable, non-configurable)
+        global.definePropertyReadonlyNonConfigurable("Infinity", JSNumber.of(Double.POSITIVE_INFINITY));
+        global.definePropertyReadonlyNonConfigurable("NaN", JSNumber.of(Double.NaN));
+        global.definePropertyReadonlyNonConfigurable("undefined", JSUndefined.INSTANCE);
+
+        // Global function properties
+        // Capture the realm context so that eval code runs in the correct realm
+        // even when called cross-realm (e.g., other.eval('code')).
+        final JSContext realmContext = context;
+        global.definePropertyWritableConfigurable("eval", new JSNativeFunction("eval", 1,
+                (callerCtx, thisArg, args) -> eval(realmContext, callerCtx, thisArg, args)));
+        global.definePropertyWritableConfigurable("isFinite", new JSNativeFunction("isFinite", 1, this::isFinite));
+        global.definePropertyWritableConfigurable("isNaN", new JSNativeFunction("isNaN", 1, this::isNaN));
+        global.definePropertyWritableConfigurable("parseFloat", new JSNativeFunction("parseFloat", 1, this::parseFloat));
+        global.definePropertyWritableConfigurable("parseInt", new JSNativeFunction("parseInt", 2, this::parseInt));
+
+        // URI handling functions
+        global.definePropertyWritableConfigurable("decodeURI", new JSNativeFunction("decodeURI", 1, this::decodeURI));
+        global.definePropertyWritableConfigurable("decodeURIComponent", new JSNativeFunction("decodeURIComponent", 1, this::decodeURIComponent));
+        global.definePropertyWritableConfigurable("encodeURI", new JSNativeFunction("encodeURI", 1, this::encodeURI));
+        global.definePropertyWritableConfigurable("encodeURIComponent", new JSNativeFunction("encodeURIComponent", 1, this::encodeURIComponent));
+        global.definePropertyWritableConfigurable("escape", new JSNativeFunction("escape", 1, this::escape));
+        global.definePropertyWritableConfigurable("unescape", new JSNativeFunction("unescape", 1, this::unescape));
+
+        // Console object for debugging
+        initializeConsoleObject(context, global);
+
+        // Global this reference
+        global.definePropertyWritableConfigurable("globalThis", global);
+
+        // Object.prototype.toString.call(globalThis) -> [object global]
+        global.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("global"));
+    }
+
     /**
      * Initialize Intl object.
      */
@@ -1621,6 +1629,27 @@ public final class JSGlobalObject {
         math.definePropertyConfigurable(JSSymbol.TO_STRING_TAG, new JSString("Math"));
 
         global.definePropertyWritableConfigurable("Math", math);
+    }
+
+    /**
+     * Set [[Prototype]] of each NativeError constructor to the Error constructor.
+     * Per ES2024 20.5.6.2: The value of the [[Prototype]] internal slot of a
+     * NativeError constructor is the Error constructor.
+     */
+    private void initializeNativeErrorPrototypeChains(JSContext context, JSObject global) {
+        JSValue errorConstructor = global.get(JSError.NAME);
+        if (!(errorConstructor instanceof JSObject errorObj)) {
+            return;
+        }
+        for (JSErrorType type : JSErrorType.values()) {
+            if (type == JSErrorType.Error) {
+                continue;
+            }
+            JSValue constructor = global.get(type.name());
+            if (constructor instanceof JSObject constructorObj) {
+                constructorObj.setPrototype(errorObj);
+            }
+        }
     }
 
     /**

@@ -251,7 +251,7 @@ public final class MathObject {
             return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        short half = Float16.toHalf((float) x);
+        short half = Float16.toHalf(x);
         return JSNumber.of(Float16.toFloat(half));
     }
 
@@ -370,15 +370,21 @@ public final class MathObject {
             return JSNumber.of(Double.NEGATIVE_INFINITY);
         }
 
+        // Per ES spec, coerce all arguments to numbers first, then compute max
         double max = Double.NEGATIVE_INFINITY;
+        boolean hasNaN = false;
         for (JSValue arg : args) {
             double x = JSTypeConversions.toNumber(context, arg).value();
-            if (Double.isNaN(x)) {
-                return JSNumber.of(Double.NaN);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
-            max = Math.max(max, x);
+            if (Double.isNaN(x)) {
+                hasNaN = true;
+            } else if (!hasNaN) {
+                max = Math.max(max, x);
+            }
         }
-        return JSNumber.of(max);
+        return hasNaN ? JSNumber.of(Double.NaN) : JSNumber.of(max);
     }
 
     /**
@@ -390,15 +396,21 @@ public final class MathObject {
             return JSNumber.of(Double.POSITIVE_INFINITY);
         }
 
+        // Per ES spec, coerce all arguments to numbers first, then compute min
         double min = Double.POSITIVE_INFINITY;
+        boolean hasNaN = false;
         for (JSValue arg : args) {
             double x = JSTypeConversions.toNumber(context, arg).value();
-            if (Double.isNaN(x)) {
-                return JSNumber.of(Double.NaN);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
-            min = Math.min(min, x);
+            if (Double.isNaN(x)) {
+                hasNaN = true;
+            } else if (!hasNaN) {
+                min = Math.min(min, x);
+            }
         }
-        return JSNumber.of(min);
+        return hasNaN ? JSNumber.of(Double.NaN) : JSNumber.of(min);
     }
 
     /**
@@ -434,7 +446,13 @@ public final class MathObject {
         if (x >= -0.5 && x < 0) {
             return JSNumber.of(-0.0);
         }
-        return JSNumber.of(Math.floor(x + 0.5));
+        // Use floor(x) then check fractional part to avoid double-rounding
+        // issues that occur with floor(x + 0.5) when x + 0.5 is exact
+        double floor = Math.floor(x);
+        if (x - floor >= 0.5) {
+            return JSNumber.of(floor + 1.0);
+        }
+        return JSNumber.of(floor);
     }
 
     /**
