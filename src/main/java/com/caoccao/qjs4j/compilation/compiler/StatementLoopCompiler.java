@@ -217,21 +217,27 @@ final class StatementLoopCompiler {
     }
 
     void compileForOfStatement(ForOfStatement forOfStmt) {
-        if (!(forOfStmt.left() instanceof VariableDeclaration varDecl)) {
+        boolean isExpressionBased = !(forOfStmt.left() instanceof VariableDeclaration);
+        VariableDeclaration varDecl = null;
+        Pattern pattern = null;
+        boolean isVar = false;
+
+        if (isExpressionBased) {
             if (forOfStmt.left() instanceof CallExpression callExpr) {
                 delegates.patterns.compileForOfWithCallExpressionTarget(forOfStmt, callExpr);
                 return;
             }
-            throw new JSCompilerException("Expression-based for-of not yet supported");
-        }
-        if (varDecl.declarations().size() != 1) {
-            throw new JSCompilerException("for-of loop must have exactly one variable");
-        }
-        Pattern pattern = varDecl.declarations().get(0).id();
-        boolean isVar = varDecl.kind() == VariableKind.VAR;
+        } else {
+            varDecl = (VariableDeclaration) forOfStmt.left();
+            if (varDecl.declarations().size() != 1) {
+                throw new JSCompilerException("for-of loop must have exactly one variable");
+            }
+            pattern = varDecl.declarations().get(0).id();
+            isVar = varDecl.kind() == VariableKind.VAR;
 
-        if (isVar && !ctx.inGlobalScope) {
-            delegates.patterns.declarePatternVariables(pattern);
+            if (isVar && !ctx.inGlobalScope) {
+                delegates.patterns.declarePatternVariables(pattern);
+            }
         }
 
         ctx.enterScope();
@@ -243,7 +249,7 @@ final class StatementLoopCompiler {
             ctx.emitter.emitOpcode(Opcode.FOR_OF_START);
         }
 
-        if (!isVar || ctx.inGlobalScope) {
+        if (!isExpressionBased && (!isVar || ctx.inGlobalScope)) {
             delegates.patterns.declarePatternVariables(pattern);
         }
 
@@ -264,16 +270,24 @@ final class StatementLoopCompiler {
             ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "done");
             jumpToEnd = ctx.emitter.emitJump(Opcode.IF_TRUE);
             ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
-            delegates.patterns.compileForOfValueAssignment(pattern, isVar);
+            if (isExpressionBased) {
+                compileForOfExpressionTargetAssignment((Expression) forOfStmt.left());
+            } else {
+                delegates.patterns.compileForOfValueAssignment(pattern, isVar);
+            }
         } else {
             ctx.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
             jumpToEnd = ctx.emitter.emitJump(Opcode.IF_TRUE);
-            delegates.patterns.compileForOfValueAssignment(pattern, isVar);
+            if (isExpressionBased) {
+                compileForOfExpressionTargetAssignment((Expression) forOfStmt.left());
+            } else {
+                delegates.patterns.compileForOfValueAssignment(pattern, isVar);
+            }
         }
 
         owner.compileStatement(forOfStmt.body());
 
-        if (!isVar) {
+        if (!isExpressionBased && !isVar) {
             delegates.emitHelpers.emitCloseLocForPattern(pattern);
         }
 
@@ -305,6 +319,48 @@ final class StatementLoopCompiler {
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
         ctx.exitScope();
+    }
+
+    private void compileForOfExpressionTargetAssignment(Expression leftExpression) {
+        if (leftExpression instanceof Identifier id) {
+            Integer localIndex = ctx.findLocalInScopes(id.name());
+            if (localIndex != null) {
+                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+            } else {
+                Integer capturedIndex = ctx.resolveCapturedBindingIndex(id.name());
+                if (capturedIndex != null) {
+                    ctx.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF, capturedIndex);
+                } else {
+                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
+                }
+            }
+            return;
+        }
+
+        if (leftExpression instanceof MemberExpression memberExpression) {
+            if (memberExpression.computed()) {
+                throw new JSCompilerException("Computed member expression in for-of not yet supported");
+            }
+            if (!(memberExpression.property() instanceof Identifier propertyIdentifier)) {
+                throw new JSCompilerException("Invalid for-of assignment target");
+            }
+            delegates.expressions.compileExpression(memberExpression.object());
+            ctx.emitter.emitOpcode(Opcode.SWAP);
+            ctx.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propertyIdentifier.name());
+            ctx.emitter.emitOpcode(Opcode.DROP);
+            return;
+        }
+
+        if (leftExpression instanceof CallExpression) {
+            ctx.emitter.emitOpcode(Opcode.DROP);
+            delegates.expressions.compileExpression(leftExpression);
+            ctx.emitter.emitOpcode(Opcode.DROP);
+            ctx.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+            ctx.emitter.emitU8(5);
+            return;
+        }
+
+        ctx.emitter.emitOpcode(Opcode.DROP);
     }
 
     void compileForStatement(ForStatement forStmt) {

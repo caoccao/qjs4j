@@ -566,12 +566,8 @@ public final class ObjectConstructor {
      * Returns a property descriptor for an own property of an object.
      */
     public static JSValue getOwnPropertyDescriptor(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 2) {
-            return JSUndefined.INSTANCE;
-        }
-
         // ES2015 19.1.2.6 step 1: Let obj be ? ToObject(O)
-        JSValue objArg = args[0];
+        JSValue objArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (objArg.isNullOrUndefined()) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
@@ -585,7 +581,8 @@ public final class ObjectConstructor {
             }
         }
 
-        PropertyKey key = PropertyKey.fromValue(context, args[1]);
+        JSValue propertyArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        PropertyKey key = PropertyKey.fromValue(context, propertyArg);
         PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
 
         if (desc == null) {

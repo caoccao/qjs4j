@@ -29,6 +29,10 @@ import java.util.List;
  * and statement-level constructs (block, labeled, return, break, continue, throw).
  */
 record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
+    private boolean isWithKeyword() {
+        return parserContext.currentToken.type() == TokenType.IDENTIFIER
+                && "with".equals(parserContext.currentToken.value());
+    }
 
     Statement parseAsyncDeclaration() {
         if (parserContext.nextToken.type() == TokenType.FUNCTION) {
@@ -257,6 +261,22 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return new ForStatement(init, test, update, body, location);
     }
 
+    Statement parseWithStatement() {
+        SourceLocation location = parserContext.getLocation();
+        if (parserContext.strictMode) {
+            throw new JSSyntaxErrorException("Strict mode code may not include a with statement");
+        }
+        if (!isWithKeyword()) {
+            throw new JSSyntaxErrorException("Unexpected token");
+        }
+        parserContext.advance(); // consume 'with'
+        parserContext.expect(TokenType.LPAREN);
+        Expression object = delegates.expressions.parseExpression();
+        parserContext.expect(TokenType.RPAREN);
+        Statement body = parseStatement();
+        return new WithStatement(object, body, location);
+    }
+
     Statement parseIfStatement() {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.IF);
@@ -311,6 +331,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
         if (parserContext.isUsingDeclarationStart()) {
             return parseUsingDeclaration(false);
+        }
+        if (isWithKeyword()) {
+            return parseWithStatement();
         }
         // Check for labeled statement: identifier followed by ':'
         // Following QuickJS is_label() check

@@ -17,11 +17,15 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Base sealed interface for all statement nodes.
+ * Represents a with statement.
  */
-public sealed interface Statement extends ASTNode permits
-        ExpressionStatement, BlockStatement, IfStatement, WhileStatement,
-        ForStatement, ForOfStatement, ForInStatement, ReturnStatement, BreakStatement, ContinueStatement,
-        ThrowStatement, TryStatement, SwitchStatement, WithStatement, VariableDeclaration,
-        LabeledStatement, Declaration {
+public record WithStatement(
+        Expression object,
+        Statement body,
+        SourceLocation location
+) implements Statement {
+    @Override
+    public SourceLocation getLocation() {
+        return location;
+    }
 }

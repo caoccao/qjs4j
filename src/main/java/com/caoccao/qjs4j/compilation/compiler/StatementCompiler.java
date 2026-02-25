@@ -124,6 +124,29 @@ final class StatementCompiler {
         }
     }
 
+    void compileWithStatement(WithStatement withStmt) {
+        if (ctx.strictMode) {
+            throw new JSSyntaxErrorException("Strict mode code may not include a with statement");
+        }
+
+        ctx.enterScope();
+        int withObjectLocalIndex = ctx.currentScope().declareLocal("$withObject" + ctx.scopeDepth);
+        delegates.expressions.compileExpression(withStmt.object());
+        ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, withObjectLocalIndex);
+
+        ctx.pushWithObjectLocal(withObjectLocalIndex);
+        try {
+            if (withStmt.body() != null) {
+                compileStatement(withStmt.body());
+            }
+        } finally {
+            ctx.popWithObjectLocal();
+        }
+
+        delegates.emitHelpers.emitCurrentScopeUsingDisposal();
+        ctx.exitScope();
+    }
+
     /**
      * Compile a statement that may be a bare function declaration in sloppy mode.
      * Per ES2024 B.3.3, function declarations in if-statement positions are treated
@@ -366,6 +389,8 @@ final class StatementCompiler {
             }
         } else if (stmt instanceof SwitchStatement switchStmt) {
             compileSwitchStatement(switchStmt);
+        } else if (stmt instanceof WithStatement withStmt) {
+            compileWithStatement(withStmt);
         } else if (stmt instanceof VariableDeclaration varDecl) {
             compileVariableDeclaration(varDecl);
         } else if (stmt instanceof FunctionDeclaration funcDecl) {

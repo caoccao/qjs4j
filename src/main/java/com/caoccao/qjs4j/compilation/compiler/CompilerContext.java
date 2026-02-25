@@ -33,6 +33,7 @@ final class CompilerContext {
     final CaptureResolver captureResolver;
     final BytecodeEmitter emitter;
     final Deque<LoopContext> loopStack;
+    final Deque<Integer> withObjectLocalStack;
     final Set<String> nonDeletableGlobalBindings;
     final Deque<CompilerScope> scopes;
     final Set<String> tdzLocals;
@@ -63,6 +64,7 @@ final class CompilerContext {
         this.emitter = new BytecodeEmitter();
         this.scopes = new ArrayDeque<>();
         this.loopStack = new ArrayDeque<>();
+        this.withObjectLocalStack = new ArrayDeque<>();
         this.captureResolver = new CaptureResolver(parentCaptureResolver, this::findLocalInScopes);
         this.inGlobalScope = false;
         this.isGlobalProgram = false;
@@ -335,6 +337,25 @@ final class CompilerContext {
             }
         }
         return null;
+    }
+
+    List<Integer> getActiveWithObjectLocals() {
+        if (withObjectLocalStack.isEmpty()) {
+            return List.of();
+        }
+        return new ArrayList<>(withObjectLocalStack);
+    }
+
+    boolean hasActiveWithObject() {
+        return !withObjectLocalStack.isEmpty();
+    }
+
+    void popWithObjectLocal() {
+        withObjectLocalStack.pop();
+    }
+
+    void pushWithObjectLocal(int localIndex) {
+        withObjectLocalStack.push(localIndex);
     }
 
     String getMethodName(ClassDeclaration.MethodDefinition method) {

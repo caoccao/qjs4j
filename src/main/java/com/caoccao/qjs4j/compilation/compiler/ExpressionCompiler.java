@@ -323,6 +323,16 @@ final class ExpressionCompiler {
             return;
         }
 
+        if (ctx.hasActiveWithObject()) {
+            emitWithAwareIdentifierLookup(name);
+            return;
+        }
+
+        emitIdentifierLookupWithoutWith(name);
+    }
+
+    private void emitIdentifierLookupWithoutWith(String name) {
+
         // Always check local scopes first, even in global scope (for nested blocks/loops)
         // This must happen BEFORE the 'arguments' special handling so that
         // explicit `var arguments` or `let arguments` declarations take precedence.
@@ -362,6 +372,34 @@ final class ExpressionCompiler {
             // Not found in local scopes, use global variable
             ctx.emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
         }
+    }
+
+    private void emitWithAwareIdentifierLookup(String name) {
+        List<Integer> withObjectLocals = ctx.getActiveWithObjectLocals();
+        emitWithAwareIdentifierLookup(name, withObjectLocals, 0);
+    }
+
+    private void emitWithAwareIdentifierLookup(String name, List<Integer> withObjectLocals, int withDepth) {
+        if (withDepth >= withObjectLocals.size()) {
+            emitIdentifierLookupWithoutWith(name);
+            return;
+        }
+
+        int withObjectLocalIndex = withObjectLocals.get(withDepth);
+        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, withObjectLocalIndex);
+        ctx.emitter.emitOpcode(Opcode.DUP);
+        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        ctx.emitter.emitOpcode(Opcode.ROT3L);
+        ctx.emitter.emitOpcode(Opcode.IN);
+
+        int jumpToFallback = ctx.emitter.emitJump(Opcode.IF_FALSE);
+        ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
+        int jumpToEnd = ctx.emitter.emitJump(Opcode.GOTO);
+
+        ctx.emitter.patchJump(jumpToFallback, ctx.emitter.currentOffset());
+        ctx.emitter.emitOpcode(Opcode.DROP);
+        emitWithAwareIdentifierLookup(name, withObjectLocals, withDepth + 1);
+        ctx.emitter.patchJump(jumpToEnd, ctx.emitter.currentOffset());
     }
 
     void compileLiteral(Literal literal) {

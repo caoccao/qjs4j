@@ -294,6 +294,24 @@ public final class JSProxy extends JSObject {
         return targetObj.delete(ctx, key);
     }
 
+    @Override
+    public boolean hasOwnProperty(PropertyKey key) {
+        return getOwnPropertyDescriptor(key) != null;
+    }
+
+    @Override
+    public PropertyKey[] enumerableKeys() {
+        List<PropertyKey> ownKeys = getOwnPropertyKeys();
+        List<PropertyKey> enumerableKeys = new ArrayList<>(ownKeys.size());
+        for (PropertyKey key : ownKeys) {
+            PropertyDescriptor descriptor = getOwnPropertyDescriptor(key);
+            if (descriptor != null && descriptor.isEnumerable()) {
+                enumerableKeys.add(key);
+            }
+        }
+        return enumerableKeys.toArray(new PropertyKey[0]);
+    }
+
     /**
      * Helper to convert PropertyDescriptor to JSObject.
      */
@@ -443,7 +461,7 @@ public final class JSProxy extends JSObject {
         // Following QuickJS js_proxy_get: forward to target
         // Since JSFunction now extends JSObject, all targets are JSObjects
         if (target instanceof JSObject targetObj) {
-            return targetObj.get(context != null ? context : this.context, key);
+            return targetObj.get(context != null ? context : this.context, key, receiver);
         }
         return JSUndefined.INSTANCE;
     }
@@ -516,9 +534,25 @@ public final class JSProxy extends JSObject {
                 throw new JSException(context.throwTypeError(
                         "proxy: inconsistent getOwnPropertyDescriptor"));
             }
+            if (resultDesc.hasConfigurable() && !resultDesc.isConfigurable() && targetDesc.isConfigurable()) {
+                throw new JSException(context.throwTypeError(
+                        "proxy: inconsistent getOwnPropertyDescriptor"));
+            }
+            if (targetDesc.isDataDescriptor()
+                    && !targetDesc.isConfigurable()
+                    && targetDesc.isWritable()
+                    && resultDesc.hasWritable()
+                    && !resultDesc.isWritable()) {
+                throw new JSException(context.throwTypeError(
+                        "proxy: inconsistent getOwnPropertyDescriptor"));
+            }
         } else {
             // Invariant: cannot return non-configurable if property doesn't exist on non-extensible target
             if (!targetExtensible) {
+                throw new JSException(context.throwTypeError(
+                        "proxy: inconsistent getOwnPropertyDescriptor"));
+            }
+            if (resultDesc.hasConfigurable() && !resultDesc.isConfigurable()) {
                 throw new JSException(context.throwTypeError(
                         "proxy: inconsistent getOwnPropertyDescriptor"));
             }
