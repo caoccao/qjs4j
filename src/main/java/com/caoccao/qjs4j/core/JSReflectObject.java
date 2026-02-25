@@ -236,11 +236,16 @@ public final class JSReflectObject {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
             return context.throwTypeError("Reflect.defineProperty called on non-object");
         }
+
+        PropertyKey key = PropertyKey.fromValue(context, args[1]);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
         if (args.length < 3 || !(args[2] instanceof JSObject attributes)) {
             return context.throwTypeError("Property description must be an object");
         }
 
-        PropertyKey key = PropertyKey.fromValue(context, args[1]);
         PropertyDescriptor descriptor = toPropertyDescriptor(context, attributes);
         if (descriptor == null) {
             return context.getPendingException();

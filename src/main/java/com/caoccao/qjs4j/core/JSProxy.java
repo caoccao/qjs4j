@@ -1118,8 +1118,11 @@ public final class JSProxy extends JSObject {
         JSFunction trapFunc = getTrapFunction("setPrototypeOf");
         if (trapFunc == null) {
             // No trap - forward to target per ES2020 9.5.2 step 5
-            targetObj.setPrototype(proto);
-            return true;
+            if (targetObj instanceof JSProxy targetProxy) {
+                return targetProxy.setPrototypeWithResult(proto);
+            }
+            JSObject.SetPrototypeResult result = targetObj.setPrototypeChecked(proto);
+            return result == JSObject.SetPrototypeResult.SUCCESS;
         }
 
         // Call trap: handler.setPrototypeOf(target, proto)

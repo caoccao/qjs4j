@@ -24,7 +24,6 @@ import com.caoccao.qjs4j.regexp.RegExpEngine;
  * Based on ES2020 RegExp specification.
  */
 public final class RegExpPrototype {
-
     private static int advanceStringIndexUnicode(String s, int index) {
         if (index + 1 >= s.length()) {
             return index + 1;
@@ -118,6 +117,13 @@ public final class RegExpPrototype {
         JSValue groupsValue = groupNames != null ? groupIndices : JSUndefined.INSTANCE;
         indicesArray.defineProperty(null, PropertyKey.GROUPS, groupsValue, PropertyDescriptor.DataState.All);
         return indicesArray;
+    }
+
+    private static JSObject createIteratorResultObject(JSContext context, JSValue value, boolean done) {
+        JSObject resultObject = context.createJSObject();
+        resultObject.defineProperty(null, PropertyKey.VALUE, value, PropertyDescriptor.DataState.All);
+        resultObject.defineProperty(null, PropertyKey.DONE, JSBoolean.valueOf(done), PropertyDescriptor.DataState.All);
+        return resultObject;
     }
 
     private static JSValue createNamedGroupsValue(String[] captures, String[] groupNames) {
@@ -329,6 +335,37 @@ public final class RegExpPrototype {
         return JSBoolean.valueOf(regexp.isUnicodeSets());
     }
 
+    private static JSValue regExpExec(JSContext context, JSObject regexpObject, JSString inputString) {
+        JSValue execValue = regexpObject.get(context, PropertyKey.EXEC);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (execValue instanceof JSFunction execFunction) {
+            JSValue result = execFunction.call(context, regexpObject, new JSValue[]{inputString});
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(result instanceof JSObject) && !(result instanceof JSNull)) {
+                return context.throwTypeError("RegExp exec method returned something other than an Object or null");
+            }
+            return result;
+        }
+        if (regexpObject instanceof JSRegExp) {
+            return exec(context, regexpObject, new JSValue[]{inputString});
+        }
+        return context.throwTypeError("RegExp.prototype.exec called on incompatible receiver");
+    }
+
+    /**
+     * %RegExpStringIteratorPrototype%.next()
+     */
+    public static JSValue regExpStringIteratorNext(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSRegExpStringIterator regExpStringIterator)) {
+            return context.throwTypeError("Method RegExp String Iterator.prototype.next called on incompatible receiver");
+        }
+        return regExpStringIterator.next(context);
+    }
+
     /**
      * RegExp.prototype[@@match](string)
      * ES2024 22.2.5.6
@@ -410,6 +447,35 @@ public final class RegExpPrototype {
                 }
             }
         }
+    }
+
+    /**
+     * RegExp.prototype[@@matchAll](string)
+     * ES2024 22.2.6.9 (subset aligned with test262 semantics in current slice).
+     */
+    public static JSValue symbolMatchAll(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSObject regexpObject)) {
+            return context.throwTypeError("RegExp.prototype[Symbol.matchAll] called on non-object");
+        }
+
+        JSString inputString = JSTypeConversions.toString(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue globalValue = regexpObject.get(context, PropertyKey.fromString("global"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean global = JSTypeConversions.toBoolean(globalValue).value();
+
+        JSValue unicodeValue = regexpObject.get(context, PropertyKey.fromString("unicode"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean fullUnicode = JSTypeConversions.toBoolean(unicodeValue).value();
+
+        return new JSRegExpStringIterator(context, regexpObject, inputString, global, fullUnicode);
     }
 
     /**
@@ -575,5 +641,92 @@ public final class RegExpPrototype {
             pattern = "(?:)";
         }
         return new JSString("/" + pattern + "/" + regexp.getFlags());
+    }
+
+    private static final class JSRegExpStringIterator extends JSObject {
+        private final boolean fullUnicode;
+        private final boolean global;
+        private final JSObject regexpObject;
+        private final JSString stringValue;
+        private boolean done;
+
+        private JSRegExpStringIterator(
+                JSContext context,
+                JSObject regexpObject,
+                JSString stringValue,
+                boolean global,
+                boolean fullUnicode) {
+            super();
+            this.regexpObject = regexpObject;
+            this.stringValue = stringValue;
+            this.global = global;
+            this.fullUnicode = fullUnicode;
+            this.done = false;
+
+            JSObject prototype = context.getIteratorPrototype("RegExp String Iterator");
+            if (prototype != null) {
+                setPrototype(prototype);
+            } else {
+                context.transferPrototype(this, JSIterator.NAME);
+            }
+        }
+
+        private JSValue next(JSContext context) {
+            if (done) {
+                return createIteratorResultObject(context, JSUndefined.INSTANCE, true);
+            }
+
+            JSValue matchValue = regExpExec(context, regexpObject, stringValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+
+            if (matchValue instanceof JSNull) {
+                done = true;
+                return createIteratorResultObject(context, JSUndefined.INSTANCE, true);
+            }
+
+            if (!(matchValue instanceof JSObject matchObject)) {
+                return context.throwTypeError("RegExp exec method returned something other than an Object or null");
+            }
+
+            if (!global) {
+                done = true;
+                return createIteratorResultObject(context, matchObject, false);
+            }
+
+            JSValue matchStringValue = matchObject.get(context, PropertyKey.fromString("0"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            JSString matchString = JSTypeConversions.toString(context, matchStringValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+
+            if (matchString.value().isEmpty()) {
+                JSValue lastIndexValue = regexpObject.get(context, PropertyKey.LAST_INDEX);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                long currentIndex = JSTypeConversions.toLength(context, lastIndexValue);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                long nextIndex;
+                if (fullUnicode) {
+                    int boundedIndex = (int) Math.min(currentIndex, stringValue.value().length());
+                    nextIndex = advanceStringIndexUnicode(stringValue.value(), boundedIndex);
+                } else {
+                    nextIndex = currentIndex + 1;
+                }
+                regexpObject.set(context, PropertyKey.LAST_INDEX, JSNumber.of(nextIndex));
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            }
+
+            return createIteratorResultObject(context, matchObject, false);
+        }
     }
 }

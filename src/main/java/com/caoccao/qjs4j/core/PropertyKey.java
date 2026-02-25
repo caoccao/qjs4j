@@ -37,6 +37,7 @@ public final class PropertyKey {
     public static final PropertyKey ENUMERABLE = fromString("enumerable");
     public static final PropertyKey ERROR = fromString("error");
     public static final PropertyKey ERRORS = fromString("errors");
+    public static final PropertyKey EXEC = fromString("exec");
     public static final PropertyKey GET = fromString("get");
     public static final PropertyKey GROUPS = fromString("groups");
     public static final PropertyKey HAS = fromString("has");

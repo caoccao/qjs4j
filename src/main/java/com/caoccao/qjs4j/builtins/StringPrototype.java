@@ -1274,7 +1274,7 @@ public final class StringPrototype {
     }
 
     private static JSValue replaceRegExpSubclassOnce(JSContext context, JSRegExp regexp, JSValue replaceValue, JSString inputString) {
-        JSValue execValue = regexp.get(context, PropertyKey.fromString("exec"));
+        JSValue execValue = regexp.get(context, PropertyKey.EXEC);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

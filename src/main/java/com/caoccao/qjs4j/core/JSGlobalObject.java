@@ -1510,6 +1510,17 @@ public final class JSGlobalObject {
             context.registerIteratorPrototype(tag, proto);
         }
 
+        JSObject regExpStringIteratorPrototype = new JSObject();
+        regExpStringIteratorPrototype.setPrototype(iteratorPrototype);
+        regExpStringIteratorPrototype.defineProperty(
+                PropertyKey.fromString("next"),
+                new JSNativeFunction("next", 0, RegExpPrototype::regExpStringIteratorNext),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        regExpStringIteratorPrototype.defineProperty(
+                PropertyKey.SYMBOL_TO_STRING_TAG,
+                PropertyDescriptor.dataDescriptor(new JSString("RegExp String Iterator"), PropertyDescriptor.DataState.Configurable));
+        context.registerIteratorPrototype("RegExp String Iterator", regExpStringIteratorPrototype);
+
         // Create %WrapForValidIteratorPrototype% for Iterator.from wrapper objects
         // This prototype inherits from Iterator.prototype and provides next/return methods
         JSObject wrapForValidIteratorPrototype = new JSObject();
@@ -1837,11 +1848,12 @@ public final class JSGlobalObject {
         // Create RegExp.prototype
         JSObject regexpPrototype = context.createJSObject();
         regexpPrototype.defineProperty(PropertyKey.fromString("test"), new JSNativeFunction("test", 1, RegExpPrototype::test), PropertyDescriptor.DataState.ConfigurableWritable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("exec"), new JSNativeFunction("exec", 1, RegExpPrototype::exec), PropertyDescriptor.DataState.ConfigurableWritable);
+        regexpPrototype.defineProperty(PropertyKey.EXEC, new JSNativeFunction("exec", 1, RegExpPrototype::exec), PropertyDescriptor.DataState.ConfigurableWritable);
         regexpPrototype.defineProperty(PropertyKey.fromString("compile"), new JSNativeFunction("compile", 2, RegExpPrototype::compile), PropertyDescriptor.DataState.ConfigurableWritable);
         regexpPrototype.defineProperty(PropertyKey.fromString("toString"), new JSNativeFunction("toString", 0, RegExpPrototype::toStringMethod), PropertyDescriptor.DataState.ConfigurableWritable);
         regexpPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPLIT), new JSNativeFunction("[Symbol.split]", 2, RegExpPrototype::symbolSplit), PropertyDescriptor.DataState.ConfigurableWritable);
         regexpPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.MATCH), new JSNativeFunction("[Symbol.match]", 1, RegExpPrototype::symbolMatch), PropertyDescriptor.DataState.ConfigurableWritable);
+        regexpPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.MATCH_ALL), new JSNativeFunction("[Symbol.matchAll]", 1, RegExpPrototype::symbolMatchAll), PropertyDescriptor.DataState.ConfigurableWritable);
         regexpPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.REPLACE), JSUndefined.INSTANCE, PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Accessor properties
