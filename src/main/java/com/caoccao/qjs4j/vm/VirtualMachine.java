@@ -654,11 +654,6 @@ public final class VirtualMachine {
         return opcode;
     }
 
-    void dispatchOpcodeForExecute(ExecutionContext executionContext) {
-        Opcode op = decodeOpcodeForExecute(executionContext);
-        op.getHandler().call(op, executionContext);
-    }
-
     void ensureConstantObjectPrototype(JSObject object) {
         if (!initializedConstantObjects.add(object)) {
             return;
@@ -760,7 +755,8 @@ public final class VirtualMachine {
                 executionContext.pc = pc;
                 executionContext.opcodeRequestedReturn = false;
 
-                dispatchOpcodeForExecute(executionContext);
+                Opcode op = decodeOpcodeForExecute(executionContext);
+                op.getHandler().call(op, executionContext);
                 if (executionContext.opcodeRequestedReturn) {
                     return executionContext.returnValue;
                 }
