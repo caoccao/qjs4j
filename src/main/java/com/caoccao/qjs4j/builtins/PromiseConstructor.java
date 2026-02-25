@@ -55,7 +55,7 @@ public final class PromiseConstructor {
         return JSPromise.create(context, args);
     }
 
-    private static JSValue callCallable(JSContext context, JSValue callable, JSValue thisArg, JSValue[] args) {
+    static JSValue callCallable(JSContext context, JSValue callable, JSValue thisArg, JSValue[] args) {
         try {
             if (callable instanceof JSProxy proxy) {
                 return proxy.apply(context, thisArg, args);
@@ -77,7 +77,7 @@ public final class PromiseConstructor {
         }
     }
 
-    private static JSValue callGet(JSContext context, JSValue target, PropertyKey propertyKey) {
+    static JSValue callGet(JSContext context, JSValue target, PropertyKey propertyKey) {
         try {
             if (target instanceof JSObject objectTarget) {
                 return objectTarget.get(context, propertyKey);
@@ -124,7 +124,7 @@ public final class PromiseConstructor {
         return rejectAbruptPromise(context, promiseCapability);
     }
 
-    private static JSNativeFunction createBuiltinFunction(
+    static JSNativeFunction createBuiltinFunction(
             JSContext context,
             String functionName,
             int length,
@@ -171,9 +171,9 @@ public final class PromiseConstructor {
         return thisArg;
     }
 
-    private static PromiseCapability newPromiseCapability(JSContext context, JSValue constructor) {
+    static PromiseCapability newPromiseCapability(JSContext context, JSValue constructor) {
         PromiseCapability promiseCapability = new PromiseCapability();
-        JSNativeFunction executor = new JSNativeFunction("executor", 2, (childContext, thisArg, args) -> {
+        JSNativeFunction executor = createBuiltinFunction(context, "", 2, (childContext, thisArg, args) -> {
             if (!promiseCapability.resolve().isUndefined() || !promiseCapability.reject().isUndefined()) {
                 return childContext.throwTypeError("Promise capability executor called multiple times");
             }
@@ -309,7 +309,9 @@ public final class PromiseConstructor {
 
             int currentIndex = index;
             boolean[] alreadyCalled = new boolean[]{false};
-            JSNativeFunction resolveElement = createBuiltinFunction(context, "", 1,
+            JSValue resolveHandler = mode == PromiseCombinatorMode.ANY
+                    ? promiseCapability.resolve()
+                    : createBuiltinFunction(context, "", 1,
                     (childContext, thisValue, functionArgs) -> {
                         if (alreadyCalled[0]) {
                             return JSUndefined.INSTANCE;
@@ -341,13 +343,11 @@ public final class PromiseConstructor {
                                 }
                             }
                             case ANY -> {
-                                if (!combinatorSettled[0]) {
-                                    combinatorSettled[0] = true;
-                                    callCallable(childContext, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{settledValue});
-                                    if (childContext.hasPendingException()) {
-                                        combinatorSettled[0] = false;
-                                        rejectAbruptPromise(childContext, promiseCapability);
-                                    }
+                                combinatorSettled[0] = true;
+                                callCallable(childContext, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{settledValue});
+                                if (childContext.hasPendingException()) {
+                                    combinatorSettled[0] = false;
+                                    rejectAbruptPromise(childContext, promiseCapability);
                                 }
                             }
                         }
@@ -403,7 +403,7 @@ public final class PromiseConstructor {
 
             remainingElementsCount[0]++;
             JSValue rejectHandler = mode == PromiseCombinatorMode.ALL ? promiseCapability.reject() : rejectElement;
-            callCallable(context, thenMethod, nextPromise, new JSValue[]{resolveElement, rejectHandler});
+            callCallable(context, thenMethod, nextPromise, new JSValue[]{resolveHandler, rejectHandler});
             if (context.hasPendingException()) {
                 return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
             }
@@ -469,13 +469,19 @@ public final class PromiseConstructor {
      * Promise.reject(reason)
      */
     public static JSValue reject(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSObject)) {
-            return context.throwTypeError("Promise.reject called on non-object");
+        if (!JSTypeChecking.isConstructor(thisArg)) {
+            return context.throwTypeError("Promise.reject called on non-constructor");
         }
         JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSPromise promise = context.createJSPromise();
-        promise.reject(reason);
-        return promise;
+        PromiseCapability promiseCapability = newPromiseCapability(context, thisArg);
+        if (promiseCapability == null) {
+            return JSUndefined.INSTANCE;
+        }
+        callCallable(context, promiseCapability.reject(), JSUndefined.INSTANCE, new JSValue[]{reason});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return promiseCapability.promise();
     }
 
     private static JSValue rejectAbruptPromise(JSContext context, PromiseCapability promiseCapability) {
@@ -644,7 +650,7 @@ public final class PromiseConstructor {
         ANY
     }
 
-    private static final class PromiseCapability {
+    static final class PromiseCapability {
         private JSValue promise;
         private JSValue reject;
         private JSValue resolve;

@@ -40,6 +40,7 @@ public final class PropertyDescriptor {
     private JSValue setter;
     private Optional<JSValue> value;
     private Optional<Boolean> writable;
+
     public PropertyDescriptor() {
         this.configurable = Optional.empty();
         this.enumerable = Optional.empty();

@@ -32,7 +32,7 @@ public final class PromisePrototype {
     public static JSValue catchMethod(JSContext context, JSValue thisArg, JSValue[] args) {
         // catch is just then(undefined, onRejected)
         JSValue[] thenArgs = new JSValue[]{JSUndefined.INSTANCE, args.length > 0 ? args[0] : JSUndefined.INSTANCE};
-        return then(context, thisArg, thenArgs);
+        return invokeThen(context, thisArg, thenArgs);
     }
 
     /**
@@ -41,20 +41,16 @@ public final class PromisePrototype {
      * Returns a new Promise, and attaches a callback that is called when the promise is settled.
      */
     public static JSValue finallyMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSPromise promise)) {
-            return context.throwTypeError("Promise.prototype.finally called on non-Promise");
-        }
         JSValue onFinallyValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue constructor = getPromiseConstructor(context, promise);
+        JSValue constructor = speciesConstructor(context, thisArg, getDefaultPromiseConstructor(context));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         if (!(onFinallyValue instanceof JSFunction onFinally)) {
-            // Non-callable onFinally: pass through via then(undefined behavior).
-            return then(context, thisArg, new JSValue[]{onFinallyValue, onFinallyValue});
+            return invokeThen(context, thisArg, new JSValue[]{onFinallyValue, onFinallyValue});
         }
 
-        JSNativeFunction onFulfilledWrapper = new JSNativeFunction("onFinallyFulfilled", 1,
+        JSNativeFunction onFulfilledWrapper = PromiseConstructor.createBuiltinFunction(context, "", 1,
                 (childContext, thisValue, funcArgs) -> {
                     JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
                     JSValue onFinallyResult = onFinally.call(childContext, JSUndefined.INSTANCE, new JSValue[0]);
@@ -62,15 +58,15 @@ public final class PromisePrototype {
                         return JSUndefined.INSTANCE;
                     }
                     JSValue resolved = PromiseConstructor.resolve(childContext, constructor, new JSValue[]{onFinallyResult});
-                    if (!(resolved instanceof JSPromise resolvedPromise)) {
-                        return value;
+                    if (childContext.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
                     }
-                    JSNativeFunction valueThunk = new JSNativeFunction("valueThunk", 0,
+                    JSNativeFunction valueThunk = PromiseConstructor.createBuiltinFunction(childContext, "", 0,
                             (nestedContext, nestedThis, nestedArgs) -> value);
-                    return then(childContext, resolvedPromise, new JSValue[]{valueThunk, JSUndefined.INSTANCE});
+                    return invokeThen(childContext, resolved, new JSValue[]{valueThunk});
                 });
 
-        JSNativeFunction onRejectedWrapper = new JSNativeFunction("onFinallyRejected", 1,
+        JSNativeFunction onRejectedWrapper = PromiseConstructor.createBuiltinFunction(context, "", 1,
                 (childContext, thisValue, funcArgs) -> {
                     JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
                     JSValue onFinallyResult = onFinally.call(childContext, JSUndefined.INSTANCE, new JSValue[0]);
@@ -78,43 +74,70 @@ public final class PromisePrototype {
                         return JSUndefined.INSTANCE;
                     }
                     JSValue resolved = PromiseConstructor.resolve(childContext, constructor, new JSValue[]{onFinallyResult});
-                    if (!(resolved instanceof JSPromise resolvedPromise)) {
-                        JSPromise rejectedPromise = childContext.createJSPromise();
-                        rejectedPromise.reject(reason);
-                        return rejectedPromise;
+                    if (childContext.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
                     }
-                    JSNativeFunction thrower = new JSNativeFunction("thrower", 0,
+                    JSNativeFunction thrower = PromiseConstructor.createBuiltinFunction(childContext, "", 0,
                             (nestedContext, nestedThis, nestedArgs) -> {
-                                JSPromise rejectedPromise = nestedContext.createJSPromise();
-                                rejectedPromise.reject(reason);
-                                return rejectedPromise;
+                                nestedContext.setPendingException(reason);
+                                return JSUndefined.INSTANCE;
                             });
-                    return then(childContext, resolvedPromise, new JSValue[]{thrower, JSUndefined.INSTANCE});
+                    return invokeThen(childContext, resolved, new JSValue[]{thrower});
                 });
 
-        return then(context, thisArg, new JSValue[]{onFulfilledWrapper, onRejectedWrapper});
+        return invokeThen(context, thisArg, new JSValue[]{onFulfilledWrapper, onRejectedWrapper});
     }
 
-    private static JSValue getPromiseConstructor(JSContext context, JSPromise promise) {
-        JSValue constructor = promise.get(PropertyKey.CONSTRUCTOR);
-        if (constructor instanceof JSObject constructorObject) {
-            JSValue species = constructorObject.get(PropertyKey.SYMBOL_SPECIES);
-            if (context.hasPendingException()) {
+    private static JSValue getDefaultPromiseConstructor(JSContext context) {
+        JSObject global = context.getGlobalObject();
+        if (global == null) {
+            return JSUndefined.INSTANCE;
+        }
+        return global.get(context, PropertyKey.fromString(JSPromise.NAME));
+    }
+
+    private static JSValue invokeThen(JSContext context, JSValue target, JSValue[] thenArgs) {
+        JSValue thenMethod = PromiseConstructor.callGet(context, target, PropertyKey.THEN);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!JSTypeChecking.isCallable(thenMethod)) {
+            return context.throwTypeError("then is not a function");
+        }
+        return PromiseConstructor.callCallable(context, thenMethod, target, thenArgs);
+    }
+
+    private static JSValue speciesConstructor(JSContext context, JSValue target, JSValue defaultConstructor) {
+        JSObject targetObject;
+        if (target instanceof JSObject jsObject) {
+            targetObject = jsObject;
+        } else {
+            targetObject = JSTypeConversions.toObject(context, target);
+            if (targetObject == null || context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (!(species instanceof JSUndefined) && !(species instanceof JSNull)) {
-                if (species instanceof JSObject) {
-                    return species;
-                }
-                return context.throwTypeError("Promise[Symbol.species] is not an object");
-            }
-            return constructor;
         }
-        JSObject global = context.getGlobalObject();
-        if (global != null) {
-            return global.get(JSPromise.NAME);
+        JSValue constructor = targetObject.get(context, PropertyKey.CONSTRUCTOR);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
-        return JSUndefined.INSTANCE;
+        if (constructor instanceof JSUndefined) {
+            return defaultConstructor;
+        }
+        if (!(constructor instanceof JSObject constructorObject)) {
+            return context.throwTypeError("Promise constructor is not an object");
+        }
+        JSValue species = constructorObject.get(context, PropertyKey.SYMBOL_SPECIES);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (species instanceof JSUndefined || species instanceof JSNull) {
+            return defaultConstructor;
+        }
+        if (!JSTypeChecking.isConstructor(species)) {
+            return context.throwTypeError("Promise[Symbol.species] is not a constructor");
+        }
+        return species;
     }
 
     /**
@@ -125,6 +148,15 @@ public final class PromisePrototype {
     public static JSValue then(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSPromise promise)) {
             return context.throwTypeError("Promise.prototype.then called on non-Promise");
+        }
+
+        JSValue constructor = speciesConstructor(context, promise, getDefaultPromiseConstructor(context));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        PromiseConstructor.PromiseCapability promiseCapability = PromiseConstructor.newPromiseCapability(context, constructor);
+        if (promiseCapability == null) {
+            return JSUndefined.INSTANCE;
         }
 
         JSFunction onFulfilled = null;
@@ -138,29 +170,21 @@ public final class PromisePrototype {
             onRejected = (JSFunction) args[1];
         }
 
-        // Create a new promise to be returned (for chaining).
-        JSPromise chainedPromise = context.createJSPromise();
-
-        // Create reaction records
-        JSPromise.ReactionRecord fulfillReaction = null;
-        if (onFulfilled != null) {
+        JSPromise.ReactionRecord fulfillReaction;
+        JSPromise.ReactionRecord rejectReaction;
+        if (promiseCapability.promise() instanceof JSPromise chainedPromise) {
             fulfillReaction = new JSPromise.ReactionRecord(onFulfilled, chainedPromise, context);
-        } else {
-            // If no onFulfilled, pass value through
-            fulfillReaction = new JSPromise.ReactionRecord(null, chainedPromise, context);
-        }
-
-        JSPromise.ReactionRecord rejectReaction = null;
-        if (onRejected != null) {
             rejectReaction = new JSPromise.ReactionRecord(onRejected, chainedPromise, context);
         } else {
-            // If no onRejected, pass rejection through
-            rejectReaction = new JSPromise.ReactionRecord(null, chainedPromise, context);
+            fulfillReaction = new JSPromise.ReactionRecord(
+                    onFulfilled, context, promiseCapability.resolve(), promiseCapability.reject());
+            rejectReaction = new JSPromise.ReactionRecord(
+                    onRejected, context, promiseCapability.resolve(), promiseCapability.reject());
         }
 
         // Add reactions to the promise
         promise.addReactions(fulfillReaction, rejectReaction);
 
-        return chainedPromise;
+        return promiseCapability.promise();
     }
 }
