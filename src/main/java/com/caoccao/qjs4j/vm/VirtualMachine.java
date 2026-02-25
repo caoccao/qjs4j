@@ -133,6 +133,23 @@ public final class VirtualMachine {
         return JSNumber.of(((JSNumber) leftNumeric).value() + ((JSNumber) rightNumeric).value());
     }
 
+    private void appendPropertyAccessForArrayIndex(JSValue indexValue) {
+        if (indexValue instanceof JSString stringValue) {
+            if (!propertyAccessChain.isEmpty()) {
+                propertyAccessChain.append('.');
+            }
+            propertyAccessChain.append(stringValue.value());
+        } else if (indexValue instanceof JSNumber numberValue) {
+            String propertyName = JSTypeConversions.toString(context, numberValue).value();
+            if (!propertyAccessChain.isEmpty()) {
+                propertyAccessChain.append('.');
+            }
+            propertyAccessChain.append(propertyName);
+        } else if (indexValue instanceof JSSymbol symbolValue) {
+            propertyAccessChain.append("[Symbol.").append(symbolValue.getDescription()).append("]");
+        }
+    }
+
     private JSValue[] buildApplyArguments(JSValue argsArrayValue, boolean allowNullOrUndefined) {
         if (allowNullOrUndefined && argsArrayValue.isNullOrUndefined()) {
             return EMPTY_ARGS;
@@ -173,6 +190,20 @@ public final class VirtualMachine {
         }
     }
 
+    private void capturePendingExceptionFromVmOrContext(JSVirtualMachineException e) {
+        if (e.getJsValue() != null) {
+            pendingException = e.getJsValue();
+        } else if (e.getJsError() != null) {
+            pendingException = e.getJsError();
+        } else if (context.hasPendingException()) {
+            pendingException = context.getPendingException();
+        } else {
+            pendingException = context.throwError("Error",
+                    e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+        }
+        context.clearPendingException();
+    }
+
     /**
      * Convert a JSVirtualMachineException to a pendingException so the VM's
      * JS exception handling mechanism (catch handlers on the value stack) can process it.
@@ -189,6 +220,15 @@ public final class VirtualMachine {
                     e.getMessage() != null ? e.getMessage() : "Unhandled exception");
         }
         context.clearPendingException();
+    }
+
+    private void checkExecutionInterruptForExecute() {
+        if (executionDeadline != 0 && --interruptCounter <= 0) {
+            interruptCounter = INTERRUPT_CHECK_INTERVAL;
+            if (System.nanoTime() >= executionDeadlineNanos) {
+                throw new JSVirtualMachineException("execution timeout");
+            }
+        }
     }
 
     private void clearActiveGeneratorSuspendedExecutionState() {
@@ -433,6 +473,51 @@ public final class VirtualMachine {
         return argumentsObject;
     }
 
+    private ExecutionContext createExecutionContext(
+            JSBytecodeFunction function,
+            StackFrame frame,
+            StackFrame previousFrame,
+            int frameStackBase,
+            int restoreStackTop,
+            boolean savedStrictMode,
+            JSGeneratorState generatorStateForExecution,
+            boolean resumeGeneratorExecution) {
+        ExecutionContext executionContext = new ExecutionContext(
+                function.getBytecode(),
+                frame,
+                previousFrame,
+                frameStackBase,
+                restoreStackTop,
+                savedStrictMode);
+        if (resumeGeneratorExecution) {
+            valueStack.stackTop = frameStackBase;
+            JSStackValue[] suspendedStackValues = generatorStateForExecution.getSuspendedStackValues();
+            if (suspendedStackValues != null && suspendedStackValues.length > 0) {
+                System.arraycopy(suspendedStackValues, 0, executionContext.stack, frameStackBase, suspendedStackValues.length);
+            }
+            executionContext.sp = frameStackBase + (suspendedStackValues == null ? 0 : suspendedStackValues.length);
+            JSGeneratorState.ResumeRecord pendingResumeRecord = generatorStateForExecution.consumePendingResumeRecord();
+            if (pendingResumeRecord != null) {
+                if (pendingResumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
+                    pendingException = pendingResumeRecord.value();
+                    context.setPendingException(pendingResumeRecord.value());
+                } else if (pendingResumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
+                    generatorForceReturn = true;
+                    generatorReturnValue = pendingResumeRecord.value();
+                    pendingException = pendingResumeRecord.value();
+                    context.setPendingException(pendingResumeRecord.value());
+                } else {
+                    executionContext.stack[executionContext.sp++] = pendingResumeRecord.value();
+                }
+            }
+            executionContext.pc = generatorStateForExecution.getSuspendedProgramCounter();
+        } else {
+            executionContext.sp = valueStack.stackTop;
+            executionContext.pc = 0;
+        }
+        return executionContext;
+    }
+
     private JSObject createReferenceObject(Opcode makeRefOpcode, int refIndex, String atomName) {
         StackFrame capturedFrame = currentFrame;
         JSObject referenceObject = new JSObject();
@@ -520,6 +605,694 @@ public final class VirtualMachine {
 
             default:
                 throw new JSVirtualMachineException("Unknown special object type: " + objectType);
+        }
+    }
+
+    private Opcode decodeOpcodeForExecute(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        Opcode opcode = executionContext.decodedOpcodes[pc];
+        int rebase = executionContext.opcodeRebaseOffsets[pc];
+        if (opcode == null) {
+            int opcodeValue = executionContext.instructions[pc] & 0xFF;
+            opcode = Opcode.fromInt(opcodeValue);
+            if (opcode == Opcode.INVALID && pc + 1 < executionContext.instructions.length) {
+                int extendedOpcodeValue = 0x100 + (executionContext.instructions[pc + 1] & 0xFF);
+                Opcode extendedOpcode = Opcode.fromInt(extendedOpcodeValue);
+                if (extendedOpcode != Opcode.INVALID) {
+                    opcode = extendedOpcode;
+                    rebase = 1;
+                }
+            }
+        }
+        if (rebase != 0) {
+            executionContext.pc = pc + rebase;
+        }
+        return opcode;
+    }
+
+    private void dispatchOpcodeForExecute(ExecutionContext executionContext) {
+        Opcode op = decodeOpcodeForExecute(executionContext);
+        switch (op) {
+            // ==================== Constants and Literals ====================
+            case INVALID -> {
+                handleInvalid(executionContext);
+            }
+            case PUSH_I32 -> {
+                handlePushI32(executionContext);
+            }
+            case PUSH_BIGINT_I32 -> {
+                handlePushBigintI32(executionContext);
+            }
+            case PUSH_MINUS1 -> {
+                handlePushMinus1(executionContext);
+            }
+            case PUSH_0 -> {
+                handlePush0(executionContext);
+            }
+            case PUSH_1 -> {
+                handlePush1(executionContext);
+            }
+            case PUSH_2 -> {
+                handlePush2(executionContext);
+            }
+            case PUSH_3 -> {
+                handlePush3(executionContext);
+            }
+            case PUSH_4 -> {
+                handlePush4(executionContext);
+            }
+            case PUSH_5 -> {
+                handlePush5(executionContext);
+            }
+            case PUSH_6 -> {
+                handlePush6(executionContext);
+            }
+            case PUSH_7 -> {
+                handlePush7(executionContext);
+            }
+            case PUSH_I8 -> {
+                handlePushI8(executionContext);
+            }
+            case PUSH_I16 -> {
+                handlePushI16(executionContext);
+            }
+            case PUSH_CONST -> {
+                handlePushConst(executionContext);
+            }
+            case PUSH_CONST8 -> {
+                handlePushConst8(executionContext);
+            }
+            case PUSH_ATOM_VALUE -> {
+                handlePushAtomValue(executionContext);
+            }
+            case PRIVATE_SYMBOL -> {
+                handlePrivateSymbol(executionContext);
+            }
+            case FCLOSURE -> {
+                handleFclosure(executionContext);
+            }
+            case FCLOSURE8 -> {
+                handleFclosure8(executionContext);
+            }
+            case PUSH_EMPTY_STRING -> {
+                handlePushEmptyString(executionContext);
+            }
+            case UNDEFINED -> {
+                handleUndefined(executionContext);
+            }
+            case NULL -> {
+                handleNull(executionContext);
+            }
+            case PUSH_THIS -> {
+                handlePushThis(executionContext);
+            }
+            case PUSH_FALSE -> {
+                handlePushFalse(executionContext);
+            }
+            case PUSH_TRUE -> {
+                handlePushTrue(executionContext);
+            }
+            case SPECIAL_OBJECT -> {
+                handleSpecialObject(executionContext);
+            }
+            case REST -> {
+                handleRest(executionContext);
+            }
+
+            // ==================== Stack Manipulation ====================
+            case DROP -> {
+                handleDrop(executionContext);
+            }
+            case NIP -> {
+                handleNip(executionContext);
+            }
+            case DUP -> {
+                handleDup(executionContext);
+            }
+            case DUP1 -> {
+                handleDup1(executionContext);
+            }
+            case DUP2 -> {
+                handleDup2(executionContext);
+            }
+            case INSERT2 -> {
+                handleInsert2(executionContext);
+            }
+            case INSERT3 -> {
+                handleInsert3(executionContext);
+            }
+            case INSERT4 -> {
+                handleInsert4(executionContext);
+            }
+            case SWAP -> {
+                handleSwap(executionContext);
+            }
+            case ROT3L -> {
+                handleRot3l(executionContext);
+            }
+            case ROT3R -> {
+                handleRot3r(executionContext);
+            }
+            case SWAP2 -> {
+                handleSwap2(executionContext);
+            }
+
+            // ==================== Arithmetic Operations ====================
+            case ADD -> {
+                handleAddOpcode(executionContext);
+            }
+            case SUB -> {
+                handleSubOpcode(executionContext);
+            }
+            case MUL -> {
+                handleMulOpcode(executionContext);
+            }
+            case DIV -> {
+                handleDivOpcode(executionContext);
+            }
+            case MOD -> {
+                handleModOpcode(executionContext);
+            }
+            case EXP, POW -> {
+                handleExpOpcode(executionContext);
+            }
+            case PLUS -> {
+                handlePlusOpcode(executionContext);
+            }
+            case NEG -> {
+                handleNegOpcode(executionContext);
+            }
+            case INC -> {
+                handleIncOpcode(executionContext);
+            }
+            case DEC -> {
+                handleDecOpcode(executionContext);
+            }
+            case INC_LOC -> {
+                handleIncLoc(executionContext);
+            }
+            case DEC_LOC -> {
+                handleDecLoc(executionContext);
+            }
+            case ADD_LOC -> {
+                handleAddLoc(executionContext);
+            }
+            case POST_INC -> {
+                handlePostIncOpcode(executionContext);
+            }
+            case POST_DEC -> {
+                handlePostDecOpcode(executionContext);
+            }
+            case PERM3 -> {
+                handlePerm3(executionContext);
+            }
+            case PERM4 -> {
+                handlePerm4(executionContext);
+            }
+            case PERM5 -> {
+                handlePerm5(executionContext);
+            }
+
+            // ==================== Bitwise Operations ====================
+            case SHL -> {
+                handleShlOpcode(executionContext);
+            }
+            case SAR -> {
+                handleSarOpcode(executionContext);
+            }
+            case SHR -> {
+                handleShrOpcode(executionContext);
+            }
+            case AND -> {
+                handleAndOpcode(executionContext);
+            }
+            case OR -> {
+                handleOrOpcode(executionContext);
+            }
+            case XOR -> {
+                handleXorOpcode(executionContext);
+            }
+            case NOT -> {
+                handleNotOpcode(executionContext);
+            }
+
+            // ==================== Comparison Operations ====================
+            case EQ -> {
+                handleEqOpcode(executionContext);
+            }
+            case NEQ -> {
+                handleNeqOpcode(executionContext);
+            }
+            case STRICT_EQ -> {
+                handleStrictEqOpcode(executionContext);
+            }
+            case STRICT_NEQ -> {
+                handleStrictNeqOpcode(executionContext);
+            }
+            case LT -> {
+                handleLtOpcode(executionContext);
+            }
+            case LTE -> {
+                handleLteOpcode(executionContext);
+            }
+            case GT -> {
+                handleGtOpcode(executionContext);
+            }
+            case GTE -> {
+                handleGteOpcode(executionContext);
+            }
+            case INSTANCEOF -> {
+                handleInstanceofOpcode(executionContext);
+            }
+            case IN -> {
+                handleInOpcode(executionContext);
+            }
+            case PRIVATE_IN -> {
+                handlePrivateInOpcode(executionContext);
+            }
+
+            // ==================== Logical Operations ====================
+            case LOGICAL_NOT, LNOT -> {
+                handleLogicalNotOpcode(executionContext);
+            }
+            case LOGICAL_AND -> {
+                handleLogicalAndOpcode(executionContext);
+            }
+            case LOGICAL_OR -> {
+                handleLogicalOrOpcode(executionContext);
+            }
+            case NULLISH_COALESCE -> {
+                handleNullishCoalesceOpcode(executionContext);
+            }
+
+            // ==================== Variable Access ====================
+            case GET_VAR_UNDEF -> {
+                handleGetVarUndef(executionContext);
+            }
+            case GET_REF_VALUE -> {
+                handleGetRefValue(executionContext);
+            }
+            case GET_VAR -> {
+                handleGetVar(executionContext);
+            }
+            case PUT_VAR_INIT -> {
+                handlePutVarInit(executionContext);
+            }
+            case PUT_REF_VALUE -> {
+                handlePutRefValue(executionContext);
+            }
+            case PUT_VAR -> {
+                handlePutVar(executionContext);
+            }
+            case SET_VAR -> {
+                handleSetVar(executionContext);
+            }
+            case DELETE_VAR -> {
+                handleDeleteVar(executionContext);
+            }
+            case GET_LOCAL, GET_LOC -> {
+                handleGetLoc(executionContext);
+            }
+            case GET_LOC8 -> {
+                handleGetLoc8(executionContext);
+            }
+            case GET_LOC0 -> {
+                handleGetLoc0(executionContext);
+            }
+            case GET_LOC1 -> {
+                handleGetLoc1(executionContext);
+            }
+            case GET_LOC2 -> {
+                handleGetLoc2(executionContext);
+            }
+            case GET_LOC3 -> {
+                handleGetLoc3(executionContext);
+            }
+            case PUT_LOCAL, PUT_LOC -> {
+                handlePutLoc(executionContext);
+            }
+            case PUT_LOC8 -> {
+                handlePutLoc8(executionContext);
+            }
+            case PUT_LOC0 -> {
+                handlePutLoc0(executionContext);
+            }
+            case PUT_LOC1 -> {
+                handlePutLoc1(executionContext);
+            }
+            case PUT_LOC2 -> {
+                handlePutLoc2(executionContext);
+            }
+            case PUT_LOC3 -> {
+                handlePutLoc3(executionContext);
+            }
+            case SET_LOCAL, SET_LOC -> {
+                handleSetLoc(executionContext);
+            }
+            case SET_LOC8 -> {
+                handleSetLoc8(executionContext);
+            }
+            case SET_LOC0 -> {
+                handleSetLoc0(executionContext);
+            }
+            case SET_LOC1 -> {
+                handleSetLoc1(executionContext);
+            }
+            case SET_LOC2 -> {
+                handleSetLoc2(executionContext);
+            }
+            case SET_LOC3 -> {
+                handleSetLoc3(executionContext);
+            }
+            case GET_ARG -> {
+                handleGetArg(executionContext);
+            }
+            case GET_ARG0, GET_ARG1, GET_ARG2, GET_ARG3 -> {
+                handleGetArgShort(executionContext, op);
+            }
+            case PUT_ARG -> {
+                handlePutArg(executionContext);
+            }
+            case PUT_ARG0, PUT_ARG1, PUT_ARG2, PUT_ARG3 -> {
+                handlePutArgShort(executionContext, op);
+            }
+            case SET_ARG -> {
+                handleSetArg(executionContext);
+            }
+            case SET_ARG0, SET_ARG1, SET_ARG2, SET_ARG3 -> {
+                handleSetArgShort(executionContext, op);
+            }
+            case GET_VAR_REF -> {
+                handleGetVarRef(executionContext);
+            }
+            case GET_VAR_REF0, GET_VAR_REF1, GET_VAR_REF2, GET_VAR_REF3 -> {
+                handleGetVarRefShort(executionContext, op);
+            }
+            case PUT_VAR_REF -> {
+                handlePutVarRef(executionContext);
+            }
+            case PUT_VAR_REF0, PUT_VAR_REF1, PUT_VAR_REF2, PUT_VAR_REF3 -> {
+                handlePutVarRefShort(executionContext, op);
+            }
+            case SET_VAR_REF -> {
+                handleSetVarRef(executionContext);
+            }
+            case SET_VAR_REF0, SET_VAR_REF1, SET_VAR_REF2, SET_VAR_REF3 -> {
+                handleSetVarRefShort(executionContext, op);
+            }
+            case CLOSE_LOC -> {
+                handleCloseLoc(executionContext);
+            }
+            case SET_LOC_UNINITIALIZED -> {
+                handleSetLocUninitialized(executionContext);
+            }
+            case GET_LOC_CHECK, GET_LOC_CHECKTHIS -> {
+                handleGetLocCheck(executionContext);
+            }
+            case PUT_LOC_CHECK -> {
+                handlePutLocCheck(executionContext);
+            }
+            case SET_LOC_CHECK -> {
+                handleSetLocCheck(executionContext);
+            }
+            case PUT_LOC_CHECK_INIT -> {
+                handlePutLocCheckInit(executionContext);
+            }
+            case GET_VAR_REF_CHECK -> {
+                handleGetVarRefCheck(executionContext);
+            }
+            case PUT_VAR_REF_CHECK -> {
+                handlePutVarRefCheck(executionContext);
+            }
+            case PUT_VAR_REF_CHECK_INIT -> {
+                handlePutVarRefCheckInit(executionContext);
+            }
+            case MAKE_LOC_REF, MAKE_ARG_REF, MAKE_VAR_REF_REF -> {
+                handleMakeScopedRef(executionContext, op);
+            }
+            case MAKE_VAR_REF -> {
+                handleMakeVarRef(executionContext);
+            }
+
+            // ==================== Property Access ====================
+            case GET_FIELD -> {
+                handleGetField(executionContext);
+            }
+            case GET_LENGTH -> {
+                handleGetLength(executionContext);
+            }
+            case PUT_FIELD -> {
+                handlePutField(executionContext);
+            }
+            case GET_ARRAY_EL -> {
+                handleGetArrayEl(executionContext);
+            }
+            case GET_ARRAY_EL2 -> {
+                handleGetArrayEl2(executionContext);
+            }
+            case GET_ARRAY_EL3 -> {
+                handleGetArrayEl3(executionContext);
+            }
+            case PUT_ARRAY_EL -> {
+                handlePutArrayEl(executionContext);
+            }
+            case GET_SUPER_VALUE -> {
+                handleGetSuperValue(executionContext);
+            }
+            case PUT_SUPER_VALUE -> {
+                handlePutSuperValue(executionContext);
+            }
+            case TO_PROPKEY -> {
+                handleToPropKey(executionContext);
+            }
+            case TO_PROPKEY2 -> {
+                handleToPropKey2(executionContext);
+            }
+
+            // ==================== Control Flow ====================
+            case IF_FALSE -> {
+                handleIfFalse(executionContext);
+            }
+            case IF_TRUE -> {
+                handleIfTrue(executionContext);
+            }
+            case IF_TRUE8 -> {
+                handleIfTrue8(executionContext);
+            }
+            case IF_FALSE8 -> {
+                handleIfFalse8(executionContext);
+            }
+            case GOTO -> {
+                handleGoto(executionContext);
+            }
+            case GOTO8 -> {
+                handleGoto8(executionContext);
+            }
+            case GOTO16 -> {
+                handleGoto16(executionContext);
+            }
+            case RETURN -> {
+                handleReturnOpcode(executionContext);
+            }
+            case RETURN_UNDEF -> {
+                handleReturnUndefOpcode(executionContext);
+            }
+            case RETURN_ASYNC -> {
+                handleReturnAsyncOpcode(executionContext);
+            }
+
+            // ==================== Function Calls ====================
+            case INIT_CTOR -> {
+                handleInitCtorOpcode(executionContext);
+            }
+            case CALL -> {
+                handleCallOpcode(executionContext);
+            }
+            case CALL0 -> {
+                handleCall0(executionContext);
+            }
+            case CALL1 -> {
+                handleCall1(executionContext);
+            }
+            case CALL2 -> {
+                handleCall2(executionContext);
+            }
+            case CALL3 -> {
+                handleCall3(executionContext);
+            }
+            case CALL_CONSTRUCTOR -> {
+                handleCallConstructorOpcode(executionContext);
+            }
+
+            // ==================== Object/Array Creation ====================
+            case OBJECT, OBJECT_NEW -> {
+                handleObjectNew(executionContext);
+            }
+            case ARRAY_NEW -> {
+                handleArrayNew(executionContext);
+            }
+            case ARRAY_FROM -> {
+                handleArrayFrom(executionContext);
+            }
+            case APPLY -> {
+                handleApply(executionContext);
+            }
+            case PUSH_ARRAY -> {
+                handlePushArray(executionContext);
+            }
+            case APPEND -> {
+                handleAppend(executionContext);
+            }
+            case DEFINE_ARRAY_EL -> {
+                handleDefineArrayEl(executionContext);
+            }
+            case DEFINE_PROP -> {
+                handleDefineProp(executionContext);
+            }
+            case SET_NAME -> {
+                handleSetName(executionContext);
+            }
+            case SET_NAME_COMPUTED -> {
+                handleSetNameComputed(executionContext);
+            }
+            case SET_PROTO -> {
+                handleSetProto(executionContext);
+            }
+            case SET_HOME_OBJECT -> {
+                handleSetHomeObject(executionContext);
+            }
+            case COPY_DATA_PROPERTIES -> {
+                handleCopyDataProperties(executionContext);
+            }
+            case DEFINE_CLASS -> {
+                handleDefineClass(executionContext);
+            }
+            case DEFINE_CLASS_COMPUTED -> {
+                handleDefineClassComputed(executionContext);
+            }
+            case DEFINE_METHOD -> {
+                handleDefineMethod(executionContext);
+            }
+            case DEFINE_METHOD_COMPUTED -> {
+                handleDefineMethodComputed(executionContext);
+            }
+            case DEFINE_FIELD -> {
+                handleDefineField(executionContext);
+            }
+            case DEFINE_PRIVATE_FIELD -> {
+                handleDefinePrivateField(executionContext);
+            }
+            case GET_PRIVATE_FIELD -> {
+                handleGetPrivateField(executionContext);
+            }
+            case PUT_PRIVATE_FIELD -> {
+                handlePutPrivateField(executionContext);
+            }
+
+            // ==================== Exception Handling ====================
+            case THROW -> {
+                handleThrowOpcode(executionContext);
+            }
+            case THROW_ERROR -> {
+                handleThrowErrorOpcode(executionContext);
+            }
+            case CATCH -> {
+                handleCatchOpcode(executionContext);
+            }
+            case NIP_CATCH -> {
+                handleNipCatchOpcode(executionContext);
+            }
+
+            // ==================== Type Operations ====================
+            case TO_STRING -> {
+                handleToStringOpcode(executionContext);
+            }
+            case TYPEOF -> {
+                handleTypeofOpcode(executionContext);
+            }
+            case DELETE -> {
+                handleDeleteOpcode(executionContext);
+            }
+            case IS_UNDEFINED_OR_NULL -> {
+                handleIsUndefinedOrNullOpcode(executionContext);
+            }
+            case IS_UNDEFINED -> {
+                handleIsUndefinedOpcode(executionContext);
+            }
+            case IS_NULL -> {
+                handleIsNullOpcode(executionContext);
+            }
+            case TYPEOF_IS_UNDEFINED -> {
+                handleTypeofIsUndefinedOpcode(executionContext);
+            }
+            case TYPEOF_IS_FUNCTION -> {
+                handleTypeofIsFunctionOpcode(executionContext);
+            }
+
+            // ==================== Async Operations ====================
+            case ITERATOR_CHECK_OBJECT -> {
+                handleIteratorCheckObjectOpcode(executionContext);
+            }
+            case ITERATOR_GET_VALUE_DONE -> {
+                handleIteratorGetValueDoneOpcode(executionContext);
+            }
+            case ITERATOR_CLOSE -> {
+                handleIteratorCloseOpcode(executionContext);
+            }
+            case ITERATOR_NEXT -> {
+                handleIteratorNextOpcode(executionContext);
+            }
+            case ITERATOR_CALL -> {
+                handleIteratorCallOpcode(executionContext);
+            }
+            case AWAIT -> {
+                handleAwaitOpcode(executionContext);
+            }
+            case FOR_AWAIT_OF_START -> {
+                handleForAwaitOfStartOpcode(executionContext);
+            }
+            case FOR_AWAIT_OF_NEXT -> {
+                handleForAwaitOfNextOpcode(executionContext);
+            }
+            case FOR_OF_START -> {
+                handleForOfStartOpcode(executionContext);
+            }
+            case FOR_OF_NEXT -> {
+                handleForOfNextOpcode(executionContext);
+            }
+            case FOR_IN_START -> {
+                handleForInStartOpcode(executionContext);
+            }
+            case FOR_IN_NEXT -> {
+                handleForInNextOpcode(executionContext);
+            }
+            case FOR_IN_END -> {
+                handleForInEndOpcode(executionContext);
+            }
+
+            // ==================== Generator Operations ====================
+            case INITIAL_YIELD -> {
+                handleInitialYieldOpcode(executionContext);
+            }
+            case YIELD -> {
+                handleYieldOpcode(executionContext);
+            }
+            case YIELD_STAR -> {
+                handleYieldStarOpcode(executionContext);
+            }
+            case ASYNC_YIELD_STAR -> {
+                handleAsyncYieldStarOpcode(executionContext);
+            }
+            case NOP -> {
+                handleNop(executionContext);
+            }
+
+            case GET_SUPER -> {
+                handleGetSuper(executionContext);
+            }
+
+            // ==================== Other Operations ====================
+            default -> throw new JSVirtualMachineException("Unimplemented opcode: " + op);
         }
     }
 
@@ -622,671 +1395,9 @@ public final class VirtualMachine {
                 pc = executionContext.pc;
                 checkExecutionInterruptForExecute();
                 executionContext.pc = pc;
-                Opcode op = decodeOpcodeForExecute(executionContext);
                 executionContext.opcodeRequestedReturn = false;
 
-                switch (op) {
-                    // ==================== Constants and Literals ====================
-                    case INVALID -> {
-                        handleInvalid(executionContext);
-                    }
-                    case PUSH_I32 -> {
-                        handlePushI32(executionContext);
-                    }
-                    case PUSH_BIGINT_I32 -> {
-                        handlePushBigintI32(executionContext);
-                    }
-                    case PUSH_MINUS1 -> {
-                        handlePushMinus1(executionContext);
-                    }
-                    case PUSH_0 -> {
-                        handlePush0(executionContext);
-                    }
-                    case PUSH_1 -> {
-                        handlePush1(executionContext);
-                    }
-                    case PUSH_2 -> {
-                        handlePush2(executionContext);
-                    }
-                    case PUSH_3 -> {
-                        handlePush3(executionContext);
-                    }
-                    case PUSH_4 -> {
-                        handlePush4(executionContext);
-                    }
-                    case PUSH_5 -> {
-                        handlePush5(executionContext);
-                    }
-                    case PUSH_6 -> {
-                        handlePush6(executionContext);
-                    }
-                    case PUSH_7 -> {
-                        handlePush7(executionContext);
-                    }
-                    case PUSH_I8 -> {
-                        handlePushI8(executionContext);
-                    }
-                    case PUSH_I16 -> {
-                        handlePushI16(executionContext);
-                    }
-                    case PUSH_CONST -> {
-                        handlePushConst(executionContext);
-                    }
-                    case PUSH_CONST8 -> {
-                        handlePushConst8(executionContext);
-                    }
-                    case PUSH_ATOM_VALUE -> {
-                        handlePushAtomValue(executionContext);
-                    }
-                    case PRIVATE_SYMBOL -> {
-                        handlePrivateSymbol(executionContext);
-                    }
-                    case FCLOSURE -> {
-                        handleFclosure(executionContext);
-                    }
-                    case FCLOSURE8 -> {
-                        handleFclosure8(executionContext);
-                    }
-                    case PUSH_EMPTY_STRING -> {
-                        handlePushEmptyString(executionContext);
-                    }
-                    case UNDEFINED -> {
-                        handleUndefined(executionContext);
-                    }
-                    case NULL -> {
-                        handleNull(executionContext);
-                    }
-                    case PUSH_THIS -> {
-                        handlePushThis(executionContext);
-                    }
-                    case PUSH_FALSE -> {
-                        handlePushFalse(executionContext);
-                    }
-                    case PUSH_TRUE -> {
-                        handlePushTrue(executionContext);
-                    }
-                    case SPECIAL_OBJECT -> {
-                        handleSpecialObject(executionContext);
-                    }
-                    case REST -> {
-                        handleRest(executionContext);
-                    }
-
-                    // ==================== Stack Manipulation ====================
-                    case DROP -> {
-                        handleDrop(executionContext);
-                    }
-                    case NIP -> {
-                        handleNip(executionContext);
-                    }
-                    case DUP -> {
-                        handleDup(executionContext);
-                    }
-                    case DUP1 -> {
-                        handleDup1(executionContext);
-                    }
-                    case DUP2 -> {
-                        handleDup2(executionContext);
-                    }
-                    case INSERT2 -> {
-                        handleInsert2(executionContext);
-                    }
-                    case INSERT3 -> {
-                        handleInsert3(executionContext);
-                    }
-                    case INSERT4 -> {
-                        handleInsert4(executionContext);
-                    }
-                    case SWAP -> {
-                        handleSwap(executionContext);
-                    }
-                    case ROT3L -> {
-                        handleRot3l(executionContext);
-                    }
-                    case ROT3R -> {
-                        handleRot3r(executionContext);
-                    }
-                    case SWAP2 -> {
-                        handleSwap2(executionContext);
-                    }
-
-                    // ==================== Arithmetic Operations ====================
-                    case ADD -> {
-                        handleAddOpcode(executionContext);
-                    }
-                    case SUB -> {
-                        handleSubOpcode(executionContext);
-                    }
-                    case MUL -> {
-                        handleMulOpcode(executionContext);
-                    }
-                    case DIV -> {
-                        handleDivOpcode(executionContext);
-                    }
-                    case MOD -> {
-                        handleModOpcode(executionContext);
-                    }
-                    case EXP, POW -> {
-                        handleExpOpcode(executionContext);
-                    }
-                    case PLUS -> {
-                        handlePlusOpcode(executionContext);
-                    }
-                    case NEG -> {
-                        handleNegOpcode(executionContext);
-                    }
-                    case INC -> {
-                        handleIncOpcode(executionContext);
-                    }
-                    case DEC -> {
-                        handleDecOpcode(executionContext);
-                    }
-                    case INC_LOC -> {
-                        handleIncLoc(executionContext);
-                    }
-                    case DEC_LOC -> {
-                        handleDecLoc(executionContext);
-                    }
-                    case ADD_LOC -> {
-                        handleAddLoc(executionContext);
-                    }
-                    case POST_INC -> {
-                        handlePostIncOpcode(executionContext);
-                    }
-                    case POST_DEC -> {
-                        handlePostDecOpcode(executionContext);
-                    }
-                    case PERM3 -> {
-                        handlePerm3(executionContext);
-                    }
-                    case PERM4 -> {
-                        handlePerm4(executionContext);
-                    }
-                    case PERM5 -> {
-                        handlePerm5(executionContext);
-                    }
-
-                    // ==================== Bitwise Operations ====================
-                    case SHL -> {
-                        handleShlOpcode(executionContext);
-                    }
-                    case SAR -> {
-                        handleSarOpcode(executionContext);
-                    }
-                    case SHR -> {
-                        handleShrOpcode(executionContext);
-                    }
-                    case AND -> {
-                        handleAndOpcode(executionContext);
-                    }
-                    case OR -> {
-                        handleOrOpcode(executionContext);
-                    }
-                    case XOR -> {
-                        handleXorOpcode(executionContext);
-                    }
-                    case NOT -> {
-                        handleNotOpcode(executionContext);
-                    }
-
-                    // ==================== Comparison Operations ====================
-                    case EQ -> {
-                        handleEqOpcode(executionContext);
-                    }
-                    case NEQ -> {
-                        handleNeqOpcode(executionContext);
-                    }
-                    case STRICT_EQ -> {
-                        handleStrictEqOpcode(executionContext);
-                    }
-                    case STRICT_NEQ -> {
-                        handleStrictNeqOpcode(executionContext);
-                    }
-                    case LT -> {
-                        handleLtOpcode(executionContext);
-                    }
-                    case LTE -> {
-                        handleLteOpcode(executionContext);
-                    }
-                    case GT -> {
-                        handleGtOpcode(executionContext);
-                    }
-                    case GTE -> {
-                        handleGteOpcode(executionContext);
-                    }
-                    case INSTANCEOF -> {
-                        handleInstanceofOpcode(executionContext);
-                    }
-                    case IN -> {
-                        handleInOpcode(executionContext);
-                    }
-                    case PRIVATE_IN -> {
-                        handlePrivateInOpcode(executionContext);
-                    }
-
-                    // ==================== Logical Operations ====================
-                    case LOGICAL_NOT, LNOT -> {
-                        handleLogicalNotOpcode(executionContext);
-                    }
-                    case LOGICAL_AND -> {
-                        handleLogicalAndOpcode(executionContext);
-                    }
-                    case LOGICAL_OR -> {
-                        handleLogicalOrOpcode(executionContext);
-                    }
-                    case NULLISH_COALESCE -> {
-                        handleNullishCoalesceOpcode(executionContext);
-                    }
-
-                    // ==================== Variable Access ====================
-                    case GET_VAR_UNDEF -> {
-                        handleGetVarUndef(executionContext);
-                    }
-                    case GET_REF_VALUE -> {
-                        handleGetRefValue(executionContext);
-                    }
-                    case GET_VAR -> {
-                        handleGetVar(executionContext);
-                    }
-                    case PUT_VAR_INIT -> {
-                        handlePutVarInit(executionContext);
-                    }
-                    case PUT_REF_VALUE -> {
-                        handlePutRefValue(executionContext);
-                    }
-                    case PUT_VAR -> {
-                        handlePutVar(executionContext);
-                    }
-                    case SET_VAR -> {
-                        handleSetVar(executionContext);
-                    }
-                    case DELETE_VAR -> {
-                        handleDeleteVar(executionContext);
-                    }
-                    case GET_LOCAL, GET_LOC -> {
-                        handleGetLoc(executionContext);
-                    }
-                    case GET_LOC8 -> {
-                        handleGetLoc8(executionContext);
-                    }
-                    case GET_LOC0 -> {
-                        handleGetLoc0(executionContext);
-                    }
-                    case GET_LOC1 -> {
-                        handleGetLoc1(executionContext);
-                    }
-                    case GET_LOC2 -> {
-                        handleGetLoc2(executionContext);
-                    }
-                    case GET_LOC3 -> {
-                        handleGetLoc3(executionContext);
-                    }
-                    case PUT_LOCAL, PUT_LOC -> {
-                        handlePutLoc(executionContext);
-                    }
-                    case PUT_LOC8 -> {
-                        handlePutLoc8(executionContext);
-                    }
-                    case PUT_LOC0 -> {
-                        handlePutLoc0(executionContext);
-                    }
-                    case PUT_LOC1 -> {
-                        handlePutLoc1(executionContext);
-                    }
-                    case PUT_LOC2 -> {
-                        handlePutLoc2(executionContext);
-                    }
-                    case PUT_LOC3 -> {
-                        handlePutLoc3(executionContext);
-                    }
-                    case SET_LOCAL, SET_LOC -> {
-                        handleSetLoc(executionContext);
-                    }
-                    case SET_LOC8 -> {
-                        handleSetLoc8(executionContext);
-                    }
-                    case SET_LOC0 -> {
-                        handleSetLoc0(executionContext);
-                    }
-                    case SET_LOC1 -> {
-                        handleSetLoc1(executionContext);
-                    }
-                    case SET_LOC2 -> {
-                        handleSetLoc2(executionContext);
-                    }
-                    case SET_LOC3 -> {
-                        handleSetLoc3(executionContext);
-                    }
-                    case GET_ARG -> {
-                        handleGetArg(executionContext);
-                    }
-                    case GET_ARG0, GET_ARG1, GET_ARG2, GET_ARG3 -> {
-                        handleGetArgShort(executionContext, op);
-                    }
-                    case PUT_ARG -> {
-                        handlePutArg(executionContext);
-                    }
-                    case PUT_ARG0, PUT_ARG1, PUT_ARG2, PUT_ARG3 -> {
-                        handlePutArgShort(executionContext, op);
-                    }
-                    case SET_ARG -> {
-                        handleSetArg(executionContext);
-                    }
-                    case SET_ARG0, SET_ARG1, SET_ARG2, SET_ARG3 -> {
-                        handleSetArgShort(executionContext, op);
-                    }
-                    case GET_VAR_REF -> {
-                        handleGetVarRef(executionContext);
-                    }
-                    case GET_VAR_REF0, GET_VAR_REF1, GET_VAR_REF2, GET_VAR_REF3 -> {
-                        handleGetVarRefShort(executionContext, op);
-                    }
-                    case PUT_VAR_REF -> {
-                        handlePutVarRef(executionContext);
-                    }
-                    case PUT_VAR_REF0, PUT_VAR_REF1, PUT_VAR_REF2, PUT_VAR_REF3 -> {
-                        handlePutVarRefShort(executionContext, op);
-                    }
-                    case SET_VAR_REF -> {
-                        handleSetVarRef(executionContext);
-                    }
-                    case SET_VAR_REF0, SET_VAR_REF1, SET_VAR_REF2, SET_VAR_REF3 -> {
-                        handleSetVarRefShort(executionContext, op);
-                    }
-                    case CLOSE_LOC -> {
-                        handleCloseLoc(executionContext);
-                    }
-                    case SET_LOC_UNINITIALIZED -> {
-                        handleSetLocUninitialized(executionContext);
-                    }
-                    case GET_LOC_CHECK, GET_LOC_CHECKTHIS -> {
-                        handleGetLocCheck(executionContext);
-                    }
-                    case PUT_LOC_CHECK -> {
-                        handlePutLocCheck(executionContext);
-                    }
-                    case SET_LOC_CHECK -> {
-                        handleSetLocCheck(executionContext);
-                    }
-                    case PUT_LOC_CHECK_INIT -> {
-                        handlePutLocCheckInit(executionContext);
-                    }
-                    case GET_VAR_REF_CHECK -> {
-                        handleGetVarRefCheck(executionContext);
-                    }
-                    case PUT_VAR_REF_CHECK -> {
-                        handlePutVarRefCheck(executionContext);
-                    }
-                    case PUT_VAR_REF_CHECK_INIT -> {
-                        handlePutVarRefCheckInit(executionContext);
-                    }
-                    case MAKE_LOC_REF, MAKE_ARG_REF, MAKE_VAR_REF_REF -> {
-                        handleMakeScopedRef(executionContext, op);
-                    }
-                    case MAKE_VAR_REF -> {
-                        handleMakeVarRef(executionContext);
-                    }
-
-                    // ==================== Property Access ====================
-                    case GET_FIELD -> {
-                        handleGetField(executionContext);
-                    }
-                    case GET_LENGTH -> {
-                        handleGetLength(executionContext);
-                    }
-                    case PUT_FIELD -> {
-                        handlePutField(executionContext);
-                    }
-                    case GET_ARRAY_EL -> {
-                        handleGetArrayEl(executionContext);
-                    }
-                    case GET_ARRAY_EL2 -> {
-                        handleGetArrayEl2(executionContext);
-                    }
-                    case GET_ARRAY_EL3 -> {
-                        handleGetArrayEl3(executionContext);
-                    }
-                    case PUT_ARRAY_EL -> {
-                        handlePutArrayEl(executionContext);
-                    }
-                    case GET_SUPER_VALUE -> {
-                        handleGetSuperValue(executionContext);
-                    }
-                    case PUT_SUPER_VALUE -> {
-                        handlePutSuperValue(executionContext);
-                    }
-                    case TO_PROPKEY -> {
-                        handleToPropKey(executionContext);
-                    }
-                    case TO_PROPKEY2 -> {
-                        handleToPropKey2(executionContext);
-                    }
-
-                    // ==================== Control Flow ====================
-                    case IF_FALSE -> {
-                        handleIfFalse(executionContext);
-                    }
-                    case IF_TRUE -> {
-                        handleIfTrue(executionContext);
-                    }
-                    case IF_TRUE8 -> {
-                        handleIfTrue8(executionContext);
-                    }
-                    case IF_FALSE8 -> {
-                        handleIfFalse8(executionContext);
-                    }
-                    case GOTO -> {
-                        handleGoto(executionContext);
-                    }
-                    case GOTO8 -> {
-                        handleGoto8(executionContext);
-                    }
-                    case GOTO16 -> {
-                        handleGoto16(executionContext);
-                    }
-                    case RETURN -> {
-                        handleReturnOpcode(executionContext);
-                    }
-                    case RETURN_UNDEF -> {
-                        handleReturnUndefOpcode(executionContext);
-                    }
-                    case RETURN_ASYNC -> {
-                        handleReturnAsyncOpcode(executionContext);
-                    }
-
-                    // ==================== Function Calls ====================
-                    case INIT_CTOR -> {
-                        handleInitCtorOpcode(executionContext);
-                    }
-                    case CALL -> {
-                        handleCallOpcode(executionContext);
-                    }
-                    case CALL0 -> {
-                        handleCall0(executionContext);
-                    }
-                    case CALL1 -> {
-                        handleCall1(executionContext);
-                    }
-                    case CALL2 -> {
-                        handleCall2(executionContext);
-                    }
-                    case CALL3 -> {
-                        handleCall3(executionContext);
-                    }
-                    case CALL_CONSTRUCTOR -> {
-                        handleCallConstructorOpcode(executionContext);
-                    }
-
-                    // ==================== Object/Array Creation ====================
-                    case OBJECT, OBJECT_NEW -> {
-                        handleObjectNew(executionContext);
-                    }
-                    case ARRAY_NEW -> {
-                        handleArrayNew(executionContext);
-                    }
-                    case ARRAY_FROM -> {
-                        handleArrayFrom(executionContext);
-                    }
-                    case APPLY -> {
-                        handleApply(executionContext);
-                    }
-                    case PUSH_ARRAY -> {
-                        handlePushArray(executionContext);
-                    }
-                    case APPEND -> {
-                        handleAppend(executionContext);
-                    }
-                    case DEFINE_ARRAY_EL -> {
-                        handleDefineArrayEl(executionContext);
-                    }
-                    case DEFINE_PROP -> {
-                        handleDefineProp(executionContext);
-                    }
-                    case SET_NAME -> {
-                        handleSetName(executionContext);
-                    }
-                    case SET_NAME_COMPUTED -> {
-                        handleSetNameComputed(executionContext);
-                    }
-                    case SET_PROTO -> {
-                        handleSetProto(executionContext);
-                    }
-                    case SET_HOME_OBJECT -> {
-                        handleSetHomeObject(executionContext);
-                    }
-                    case COPY_DATA_PROPERTIES -> {
-                        handleCopyDataProperties(executionContext);
-                    }
-                    case DEFINE_CLASS -> {
-                        handleDefineClass(executionContext);
-                    }
-                    case DEFINE_CLASS_COMPUTED -> {
-                        handleDefineClassComputed(executionContext);
-                    }
-                    case DEFINE_METHOD -> {
-                        handleDefineMethod(executionContext);
-                    }
-                    case DEFINE_METHOD_COMPUTED -> {
-                        handleDefineMethodComputed(executionContext);
-                    }
-                    case DEFINE_FIELD -> {
-                        handleDefineField(executionContext);
-                    }
-                    case DEFINE_PRIVATE_FIELD -> {
-                        handleDefinePrivateField(executionContext);
-                    }
-                    case GET_PRIVATE_FIELD -> {
-                        handleGetPrivateField(executionContext);
-                    }
-                    case PUT_PRIVATE_FIELD -> {
-                        handlePutPrivateField(executionContext);
-                    }
-
-                    // ==================== Exception Handling ====================
-                    case THROW -> {
-                        handleThrowOpcode(executionContext);
-                    }
-                    case THROW_ERROR -> {
-                        handleThrowErrorOpcode(executionContext);
-                    }
-                    case CATCH -> {
-                        handleCatchOpcode(executionContext);
-                    }
-                    case NIP_CATCH -> {
-                        handleNipCatchOpcode(executionContext);
-                    }
-
-                    // ==================== Type Operations ====================
-                    case TO_STRING -> {
-                        handleToStringOpcode(executionContext);
-                    }
-                    case TYPEOF -> {
-                        handleTypeofOpcode(executionContext);
-                    }
-                    case DELETE -> {
-                        handleDeleteOpcode(executionContext);
-                    }
-                    case IS_UNDEFINED_OR_NULL -> {
-                        handleIsUndefinedOrNullOpcode(executionContext);
-                    }
-                    case IS_UNDEFINED -> {
-                        handleIsUndefinedOpcode(executionContext);
-                    }
-                    case IS_NULL -> {
-                        handleIsNullOpcode(executionContext);
-                    }
-                    case TYPEOF_IS_UNDEFINED -> {
-                        handleTypeofIsUndefinedOpcode(executionContext);
-                    }
-                    case TYPEOF_IS_FUNCTION -> {
-                        handleTypeofIsFunctionOpcode(executionContext);
-                    }
-
-                    // ==================== Async Operations ====================
-                    case ITERATOR_CHECK_OBJECT -> {
-                        handleIteratorCheckObjectOpcode(executionContext);
-                    }
-                    case ITERATOR_GET_VALUE_DONE -> {
-                        handleIteratorGetValueDoneOpcode(executionContext);
-                    }
-                    case ITERATOR_CLOSE -> {
-                        handleIteratorCloseOpcode(executionContext);
-                    }
-                    case ITERATOR_NEXT -> {
-                        handleIteratorNextOpcode(executionContext);
-                    }
-                    case ITERATOR_CALL -> {
-                        handleIteratorCallOpcode(executionContext);
-                    }
-                    case AWAIT -> {
-                        handleAwaitOpcode(executionContext);
-                    }
-                    case FOR_AWAIT_OF_START -> {
-                        handleForAwaitOfStartOpcode(executionContext);
-                    }
-                    case FOR_AWAIT_OF_NEXT -> {
-                        handleForAwaitOfNextOpcode(executionContext);
-                    }
-                    case FOR_OF_START -> {
-                        handleForOfStartOpcode(executionContext);
-                    }
-                    case FOR_OF_NEXT -> {
-                        handleForOfNextOpcode(executionContext);
-                    }
-                    case FOR_IN_START -> {
-                        handleForInStartOpcode(executionContext);
-                    }
-                    case FOR_IN_NEXT -> {
-                        handleForInNextOpcode(executionContext);
-                    }
-                    case FOR_IN_END -> {
-                        handleForInEndOpcode(executionContext);
-                    }
-
-                    // ==================== Generator Operations ====================
-                    case INITIAL_YIELD -> {
-                        handleInitialYieldOpcode(executionContext);
-                    }
-                    case YIELD -> {
-                        handleYieldOpcode(executionContext);
-                    }
-                    case YIELD_STAR -> {
-                        handleYieldStarOpcode(executionContext);
-                    }
-                    case ASYNC_YIELD_STAR -> {
-                        handleAsyncYieldStarOpcode(executionContext);
-                    }
-                    case NOP -> {
-                        handleNop(executionContext);
-                    }
-
-                    case GET_SUPER -> {
-                        handleGetSuper(executionContext);
-                    }
-
-                    // ==================== Other Operations ====================
-                    default -> throw new JSVirtualMachineException("Unimplemented opcode: " + op + " at PC " + pc);
-                }
+                dispatchOpcodeForExecute(executionContext);
                 if (executionContext.opcodeRequestedReturn) {
                     return executionContext.returnValue;
                 }
@@ -1312,2109 +1423,6 @@ public final class VirtualMachine {
         }
     }
 
-    private void checkExecutionInterruptForExecute() {
-        if (executionDeadline != 0 && --interruptCounter <= 0) {
-            interruptCounter = INTERRUPT_CHECK_INTERVAL;
-            if (System.nanoTime() >= executionDeadlineNanos) {
-                throw new JSVirtualMachineException("execution timeout");
-            }
-        }
-    }
-
-    private ExecutionContext createExecutionContext(
-            JSBytecodeFunction function,
-            StackFrame frame,
-            StackFrame previousFrame,
-            int frameStackBase,
-            int restoreStackTop,
-            boolean savedStrictMode,
-            JSGeneratorState generatorStateForExecution,
-            boolean resumeGeneratorExecution) {
-        ExecutionContext executionContext = new ExecutionContext(
-                function.getBytecode(),
-                frame,
-                previousFrame,
-                frameStackBase,
-                restoreStackTop,
-                savedStrictMode);
-        if (resumeGeneratorExecution) {
-            valueStack.stackTop = frameStackBase;
-            JSStackValue[] suspendedStackValues = generatorStateForExecution.getSuspendedStackValues();
-            if (suspendedStackValues != null && suspendedStackValues.length > 0) {
-                System.arraycopy(suspendedStackValues, 0, executionContext.stack, frameStackBase, suspendedStackValues.length);
-            }
-            executionContext.sp = frameStackBase + (suspendedStackValues == null ? 0 : suspendedStackValues.length);
-            JSGeneratorState.ResumeRecord pendingResumeRecord = generatorStateForExecution.consumePendingResumeRecord();
-            if (pendingResumeRecord != null) {
-                if (pendingResumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
-                    pendingException = pendingResumeRecord.value();
-                    context.setPendingException(pendingResumeRecord.value());
-                } else if (pendingResumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
-                    generatorForceReturn = true;
-                    generatorReturnValue = pendingResumeRecord.value();
-                    pendingException = pendingResumeRecord.value();
-                    context.setPendingException(pendingResumeRecord.value());
-                } else {
-                    executionContext.stack[executionContext.sp++] = pendingResumeRecord.value();
-                }
-            }
-            executionContext.pc = generatorStateForExecution.getSuspendedProgramCounter();
-        } else {
-            executionContext.sp = valueStack.stackTop;
-            executionContext.pc = 0;
-        }
-        return executionContext;
-    }
-
-    private Opcode decodeOpcodeForExecute(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        Opcode opcode = executionContext.decodedOpcodes[pc];
-        int rebase = executionContext.opcodeRebaseOffsets[pc];
-        if (opcode == null) {
-            int opcodeValue = executionContext.instructions[pc] & 0xFF;
-            opcode = Opcode.fromInt(opcodeValue);
-            if (opcode == Opcode.INVALID && pc + 1 < executionContext.instructions.length) {
-                int extendedOpcodeValue = 0x100 + (executionContext.instructions[pc + 1] & 0xFF);
-                Opcode extendedOpcode = Opcode.fromInt(extendedOpcodeValue);
-                if (extendedOpcode != Opcode.INVALID) {
-                    opcode = extendedOpcode;
-                    rebase = 1;
-                }
-            }
-        }
-        if (rebase != 0) {
-            executionContext.pc = pc + rebase;
-        }
-        return opcode;
-    }
-
-    private PendingExceptionAction handlePendingExceptionForExecute(ExecutionContext executionContext) {
-        if (pendingException == null) {
-            return PendingExceptionAction.NONE;
-        }
-
-        JSValue exception = pendingException;
-        pendingException = null;
-
-        boolean foundHandler = false;
-        while (valueStack.stackTop > executionContext.frameStackBase) {
-            JSStackValue stackValue = executionContext.stack[--valueStack.stackTop];
-            if (stackValue instanceof JSCatchOffset catchOffset) {
-                if (generatorForceReturn && !catchOffset.isFinally()) {
-                    continue;
-                }
-                executionContext.stack[valueStack.stackTop++] = exception;
-                executionContext.pc = catchOffset.offset();
-                foundHandler = true;
-                context.clearPendingException();
-                break;
-            }
-        }
-        executionContext.sp = valueStack.stackTop;
-
-        if (foundHandler) {
-            return PendingExceptionAction.CONTINUE;
-        }
-
-        if (generatorForceReturn) {
-            generatorForceReturn = false;
-            restoreExecuteCallerState(
-                    executionContext.restoreStackTop,
-                    executionContext.previousFrame,
-                    executionContext.savedStrictMode);
-            context.clearPendingException();
-            executionContext.returnValue = generatorReturnValue;
-            return PendingExceptionAction.RETURN;
-        }
-
-        restoreExecuteCallerState(
-                executionContext.restoreStackTop,
-                executionContext.previousFrame,
-                executionContext.savedStrictMode);
-        if (exception instanceof JSError jsError) {
-            throw new JSVirtualMachineException(jsError);
-        }
-        String exceptionMessage = safeExceptionToString(context, exception);
-        throw new JSVirtualMachineException("Unhandled exception: " + exceptionMessage, exception);
-    }
-
-    private void restoreExecuteCallerState(int restoreStackTop, StackFrame previousFrame, boolean savedStrictMode) {
-        valueStack.stackTop = restoreStackTop;
-        currentFrame = previousFrame;
-        if (savedStrictMode) {
-            context.enterStrictMode();
-        } else {
-            context.exitStrictMode();
-        }
-    }
-
-    private void restoreExecuteFailureState(int restoreStackTop, StackFrame previousFrame, boolean savedStrictMode) {
-        valueStack.setStackTop(restoreStackTop);
-        currentFrame = previousFrame;
-        resetPropertyAccessTracking();
-        if (savedStrictMode) {
-            context.enterStrictMode();
-        } else {
-            context.exitStrictMode();
-        }
-    }
-
-    private void handleDrop(ExecutionContext executionContext) {
-        executionContext.sp--;
-        executionContext.pc += 1;
-    }
-
-    private void handleDup(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        stack[sp] = stack[sp - 1];
-        executionContext.sp = sp + 1;
-        executionContext.pc += 1;
-    }
-
-    private void handleDup1(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        stack[sp] = stack[sp - 2];
-        executionContext.sp = sp + 1;
-        executionContext.pc += 1;
-    }
-
-    private void handleDup2(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        stack[sp] = stack[sp - 2];
-        stack[sp + 1] = stack[sp - 1];
-        executionContext.sp = sp + 2;
-        executionContext.pc += 1;
-    }
-
-    private void handleAddLoc(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
-        JSValue rightValue = (JSValue) executionContext.stack[--executionContext.sp];
-        JSValue leftValue = executionContext.locals[localIndex];
-        if (leftValue == null) {
-            leftValue = JSUndefined.INSTANCE;
-        }
-        executionContext.locals[localIndex] = addValues(leftValue, rightValue);
-        executionContext.pc = pc + Opcode.ADD_LOC.getSize();
-    }
-
-    private void handleCloseLoc(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
-        executionContext.frame.closeLocal(localIndex);
-        executionContext.pc = pc + Opcode.CLOSE_LOC.getSize();
-    }
-
-    private void handleGetLoc(ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
-        int pc = executionContext.pc;
-        int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
-        handleGetLocAtIndex(executionContext, localIndex, Opcode.GET_LOC.getSize());
-    }
-
-    private void handleGetLoc0(ExecutionContext executionContext) {
-        handleGetLocAtIndex(executionContext, 0, Opcode.GET_LOC0.getSize());
-    }
-
-    private void handleGetLoc1(ExecutionContext executionContext) {
-        handleGetLocAtIndex(executionContext, 1, Opcode.GET_LOC1.getSize());
-    }
-
-    private void handleGetLoc2(ExecutionContext executionContext) {
-        handleGetLocAtIndex(executionContext, 2, Opcode.GET_LOC2.getSize());
-    }
-
-    private void handleGetLoc3(ExecutionContext executionContext) {
-        handleGetLocAtIndex(executionContext, 3, Opcode.GET_LOC3.getSize());
-    }
-
-    private void handleGetLoc8(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
-        handleGetLocAtIndex(executionContext, localIndex, Opcode.GET_LOC8.getSize());
-    }
-
-    private void handleGetLocAtIndex(ExecutionContext executionContext, int localIndex, int opcodeSize) {
-        JSValue localValue = executionContext.locals[localIndex];
-        executionContext.stack[executionContext.sp++] = localValue != null ? localValue : JSUndefined.INSTANCE;
-        executionContext.pc += opcodeSize;
-    }
-
-    private void handleGetArg(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int argumentIndex = executionContext.bytecode.readU16(pc + 1);
-        executionContext.stack[executionContext.sp++] = getArgumentValue(argumentIndex);
-        executionContext.pc = pc + Opcode.GET_ARG.getSize();
-    }
-
-    private void handleGetArgShort(ExecutionContext executionContext, Opcode opcode) {
-        int argumentIndex = switch (opcode) {
-            case GET_ARG0 -> 0;
-            case GET_ARG1 -> 1;
-            case GET_ARG2 -> 2;
-            case GET_ARG3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short get arg opcode: " + opcode);
-        };
-        executionContext.stack[executionContext.sp++] = getArgumentValue(argumentIndex);
-        executionContext.pc += opcode.getSize();
-    }
-
-    private void handleGetField(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String fieldName = executionContext.bytecode.getAtoms()[atomIndex];
-        JSValue objectValue = (JSValue) executionContext.stack[--executionContext.sp];
-
-        JSObject targetObject = toObject(objectValue);
-        if (targetObject != null) {
-            JSValue result = targetObject.get(context, PropertyKey.fromString(fieldName));
-            if (context.hasPendingException()) {
-                pendingException = context.getPendingException();
-                context.clearPendingException();
-                executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
-            } else {
-                if (trackPropertyAccess && !propertyAccessLock) {
-                    if (!propertyAccessChain.isEmpty()) {
-                        propertyAccessChain.append('.');
-                    }
-                    propertyAccessChain.append(fieldName);
-                }
-                executionContext.stack[executionContext.sp++] = result;
-            }
-        } else {
-            String typeName = objectValue instanceof JSNull ? "null" : "undefined";
-            pendingException = context.throwTypeError("cannot read property '" + fieldName + "' of " + typeName);
-            resetPropertyAccessTracking();
-            executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
-        }
-        executionContext.pc = pc + Opcode.GET_FIELD.getSize();
-    }
-
-    private void handleGetArrayEl(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue indexValue = (JSValue) stack[--sp];
-        JSValue objectValue = (JSValue) stack[sp - 1];
-
-        if (objectValue instanceof JSString stringValue && indexValue instanceof JSNumber numberValue) {
-            double doubleValue = numberValue.value();
-            int index = (int) doubleValue;
-            if (index == doubleValue && index >= 0 && index < stringValue.value().length()) {
-                stack[sp - 1] = new JSString(String.valueOf(stringValue.value().charAt(index)));
-                executionContext.sp = sp;
-                executionContext.pc = pc + Opcode.GET_ARRAY_EL.getSize();
-                return;
-            }
-        }
-
-        valueStack.stackTop = sp - 1;
-        JSObject targetObject = toObject(objectValue);
-        if (targetObject != null) {
-            try {
-                PropertyKey key = PropertyKey.fromValue(context, indexValue);
-                JSValue result = targetObject.get(context, key);
-                if (context.hasPendingException()) {
-                    pendingException = context.getPendingException();
-                    context.clearPendingException();
-                    stack[sp - 1] = JSUndefined.INSTANCE;
-                } else {
-                    if (trackPropertyAccess && !propertyAccessLock) {
-                        appendPropertyAccessForArrayIndex(indexValue);
-                    }
-                    stack[sp - 1] = result;
-                }
-            } catch (JSVirtualMachineException e) {
-                captureVMException(e);
-                stack[sp - 1] = JSUndefined.INSTANCE;
-            }
-        } else {
-            resetPropertyAccessTracking();
-            stack[sp - 1] = JSUndefined.INSTANCE;
-        }
-        valueStack.stackTop = sp;
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.GET_ARRAY_EL.getSize();
-    }
-
-    private void handleGetArrayEl2(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue indexValue = (JSValue) stack[--sp];
-        JSValue arrayObjectValue = (JSValue) stack[sp - 1];
-
-        if (arrayObjectValue instanceof JSString stringValue && indexValue instanceof JSNumber numberValue) {
-            double doubleValue = numberValue.value();
-            int index = (int) doubleValue;
-            if (index == doubleValue && index >= 0 && index < stringValue.value().length()) {
-                stack[sp++] = new JSString(String.valueOf(stringValue.value().charAt(index)));
-                executionContext.sp = sp;
-                executionContext.pc = pc + Opcode.GET_ARRAY_EL2.getSize();
-                return;
-            }
-        }
-
-        JSObject targetObject = toObject(arrayObjectValue);
-        if (targetObject != null) {
-            try {
-                PropertyKey key = PropertyKey.fromValue(context, indexValue);
-                JSValue result = targetObject.get(context, key);
-                if (context.hasPendingException()) {
-                    pendingException = context.getPendingException();
-                    context.clearPendingException();
-                    stack[sp++] = JSUndefined.INSTANCE;
-                } else {
-                    stack[sp++] = result;
-                }
-            } catch (JSVirtualMachineException e) {
-                captureVMException(e);
-                stack[sp++] = JSUndefined.INSTANCE;
-            }
-        } else {
-            stack[sp++] = JSUndefined.INSTANCE;
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.GET_ARRAY_EL2.getSize();
-    }
-
-    private void handleGetArrayEl3(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue indexValue = (JSValue) stack[sp - 1];
-        JSValue arrayObjectValue = (JSValue) stack[sp - 2];
-
-        if (!(indexValue instanceof JSNumber || indexValue instanceof JSString || indexValue instanceof JSSymbol)) {
-            if (arrayObjectValue.isNullOrUndefined()) {
-                throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
-            }
-            try {
-                JSValue convertedIndex = toPropertyKeyValue(indexValue);
-                stack[sp - 1] = convertedIndex;
-                indexValue = convertedIndex;
-            } catch (JSVirtualMachineException e) {
-                captureVMException(e);
-                executionContext.sp = sp;
-                executionContext.pc = pc;
-                return;
-            }
-        }
-
-        JSObject targetObject = toObject(arrayObjectValue);
-        if (targetObject == null) {
-            throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
-        }
-
-        PropertyKey key = PropertyKey.fromValue(context, indexValue);
-        JSValue result = targetObject.get(context, key);
-        if (context.hasPendingException()) {
-            pendingException = context.getPendingException();
-            context.clearPendingException();
-            stack[sp++] = JSUndefined.INSTANCE;
-        } else {
-            stack[sp++] = result;
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.GET_ARRAY_EL3.getSize();
-    }
-
-    private void handleGetSuperValue(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue keyValue = (JSValue) stack[--sp];
-        JSValue superObjectValue = (JSValue) stack[--sp];
-        JSValue receiverValue = (JSValue) stack[--sp];
-
-        if (!(superObjectValue instanceof JSObject superObject)) {
-            throw new JSVirtualMachineException(context.throwTypeError("super object expected"));
-        }
-
-        PropertyKey key = PropertyKey.fromValue(context, keyValue);
-        JSValue result;
-        if (receiverValue instanceof JSObject receiverObject) {
-            result = superObject.getWithReceiver(key, context, receiverObject);
-        } else {
-            JSObject boxedReceiver = toObject(receiverValue);
-            result = boxedReceiver != null
-                    ? superObject.getWithReceiver(key, context, boxedReceiver)
-                    : superObject.get(context, key);
-        }
-
-        if (context.hasPendingException()) {
-            pendingException = context.getPendingException();
-            context.clearPendingException();
-            stack[sp++] = JSUndefined.INSTANCE;
-        } else {
-            stack[sp++] = result;
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.GET_SUPER_VALUE.getSize();
-    }
-
-    private void handleObjectNew(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = context.createJSObject();
-        executionContext.pc += Opcode.OBJECT.getSize();
-    }
-
-    private void handleArrayNew(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = context.createJSArray();
-        executionContext.pc += Opcode.ARRAY_NEW.getSize();
-    }
-
-    private void handleArrayFrom(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int count = executionContext.bytecode.readU16(pc + 1);
-        JSArray array = context.createJSArray();
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-
-        JSValue[] elements = new JSValue[count];
-        for (int i = count - 1; i >= 0; i--) {
-            elements[i] = (JSValue) stack[--sp];
-        }
-        for (JSValue element : elements) {
-            array.push(element);
-        }
-
-        stack[sp++] = array;
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.ARRAY_FROM.getSize();
-    }
-
-    private void handleApply(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int isConstructorCall = executionContext.bytecode.readU16(pc + 1);
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue argsArrayValue = (JSValue) stack[--sp];
-        JSValue functionValue = (JSValue) stack[--sp];
-        JSValue thisArgValue = (JSValue) stack[--sp];
-
-        JSValue result;
-        if (isConstructorCall != 0) {
-            JSValue constructorNewTarget = thisArgValue;
-            if (constructorNewTarget.isNullOrUndefined()) {
-                constructorNewTarget = functionValue;
-            }
-            result = JSReflectObject.construct(
-                    context,
-                    JSUndefined.INSTANCE,
-                    new JSValue[]{functionValue, argsArrayValue, constructorNewTarget});
-        } else {
-            JSValue[] applyArgs = buildApplyArguments(argsArrayValue, true);
-            if (applyArgs == null) {
-                pendingException = context.getPendingException();
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                executionContext.pc = pc + Opcode.APPLY.getSize();
-                return;
-            }
-            if (functionValue instanceof JSProxy proxyFunction) {
-                result = proxyApply(proxyFunction, thisArgValue, applyArgs);
-            } else if (functionValue instanceof JSFunction applyFunction) {
-                result = applyFunction.call(context, thisArgValue, applyArgs);
-            } else {
-                throw new JSVirtualMachineException("APPLY: not a function");
-            }
-        }
-
-        if (context.hasPendingException()) {
-            pendingException = context.getPendingException();
-            stack[sp++] = JSUndefined.INSTANCE;
-        } else {
-            stack[sp++] = result;
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.APPLY.getSize();
-    }
-
-    private void handlePushArray(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue element = (JSValue) stack[--sp];
-        JSValue arrayValue = (JSValue) stack[sp - 1];
-        if (arrayValue instanceof JSArray jsArray) {
-            jsArray.push(element);
-        }
-        executionContext.sp = sp;
-        executionContext.pc += Opcode.PUSH_ARRAY.getSize();
-    }
-
-    private void handleAppend(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue enumerableObject = (JSValue) stack[--sp];
-        JSValue positionValue = (JSValue) stack[--sp];
-        JSValue arrayValue = (JSValue) stack[--sp];
-
-        if (!(arrayValue instanceof JSArray array)) {
-            throw new JSVirtualMachineException("APPEND: first argument must be an array");
-        }
-
-        if (!(positionValue instanceof JSNumber positionNumber)) {
-            throw new JSVirtualMachineException("APPEND: second argument must be a number");
-        }
-
-        int position = (int) positionNumber.value();
-
-        try {
-            JSValue iterator = JSIteratorHelper.getIterator(context, enumerableObject);
-            if (iterator == null) {
-                context.throwError("TypeError", "Value is not iterable");
-                throw new JSVirtualMachineException("APPEND: value is not iterable");
-            }
-
-            while (true) {
-                JSObject resultObject = JSIteratorHelper.iteratorNext(iterator, context);
-                if (resultObject == null) {
-                    break;
-                }
-                JSValue doneValue = resultObject.get("done");
-                if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
-                    break;
-                }
-                JSValue value = resultObject.get(PropertyKey.VALUE);
-                array.set(context, position++, value);
-            }
-
-            stack[sp++] = array;
-            stack[sp++] = JSNumber.of(position);
-        } catch (Exception e) {
-            throw new JSVirtualMachineException("APPEND: error iterating: " + e.getMessage(), e);
-        }
-
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.APPEND.getSize();
-    }
-
-    private void handleDefineArrayEl(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue value = (JSValue) stack[--sp];
-        JSValue indexValue = (JSValue) stack[sp - 1];
-        JSValue arrayValue = (JSValue) stack[sp - 2];
-
-        if (!(arrayValue instanceof JSArray array)) {
-            throw new JSVirtualMachineException("DEFINE_ARRAY_EL: first argument must be an array");
-        }
-        if (!(indexValue instanceof JSNumber indexNumber)) {
-            throw new JSVirtualMachineException("DEFINE_ARRAY_EL: second argument must be a number");
-        }
-
-        int index = (int) indexNumber.value();
-        array.set(context, index, value);
-
-        executionContext.sp = sp;
-        executionContext.pc += Opcode.DEFINE_ARRAY_EL.getSize();
-    }
-
-    private void handleDefineProp(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue propertyValue = (JSValue) stack[--sp];
-        JSValue propertyKeyValue = (JSValue) stack[--sp];
-        JSValue objectValue = (JSValue) stack[sp - 1];
-        if (objectValue instanceof JSObject jsObject) {
-            PropertyKey key = PropertyKey.fromValue(context, propertyKeyValue);
-            jsObject.defineProperty(context, key, propertyValue, PropertyDescriptor.DataState.All);
-        }
-        executionContext.sp = sp;
-        executionContext.pc += Opcode.DEFINE_PROP.getSize();
-    }
-
-    private void handleGetLength(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSValue objectValue = (JSValue) executionContext.stack[--executionContext.sp];
-        JSObject targetObject = toObject(objectValue);
-        if (targetObject != null) {
-            JSValue result = targetObject.get(context, PropertyKey.LENGTH);
-            if (context.hasPendingException()) {
-                pendingException = context.getPendingException();
-                context.clearPendingException();
-                executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
-            } else {
-                executionContext.stack[executionContext.sp++] = result;
-            }
-        } else {
-            String typeName = objectValue instanceof JSNull ? "null" : "undefined";
-            pendingException = context.throwTypeError("cannot read property 'length' of " + typeName);
-            executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
-        }
-        executionContext.pc = pc + Opcode.GET_LENGTH.getSize();
-    }
-
-    private void handleGetVarRef(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        executionContext.stack[executionContext.sp++] = executionContext.frame.getVarRef(varRefIndex);
-        executionContext.pc = pc + Opcode.GET_VAR_REF.getSize();
-    }
-
-    private void handleGetVarRefShort(ExecutionContext executionContext, Opcode opcode) {
-        int varRefIndex = switch (opcode) {
-            case GET_VAR_REF0 -> 0;
-            case GET_VAR_REF1 -> 1;
-            case GET_VAR_REF2 -> 2;
-            case GET_VAR_REF3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short get var ref opcode: " + opcode);
-        };
-        executionContext.stack[executionContext.sp++] = executionContext.frame.getVarRef(varRefIndex);
-        executionContext.pc += opcode.getSize();
-    }
-
-    private void handleGetRefValue(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.stack;
-        JSValue propertyValue = (JSValue) stack[sp - 1];
-        JSValue objectValue = (JSValue) stack[sp - 2];
-        PropertyKey key = PropertyKey.fromValue(context, propertyValue);
-
-        if (objectValue.isUndefined()) {
-            String name = key != null ? key.toPropertyString() : "variable";
-            pendingException = context.throwReferenceError(name + " is not defined");
-            stack[sp++] = JSUndefined.INSTANCE;
-            executionContext.sp = sp;
-            executionContext.pc = pc + Opcode.GET_REF_VALUE.getSize();
-            return;
-        }
-
-        JSObject targetObject = toObject(objectValue);
-        if (targetObject == null) {
-            pendingException = context.throwTypeError("value has no property");
-            stack[sp++] = JSUndefined.INSTANCE;
-            executionContext.sp = sp;
-            executionContext.pc = pc + Opcode.GET_REF_VALUE.getSize();
-            return;
-        }
-
-        JSValue value;
-        if (!targetObject.has(key)) {
-            if (context.isStrictMode()) {
-                String name = key != null ? key.toPropertyString() : "variable";
-                pendingException = context.throwReferenceError(name + " is not defined");
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                executionContext.pc = pc + Opcode.GET_REF_VALUE.getSize();
-                return;
-            }
-            value = JSUndefined.INSTANCE;
-        } else {
-            value = targetObject.get(context, key);
-        }
-        stack[sp++] = value;
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.GET_REF_VALUE.getSize();
-    }
-
-    private void handleGetVarUndef(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        executionContext.stack[executionContext.sp++] = executionContext.frame.getVarRef(varRefIndex);
-        executionContext.pc = pc + Opcode.GET_VAR_UNDEF.getSize();
-    }
-
-    private void handleGetVar(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.stack;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String variableName = executionContext.bytecode.getAtoms()[atomIndex];
-        PropertyKey key = PropertyKey.fromString(variableName);
-        JSObject globalObject = context.getGlobalObject();
-        if (!globalObject.has(key)) {
-            pendingException = context.throwReferenceError(variableName + " is not defined");
-            stack[sp++] = JSUndefined.INSTANCE;
-        } else {
-            JSValue variableValue = globalObject.get(key);
-            if (trackPropertyAccess && !propertyAccessLock) {
-                resetPropertyAccessTracking();
-                propertyAccessChain.append(variableName);
-            }
-            stack[sp++] = variableValue;
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.GET_VAR.getSize();
-    }
-
-    private void handlePutVarInit(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
-        executionContext.frame.setVarRef(varRefIndex, value);
-        executionContext.pc = pc + Opcode.PUT_VAR_INIT.getSize();
-    }
-
-    private void handleGetLocCheck(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
-        JSValue localValue = executionContext.frame.getLocals()[localIndex];
-        if (isUninitialized(localValue)) {
-            throwVariableUninitializedReferenceError();
-        }
-        executionContext.stack[executionContext.sp++] = localValue;
-        executionContext.pc = pc + Opcode.GET_LOC_CHECK.getSize();
-    }
-
-    private void handleGetVarRefCheck(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        JSValue value = executionContext.frame.getVarRef(varRefIndex);
-        if (isUninitialized(value)) {
-            throwVariableUninitializedReferenceError();
-        }
-        executionContext.stack[executionContext.sp++] = value;
-        executionContext.pc = pc + Opcode.GET_VAR_REF_CHECK.getSize();
-    }
-
-    private void handleInsert2(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSStackValue topValue = stack[sp - 1];
-        stack[sp] = topValue;
-        stack[sp - 1] = stack[sp - 2];
-        stack[sp - 2] = topValue;
-        executionContext.sp = sp + 1;
-        executionContext.pc += 1;
-    }
-
-    private void handleInsert3(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSStackValue topValue = stack[sp - 1];
-        stack[sp] = topValue;
-        stack[sp - 1] = stack[sp - 2];
-        stack[sp - 2] = stack[sp - 3];
-        stack[sp - 3] = topValue;
-        executionContext.sp = sp + 1;
-        executionContext.pc += 1;
-    }
-
-    private void handleInsert4(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSStackValue topValue = stack[sp - 1];
-        stack[sp] = topValue;
-        stack[sp - 1] = stack[sp - 2];
-        stack[sp - 2] = stack[sp - 3];
-        stack[sp - 3] = stack[sp - 4];
-        stack[sp - 4] = topValue;
-        executionContext.sp = sp + 1;
-        executionContext.pc += 1;
-    }
-
-    private void handleIncLoc(ExecutionContext executionContext) {
-        handleIncDecLoc(executionContext, 1);
-    }
-
-    private void handleIncDecLoc(ExecutionContext executionContext, int delta) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
-        JSValue localValue = executionContext.locals[localIndex];
-        if (localValue == null) {
-            localValue = JSUndefined.INSTANCE;
-        }
-        executionContext.locals[localIndex] = incrementValue(localValue, delta);
-        executionContext.pc = pc + Opcode.INC_LOC.getSize();
-    }
-
-    private void handleInvalid(ExecutionContext executionContext) {
-        throw new JSVirtualMachineException("Invalid opcode at PC " + executionContext.pc);
-    }
-
-    private void handleMakeScopedRef(ExecutionContext executionContext, Opcode opcode) {
-        int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        int refIndex = executionContext.bytecode.readU16(pc + 5);
-        String atomName = executionContext.bytecode.getAtoms()[atomIndex];
-        JSObject referenceObject = createReferenceObject(opcode, refIndex, atomName);
-        executionContext.stack[executionContext.sp++] = referenceObject;
-        executionContext.stack[executionContext.sp++] = new JSString(atomName);
-        executionContext.pc = pc + opcode.getSize();
-    }
-
-    private void handleMakeVarRef(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String atomName = executionContext.bytecode.getAtoms()[atomIndex];
-        executionContext.stack[executionContext.sp++] = context.getGlobalObject();
-        executionContext.stack[executionContext.sp++] = new JSString(atomName);
-        executionContext.pc = pc + Opcode.MAKE_VAR_REF.getSize();
-    }
-
-    private void handleNip(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        stack[sp - 2] = stack[sp - 1];
-        executionContext.sp = sp - 1;
-        executionContext.pc += 1;
-    }
-
-    private void handleNull(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSNull.INSTANCE;
-        executionContext.pc += 1;
-    }
-
-    private void handleDecLoc(ExecutionContext executionContext) {
-        handleIncDecLoc(executionContext, -1);
-    }
-
-    private void handlePerm3(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSStackValue temporaryValue = stack[sp - 3];
-        stack[sp - 3] = stack[sp - 2];
-        stack[sp - 2] = temporaryValue;
-        executionContext.pc += 1;
-    }
-
-    private void handlePerm4(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSStackValue firstValue = stack[sp - 4];
-        stack[sp - 4] = stack[sp - 2];
-        stack[sp - 2] = stack[sp - 3];
-        stack[sp - 3] = firstValue;
-        executionContext.pc += 1;
-    }
-
-    private void handlePerm5(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSStackValue firstValue = stack[sp - 5];
-        stack[sp - 5] = stack[sp - 2];
-        stack[sp - 2] = stack[sp - 3];
-        stack[sp - 3] = stack[sp - 4];
-        stack[sp - 4] = firstValue;
-        executionContext.pc += 1;
-    }
-
-    private void handlePutLoc(ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
-        int pc = executionContext.pc;
-        int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
-        handlePutLocAtIndex(executionContext, localIndex, Opcode.PUT_LOC.getSize());
-    }
-
-    private void handlePutLoc0(ExecutionContext executionContext) {
-        handlePutLocAtIndex(executionContext, 0, Opcode.PUT_LOC0.getSize());
-    }
-
-    private void handlePutLoc1(ExecutionContext executionContext) {
-        handlePutLocAtIndex(executionContext, 1, Opcode.PUT_LOC1.getSize());
-    }
-
-    private void handlePutLoc2(ExecutionContext executionContext) {
-        handlePutLocAtIndex(executionContext, 2, Opcode.PUT_LOC2.getSize());
-    }
-
-    private void handlePutLoc3(ExecutionContext executionContext) {
-        handlePutLocAtIndex(executionContext, 3, Opcode.PUT_LOC3.getSize());
-    }
-
-    private void handlePutLoc8(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
-        handlePutLocAtIndex(executionContext, localIndex, Opcode.PUT_LOC8.getSize());
-    }
-
-    private void handlePutLocAtIndex(ExecutionContext executionContext, int localIndex, int opcodeSize) {
-        executionContext.locals[localIndex] = (JSValue) executionContext.stack[--executionContext.sp];
-        executionContext.pc += opcodeSize;
-    }
-
-    private void handlePutArg(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int argumentIndex = executionContext.bytecode.readU16(pc + 1);
-        JSValue argumentValue = (JSValue) executionContext.stack[--executionContext.sp];
-        setArgumentValue(argumentIndex, argumentValue);
-        executionContext.pc = pc + Opcode.PUT_ARG.getSize();
-    }
-
-    private void handlePutArgShort(ExecutionContext executionContext, Opcode opcode) {
-        int argumentIndex = switch (opcode) {
-            case PUT_ARG0 -> 0;
-            case PUT_ARG1 -> 1;
-            case PUT_ARG2 -> 2;
-            case PUT_ARG3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short put arg opcode: " + opcode);
-        };
-        JSValue argumentValue = (JSValue) executionContext.stack[--executionContext.sp];
-        setArgumentValue(argumentIndex, argumentValue);
-        executionContext.pc += opcode.getSize();
-    }
-
-    private void handlePutRefValue(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue setValue = (JSValue) stack[--sp];
-        JSValue propertyValue = (JSValue) stack[--sp];
-        JSValue objectValue = (JSValue) stack[--sp];
-        PropertyKey key = PropertyKey.fromValue(context, propertyValue);
-
-        if (objectValue.isUndefined()) {
-            if (context.isStrictMode()) {
-                String name = key != null ? key.toPropertyString() : "variable";
-                pendingException = context.throwReferenceError(name + " is not defined");
-                executionContext.sp = sp;
-                executionContext.pc = pc + Opcode.PUT_REF_VALUE.getSize();
-                return;
-            }
-            objectValue = context.getGlobalObject();
-        }
-
-        JSObject targetObject = toObject(objectValue);
-        if (targetObject == null) {
-            pendingException = context.throwTypeError("value has no property");
-            executionContext.sp = sp;
-            executionContext.pc = pc + Opcode.PUT_REF_VALUE.getSize();
-            return;
-        }
-
-        if (!targetObject.has(key) && context.isStrictMode()) {
-            String name = key != null ? key.toPropertyString() : "variable";
-            pendingException = context.throwReferenceError(name + " is not defined");
-            executionContext.sp = sp;
-            executionContext.pc = pc + Opcode.PUT_REF_VALUE.getSize();
-            return;
-        }
-
-        targetObject.set(context, key, setValue);
-        if (context.hasPendingException()) {
-            pendingException = context.getPendingException();
-            context.clearPendingException();
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.PUT_REF_VALUE.getSize();
-    }
-
-    private void handlePutField(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String fieldName = executionContext.bytecode.getAtoms()[atomIndex];
-        JSValue objectValue = (JSValue) executionContext.stack[--executionContext.sp];
-        JSValue fieldValue = (JSValue) executionContext.stack[executionContext.sp - 1];
-        PropertyKey propertyKey = PropertyKey.fromString(fieldName);
-
-        if (objectValue instanceof JSObject jsObject) {
-            try {
-                jsObject.set(context, propertyKey, fieldValue);
-                if (context.hasPendingException()) {
-                    pendingException = context.getPendingException();
-                    context.clearPendingException();
-                }
-            } catch (JSVirtualMachineException e) {
-                capturePendingExceptionFromVmOrContext(e);
-            }
-        } else if (objectValue instanceof JSNull || objectValue instanceof JSUndefined) {
-            context.throwTypeError("cannot set property '" + fieldName + "' of "
-                    + (objectValue instanceof JSNull ? "null" : "undefined"));
-            pendingException = context.getPendingException();
-            context.clearPendingException();
-        } else {
-            JSObject boxedObject = toObject(objectValue);
-            if (boxedObject != null) {
-                try {
-                    boxedObject.set(context, propertyKey, fieldValue);
-                    if (context.hasPendingException()) {
-                        pendingException = context.getPendingException();
-                        context.clearPendingException();
-                    }
-                } catch (JSVirtualMachineException e) {
-                    capturePendingExceptionFromVmOrContext(e);
-                }
-            }
-        }
-        executionContext.pc = pc + Opcode.PUT_FIELD.getSize();
-    }
-
-    private void handlePutArrayEl(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue assignedValue = (JSValue) stack[--sp];
-        JSValue indexValue = (JSValue) stack[--sp];
-        JSValue objectValue = (JSValue) stack[--sp];
-
-        if (objectValue instanceof JSObject jsObject) {
-            try {
-                PropertyKey key = PropertyKey.fromValue(context, indexValue);
-                jsObject.set(context, key, assignedValue);
-                if (context.hasPendingException()) {
-                    pendingException = context.getPendingException();
-                    context.clearPendingException();
-                }
-            } catch (JSVirtualMachineException e) {
-                capturePendingExceptionFromVmOrContext(e);
-            }
-        } else if (objectValue instanceof JSNull || objectValue instanceof JSUndefined) {
-            PropertyKey key = PropertyKey.fromValue(context, indexValue);
-            context.throwTypeError("cannot set property '" + key + "' of "
-                    + (objectValue instanceof JSNull ? "null" : "undefined"));
-            pendingException = context.getPendingException();
-            context.clearPendingException();
-        } else {
-            JSObject boxedObject = toObject(objectValue);
-            if (boxedObject != null) {
-                try {
-                    PropertyKey key = PropertyKey.fromValue(context, indexValue);
-                    boxedObject.set(context, key, assignedValue);
-                    if (context.hasPendingException()) {
-                        pendingException = context.getPendingException();
-                        context.clearPendingException();
-                    }
-                } catch (JSVirtualMachineException e) {
-                    capturePendingExceptionFromVmOrContext(e);
-                }
-            }
-        }
-
-        stack[sp++] = assignedValue;
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.PUT_ARRAY_EL.getSize();
-    }
-
-    private void handlePutSuperValue(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue keyValue = (JSValue) stack[--sp];
-        JSValue superObjectValue = (JSValue) stack[--sp];
-        JSValue receiverValue = (JSValue) stack[--sp];
-        JSValue assignedValue = (JSValue) stack[--sp];
-
-        if (!(superObjectValue instanceof JSObject superObject)) {
-            throw new JSVirtualMachineException(context.throwTypeError("super object expected"));
-        }
-
-        PropertyKey key = PropertyKey.fromValue(context, keyValue);
-        if (receiverValue instanceof JSObject receiverObject) {
-            superObject.set(context, key, assignedValue, receiverObject);
-        } else {
-            JSObject boxedReceiver = toObject(receiverValue);
-            if (boxedReceiver != null) {
-                superObject.set(context, key, assignedValue, boxedReceiver);
-            } else {
-                superObject.set(context, key, assignedValue);
-            }
-        }
-
-        if (context.hasPendingException()) {
-            pendingException = context.getPendingException();
-            context.clearPendingException();
-        }
-        stack[sp++] = assignedValue;
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.PUT_SUPER_VALUE.getSize();
-    }
-
-    private void handlePutVar(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String variableName = executionContext.bytecode.getAtoms()[atomIndex];
-        JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
-        context.getGlobalObject().set(PropertyKey.fromString(variableName), value);
-        executionContext.pc = pc + Opcode.PUT_VAR.getSize();
-    }
-
-    private void handlePutLocCheck(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
-        JSValue[] localValues = executionContext.frame.getLocals();
-        if (isUninitialized(localValues[localIndex])) {
-            throwVariableUninitializedReferenceError();
-        }
-        localValues[localIndex] = (JSValue) executionContext.stack[--executionContext.sp];
-        executionContext.pc = pc + Opcode.PUT_LOC_CHECK.getSize();
-    }
-
-    private void handlePutLocCheckInit(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
-        JSValue[] localValues = executionContext.frame.getLocals();
-        if (!isUninitialized(localValues[localIndex])) {
-            throw new JSVirtualMachineException(context.throwReferenceError("'this' can be initialized only once"));
-        }
-        localValues[localIndex] = (JSValue) executionContext.stack[--executionContext.sp];
-        executionContext.pc = pc + Opcode.PUT_LOC_CHECK_INIT.getSize();
-    }
-
-    private void handlePutVarRef(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
-        executionContext.frame.setVarRef(varRefIndex, value);
-        executionContext.pc = pc + Opcode.PUT_VAR_REF.getSize();
-    }
-
-    private void handlePutVarRefShort(ExecutionContext executionContext, Opcode opcode) {
-        int varRefIndex = switch (opcode) {
-            case PUT_VAR_REF0 -> 0;
-            case PUT_VAR_REF1 -> 1;
-            case PUT_VAR_REF2 -> 2;
-            case PUT_VAR_REF3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short put var ref opcode: " + opcode);
-        };
-        JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
-        executionContext.frame.setVarRef(varRefIndex, value);
-        executionContext.pc += opcode.getSize();
-    }
-
-    private void handlePutVarRefCheck(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        if (isUninitialized(executionContext.frame.getVarRef(varRefIndex))) {
-            throwVariableUninitializedReferenceError();
-        }
-        executionContext.frame.setVarRef(varRefIndex, (JSValue) executionContext.stack[--executionContext.sp]);
-        executionContext.pc = pc + Opcode.PUT_VAR_REF_CHECK.getSize();
-    }
-
-    private void handlePutVarRefCheckInit(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        if (!isUninitialized(executionContext.frame.getVarRef(varRefIndex))) {
-            throw new JSVirtualMachineException(context.throwReferenceError("variable is already initialized"));
-        }
-        executionContext.frame.setVarRef(varRefIndex, (JSValue) executionContext.stack[--executionContext.sp]);
-        executionContext.pc = pc + Opcode.PUT_VAR_REF_CHECK_INIT.getSize();
-    }
-
-    private void handleSetLoc(ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
-        int pc = executionContext.pc;
-        int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
-        handleSetLocAtIndex(executionContext, localIndex, Opcode.SET_LOC.getSize());
-    }
-
-    private void handleSetLoc0(ExecutionContext executionContext) {
-        handleSetLocAtIndex(executionContext, 0, Opcode.SET_LOC0.getSize());
-    }
-
-    private void handleSetLoc1(ExecutionContext executionContext) {
-        handleSetLocAtIndex(executionContext, 1, Opcode.SET_LOC1.getSize());
-    }
-
-    private void handleSetLoc2(ExecutionContext executionContext) {
-        handleSetLocAtIndex(executionContext, 2, Opcode.SET_LOC2.getSize());
-    }
-
-    private void handleSetLoc3(ExecutionContext executionContext) {
-        handleSetLocAtIndex(executionContext, 3, Opcode.SET_LOC3.getSize());
-    }
-
-    private void handleSetLoc8(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
-        handleSetLocAtIndex(executionContext, localIndex, Opcode.SET_LOC8.getSize());
-    }
-
-    private void handleSetLocAtIndex(ExecutionContext executionContext, int localIndex, int opcodeSize) {
-        executionContext.locals[localIndex] = (JSValue) executionContext.stack[executionContext.sp - 1];
-        executionContext.pc += opcodeSize;
-    }
-
-    private void handleSetLocCheck(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
-        JSValue[] localValues = executionContext.frame.getLocals();
-        if (isUninitialized(localValues[localIndex])) {
-            throwVariableUninitializedReferenceError();
-        }
-        localValues[localIndex] = (JSValue) executionContext.stack[executionContext.sp - 1];
-        executionContext.pc = pc + Opcode.SET_LOC_CHECK.getSize();
-    }
-
-    private void handleSetLocUninitialized(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
-        executionContext.frame.getLocals()[localIndex] = UNINITIALIZED_MARKER;
-        executionContext.pc = pc + Opcode.SET_LOC_UNINITIALIZED.getSize();
-    }
-
-    private void handleSetArg(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int argumentIndex = executionContext.bytecode.readU16(pc + 1);
-        setArgumentValue(argumentIndex, (JSValue) executionContext.stack[executionContext.sp - 1]);
-        executionContext.pc = pc + Opcode.SET_ARG.getSize();
-    }
-
-    private void handleSetArgShort(ExecutionContext executionContext, Opcode opcode) {
-        int argumentIndex = switch (opcode) {
-            case SET_ARG0 -> 0;
-            case SET_ARG1 -> 1;
-            case SET_ARG2 -> 2;
-            case SET_ARG3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short set arg opcode: " + opcode);
-        };
-        setArgumentValue(argumentIndex, (JSValue) executionContext.stack[executionContext.sp - 1]);
-        executionContext.pc += opcode.getSize();
-    }
-
-    private void handleToPropKey(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rawKey = (JSValue) stack[--sp];
-        try {
-            stack[sp++] = toPropertyKeyValue(rawKey);
-        } catch (JSVirtualMachineException e) {
-            captureVMException(e);
-            executionContext.sp = sp;
-            executionContext.pc = pc;
-            return;
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.TO_PROPKEY.getSize();
-    }
-
-    private void handleToPropKey2(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rawKey = (JSValue) stack[--sp];
-        JSValue baseObject = (JSValue) stack[--sp];
-        stack[sp++] = baseObject;
-        try {
-            stack[sp++] = toPropertyKeyValue(rawKey);
-        } catch (JSVirtualMachineException e) {
-            sp--;
-            captureVMException(e);
-            executionContext.sp = sp;
-            executionContext.pc = pc;
-            return;
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.TO_PROPKEY2.getSize();
-    }
-
-    private void handleSetVar(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String variableName = executionContext.bytecode.getAtoms()[atomIndex];
-        JSValue value = (JSValue) executionContext.stack[executionContext.sp - 1];
-        PropertyKey variableKey = PropertyKey.fromString(variableName);
-        JSObject globalObject = context.getGlobalObject();
-        if (context.isStrictMode() && !globalObject.has(variableKey)) {
-            throw new JSVirtualMachineException(context.throwReferenceError(variableName + " is not defined"));
-        }
-        globalObject.set(variableKey, value);
-        executionContext.pc = pc + Opcode.SET_VAR.getSize();
-    }
-
-    private void handleSetVarRef(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        executionContext.frame.setVarRef(varRefIndex, (JSValue) executionContext.stack[executionContext.sp - 1]);
-        executionContext.pc = pc + Opcode.SET_VAR_REF.getSize();
-    }
-
-    private void handleSetVarRefShort(ExecutionContext executionContext, Opcode opcode) {
-        int varRefIndex = switch (opcode) {
-            case SET_VAR_REF0 -> 0;
-            case SET_VAR_REF1 -> 1;
-            case SET_VAR_REF2 -> 2;
-            case SET_VAR_REF3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short set var ref opcode: " + opcode);
-        };
-        executionContext.frame.setVarRef(varRefIndex, (JSValue) executionContext.stack[executionContext.sp - 1]);
-        executionContext.pc += opcode.getSize();
-    }
-
-    private void capturePendingExceptionFromVmOrContext(JSVirtualMachineException e) {
-        if (e.getJsValue() != null) {
-            pendingException = e.getJsValue();
-        } else if (e.getJsError() != null) {
-            pendingException = e.getJsError();
-        } else if (context.hasPendingException()) {
-            pendingException = context.getPendingException();
-        } else {
-            pendingException = context.throwError("Error",
-                    e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-        }
-        context.clearPendingException();
-    }
-
-    private void appendPropertyAccessForArrayIndex(JSValue indexValue) {
-        if (indexValue instanceof JSString stringValue) {
-            if (!propertyAccessChain.isEmpty()) {
-                propertyAccessChain.append('.');
-            }
-            propertyAccessChain.append(stringValue.value());
-        } else if (indexValue instanceof JSNumber numberValue) {
-            String propertyName = JSTypeConversions.toString(context, numberValue).value();
-            if (!propertyAccessChain.isEmpty()) {
-                propertyAccessChain.append('.');
-            }
-            propertyAccessChain.append(propertyName);
-        } else if (indexValue instanceof JSSymbol symbolValue) {
-            propertyAccessChain.append("[Symbol.").append(symbolValue.getDescription()).append("]");
-        }
-    }
-
-    private void handleDeleteVar(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String variableName = executionContext.bytecode.getAtoms()[atomIndex];
-        boolean deleted = context.getGlobalObject().delete(context, PropertyKey.fromString(variableName));
-        executionContext.stack[executionContext.sp++] = JSBoolean.valueOf(deleted);
-        executionContext.pc = pc + Opcode.DELETE_VAR.getSize();
-    }
-
-    private void handleIfFalse(ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
-        int pc = executionContext.pc;
-        JSValue conditionValue = (JSValue) executionContext.stack[--executionContext.sp];
-        int offset = ((instructions[pc + 1] & 0xFF) << 24)
-                | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8)
-                | (instructions[pc + 4] & 0xFF);
-        if (isBranchTruthy(conditionValue)) {
-            executionContext.pc = pc + Opcode.IF_FALSE.getSize();
-        } else {
-            executionContext.pc = pc + Opcode.IF_FALSE.getSize() + offset;
-        }
-    }
-
-    private void handleIfTrue(ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
-        int pc = executionContext.pc;
-        JSValue conditionValue = (JSValue) executionContext.stack[--executionContext.sp];
-        int offset = ((instructions[pc + 1] & 0xFF) << 24)
-                | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8)
-                | (instructions[pc + 4] & 0xFF);
-        if (isBranchTruthy(conditionValue)) {
-            executionContext.pc = pc + Opcode.IF_TRUE.getSize() + offset;
-        } else {
-            executionContext.pc = pc + Opcode.IF_TRUE.getSize();
-        }
-    }
-
-    private void handleIfTrue8(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSValue conditionValue = (JSValue) executionContext.stack[--executionContext.sp];
-        if (isBranchTruthy(conditionValue)) {
-            executionContext.pc = pc + Opcode.IF_TRUE8.getSize() + executionContext.instructions[pc + 1];
-        } else {
-            executionContext.pc = pc + Opcode.IF_TRUE8.getSize();
-        }
-    }
-
-    private void handleIfFalse8(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSValue conditionValue = (JSValue) executionContext.stack[--executionContext.sp];
-        if (isBranchTruthy(conditionValue)) {
-            executionContext.pc = pc + Opcode.IF_FALSE8.getSize();
-        } else {
-            executionContext.pc = pc + Opcode.IF_FALSE8.getSize() + executionContext.instructions[pc + 1];
-        }
-    }
-
-    private void handleGoto(ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
-        int pc = executionContext.pc;
-        int offset = ((instructions[pc + 1] & 0xFF) << 24)
-                | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8)
-                | (instructions[pc + 4] & 0xFF);
-        executionContext.pc = pc + Opcode.GOTO.getSize() + offset;
-    }
-
-    private void handleGoto8(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        executionContext.pc = pc + Opcode.GOTO8.getSize() + executionContext.instructions[pc + 1];
-    }
-
-    private void handleGoto16(ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
-        int pc = executionContext.pc;
-        int offset = (short) (((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF));
-        executionContext.pc = pc + Opcode.GOTO16.getSize() + offset;
-    }
-
-    private void finalizeExecuteReturn(ExecutionContext executionContext) {
-        restoreExecuteCallerState(
-                executionContext.restoreStackTop,
-                executionContext.previousFrame,
-                executionContext.savedStrictMode);
-    }
-
-    private boolean isBranchTruthy(JSValue conditionValue) {
-        if (conditionValue instanceof JSBoolean booleanValue) {
-            return booleanValue.value();
-        }
-        if (conditionValue instanceof JSNumber numberValue) {
-            double d = numberValue.value();
-            return d != 0.0 && !Double.isNaN(d);
-        }
-        return JSTypeConversions.toBoolean(conditionValue) == JSBoolean.TRUE;
-    }
-
-    private void handleSetName(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String name = executionContext.bytecode.getAtoms()[atomIndex];
-        setObjectName((JSValue) executionContext.stack[executionContext.sp - 1], new JSString(name));
-        executionContext.pc = pc + Opcode.SET_NAME.getSize();
-    }
-
-    private void handleSetNameComputed(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue nameValue = (JSValue) stack[sp - 2];
-        setObjectName((JSValue) stack[sp - 1], getComputedNameString(nameValue));
-        executionContext.pc += Opcode.SET_NAME_COMPUTED.getSize();
-    }
-
-    private void handleSetProto(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue prototypeValue = (JSValue) stack[--sp];
-        JSValue objectValue = (JSValue) stack[sp - 1];
-        if (objectValue instanceof JSObject object) {
-            if (prototypeValue instanceof JSObject prototypeObject) {
-                object.setPrototype(prototypeObject);
-            } else if (prototypeValue.isNull()) {
-                object.setPrototype(null);
-            }
-        }
-        executionContext.sp = sp;
-        executionContext.pc += Opcode.SET_PROTO.getSize();
-    }
-
-    private void handleSetHomeObject(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue homeObjectValue = (JSValue) stack[sp - 2];
-        JSValue methodValue = (JSValue) stack[sp - 1];
-        if (methodValue instanceof JSFunction methodFunction && homeObjectValue instanceof JSObject homeObject) {
-            methodFunction.setHomeObject(homeObject);
-        }
-        executionContext.pc += Opcode.SET_HOME_OBJECT.getSize();
-    }
-
-    private void handleCopyDataProperties(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int mask = executionContext.bytecode.readU8(pc + 1);
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue targetValue = (JSValue) stack[sp - 1 - (mask & 3)];
-        JSValue sourceValue = (JSValue) stack[sp - 1 - ((mask >> 2) & 7)];
-        JSValue excludeListValue = (JSValue) stack[sp - 1 - ((mask >> 5) & 7)];
-        copyDataProperties(targetValue, sourceValue, excludeListValue);
-        executionContext.pc = pc + Opcode.COPY_DATA_PROPERTIES.getSize();
-    }
-
-    private void handleDefineClass(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        int classNameAtom = executionContext.bytecode.readU32(pc + 1);
-        String className = executionContext.bytecode.getAtoms()[classNameAtom];
-        JSValue constructorValue = (JSValue) stack[--sp];
-        JSValue superClassValue = (JSValue) stack[--sp];
-
-        if (!(constructorValue instanceof JSFunction constructorFunction)) {
-            throw new JSVirtualMachineException("DEFINE_CLASS: constructor must be a function");
-        }
-
-        JSObject prototypeObject = context.createJSObject();
-        if (superClassValue instanceof JSNull) {
-            prototypeObject.setPrototype(null);
-        } else if (superClassValue != JSUndefined.INSTANCE) {
-            if (!JSTypeChecking.isConstructor(superClassValue)) {
-                context.throwTypeError("parent class must be constructor");
-                pendingException = context.getPendingException();
-                stack[sp++] = JSUndefined.INSTANCE;
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                executionContext.pc = pc + Opcode.DEFINE_CLASS.getSize();
-                return;
-            }
-            if (superClassValue instanceof JSFunction superFunction) {
-                context.transferPrototype(prototypeObject, superFunction);
-                constructorFunction.setPrototype(superFunction);
-            }
-        }
-
-        JSObject constructorObject = constructorFunction;
-        constructorObject.defineProperty(
-                PropertyKey.fromString("prototype"),
-                prototypeObject,
-                PropertyDescriptor.DataState.None);
-
-        prototypeObject.set(PropertyKey.CONSTRUCTOR, constructorValue);
-        setObjectName(constructorValue, new JSString(className));
-
-        if (constructorFunction instanceof JSBytecodeFunction bytecodeConstructor) {
-            bytecodeConstructor.setClassConstructor(true);
-            if (superClassValue != JSUndefined.INSTANCE) {
-                bytecodeConstructor.setDerivedConstructor(true);
-            }
-        }
-
-        stack[sp++] = prototypeObject;
-        stack[sp++] = constructorValue;
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.DEFINE_CLASS.getSize();
-    }
-
-    private void handleDefineClassComputed(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        int classNameAtom = executionContext.bytecode.readU32(pc + 1);
-        int classFlags = executionContext.bytecode.readU8(pc + 5);
-        String className = executionContext.bytecode.getAtoms()[classNameAtom];
-        JSValue constructorValue = (JSValue) stack[--sp];
-        JSValue superClassValue = (JSValue) stack[--sp];
-        JSValue computedClassNameValue = (JSValue) stack[sp - 1];
-
-        if (!(constructorValue instanceof JSFunction constructorFunction)) {
-            throw new JSVirtualMachineException("DEFINE_CLASS_COMPUTED: constructor must be a function");
-        }
-
-        JSObject prototypeObject = context.createJSObject();
-        boolean hasHeritage = (classFlags & 1) != 0;
-        if (hasHeritage && superClassValue != JSUndefined.INSTANCE && superClassValue != JSNull.INSTANCE) {
-            if (superClassValue instanceof JSFunction superFunction) {
-                context.transferPrototype(prototypeObject, superFunction);
-                constructorFunction.setPrototype(superFunction);
-            } else {
-                throw new JSVirtualMachineException(context.throwTypeError("parent class must be constructor"));
-            }
-        }
-
-        constructorFunction.defineProperty(
-                PropertyKey.fromString("prototype"),
-                prototypeObject,
-                PropertyDescriptor.DataState.None);
-        prototypeObject.set(PropertyKey.CONSTRUCTOR, constructorValue);
-        JSString computedClassName = getComputedNameString(computedClassNameValue);
-        if (computedClassName.value().isEmpty()) {
-            computedClassName = new JSString(className);
-        }
-        setObjectName(constructorValue, computedClassName);
-
-        stack[sp++] = prototypeObject;
-        stack[sp++] = constructorValue;
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.DEFINE_CLASS_COMPUTED.getSize();
-    }
-
-    private void handleDefineMethod(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        int methodNameAtom = executionContext.bytecode.readU32(pc + 1);
-        String methodName = executionContext.bytecode.getAtoms()[methodNameAtom];
-        JSValue methodValue = (JSValue) stack[--sp];
-        JSValue objectValue = (JSValue) stack[--sp];
-
-        if (objectValue instanceof JSObject object) {
-            if (methodValue instanceof JSFunction methodFunction) {
-                methodFunction.setHomeObject(object);
-            }
-            object.set(PropertyKey.fromString(methodName), methodValue);
-        }
-
-        stack[sp++] = objectValue;
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.DEFINE_METHOD.getSize();
-    }
-
-    private void handleDefineMethodComputed(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        int methodFlags = executionContext.bytecode.readU8(pc + 1);
-        boolean enumerable = (methodFlags & 4) != 0;
-        int methodKind = methodFlags & 3;
-
-        JSValue methodValue = (JSValue) stack[--sp];
-        JSValue propertyValue = (JSValue) stack[--sp];
-        JSValue objectValue = (JSValue) stack[sp - 1];
-
-        if (objectValue instanceof JSObject object) {
-            PropertyKey key = PropertyKey.fromValue(context, propertyValue);
-            JSString computedName = getComputedNameString(propertyValue);
-            if (methodValue instanceof JSFunction methodFunction) {
-                methodFunction.setHomeObject(object);
-                String namePrefix;
-                if (methodKind == 1) {
-                    namePrefix = "get ";
-                } else if (methodKind == 2) {
-                    namePrefix = "set ";
-                } else {
-                    namePrefix = "";
-                }
-                setObjectName(methodFunction, new JSString(namePrefix + computedName.value()));
-                if (methodKind == 1 || methodKind == 2) {
-                    methodFunction.delete(PropertyKey.PROTOTYPE);
-                }
-            }
-
-            if (methodKind == 0) {
-                object.defineProperty(
-                        key,
-                        PropertyDescriptor.dataDescriptor(
-                                methodValue,
-                                enumerable
-                                        ? PropertyDescriptor.DataState.All
-                                        : PropertyDescriptor.DataState.ConfigurableWritable));
-            } else if (methodKind == 1) {
-                JSFunction getter = methodValue instanceof JSFunction function ? function : null;
-                JSFunction setter = null;
-                PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
-                if (descriptor != null && descriptor.hasSetter()) {
-                    setter = descriptor.getSetter();
-                }
-                object.defineProperty(
-                        key,
-                        PropertyDescriptor.accessorDescriptor(
-                                getter,
-                                setter,
-                                enumerable
-                                        ? PropertyDescriptor.AccessorState.All
-                                        : PropertyDescriptor.AccessorState.Configurable));
-            } else if (methodKind == 2) {
-                JSFunction setter = methodValue instanceof JSFunction function ? function : null;
-                JSFunction getter = null;
-                PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
-                if (descriptor != null && descriptor.hasGetter()) {
-                    getter = descriptor.getGetter();
-                }
-                object.defineProperty(
-                        key,
-                        PropertyDescriptor.accessorDescriptor(
-                                getter,
-                                setter,
-                                enumerable
-                                        ? PropertyDescriptor.AccessorState.All
-                                        : PropertyDescriptor.AccessorState.Configurable));
-            } else {
-                throw new JSVirtualMachineException("DEFINE_METHOD_COMPUTED: unsupported method flags " + methodFlags);
-            }
-        }
-
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.DEFINE_METHOD_COMPUTED.getSize();
-    }
-
-    private void handleDefineField(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        int fieldNameAtom = executionContext.bytecode.readU32(pc + 1);
-        String fieldName = executionContext.bytecode.getAtoms()[fieldNameAtom];
-        JSValue value = (JSValue) stack[--sp];
-        JSValue objectValue = (JSValue) stack[--sp];
-
-        if (objectValue instanceof JSObject object) {
-            object.set(PropertyKey.fromString(fieldName), value);
-        }
-
-        stack[sp++] = objectValue;
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.DEFINE_FIELD.getSize();
-    }
-
-    private void handleDefinePrivateField(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue value = (JSValue) stack[--sp];
-        JSValue privateSymbolValue = (JSValue) stack[--sp];
-        JSValue objectValue = (JSValue) stack[--sp];
-
-        if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
-            object.set(PropertyKey.fromSymbol(symbol), value);
-        }
-
-        stack[sp++] = objectValue;
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.DEFINE_PRIVATE_FIELD.getSize();
-    }
-
-    private void handleGetPrivateField(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue privateSymbolValue = (JSValue) stack[--sp];
-        JSValue objectValue = (JSValue) stack[--sp];
-
-        JSValue value = JSUndefined.INSTANCE;
-        if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
-            value = object.get(PropertyKey.fromSymbol(symbol));
-        }
-
-        stack[sp++] = value;
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.GET_PRIVATE_FIELD.getSize();
-    }
-
-    private void handlePutPrivateField(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue privateSymbolValue = (JSValue) stack[--sp];
-        JSValue value = (JSValue) stack[--sp];
-        JSValue objectValue = (JSValue) stack[--sp];
-
-        if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
-            object.set(PropertyKey.fromSymbol(symbol), value);
-        }
-
-        stack[sp++] = value;
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.PUT_PRIVATE_FIELD.getSize();
-    }
-
-    private void throwVariableUninitializedReferenceError() {
-        throw new JSVirtualMachineException(context.throwReferenceError("variable is uninitialized"));
-    }
-
-    private void handlePush0(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSNumber.of(0);
-        executionContext.pc += 1;
-    }
-
-    private void handlePush1(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSNumber.of(1);
-        executionContext.pc += 1;
-    }
-
-    private void handlePush2(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSNumber.of(2);
-        executionContext.pc += 1;
-    }
-
-    private void handlePush3(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSNumber.of(3);
-        executionContext.pc += 1;
-    }
-
-    private void handlePush4(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSNumber.of(4);
-        executionContext.pc += 1;
-    }
-
-    private void handlePush5(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSNumber.of(5);
-        executionContext.pc += 1;
-    }
-
-    private void handlePush6(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSNumber.of(6);
-        executionContext.pc += 1;
-    }
-
-    private void handlePush7(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSNumber.of(7);
-        executionContext.pc += 1;
-    }
-
-    private void handlePushAtomValue(ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
-        int pc = executionContext.pc;
-        int atomIndex = ((instructions[pc + 1] & 0xFF) << 24)
-                | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8)
-                | (instructions[pc + 4] & 0xFF);
-        executionContext.stack[executionContext.sp++] = new JSString(executionContext.bytecode.getAtoms()[atomIndex]);
-        executionContext.pc = pc + Opcode.PUSH_ATOM_VALUE.getSize();
-    }
-
-    private void handlePushBigintI32(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = new JSBigInt(executionContext.bytecode.readI32(executionContext.pc + 1));
-        executionContext.pc += Opcode.PUSH_BIGINT_I32.getSize();
-    }
-
-    private void handlePushConst(ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
-        int pc = executionContext.pc;
-        int constIndex = ((instructions[pc + 1] & 0xFF) << 24)
-                | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8)
-                | (instructions[pc + 4] & 0xFF);
-        JSValue constantValue = executionContext.bytecode.getConstants()[constIndex];
-        initializeConstantValueIfNeeded(constantValue);
-        executionContext.stack[executionContext.sp++] = constantValue;
-        executionContext.pc = pc + Opcode.PUSH_CONST.getSize();
-    }
-
-    private void handlePushConst8(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int constIndex = executionContext.instructions[pc + 1] & 0xFF;
-        JSValue constantValue = executionContext.bytecode.getConstants()[constIndex];
-        initializeConstantValueIfNeeded(constantValue);
-        executionContext.stack[executionContext.sp++] = constantValue;
-        executionContext.pc = pc + Opcode.PUSH_CONST8.getSize();
-    }
-
-    private void handlePushEmptyString(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = new JSString("");
-        executionContext.pc += 1;
-    }
-
-    private void handlePushFalse(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSBoolean.FALSE;
-        executionContext.pc += 1;
-    }
-
-    private void handlePushI16(ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
-        int pc = executionContext.pc;
-        executionContext.stack[executionContext.sp++] =
-                JSNumber.of((short) (((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF)));
-        executionContext.pc = pc + 3;
-    }
-
-    private void handlePushI32(ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
-        int pc = executionContext.pc;
-        int intValue = ((instructions[pc + 1] & 0xFF) << 24)
-                | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8)
-                | (instructions[pc + 4] & 0xFF);
-        executionContext.stack[executionContext.sp++] = JSNumber.of(intValue);
-        executionContext.pc = pc + 5;
-    }
-
-    private void handlePushI8(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        executionContext.stack[executionContext.sp++] = JSNumber.of(executionContext.instructions[pc + 1]);
-        executionContext.pc = pc + 2;
-    }
-
-    private void handlePushMinus1(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSNumber.of(-1);
-        executionContext.pc += 1;
-    }
-
-    private void handlePushThis(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = executionContext.frame.getThisArg();
-        executionContext.pc += 1;
-    }
-
-    private void handlePushTrue(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSBoolean.TRUE;
-        executionContext.pc += 1;
-    }
-
-    private void handlePrivateSymbol(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int fieldNameAtomIndex = executionContext.bytecode.readU32(pc + 1);
-        String fieldName = executionContext.bytecode.getAtoms()[fieldNameAtomIndex];
-        executionContext.stack[executionContext.sp++] = new JSSymbol(fieldName);
-        executionContext.pc = pc + Opcode.PRIVATE_SYMBOL.getSize();
-    }
-
-    private void handleFclosure(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        int functionIndex = executionContext.bytecode.readU32(pc + 1);
-        JSValue functionValue = executionContext.bytecode.getConstants()[functionIndex];
-        if (functionValue instanceof JSBytecodeFunction templateFunction) {
-            int[] captureInfos = templateFunction.getCaptureSourceInfos();
-            JSBytecodeFunction closureFunction;
-            if (captureInfos != null) {
-                VarRef[] capturedVarRefs = createVarRefsFromCaptures(captureInfos, executionContext.frame);
-                closureFunction = templateFunction.copyWithVarRefs(capturedVarRefs);
-                int selfIndex = templateFunction.getSelfCaptureIndex();
-                if (selfIndex >= 0 && selfIndex < capturedVarRefs.length) {
-                    capturedVarRefs[selfIndex].set(closureFunction);
-                }
-            } else {
-                int closureCount = templateFunction.getClosureVars().length;
-                JSValue[] capturedClosureVars = new JSValue[closureCount];
-                for (int i = closureCount - 1; i >= 0; i--) {
-                    capturedClosureVars[i] = (JSValue) stack[--sp];
-                }
-                closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
-                int selfIndex = templateFunction.getSelfCaptureIndex();
-                if (selfIndex >= 0 && selfIndex < capturedClosureVars.length) {
-                    capturedClosureVars[selfIndex] = closureFunction;
-                }
-            }
-            closureFunction.initializePrototypeChain(context);
-            stack[sp++] = closureFunction;
-        } else {
-            if (functionValue instanceof JSFunction function) {
-                function.initializePrototypeChain(context);
-            }
-            stack[sp++] = functionValue;
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.FCLOSURE.getSize();
-    }
-
-    private void handleFclosure8(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        int functionIndex = executionContext.bytecode.readU8(pc + 1);
-        JSValue functionValue = executionContext.bytecode.getConstants()[functionIndex];
-        if (functionValue instanceof JSBytecodeFunction templateFunction) {
-            int[] captureInfos = templateFunction.getCaptureSourceInfos();
-            JSBytecodeFunction closureFunction;
-            if (captureInfos != null) {
-                VarRef[] capturedVarRefs = createVarRefsFromCaptures(captureInfos, executionContext.frame);
-                closureFunction = templateFunction.copyWithVarRefs(capturedVarRefs);
-            } else {
-                int closureCount = templateFunction.getClosureVars().length;
-                JSValue[] capturedClosureVars = new JSValue[closureCount];
-                for (int i = closureCount - 1; i >= 0; i--) {
-                    capturedClosureVars[i] = (JSValue) stack[--sp];
-                }
-                closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
-            }
-            closureFunction.initializePrototypeChain(context);
-            stack[sp++] = closureFunction;
-        } else {
-            if (functionValue instanceof JSFunction function) {
-                function.initializePrototypeChain(context);
-            }
-            stack[sp++] = functionValue;
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.FCLOSURE8.getSize();
-    }
-
-    private void handleRest(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int firstRestArgumentIndex = executionContext.bytecode.readU16(pc + 1);
-        JSValue[] functionArguments = executionContext.frame.getArguments();
-        int argumentCount = functionArguments.length;
-        int restStartIndex = Math.min(firstRestArgumentIndex, argumentCount);
-        int restCount = argumentCount - restStartIndex;
-        JSValue[] restArguments = new JSValue[restCount];
-        System.arraycopy(functionArguments, restStartIndex, restArguments, 0, restCount);
-        JSArray restArray = context.createJSArray(restArguments);
-        executionContext.stack[executionContext.sp++] = restArray;
-        executionContext.pc = pc + Opcode.REST.getSize();
-    }
-
-    private void handleRot3l(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSStackValue firstValue = stack[sp - 3];
-        stack[sp - 3] = stack[sp - 2];
-        stack[sp - 2] = stack[sp - 1];
-        stack[sp - 1] = firstValue;
-        executionContext.pc += 1;
-    }
-
-    private void handleRot3r(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSStackValue thirdValue = stack[sp - 1];
-        stack[sp - 1] = stack[sp - 2];
-        stack[sp - 2] = stack[sp - 3];
-        stack[sp - 3] = thirdValue;
-        executionContext.pc += 1;
-    }
-
-    private void handleSwap(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSStackValue temporaryValue = stack[sp - 1];
-        stack[sp - 1] = stack[sp - 2];
-        stack[sp - 2] = temporaryValue;
-        propertyAccessLock = true;
-        executionContext.pc += 1;
-    }
-
-    private void handleSwap2(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSStackValue firstPairLeft = stack[sp - 4];
-        JSStackValue firstPairRight = stack[sp - 3];
-        stack[sp - 4] = stack[sp - 2];
-        stack[sp - 3] = stack[sp - 1];
-        stack[sp - 2] = firstPairLeft;
-        stack[sp - 1] = firstPairRight;
-        executionContext.pc += 1;
-    }
-
-    private void handleSpecialObject(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int objectType = executionContext.bytecode.readU8(pc + 1);
-        JSValue specialObject = createSpecialObject(objectType, executionContext.frame);
-        executionContext.stack[executionContext.sp++] = specialObject;
-        executionContext.pc = pc + Opcode.SPECIAL_OBJECT.getSize();
-    }
-
-    private void handleUndefined(ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
-        executionContext.pc += 1;
-    }
-
-    private void initializeConstantValueIfNeeded(JSValue constantValue) {
-        if (constantValue instanceof JSFunction functionValue) {
-            functionValue.initializePrototypeChain(context);
-        } else if (constantValue instanceof JSObject objectValue) {
-            ensureConstantObjectPrototype(objectValue);
-        }
-    }
-
-    private enum PendingExceptionAction {
-        NONE,
-        CONTINUE,
-        RETURN
-    }
-
-    private final class ExecutionContext {
-        private final Bytecode bytecode;
-        private final byte[] instructions;
-        private final Opcode[] decodedOpcodes;
-        private final byte[] opcodeRebaseOffsets;
-        private final StackFrame frame;
-        private final StackFrame previousFrame;
-        private final int frameStackBase;
-        private final int restoreStackTop;
-        private final boolean savedStrictMode;
-        private final JSValue[] locals;
-        private final JSStackValue[] stack;
-        private int pc;
-        private boolean opcodeRequestedReturn;
-        private JSValue returnValue;
-        private int sp;
-
-        private ExecutionContext(
-                Bytecode bytecode,
-                StackFrame frame,
-                StackFrame previousFrame,
-                int frameStackBase,
-                int restoreStackTop,
-                boolean savedStrictMode) {
-            this.bytecode = bytecode;
-            this.instructions = bytecode.getInstructions();
-            this.decodedOpcodes = bytecode.getDecodedOpcodes();
-            this.opcodeRebaseOffsets = bytecode.getOpcodeRebaseOffsets();
-            this.frame = frame;
-            this.previousFrame = previousFrame;
-            this.frameStackBase = frameStackBase;
-            this.restoreStackTop = restoreStackTop;
-            this.savedStrictMode = savedStrictMode;
-            this.locals = frame.getLocals();
-            this.stack = valueStack.stack;
-            this.pc = 0;
-            this.opcodeRequestedReturn = false;
-            this.returnValue = null;
-            this.sp = 0;
-        }
-    }
-
     public JSValue executeAsyncFunction(JSGeneratorState state, JSContext context) {
         yieldResult = null;
         awaitSuspensionPromise = null;
@@ -3428,795 +1436,6 @@ public final class VirtualMachine {
             activeGeneratorState = previousActiveGeneratorState;
             awaitSuspensionEnabled = previousAwaitSuspensionEnabled;
         }
-    }
-
-    private void handleInitCtorOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleInitCtor();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.INIT_CTOR.getSize();
-    }
-
-    private void handleCallOpcode(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        byte[] instructions = executionContext.instructions;
-        int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
-        handleCallFixedArityOpcode(executionContext, argumentCount, Opcode.CALL.getSize());
-    }
-
-    private void handleCall0(ExecutionContext executionContext) {
-        handleCallFixedArityOpcode(executionContext, 0, Opcode.CALL0.getSize());
-    }
-
-    private void handleCall1(ExecutionContext executionContext) {
-        handleCallFixedArityOpcode(executionContext, 1, Opcode.CALL1.getSize());
-    }
-
-    private void handleCall2(ExecutionContext executionContext) {
-        handleCallFixedArityOpcode(executionContext, 2, Opcode.CALL2.getSize());
-    }
-
-    private void handleCall3(ExecutionContext executionContext) {
-        handleCallFixedArityOpcode(executionContext, 3, Opcode.CALL3.getSize());
-    }
-
-    private void handleCallFixedArityOpcode(ExecutionContext executionContext, int argumentCount, int opcodeSize) {
-        valueStack.stackTop = executionContext.sp;
-        handleCall(argumentCount);
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += opcodeSize;
-    }
-
-    private void handleCallConstructorOpcode(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        byte[] instructions = executionContext.instructions;
-        int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
-        valueStack.stackTop = executionContext.sp;
-        handleCallConstructor(argumentCount);
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc = pc + Opcode.CALL_CONSTRUCTOR.getSize();
-    }
-
-    private void handleThrowOpcode(ExecutionContext executionContext) {
-        JSValue exceptionValue = (JSValue) executionContext.stack[--executionContext.sp];
-        pendingException = exceptionValue;
-        context.setPendingException(exceptionValue);
-        // PC intentionally unchanged. Exception unwinding loop handles control transfer.
-    }
-
-    private void handleThrowErrorOpcode(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int throwAtom = executionContext.bytecode.readU32(pc + 1);
-        int throwType = executionContext.bytecode.readU8(pc + 5);
-        String throwName = executionContext.bytecode.getAtoms()[throwAtom];
-        switch (throwType) {
-            case 0 -> context.throwTypeError("'" + throwName + "' is read-only");
-            case 1 -> context.throwError("SyntaxError: redeclaration of '" + throwName + "'");
-            case 2 -> context.throwReferenceError(throwName + " is not initialized");
-            case 3 -> context.throwReferenceError("unsupported reference to 'super'");
-            case 4 -> context.throwTypeError("iterator does not have a throw method");
-            case 5 -> context.throwReferenceError(throwName);
-            default -> throw new JSVirtualMachineException("invalid throw_error type: " + throwType);
-        }
-        pendingException = context.getPendingException();
-        // PC intentionally unchanged. Exception unwinding loop handles control transfer.
-    }
-
-    private void handleCatchOpcode(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int rawCatchOffset = executionContext.bytecode.readI32(pc + 1);
-        boolean isFinally = (rawCatchOffset & 0x80000000) != 0;
-        int catchOffset = rawCatchOffset & 0x7FFFFFFF;
-        int catchHandlerProgramCounter = pc + Opcode.CATCH.getSize() + catchOffset;
-        executionContext.stack[executionContext.sp++] = new JSCatchOffset(catchHandlerProgramCounter, isFinally);
-        executionContext.pc = pc + Opcode.CATCH.getSize();
-    }
-
-    private void handleNipCatchOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue returnValue = (JSValue) stack[--sp];
-        boolean foundCatchMarker = false;
-        while (sp > executionContext.frameStackBase) {
-            JSStackValue stackValue = stack[--sp];
-            if (stackValue instanceof JSCatchOffset) {
-                foundCatchMarker = true;
-                break;
-            }
-        }
-        if (!foundCatchMarker) {
-            throw new JSVirtualMachineException(context.throwError("nip_catch"));
-        }
-        stack[sp++] = returnValue;
-        executionContext.sp = sp;
-        executionContext.pc += Opcode.NIP_CATCH.getSize();
-    }
-
-    private void handleToStringOpcode(ExecutionContext executionContext) {
-        int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.stack;
-        JSValue value = (JSValue) stack[sp - 1];
-        if (!(value instanceof JSString)) {
-            stack[sp - 1] = JSTypeConversions.toString(context, value);
-        }
-        executionContext.pc += Opcode.TO_STRING.getSize();
-    }
-
-    private void handleTypeofOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleTypeof();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.TYPEOF.getSize();
-    }
-
-    private void handleDeleteOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleDelete();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.DELETE.getSize();
-    }
-
-    private void handleIsUndefinedOrNullOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleIsUndefinedOrNull();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.IS_UNDEFINED_OR_NULL.getSize();
-    }
-
-    private void handleIsUndefinedOpcode(ExecutionContext executionContext) {
-        int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.stack;
-        JSValue value = (JSValue) stack[sp - 1];
-        stack[sp - 1] = JSBoolean.valueOf(value.isUndefined());
-        executionContext.pc += Opcode.IS_UNDEFINED.getSize();
-    }
-
-    private void handleIsNullOpcode(ExecutionContext executionContext) {
-        int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.stack;
-        JSValue value = (JSValue) stack[sp - 1];
-        stack[sp - 1] = JSBoolean.valueOf(value.isNull());
-        executionContext.pc += Opcode.IS_NULL.getSize();
-    }
-
-    private void handleTypeofIsUndefinedOpcode(ExecutionContext executionContext) {
-        int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.stack;
-        JSValue value = (JSValue) stack[sp - 1];
-        stack[sp - 1] = JSBoolean.valueOf("undefined".equals(JSTypeChecking.typeof(value)));
-        executionContext.pc += Opcode.TYPEOF_IS_UNDEFINED.getSize();
-    }
-
-    private void handleTypeofIsFunctionOpcode(ExecutionContext executionContext) {
-        int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.stack;
-        JSValue value = (JSValue) stack[sp - 1];
-        stack[sp - 1] = JSBoolean.valueOf("function".equals(JSTypeChecking.typeof(value)));
-        executionContext.pc += Opcode.TYPEOF_IS_FUNCTION.getSize();
-    }
-
-    private void handleIteratorCheckObjectOpcode(ExecutionContext executionContext) {
-        JSValue iteratorResult = (JSValue) executionContext.stack[executionContext.sp - 1];
-        if (!(iteratorResult instanceof JSObject)) {
-            throw new JSVirtualMachineException(context.throwTypeError("iterator must return an object"));
-        }
-        executionContext.pc += Opcode.ITERATOR_CHECK_OBJECT.getSize();
-    }
-
-    private void handleIteratorGetValueDoneOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue iteratorResult = (JSValue) stack[sp - 1];
-        if (!(iteratorResult instanceof JSObject iteratorResultObject)) {
-            throw new JSVirtualMachineException(context.throwTypeError("iterator must return an object"));
-        }
-
-        JSValue doneValue = iteratorResultObject.get(PropertyKey.DONE);
-        JSValue value = iteratorResultObject.get(PropertyKey.VALUE);
-        if (value == null) {
-            value = JSUndefined.INSTANCE;
-        }
-        boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
-
-        stack[sp - 1] = value;
-        stack[sp - 2] = JSNumber.of(0);
-        stack[sp++] = JSBoolean.valueOf(done);
-        executionContext.sp = sp;
-        executionContext.pc += Opcode.ITERATOR_GET_VALUE_DONE.getSize();
-    }
-
-    private void handleIteratorCloseOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue originalPendingException = pendingException;
-        sp--;
-        sp--;
-        JSValue iteratorValue = (JSValue) stack[--sp];
-        if (iteratorValue instanceof JSObject iteratorObject && !iteratorValue.isUndefined()) {
-            JSValue returnMethodValue = iteratorObject.get(context, PropertyKey.RETURN);
-            if (context.hasPendingException()) {
-                if (originalPendingException == null) {
-                    pendingException = context.getPendingException();
-                }
-                context.clearPendingException();
-                executionContext.sp = sp;
-                executionContext.pc += Opcode.ITERATOR_CLOSE.getSize();
-                return;
-            }
-            if (returnMethodValue instanceof JSFunction returnMethod) {
-                JSValue closeResult = returnMethod.call(context, iteratorObject, EMPTY_ARGS);
-                if (context.hasPendingException()) {
-                    if (originalPendingException == null) {
-                        pendingException = context.getPendingException();
-                    }
-                    context.clearPendingException();
-                } else if (!(closeResult instanceof JSObject)) {
-                    if (originalPendingException == null) {
-                        pendingException = context.throwTypeError("iterator result is not an object");
-                    }
-                }
-            } else if (returnMethodValue.isNullOrUndefined()) {
-                // No return method.
-            } else if (returnMethodValue instanceof JSObject returnObject && returnObject.isHTMLDDA()) {
-                // IsHTMLDDA callable edge case; preserve previous no-op behavior.
-            } else {
-                if (originalPendingException == null) {
-                    pendingException = context.throwTypeError("iterator return is not a function");
-                }
-            }
-        }
-        executionContext.sp = sp;
-        executionContext.pc += Opcode.ITERATOR_CLOSE.getSize();
-    }
-
-    private void handleIteratorNextOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue argumentValue = (JSValue) stack[sp - 1];
-        JSValue catchOffsetValue = (JSValue) stack[sp - 2];
-        JSValue nextMethodValue = (JSValue) stack[sp - 3];
-        JSValue iteratorValue = (JSValue) stack[sp - 4];
-        if (!(nextMethodValue instanceof JSFunction nextMethod)) {
-            throw new JSVirtualMachineException(context.throwTypeError("iterator next is not a function"));
-        }
-        JSValue nextResult = nextMethod.call(context, iteratorValue, new JSValue[]{argumentValue});
-        stack[sp - 1] = nextResult;
-        stack[sp - 2] = catchOffsetValue;
-        executionContext.pc += Opcode.ITERATOR_NEXT.getSize();
-    }
-
-    private void handleIteratorCallOpcode(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int flags = executionContext.bytecode.readU8(pc + 1);
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue argumentValue = (JSValue) stack[sp - 1];
-        JSValue iteratorValue = (JSValue) stack[sp - 4];
-        if (!(iteratorValue instanceof JSObject iteratorObject)) {
-            throw new JSVirtualMachineException(context.throwTypeError("iterator call target must be an object"));
-        }
-
-        String methodName = (flags & 1) != 0 ? "throw" : "return";
-        JSValue methodValue = (flags & 1) != 0
-                ? iteratorObject.get(context, PropertyKey.THROW)
-                : iteratorObject.get(context, PropertyKey.RETURN);
-        if (context.hasPendingException()) {
-            throw new JSVirtualMachineException(
-                    context.getPendingException().toString(),
-                    context.getPendingException());
-        }
-        boolean noMethod = methodValue.isNullOrUndefined();
-        if (!noMethod) {
-            if (!(methodValue instanceof JSFunction method)) {
-                throw new JSVirtualMachineException(context.throwTypeError("iterator " + methodName + " is not a function"));
-            }
-            JSValue callResult = (flags & 2) != 0
-                    ? method.call(context, iteratorObject, EMPTY_ARGS)
-                    : method.call(context, iteratorObject, new JSValue[]{argumentValue});
-            stack[sp - 1] = callResult;
-        }
-        stack[sp++] = JSBoolean.valueOf(noMethod);
-        executionContext.sp = sp;
-        executionContext.pc = pc + Opcode.ITERATOR_CALL.getSize();
-    }
-
-    private void handleForAwaitOfStartOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleForAwaitOfStart();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.FOR_AWAIT_OF_START.getSize();
-    }
-
-    private void handleForAwaitOfNextOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleForAwaitOfNext();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.FOR_AWAIT_OF_NEXT.getSize();
-    }
-
-    private void handleForOfStartOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleForOfStart();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.FOR_OF_START.getSize();
-    }
-
-    private void handleForOfNextOpcode(ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int depth = executionContext.bytecode.readU8(pc + 1);
-        valueStack.stackTop = executionContext.sp;
-        handleForOfNext(depth);
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc = pc + Opcode.FOR_OF_NEXT.getSize();
-    }
-
-    private void handleForInStartOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleForInStart();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.FOR_IN_START.getSize();
-    }
-
-    private void handleForInNextOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleForInNext();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.FOR_IN_NEXT.getSize();
-    }
-
-    private void handleForInEndOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleForInEnd();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.FOR_IN_END.getSize();
-    }
-
-    private void handleReturnOpcode(ExecutionContext executionContext) {
-        JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
-        lastConstructorThisArg = executionContext.frame.getThisArg();
-        finalizeExecuteReturn(executionContext);
-        executionContext.returnValue = returnValue;
-        executionContext.opcodeRequestedReturn = true;
-    }
-
-    private void handleReturnUndefOpcode(ExecutionContext executionContext) {
-        lastConstructorThisArg = executionContext.frame.getThisArg();
-        finalizeExecuteReturn(executionContext);
-        executionContext.returnValue = JSUndefined.INSTANCE;
-        executionContext.opcodeRequestedReturn = true;
-    }
-
-    private void handleReturnAsyncOpcode(ExecutionContext executionContext) {
-        JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
-        finalizeExecuteReturn(executionContext);
-        executionContext.returnValue = returnValue;
-        executionContext.opcodeRequestedReturn = true;
-    }
-
-    private void handleAwaitOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleAwait();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.AWAIT.getSize();
-        if (awaitSuspensionPromise != null) {
-            saveActiveGeneratorSuspendedExecutionState(
-                    executionContext.frame,
-                    executionContext.pc,
-                    executionContext.stack,
-                    executionContext.sp,
-                    executionContext.frameStackBase);
-            requestOpcodeReturnFromExecute(executionContext, JSUndefined.INSTANCE);
-        }
-    }
-
-    private void handleInitialYieldOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleInitialYield();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.INITIAL_YIELD.getSize();
-        if (yieldResult != null) {
-            requestOpcodeReturnFromExecute(executionContext, JSUndefined.INSTANCE);
-        }
-    }
-
-    private void handleYieldOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleYield();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.YIELD.getSize();
-        if (yieldResult != null) {
-            JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
-            saveActiveGeneratorSuspendedExecutionState(
-                    executionContext.frame,
-                    executionContext.pc,
-                    executionContext.stack,
-                    executionContext.sp,
-                    executionContext.frameStackBase);
-            requestOpcodeReturnFromExecute(executionContext, returnValue);
-        }
-    }
-
-    private void handleYieldStarOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleYieldStar();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.YIELD_STAR.getSize();
-        if (yieldResult != null) {
-            JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
-            clearActiveGeneratorSuspendedExecutionState();
-            requestOpcodeReturnFromExecute(executionContext, returnValue);
-        }
-    }
-
-    private void handleAsyncYieldStarOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleAsyncYieldStar();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.ASYNC_YIELD_STAR.getSize();
-        if (yieldResult != null) {
-            JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
-            clearActiveGeneratorSuspendedExecutionState();
-            requestOpcodeReturnFromExecute(executionContext, returnValue);
-        }
-    }
-
-    private void requestOpcodeReturnFromExecute(ExecutionContext executionContext, JSValue returnValue) {
-        restoreExecuteCallerState(
-                executionContext.restoreStackTop,
-                executionContext.previousFrame,
-                executionContext.savedStrictMode);
-        executionContext.returnValue = returnValue;
-        executionContext.opcodeRequestedReturn = true;
-    }
-
-    private void handleAddOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSNumber.of(leftNumber.value() + rightNumber.value());
-            executionContext.sp = sp - 1;
-        } else {
-            valueStack.stackTop = sp;
-            handleAdd();
-            executionContext.sp = valueStack.stackTop;
-        }
-        executionContext.pc += Opcode.ADD.getSize();
-    }
-
-    private void handleSubOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSNumber.of(leftNumber.value() - rightNumber.value());
-            executionContext.sp = sp - 1;
-        } else {
-            valueStack.stackTop = sp;
-            handleSub();
-            executionContext.sp = valueStack.stackTop;
-        }
-        executionContext.pc += Opcode.SUB.getSize();
-    }
-
-    private void handleMulOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSNumber.of(leftNumber.value() * rightNumber.value());
-            executionContext.sp = sp - 1;
-        } else {
-            valueStack.stackTop = sp;
-            handleMul();
-            executionContext.sp = valueStack.stackTop;
-        }
-        executionContext.pc += Opcode.MUL.getSize();
-    }
-
-    private void handleDivOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleDiv();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.DIV.getSize();
-    }
-
-    private void handleModOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleMod();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.MOD.getSize();
-    }
-
-    private void handleExpOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleExp();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.EXP.getSize();
-    }
-
-    private void handlePlusOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handlePlus();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.PLUS.getSize();
-    }
-
-    private void handleNegOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleNeg();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.NEG.getSize();
-    }
-
-    private void handleIncOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleInc();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.INC.getSize();
-    }
-
-    private void handleDecOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleDec();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.DEC.getSize();
-    }
-
-    private void handlePostIncOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handlePostInc();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.POST_INC.getSize();
-    }
-
-    private void handlePostDecOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handlePostDec();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.POST_DEC.getSize();
-    }
-
-    private void handleShlOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSNumber.of(((int) leftNumber.value()) << (((int) rightNumber.value()) & 0x1F));
-            executionContext.sp = sp - 1;
-        } else {
-            valueStack.stackTop = sp;
-            handleShl();
-            executionContext.sp = valueStack.stackTop;
-        }
-        executionContext.pc += Opcode.SHL.getSize();
-    }
-
-    private void handleSarOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSNumber.of(((int) leftNumber.value()) >> (((int) rightNumber.value()) & 0x1F));
-            executionContext.sp = sp - 1;
-        } else {
-            valueStack.stackTop = sp;
-            handleSar();
-            executionContext.sp = valueStack.stackTop;
-        }
-        executionContext.pc += Opcode.SAR.getSize();
-    }
-
-    private void handleShrOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleShr();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.SHR.getSize();
-    }
-
-    private void handleAndOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSNumber.of(((int) leftNumber.value()) & ((int) rightNumber.value()));
-            executionContext.sp = sp - 1;
-        } else {
-            valueStack.stackTop = sp;
-            handleAnd();
-            executionContext.sp = valueStack.stackTop;
-        }
-        executionContext.pc += Opcode.AND.getSize();
-    }
-
-    private void handleOrOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleOr();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.OR.getSize();
-    }
-
-    private void handleXorOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleXor();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.XOR.getSize();
-    }
-
-    private void handleNotOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleNot();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.NOT.getSize();
-    }
-
-    private void handleEqOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleEq();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.EQ.getSize();
-    }
-
-    private void handleNeqOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleNeq();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.NEQ.getSize();
-    }
-
-    private void handleStrictEqOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleStrictEq();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.STRICT_EQ.getSize();
-    }
-
-    private void handleStrictNeqOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleStrictNeq();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.STRICT_NEQ.getSize();
-    }
-
-    private void handleLtOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() < rightNumber.value());
-            executionContext.sp = sp - 1;
-        } else {
-            valueStack.stackTop = sp;
-            handleLt();
-            executionContext.sp = valueStack.stackTop;
-        }
-        executionContext.pc += Opcode.LT.getSize();
-    }
-
-    private void handleLteOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() <= rightNumber.value());
-            executionContext.sp = sp - 1;
-        } else {
-            valueStack.stackTop = sp;
-            handleLte();
-            executionContext.sp = valueStack.stackTop;
-        }
-        executionContext.pc += Opcode.LTE.getSize();
-    }
-
-    private void handleGtOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() > rightNumber.value());
-            executionContext.sp = sp - 1;
-        } else {
-            valueStack.stackTop = sp;
-            handleGt();
-            executionContext.sp = valueStack.stackTop;
-        }
-        executionContext.pc += Opcode.GT.getSize();
-    }
-
-    private void handleGteOpcode(ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() >= rightNumber.value());
-            executionContext.sp = sp - 1;
-        } else {
-            valueStack.stackTop = sp;
-            handleGte();
-            executionContext.sp = valueStack.stackTop;
-        }
-        executionContext.pc += Opcode.GTE.getSize();
-    }
-
-    private void handleInstanceofOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleInstanceof();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.INSTANCEOF.getSize();
-    }
-
-    private void handleInOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleIn();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.IN.getSize();
-    }
-
-    private void handlePrivateInOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handlePrivateIn();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.PRIVATE_IN.getSize();
-    }
-
-    private void handleLogicalNotOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleLogicalNot();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.LOGICAL_NOT.getSize();
-    }
-
-    private void handleLogicalAndOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleLogicalAnd();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.LOGICAL_AND.getSize();
-    }
-
-    private void handleLogicalOrOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleLogicalOr();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.LOGICAL_OR.getSize();
-    }
-
-    private void handleNullishCoalesceOpcode(ExecutionContext executionContext) {
-        valueStack.stackTop = executionContext.sp;
-        handleNullishCoalesce();
-        executionContext.sp = valueStack.stackTop;
-        executionContext.pc += Opcode.NULLISH_COALESCE.getSize();
-    }
-
-    private void handleNop(ExecutionContext executionContext) {
-        executionContext.pc += Opcode.NOP.getSize();
-    }
-
-    private void handleGetSuper(ExecutionContext executionContext) {
-        int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.stack;
-        JSValue objectValue = (JSValue) stack[sp - 1];
-        JSObject object = toObject(objectValue);
-        if (object == null) {
-            if (context.hasPendingException()) {
-                pendingException = context.getPendingException();
-                context.clearPendingException();
-            }
-            stack[sp - 1] = JSUndefined.INSTANCE;
-        } else {
-            JSObject prototypeObject = object.getPrototype();
-            stack[sp - 1] = prototypeObject != null ? prototypeObject : JSNull.INSTANCE;
-        }
-        executionContext.pc += Opcode.GET_SUPER.getSize();
     }
 
     /**
@@ -4288,6 +1507,13 @@ public final class VirtualMachine {
         }
     }
 
+    private void finalizeExecuteReturn(ExecutionContext executionContext) {
+        restoreExecuteCallerState(
+                executionContext.restoreStackTop,
+                executionContext.previousFrame,
+                executionContext.savedStrictMode);
+    }
+
     private JSValue getArgumentValue(int index) {
         JSValue[] arguments = currentFrame.getArguments();
         if (index >= 0 && index < arguments.length) {
@@ -4338,6 +1564,34 @@ public final class VirtualMachine {
         valueStack.push(addValues(left, right));
     }
 
+    private void handleAddLoc(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
+        JSValue rightValue = (JSValue) executionContext.stack[--executionContext.sp];
+        JSValue leftValue = executionContext.locals[localIndex];
+        if (leftValue == null) {
+            leftValue = JSUndefined.INSTANCE;
+        }
+        executionContext.locals[localIndex] = addValues(leftValue, rightValue);
+        executionContext.pc = pc + Opcode.ADD_LOC.getSize();
+    }
+
+    private void handleAddOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue rightValue = (JSValue) stack[sp - 1];
+        JSValue leftValue = (JSValue) stack[sp - 2];
+        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
+            stack[sp - 2] = JSNumber.of(leftNumber.value() + rightNumber.value());
+            executionContext.sp = sp - 1;
+        } else {
+            valueStack.stackTop = sp;
+            handleAdd();
+            executionContext.sp = valueStack.stackTop;
+        }
+        executionContext.pc += Opcode.ADD.getSize();
+    }
+
     private void handleAnd() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -4361,10 +1615,158 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(result));
     }
 
+    private void handleAndOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue rightValue = (JSValue) stack[sp - 1];
+        JSValue leftValue = (JSValue) stack[sp - 2];
+        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
+            stack[sp - 2] = JSNumber.of(((int) leftNumber.value()) & ((int) rightNumber.value()));
+            executionContext.sp = sp - 1;
+        } else {
+            valueStack.stackTop = sp;
+            handleAnd();
+            executionContext.sp = valueStack.stackTop;
+        }
+        executionContext.pc += Opcode.AND.getSize();
+    }
+
+    private void handleAppend(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue enumerableObject = (JSValue) stack[--sp];
+        JSValue positionValue = (JSValue) stack[--sp];
+        JSValue arrayValue = (JSValue) stack[--sp];
+
+        if (!(arrayValue instanceof JSArray array)) {
+            throw new JSVirtualMachineException("APPEND: first argument must be an array");
+        }
+
+        if (!(positionValue instanceof JSNumber positionNumber)) {
+            throw new JSVirtualMachineException("APPEND: second argument must be a number");
+        }
+
+        int position = (int) positionNumber.value();
+
+        try {
+            JSValue iterator = JSIteratorHelper.getIterator(context, enumerableObject);
+            if (iterator == null) {
+                context.throwError("TypeError", "Value is not iterable");
+                throw new JSVirtualMachineException("APPEND: value is not iterable");
+            }
+
+            while (true) {
+                JSObject resultObject = JSIteratorHelper.iteratorNext(iterator, context);
+                if (resultObject == null) {
+                    break;
+                }
+                JSValue doneValue = resultObject.get("done");
+                if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
+                    break;
+                }
+                JSValue value = resultObject.get(PropertyKey.VALUE);
+                array.set(context, position++, value);
+            }
+
+            stack[sp++] = array;
+            stack[sp++] = JSNumber.of(position);
+        } catch (Exception e) {
+            throw new JSVirtualMachineException("APPEND: error iterating: " + e.getMessage(), e);
+        }
+
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.APPEND.getSize();
+    }
+
+    private void handleApply(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int isConstructorCall = executionContext.bytecode.readU16(pc + 1);
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue argsArrayValue = (JSValue) stack[--sp];
+        JSValue functionValue = (JSValue) stack[--sp];
+        JSValue thisArgValue = (JSValue) stack[--sp];
+
+        JSValue result;
+        if (isConstructorCall != 0) {
+            JSValue constructorNewTarget = thisArgValue;
+            if (constructorNewTarget.isNullOrUndefined()) {
+                constructorNewTarget = functionValue;
+            }
+            result = JSReflectObject.construct(
+                    context,
+                    JSUndefined.INSTANCE,
+                    new JSValue[]{functionValue, argsArrayValue, constructorNewTarget});
+        } else {
+            JSValue[] applyArgs = buildApplyArguments(argsArrayValue, true);
+            if (applyArgs == null) {
+                pendingException = context.getPendingException();
+                stack[sp++] = JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                executionContext.pc = pc + Opcode.APPLY.getSize();
+                return;
+            }
+            if (functionValue instanceof JSProxy proxyFunction) {
+                result = proxyApply(proxyFunction, thisArgValue, applyArgs);
+            } else if (functionValue instanceof JSFunction applyFunction) {
+                result = applyFunction.call(context, thisArgValue, applyArgs);
+            } else {
+                throw new JSVirtualMachineException("APPLY: not a function");
+            }
+        }
+
+        if (context.hasPendingException()) {
+            pendingException = context.getPendingException();
+            stack[sp++] = JSUndefined.INSTANCE;
+        } else {
+            stack[sp++] = result;
+        }
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.APPLY.getSize();
+    }
+
+    private void handleArrayFrom(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int count = executionContext.bytecode.readU16(pc + 1);
+        JSArray array = context.createJSArray();
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+
+        JSValue[] elements = new JSValue[count];
+        for (int i = count - 1; i >= 0; i--) {
+            elements[i] = (JSValue) stack[--sp];
+        }
+        for (JSValue element : elements) {
+            array.push(element);
+        }
+
+        stack[sp++] = array;
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.ARRAY_FROM.getSize();
+    }
+
+    private void handleArrayNew(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = context.createJSArray();
+        executionContext.pc += Opcode.ARRAY_NEW.getSize();
+    }
+
     private void handleAsyncYieldStar() {
         // Keep the same suspension model as sync yield* in the current generator runtime.
         // Full async delegation semantics can be layered on top of this baseline.
         handleYieldStar();
+    }
+
+    private void handleAsyncYieldStarOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleAsyncYieldStar();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.ASYNC_YIELD_STAR.getSize();
+        if (yieldResult != null) {
+            JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
+            clearActiveGeneratorSuspendedExecutionState();
+            requestOpcodeReturnFromExecute(executionContext, returnValue);
+        }
     }
 
     private void handleAwait() {
@@ -4410,6 +1812,22 @@ public final class VirtualMachine {
         } else {
             // Promise is still pending - this shouldn't happen
             throw new JSVirtualMachineException("Promise did not settle after processing microtasks");
+        }
+    }
+
+    private void handleAwaitOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleAwait();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.AWAIT.getSize();
+        if (awaitSuspensionPromise != null) {
+            saveActiveGeneratorSuspendedExecutionState(
+                    executionContext.frame,
+                    executionContext.pc,
+                    executionContext.stack,
+                    executionContext.sp,
+                    executionContext.frameStackBase);
+            requestOpcodeReturnFromExecute(executionContext, JSUndefined.INSTANCE);
         }
     }
 
@@ -4604,6 +2022,22 @@ public final class VirtualMachine {
         }
     }
 
+    private void handleCall0(ExecutionContext executionContext) {
+        handleCallFixedArityOpcode(executionContext, 0, Opcode.CALL0.getSize());
+    }
+
+    private void handleCall1(ExecutionContext executionContext) {
+        handleCallFixedArityOpcode(executionContext, 1, Opcode.CALL1.getSize());
+    }
+
+    private void handleCall2(ExecutionContext executionContext) {
+        handleCallFixedArityOpcode(executionContext, 2, Opcode.CALL2.getSize());
+    }
+
+    private void handleCall3(ExecutionContext executionContext) {
+        handleCallFixedArityOpcode(executionContext, 3, Opcode.CALL3.getSize());
+    }
+
     private void handleCallConstructor(int argCount) {
         // Pop arguments
         JSValue[] args = argCount == 0 ? EMPTY_ARGS : new JSValue[argCount];
@@ -4666,9 +2100,339 @@ public final class VirtualMachine {
         }
     }
 
+    private void handleCallConstructorOpcode(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        byte[] instructions = executionContext.instructions;
+        int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        valueStack.stackTop = executionContext.sp;
+        handleCallConstructor(argumentCount);
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc = pc + Opcode.CALL_CONSTRUCTOR.getSize();
+    }
+
+    private void handleCallFixedArityOpcode(ExecutionContext executionContext, int argumentCount, int opcodeSize) {
+        valueStack.stackTop = executionContext.sp;
+        handleCall(argumentCount);
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += opcodeSize;
+    }
+
+    private void handleCallOpcode(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        byte[] instructions = executionContext.instructions;
+        int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        handleCallFixedArityOpcode(executionContext, argumentCount, Opcode.CALL.getSize());
+    }
+
+    private void handleCatchOpcode(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int rawCatchOffset = executionContext.bytecode.readI32(pc + 1);
+        boolean isFinally = (rawCatchOffset & 0x80000000) != 0;
+        int catchOffset = rawCatchOffset & 0x7FFFFFFF;
+        int catchHandlerProgramCounter = pc + Opcode.CATCH.getSize() + catchOffset;
+        executionContext.stack[executionContext.sp++] = new JSCatchOffset(catchHandlerProgramCounter, isFinally);
+        executionContext.pc = pc + Opcode.CATCH.getSize();
+    }
+
+    private void handleCloseLoc(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        executionContext.frame.closeLocal(localIndex);
+        executionContext.pc = pc + Opcode.CLOSE_LOC.getSize();
+    }
+
+    private void handleCopyDataProperties(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int mask = executionContext.bytecode.readU8(pc + 1);
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue targetValue = (JSValue) stack[sp - 1 - (mask & 3)];
+        JSValue sourceValue = (JSValue) stack[sp - 1 - ((mask >> 2) & 7)];
+        JSValue excludeListValue = (JSValue) stack[sp - 1 - ((mask >> 5) & 7)];
+        copyDataProperties(targetValue, sourceValue, excludeListValue);
+        executionContext.pc = pc + Opcode.COPY_DATA_PROPERTIES.getSize();
+    }
+
     private void handleDec() {
         JSValue operand = valueStack.pop();
         valueStack.push(incrementValue(operand, -1));
+    }
+
+    private void handleDecLoc(ExecutionContext executionContext) {
+        handleIncDecLoc(executionContext, -1);
+    }
+
+    private void handleDecOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleDec();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.DEC.getSize();
+    }
+
+    private void handleDefineArrayEl(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue value = (JSValue) stack[--sp];
+        JSValue indexValue = (JSValue) stack[sp - 1];
+        JSValue arrayValue = (JSValue) stack[sp - 2];
+
+        if (!(arrayValue instanceof JSArray array)) {
+            throw new JSVirtualMachineException("DEFINE_ARRAY_EL: first argument must be an array");
+        }
+        if (!(indexValue instanceof JSNumber indexNumber)) {
+            throw new JSVirtualMachineException("DEFINE_ARRAY_EL: second argument must be a number");
+        }
+
+        int index = (int) indexNumber.value();
+        array.set(context, index, value);
+
+        executionContext.sp = sp;
+        executionContext.pc += Opcode.DEFINE_ARRAY_EL.getSize();
+    }
+
+    private void handleDefineClass(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        int classNameAtom = executionContext.bytecode.readU32(pc + 1);
+        String className = executionContext.bytecode.getAtoms()[classNameAtom];
+        JSValue constructorValue = (JSValue) stack[--sp];
+        JSValue superClassValue = (JSValue) stack[--sp];
+
+        if (!(constructorValue instanceof JSFunction constructorFunction)) {
+            throw new JSVirtualMachineException("DEFINE_CLASS: constructor must be a function");
+        }
+
+        JSObject prototypeObject = context.createJSObject();
+        if (superClassValue instanceof JSNull) {
+            prototypeObject.setPrototype(null);
+        } else if (superClassValue != JSUndefined.INSTANCE) {
+            if (!JSTypeChecking.isConstructor(superClassValue)) {
+                context.throwTypeError("parent class must be constructor");
+                pendingException = context.getPendingException();
+                stack[sp++] = JSUndefined.INSTANCE;
+                stack[sp++] = JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                executionContext.pc = pc + Opcode.DEFINE_CLASS.getSize();
+                return;
+            }
+            if (superClassValue instanceof JSFunction superFunction) {
+                context.transferPrototype(prototypeObject, superFunction);
+                constructorFunction.setPrototype(superFunction);
+            }
+        }
+
+        JSObject constructorObject = constructorFunction;
+        constructorObject.defineProperty(
+                PropertyKey.fromString("prototype"),
+                prototypeObject,
+                PropertyDescriptor.DataState.None);
+
+        prototypeObject.set(PropertyKey.CONSTRUCTOR, constructorValue);
+        setObjectName(constructorValue, new JSString(className));
+
+        if (constructorFunction instanceof JSBytecodeFunction bytecodeConstructor) {
+            bytecodeConstructor.setClassConstructor(true);
+            if (superClassValue != JSUndefined.INSTANCE) {
+                bytecodeConstructor.setDerivedConstructor(true);
+            }
+        }
+
+        stack[sp++] = prototypeObject;
+        stack[sp++] = constructorValue;
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.DEFINE_CLASS.getSize();
+    }
+
+    private void handleDefineClassComputed(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        int classNameAtom = executionContext.bytecode.readU32(pc + 1);
+        int classFlags = executionContext.bytecode.readU8(pc + 5);
+        String className = executionContext.bytecode.getAtoms()[classNameAtom];
+        JSValue constructorValue = (JSValue) stack[--sp];
+        JSValue superClassValue = (JSValue) stack[--sp];
+        JSValue computedClassNameValue = (JSValue) stack[sp - 1];
+
+        if (!(constructorValue instanceof JSFunction constructorFunction)) {
+            throw new JSVirtualMachineException("DEFINE_CLASS_COMPUTED: constructor must be a function");
+        }
+
+        JSObject prototypeObject = context.createJSObject();
+        boolean hasHeritage = (classFlags & 1) != 0;
+        if (hasHeritage && superClassValue != JSUndefined.INSTANCE && superClassValue != JSNull.INSTANCE) {
+            if (superClassValue instanceof JSFunction superFunction) {
+                context.transferPrototype(prototypeObject, superFunction);
+                constructorFunction.setPrototype(superFunction);
+            } else {
+                throw new JSVirtualMachineException(context.throwTypeError("parent class must be constructor"));
+            }
+        }
+
+        constructorFunction.defineProperty(
+                PropertyKey.fromString("prototype"),
+                prototypeObject,
+                PropertyDescriptor.DataState.None);
+        prototypeObject.set(PropertyKey.CONSTRUCTOR, constructorValue);
+        JSString computedClassName = getComputedNameString(computedClassNameValue);
+        if (computedClassName.value().isEmpty()) {
+            computedClassName = new JSString(className);
+        }
+        setObjectName(constructorValue, computedClassName);
+
+        stack[sp++] = prototypeObject;
+        stack[sp++] = constructorValue;
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.DEFINE_CLASS_COMPUTED.getSize();
+    }
+
+    private void handleDefineField(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        int fieldNameAtom = executionContext.bytecode.readU32(pc + 1);
+        String fieldName = executionContext.bytecode.getAtoms()[fieldNameAtom];
+        JSValue value = (JSValue) stack[--sp];
+        JSValue objectValue = (JSValue) stack[--sp];
+
+        if (objectValue instanceof JSObject object) {
+            object.set(PropertyKey.fromString(fieldName), value);
+        }
+
+        stack[sp++] = objectValue;
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.DEFINE_FIELD.getSize();
+    }
+
+    private void handleDefineMethod(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        int methodNameAtom = executionContext.bytecode.readU32(pc + 1);
+        String methodName = executionContext.bytecode.getAtoms()[methodNameAtom];
+        JSValue methodValue = (JSValue) stack[--sp];
+        JSValue objectValue = (JSValue) stack[--sp];
+
+        if (objectValue instanceof JSObject object) {
+            if (methodValue instanceof JSFunction methodFunction) {
+                methodFunction.setHomeObject(object);
+            }
+            object.set(PropertyKey.fromString(methodName), methodValue);
+        }
+
+        stack[sp++] = objectValue;
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.DEFINE_METHOD.getSize();
+    }
+
+    private void handleDefineMethodComputed(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        int methodFlags = executionContext.bytecode.readU8(pc + 1);
+        boolean enumerable = (methodFlags & 4) != 0;
+        int methodKind = methodFlags & 3;
+
+        JSValue methodValue = (JSValue) stack[--sp];
+        JSValue propertyValue = (JSValue) stack[--sp];
+        JSValue objectValue = (JSValue) stack[sp - 1];
+
+        if (objectValue instanceof JSObject object) {
+            PropertyKey key = PropertyKey.fromValue(context, propertyValue);
+            JSString computedName = getComputedNameString(propertyValue);
+            if (methodValue instanceof JSFunction methodFunction) {
+                methodFunction.setHomeObject(object);
+                String namePrefix;
+                if (methodKind == 1) {
+                    namePrefix = "get ";
+                } else if (methodKind == 2) {
+                    namePrefix = "set ";
+                } else {
+                    namePrefix = "";
+                }
+                setObjectName(methodFunction, new JSString(namePrefix + computedName.value()));
+                if (methodKind == 1 || methodKind == 2) {
+                    methodFunction.delete(PropertyKey.PROTOTYPE);
+                }
+            }
+
+            if (methodKind == 0) {
+                object.defineProperty(
+                        key,
+                        PropertyDescriptor.dataDescriptor(
+                                methodValue,
+                                enumerable
+                                        ? PropertyDescriptor.DataState.All
+                                        : PropertyDescriptor.DataState.ConfigurableWritable));
+            } else if (methodKind == 1) {
+                JSFunction getter = methodValue instanceof JSFunction function ? function : null;
+                JSFunction setter = null;
+                PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
+                if (descriptor != null && descriptor.hasSetter()) {
+                    setter = descriptor.getSetter();
+                }
+                object.defineProperty(
+                        key,
+                        PropertyDescriptor.accessorDescriptor(
+                                getter,
+                                setter,
+                                enumerable
+                                        ? PropertyDescriptor.AccessorState.All
+                                        : PropertyDescriptor.AccessorState.Configurable));
+            } else if (methodKind == 2) {
+                JSFunction setter = methodValue instanceof JSFunction function ? function : null;
+                JSFunction getter = null;
+                PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
+                if (descriptor != null && descriptor.hasGetter()) {
+                    getter = descriptor.getGetter();
+                }
+                object.defineProperty(
+                        key,
+                        PropertyDescriptor.accessorDescriptor(
+                                getter,
+                                setter,
+                                enumerable
+                                        ? PropertyDescriptor.AccessorState.All
+                                        : PropertyDescriptor.AccessorState.Configurable));
+            } else {
+                throw new JSVirtualMachineException("DEFINE_METHOD_COMPUTED: unsupported method flags " + methodFlags);
+            }
+        }
+
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.DEFINE_METHOD_COMPUTED.getSize();
+    }
+
+    private void handleDefinePrivateField(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue value = (JSValue) stack[--sp];
+        JSValue privateSymbolValue = (JSValue) stack[--sp];
+        JSValue objectValue = (JSValue) stack[--sp];
+
+        if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
+            object.set(PropertyKey.fromSymbol(symbol), value);
+        }
+
+        stack[sp++] = objectValue;
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.DEFINE_PRIVATE_FIELD.getSize();
+    }
+
+    private void handleDefineProp(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue propertyValue = (JSValue) stack[--sp];
+        JSValue propertyKeyValue = (JSValue) stack[--sp];
+        JSValue objectValue = (JSValue) stack[sp - 1];
+        if (objectValue instanceof JSObject jsObject) {
+            PropertyKey key = PropertyKey.fromValue(context, propertyKeyValue);
+            jsObject.defineProperty(context, key, propertyValue, PropertyDescriptor.DataState.All);
+        }
+        executionContext.sp = sp;
+        executionContext.pc += Opcode.DEFINE_PROP.getSize();
     }
 
     private void handleDelete() {
@@ -4683,6 +2447,22 @@ public final class VirtualMachine {
             }
         }
         valueStack.push(JSBoolean.valueOf(result));
+    }
+
+    private void handleDeleteOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleDelete();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.DELETE.getSize();
+    }
+
+    private void handleDeleteVar(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        String variableName = executionContext.bytecode.getAtoms()[atomIndex];
+        boolean deleted = context.getGlobalObject().delete(context, PropertyKey.fromString(variableName));
+        executionContext.stack[executionContext.sp++] = JSBoolean.valueOf(deleted);
+        executionContext.pc = pc + Opcode.DELETE_VAR.getSize();
     }
 
     private void handleDiv() {
@@ -4709,11 +2489,55 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(leftNumber.value() / rightNumber.value()));
     }
 
+    private void handleDivOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleDiv();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.DIV.getSize();
+    }
+
+    private void handleDrop(ExecutionContext executionContext) {
+        executionContext.sp--;
+        executionContext.pc += 1;
+    }
+
+    private void handleDup(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        stack[sp] = stack[sp - 1];
+        executionContext.sp = sp + 1;
+        executionContext.pc += 1;
+    }
+
+    private void handleDup1(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        stack[sp] = stack[sp - 2];
+        executionContext.sp = sp + 1;
+        executionContext.pc += 1;
+    }
+
+    private void handleDup2(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        stack[sp] = stack[sp - 2];
+        stack[sp + 1] = stack[sp - 1];
+        executionContext.sp = sp + 2;
+        executionContext.pc += 1;
+    }
+
     private void handleEq() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
         boolean result = JSTypeConversions.abstractEquals(context, left, right);
         valueStack.push(JSBoolean.valueOf(result));
+    }
+
+    private void handleEqOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleEq();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.EQ.getSize();
     }
 
     private void handleExp() {
@@ -4749,6 +2573,85 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(Math.pow(leftNumber.value(), rightNumber.value())));
     }
 
+    private void handleExpOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleExp();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.EXP.getSize();
+    }
+
+    private void handleFclosure(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        int functionIndex = executionContext.bytecode.readU32(pc + 1);
+        JSValue functionValue = executionContext.bytecode.getConstants()[functionIndex];
+        if (functionValue instanceof JSBytecodeFunction templateFunction) {
+            int[] captureInfos = templateFunction.getCaptureSourceInfos();
+            JSBytecodeFunction closureFunction;
+            if (captureInfos != null) {
+                VarRef[] capturedVarRefs = createVarRefsFromCaptures(captureInfos, executionContext.frame);
+                closureFunction = templateFunction.copyWithVarRefs(capturedVarRefs);
+                int selfIndex = templateFunction.getSelfCaptureIndex();
+                if (selfIndex >= 0 && selfIndex < capturedVarRefs.length) {
+                    capturedVarRefs[selfIndex].set(closureFunction);
+                }
+            } else {
+                int closureCount = templateFunction.getClosureVars().length;
+                JSValue[] capturedClosureVars = new JSValue[closureCount];
+                for (int i = closureCount - 1; i >= 0; i--) {
+                    capturedClosureVars[i] = (JSValue) stack[--sp];
+                }
+                closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
+                int selfIndex = templateFunction.getSelfCaptureIndex();
+                if (selfIndex >= 0 && selfIndex < capturedClosureVars.length) {
+                    capturedClosureVars[selfIndex] = closureFunction;
+                }
+            }
+            closureFunction.initializePrototypeChain(context);
+            stack[sp++] = closureFunction;
+        } else {
+            if (functionValue instanceof JSFunction function) {
+                function.initializePrototypeChain(context);
+            }
+            stack[sp++] = functionValue;
+        }
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.FCLOSURE.getSize();
+    }
+
+    private void handleFclosure8(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        int functionIndex = executionContext.bytecode.readU8(pc + 1);
+        JSValue functionValue = executionContext.bytecode.getConstants()[functionIndex];
+        if (functionValue instanceof JSBytecodeFunction templateFunction) {
+            int[] captureInfos = templateFunction.getCaptureSourceInfos();
+            JSBytecodeFunction closureFunction;
+            if (captureInfos != null) {
+                VarRef[] capturedVarRefs = createVarRefsFromCaptures(captureInfos, executionContext.frame);
+                closureFunction = templateFunction.copyWithVarRefs(capturedVarRefs);
+            } else {
+                int closureCount = templateFunction.getClosureVars().length;
+                JSValue[] capturedClosureVars = new JSValue[closureCount];
+                for (int i = closureCount - 1; i >= 0; i--) {
+                    capturedClosureVars[i] = (JSValue) stack[--sp];
+                }
+                closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
+            }
+            closureFunction.initializePrototypeChain(context);
+            stack[sp++] = closureFunction;
+        } else {
+            if (functionValue instanceof JSFunction function) {
+                function.initializePrototypeChain(context);
+            }
+            stack[sp++] = functionValue;
+        }
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.FCLOSURE8.getSize();
+    }
+
     private void handleForAwaitOfNext() {
         // Stack layout before: iter, next, catch_offset (bottom to top)
         // Stack layout after: iter, next, catch_offset, result (bottom to top)
@@ -4770,6 +2673,13 @@ public final class VirtualMachine {
         // Restore catch_offset and push the result
         valueStack.push(catchOffset);  // Restore catch_offset
         valueStack.push(result);        // Push the result (promise that resolves to {value, done})
+    }
+
+    private void handleForAwaitOfNextOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleForAwaitOfNext();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.FOR_AWAIT_OF_NEXT.getSize();
     }
 
     private void handleForAwaitOfStart() {
@@ -4947,6 +2857,13 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(0));  // Catch offset (placeholder)
     }
 
+    private void handleForAwaitOfStartOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleForAwaitOfStart();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.FOR_AWAIT_OF_START.getSize();
+    }
+
     private void handleForInEnd() {
         // Clean up the enumerator from the stack
         JSStackValue stackValue = valueStack.popStackValue();
@@ -4955,6 +2872,13 @@ public final class VirtualMachine {
             throw new JSVirtualMachineException("Invalid for-in enumerator in FOR_IN_END");
         }
         // Just pop it, no need to do anything else
+    }
+
+    private void handleForInEndOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleForInEnd();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.FOR_IN_END.getSize();
     }
 
     private void handleForInNext() {
@@ -4976,6 +2900,13 @@ public final class VirtualMachine {
         valueStack.push(nextKey);
     }
 
+    private void handleForInNextOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleForInNext();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.FOR_IN_NEXT.getSize();
+    }
+
     private void handleForInStart() {
         // Pop the object from the stack
         JSValue obj = valueStack.pop();
@@ -4986,6 +2917,13 @@ public final class VirtualMachine {
         // Push the enumerator onto the stack (wrapped in a special internal object)
         // We'll use JSInternalValue to hold it
         valueStack.pushStackValue(new JSInternalValue(enumerator));
+    }
+
+    private void handleForInStartOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleForInStart();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.FOR_IN_START.getSize();
     }
 
     private void handleForOfNext(int depth) {
@@ -5063,6 +3001,15 @@ public final class VirtualMachine {
         valueStack.push(done ? JSBoolean.TRUE : JSBoolean.FALSE);
     }
 
+    private void handleForOfNextOpcode(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int depth = executionContext.bytecode.readU8(pc + 1);
+        valueStack.stackTop = executionContext.sp;
+        handleForOfNext(depth);
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc = pc + Opcode.FOR_OF_NEXT.getSize();
+    }
+
     private void handleForOfStart() {
         // Pop the iterable from the stack
         JSValue iterable = valueStack.pop();
@@ -5110,6 +3057,455 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(0));  // Catch offset (placeholder)
     }
 
+    private void handleForOfStartOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleForOfStart();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.FOR_OF_START.getSize();
+    }
+
+    private void handleGetArg(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int argumentIndex = executionContext.bytecode.readU16(pc + 1);
+        executionContext.stack[executionContext.sp++] = getArgumentValue(argumentIndex);
+        executionContext.pc = pc + Opcode.GET_ARG.getSize();
+    }
+
+    private void handleGetArgShort(ExecutionContext executionContext, Opcode opcode) {
+        int argumentIndex = switch (opcode) {
+            case GET_ARG0 -> 0;
+            case GET_ARG1 -> 1;
+            case GET_ARG2 -> 2;
+            case GET_ARG3 -> 3;
+            default -> throw new IllegalStateException("Unexpected short get arg opcode: " + opcode);
+        };
+        executionContext.stack[executionContext.sp++] = getArgumentValue(argumentIndex);
+        executionContext.pc += opcode.getSize();
+    }
+
+    private void handleGetArrayEl(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue indexValue = (JSValue) stack[--sp];
+        JSValue objectValue = (JSValue) stack[sp - 1];
+
+        if (objectValue instanceof JSString stringValue && indexValue instanceof JSNumber numberValue) {
+            double doubleValue = numberValue.value();
+            int index = (int) doubleValue;
+            if (index == doubleValue && index >= 0 && index < stringValue.value().length()) {
+                stack[sp - 1] = new JSString(String.valueOf(stringValue.value().charAt(index)));
+                executionContext.sp = sp;
+                executionContext.pc = pc + Opcode.GET_ARRAY_EL.getSize();
+                return;
+            }
+        }
+
+        valueStack.stackTop = sp - 1;
+        JSObject targetObject = toObject(objectValue);
+        if (targetObject != null) {
+            try {
+                PropertyKey key = PropertyKey.fromValue(context, indexValue);
+                JSValue result = targetObject.get(context, key);
+                if (context.hasPendingException()) {
+                    pendingException = context.getPendingException();
+                    context.clearPendingException();
+                    stack[sp - 1] = JSUndefined.INSTANCE;
+                } else {
+                    if (trackPropertyAccess && !propertyAccessLock) {
+                        appendPropertyAccessForArrayIndex(indexValue);
+                    }
+                    stack[sp - 1] = result;
+                }
+            } catch (JSVirtualMachineException e) {
+                captureVMException(e);
+                stack[sp - 1] = JSUndefined.INSTANCE;
+            }
+        } else {
+            resetPropertyAccessTracking();
+            stack[sp - 1] = JSUndefined.INSTANCE;
+        }
+        valueStack.stackTop = sp;
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.GET_ARRAY_EL.getSize();
+    }
+
+    private void handleGetArrayEl2(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue indexValue = (JSValue) stack[--sp];
+        JSValue arrayObjectValue = (JSValue) stack[sp - 1];
+
+        if (arrayObjectValue instanceof JSString stringValue && indexValue instanceof JSNumber numberValue) {
+            double doubleValue = numberValue.value();
+            int index = (int) doubleValue;
+            if (index == doubleValue && index >= 0 && index < stringValue.value().length()) {
+                stack[sp++] = new JSString(String.valueOf(stringValue.value().charAt(index)));
+                executionContext.sp = sp;
+                executionContext.pc = pc + Opcode.GET_ARRAY_EL2.getSize();
+                return;
+            }
+        }
+
+        JSObject targetObject = toObject(arrayObjectValue);
+        if (targetObject != null) {
+            try {
+                PropertyKey key = PropertyKey.fromValue(context, indexValue);
+                JSValue result = targetObject.get(context, key);
+                if (context.hasPendingException()) {
+                    pendingException = context.getPendingException();
+                    context.clearPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
+                } else {
+                    stack[sp++] = result;
+                }
+            } catch (JSVirtualMachineException e) {
+                captureVMException(e);
+                stack[sp++] = JSUndefined.INSTANCE;
+            }
+        } else {
+            stack[sp++] = JSUndefined.INSTANCE;
+        }
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.GET_ARRAY_EL2.getSize();
+    }
+
+    private void handleGetArrayEl3(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue indexValue = (JSValue) stack[sp - 1];
+        JSValue arrayObjectValue = (JSValue) stack[sp - 2];
+
+        if (!(indexValue instanceof JSNumber || indexValue instanceof JSString || indexValue instanceof JSSymbol)) {
+            if (arrayObjectValue.isNullOrUndefined()) {
+                throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
+            }
+            try {
+                JSValue convertedIndex = toPropertyKeyValue(indexValue);
+                stack[sp - 1] = convertedIndex;
+                indexValue = convertedIndex;
+            } catch (JSVirtualMachineException e) {
+                captureVMException(e);
+                executionContext.sp = sp;
+                executionContext.pc = pc;
+                return;
+            }
+        }
+
+        JSObject targetObject = toObject(arrayObjectValue);
+        if (targetObject == null) {
+            throw new JSVirtualMachineException(context.throwTypeError("value has no property"));
+        }
+
+        PropertyKey key = PropertyKey.fromValue(context, indexValue);
+        JSValue result = targetObject.get(context, key);
+        if (context.hasPendingException()) {
+            pendingException = context.getPendingException();
+            context.clearPendingException();
+            stack[sp++] = JSUndefined.INSTANCE;
+        } else {
+            stack[sp++] = result;
+        }
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.GET_ARRAY_EL3.getSize();
+    }
+
+    private void handleGetField(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        String fieldName = executionContext.bytecode.getAtoms()[atomIndex];
+        JSValue objectValue = (JSValue) executionContext.stack[--executionContext.sp];
+
+        JSObject targetObject = toObject(objectValue);
+        if (targetObject != null) {
+            JSValue result = targetObject.get(context, PropertyKey.fromString(fieldName));
+            if (context.hasPendingException()) {
+                pendingException = context.getPendingException();
+                context.clearPendingException();
+                executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
+            } else {
+                if (trackPropertyAccess && !propertyAccessLock) {
+                    if (!propertyAccessChain.isEmpty()) {
+                        propertyAccessChain.append('.');
+                    }
+                    propertyAccessChain.append(fieldName);
+                }
+                executionContext.stack[executionContext.sp++] = result;
+            }
+        } else {
+            String typeName = objectValue instanceof JSNull ? "null" : "undefined";
+            pendingException = context.throwTypeError("cannot read property '" + fieldName + "' of " + typeName);
+            resetPropertyAccessTracking();
+            executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
+        }
+        executionContext.pc = pc + Opcode.GET_FIELD.getSize();
+    }
+
+    private void handleGetLength(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSValue objectValue = (JSValue) executionContext.stack[--executionContext.sp];
+        JSObject targetObject = toObject(objectValue);
+        if (targetObject != null) {
+            JSValue result = targetObject.get(context, PropertyKey.LENGTH);
+            if (context.hasPendingException()) {
+                pendingException = context.getPendingException();
+                context.clearPendingException();
+                executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
+            } else {
+                executionContext.stack[executionContext.sp++] = result;
+            }
+        } else {
+            String typeName = objectValue instanceof JSNull ? "null" : "undefined";
+            pendingException = context.throwTypeError("cannot read property 'length' of " + typeName);
+            executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
+        }
+        executionContext.pc = pc + Opcode.GET_LENGTH.getSize();
+    }
+
+    private void handleGetLoc(ExecutionContext executionContext) {
+        byte[] instructions = executionContext.instructions;
+        int pc = executionContext.pc;
+        int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        handleGetLocAtIndex(executionContext, localIndex, Opcode.GET_LOC.getSize());
+    }
+
+    private void handleGetLoc0(ExecutionContext executionContext) {
+        handleGetLocAtIndex(executionContext, 0, Opcode.GET_LOC0.getSize());
+    }
+
+    private void handleGetLoc1(ExecutionContext executionContext) {
+        handleGetLocAtIndex(executionContext, 1, Opcode.GET_LOC1.getSize());
+    }
+
+    private void handleGetLoc2(ExecutionContext executionContext) {
+        handleGetLocAtIndex(executionContext, 2, Opcode.GET_LOC2.getSize());
+    }
+
+    private void handleGetLoc3(ExecutionContext executionContext) {
+        handleGetLocAtIndex(executionContext, 3, Opcode.GET_LOC3.getSize());
+    }
+
+    private void handleGetLoc8(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
+        handleGetLocAtIndex(executionContext, localIndex, Opcode.GET_LOC8.getSize());
+    }
+
+    private void handleGetLocAtIndex(ExecutionContext executionContext, int localIndex, int opcodeSize) {
+        JSValue localValue = executionContext.locals[localIndex];
+        executionContext.stack[executionContext.sp++] = localValue != null ? localValue : JSUndefined.INSTANCE;
+        executionContext.pc += opcodeSize;
+    }
+
+    private void handleGetLocCheck(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        JSValue localValue = executionContext.frame.getLocals()[localIndex];
+        if (isUninitialized(localValue)) {
+            throwVariableUninitializedReferenceError();
+        }
+        executionContext.stack[executionContext.sp++] = localValue;
+        executionContext.pc = pc + Opcode.GET_LOC_CHECK.getSize();
+    }
+
+    private void handleGetPrivateField(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue privateSymbolValue = (JSValue) stack[--sp];
+        JSValue objectValue = (JSValue) stack[--sp];
+
+        JSValue value = JSUndefined.INSTANCE;
+        if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
+            value = object.get(PropertyKey.fromSymbol(symbol));
+        }
+
+        stack[sp++] = value;
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.GET_PRIVATE_FIELD.getSize();
+    }
+
+    private void handleGetRefValue(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.stack;
+        JSValue propertyValue = (JSValue) stack[sp - 1];
+        JSValue objectValue = (JSValue) stack[sp - 2];
+        PropertyKey key = PropertyKey.fromValue(context, propertyValue);
+
+        if (objectValue.isUndefined()) {
+            String name = key != null ? key.toPropertyString() : "variable";
+            pendingException = context.throwReferenceError(name + " is not defined");
+            stack[sp++] = JSUndefined.INSTANCE;
+            executionContext.sp = sp;
+            executionContext.pc = pc + Opcode.GET_REF_VALUE.getSize();
+            return;
+        }
+
+        JSObject targetObject = toObject(objectValue);
+        if (targetObject == null) {
+            pendingException = context.throwTypeError("value has no property");
+            stack[sp++] = JSUndefined.INSTANCE;
+            executionContext.sp = sp;
+            executionContext.pc = pc + Opcode.GET_REF_VALUE.getSize();
+            return;
+        }
+
+        JSValue value;
+        if (!targetObject.has(key)) {
+            if (context.isStrictMode()) {
+                String name = key != null ? key.toPropertyString() : "variable";
+                pendingException = context.throwReferenceError(name + " is not defined");
+                stack[sp++] = JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                executionContext.pc = pc + Opcode.GET_REF_VALUE.getSize();
+                return;
+            }
+            value = JSUndefined.INSTANCE;
+        } else {
+            value = targetObject.get(context, key);
+        }
+        stack[sp++] = value;
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.GET_REF_VALUE.getSize();
+    }
+
+    private void handleGetSuper(ExecutionContext executionContext) {
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.stack;
+        JSValue objectValue = (JSValue) stack[sp - 1];
+        JSObject object = toObject(objectValue);
+        if (object == null) {
+            if (context.hasPendingException()) {
+                pendingException = context.getPendingException();
+                context.clearPendingException();
+            }
+            stack[sp - 1] = JSUndefined.INSTANCE;
+        } else {
+            JSObject prototypeObject = object.getPrototype();
+            stack[sp - 1] = prototypeObject != null ? prototypeObject : JSNull.INSTANCE;
+        }
+        executionContext.pc += Opcode.GET_SUPER.getSize();
+    }
+
+    private void handleGetSuperValue(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue keyValue = (JSValue) stack[--sp];
+        JSValue superObjectValue = (JSValue) stack[--sp];
+        JSValue receiverValue = (JSValue) stack[--sp];
+
+        if (!(superObjectValue instanceof JSObject superObject)) {
+            throw new JSVirtualMachineException(context.throwTypeError("super object expected"));
+        }
+
+        PropertyKey key = PropertyKey.fromValue(context, keyValue);
+        JSValue result;
+        if (receiverValue instanceof JSObject receiverObject) {
+            result = superObject.getWithReceiver(key, context, receiverObject);
+        } else {
+            JSObject boxedReceiver = toObject(receiverValue);
+            result = boxedReceiver != null
+                    ? superObject.getWithReceiver(key, context, boxedReceiver)
+                    : superObject.get(context, key);
+        }
+
+        if (context.hasPendingException()) {
+            pendingException = context.getPendingException();
+            context.clearPendingException();
+            stack[sp++] = JSUndefined.INSTANCE;
+        } else {
+            stack[sp++] = result;
+        }
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.GET_SUPER_VALUE.getSize();
+    }
+
+    private void handleGetVar(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.stack;
+        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        String variableName = executionContext.bytecode.getAtoms()[atomIndex];
+        PropertyKey key = PropertyKey.fromString(variableName);
+        JSObject globalObject = context.getGlobalObject();
+        if (!globalObject.has(key)) {
+            pendingException = context.throwReferenceError(variableName + " is not defined");
+            stack[sp++] = JSUndefined.INSTANCE;
+        } else {
+            JSValue variableValue = globalObject.get(key);
+            if (trackPropertyAccess && !propertyAccessLock) {
+                resetPropertyAccessTracking();
+                propertyAccessChain.append(variableName);
+            }
+            stack[sp++] = variableValue;
+        }
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.GET_VAR.getSize();
+    }
+
+    private void handleGetVarRef(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        executionContext.stack[executionContext.sp++] = executionContext.frame.getVarRef(varRefIndex);
+        executionContext.pc = pc + Opcode.GET_VAR_REF.getSize();
+    }
+
+    private void handleGetVarRefCheck(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        JSValue value = executionContext.frame.getVarRef(varRefIndex);
+        if (isUninitialized(value)) {
+            throwVariableUninitializedReferenceError();
+        }
+        executionContext.stack[executionContext.sp++] = value;
+        executionContext.pc = pc + Opcode.GET_VAR_REF_CHECK.getSize();
+    }
+
+    private void handleGetVarRefShort(ExecutionContext executionContext, Opcode opcode) {
+        int varRefIndex = switch (opcode) {
+            case GET_VAR_REF0 -> 0;
+            case GET_VAR_REF1 -> 1;
+            case GET_VAR_REF2 -> 2;
+            case GET_VAR_REF3 -> 3;
+            default -> throw new IllegalStateException("Unexpected short get var ref opcode: " + opcode);
+        };
+        executionContext.stack[executionContext.sp++] = executionContext.frame.getVarRef(varRefIndex);
+        executionContext.pc += opcode.getSize();
+    }
+
+    private void handleGetVarUndef(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        executionContext.stack[executionContext.sp++] = executionContext.frame.getVarRef(varRefIndex);
+        executionContext.pc = pc + Opcode.GET_VAR_UNDEF.getSize();
+    }
+
+    private void handleGoto(ExecutionContext executionContext) {
+        byte[] instructions = executionContext.instructions;
+        int pc = executionContext.pc;
+        int offset = ((instructions[pc + 1] & 0xFF) << 24)
+                | ((instructions[pc + 2] & 0xFF) << 16)
+                | ((instructions[pc + 3] & 0xFF) << 8)
+                | (instructions[pc + 4] & 0xFF);
+        executionContext.pc = pc + Opcode.GOTO.getSize() + offset;
+    }
+
+    private void handleGoto16(ExecutionContext executionContext) {
+        byte[] instructions = executionContext.instructions;
+        int pc = executionContext.pc;
+        int offset = (short) (((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF));
+        executionContext.pc = pc + Opcode.GOTO16.getSize() + offset;
+    }
+
+    private void handleGoto8(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        executionContext.pc = pc + Opcode.GOTO8.getSize() + executionContext.instructions[pc + 1];
+    }
+
     private void handleGt() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -5120,6 +3516,22 @@ public final class VirtualMachine {
         }
         boolean result = JSTypeConversions.lessThan(context, right, left);
         valueStack.push(JSBoolean.valueOf(result));
+    }
+
+    private void handleGtOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue rightValue = (JSValue) stack[sp - 1];
+        JSValue leftValue = (JSValue) stack[sp - 2];
+        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
+            stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() > rightNumber.value());
+            executionContext.sp = sp - 1;
+        } else {
+            valueStack.stackTop = sp;
+            handleGt();
+            executionContext.sp = valueStack.stackTop;
+        }
+        executionContext.pc += Opcode.GT.getSize();
     }
 
     private void handleGte() {
@@ -5135,6 +3547,72 @@ public final class VirtualMachine {
         valueStack.push(JSBoolean.valueOf(result));
     }
 
+    private void handleGteOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue rightValue = (JSValue) stack[sp - 1];
+        JSValue leftValue = (JSValue) stack[sp - 2];
+        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
+            stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() >= rightNumber.value());
+            executionContext.sp = sp - 1;
+        } else {
+            valueStack.stackTop = sp;
+            handleGte();
+            executionContext.sp = valueStack.stackTop;
+        }
+        executionContext.pc += Opcode.GTE.getSize();
+    }
+
+    private void handleIfFalse(ExecutionContext executionContext) {
+        byte[] instructions = executionContext.instructions;
+        int pc = executionContext.pc;
+        JSValue conditionValue = (JSValue) executionContext.stack[--executionContext.sp];
+        int offset = ((instructions[pc + 1] & 0xFF) << 24)
+                | ((instructions[pc + 2] & 0xFF) << 16)
+                | ((instructions[pc + 3] & 0xFF) << 8)
+                | (instructions[pc + 4] & 0xFF);
+        if (isBranchTruthy(conditionValue)) {
+            executionContext.pc = pc + Opcode.IF_FALSE.getSize();
+        } else {
+            executionContext.pc = pc + Opcode.IF_FALSE.getSize() + offset;
+        }
+    }
+
+    private void handleIfFalse8(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSValue conditionValue = (JSValue) executionContext.stack[--executionContext.sp];
+        if (isBranchTruthy(conditionValue)) {
+            executionContext.pc = pc + Opcode.IF_FALSE8.getSize();
+        } else {
+            executionContext.pc = pc + Opcode.IF_FALSE8.getSize() + executionContext.instructions[pc + 1];
+        }
+    }
+
+    private void handleIfTrue(ExecutionContext executionContext) {
+        byte[] instructions = executionContext.instructions;
+        int pc = executionContext.pc;
+        JSValue conditionValue = (JSValue) executionContext.stack[--executionContext.sp];
+        int offset = ((instructions[pc + 1] & 0xFF) << 24)
+                | ((instructions[pc + 2] & 0xFF) << 16)
+                | ((instructions[pc + 3] & 0xFF) << 8)
+                | (instructions[pc + 4] & 0xFF);
+        if (isBranchTruthy(conditionValue)) {
+            executionContext.pc = pc + Opcode.IF_TRUE.getSize() + offset;
+        } else {
+            executionContext.pc = pc + Opcode.IF_TRUE.getSize();
+        }
+    }
+
+    private void handleIfTrue8(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSValue conditionValue = (JSValue) executionContext.stack[--executionContext.sp];
+        if (isBranchTruthy(conditionValue)) {
+            executionContext.pc = pc + Opcode.IF_TRUE8.getSize() + executionContext.instructions[pc + 1];
+        } else {
+            executionContext.pc = pc + Opcode.IF_TRUE8.getSize();
+        }
+    }
+
     private void handleIn() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -5147,9 +3625,38 @@ public final class VirtualMachine {
         valueStack.push(JSBoolean.valueOf(result));
     }
 
+    private void handleInOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleIn();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.IN.getSize();
+    }
+
     private void handleInc() {
         JSValue operand = valueStack.pop();
         valueStack.push(incrementValue(operand, 1));
+    }
+
+    private void handleIncDecLoc(ExecutionContext executionContext, int delta) {
+        int pc = executionContext.pc;
+        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
+        JSValue localValue = executionContext.locals[localIndex];
+        if (localValue == null) {
+            localValue = JSUndefined.INSTANCE;
+        }
+        executionContext.locals[localIndex] = incrementValue(localValue, delta);
+        executionContext.pc = pc + Opcode.INC_LOC.getSize();
+    }
+
+    private void handleIncLoc(ExecutionContext executionContext) {
+        handleIncDecLoc(executionContext, 1);
+    }
+
+    private void handleIncOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleInc();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.INC.getSize();
     }
 
     private void handleInitCtor() {
@@ -5198,6 +3705,13 @@ public final class VirtualMachine {
         valueStack.push(superObject);
     }
 
+    private void handleInitCtorOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleInitCtor();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.INIT_CTOR.getSize();
+    }
+
     private void handleInitialYield() {
         // Initial yield - generator is being created
         // In QuickJS, this is where generator creation stops and returns the generator object.
@@ -5210,6 +3724,52 @@ public final class VirtualMachine {
         }
         // Signal suspension at INITIAL_YIELD
         yieldResult = new YieldResult(YieldResult.Type.INITIAL_YIELD, JSUndefined.INSTANCE);
+    }
+
+    private void handleInitialYieldOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleInitialYield();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.INITIAL_YIELD.getSize();
+        if (yieldResult != null) {
+            requestOpcodeReturnFromExecute(executionContext, JSUndefined.INSTANCE);
+        }
+    }
+
+    private void handleInsert2(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue topValue = stack[sp - 1];
+        stack[sp] = topValue;
+        stack[sp - 1] = stack[sp - 2];
+        stack[sp - 2] = topValue;
+        executionContext.sp = sp + 1;
+        executionContext.pc += 1;
+    }
+
+    private void handleInsert3(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue topValue = stack[sp - 1];
+        stack[sp] = topValue;
+        stack[sp - 1] = stack[sp - 2];
+        stack[sp - 2] = stack[sp - 3];
+        stack[sp - 3] = topValue;
+        executionContext.sp = sp + 1;
+        executionContext.pc += 1;
+    }
+
+    private void handleInsert4(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue topValue = stack[sp - 1];
+        stack[sp] = topValue;
+        stack[sp - 1] = stack[sp - 2];
+        stack[sp - 2] = stack[sp - 3];
+        stack[sp - 3] = stack[sp - 4];
+        stack[sp - 4] = topValue;
+        executionContext.sp = sp + 1;
+        executionContext.pc += 1;
     }
 
     private void handleInstanceof() {
@@ -5256,10 +3816,169 @@ public final class VirtualMachine {
         valueStack.push(ordinaryHasInstance(right, left) ? JSBoolean.TRUE : JSBoolean.FALSE);
     }
 
+    private void handleInstanceofOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleInstanceof();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.INSTANCEOF.getSize();
+    }
+
+    private void handleInvalid(ExecutionContext executionContext) {
+        throw new JSVirtualMachineException("Invalid opcode at PC " + executionContext.pc);
+    }
+
+    private void handleIsNullOpcode(ExecutionContext executionContext) {
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.stack;
+        JSValue value = (JSValue) stack[sp - 1];
+        stack[sp - 1] = JSBoolean.valueOf(value.isNull());
+        executionContext.pc += Opcode.IS_NULL.getSize();
+    }
+
+    private void handleIsUndefinedOpcode(ExecutionContext executionContext) {
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.stack;
+        JSValue value = (JSValue) stack[sp - 1];
+        stack[sp - 1] = JSBoolean.valueOf(value.isUndefined());
+        executionContext.pc += Opcode.IS_UNDEFINED.getSize();
+    }
+
     private void handleIsUndefinedOrNull() {
         JSValue value = valueStack.pop();
         boolean result = value instanceof JSNull || value instanceof JSUndefined;
         valueStack.push(result ? JSBoolean.TRUE : JSBoolean.FALSE);
+    }
+
+    private void handleIsUndefinedOrNullOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleIsUndefinedOrNull();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.IS_UNDEFINED_OR_NULL.getSize();
+    }
+
+    private void handleIteratorCallOpcode(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int flags = executionContext.bytecode.readU8(pc + 1);
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue argumentValue = (JSValue) stack[sp - 1];
+        JSValue iteratorValue = (JSValue) stack[sp - 4];
+        if (!(iteratorValue instanceof JSObject iteratorObject)) {
+            throw new JSVirtualMachineException(context.throwTypeError("iterator call target must be an object"));
+        }
+
+        String methodName = (flags & 1) != 0 ? "throw" : "return";
+        JSValue methodValue = (flags & 1) != 0
+                ? iteratorObject.get(context, PropertyKey.THROW)
+                : iteratorObject.get(context, PropertyKey.RETURN);
+        if (context.hasPendingException()) {
+            throw new JSVirtualMachineException(
+                    context.getPendingException().toString(),
+                    context.getPendingException());
+        }
+        boolean noMethod = methodValue.isNullOrUndefined();
+        if (!noMethod) {
+            if (!(methodValue instanceof JSFunction method)) {
+                throw new JSVirtualMachineException(context.throwTypeError("iterator " + methodName + " is not a function"));
+            }
+            JSValue callResult = (flags & 2) != 0
+                    ? method.call(context, iteratorObject, EMPTY_ARGS)
+                    : method.call(context, iteratorObject, new JSValue[]{argumentValue});
+            stack[sp - 1] = callResult;
+        }
+        stack[sp++] = JSBoolean.valueOf(noMethod);
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.ITERATOR_CALL.getSize();
+    }
+
+    private void handleIteratorCheckObjectOpcode(ExecutionContext executionContext) {
+        JSValue iteratorResult = (JSValue) executionContext.stack[executionContext.sp - 1];
+        if (!(iteratorResult instanceof JSObject)) {
+            throw new JSVirtualMachineException(context.throwTypeError("iterator must return an object"));
+        }
+        executionContext.pc += Opcode.ITERATOR_CHECK_OBJECT.getSize();
+    }
+
+    private void handleIteratorCloseOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue originalPendingException = pendingException;
+        sp--;
+        sp--;
+        JSValue iteratorValue = (JSValue) stack[--sp];
+        if (iteratorValue instanceof JSObject iteratorObject && !iteratorValue.isUndefined()) {
+            JSValue returnMethodValue = iteratorObject.get(context, PropertyKey.RETURN);
+            if (context.hasPendingException()) {
+                if (originalPendingException == null) {
+                    pendingException = context.getPendingException();
+                }
+                context.clearPendingException();
+                executionContext.sp = sp;
+                executionContext.pc += Opcode.ITERATOR_CLOSE.getSize();
+                return;
+            }
+            if (returnMethodValue instanceof JSFunction returnMethod) {
+                JSValue closeResult = returnMethod.call(context, iteratorObject, EMPTY_ARGS);
+                if (context.hasPendingException()) {
+                    if (originalPendingException == null) {
+                        pendingException = context.getPendingException();
+                    }
+                    context.clearPendingException();
+                } else if (!(closeResult instanceof JSObject)) {
+                    if (originalPendingException == null) {
+                        pendingException = context.throwTypeError("iterator result is not an object");
+                    }
+                }
+            } else if (returnMethodValue.isNullOrUndefined()) {
+                // No return method.
+            } else if (returnMethodValue instanceof JSObject returnObject && returnObject.isHTMLDDA()) {
+                // IsHTMLDDA callable edge case; preserve previous no-op behavior.
+            } else {
+                if (originalPendingException == null) {
+                    pendingException = context.throwTypeError("iterator return is not a function");
+                }
+            }
+        }
+        executionContext.sp = sp;
+        executionContext.pc += Opcode.ITERATOR_CLOSE.getSize();
+    }
+
+    private void handleIteratorGetValueDoneOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue iteratorResult = (JSValue) stack[sp - 1];
+        if (!(iteratorResult instanceof JSObject iteratorResultObject)) {
+            throw new JSVirtualMachineException(context.throwTypeError("iterator must return an object"));
+        }
+
+        JSValue doneValue = iteratorResultObject.get(PropertyKey.DONE);
+        JSValue value = iteratorResultObject.get(PropertyKey.VALUE);
+        if (value == null) {
+            value = JSUndefined.INSTANCE;
+        }
+        boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
+
+        stack[sp - 1] = value;
+        stack[sp - 2] = JSNumber.of(0);
+        stack[sp++] = JSBoolean.valueOf(done);
+        executionContext.sp = sp;
+        executionContext.pc += Opcode.ITERATOR_GET_VALUE_DONE.getSize();
+    }
+
+    private void handleIteratorNextOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue argumentValue = (JSValue) stack[sp - 1];
+        JSValue catchOffsetValue = (JSValue) stack[sp - 2];
+        JSValue nextMethodValue = (JSValue) stack[sp - 3];
+        JSValue iteratorValue = (JSValue) stack[sp - 4];
+        if (!(nextMethodValue instanceof JSFunction nextMethod)) {
+            throw new JSVirtualMachineException(context.throwTypeError("iterator next is not a function"));
+        }
+        JSValue nextResult = nextMethod.call(context, iteratorValue, new JSValue[]{argumentValue});
+        stack[sp - 1] = nextResult;
+        stack[sp - 2] = catchOffsetValue;
+        executionContext.pc += Opcode.ITERATOR_NEXT.getSize();
     }
 
     private void handleLogicalAnd() {
@@ -5273,10 +3992,24 @@ public final class VirtualMachine {
         }
     }
 
+    private void handleLogicalAndOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleLogicalAnd();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.LOGICAL_AND.getSize();
+    }
+
     private void handleLogicalNot() {
         JSValue operand = valueStack.pop();
         boolean result = JSTypeConversions.toBoolean(operand) == JSBoolean.FALSE;
         valueStack.push(JSBoolean.valueOf(result));
+    }
+
+    private void handleLogicalNotOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleLogicalNot();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.LOGICAL_NOT.getSize();
     }
 
     private void handleLogicalOr() {
@@ -5288,6 +4021,13 @@ public final class VirtualMachine {
         } else {
             valueStack.push(right);
         }
+    }
+
+    private void handleLogicalOrOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleLogicalOr();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.LOGICAL_OR.getSize();
     }
 
     private void handleLt() {
@@ -5302,6 +4042,22 @@ public final class VirtualMachine {
         valueStack.push(JSBoolean.valueOf(result));
     }
 
+    private void handleLtOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue rightValue = (JSValue) stack[sp - 1];
+        JSValue leftValue = (JSValue) stack[sp - 2];
+        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
+            stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() < rightNumber.value());
+            executionContext.sp = sp - 1;
+        } else {
+            valueStack.stackTop = sp;
+            handleLt();
+            executionContext.sp = valueStack.stackTop;
+        }
+        executionContext.pc += Opcode.LT.getSize();
+    }
+
     private void handleLte() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -5313,6 +4069,42 @@ public final class VirtualMachine {
         boolean result = JSTypeConversions.lessThan(context, left, right) ||
                 JSTypeConversions.abstractEquals(context, left, right);
         valueStack.push(JSBoolean.valueOf(result));
+    }
+
+    private void handleLteOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue rightValue = (JSValue) stack[sp - 1];
+        JSValue leftValue = (JSValue) stack[sp - 2];
+        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
+            stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() <= rightNumber.value());
+            executionContext.sp = sp - 1;
+        } else {
+            valueStack.stackTop = sp;
+            handleLte();
+            executionContext.sp = valueStack.stackTop;
+        }
+        executionContext.pc += Opcode.LTE.getSize();
+    }
+
+    private void handleMakeScopedRef(ExecutionContext executionContext, Opcode opcode) {
+        int pc = executionContext.pc;
+        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        int refIndex = executionContext.bytecode.readU16(pc + 5);
+        String atomName = executionContext.bytecode.getAtoms()[atomIndex];
+        JSObject referenceObject = createReferenceObject(opcode, refIndex, atomName);
+        executionContext.stack[executionContext.sp++] = referenceObject;
+        executionContext.stack[executionContext.sp++] = new JSString(atomName);
+        executionContext.pc = pc + opcode.getSize();
+    }
+
+    private void handleMakeVarRef(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        String atomName = executionContext.bytecode.getAtoms()[atomIndex];
+        executionContext.stack[executionContext.sp++] = context.getGlobalObject();
+        executionContext.stack[executionContext.sp++] = new JSString(atomName);
+        executionContext.pc = pc + Opcode.MAKE_VAR_REF.getSize();
     }
 
     private void handleMod() {
@@ -5339,6 +4131,13 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(leftNumber.value() % rightNumber.value()));
     }
 
+    private void handleModOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleMod();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.MOD.getSize();
+    }
+
     private void handleMul() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -5358,6 +4157,22 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(leftNumber.value() * rightNumber.value()));
     }
 
+    private void handleMulOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue rightValue = (JSValue) stack[sp - 1];
+        JSValue leftValue = (JSValue) stack[sp - 2];
+        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
+            stack[sp - 2] = JSNumber.of(leftNumber.value() * rightNumber.value());
+            executionContext.sp = sp - 1;
+        } else {
+            valueStack.stackTop = sp;
+            handleMul();
+            executionContext.sp = valueStack.stackTop;
+        }
+        executionContext.pc += Opcode.MUL.getSize();
+    }
+
     private void handleNeg() {
         JSValue operand = valueStack.pop();
         JSValue numeric = toNumericValue(operand);
@@ -5368,11 +4183,57 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(-((JSNumber) numeric).value()));
     }
 
+    private void handleNegOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleNeg();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.NEG.getSize();
+    }
+
     private void handleNeq() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
         boolean result = !JSTypeConversions.abstractEquals(context, left, right);
         valueStack.push(JSBoolean.valueOf(result));
+    }
+
+    private void handleNeqOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleNeq();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.NEQ.getSize();
+    }
+
+    private void handleNip(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        stack[sp - 2] = stack[sp - 1];
+        executionContext.sp = sp - 1;
+        executionContext.pc += 1;
+    }
+
+    private void handleNipCatchOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue returnValue = (JSValue) stack[--sp];
+        boolean foundCatchMarker = false;
+        while (sp > executionContext.frameStackBase) {
+            JSStackValue stackValue = stack[--sp];
+            if (stackValue instanceof JSCatchOffset) {
+                foundCatchMarker = true;
+                break;
+            }
+        }
+        if (!foundCatchMarker) {
+            throw new JSVirtualMachineException(context.throwError("nip_catch"));
+        }
+        stack[sp++] = returnValue;
+        executionContext.sp = sp;
+        executionContext.pc += Opcode.NIP_CATCH.getSize();
+    }
+
+    private void handleNop(ExecutionContext executionContext) {
+        executionContext.pc += Opcode.NOP.getSize();
     }
 
     private void handleNot() {
@@ -5386,6 +4247,18 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(result));
     }
 
+    private void handleNotOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleNot();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.NOT.getSize();
+    }
+
+    private void handleNull(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSNull.INSTANCE;
+        executionContext.pc += 1;
+    }
+
     private void handleNullishCoalesce() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -5395,6 +4268,18 @@ public final class VirtualMachine {
         } else {
             valueStack.push(left);
         }
+    }
+
+    private void handleNullishCoalesceOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleNullishCoalesce();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.NULLISH_COALESCE.getSize();
+    }
+
+    private void handleObjectNew(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = context.createJSObject();
+        executionContext.pc += Opcode.OBJECT.getSize();
     }
 
     private void handleOr() {
@@ -5419,11 +4304,105 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(result));
     }
 
+    private void handleOrOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleOr();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.OR.getSize();
+    }
+
+    private PendingExceptionAction handlePendingExceptionForExecute(ExecutionContext executionContext) {
+        if (pendingException == null) {
+            return PendingExceptionAction.NONE;
+        }
+
+        JSValue exception = pendingException;
+        pendingException = null;
+
+        boolean foundHandler = false;
+        while (valueStack.stackTop > executionContext.frameStackBase) {
+            JSStackValue stackValue = executionContext.stack[--valueStack.stackTop];
+            if (stackValue instanceof JSCatchOffset catchOffset) {
+                if (generatorForceReturn && !catchOffset.isFinally()) {
+                    continue;
+                }
+                executionContext.stack[valueStack.stackTop++] = exception;
+                executionContext.pc = catchOffset.offset();
+                foundHandler = true;
+                context.clearPendingException();
+                break;
+            }
+        }
+        executionContext.sp = valueStack.stackTop;
+
+        if (foundHandler) {
+            return PendingExceptionAction.CONTINUE;
+        }
+
+        if (generatorForceReturn) {
+            generatorForceReturn = false;
+            restoreExecuteCallerState(
+                    executionContext.restoreStackTop,
+                    executionContext.previousFrame,
+                    executionContext.savedStrictMode);
+            context.clearPendingException();
+            executionContext.returnValue = generatorReturnValue;
+            return PendingExceptionAction.RETURN;
+        }
+
+        restoreExecuteCallerState(
+                executionContext.restoreStackTop,
+                executionContext.previousFrame,
+                executionContext.savedStrictMode);
+        if (exception instanceof JSError jsError) {
+            throw new JSVirtualMachineException(jsError);
+        }
+        String exceptionMessage = safeExceptionToString(context, exception);
+        throw new JSVirtualMachineException("Unhandled exception: " + exceptionMessage, exception);
+    }
+
+    private void handlePerm3(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue temporaryValue = stack[sp - 3];
+        stack[sp - 3] = stack[sp - 2];
+        stack[sp - 2] = temporaryValue;
+        executionContext.pc += 1;
+    }
+
+    private void handlePerm4(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue firstValue = stack[sp - 4];
+        stack[sp - 4] = stack[sp - 2];
+        stack[sp - 2] = stack[sp - 3];
+        stack[sp - 3] = firstValue;
+        executionContext.pc += 1;
+    }
+
+    private void handlePerm5(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue firstValue = stack[sp - 5];
+        stack[sp - 5] = stack[sp - 2];
+        stack[sp - 2] = stack[sp - 3];
+        stack[sp - 3] = stack[sp - 4];
+        stack[sp - 4] = firstValue;
+        executionContext.pc += 1;
+    }
+
     private void handlePlus() {
         JSValue operand = valueStack.pop();
         JSNumber result = JSTypeConversions.toNumber(context, operand);
         capturePendingException();
         valueStack.push(result);
+    }
+
+    private void handlePlusOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handlePlus();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.PLUS.getSize();
     }
 
     private void handlePostDec() {
@@ -5439,6 +4418,13 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(((JSNumber) oldValue).value() - 1));
     }
 
+    private void handlePostDecOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handlePostDec();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.POST_DEC.getSize();
+    }
+
     private void handlePostInc() {
         // POST_INC: [value] -> [old_value, new_value]
         // Takes value on top, pushes old value then new value
@@ -5450,6 +4436,13 @@ public final class VirtualMachine {
             return;
         }
         valueStack.push(JSNumber.of(((JSNumber) oldValue).value() + 1));
+    }
+
+    private void handlePostIncOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handlePostInc();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.POST_INC.getSize();
     }
 
     private void handlePrivateIn() {
@@ -5466,6 +4459,534 @@ public final class VirtualMachine {
         }
 
         valueStack.push(JSBoolean.valueOf(result));
+    }
+
+    private void handlePrivateInOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handlePrivateIn();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.PRIVATE_IN.getSize();
+    }
+
+    private void handlePrivateSymbol(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int fieldNameAtomIndex = executionContext.bytecode.readU32(pc + 1);
+        String fieldName = executionContext.bytecode.getAtoms()[fieldNameAtomIndex];
+        executionContext.stack[executionContext.sp++] = new JSSymbol(fieldName);
+        executionContext.pc = pc + Opcode.PRIVATE_SYMBOL.getSize();
+    }
+
+    private void handlePush0(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSNumber.of(0);
+        executionContext.pc += 1;
+    }
+
+    private void handlePush1(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSNumber.of(1);
+        executionContext.pc += 1;
+    }
+
+    private void handlePush2(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSNumber.of(2);
+        executionContext.pc += 1;
+    }
+
+    private void handlePush3(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSNumber.of(3);
+        executionContext.pc += 1;
+    }
+
+    private void handlePush4(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSNumber.of(4);
+        executionContext.pc += 1;
+    }
+
+    private void handlePush5(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSNumber.of(5);
+        executionContext.pc += 1;
+    }
+
+    private void handlePush6(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSNumber.of(6);
+        executionContext.pc += 1;
+    }
+
+    private void handlePush7(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSNumber.of(7);
+        executionContext.pc += 1;
+    }
+
+    private void handlePushArray(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue element = (JSValue) stack[--sp];
+        JSValue arrayValue = (JSValue) stack[sp - 1];
+        if (arrayValue instanceof JSArray jsArray) {
+            jsArray.push(element);
+        }
+        executionContext.sp = sp;
+        executionContext.pc += Opcode.PUSH_ARRAY.getSize();
+    }
+
+    private void handlePushAtomValue(ExecutionContext executionContext) {
+        byte[] instructions = executionContext.instructions;
+        int pc = executionContext.pc;
+        int atomIndex = ((instructions[pc + 1] & 0xFF) << 24)
+                | ((instructions[pc + 2] & 0xFF) << 16)
+                | ((instructions[pc + 3] & 0xFF) << 8)
+                | (instructions[pc + 4] & 0xFF);
+        executionContext.stack[executionContext.sp++] = new JSString(executionContext.bytecode.getAtoms()[atomIndex]);
+        executionContext.pc = pc + Opcode.PUSH_ATOM_VALUE.getSize();
+    }
+
+    private void handlePushBigintI32(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = new JSBigInt(executionContext.bytecode.readI32(executionContext.pc + 1));
+        executionContext.pc += Opcode.PUSH_BIGINT_I32.getSize();
+    }
+
+    private void handlePushConst(ExecutionContext executionContext) {
+        byte[] instructions = executionContext.instructions;
+        int pc = executionContext.pc;
+        int constIndex = ((instructions[pc + 1] & 0xFF) << 24)
+                | ((instructions[pc + 2] & 0xFF) << 16)
+                | ((instructions[pc + 3] & 0xFF) << 8)
+                | (instructions[pc + 4] & 0xFF);
+        JSValue constantValue = executionContext.bytecode.getConstants()[constIndex];
+        initializeConstantValueIfNeeded(constantValue);
+        executionContext.stack[executionContext.sp++] = constantValue;
+        executionContext.pc = pc + Opcode.PUSH_CONST.getSize();
+    }
+
+    private void handlePushConst8(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int constIndex = executionContext.instructions[pc + 1] & 0xFF;
+        JSValue constantValue = executionContext.bytecode.getConstants()[constIndex];
+        initializeConstantValueIfNeeded(constantValue);
+        executionContext.stack[executionContext.sp++] = constantValue;
+        executionContext.pc = pc + Opcode.PUSH_CONST8.getSize();
+    }
+
+    private void handlePushEmptyString(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = new JSString("");
+        executionContext.pc += 1;
+    }
+
+    private void handlePushFalse(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSBoolean.FALSE;
+        executionContext.pc += 1;
+    }
+
+    private void handlePushI16(ExecutionContext executionContext) {
+        byte[] instructions = executionContext.instructions;
+        int pc = executionContext.pc;
+        executionContext.stack[executionContext.sp++] =
+                JSNumber.of((short) (((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF)));
+        executionContext.pc = pc + 3;
+    }
+
+    private void handlePushI32(ExecutionContext executionContext) {
+        byte[] instructions = executionContext.instructions;
+        int pc = executionContext.pc;
+        int intValue = ((instructions[pc + 1] & 0xFF) << 24)
+                | ((instructions[pc + 2] & 0xFF) << 16)
+                | ((instructions[pc + 3] & 0xFF) << 8)
+                | (instructions[pc + 4] & 0xFF);
+        executionContext.stack[executionContext.sp++] = JSNumber.of(intValue);
+        executionContext.pc = pc + 5;
+    }
+
+    private void handlePushI8(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        executionContext.stack[executionContext.sp++] = JSNumber.of(executionContext.instructions[pc + 1]);
+        executionContext.pc = pc + 2;
+    }
+
+    private void handlePushMinus1(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSNumber.of(-1);
+        executionContext.pc += 1;
+    }
+
+    private void handlePushThis(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = executionContext.frame.getThisArg();
+        executionContext.pc += 1;
+    }
+
+    private void handlePushTrue(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSBoolean.TRUE;
+        executionContext.pc += 1;
+    }
+
+    private void handlePutArg(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int argumentIndex = executionContext.bytecode.readU16(pc + 1);
+        JSValue argumentValue = (JSValue) executionContext.stack[--executionContext.sp];
+        setArgumentValue(argumentIndex, argumentValue);
+        executionContext.pc = pc + Opcode.PUT_ARG.getSize();
+    }
+
+    private void handlePutArgShort(ExecutionContext executionContext, Opcode opcode) {
+        int argumentIndex = switch (opcode) {
+            case PUT_ARG0 -> 0;
+            case PUT_ARG1 -> 1;
+            case PUT_ARG2 -> 2;
+            case PUT_ARG3 -> 3;
+            default -> throw new IllegalStateException("Unexpected short put arg opcode: " + opcode);
+        };
+        JSValue argumentValue = (JSValue) executionContext.stack[--executionContext.sp];
+        setArgumentValue(argumentIndex, argumentValue);
+        executionContext.pc += opcode.getSize();
+    }
+
+    private void handlePutArrayEl(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue assignedValue = (JSValue) stack[--sp];
+        JSValue indexValue = (JSValue) stack[--sp];
+        JSValue objectValue = (JSValue) stack[--sp];
+
+        if (objectValue instanceof JSObject jsObject) {
+            try {
+                PropertyKey key = PropertyKey.fromValue(context, indexValue);
+                jsObject.set(context, key, assignedValue);
+                if (context.hasPendingException()) {
+                    pendingException = context.getPendingException();
+                    context.clearPendingException();
+                }
+            } catch (JSVirtualMachineException e) {
+                capturePendingExceptionFromVmOrContext(e);
+            }
+        } else if (objectValue instanceof JSNull || objectValue instanceof JSUndefined) {
+            PropertyKey key = PropertyKey.fromValue(context, indexValue);
+            context.throwTypeError("cannot set property '" + key + "' of "
+                    + (objectValue instanceof JSNull ? "null" : "undefined"));
+            pendingException = context.getPendingException();
+            context.clearPendingException();
+        } else {
+            JSObject boxedObject = toObject(objectValue);
+            if (boxedObject != null) {
+                try {
+                    PropertyKey key = PropertyKey.fromValue(context, indexValue);
+                    boxedObject.set(context, key, assignedValue);
+                    if (context.hasPendingException()) {
+                        pendingException = context.getPendingException();
+                        context.clearPendingException();
+                    }
+                } catch (JSVirtualMachineException e) {
+                    capturePendingExceptionFromVmOrContext(e);
+                }
+            }
+        }
+
+        stack[sp++] = assignedValue;
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.PUT_ARRAY_EL.getSize();
+    }
+
+    private void handlePutField(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        String fieldName = executionContext.bytecode.getAtoms()[atomIndex];
+        JSValue objectValue = (JSValue) executionContext.stack[--executionContext.sp];
+        JSValue fieldValue = (JSValue) executionContext.stack[executionContext.sp - 1];
+        PropertyKey propertyKey = PropertyKey.fromString(fieldName);
+
+        if (objectValue instanceof JSObject jsObject) {
+            try {
+                jsObject.set(context, propertyKey, fieldValue);
+                if (context.hasPendingException()) {
+                    pendingException = context.getPendingException();
+                    context.clearPendingException();
+                }
+            } catch (JSVirtualMachineException e) {
+                capturePendingExceptionFromVmOrContext(e);
+            }
+        } else if (objectValue instanceof JSNull || objectValue instanceof JSUndefined) {
+            context.throwTypeError("cannot set property '" + fieldName + "' of "
+                    + (objectValue instanceof JSNull ? "null" : "undefined"));
+            pendingException = context.getPendingException();
+            context.clearPendingException();
+        } else {
+            JSObject boxedObject = toObject(objectValue);
+            if (boxedObject != null) {
+                try {
+                    boxedObject.set(context, propertyKey, fieldValue);
+                    if (context.hasPendingException()) {
+                        pendingException = context.getPendingException();
+                        context.clearPendingException();
+                    }
+                } catch (JSVirtualMachineException e) {
+                    capturePendingExceptionFromVmOrContext(e);
+                }
+            }
+        }
+        executionContext.pc = pc + Opcode.PUT_FIELD.getSize();
+    }
+
+    private void handlePutLoc(ExecutionContext executionContext) {
+        byte[] instructions = executionContext.instructions;
+        int pc = executionContext.pc;
+        int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        handlePutLocAtIndex(executionContext, localIndex, Opcode.PUT_LOC.getSize());
+    }
+
+    private void handlePutLoc0(ExecutionContext executionContext) {
+        handlePutLocAtIndex(executionContext, 0, Opcode.PUT_LOC0.getSize());
+    }
+
+    private void handlePutLoc1(ExecutionContext executionContext) {
+        handlePutLocAtIndex(executionContext, 1, Opcode.PUT_LOC1.getSize());
+    }
+
+    private void handlePutLoc2(ExecutionContext executionContext) {
+        handlePutLocAtIndex(executionContext, 2, Opcode.PUT_LOC2.getSize());
+    }
+
+    private void handlePutLoc3(ExecutionContext executionContext) {
+        handlePutLocAtIndex(executionContext, 3, Opcode.PUT_LOC3.getSize());
+    }
+
+    private void handlePutLoc8(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
+        handlePutLocAtIndex(executionContext, localIndex, Opcode.PUT_LOC8.getSize());
+    }
+
+    private void handlePutLocAtIndex(ExecutionContext executionContext, int localIndex, int opcodeSize) {
+        executionContext.locals[localIndex] = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.pc += opcodeSize;
+    }
+
+    private void handlePutLocCheck(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        JSValue[] localValues = executionContext.frame.getLocals();
+        if (isUninitialized(localValues[localIndex])) {
+            throwVariableUninitializedReferenceError();
+        }
+        localValues[localIndex] = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.pc = pc + Opcode.PUT_LOC_CHECK.getSize();
+    }
+
+    private void handlePutLocCheckInit(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        JSValue[] localValues = executionContext.frame.getLocals();
+        if (!isUninitialized(localValues[localIndex])) {
+            throw new JSVirtualMachineException(context.throwReferenceError("'this' can be initialized only once"));
+        }
+        localValues[localIndex] = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.pc = pc + Opcode.PUT_LOC_CHECK_INIT.getSize();
+    }
+
+    private void handlePutPrivateField(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue privateSymbolValue = (JSValue) stack[--sp];
+        JSValue value = (JSValue) stack[--sp];
+        JSValue objectValue = (JSValue) stack[--sp];
+
+        if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
+            object.set(PropertyKey.fromSymbol(symbol), value);
+        }
+
+        stack[sp++] = value;
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.PUT_PRIVATE_FIELD.getSize();
+    }
+
+    private void handlePutRefValue(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue setValue = (JSValue) stack[--sp];
+        JSValue propertyValue = (JSValue) stack[--sp];
+        JSValue objectValue = (JSValue) stack[--sp];
+        PropertyKey key = PropertyKey.fromValue(context, propertyValue);
+
+        if (objectValue.isUndefined()) {
+            if (context.isStrictMode()) {
+                String name = key != null ? key.toPropertyString() : "variable";
+                pendingException = context.throwReferenceError(name + " is not defined");
+                executionContext.sp = sp;
+                executionContext.pc = pc + Opcode.PUT_REF_VALUE.getSize();
+                return;
+            }
+            objectValue = context.getGlobalObject();
+        }
+
+        JSObject targetObject = toObject(objectValue);
+        if (targetObject == null) {
+            pendingException = context.throwTypeError("value has no property");
+            executionContext.sp = sp;
+            executionContext.pc = pc + Opcode.PUT_REF_VALUE.getSize();
+            return;
+        }
+
+        if (!targetObject.has(key) && context.isStrictMode()) {
+            String name = key != null ? key.toPropertyString() : "variable";
+            pendingException = context.throwReferenceError(name + " is not defined");
+            executionContext.sp = sp;
+            executionContext.pc = pc + Opcode.PUT_REF_VALUE.getSize();
+            return;
+        }
+
+        targetObject.set(context, key, setValue);
+        if (context.hasPendingException()) {
+            pendingException = context.getPendingException();
+            context.clearPendingException();
+        }
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.PUT_REF_VALUE.getSize();
+    }
+
+    private void handlePutSuperValue(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue keyValue = (JSValue) stack[--sp];
+        JSValue superObjectValue = (JSValue) stack[--sp];
+        JSValue receiverValue = (JSValue) stack[--sp];
+        JSValue assignedValue = (JSValue) stack[--sp];
+
+        if (!(superObjectValue instanceof JSObject superObject)) {
+            throw new JSVirtualMachineException(context.throwTypeError("super object expected"));
+        }
+
+        PropertyKey key = PropertyKey.fromValue(context, keyValue);
+        if (receiverValue instanceof JSObject receiverObject) {
+            superObject.set(context, key, assignedValue, receiverObject);
+        } else {
+            JSObject boxedReceiver = toObject(receiverValue);
+            if (boxedReceiver != null) {
+                superObject.set(context, key, assignedValue, boxedReceiver);
+            } else {
+                superObject.set(context, key, assignedValue);
+            }
+        }
+
+        if (context.hasPendingException()) {
+            pendingException = context.getPendingException();
+            context.clearPendingException();
+        }
+        stack[sp++] = assignedValue;
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.PUT_SUPER_VALUE.getSize();
+    }
+
+    private void handlePutVar(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        String variableName = executionContext.bytecode.getAtoms()[atomIndex];
+        JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
+        context.getGlobalObject().set(PropertyKey.fromString(variableName), value);
+        executionContext.pc = pc + Opcode.PUT_VAR.getSize();
+    }
+
+    private void handlePutVarInit(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.frame.setVarRef(varRefIndex, value);
+        executionContext.pc = pc + Opcode.PUT_VAR_INIT.getSize();
+    }
+
+    private void handlePutVarRef(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.frame.setVarRef(varRefIndex, value);
+        executionContext.pc = pc + Opcode.PUT_VAR_REF.getSize();
+    }
+
+    private void handlePutVarRefCheck(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        if (isUninitialized(executionContext.frame.getVarRef(varRefIndex))) {
+            throwVariableUninitializedReferenceError();
+        }
+        executionContext.frame.setVarRef(varRefIndex, (JSValue) executionContext.stack[--executionContext.sp]);
+        executionContext.pc = pc + Opcode.PUT_VAR_REF_CHECK.getSize();
+    }
+
+    private void handlePutVarRefCheckInit(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        if (!isUninitialized(executionContext.frame.getVarRef(varRefIndex))) {
+            throw new JSVirtualMachineException(context.throwReferenceError("variable is already initialized"));
+        }
+        executionContext.frame.setVarRef(varRefIndex, (JSValue) executionContext.stack[--executionContext.sp]);
+        executionContext.pc = pc + Opcode.PUT_VAR_REF_CHECK_INIT.getSize();
+    }
+
+    private void handlePutVarRefShort(ExecutionContext executionContext, Opcode opcode) {
+        int varRefIndex = switch (opcode) {
+            case PUT_VAR_REF0 -> 0;
+            case PUT_VAR_REF1 -> 1;
+            case PUT_VAR_REF2 -> 2;
+            case PUT_VAR_REF3 -> 3;
+            default -> throw new IllegalStateException("Unexpected short put var ref opcode: " + opcode);
+        };
+        JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.frame.setVarRef(varRefIndex, value);
+        executionContext.pc += opcode.getSize();
+    }
+
+    private void handleRest(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int firstRestArgumentIndex = executionContext.bytecode.readU16(pc + 1);
+        JSValue[] functionArguments = executionContext.frame.getArguments();
+        int argumentCount = functionArguments.length;
+        int restStartIndex = Math.min(firstRestArgumentIndex, argumentCount);
+        int restCount = argumentCount - restStartIndex;
+        JSValue[] restArguments = new JSValue[restCount];
+        System.arraycopy(functionArguments, restStartIndex, restArguments, 0, restCount);
+        JSArray restArray = context.createJSArray(restArguments);
+        executionContext.stack[executionContext.sp++] = restArray;
+        executionContext.pc = pc + Opcode.REST.getSize();
+    }
+
+    private void handleReturnAsyncOpcode(ExecutionContext executionContext) {
+        JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
+        finalizeExecuteReturn(executionContext);
+        executionContext.returnValue = returnValue;
+        executionContext.opcodeRequestedReturn = true;
+    }
+
+    private void handleReturnOpcode(ExecutionContext executionContext) {
+        JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
+        lastConstructorThisArg = executionContext.frame.getThisArg();
+        finalizeExecuteReturn(executionContext);
+        executionContext.returnValue = returnValue;
+        executionContext.opcodeRequestedReturn = true;
+    }
+
+    private void handleReturnUndefOpcode(ExecutionContext executionContext) {
+        lastConstructorThisArg = executionContext.frame.getThisArg();
+        finalizeExecuteReturn(executionContext);
+        executionContext.returnValue = JSUndefined.INSTANCE;
+        executionContext.opcodeRequestedReturn = true;
+    }
+
+    private void handleRot3l(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue firstValue = stack[sp - 3];
+        stack[sp - 3] = stack[sp - 2];
+        stack[sp - 2] = stack[sp - 1];
+        stack[sp - 1] = firstValue;
+        executionContext.pc += 1;
+    }
+
+    private void handleRot3r(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue thirdValue = stack[sp - 1];
+        stack[sp - 1] = stack[sp - 2];
+        stack[sp - 2] = stack[sp - 3];
+        stack[sp - 3] = thirdValue;
+        executionContext.pc += 1;
     }
 
     private void handleSar() {
@@ -5489,6 +5010,169 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(leftInt >> (rightInt & 0x1F)));
     }
 
+    private void handleSarOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue rightValue = (JSValue) stack[sp - 1];
+        JSValue leftValue = (JSValue) stack[sp - 2];
+        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
+            stack[sp - 2] = JSNumber.of(((int) leftNumber.value()) >> (((int) rightNumber.value()) & 0x1F));
+            executionContext.sp = sp - 1;
+        } else {
+            valueStack.stackTop = sp;
+            handleSar();
+            executionContext.sp = valueStack.stackTop;
+        }
+        executionContext.pc += Opcode.SAR.getSize();
+    }
+
+    private void handleSetArg(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int argumentIndex = executionContext.bytecode.readU16(pc + 1);
+        setArgumentValue(argumentIndex, (JSValue) executionContext.stack[executionContext.sp - 1]);
+        executionContext.pc = pc + Opcode.SET_ARG.getSize();
+    }
+
+    private void handleSetArgShort(ExecutionContext executionContext, Opcode opcode) {
+        int argumentIndex = switch (opcode) {
+            case SET_ARG0 -> 0;
+            case SET_ARG1 -> 1;
+            case SET_ARG2 -> 2;
+            case SET_ARG3 -> 3;
+            default -> throw new IllegalStateException("Unexpected short set arg opcode: " + opcode);
+        };
+        setArgumentValue(argumentIndex, (JSValue) executionContext.stack[executionContext.sp - 1]);
+        executionContext.pc += opcode.getSize();
+    }
+
+    private void handleSetHomeObject(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue homeObjectValue = (JSValue) stack[sp - 2];
+        JSValue methodValue = (JSValue) stack[sp - 1];
+        if (methodValue instanceof JSFunction methodFunction && homeObjectValue instanceof JSObject homeObject) {
+            methodFunction.setHomeObject(homeObject);
+        }
+        executionContext.pc += Opcode.SET_HOME_OBJECT.getSize();
+    }
+
+    private void handleSetLoc(ExecutionContext executionContext) {
+        byte[] instructions = executionContext.instructions;
+        int pc = executionContext.pc;
+        int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        handleSetLocAtIndex(executionContext, localIndex, Opcode.SET_LOC.getSize());
+    }
+
+    private void handleSetLoc0(ExecutionContext executionContext) {
+        handleSetLocAtIndex(executionContext, 0, Opcode.SET_LOC0.getSize());
+    }
+
+    private void handleSetLoc1(ExecutionContext executionContext) {
+        handleSetLocAtIndex(executionContext, 1, Opcode.SET_LOC1.getSize());
+    }
+
+    private void handleSetLoc2(ExecutionContext executionContext) {
+        handleSetLocAtIndex(executionContext, 2, Opcode.SET_LOC2.getSize());
+    }
+
+    private void handleSetLoc3(ExecutionContext executionContext) {
+        handleSetLocAtIndex(executionContext, 3, Opcode.SET_LOC3.getSize());
+    }
+
+    private void handleSetLoc8(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
+        handleSetLocAtIndex(executionContext, localIndex, Opcode.SET_LOC8.getSize());
+    }
+
+    private void handleSetLocAtIndex(ExecutionContext executionContext, int localIndex, int opcodeSize) {
+        executionContext.locals[localIndex] = (JSValue) executionContext.stack[executionContext.sp - 1];
+        executionContext.pc += opcodeSize;
+    }
+
+    private void handleSetLocCheck(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        JSValue[] localValues = executionContext.frame.getLocals();
+        if (isUninitialized(localValues[localIndex])) {
+            throwVariableUninitializedReferenceError();
+        }
+        localValues[localIndex] = (JSValue) executionContext.stack[executionContext.sp - 1];
+        executionContext.pc = pc + Opcode.SET_LOC_CHECK.getSize();
+    }
+
+    private void handleSetLocUninitialized(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        executionContext.frame.getLocals()[localIndex] = UNINITIALIZED_MARKER;
+        executionContext.pc = pc + Opcode.SET_LOC_UNINITIALIZED.getSize();
+    }
+
+    private void handleSetName(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        String name = executionContext.bytecode.getAtoms()[atomIndex];
+        setObjectName((JSValue) executionContext.stack[executionContext.sp - 1], new JSString(name));
+        executionContext.pc = pc + Opcode.SET_NAME.getSize();
+    }
+
+    private void handleSetNameComputed(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue nameValue = (JSValue) stack[sp - 2];
+        setObjectName((JSValue) stack[sp - 1], getComputedNameString(nameValue));
+        executionContext.pc += Opcode.SET_NAME_COMPUTED.getSize();
+    }
+
+    private void handleSetProto(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue prototypeValue = (JSValue) stack[--sp];
+        JSValue objectValue = (JSValue) stack[sp - 1];
+        if (objectValue instanceof JSObject object) {
+            if (prototypeValue instanceof JSObject prototypeObject) {
+                object.setPrototype(prototypeObject);
+            } else if (prototypeValue.isNull()) {
+                object.setPrototype(null);
+            }
+        }
+        executionContext.sp = sp;
+        executionContext.pc += Opcode.SET_PROTO.getSize();
+    }
+
+    private void handleSetVar(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        String variableName = executionContext.bytecode.getAtoms()[atomIndex];
+        JSValue value = (JSValue) executionContext.stack[executionContext.sp - 1];
+        PropertyKey variableKey = PropertyKey.fromString(variableName);
+        JSObject globalObject = context.getGlobalObject();
+        if (context.isStrictMode() && !globalObject.has(variableKey)) {
+            throw new JSVirtualMachineException(context.throwReferenceError(variableName + " is not defined"));
+        }
+        globalObject.set(variableKey, value);
+        executionContext.pc = pc + Opcode.SET_VAR.getSize();
+    }
+
+    private void handleSetVarRef(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        executionContext.frame.setVarRef(varRefIndex, (JSValue) executionContext.stack[executionContext.sp - 1]);
+        executionContext.pc = pc + Opcode.SET_VAR_REF.getSize();
+    }
+
+    private void handleSetVarRefShort(ExecutionContext executionContext, Opcode opcode) {
+        int varRefIndex = switch (opcode) {
+            case SET_VAR_REF0 -> 0;
+            case SET_VAR_REF1 -> 1;
+            case SET_VAR_REF2 -> 2;
+            case SET_VAR_REF3 -> 3;
+            default -> throw new IllegalStateException("Unexpected short set var ref opcode: " + opcode);
+        };
+        executionContext.frame.setVarRef(varRefIndex, (JSValue) executionContext.stack[executionContext.sp - 1]);
+        executionContext.pc += opcode.getSize();
+    }
+
     private void handleShl() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -5508,6 +5192,22 @@ public final class VirtualMachine {
         int leftInt = JSTypeConversions.toInt32(context, pair.left());
         int rightInt = JSTypeConversions.toInt32(context, pair.right());
         valueStack.push(JSNumber.of(leftInt << (rightInt & 0x1F)));
+    }
+
+    private void handleShlOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue rightValue = (JSValue) stack[sp - 1];
+        JSValue leftValue = (JSValue) stack[sp - 2];
+        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
+            stack[sp - 2] = JSNumber.of(((int) leftNumber.value()) << (((int) rightNumber.value()) & 0x1F));
+            executionContext.sp = sp - 1;
+        } else {
+            valueStack.stackTop = sp;
+            handleShl();
+            executionContext.sp = valueStack.stackTop;
+        }
+        executionContext.pc += Opcode.SHL.getSize();
     }
 
     private void handleShr() {
@@ -5531,6 +5231,21 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
     }
 
+    private void handleShrOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleShr();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.SHR.getSize();
+    }
+
+    private void handleSpecialObject(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int objectType = executionContext.bytecode.readU8(pc + 1);
+        JSValue specialObject = createSpecialObject(objectType, executionContext.frame);
+        executionContext.stack[executionContext.sp++] = specialObject;
+        executionContext.pc = pc + Opcode.SPECIAL_OBJECT.getSize();
+    }
+
     private void handleStrictEq() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
@@ -5538,11 +5253,25 @@ public final class VirtualMachine {
         valueStack.push(JSBoolean.valueOf(result));
     }
 
+    private void handleStrictEqOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleStrictEq();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.STRICT_EQ.getSize();
+    }
+
     private void handleStrictNeq() {
         JSValue right = valueStack.pop();
         JSValue left = valueStack.pop();
         boolean result = !JSTypeConversions.strictEquals(left, right);
         valueStack.push(JSBoolean.valueOf(result));
+    }
+
+    private void handleStrictNeqOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleStrictNeq();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.STRICT_NEQ.getSize();
     }
 
     private void handleSub() {
@@ -5564,10 +5293,148 @@ public final class VirtualMachine {
         valueStack.push(JSNumber.of(leftNumber.value() - rightNumber.value()));
     }
 
+    private void handleSubOpcode(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue rightValue = (JSValue) stack[sp - 1];
+        JSValue leftValue = (JSValue) stack[sp - 2];
+        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
+            stack[sp - 2] = JSNumber.of(leftNumber.value() - rightNumber.value());
+            executionContext.sp = sp - 1;
+        } else {
+            valueStack.stackTop = sp;
+            handleSub();
+            executionContext.sp = valueStack.stackTop;
+        }
+        executionContext.pc += Opcode.SUB.getSize();
+    }
+
+    private void handleSwap(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue temporaryValue = stack[sp - 1];
+        stack[sp - 1] = stack[sp - 2];
+        stack[sp - 2] = temporaryValue;
+        propertyAccessLock = true;
+        executionContext.pc += 1;
+    }
+
+    private void handleSwap2(ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue firstPairLeft = stack[sp - 4];
+        JSStackValue firstPairRight = stack[sp - 3];
+        stack[sp - 4] = stack[sp - 2];
+        stack[sp - 3] = stack[sp - 1];
+        stack[sp - 2] = firstPairLeft;
+        stack[sp - 1] = firstPairRight;
+        executionContext.pc += 1;
+    }
+
+    private void handleThrowErrorOpcode(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int throwAtom = executionContext.bytecode.readU32(pc + 1);
+        int throwType = executionContext.bytecode.readU8(pc + 5);
+        String throwName = executionContext.bytecode.getAtoms()[throwAtom];
+        switch (throwType) {
+            case 0 -> context.throwTypeError("'" + throwName + "' is read-only");
+            case 1 -> context.throwError("SyntaxError: redeclaration of '" + throwName + "'");
+            case 2 -> context.throwReferenceError(throwName + " is not initialized");
+            case 3 -> context.throwReferenceError("unsupported reference to 'super'");
+            case 4 -> context.throwTypeError("iterator does not have a throw method");
+            case 5 -> context.throwReferenceError(throwName);
+            default -> throw new JSVirtualMachineException("invalid throw_error type: " + throwType);
+        }
+        pendingException = context.getPendingException();
+        // PC intentionally unchanged. Exception unwinding loop handles control transfer.
+    }
+
+    private void handleThrowOpcode(ExecutionContext executionContext) {
+        JSValue exceptionValue = (JSValue) executionContext.stack[--executionContext.sp];
+        pendingException = exceptionValue;
+        context.setPendingException(exceptionValue);
+        // PC intentionally unchanged. Exception unwinding loop handles control transfer.
+    }
+
+    private void handleToPropKey(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue rawKey = (JSValue) stack[--sp];
+        try {
+            stack[sp++] = toPropertyKeyValue(rawKey);
+        } catch (JSVirtualMachineException e) {
+            captureVMException(e);
+            executionContext.sp = sp;
+            executionContext.pc = pc;
+            return;
+        }
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.TO_PROPKEY.getSize();
+    }
+
+    private void handleToPropKey2(ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue rawKey = (JSValue) stack[--sp];
+        JSValue baseObject = (JSValue) stack[--sp];
+        stack[sp++] = baseObject;
+        try {
+            stack[sp++] = toPropertyKeyValue(rawKey);
+        } catch (JSVirtualMachineException e) {
+            sp--;
+            captureVMException(e);
+            executionContext.sp = sp;
+            executionContext.pc = pc;
+            return;
+        }
+        executionContext.sp = sp;
+        executionContext.pc = pc + Opcode.TO_PROPKEY2.getSize();
+    }
+
+    private void handleToStringOpcode(ExecutionContext executionContext) {
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.stack;
+        JSValue value = (JSValue) stack[sp - 1];
+        if (!(value instanceof JSString)) {
+            stack[sp - 1] = JSTypeConversions.toString(context, value);
+        }
+        executionContext.pc += Opcode.TO_STRING.getSize();
+    }
+
     private void handleTypeof() {
         JSValue operand = valueStack.pop();
         String type = JSTypeChecking.typeof(operand);
         valueStack.push(new JSString(type));
+    }
+
+    private void handleTypeofIsFunctionOpcode(ExecutionContext executionContext) {
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.stack;
+        JSValue value = (JSValue) stack[sp - 1];
+        stack[sp - 1] = JSBoolean.valueOf("function".equals(JSTypeChecking.typeof(value)));
+        executionContext.pc += Opcode.TYPEOF_IS_FUNCTION.getSize();
+    }
+
+    private void handleTypeofIsUndefinedOpcode(ExecutionContext executionContext) {
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.stack;
+        JSValue value = (JSValue) stack[sp - 1];
+        stack[sp - 1] = JSBoolean.valueOf("undefined".equals(JSTypeChecking.typeof(value)));
+        executionContext.pc += Opcode.TYPEOF_IS_UNDEFINED.getSize();
+    }
+
+    private void handleTypeofOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleTypeof();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.TYPEOF.getSize();
+    }
+
+    private void handleUndefined(ExecutionContext executionContext) {
+        executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
+        executionContext.pc += 1;
     }
 
     private void handleXor() {
@@ -5590,6 +5457,13 @@ public final class VirtualMachine {
         }
         int result = JSTypeConversions.toInt32(context, pair.left()) ^ JSTypeConversions.toInt32(context, pair.right());
         valueStack.push(JSNumber.of(result));
+    }
+
+    private void handleXorOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleXor();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.XOR.getSize();
     }
 
     private void handleYield() {
@@ -5637,6 +5511,23 @@ public final class VirtualMachine {
 
         // Push the value back so it can be returned
         valueStack.push(value);
+    }
+
+    private void handleYieldOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleYield();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.YIELD.getSize();
+        if (yieldResult != null) {
+            JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
+            saveActiveGeneratorSuspendedExecutionState(
+                    executionContext.frame,
+                    executionContext.pc,
+                    executionContext.stack,
+                    executionContext.sp,
+                    executionContext.frameStackBase);
+            requestOpcodeReturnFromExecute(executionContext, returnValue);
+        }
     }
 
     private void handleYieldStar() {
@@ -5830,12 +5721,43 @@ public final class VirtualMachine {
         valueStack.push(result);
     }
 
+    private void handleYieldStarOpcode(ExecutionContext executionContext) {
+        valueStack.stackTop = executionContext.sp;
+        handleYieldStar();
+        executionContext.sp = valueStack.stackTop;
+        executionContext.pc += Opcode.YIELD_STAR.getSize();
+        if (yieldResult != null) {
+            JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
+            clearActiveGeneratorSuspendedExecutionState();
+            requestOpcodeReturnFromExecute(executionContext, returnValue);
+        }
+    }
+
     private JSValue incrementValue(JSValue value, int delta) {
         JSValue numeric = toNumericValue(value);
         if (numeric instanceof JSBigInt bigInt) {
             return new JSBigInt(bigInt.value().add(delta >= 0 ? BIGINT_ONE : BIGINT_NEGATIVE_ONE));
         }
         return JSNumber.of(((JSNumber) numeric).value() + delta);
+    }
+
+    private void initializeConstantValueIfNeeded(JSValue constantValue) {
+        if (constantValue instanceof JSFunction functionValue) {
+            functionValue.initializePrototypeChain(context);
+        } else if (constantValue instanceof JSObject objectValue) {
+            ensureConstantObjectPrototype(objectValue);
+        }
+    }
+
+    private boolean isBranchTruthy(JSValue conditionValue) {
+        if (conditionValue instanceof JSBoolean booleanValue) {
+            return booleanValue.value();
+        }
+        if (conditionValue instanceof JSNumber numberValue) {
+            double d = numberValue.value();
+            return d != 0.0 && !Double.isNaN(d);
+        }
+        return JSTypeConversions.toBoolean(conditionValue) == JSBoolean.TRUE;
     }
 
     private boolean isUninitialized(JSValue value) {
@@ -6025,11 +5947,41 @@ public final class VirtualMachine {
         return new JSVirtualMachineException(context.throwReferenceError(name + " is not defined"));
     }
 
+    private void requestOpcodeReturnFromExecute(ExecutionContext executionContext, JSValue returnValue) {
+        restoreExecuteCallerState(
+                executionContext.restoreStackTop,
+                executionContext.previousFrame,
+                executionContext.savedStrictMode);
+        executionContext.returnValue = returnValue;
+        executionContext.opcodeRequestedReturn = true;
+    }
+
     private void resetPropertyAccessTracking() {
         if (trackPropertyAccess) {
             this.propertyAccessChain.setLength(0);
         }
         this.propertyAccessLock = false;
+    }
+
+    private void restoreExecuteCallerState(int restoreStackTop, StackFrame previousFrame, boolean savedStrictMode) {
+        valueStack.stackTop = restoreStackTop;
+        currentFrame = previousFrame;
+        if (savedStrictMode) {
+            context.enterStrictMode();
+        } else {
+            context.exitStrictMode();
+        }
+    }
+
+    private void restoreExecuteFailureState(int restoreStackTop, StackFrame previousFrame, boolean savedStrictMode) {
+        valueStack.setStackTop(restoreStackTop);
+        currentFrame = previousFrame;
+        resetPropertyAccessTracking();
+        if (savedStrictMode) {
+            context.enterStrictMode();
+        } else {
+            context.exitStrictMode();
+        }
     }
 
     /**
@@ -6159,6 +6111,10 @@ public final class VirtualMachine {
     private JSValue throwMixedBigIntTypeError() {
         pendingException = context.throwTypeError("Cannot mix BigInt and other types");
         return JSUndefined.INSTANCE;
+    }
+
+    private void throwVariableUninitializedReferenceError() {
+        throw new JSVirtualMachineException(context.throwReferenceError("variable is uninitialized"));
     }
 
     private JSValue toNumericValue(JSValue value) {
@@ -6300,6 +6256,54 @@ public final class VirtualMachine {
         }
     }
 
+    private enum PendingExceptionAction {
+        NONE,
+        CONTINUE,
+        RETURN
+    }
+
     private record NumericPair(JSValue left, JSValue right, boolean bigInt) {
+    }
+
+    private final class ExecutionContext {
+        private final Bytecode bytecode;
+        private final Opcode[] decodedOpcodes;
+        private final StackFrame frame;
+        private final int frameStackBase;
+        private final byte[] instructions;
+        private final JSValue[] locals;
+        private final byte[] opcodeRebaseOffsets;
+        private final StackFrame previousFrame;
+        private final int restoreStackTop;
+        private final boolean savedStrictMode;
+        private final JSStackValue[] stack;
+        private boolean opcodeRequestedReturn;
+        private int pc;
+        private JSValue returnValue;
+        private int sp;
+
+        private ExecutionContext(
+                Bytecode bytecode,
+                StackFrame frame,
+                StackFrame previousFrame,
+                int frameStackBase,
+                int restoreStackTop,
+                boolean savedStrictMode) {
+            this.bytecode = bytecode;
+            this.instructions = bytecode.getInstructions();
+            this.decodedOpcodes = bytecode.getDecodedOpcodes();
+            this.opcodeRebaseOffsets = bytecode.getOpcodeRebaseOffsets();
+            this.frame = frame;
+            this.previousFrame = previousFrame;
+            this.frameStackBase = frameStackBase;
+            this.restoreStackTop = restoreStackTop;
+            this.savedStrictMode = savedStrictMode;
+            this.locals = frame.getLocals();
+            this.stack = valueStack.stack;
+            this.pc = 0;
+            this.opcodeRequestedReturn = false;
+            this.returnValue = null;
+            this.sp = 0;
+        }
     }
 }
