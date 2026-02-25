@@ -171,7 +171,7 @@ tasks.register<JavaExec>("test262Quick") {
     
     args = listOf("../test262", "--quick")
     
-    jvmArgs = listOf("-Xmx1g")
+    jvmArgs = listOf("-Xmx2g")
 }
 
 // Long-running tests (e.g. decodeURI heavy loops)
@@ -184,7 +184,7 @@ tasks.register<JavaExec>("test262LongRunning") {
 
     args = listOf("../test262", "--long-running")
 
-    jvmArgs = listOf("-Xmx1g")
+    jvmArgs = listOf("-Xmx2g")
 }
 
 // Language tests only
