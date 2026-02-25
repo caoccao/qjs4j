@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -82,6 +83,22 @@ public final class JSStringObject extends JSObject {
         JSObject jsObject = new JSStringObject(strValue);
         context.transferPrototype(jsObject, NAME);
         return jsObject;
+    }
+
+    /**
+     * Override enumerableKeys to include character index properties for for-in enumeration.
+     * String exotic objects have enumerable index properties for each character.
+     */
+    @Override
+    public PropertyKey[] enumerableKeys() {
+        int len = value.value().length();
+        PropertyKey[] superKeys = super.enumerableKeys();
+        List<PropertyKey> keys = new ArrayList<>(len + superKeys.length);
+        for (int i = 0; i < len; i++) {
+            keys.add(PropertyKey.fromString(String.valueOf(i)));
+        }
+        Collections.addAll(keys, superKeys);
+        return keys.toArray(new PropertyKey[0]);
     }
 
     /**
@@ -177,24 +194,6 @@ public final class JSStringObject extends JSObject {
         }
         keys.addAll(superKeys);
         return keys;
-    }
-
-    /**
-     * Override enumerableKeys to include character index properties for for-in enumeration.
-     * String exotic objects have enumerable index properties for each character.
-     */
-    @Override
-    public PropertyKey[] enumerableKeys() {
-        int len = value.value().length();
-        PropertyKey[] superKeys = super.enumerableKeys();
-        List<PropertyKey> keys = new ArrayList<>(len + superKeys.length);
-        for (int i = 0; i < len; i++) {
-            keys.add(PropertyKey.fromString(String.valueOf(i)));
-        }
-        for (PropertyKey key : superKeys) {
-            keys.add(key);
-        }
-        return keys.toArray(new PropertyKey[0]);
     }
 
     /**

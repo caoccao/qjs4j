@@ -151,13 +151,19 @@ public final class JSReflectObject {
                 }
             }
 
+            JSValue savedNewTarget = context.getConstructorNewTarget();
+            context.setConstructorNewTarget(newTarget);
             JSValue result;
-            if (function instanceof JSNativeFunction nativeFunc) {
-                result = nativeFunc.call(context, thisObject, args);
-            } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
-                result = context.getVirtualMachine().execute(bytecodeFunction, thisObject, args, newTarget);
-            } else {
-                result = function.call(context, thisObject, args);
+            try {
+                if (function instanceof JSNativeFunction nativeFunc) {
+                    result = nativeFunc.call(context, thisObject, args);
+                } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
+                    result = context.getVirtualMachine().execute(bytecodeFunction, thisObject, args, newTarget);
+                } else {
+                    result = function.call(context, thisObject, args);
+                }
+            } finally {
+                context.setConstructorNewTarget(savedNewTarget);
             }
 
             if (context.hasPendingException()) {

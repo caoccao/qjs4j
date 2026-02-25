@@ -1007,23 +1007,11 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Mark this object as an immutable prototype exotic object.
-     * Per ES2024 9.4.7, [[SetPrototypeOf]] always returns false unless
-     * the new prototype is the same as the current one.
-     * Used for Object.prototype.
-     */
-    public void setImmutablePrototype() {
-        this.immutablePrototype = true;
-    }
-
-    /**
      * Set a property value by string name.
      */
     public void set(String propertyName, JSValue value) {
         set(PropertyKey.fromString(propertyName), value);
     }
-
-    // Prototype chain
 
     /**
      * Set a property value by integer index.
@@ -1041,6 +1029,8 @@ public non-sealed class JSObject implements JSValue {
         set(PropertyKey.fromIndex(index), value);
     }
 
+    // Prototype chain
+
     /**
      * Set a property value by property key.
      */
@@ -1048,14 +1038,14 @@ public non-sealed class JSObject implements JSValue {
         set(null, key, value);
     }
 
-    // Object integrity levels (ES5)
-
     /**
      * Set a property value by property key with context for setter functions.
      */
     public void set(JSContext context, PropertyKey key, JSValue value) {
         set(context, key, value, this);
     }
+
+    // Object integrity levels (ES5)
 
     /**
      * Set a property value with an explicit receiver for setter invocation.
@@ -1082,6 +1072,16 @@ public non-sealed class JSObject implements JSValue {
      */
     public void setHTMLDDA(boolean htmlDDA) {
         this.htmlDDA = htmlDDA;
+    }
+
+    /**
+     * Mark this object as an immutable prototype exotic object.
+     * Per ES2024 9.4.7, [[SetPrototypeOf]] always returns false unless
+     * the new prototype is the same as the current one.
+     * Used for Object.prototype.
+     */
+    public void setImmutablePrototype() {
+        this.immutablePrototype = true;
     }
 
     private boolean setInternal(JSContext context, PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {

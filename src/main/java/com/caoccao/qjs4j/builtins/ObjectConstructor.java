@@ -105,6 +105,25 @@ public final class ObjectConstructor {
      * - For objects, returns the object itself
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSValue newTarget = context.getConstructorNewTarget();
+        if (newTarget != null) {
+            JSValue objectConstructor = context.getGlobalObject().get(PropertyKey.fromString(JSObject.NAME));
+            if (newTarget != objectConstructor) {
+                JSObject newObject = new JSObject();
+                if (newTarget instanceof JSObject newTargetObject) {
+                    if (!context.transferPrototypeFromConstructor(newObject, newTargetObject)) {
+                        if (context.hasPendingException()) {
+                            return JSUndefined.INSTANCE;
+                        }
+                        context.transferPrototype(newObject, JSObject.NAME);
+                    }
+                } else {
+                    context.transferPrototype(newObject, JSObject.NAME);
+                }
+                return newObject;
+            }
+        }
+
         // If no argument or undefined/null, return new empty object
         if (args.length == 0 || args[0].isNullOrUndefined()) {
             return context.createJSObject();
@@ -1318,7 +1337,7 @@ public final class ObjectConstructor {
      */
     public static JSValue values(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return context.throwTypeError("Object.values called on non-object");
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
         JSValue arg = args[0];
@@ -1328,8 +1347,14 @@ public final class ObjectConstructor {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
-        if (!(arg instanceof JSObject obj)) {
-            return context.createJSArray();
+        JSObject obj;
+        if (arg instanceof JSObject jsObject) {
+            obj = jsObject;
+        } else {
+            obj = JSTypeConversions.toObject(context, arg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         JSValue[] fastPathValues = obj.enumerableStringPropertyValuesFastPath();
@@ -1341,25 +1366,24 @@ public final class ObjectConstructor {
         }
 
         List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
-        int stringKeyCount = 0;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        List<JSValue> values = new ArrayList<>();
         for (PropertyKey key : propertyKeys) {
-            if (key.isString()) {
+            if (!key.isSymbol()) {
                 PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
                 if (descriptor != null && descriptor.isEnumerable()) {
-                    stringKeyCount++;
+                    values.add(obj.get(context, key));
+                    if (context.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
+                    }
                 }
             }
         }
-        JSValue[] values = new JSValue[stringKeyCount];
-        int valueIndex = 0;
-        for (PropertyKey key : propertyKeys) {
-            if (key.isString()) {
-                PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
-                if (descriptor != null && descriptor.isEnumerable()) {
-                    values[valueIndex++] = obj.get(key);
-                }
-            }
-        }
-        return context.createJSArray(values, true);
+        return context.createJSArray(values.toArray(new JSValue[0]), true);
     }
 }
