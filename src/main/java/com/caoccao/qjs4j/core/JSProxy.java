@@ -115,21 +115,11 @@ public final class JSProxy extends JSObject {
 
         JSFunction trapFunc = getTrapFunction("construct");
         if (trapFunc == null) {
-            // Forward to target constructor
-            if (target instanceof JSProxy targetProxy) {
-                return targetProxy.construct(context, args, newTarget);
-            }
-            if (target instanceof JSFunction targetFunc) {
-                JSObject instance = new JSObject();
-                this.context.transferPrototype(instance, targetFunc);
-
-                JSValue result = targetFunc.call(context, instance, args);
-                if (result instanceof JSObject) {
-                    return result;
-                }
-                return instance;
-            }
-            throw new JSException(this.context.throwTypeError("target is not a constructor"));
+            // ES2024 10.5.13 [[Construct]] step 7:
+            // If trap is undefined, forward using full Construct(target, args, newTarget)
+            // semantics (including bound functions, proxies, and custom newTarget).
+            JSArray argumentListArray = createArgumentsArray(args);
+            return JSReflectObject.construct(context, JSUndefined.INSTANCE, new JSValue[]{target, argumentListArray, newTarget});
         }
 
         // Create arguments array
@@ -240,6 +230,14 @@ public final class JSProxy extends JSObject {
                                 "'  that is incompatible with the existing property in the proxy target"));
             }
             if (targetDesc.isConfigurable() && settingConfigFalse) {
+                throw new JSException(context.throwTypeError(
+                        "proxy: inconsistent defineProperty"));
+            }
+            if (targetDesc.isDataDescriptor()
+                    && !targetDesc.isConfigurable()
+                    && targetDesc.isWritable()
+                    && descriptor.hasWritable()
+                    && !descriptor.isWritable()) {
                 throw new JSException(context.throwTypeError(
                         "proxy: inconsistent defineProperty"));
             }
