@@ -659,660 +659,660 @@ public final class VirtualMachine {
         switch (op) {
             // ==================== Constants and Literals ====================
             case INVALID -> {
-                handleInvalid(executionContext);
+                handleInvalid(op, executionContext);
             }
             case PUSH_I32 -> {
-                handlePushI32(executionContext);
+                handlePushI32(op, executionContext);
             }
             case PUSH_BIGINT_I32 -> {
-                handlePushBigintI32(executionContext);
+                handlePushBigintI32(op, executionContext);
             }
             case PUSH_MINUS1 -> {
-                handlePushMinus1(executionContext);
+                handlePushMinus1(op, executionContext);
             }
             case PUSH_0 -> {
-                handlePush0(executionContext);
+                handlePush0(op, executionContext);
             }
             case PUSH_1 -> {
-                handlePush1(executionContext);
+                handlePush1(op, executionContext);
             }
             case PUSH_2 -> {
-                handlePush2(executionContext);
+                handlePush2(op, executionContext);
             }
             case PUSH_3 -> {
-                handlePush3(executionContext);
+                handlePush3(op, executionContext);
             }
             case PUSH_4 -> {
-                handlePush4(executionContext);
+                handlePush4(op, executionContext);
             }
             case PUSH_5 -> {
-                handlePush5(executionContext);
+                handlePush5(op, executionContext);
             }
             case PUSH_6 -> {
-                handlePush6(executionContext);
+                handlePush6(op, executionContext);
             }
             case PUSH_7 -> {
-                handlePush7(executionContext);
+                handlePush7(op, executionContext);
             }
             case PUSH_I8 -> {
-                handlePushI8(executionContext);
+                handlePushI8(op, executionContext);
             }
             case PUSH_I16 -> {
-                handlePushI16(executionContext);
+                handlePushI16(op, executionContext);
             }
             case PUSH_CONST -> {
-                handlePushConst(executionContext);
+                handlePushConst(op, executionContext);
             }
             case PUSH_CONST8 -> {
-                handlePushConst8(executionContext);
+                handlePushConst8(op, executionContext);
             }
             case PUSH_ATOM_VALUE -> {
-                handlePushAtomValue(executionContext);
+                handlePushAtomValue(op, executionContext);
             }
             case PRIVATE_SYMBOL -> {
-                handlePrivateSymbol(executionContext);
+                handlePrivateSymbol(op, executionContext);
             }
             case FCLOSURE -> {
-                handleFclosure(executionContext);
+                handleFclosure(op, executionContext);
             }
             case FCLOSURE8 -> {
-                handleFclosure8(executionContext);
+                handleFclosure8(op, executionContext);
             }
             case PUSH_EMPTY_STRING -> {
-                handlePushEmptyString(executionContext);
+                handlePushEmptyString(op, executionContext);
             }
             case UNDEFINED -> {
-                handleUndefined(executionContext);
+                handleUndefined(op, executionContext);
             }
             case NULL -> {
-                handleNull(executionContext);
+                handleNull(op, executionContext);
             }
             case PUSH_THIS -> {
-                handlePushThis(executionContext);
+                handlePushThis(op, executionContext);
             }
             case PUSH_FALSE -> {
-                handlePushFalse(executionContext);
+                handlePushFalse(op, executionContext);
             }
             case PUSH_TRUE -> {
-                handlePushTrue(executionContext);
+                handlePushTrue(op, executionContext);
             }
             case SPECIAL_OBJECT -> {
-                handleSpecialObject(executionContext);
+                handleSpecialObject(op, executionContext);
             }
             case REST -> {
-                handleRest(executionContext);
+                handleRest(op, executionContext);
             }
 
             // ==================== Stack Manipulation ====================
             case DROP -> {
-                handleDrop(executionContext);
+                handleDrop(op, executionContext);
             }
             case NIP -> {
-                handleNip(executionContext);
+                handleNip(op, executionContext);
             }
             case DUP -> {
-                handleDup(executionContext);
+                handleDup(op, executionContext);
             }
             case DUP1 -> {
-                handleDup1(executionContext);
+                handleDup1(op, executionContext);
             }
             case DUP2 -> {
-                handleDup2(executionContext);
+                handleDup2(op, executionContext);
             }
             case INSERT2 -> {
-                handleInsert2(executionContext);
+                handleInsert2(op, executionContext);
             }
             case INSERT3 -> {
-                handleInsert3(executionContext);
+                handleInsert3(op, executionContext);
             }
             case INSERT4 -> {
-                handleInsert4(executionContext);
+                handleInsert4(op, executionContext);
             }
             case SWAP -> {
-                handleSwap(executionContext);
+                handleSwap(op, executionContext);
             }
             case ROT3L -> {
-                handleRot3l(executionContext);
+                handleRot3l(op, executionContext);
             }
             case ROT3R -> {
-                handleRot3r(executionContext);
+                handleRot3r(op, executionContext);
             }
             case SWAP2 -> {
-                handleSwap2(executionContext);
+                handleSwap2(op, executionContext);
             }
 
             // ==================== Arithmetic Operations ====================
             case ADD -> {
-                handleAddOpcode(executionContext);
+                handleAdd(op, executionContext);
             }
             case SUB -> {
-                handleSubOpcode(executionContext);
+                handleSub(op, executionContext);
             }
             case MUL -> {
-                handleMulOpcode(executionContext);
+                handleMul(op, executionContext);
             }
             case DIV -> {
-                handleDivOpcode(executionContext);
+                handleDiv(op, executionContext);
             }
             case MOD -> {
-                handleModOpcode(executionContext);
+                handleMod(op, executionContext);
             }
             case EXP, POW -> {
-                handleExpOpcode(executionContext);
+                handleExp(op, executionContext);
             }
             case PLUS -> {
-                handlePlusOpcode(executionContext);
+                handlePlus(op, executionContext);
             }
             case NEG -> {
-                handleNegOpcode(executionContext);
+                handleNeg(op, executionContext);
             }
             case INC -> {
-                handleIncOpcode(executionContext);
+                handleInc(op, executionContext);
             }
             case DEC -> {
-                handleDecOpcode(executionContext);
+                handleDec(op, executionContext);
             }
             case INC_LOC -> {
-                handleIncLoc(executionContext);
+                handleIncLoc(op, executionContext);
             }
             case DEC_LOC -> {
-                handleDecLoc(executionContext);
+                handleDecLoc(op, executionContext);
             }
             case ADD_LOC -> {
-                handleAddLoc(executionContext);
+                handleAddLoc(op, executionContext);
             }
             case POST_INC -> {
-                handlePostIncOpcode(executionContext);
+                handlePostInc(op, executionContext);
             }
             case POST_DEC -> {
-                handlePostDecOpcode(executionContext);
+                handlePostDec(op, executionContext);
             }
             case PERM3 -> {
-                handlePerm3(executionContext);
+                handlePerm3(op, executionContext);
             }
             case PERM4 -> {
-                handlePerm4(executionContext);
+                handlePerm4(op, executionContext);
             }
             case PERM5 -> {
-                handlePerm5(executionContext);
+                handlePerm5(op, executionContext);
             }
 
             // ==================== Bitwise Operations ====================
             case SHL -> {
-                handleShlOpcode(executionContext);
+                handleShl(op, executionContext);
             }
             case SAR -> {
-                handleSarOpcode(executionContext);
+                handleSar(op, executionContext);
             }
             case SHR -> {
-                handleShrOpcode(executionContext);
+                handleShr(op, executionContext);
             }
             case AND -> {
-                handleAndOpcode(executionContext);
+                handleAnd(op, executionContext);
             }
             case OR -> {
-                handleOrOpcode(executionContext);
+                handleOr(op, executionContext);
             }
             case XOR -> {
-                handleXorOpcode(executionContext);
+                handleXor(op, executionContext);
             }
             case NOT -> {
-                handleNotOpcode(executionContext);
+                handleNot(op, executionContext);
             }
 
             // ==================== Comparison Operations ====================
             case EQ -> {
-                handleEqOpcode(executionContext);
+                handleEq(op, executionContext);
             }
             case NEQ -> {
-                handleNeqOpcode(executionContext);
+                handleNeq(op, executionContext);
             }
             case STRICT_EQ -> {
-                handleStrictEqOpcode(executionContext);
+                handleStrictEq(op, executionContext);
             }
             case STRICT_NEQ -> {
-                handleStrictNeqOpcode(executionContext);
+                handleStrictNeq(op, executionContext);
             }
             case LT -> {
-                handleLtOpcode(executionContext);
+                handleLt(op, executionContext);
             }
             case LTE -> {
-                handleLteOpcode(executionContext);
+                handleLte(op, executionContext);
             }
             case GT -> {
-                handleGtOpcode(executionContext);
+                handleGt(op, executionContext);
             }
             case GTE -> {
-                handleGteOpcode(executionContext);
+                handleGte(op, executionContext);
             }
             case INSTANCEOF -> {
-                handleInstanceofOpcode(executionContext);
+                handleInstanceof(op, executionContext);
             }
             case IN -> {
-                handleInOpcode(executionContext);
+                handleIn(op, executionContext);
             }
             case PRIVATE_IN -> {
-                handlePrivateInOpcode(executionContext);
+                handlePrivateIn(op, executionContext);
             }
 
             // ==================== Logical Operations ====================
             case LOGICAL_NOT, LNOT -> {
-                handleLogicalNotOpcode(executionContext);
+                handleLogicalNot(op, executionContext);
             }
             case LOGICAL_AND -> {
-                handleLogicalAndOpcode(executionContext);
+                handleLogicalAnd(op, executionContext);
             }
             case LOGICAL_OR -> {
-                handleLogicalOrOpcode(executionContext);
+                handleLogicalOr(op, executionContext);
             }
             case NULLISH_COALESCE -> {
-                handleNullishCoalesceOpcode(executionContext);
+                handleNullishCoalesce(op, executionContext);
             }
 
             // ==================== Variable Access ====================
             case GET_VAR_UNDEF -> {
-                handleGetVarUndef(executionContext);
+                handleGetVarUndef(op, executionContext);
             }
             case GET_REF_VALUE -> {
-                handleGetRefValue(executionContext);
+                handleGetRefValue(op, executionContext);
             }
             case GET_VAR -> {
-                handleGetVar(executionContext);
+                handleGetVar(op, executionContext);
             }
             case PUT_VAR_INIT -> {
-                handlePutVarInit(executionContext);
+                handlePutVarInit(op, executionContext);
             }
             case PUT_REF_VALUE -> {
-                handlePutRefValue(executionContext);
+                handlePutRefValue(op, executionContext);
             }
             case PUT_VAR -> {
-                handlePutVar(executionContext);
+                handlePutVar(op, executionContext);
             }
             case SET_VAR -> {
-                handleSetVar(executionContext);
+                handleSetVar(op, executionContext);
             }
             case DELETE_VAR -> {
-                handleDeleteVar(executionContext);
+                handleDeleteVar(op, executionContext);
             }
             case GET_LOCAL, GET_LOC -> {
-                handleGetLoc(executionContext);
+                handleGetLoc(op, executionContext);
             }
             case GET_LOC8 -> {
-                handleGetLoc8(executionContext);
+                handleGetLoc8(op, executionContext);
             }
             case GET_LOC0 -> {
-                handleGetLoc0(executionContext);
+                handleGetLoc0(op, executionContext);
             }
             case GET_LOC1 -> {
-                handleGetLoc1(executionContext);
+                handleGetLoc1(op, executionContext);
             }
             case GET_LOC2 -> {
-                handleGetLoc2(executionContext);
+                handleGetLoc2(op, executionContext);
             }
             case GET_LOC3 -> {
-                handleGetLoc3(executionContext);
+                handleGetLoc3(op, executionContext);
             }
             case PUT_LOCAL, PUT_LOC -> {
-                handlePutLoc(executionContext);
+                handlePutLoc(op, executionContext);
             }
             case PUT_LOC8 -> {
-                handlePutLoc8(executionContext);
+                handlePutLoc8(op, executionContext);
             }
             case PUT_LOC0 -> {
-                handlePutLoc0(executionContext);
+                handlePutLoc0(op, executionContext);
             }
             case PUT_LOC1 -> {
-                handlePutLoc1(executionContext);
+                handlePutLoc1(op, executionContext);
             }
             case PUT_LOC2 -> {
-                handlePutLoc2(executionContext);
+                handlePutLoc2(op, executionContext);
             }
             case PUT_LOC3 -> {
-                handlePutLoc3(executionContext);
+                handlePutLoc3(op, executionContext);
             }
             case SET_LOCAL, SET_LOC -> {
-                handleSetLoc(executionContext);
+                handleSetLoc(op, executionContext);
             }
             case SET_LOC8 -> {
-                handleSetLoc8(executionContext);
+                handleSetLoc8(op, executionContext);
             }
             case SET_LOC0 -> {
-                handleSetLoc0(executionContext);
+                handleSetLoc0(op, executionContext);
             }
             case SET_LOC1 -> {
-                handleSetLoc1(executionContext);
+                handleSetLoc1(op, executionContext);
             }
             case SET_LOC2 -> {
-                handleSetLoc2(executionContext);
+                handleSetLoc2(op, executionContext);
             }
             case SET_LOC3 -> {
-                handleSetLoc3(executionContext);
+                handleSetLoc3(op, executionContext);
             }
             case GET_ARG -> {
-                handleGetArg(executionContext);
+                handleGetArg(op, executionContext);
             }
             case GET_ARG0, GET_ARG1, GET_ARG2, GET_ARG3 -> {
-                handleGetArgShort(executionContext, op);
+                handleGetArgShort(op, executionContext, op);
             }
             case PUT_ARG -> {
-                handlePutArg(executionContext);
+                handlePutArg(op, executionContext);
             }
             case PUT_ARG0, PUT_ARG1, PUT_ARG2, PUT_ARG3 -> {
-                handlePutArgShort(executionContext, op);
+                handlePutArgShort(op, executionContext, op);
             }
             case SET_ARG -> {
-                handleSetArg(executionContext);
+                handleSetArg(op, executionContext);
             }
             case SET_ARG0, SET_ARG1, SET_ARG2, SET_ARG3 -> {
-                handleSetArgShort(executionContext, op);
+                handleSetArgShort(op, executionContext, op);
             }
             case GET_VAR_REF -> {
-                handleGetVarRef(executionContext);
+                handleGetVarRef(op, executionContext);
             }
             case GET_VAR_REF0, GET_VAR_REF1, GET_VAR_REF2, GET_VAR_REF3 -> {
-                handleGetVarRefShort(executionContext, op);
+                handleGetVarRefShort(op, executionContext, op);
             }
             case PUT_VAR_REF -> {
-                handlePutVarRef(executionContext);
+                handlePutVarRef(op, executionContext);
             }
             case PUT_VAR_REF0, PUT_VAR_REF1, PUT_VAR_REF2, PUT_VAR_REF3 -> {
-                handlePutVarRefShort(executionContext, op);
+                handlePutVarRefShort(op, executionContext, op);
             }
             case SET_VAR_REF -> {
-                handleSetVarRef(executionContext);
+                handleSetVarRef(op, executionContext);
             }
             case SET_VAR_REF0, SET_VAR_REF1, SET_VAR_REF2, SET_VAR_REF3 -> {
-                handleSetVarRefShort(executionContext, op);
+                handleSetVarRefShort(op, executionContext, op);
             }
             case CLOSE_LOC -> {
-                handleCloseLoc(executionContext);
+                handleCloseLoc(op, executionContext);
             }
             case SET_LOC_UNINITIALIZED -> {
-                handleSetLocUninitialized(executionContext);
+                handleSetLocUninitialized(op, executionContext);
             }
             case GET_LOC_CHECK, GET_LOC_CHECKTHIS -> {
-                handleGetLocCheck(executionContext);
+                handleGetLocCheck(op, executionContext);
             }
             case PUT_LOC_CHECK -> {
-                handlePutLocCheck(executionContext);
+                handlePutLocCheck(op, executionContext);
             }
             case SET_LOC_CHECK -> {
-                handleSetLocCheck(executionContext);
+                handleSetLocCheck(op, executionContext);
             }
             case PUT_LOC_CHECK_INIT -> {
-                handlePutLocCheckInit(executionContext);
+                handlePutLocCheckInit(op, executionContext);
             }
             case GET_VAR_REF_CHECK -> {
-                handleGetVarRefCheck(executionContext);
+                handleGetVarRefCheck(op, executionContext);
             }
             case PUT_VAR_REF_CHECK -> {
-                handlePutVarRefCheck(executionContext);
+                handlePutVarRefCheck(op, executionContext);
             }
             case PUT_VAR_REF_CHECK_INIT -> {
-                handlePutVarRefCheckInit(executionContext);
+                handlePutVarRefCheckInit(op, executionContext);
             }
             case MAKE_LOC_REF, MAKE_ARG_REF, MAKE_VAR_REF_REF -> {
-                handleMakeScopedRef(executionContext, op);
+                handleMakeScopedRef(op, executionContext, op);
             }
             case MAKE_VAR_REF -> {
-                handleMakeVarRef(executionContext);
+                handleMakeVarRef(op, executionContext);
             }
 
             // ==================== Property Access ====================
             case GET_FIELD -> {
-                handleGetField(executionContext);
+                handleGetField(op, executionContext);
             }
             case GET_LENGTH -> {
-                handleGetLength(executionContext);
+                handleGetLength(op, executionContext);
             }
             case PUT_FIELD -> {
-                handlePutField(executionContext);
+                handlePutField(op, executionContext);
             }
             case GET_ARRAY_EL -> {
-                handleGetArrayEl(executionContext);
+                handleGetArrayEl(op, executionContext);
             }
             case GET_ARRAY_EL2 -> {
-                handleGetArrayEl2(executionContext);
+                handleGetArrayEl2(op, executionContext);
             }
             case GET_ARRAY_EL3 -> {
-                handleGetArrayEl3(executionContext);
+                handleGetArrayEl3(op, executionContext);
             }
             case PUT_ARRAY_EL -> {
-                handlePutArrayEl(executionContext);
+                handlePutArrayEl(op, executionContext);
             }
             case GET_SUPER_VALUE -> {
-                handleGetSuperValue(executionContext);
+                handleGetSuperValue(op, executionContext);
             }
             case PUT_SUPER_VALUE -> {
-                handlePutSuperValue(executionContext);
+                handlePutSuperValue(op, executionContext);
             }
             case TO_PROPKEY -> {
-                handleToPropKey(executionContext);
+                handleToPropKey(op, executionContext);
             }
             case TO_PROPKEY2 -> {
-                handleToPropKey2(executionContext);
+                handleToPropKey2(op, executionContext);
             }
 
             // ==================== Control Flow ====================
             case IF_FALSE -> {
-                handleIfFalse(executionContext);
+                handleIfFalse(op, executionContext);
             }
             case IF_TRUE -> {
-                handleIfTrue(executionContext);
+                handleIfTrue(op, executionContext);
             }
             case IF_TRUE8 -> {
-                handleIfTrue8(executionContext);
+                handleIfTrue8(op, executionContext);
             }
             case IF_FALSE8 -> {
-                handleIfFalse8(executionContext);
+                handleIfFalse8(op, executionContext);
             }
             case GOTO -> {
-                handleGoto(executionContext);
+                handleGoto(op, executionContext);
             }
             case GOTO8 -> {
-                handleGoto8(executionContext);
+                handleGoto8(op, executionContext);
             }
             case GOTO16 -> {
-                handleGoto16(executionContext);
+                handleGoto16(op, executionContext);
             }
             case RETURN -> {
-                handleReturnOpcode(executionContext);
+                handleReturn(op, executionContext);
             }
             case RETURN_UNDEF -> {
-                handleReturnUndefOpcode(executionContext);
+                handleReturnUndef(op, executionContext);
             }
             case RETURN_ASYNC -> {
-                handleReturnAsyncOpcode(executionContext);
+                handleReturnAsync(op, executionContext);
             }
 
             // ==================== Function Calls ====================
             case INIT_CTOR -> {
-                handleInitCtorOpcode(executionContext);
+                handleInitCtor(op, executionContext);
             }
             case CALL -> {
-                handleCallOpcode(executionContext);
+                handleCall(op, executionContext);
             }
             case CALL0 -> {
-                handleCall0(executionContext);
+                handleCall0(op, executionContext);
             }
             case CALL1 -> {
-                handleCall1(executionContext);
+                handleCall1(op, executionContext);
             }
             case CALL2 -> {
-                handleCall2(executionContext);
+                handleCall2(op, executionContext);
             }
             case CALL3 -> {
-                handleCall3(executionContext);
+                handleCall3(op, executionContext);
             }
             case CALL_CONSTRUCTOR -> {
-                handleCallConstructorOpcode(executionContext);
+                handleCallConstructor(op, executionContext);
             }
 
             // ==================== Object/Array Creation ====================
             case OBJECT, OBJECT_NEW -> {
-                handleObjectNew(executionContext);
+                handleObjectNew(op, executionContext);
             }
             case ARRAY_NEW -> {
-                handleArrayNew(executionContext);
+                handleArrayNew(op, executionContext);
             }
             case ARRAY_FROM -> {
-                handleArrayFrom(executionContext);
+                handleArrayFrom(op, executionContext);
             }
             case APPLY -> {
-                handleApply(executionContext);
+                handleApply(op, executionContext);
             }
             case PUSH_ARRAY -> {
-                handlePushArray(executionContext);
+                handlePushArray(op, executionContext);
             }
             case APPEND -> {
-                handleAppend(executionContext);
+                handleAppend(op, executionContext);
             }
             case DEFINE_ARRAY_EL -> {
-                handleDefineArrayEl(executionContext);
+                handleDefineArrayEl(op, executionContext);
             }
             case DEFINE_PROP -> {
-                handleDefineProp(executionContext);
+                handleDefineProp(op, executionContext);
             }
             case SET_NAME -> {
-                handleSetName(executionContext);
+                handleSetName(op, executionContext);
             }
             case SET_NAME_COMPUTED -> {
-                handleSetNameComputed(executionContext);
+                handleSetNameComputed(op, executionContext);
             }
             case SET_PROTO -> {
-                handleSetProto(executionContext);
+                handleSetProto(op, executionContext);
             }
             case SET_HOME_OBJECT -> {
-                handleSetHomeObject(executionContext);
+                handleSetHomeObject(op, executionContext);
             }
             case COPY_DATA_PROPERTIES -> {
-                handleCopyDataProperties(executionContext);
+                handleCopyDataProperties(op, executionContext);
             }
             case DEFINE_CLASS -> {
-                handleDefineClass(executionContext);
+                handleDefineClass(op, executionContext);
             }
             case DEFINE_CLASS_COMPUTED -> {
-                handleDefineClassComputed(executionContext);
+                handleDefineClassComputed(op, executionContext);
             }
             case DEFINE_METHOD -> {
-                handleDefineMethod(executionContext);
+                handleDefineMethod(op, executionContext);
             }
             case DEFINE_METHOD_COMPUTED -> {
-                handleDefineMethodComputed(executionContext);
+                handleDefineMethodComputed(op, executionContext);
             }
             case DEFINE_FIELD -> {
-                handleDefineField(executionContext);
+                handleDefineField(op, executionContext);
             }
             case DEFINE_PRIVATE_FIELD -> {
-                handleDefinePrivateField(executionContext);
+                handleDefinePrivateField(op, executionContext);
             }
             case GET_PRIVATE_FIELD -> {
-                handleGetPrivateField(executionContext);
+                handleGetPrivateField(op, executionContext);
             }
             case PUT_PRIVATE_FIELD -> {
-                handlePutPrivateField(executionContext);
+                handlePutPrivateField(op, executionContext);
             }
 
             // ==================== Exception Handling ====================
             case THROW -> {
-                handleThrowOpcode(executionContext);
+                handleThrow(op, executionContext);
             }
             case THROW_ERROR -> {
-                handleThrowErrorOpcode(executionContext);
+                handleThrowError(op, executionContext);
             }
             case CATCH -> {
-                handleCatchOpcode(executionContext);
+                handleCatch(op, executionContext);
             }
             case NIP_CATCH -> {
-                handleNipCatchOpcode(executionContext);
+                handleNipCatch(op, executionContext);
             }
 
             // ==================== Type Operations ====================
             case TO_STRING -> {
-                handleToStringOpcode(executionContext);
+                handleToString(op, executionContext);
             }
             case TYPEOF -> {
-                handleTypeofOpcode(executionContext);
+                handleTypeof(op, executionContext);
             }
             case DELETE -> {
-                handleDeleteOpcode(executionContext);
+                handleDelete(op, executionContext);
             }
             case IS_UNDEFINED_OR_NULL -> {
-                handleIsUndefinedOrNullOpcode(executionContext);
+                handleIsUndefinedOrNull(op, executionContext);
             }
             case IS_UNDEFINED -> {
-                handleIsUndefinedOpcode(executionContext);
+                handleIsUndefined(op, executionContext);
             }
             case IS_NULL -> {
-                handleIsNullOpcode(executionContext);
+                handleIsNull(op, executionContext);
             }
             case TYPEOF_IS_UNDEFINED -> {
-                handleTypeofIsUndefinedOpcode(executionContext);
+                handleTypeofIsUndefined(op, executionContext);
             }
             case TYPEOF_IS_FUNCTION -> {
-                handleTypeofIsFunctionOpcode(executionContext);
+                handleTypeofIsFunction(op, executionContext);
             }
 
             // ==================== Async Operations ====================
             case ITERATOR_CHECK_OBJECT -> {
-                handleIteratorCheckObjectOpcode(executionContext);
+                handleIteratorCheckObject(op, executionContext);
             }
             case ITERATOR_GET_VALUE_DONE -> {
-                handleIteratorGetValueDoneOpcode(executionContext);
+                handleIteratorGetValueDone(op, executionContext);
             }
             case ITERATOR_CLOSE -> {
-                handleIteratorCloseOpcode(executionContext);
+                handleIteratorClose(op, executionContext);
             }
             case ITERATOR_NEXT -> {
-                handleIteratorNextOpcode(executionContext);
+                handleIteratorNext(op, executionContext);
             }
             case ITERATOR_CALL -> {
-                handleIteratorCallOpcode(executionContext);
+                handleIteratorCall(op, executionContext);
             }
             case AWAIT -> {
-                handleAwaitOpcode(executionContext);
+                handleAwait(op, executionContext);
             }
             case FOR_AWAIT_OF_START -> {
-                handleForAwaitOfStartOpcode(executionContext);
+                handleForAwaitOfStart(op, executionContext);
             }
             case FOR_AWAIT_OF_NEXT -> {
-                handleForAwaitOfNextOpcode(executionContext);
+                handleForAwaitOfNext(op, executionContext);
             }
             case FOR_OF_START -> {
-                handleForOfStartOpcode(executionContext);
+                handleForOfStart(op, executionContext);
             }
             case FOR_OF_NEXT -> {
-                handleForOfNextOpcode(executionContext);
+                handleForOfNext(op, executionContext);
             }
             case FOR_IN_START -> {
-                handleForInStartOpcode(executionContext);
+                handleForInStart(op, executionContext);
             }
             case FOR_IN_NEXT -> {
-                handleForInNextOpcode(executionContext);
+                handleForInNext(op, executionContext);
             }
             case FOR_IN_END -> {
-                handleForInEndOpcode(executionContext);
+                handleForInEnd(op, executionContext);
             }
 
             // ==================== Generator Operations ====================
             case INITIAL_YIELD -> {
-                handleInitialYieldOpcode(executionContext);
+                handleInitialYield(op, executionContext);
             }
             case YIELD -> {
-                handleYieldOpcode(executionContext);
+                handleYield(op, executionContext);
             }
             case YIELD_STAR -> {
-                handleYieldStarOpcode(executionContext);
+                handleYieldStar(op, executionContext);
             }
             case ASYNC_YIELD_STAR -> {
-                handleAsyncYieldStarOpcode(executionContext);
+                handleAsyncYieldStar(op, executionContext);
             }
             case NOP -> {
-                handleNop(executionContext);
+                handleNop(op, executionContext);
             }
 
             case GET_SUPER -> {
-                handleGetSuper(executionContext);
+                handleGetSuper(op, executionContext);
             }
 
             // ==================== Other Operations ====================
