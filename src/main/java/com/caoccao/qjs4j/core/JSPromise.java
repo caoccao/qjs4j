@@ -222,14 +222,14 @@ public final class JSPromise extends JSObject {
             return;
         }
 
-        JSValue thenValue = resolutionObject.get(PropertyKey.THEN);
+        JSValue thenValue = resolutionObject.get(context, PropertyKey.THEN);
         if (context.hasPendingException()) {
             JSValue error = context.getPendingException();
             context.clearPendingException();
             reject(error);
             return;
         }
-        if (!(thenValue instanceof JSFunction thenFunction)) {
+        if (!JSTypeChecking.isCallable(thenValue)) {
             fulfill(resolution);
             return;
         }
@@ -257,7 +257,11 @@ public final class JSPromise extends JSObject {
                         return JSUndefined.INSTANCE;
                     });
             try {
-                thenFunction.call(context, resolutionObject, new JSValue[]{resolveFunc, rejectFunc});
+                if (thenValue instanceof JSProxy thenProxy) {
+                    thenProxy.apply(context, resolutionObject, new JSValue[]{resolveFunc, rejectFunc});
+                } else {
+                    ((JSFunction) thenValue).call(context, resolutionObject, new JSValue[]{resolveFunc, rejectFunc});
+                }
                 if (context.hasPendingException() && !resolveState.alreadyResolved) {
                     JSValue error = context.getPendingException();
                     context.clearPendingException();
@@ -272,7 +276,13 @@ public final class JSPromise extends JSObject {
             } catch (Exception e) {
                 if (!resolveState.alreadyResolved) {
                     resolveState.alreadyResolved = true;
-                    reject(new JSString("Error in promise resolution: " + e.getMessage()));
+                    if (context.hasPendingException()) {
+                        JSValue error = context.getPendingException();
+                        context.clearPendingException();
+                        reject(error);
+                    } else {
+                        reject(new JSString("Error in promise resolution: " + e.getMessage()));
+                    }
                 }
             }
         });
@@ -314,7 +324,13 @@ public final class JSPromise extends JSObject {
                 } catch (Exception e) {
                     // If handler throws, reject the chained promise
                     if (reaction.promise != null) {
-                        reaction.promise.reject(new JSString("Error in promise handler: " + e.getMessage()));
+                        if (reaction.context.hasPendingException()) {
+                            JSValue error = reaction.context.getPendingException();
+                            reaction.context.clearPendingException();
+                            reaction.promise.reject(error);
+                        } else {
+                            reaction.promise.reject(new JSString("Error in promise handler: " + e.getMessage()));
+                        }
                     }
                 }
             } else {

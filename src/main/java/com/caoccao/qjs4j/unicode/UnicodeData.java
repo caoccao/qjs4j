@@ -177,6 +177,9 @@ public final class UnicodeData {
      * Follows ECMAScript specification.
      */
     public static boolean isWhiteSpace(int codePoint) {
+        if (codePoint == 0x00A0) {
+            return true;
+        }
         if (codePoint < 256) {
             return (ASCII_CTYPE_BITS[codePoint] & UNICODE_C_SPACE) != 0;
         }

@@ -34,70 +34,12 @@ import java.util.Optional;
  * All fields are initialized and never null.
  */
 public final class PropertyDescriptor {
-    public enum AccessorState {
-        None(false, false),
-        Enumerable(true, false),
-        Configurable(false, true),
-        All(true, true);
-
-        private final boolean enumerable;
-        private final boolean configurable;
-
-        AccessorState(boolean enumerable, boolean configurable) {
-            this.enumerable = enumerable;
-            this.configurable = configurable;
-        }
-
-        public boolean isConfigurable() {
-            return configurable;
-        }
-
-        public boolean isEnumerable() {
-            return enumerable;
-        }
-    }
-
-    public enum DataState {
-        None(false, false, false),
-        Enumerable(false, true, false),
-        EnumerableConfigurable(false, true, true),
-        Configurable(false, false, true),
-        ConfigurableWritable(true, false, true),
-        Writable(true, false, false),
-        EnumerableWritable(true, true, false),
-        All(true, true, true);
-
-        private final boolean writable;
-        private final boolean enumerable;
-        private final boolean configurable;
-
-        DataState(boolean writable, boolean enumerable, boolean configurable) {
-            this.writable = writable;
-            this.enumerable = enumerable;
-            this.configurable = configurable;
-        }
-
-        public boolean isConfigurable() {
-            return configurable;
-        }
-
-        public boolean isEnumerable() {
-            return enumerable;
-        }
-
-        public boolean isWritable() {
-            return writable;
-        }
-
-    }
-
     private Optional<Boolean> configurable;
     private Optional<Boolean> enumerable;
     private JSValue getter;
     private JSValue setter;
     private Optional<JSValue> value;
     private Optional<Boolean> writable;
-
     public PropertyDescriptor() {
         this.configurable = Optional.empty();
         this.enumerable = Optional.empty();
@@ -145,8 +87,6 @@ public final class PropertyDescriptor {
         return dataDescriptor(value, DataState.All);
     }
 
-    // Getters
-
     /**
      * Complete this descriptor with default values for accessor.
      */
@@ -184,6 +124,8 @@ public final class PropertyDescriptor {
         }
     }
 
+    // Getters
+
     public JSFunction getGetter() {
         return getter instanceof JSFunction f ? f : null;
     }
@@ -200,8 +142,6 @@ public final class PropertyDescriptor {
         return configurable.isPresent();
     }
 
-    // "Has" checks for partial descriptors
-
     public boolean hasEnumerable() {
         return enumerable.isPresent();
     }
@@ -209,6 +149,8 @@ public final class PropertyDescriptor {
     public boolean hasGetter() {
         return !(getter instanceof JSUndefined);
     }
+
+    // "Has" checks for partial descriptors
 
     public boolean hasSetter() {
         return !(setter instanceof JSUndefined);
@@ -230,8 +172,6 @@ public final class PropertyDescriptor {
         return !(getter instanceof JSUndefined) || !(setter instanceof JSUndefined);
     }
 
-    // Setters
-
     public boolean isConfigurable() {
         return configurable.orElse(false);
     }
@@ -243,6 +183,8 @@ public final class PropertyDescriptor {
     public boolean isDataDescriptor() {
         return value.isPresent() || writable.isPresent();
     }
+
+    // Setters
 
     /**
      * Check if descriptor is empty (no attributes set).
@@ -306,8 +248,6 @@ public final class PropertyDescriptor {
         }
     }
 
-    // Type checks
-
     public void setConfigurable(boolean configurable) {
         this.configurable = Optional.of(configurable);
     }
@@ -315,6 +255,8 @@ public final class PropertyDescriptor {
     public void setEnumerable(boolean enumerable) {
         this.enumerable = Optional.of(enumerable);
     }
+
+    // Type checks
 
     public void setGetter(JSFunction getter) {
         this.getter = getter;
@@ -358,5 +300,62 @@ public final class PropertyDescriptor {
         } // Remove trailing ", "
         sb.append("}");
         return sb.toString();
+    }
+
+    public enum AccessorState {
+        None(false, false),
+        Enumerable(true, false),
+        Configurable(false, true),
+        All(true, true);
+
+        private final boolean configurable;
+        private final boolean enumerable;
+
+        AccessorState(boolean enumerable, boolean configurable) {
+            this.enumerable = enumerable;
+            this.configurable = configurable;
+        }
+
+        public boolean isConfigurable() {
+            return configurable;
+        }
+
+        public boolean isEnumerable() {
+            return enumerable;
+        }
+    }
+
+    public enum DataState {
+        None(false, false, false),
+        Enumerable(false, true, false),
+        EnumerableConfigurable(false, true, true),
+        Configurable(false, false, true),
+        ConfigurableWritable(true, false, true),
+        Writable(true, false, false),
+        EnumerableWritable(true, true, false),
+        All(true, true, true);
+
+        private final boolean configurable;
+        private final boolean enumerable;
+        private final boolean writable;
+
+        DataState(boolean writable, boolean enumerable, boolean configurable) {
+            this.writable = writable;
+            this.enumerable = enumerable;
+            this.configurable = configurable;
+        }
+
+        public boolean isConfigurable() {
+            return configurable;
+        }
+
+        public boolean isEnumerable() {
+            return enumerable;
+        }
+
+        public boolean isWritable() {
+            return writable;
+        }
+
     }
 }
