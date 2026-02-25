@@ -1880,6 +1880,18 @@ public final class VirtualMachine {
                             }
                         }
 
+                        // Fast path: JSArray with numeric index (avoids PropertyKey allocation)
+                        if (gaelObj instanceof JSArray gaelArray && gaelIdx instanceof JSNumber gaelNum) {
+                            double d = gaelNum.value();
+                            int idx = (int) d;
+                            if (idx == d && idx >= 0) {
+                                JSValue result = gaelArray.get((long) idx);
+                                stack[sp - 1] = result != null ? result : JSUndefined.INSTANCE;
+                                pc += 1;
+                                break;
+                            }
+                        }
+
                         // Slow path: sync sp and use valueStack
                         valueStack.stackTop = sp - 1; // pop both, we'll push result
                         JSObject targetObj = toObject(gaelObj);
@@ -1932,6 +1944,18 @@ public final class VirtualMachine {
                             int idx = (int) d;
                             if (idx == d && idx >= 0 && idx < str.value().length()) {
                                 stack[sp++] = new JSString(String.valueOf(str.value().charAt(idx)));
+                                pc += 1;
+                                break;
+                            }
+                        }
+
+                        // Fast path: JSArray with numeric index (avoids PropertyKey allocation)
+                        if (arrayObj instanceof JSArray gel2Array && index instanceof JSNumber gel2Num) {
+                            double d = gel2Num.value();
+                            int idx = (int) d;
+                            if (idx == d && idx >= 0) {
+                                JSValue result = gel2Array.get((long) idx);
+                                stack[sp++] = result != null ? result : JSUndefined.INSTANCE;
                                 pc += 1;
                                 break;
                             }
@@ -1997,6 +2021,24 @@ public final class VirtualMachine {
                         JSValue putElValue = (JSValue) stack[--sp];   // Pop value
                         JSValue putElIndex = (JSValue) stack[--sp];   // Pop property
                         JSValue putElObj = (JSValue) stack[--sp];     // Pop object
+
+                        // Fast path: JSArray with numeric index (avoids PropertyKey allocation)
+                        if (putElObj instanceof JSArray putElArray && putElIndex instanceof JSNumber putElNum) {
+                            double d = putElNum.value();
+                            int idx = (int) d;
+                            if (idx == d && idx >= 0) {
+                                putElArray.set(context, (long) idx, putElValue);
+                                if (context.hasPendingException()) {
+                                    pendingException = context.getPendingException();
+                                    context.clearPendingException();
+                                }
+                                // Assignment expressions return the assigned value
+                                stack[sp++] = putElValue;
+                                pc += op.getSize();
+                                break;
+                            }
+                        }
+
                         if (putElObj instanceof JSObject jsObj) {
                             try {
                                 PropertyKey key = PropertyKey.fromValue(context, putElIndex);

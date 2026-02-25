@@ -152,22 +152,26 @@ public final class FunctionPrototype {
             return null;
         }
 
-        JSValue[] callArgs = new JSValue[(int) length];
-        for (int i = 0; i < callArgs.length; i++) {
-            JSValue argumentValue = arrayLike.get(context, PropertyKey.fromString(String.valueOf(i)));
+        int len = (int) length;
+        JSValue[] callArgs = new JSValue[len];
+
+        // Fast path: JSArray with dense storage — direct indexed access avoids
+        // PropertyKey allocation and property chain lookup per element.
+        if (arrayLike instanceof JSArray jsArray) {
+            for (int i = 0; i < len; i++) {
+                JSValue value = jsArray.get(i);
+                callArgs[i] = value != null ? value : JSUndefined.INSTANCE;
+            }
+            return callArgs;
+        }
+
+        // Generic path for other array-like objects (arguments, typed arrays, etc.)
+        for (int i = 0; i < len; i++) {
+            JSValue argumentValue = arrayLike.get(context, PropertyKey.fromIndex(i));
             if (context.hasPendingException()) {
                 return null;
             }
-            if (argumentValue instanceof JSUndefined) {
-                argumentValue = arrayLike.get(context, PropertyKey.fromString(Integer.toString(i)));
-                if (context.hasPendingException()) {
-                    return null;
-                }
-            }
-            callArgs[i] = argumentValue;
-            if (context.hasPendingException()) {
-                return null;
-            }
+            callArgs[i] = argumentValue != null ? argumentValue : JSUndefined.INSTANCE;
         }
         return callArgs;
     }
