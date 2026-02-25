@@ -225,23 +225,38 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         byte[] instructions = executionContext.instructions;
         int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
-        internalHandleCallFixedArityOpcode(executionContext, argumentCount, op.getSize());
+        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        internalHandleCall(executionContext, argumentCount);
+        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        executionContext.pc += op.getSize();
     }
 
     static void handleCall0(Opcode op, ExecutionContext executionContext) {
-        internalHandleCallFixedArityOpcode(executionContext, 0, op.getSize());
+        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        internalHandleCall(executionContext, 0);
+        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        executionContext.pc += op.getSize();
     }
 
     static void handleCall1(Opcode op, ExecutionContext executionContext) {
-        internalHandleCallFixedArityOpcode(executionContext, 1, op.getSize());
+        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        internalHandleCall(executionContext, 1);
+        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        executionContext.pc += op.getSize();
     }
 
     static void handleCall2(Opcode op, ExecutionContext executionContext) {
-        internalHandleCallFixedArityOpcode(executionContext, 2, op.getSize());
+        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        internalHandleCall(executionContext, 2);
+        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        executionContext.pc += op.getSize();
     }
 
     static void handleCall3(Opcode op, ExecutionContext executionContext) {
-        internalHandleCallFixedArityOpcode(executionContext, 3, op.getSize());
+        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        internalHandleCall(executionContext, 3);
+        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        executionContext.pc += op.getSize();
     }
 
     static void handleCallConstructor(Opcode op, ExecutionContext executionContext) {
@@ -291,7 +306,14 @@ public final class OpcodeHandler {
     }
 
     static void handleDecLoc(Opcode op, ExecutionContext executionContext) {
-        internalHandleIncDecLoc(executionContext, -1);
+        int pc = executionContext.pc;
+        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
+        JSValue localValue = executionContext.locals[localIndex];
+        if (localValue == null) {
+            localValue = JSUndefined.INSTANCE;
+        }
+        executionContext.locals[localIndex] = executionContext.virtualMachine.incrementValue(localValue, -1);
+        executionContext.pc = pc + op.getSize();
     }
 
     static void handleDefineArrayEl(Opcode op, ExecutionContext executionContext) {
@@ -757,16 +779,16 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
-    static void handleGetArgShort(Opcode op, ExecutionContext executionContext, Opcode opcode) {
-        int argumentIndex = switch (opcode) {
+    static void handleGetArgShort(Opcode op, ExecutionContext executionContext) {
+        int argumentIndex = switch (op) {
             case GET_ARG0 -> 0;
             case GET_ARG1 -> 1;
             case GET_ARG2 -> 2;
             case GET_ARG3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short get arg opcode: " + opcode);
+            default -> throw new IllegalStateException("Unexpected short get arg opcode: " + op);
         };
         executionContext.stack[executionContext.sp++] = executionContext.virtualMachine.getArgumentValue(argumentIndex);
-        executionContext.pc += opcode.getSize();
+        executionContext.pc += op.getSize();
     }
 
     static void handleGetArrayEl(Opcode op, ExecutionContext executionContext) {
@@ -954,29 +976,41 @@ public final class OpcodeHandler {
         byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
         int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
-        internalHandleGetLocAtIndex(executionContext, localIndex, op.getSize());
+        JSValue localValue = executionContext.locals[localIndex];
+        executionContext.stack[executionContext.sp++] = localValue != null ? localValue : JSUndefined.INSTANCE;
+        executionContext.pc += op.getSize();
     }
 
     static void handleGetLoc0(Opcode op, ExecutionContext executionContext) {
-        internalHandleGetLocAtIndex(executionContext, 0, op.getSize());
+        JSValue localValue = executionContext.locals[0];
+        executionContext.stack[executionContext.sp++] = localValue != null ? localValue : JSUndefined.INSTANCE;
+        executionContext.pc += op.getSize();
     }
 
     static void handleGetLoc1(Opcode op, ExecutionContext executionContext) {
-        internalHandleGetLocAtIndex(executionContext, 1, op.getSize());
+        JSValue localValue = executionContext.locals[1];
+        executionContext.stack[executionContext.sp++] = localValue != null ? localValue : JSUndefined.INSTANCE;
+        executionContext.pc += op.getSize();
     }
 
     static void handleGetLoc2(Opcode op, ExecutionContext executionContext) {
-        internalHandleGetLocAtIndex(executionContext, 2, op.getSize());
+        JSValue localValue = executionContext.locals[2];
+        executionContext.stack[executionContext.sp++] = localValue != null ? localValue : JSUndefined.INSTANCE;
+        executionContext.pc += op.getSize();
     }
 
     static void handleGetLoc3(Opcode op, ExecutionContext executionContext) {
-        internalHandleGetLocAtIndex(executionContext, 3, op.getSize());
+        JSValue localValue = executionContext.locals[3];
+        executionContext.stack[executionContext.sp++] = localValue != null ? localValue : JSUndefined.INSTANCE;
+        executionContext.pc += op.getSize();
     }
 
     static void handleGetLoc8(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int localIndex = executionContext.instructions[pc + 1] & 0xFF;
-        internalHandleGetLocAtIndex(executionContext, localIndex, op.getSize());
+        JSValue localValue = executionContext.locals[localIndex];
+        executionContext.stack[executionContext.sp++] = localValue != null ? localValue : JSUndefined.INSTANCE;
+        executionContext.pc += op.getSize();
     }
 
     static void handleGetLocCheck(Opcode op, ExecutionContext executionContext) {
@@ -1145,16 +1179,16 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
-    static void handleGetVarRefShort(Opcode op, ExecutionContext executionContext, Opcode opcode) {
-        int varRefIndex = switch (opcode) {
+    static void handleGetVarRefShort(Opcode op, ExecutionContext executionContext) {
+        int varRefIndex = switch (op) {
             case GET_VAR_REF0 -> 0;
             case GET_VAR_REF1 -> 1;
             case GET_VAR_REF2 -> 2;
             case GET_VAR_REF3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short get var ref opcode: " + opcode);
+            default -> throw new IllegalStateException("Unexpected short get var ref opcode: " + op);
         };
         executionContext.stack[executionContext.sp++] = executionContext.frame.getVarRef(varRefIndex);
-        executionContext.pc += opcode.getSize();
+        executionContext.pc += op.getSize();
     }
 
     static void handleGetVarUndef(Opcode op, ExecutionContext executionContext) {
@@ -1283,7 +1317,14 @@ public final class OpcodeHandler {
     }
 
     static void handleIncLoc(Opcode op, ExecutionContext executionContext) {
-        internalHandleIncDecLoc(executionContext, 1);
+        int pc = executionContext.pc;
+        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
+        JSValue localValue = executionContext.locals[localIndex];
+        if (localValue == null) {
+            localValue = JSUndefined.INSTANCE;
+        }
+        executionContext.locals[localIndex] = executionContext.virtualMachine.incrementValue(localValue, 1);
+        executionContext.pc = pc + op.getSize();
     }
 
     static void handleInitCtor(Opcode op, ExecutionContext executionContext) {
@@ -1367,9 +1408,10 @@ public final class OpcodeHandler {
     }
 
     static void handleIsUndefinedOrNull(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleIsUndefinedOrNull(executionContext);
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.stack;
+        JSValue value = (JSValue) stack[sp - 1];
+        stack[sp - 1] = JSBoolean.valueOf(value instanceof JSNull || value instanceof JSUndefined);
         executionContext.pc += op.getSize();
     }
 
@@ -1551,15 +1593,15 @@ public final class OpcodeHandler {
         executionContext.pc += op.getSize();
     }
 
-    static void handleMakeScopedRef(Opcode op, ExecutionContext executionContext, Opcode opcode) {
+    static void handleMakeScopedRef(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
         int refIndex = executionContext.bytecode.readU16(pc + 5);
         String atomName = executionContext.bytecode.getAtoms()[atomIndex];
-        JSObject referenceObject = executionContext.virtualMachine.createReferenceObject(opcode, refIndex, atomName);
+        JSObject referenceObject = executionContext.virtualMachine.createReferenceObject(op, refIndex, atomName);
         executionContext.stack[executionContext.sp++] = referenceObject;
         executionContext.stack[executionContext.sp++] = new JSString(atomName);
-        executionContext.pc = pc + opcode.getSize();
+        executionContext.pc = pc + op.getSize();
     }
 
     static void handleMakeVarRef(Opcode op, ExecutionContext executionContext) {
@@ -1885,17 +1927,17 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
-    static void handlePutArgShort(Opcode op, ExecutionContext executionContext, Opcode opcode) {
-        int argumentIndex = switch (opcode) {
+    static void handlePutArgShort(Opcode op, ExecutionContext executionContext) {
+        int argumentIndex = switch (op) {
             case PUT_ARG0 -> 0;
             case PUT_ARG1 -> 1;
             case PUT_ARG2 -> 2;
             case PUT_ARG3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short put arg opcode: " + opcode);
+            default -> throw new IllegalStateException("Unexpected short put arg opcode: " + op);
         };
         JSValue argumentValue = (JSValue) executionContext.stack[--executionContext.sp];
         executionContext.virtualMachine.setArgumentValue(argumentIndex, argumentValue);
-        executionContext.pc += opcode.getSize();
+        executionContext.pc += op.getSize();
     }
 
     static void handlePutArrayEl(Opcode op, ExecutionContext executionContext) {
@@ -1988,29 +2030,35 @@ public final class OpcodeHandler {
         byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
         int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
-        internalHandlePutLocAtIndex(executionContext, localIndex, op.getSize());
+        executionContext.locals[localIndex] = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.pc += op.getSize();
     }
 
     static void handlePutLoc0(Opcode op, ExecutionContext executionContext) {
-        internalHandlePutLocAtIndex(executionContext, 0, op.getSize());
+        executionContext.locals[0] = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.pc += op.getSize();
     }
 
     static void handlePutLoc1(Opcode op, ExecutionContext executionContext) {
-        internalHandlePutLocAtIndex(executionContext, 1, op.getSize());
+        executionContext.locals[1] = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.pc += op.getSize();
     }
 
     static void handlePutLoc2(Opcode op, ExecutionContext executionContext) {
-        internalHandlePutLocAtIndex(executionContext, 2, op.getSize());
+        executionContext.locals[2] = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.pc += op.getSize();
     }
 
     static void handlePutLoc3(Opcode op, ExecutionContext executionContext) {
-        internalHandlePutLocAtIndex(executionContext, 3, op.getSize());
+        executionContext.locals[3] = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.pc += op.getSize();
     }
 
     static void handlePutLoc8(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int localIndex = executionContext.instructions[pc + 1] & 0xFF;
-        internalHandlePutLocAtIndex(executionContext, localIndex, op.getSize());
+        executionContext.locals[localIndex] = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.pc += op.getSize();
     }
 
     static void handlePutLocCheck(Opcode op, ExecutionContext executionContext) {
@@ -2176,17 +2224,17 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
-    static void handlePutVarRefShort(Opcode op, ExecutionContext executionContext, Opcode opcode) {
-        int varRefIndex = switch (opcode) {
+    static void handlePutVarRefShort(Opcode op, ExecutionContext executionContext) {
+        int varRefIndex = switch (op) {
             case PUT_VAR_REF0 -> 0;
             case PUT_VAR_REF1 -> 1;
             case PUT_VAR_REF2 -> 2;
             case PUT_VAR_REF3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short put var ref opcode: " + opcode);
+            default -> throw new IllegalStateException("Unexpected short put var ref opcode: " + op);
         };
         JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
         executionContext.frame.setVarRef(varRefIndex, value);
-        executionContext.pc += opcode.getSize();
+        executionContext.pc += op.getSize();
     }
 
     static void handleRest(Opcode op, ExecutionContext executionContext) {
@@ -2268,16 +2316,16 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
-    static void handleSetArgShort(Opcode op, ExecutionContext executionContext, Opcode opcode) {
-        int argumentIndex = switch (opcode) {
+    static void handleSetArgShort(Opcode op, ExecutionContext executionContext) {
+        int argumentIndex = switch (op) {
             case SET_ARG0 -> 0;
             case SET_ARG1 -> 1;
             case SET_ARG2 -> 2;
             case SET_ARG3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short set arg opcode: " + opcode);
+            default -> throw new IllegalStateException("Unexpected short set arg opcode: " + op);
         };
         executionContext.virtualMachine.setArgumentValue(argumentIndex, (JSValue) executionContext.stack[executionContext.sp - 1]);
-        executionContext.pc += opcode.getSize();
+        executionContext.pc += op.getSize();
     }
 
     static void handleSetHomeObject(Opcode op, ExecutionContext executionContext) {
@@ -2295,29 +2343,35 @@ public final class OpcodeHandler {
         byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
         int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
-        internalHandleSetLocAtIndex(executionContext, localIndex, op.getSize());
+        executionContext.locals[localIndex] = (JSValue) executionContext.stack[executionContext.sp - 1];
+        executionContext.pc += op.getSize();
     }
 
     static void handleSetLoc0(Opcode op, ExecutionContext executionContext) {
-        internalHandleSetLocAtIndex(executionContext, 0, op.getSize());
+        executionContext.locals[0] = (JSValue) executionContext.stack[executionContext.sp - 1];
+        executionContext.pc += op.getSize();
     }
 
     static void handleSetLoc1(Opcode op, ExecutionContext executionContext) {
-        internalHandleSetLocAtIndex(executionContext, 1, op.getSize());
+        executionContext.locals[1] = (JSValue) executionContext.stack[executionContext.sp - 1];
+        executionContext.pc += op.getSize();
     }
 
     static void handleSetLoc2(Opcode op, ExecutionContext executionContext) {
-        internalHandleSetLocAtIndex(executionContext, 2, op.getSize());
+        executionContext.locals[2] = (JSValue) executionContext.stack[executionContext.sp - 1];
+        executionContext.pc += op.getSize();
     }
 
     static void handleSetLoc3(Opcode op, ExecutionContext executionContext) {
-        internalHandleSetLocAtIndex(executionContext, 3, op.getSize());
+        executionContext.locals[3] = (JSValue) executionContext.stack[executionContext.sp - 1];
+        executionContext.pc += op.getSize();
     }
 
     static void handleSetLoc8(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int localIndex = executionContext.instructions[pc + 1] & 0xFF;
-        internalHandleSetLocAtIndex(executionContext, localIndex, op.getSize());
+        executionContext.locals[localIndex] = (JSValue) executionContext.stack[executionContext.sp - 1];
+        executionContext.pc += op.getSize();
     }
 
     static void handleSetLocCheck(Opcode op, ExecutionContext executionContext) {
@@ -2391,16 +2445,16 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
-    static void handleSetVarRefShort(Opcode op, ExecutionContext executionContext, Opcode opcode) {
-        int varRefIndex = switch (opcode) {
+    static void handleSetVarRefShort(Opcode op, ExecutionContext executionContext) {
+        int varRefIndex = switch (op) {
             case SET_VAR_REF0 -> 0;
             case SET_VAR_REF1 -> 1;
             case SET_VAR_REF2 -> 2;
             case SET_VAR_REF3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short set var ref opcode: " + opcode);
+            default -> throw new IllegalStateException("Unexpected short set var ref opcode: " + op);
         };
         executionContext.frame.setVarRef(varRefIndex, (JSValue) executionContext.stack[executionContext.sp - 1]);
-        executionContext.pc += opcode.getSize();
+        executionContext.pc += op.getSize();
     }
 
     static void handleShl(Opcode op, ExecutionContext executionContext) {
@@ -2985,13 +3039,6 @@ public final class OpcodeHandler {
         }
     }
 
-    private static void internalHandleCallFixedArityOpcode(ExecutionContext executionContext, int argumentCount, int opcodeSize) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleCall(executionContext, argumentCount);
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        executionContext.pc += opcodeSize;
-    }
-
     private static void internalHandleDec(ExecutionContext executionContext) {
         JSValue operand = executionContext.virtualMachine.valueStack.pop();
         executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.incrementValue(operand, -1));
@@ -3437,12 +3484,6 @@ public final class OpcodeHandler {
         executionContext.virtualMachine.valueStack.push(JSNumber.of(0));  // Catch offset (placeholder)
     }
 
-    private static void internalHandleGetLocAtIndex(ExecutionContext executionContext, int localIndex, int opcodeSize) {
-        JSValue localValue = executionContext.locals[localIndex];
-        executionContext.stack[executionContext.sp++] = localValue != null ? localValue : JSUndefined.INSTANCE;
-        executionContext.pc += opcodeSize;
-    }
-
     private static void internalHandleGt(ExecutionContext executionContext) {
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
@@ -3483,17 +3524,6 @@ public final class OpcodeHandler {
     private static void internalHandleInc(ExecutionContext executionContext) {
         JSValue operand = executionContext.virtualMachine.valueStack.pop();
         executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.incrementValue(operand, 1));
-    }
-
-    private static void internalHandleIncDecLoc(ExecutionContext executionContext, int delta) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.instructions[pc + 1] & 0xFF;
-        JSValue localValue = executionContext.locals[localIndex];
-        if (localValue == null) {
-            localValue = JSUndefined.INSTANCE;
-        }
-        executionContext.locals[localIndex] = executionContext.virtualMachine.incrementValue(localValue, delta);
-        executionContext.pc = pc + Opcode.INC_LOC.getSize();
     }
 
     private static void internalHandleInitCtor(ExecutionContext executionContext) {
@@ -3599,12 +3629,6 @@ public final class OpcodeHandler {
         }
 
         executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.ordinaryHasInstance(right, left) ? JSBoolean.TRUE : JSBoolean.FALSE);
-    }
-
-    private static void internalHandleIsUndefinedOrNull(ExecutionContext executionContext) {
-        JSValue value = executionContext.virtualMachine.valueStack.pop();
-        boolean result = value instanceof JSNull || value instanceof JSUndefined;
-        executionContext.virtualMachine.valueStack.push(result ? JSBoolean.TRUE : JSBoolean.FALSE);
     }
 
     private static void internalHandleLogicalAnd(ExecutionContext executionContext) {
@@ -3813,11 +3837,6 @@ public final class OpcodeHandler {
         executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
     }
 
-    private static void internalHandlePutLocAtIndex(ExecutionContext executionContext, int localIndex, int opcodeSize) {
-        executionContext.locals[localIndex] = (JSValue) executionContext.stack[--executionContext.sp];
-        executionContext.pc += opcodeSize;
-    }
-
     private static void internalHandleSar(ExecutionContext executionContext) {
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
@@ -3837,11 +3856,6 @@ public final class OpcodeHandler {
         int leftInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.left());
         int rightInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.right());
         executionContext.virtualMachine.valueStack.push(JSNumber.of(leftInt >> (rightInt & 0x1F)));
-    }
-
-    private static void internalHandleSetLocAtIndex(ExecutionContext executionContext, int localIndex, int opcodeSize) {
-        executionContext.locals[localIndex] = (JSValue) executionContext.stack[executionContext.sp - 1];
-        executionContext.pc += opcodeSize;
     }
 
     private static void internalHandleShl(ExecutionContext executionContext) {
