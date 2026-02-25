@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -101,6 +102,24 @@ public final class JSPromise extends JSObject {
             if (!resolveState.alreadyResolved) {
                 resolveState.alreadyResolved = true;
                 jsPromise.reject(e.getErrorValue());
+            }
+            if (context.hasPendingException()) {
+                context.clearPendingException();
+            }
+        } catch (JSVirtualMachineException e) {
+            if (!resolveState.alreadyResolved) {
+                resolveState.alreadyResolved = true;
+                if (e.getJsValue() != null) {
+                    jsPromise.reject(e.getJsValue());
+                } else if (e.getJsError() != null) {
+                    jsPromise.reject(e.getJsError());
+                } else if (context.hasPendingException()) {
+                    JSValue error = context.getPendingException();
+                    context.clearPendingException();
+                    jsPromise.reject(error);
+                } else {
+                    jsPromise.reject(new JSString(e.getMessage() != null ? e.getMessage() : "Unhandled exception"));
+                }
             }
             if (context.hasPendingException()) {
                 context.clearPendingException();
@@ -305,6 +324,28 @@ public final class JSPromise extends JSObject {
                 if (!resolveState.alreadyResolved) {
                     resolveState.alreadyResolved = true;
                     reject(e.getErrorValue());
+                }
+                if (context.hasPendingException()) {
+                    context.clearPendingException();
+                }
+            } catch (JSVirtualMachineException e) {
+                if (!resolveState.alreadyResolved) {
+                    resolveState.alreadyResolved = true;
+                    if (e.getJsValue() != null) {
+                        reject(e.getJsValue());
+                    } else if (e.getJsError() != null) {
+                        reject(e.getJsError());
+                    } else if (context.hasPendingException()) {
+                        JSValue error = context.getPendingException();
+                        context.clearPendingException();
+                        reject(error);
+                    } else {
+                        reject(new JSString("Error in promise resolution: "
+                                + (e.getMessage() != null ? e.getMessage() : "Unhandled exception")));
+                    }
+                }
+                if (context.hasPendingException()) {
+                    context.clearPendingException();
                 }
             } catch (Exception e) {
                 if (!resolveState.alreadyResolved) {

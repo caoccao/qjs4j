@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.util.Arrays;
 
@@ -69,6 +70,17 @@ public final class PromiseConstructor {
                 context.setPendingException(e.getErrorValue());
             }
             return JSUndefined.INSTANCE;
+        } catch (JSVirtualMachineException e) {
+            if (!context.hasPendingException()) {
+                if (e.getJsValue() != null) {
+                    context.setPendingException(e.getJsValue());
+                } else if (e.getJsError() != null) {
+                    context.setPendingException(e.getJsError());
+                } else {
+                    context.throwError("Error", e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                }
+            }
+            return JSUndefined.INSTANCE;
         } catch (Exception e) {
             if (!context.hasPendingException()) {
                 context.throwError("Error", e.getMessage() != null ? e.getMessage() : "Unhandled exception");
@@ -90,6 +102,17 @@ public final class PromiseConstructor {
         } catch (JSException e) {
             if (!context.hasPendingException()) {
                 context.setPendingException(e.getErrorValue());
+            }
+            return JSUndefined.INSTANCE;
+        } catch (JSVirtualMachineException e) {
+            if (!context.hasPendingException()) {
+                if (e.getJsValue() != null) {
+                    context.setPendingException(e.getJsValue());
+                } else if (e.getJsError() != null) {
+                    context.setPendingException(e.getJsError());
+                } else {
+                    context.throwError("Error", e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                }
             }
             return JSUndefined.INSTANCE;
         } catch (Exception e) {
@@ -415,54 +438,110 @@ public final class PromiseConstructor {
      * Promise.race(iterable)
      */
     public static JSValue race(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSObject)) {
-            return context.throwTypeError("Promise.race called on non-object");
+        if (!JSTypeChecking.isConstructor(thisArg)) {
+            return context.throwTypeError("Promise.race called on non-constructor");
         }
-        JSArray array = toArray(context, args, "Promise.race");
-        if (array == null) {
+
+        PromiseCapability promiseCapability = newPromiseCapability(context, thisArg);
+        if (promiseCapability == null) {
             return JSUndefined.INSTANCE;
         }
 
-        JSPromise resultPromise = context.createJSPromise();
-        int length = (int) array.getLength();
-        final Object raceLock = new Object();
-        final boolean[] raceSettled = {false};
-        for (int i = 0; i < length; i++) {
-            JSPromise elementPromise = toPromise(context, thisArg, array.get(i));
-            if (elementPromise == null) {
-                return JSUndefined.INSTANCE;
-            }
-            elementPromise.addReactions(
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onFulfill", 1, (childContext, thisValue, funcArgs) -> {
-                                JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                                synchronized (raceLock) {
-                                    if (raceSettled[0]) {
-                                        return JSUndefined.INSTANCE;
-                                    }
-                                    raceSettled[0] = true;
-                                    resultPromise.fulfill(value);
-                                }
-                                return JSUndefined.INSTANCE;
-                            }),
-                            null,
-                            context),
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onReject", 1, (childContext, thisValue, funcArgs) -> {
-                                JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                                synchronized (raceLock) {
-                                    if (raceSettled[0]) {
-                                        return JSUndefined.INSTANCE;
-                                    }
-                                    raceSettled[0] = true;
-                                    resultPromise.reject(reason);
-                                }
-                                return JSUndefined.INSTANCE;
-                            }),
-                            null,
-                            context));
+        JSValue promiseResolve = callGet(context, thisArg, PropertyKey.RESOLVE);
+        if (context.hasPendingException()) {
+            return rejectAbruptPromise(context, promiseCapability);
         }
-        return resultPromise;
+        if (!JSTypeChecking.isCallable(promiseResolve)) {
+            context.throwTypeError("Promise.race resolve is not callable");
+            return rejectAbruptPromise(context, promiseCapability);
+        }
+
+        JSValue iterable = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue iterator = JSIteratorHelper.getIterator(context, iterable);
+        if (context.hasPendingException()) {
+            return rejectAbruptPromise(context, promiseCapability);
+        }
+        if (!(iterator instanceof JSObject iteratorObject)) {
+            context.throwTypeError("Value is not iterable");
+            return rejectAbruptPromise(context, promiseCapability);
+        }
+
+        boolean iteratorDone = false;
+        while (true) {
+            JSObject nextResult;
+            try {
+                nextResult = JSIteratorHelper.iteratorNext(iteratorObject, context);
+            } catch (JSException e) {
+                if (!context.hasPendingException()) {
+                    context.setPendingException(e.getErrorValue());
+                }
+                iteratorDone = true;
+                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
+            } catch (JSVirtualMachineException e) {
+                if (!context.hasPendingException()) {
+                    if (e.getJsValue() != null) {
+                        context.setPendingException(e.getJsValue());
+                    } else if (e.getJsError() != null) {
+                        context.setPendingException(e.getJsError());
+                    } else {
+                        context.throwError("Error", e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                    }
+                }
+                iteratorDone = true;
+                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
+            } catch (Exception e) {
+                if (!context.hasPendingException()) {
+                    context.throwError("Error", e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                }
+                iteratorDone = true;
+                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
+            }
+            if (context.hasPendingException()) {
+                iteratorDone = true;
+                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
+            }
+            if (nextResult == null) {
+                context.throwTypeError("iterator result is not an object");
+                iteratorDone = true;
+                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
+            }
+
+            JSValue doneValue = callGet(context, nextResult, PropertyKey.DONE);
+            if (context.hasPendingException()) {
+                iteratorDone = true;
+                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
+            }
+            boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
+            if (done) {
+                return promiseCapability.promise();
+            }
+
+            JSValue nextValue = callGet(context, nextResult, PropertyKey.VALUE);
+            if (context.hasPendingException()) {
+                iteratorDone = true;
+                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
+            }
+
+            JSValue nextPromise = callCallable(context, promiseResolve, thisArg, new JSValue[]{nextValue});
+            if (context.hasPendingException()) {
+                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
+            }
+
+            JSValue thenMethod = callGet(context, nextPromise, PropertyKey.THEN);
+            if (context.hasPendingException()) {
+                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
+            }
+            if (!JSTypeChecking.isCallable(thenMethod)) {
+                context.throwTypeError("Promise.race resolve result then is not callable");
+                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
+            }
+
+            callCallable(context, thenMethod, nextPromise,
+                    new JSValue[]{promiseCapability.resolve(), promiseCapability.reject()});
+            if (context.hasPendingException()) {
+                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
+            }
+        }
     }
 
     /**
@@ -567,80 +646,49 @@ public final class PromiseConstructor {
      * Promise.try(callback, ...args)
      */
     public static JSValue tryMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSObject)) {
-            return context.throwTypeError("Promise.try called on non-object");
+        if (!JSTypeChecking.isConstructor(thisArg)) {
+            return context.throwTypeError("Promise.try called on non-constructor");
         }
-        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
+        if (args.length == 0 || !JSTypeChecking.isCallable(args[0])) {
             return context.throwTypeError("Promise.try requires a function");
         }
-        JSValue[] callbackArgs = args.length > 1
-                ? Arrays.copyOfRange(args, 1, args.length)
-                : new JSValue[0];
 
-        JSPromise resultPromise = context.createJSPromise();
-        try {
-            JSValue result = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
-            if (context.hasPendingException()) {
-                JSValue error = context.getPendingException();
-                context.clearPendingException();
-                resultPromise.reject(error);
-            } else {
-                resultPromise.resolve(context, result);
-            }
-        } catch (JSException e) {
-            if (context.hasPendingException()) {
-                context.clearPendingException();
-            }
-            resultPromise.reject(e.getErrorValue());
-        } catch (Exception e) {
-            if (context.hasPendingException()) {
-                JSValue error = context.getPendingException();
-                context.clearPendingException();
-                resultPromise.reject(error);
-                return resultPromise;
-            }
-            if (context.hasPendingException()) {
-                context.clearPendingException();
-            }
-            resultPromise.reject(new com.caoccao.qjs4j.core.JSString(
-                    "Error in Promise.try callback: " + e.getMessage()));
+        PromiseCapability promiseCapability = newPromiseCapability(context, thisArg);
+        if (promiseCapability == null) {
+            return JSUndefined.INSTANCE;
         }
-        return resultPromise;
+
+        JSValue callback = args[0];
+        JSValue[] callbackArgs = args.length > 1 ? Arrays.copyOfRange(args, 1, args.length) : new JSValue[0];
+        JSValue callbackResult = callCallable(context, callback, JSUndefined.INSTANCE, callbackArgs);
+        if (context.hasPendingException()) {
+            return rejectAbruptPromise(context, promiseCapability);
+        }
+
+        callCallable(context, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{callbackResult});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return promiseCapability.promise();
     }
 
     /**
      * Promise.withResolvers()
      */
     public static JSValue withResolvers(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSObject)) {
-            return context.throwTypeError("Promise.withResolvers called on non-object");
+        if (!JSTypeChecking.isConstructor(thisArg)) {
+            return context.throwTypeError("Promise.withResolvers called on non-constructor");
         }
-        JSPromise promise = context.createJSPromise();
-        final boolean[] alreadyResolved = {false};
 
-        JSNativeFunction resolveFn = new JSNativeFunction("resolve", 1, (childContext, thisValue, funcArgs) -> {
-            if (alreadyResolved[0]) {
-                return JSUndefined.INSTANCE;
-            }
-            alreadyResolved[0] = true;
-            JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-            promise.resolve(childContext, value);
+        PromiseCapability promiseCapability = newPromiseCapability(context, thisArg);
+        if (promiseCapability == null) {
             return JSUndefined.INSTANCE;
-        });
-        JSNativeFunction rejectFn = new JSNativeFunction("reject", 1, (childContext, thisValue, funcArgs) -> {
-            if (alreadyResolved[0]) {
-                return JSUndefined.INSTANCE;
-            }
-            alreadyResolved[0] = true;
-            JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-            promise.reject(reason);
-            return JSUndefined.INSTANCE;
-        });
+        }
 
         JSObject result = context.createJSObject();
-        result.set(PropertyKey.PROMISE, promise);
-        result.set(PropertyKey.RESOLVE, resolveFn);
-        result.set(PropertyKey.REJECT, rejectFn);
+        result.set(PropertyKey.PROMISE, promiseCapability.promise());
+        result.set(PropertyKey.RESOLVE, promiseCapability.resolve());
+        result.set(PropertyKey.REJECT, promiseCapability.reject());
         return result;
     }
 

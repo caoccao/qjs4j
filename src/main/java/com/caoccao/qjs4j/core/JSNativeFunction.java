@@ -80,6 +80,16 @@ public final class JSNativeFunction extends JSFunction {
 
     @Override
     public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (requiresNew && context.getConstructorNewTarget() == null) {
+            String constructorName = name != null ? name : "constructor";
+            String errorMessage;
+            if (JSPromise.NAME.equals(constructorName)) {
+                errorMessage = "Promise constructor cannot be invoked without 'new'";
+            } else {
+                errorMessage = "Constructor " + constructorName + " requires 'new'";
+            }
+            return context.throwTypeError(errorMessage);
+        }
         JSContext callbackContext = getHomeContext() != null ? getHomeContext() : context;
         JSValue result = callback.call(callbackContext, thisArg, args);
         if (callbackContext != context && callbackContext.hasPendingException()) {
