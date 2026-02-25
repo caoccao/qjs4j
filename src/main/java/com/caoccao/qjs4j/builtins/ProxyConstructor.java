@@ -73,6 +73,7 @@ public final class ProxyConstructor {
             proxy.revoke();
             return JSUndefined.INSTANCE;
         });
+        revokeFunc.initializePrototypeChain(context);
         result.set("revoke", revokeFunc);
 
         return result;

@@ -216,6 +216,48 @@ final class StatementLoopCompiler {
         ctx.exitScope();
     }
 
+    private void compileForOfExpressionTargetAssignment(Expression leftExpression) {
+        if (leftExpression instanceof Identifier id) {
+            Integer localIndex = ctx.findLocalInScopes(id.name());
+            if (localIndex != null) {
+                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+            } else {
+                Integer capturedIndex = ctx.resolveCapturedBindingIndex(id.name());
+                if (capturedIndex != null) {
+                    ctx.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF, capturedIndex);
+                } else {
+                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
+                }
+            }
+            return;
+        }
+
+        if (leftExpression instanceof MemberExpression memberExpression) {
+            if (memberExpression.computed()) {
+                throw new JSCompilerException("Computed member expression in for-of not yet supported");
+            }
+            if (!(memberExpression.property() instanceof Identifier propertyIdentifier)) {
+                throw new JSCompilerException("Invalid for-of assignment target");
+            }
+            delegates.expressions.compileExpression(memberExpression.object());
+            ctx.emitter.emitOpcode(Opcode.SWAP);
+            ctx.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propertyIdentifier.name());
+            ctx.emitter.emitOpcode(Opcode.DROP);
+            return;
+        }
+
+        if (leftExpression instanceof CallExpression) {
+            ctx.emitter.emitOpcode(Opcode.DROP);
+            delegates.expressions.compileExpression(leftExpression);
+            ctx.emitter.emitOpcode(Opcode.DROP);
+            ctx.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+            ctx.emitter.emitU8(5);
+            return;
+        }
+
+        ctx.emitter.emitOpcode(Opcode.DROP);
+    }
+
     void compileForOfStatement(ForOfStatement forOfStmt) {
         boolean isExpressionBased = !(forOfStmt.left() instanceof VariableDeclaration);
         VariableDeclaration varDecl = null;
@@ -319,48 +361,6 @@ final class StatementLoopCompiler {
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
         ctx.exitScope();
-    }
-
-    private void compileForOfExpressionTargetAssignment(Expression leftExpression) {
-        if (leftExpression instanceof Identifier id) {
-            Integer localIndex = ctx.findLocalInScopes(id.name());
-            if (localIndex != null) {
-                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
-            } else {
-                Integer capturedIndex = ctx.resolveCapturedBindingIndex(id.name());
-                if (capturedIndex != null) {
-                    ctx.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF, capturedIndex);
-                } else {
-                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
-                }
-            }
-            return;
-        }
-
-        if (leftExpression instanceof MemberExpression memberExpression) {
-            if (memberExpression.computed()) {
-                throw new JSCompilerException("Computed member expression in for-of not yet supported");
-            }
-            if (!(memberExpression.property() instanceof Identifier propertyIdentifier)) {
-                throw new JSCompilerException("Invalid for-of assignment target");
-            }
-            delegates.expressions.compileExpression(memberExpression.object());
-            ctx.emitter.emitOpcode(Opcode.SWAP);
-            ctx.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propertyIdentifier.name());
-            ctx.emitter.emitOpcode(Opcode.DROP);
-            return;
-        }
-
-        if (leftExpression instanceof CallExpression) {
-            ctx.emitter.emitOpcode(Opcode.DROP);
-            delegates.expressions.compileExpression(leftExpression);
-            ctx.emitter.emitOpcode(Opcode.DROP);
-            ctx.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-            ctx.emitter.emitU8(5);
-            return;
-        }
-
-        ctx.emitter.emitOpcode(Opcode.DROP);
     }
 
     void compileForStatement(ForStatement forStmt) {

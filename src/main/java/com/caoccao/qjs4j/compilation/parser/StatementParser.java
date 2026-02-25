@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.compilation.parser;
 
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
@@ -261,22 +262,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return new ForStatement(init, test, update, body, location);
     }
 
-    Statement parseWithStatement() {
-        SourceLocation location = parserContext.getLocation();
-        if (parserContext.strictMode) {
-            throw new JSSyntaxErrorException("Strict mode code may not include a with statement");
-        }
-        if (!isWithKeyword()) {
-            throw new JSSyntaxErrorException("Unexpected token");
-        }
-        parserContext.advance(); // consume 'with'
-        parserContext.expect(TokenType.LPAREN);
-        Expression object = delegates.expressions.parseExpression();
-        parserContext.expect(TokenType.RPAREN);
-        Statement body = parseStatement();
-        return new WithStatement(object, body, location);
-    }
-
     Statement parseIfStatement() {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.IF);
@@ -293,6 +278,37 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
 
         return new IfStatement(test, consequent, alternate, location);
+    }
+
+    Statement parseImportDeclarationStatement() {
+        SourceLocation location = parserContext.getLocation();
+        if (!parserContext.moduleMode || parserContext.functionNesting != 0) {
+            throw new JSSyntaxErrorException("Cannot use import statement outside a module");
+        }
+
+        parserContext.expect(TokenType.IMPORT);
+
+        if (parserContext.match(TokenType.STRING)) {
+            parserContext.advance(); // module specifier
+            parserContext.consumeSemicolon();
+            return null; // Side-effect-only import; ignored until full module linking is implemented.
+        }
+
+        if (parserContext.match(TokenType.MUL)) {
+            parserContext.advance();
+            parserContext.expect(TokenType.AS);
+            Identifier namespaceIdentifier = parserContext.parseIdentifier();
+            parserContext.expect(TokenType.FROM);
+            parserContext.expect(TokenType.STRING);
+            parserContext.consumeSemicolon();
+
+            ObjectExpression emptyNamespaceObject = new ObjectExpression(List.of(), location);
+            VariableDeclaration.VariableDeclarator namespaceDeclarator =
+                    new VariableDeclaration.VariableDeclarator(namespaceIdentifier, emptyNamespaceObject);
+            return new VariableDeclaration(List.of(namespaceDeclarator), VariableKind.CONST, location);
+        }
+
+        throw new JSSyntaxErrorException("Unsupported import declaration");
     }
 
     /**
@@ -358,6 +374,14 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     delegates.functions.parseFunctionDeclaration(false, false);
             case CLASS -> // Class declarations are treated as statements in JavaScript
                     delegates.functions.parseClassDeclaration();
+            case IMPORT -> {
+                Token nextToken = parserContext.peek();
+                boolean isDynamicImportExpression = nextToken != null && nextToken.type() == TokenType.LPAREN;
+                if (parserContext.moduleMode && parserContext.functionNesting == 0 && !isDynamicImportExpression) {
+                    yield parseImportDeclarationStatement();
+                }
+                yield parseExpressionStatement();
+            }
             case SEMICOLON -> {
                 parserContext.advance(); // consume semicolon
                 yield null; // empty statement
@@ -518,5 +542,21 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         Statement body = parseStatement();
 
         return new WhileStatement(test, body, location);
+    }
+
+    Statement parseWithStatement() {
+        SourceLocation location = parserContext.getLocation();
+        if (parserContext.strictMode) {
+            throw new JSSyntaxErrorException("Strict mode code may not include a with statement");
+        }
+        if (!isWithKeyword()) {
+            throw new JSSyntaxErrorException("Unexpected token");
+        }
+        parserContext.advance(); // consume 'with'
+        parserContext.expect(TokenType.LPAREN);
+        Expression object = delegates.expressions.parseExpression();
+        parserContext.expect(TokenType.RPAREN);
+        Statement body = parseStatement();
+        return new WithStatement(object, body, location);
     }
 }

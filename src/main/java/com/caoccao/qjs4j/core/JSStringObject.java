@@ -85,6 +85,30 @@ public final class JSStringObject extends JSObject {
         return jsObject;
     }
 
+    @Override
+    public boolean delete(JSContext context, PropertyKey key) {
+        boolean isCharacterIndex = false;
+        if (key.isIndex()) {
+            int index = key.asIndex();
+            isCharacterIndex = index >= 0 && index < value.value().length();
+        } else if (key.isString()) {
+            try {
+                int index = Integer.parseInt(key.asString());
+                isCharacterIndex = index >= 0 && index < value.value().length();
+            } catch (NumberFormatException e) {
+                isCharacterIndex = false;
+            }
+        }
+        if (isCharacterIndex) {
+            if (context != null && context.isStrictMode()) {
+                context.throwTypeError(
+                        "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForDelete());
+            }
+            return false;
+        }
+        return super.delete(context, key);
+    }
+
     /**
      * Override enumerableKeys to include character index properties for for-in enumeration.
      * String exotic objects have enumerable index properties for each character.
@@ -135,6 +159,10 @@ public final class JSStringObject extends JSObject {
             return new JSString(String.valueOf(value.value().charAt(index)));
         }
         return super.get(index);
+    }
+
+    private String getObjectDescriptionForDelete() {
+        return "[object String]";
     }
 
     /**
@@ -227,34 +255,6 @@ public final class JSStringObject extends JSObject {
             }
         }
         return super.hasOwnProperty(key);
-    }
-
-    @Override
-    public boolean delete(JSContext context, PropertyKey key) {
-        boolean isCharacterIndex = false;
-        if (key.isIndex()) {
-            int index = key.asIndex();
-            isCharacterIndex = index >= 0 && index < value.value().length();
-        } else if (key.isString()) {
-            try {
-                int index = Integer.parseInt(key.asString());
-                isCharacterIndex = index >= 0 && index < value.value().length();
-            } catch (NumberFormatException e) {
-                isCharacterIndex = false;
-            }
-        }
-        if (isCharacterIndex) {
-            if (context != null && context.isStrictMode()) {
-                context.throwTypeError(
-                        "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForDelete());
-            }
-            return false;
-        }
-        return super.delete(context, key);
-    }
-
-    private String getObjectDescriptionForDelete() {
-        return "[object String]";
     }
 
     /**

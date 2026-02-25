@@ -33,10 +33,10 @@ final class CompilerContext {
     final CaptureResolver captureResolver;
     final BytecodeEmitter emitter;
     final Deque<LoopContext> loopStack;
-    final Deque<Integer> withObjectLocalStack;
     final Set<String> nonDeletableGlobalBindings;
     final Deque<CompilerScope> scopes;
     final Set<String> tdzLocals;
+    final Deque<Integer> withObjectLocalStack;
     boolean hasEnclosingArgumentsBinding;
     boolean inGlobalScope;
     boolean isGlobalProgram;
@@ -346,18 +346,6 @@ final class CompilerContext {
         return new ArrayList<>(withObjectLocalStack);
     }
 
-    boolean hasActiveWithObject() {
-        return !withObjectLocalStack.isEmpty();
-    }
-
-    void popWithObjectLocal() {
-        withObjectLocalStack.pop();
-    }
-
-    void pushWithObjectLocal(int localIndex) {
-        withObjectLocalStack.push(localIndex);
-    }
-
     String getMethodName(ClassDeclaration.MethodDefinition method) {
         Expression key = method.key();
         if (key instanceof Identifier id) {
@@ -371,8 +359,6 @@ final class CompilerContext {
         }
     }
 
-    // ---- Static utility methods ----
-
     boolean hasActiveIteratorLoops() {
         for (LoopContext loopContext : loopStack) {
             if (loopContext.hasIterator) {
@@ -380,6 +366,10 @@ final class CompilerContext {
             }
         }
         return false;
+    }
+
+    boolean hasActiveWithObject() {
+        return !withObjectLocalStack.isEmpty();
     }
 
     boolean hasEnclosingBlockScopeLocal(String name) {
@@ -402,6 +392,8 @@ final class CompilerContext {
         }
         return false;
     }
+
+    // ---- Static utility methods ----
 
     boolean hasUseStrictDirective(BlockStatement block) {
         if (block == null || block.body().isEmpty()) {
@@ -427,6 +419,14 @@ final class CompilerContext {
 
     boolean isSuperMemberExpression(MemberExpression memberExpr) {
         return isSuperIdentifier(memberExpr.object());
+    }
+
+    void popWithObjectLocal() {
+        withObjectLocalStack.pop();
+    }
+
+    void pushWithObjectLocal(int localIndex) {
+        withObjectLocalStack.push(localIndex);
     }
 
     Integer resolveCapturedBindingIndex(String name) {

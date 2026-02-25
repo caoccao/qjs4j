@@ -231,8 +231,9 @@ public final class VirtualMachine {
                     // ES spec GetPrototypeFromConstructor step 4a: GetFunctionRealm(constructor)
                     // If newTarget is a revoked Proxy, throw TypeError
                     if (newTargetObject instanceof JSProxy proxy && proxy.isRevoked()) {
+                        JSContext proxyContext = proxy.getProxyContext();
                         throw new JSVirtualMachineException(
-                                context.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked"));
+                                proxyContext.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked"));
                     }
                     context.transferPrototypeFromConstructor(thisObject, function);
                     if (context.hasPendingException()) {
@@ -3153,6 +3154,21 @@ public final class VirtualMachine {
                 context.exitStrictMode();
             }
             throw e;
+        } catch (JSException e) {
+            // Preserve thrown JS values so callers can keep the original error type and realm.
+            valueStack.setStackTop(restoreStackTop);
+            currentFrame = previousFrame;
+            resetPropertyAccessTracking();
+            if (savedStrictMode) {
+                context.enterStrictMode();
+            } else {
+                context.exitStrictMode();
+            }
+            JSValue errorValue = e.getErrorValue();
+            if (errorValue instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException(e.getMessage(), errorValue);
         } catch (Exception e) {
             // Restore stack and strict mode on exception
             valueStack.setStackTop(restoreStackTop);
@@ -4861,7 +4877,8 @@ public final class VirtualMachine {
      */
     private JSValue proxyApply(JSProxy proxy, JSValue thisArg, JSValue[] args) {
         if (proxy.isRevoked()) {
-            throw new JSException(context.throwTypeError("Cannot perform 'apply' on a proxy that has been revoked"));
+            JSContext proxyContext = proxy.getProxyContext();
+            throw new JSException(proxyContext.throwTypeError("Cannot perform 'apply' on a proxy that has been revoked"));
         }
 
         JSValue target = proxy.getTarget();
@@ -4917,7 +4934,8 @@ public final class VirtualMachine {
      */
     private JSValue proxyConstruct(JSProxy proxy, JSValue[] args, JSValue newTarget) {
         if (proxy.isRevoked()) {
-            throw new JSException(context.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked"));
+            JSContext proxyContext = proxy.getProxyContext();
+            throw new JSException(proxyContext.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked"));
         }
 
         JSValue target = proxy.getTarget();

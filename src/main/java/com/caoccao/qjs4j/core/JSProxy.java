@@ -295,11 +295,6 @@ public final class JSProxy extends JSObject {
     }
 
     @Override
-    public boolean hasOwnProperty(PropertyKey key) {
-        return getOwnPropertyDescriptor(key) != null;
-    }
-
-    @Override
     public PropertyKey[] enumerableKeys() {
         List<PropertyKey> ownKeys = getOwnPropertyKeys();
         List<PropertyKey> enumerableKeys = new ArrayList<>(ownKeys.size());
@@ -711,6 +706,10 @@ public final class JSProxy extends JSObject {
         return (result instanceof JSNull) ? null : (JSObject) result;
     }
 
+    public JSContext getProxyContext() {
+        return context;
+    }
+
     public JSValue getTarget() {
         return target;
     }
@@ -791,6 +790,11 @@ public final class JSProxy extends JSObject {
 
         // No trap, forward to target
         return targetObj.has(key);
+    }
+
+    @Override
+    public boolean hasOwnProperty(PropertyKey key) {
+        return getOwnPropertyDescriptor(key) != null;
     }
 
     /**
