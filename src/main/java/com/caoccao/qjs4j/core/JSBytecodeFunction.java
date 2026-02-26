@@ -50,6 +50,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private final JSObject prototype;
     private final int selfCaptureIndex;
     private final boolean strict;
+    private JSValue capturedThisArg;
     private int[] captureSourceInfos;
     private boolean classConstructor;
     private boolean derivedConstructor;
@@ -581,6 +582,11 @@ public final class JSBytecodeFunction extends JSFunction {
         // the function should execute in its own realm, not the caller's realm.
         JSContext executionContext = getHomeContext() != null ? getHomeContext() : context;
 
+        // Arrow functions use the lexically captured this, ignoring the provided thisArg
+        if (isArrow && capturedThisArg != null) {
+            thisArg = capturedThisArg;
+        }
+
         // OrdinaryCallBindThis: in non-strict mode, coerce this value
         if (!strict && !(thisArg instanceof JSObject)) {
             if (thisArg instanceof JSUndefined || thisArg instanceof JSNull) {
@@ -961,6 +967,7 @@ public final class JSBytecodeFunction extends JSFunction {
         );
         copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
         copiedFunction.selfLocalIndex = selfLocalIndex;
+        copiedFunction.capturedThisArg = this.capturedThisArg;
         return copiedFunction;
     }
 
@@ -986,6 +993,7 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.varRefs = capturedVarRefs;
         copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
         copiedFunction.selfLocalIndex = selfLocalIndex;
+        copiedFunction.capturedThisArg = this.capturedThisArg;
         return copiedFunction;
     }
 
@@ -1075,6 +1083,21 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public boolean isArrow() {
         return isArrow;
+    }
+
+    /**
+     * Get the captured this value for arrow functions.
+     */
+    public JSValue getCapturedThisArg() {
+        return capturedThisArg;
+    }
+
+    /**
+     * Set the captured this value for arrow functions.
+     * Called during FCLOSURE to capture the enclosing scope's this.
+     */
+    public void setCapturedThisArg(JSValue thisArg) {
+        this.capturedThisArg = thisArg;
     }
 
     /**

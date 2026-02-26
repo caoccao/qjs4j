@@ -677,6 +677,10 @@ public final class OpcodeHandler {
                     capturedClosureVars[selfIndex] = closureFunction;
                 }
             }
+            // Arrow functions capture this from the enclosing scope
+            if (closureFunction.isArrow()) {
+                closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
+            }
             closureFunction.initializePrototypeChain(executionContext.virtualMachine.context);
             stack[sp++] = closureFunction;
         } else {
@@ -708,6 +712,10 @@ public final class OpcodeHandler {
                     capturedClosureVars[i] = (JSValue) stack[--sp];
                 }
                 closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
+            }
+            // Arrow functions capture this from the enclosing scope
+            if (closureFunction.isArrow()) {
+                closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
             }
             closureFunction.initializePrototypeChain(executionContext.virtualMachine.context);
             stack[sp++] = closureFunction;

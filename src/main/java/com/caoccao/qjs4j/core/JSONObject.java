@@ -389,10 +389,19 @@ public final class JSONObject {
                         return null;
                     }
                 } else if (val instanceof JSBigInt) {
-                    // For primitive BigInt, auto-box to check BigInt.prototype.toJSON
+                    // For primitive BigInt, auto-box to look up toJSON on prototype
+                    // but pass the original primitive as receiver for correct getter this
                     JSObject boxed = JSTypeConversions.toObject(context, val);
                     if (boxed != null) {
-                        toJSON = getSafe(context, boxed, "toJSON");
+                        try {
+                            toJSON = boxed.get(context, PropertyKey.fromString("toJSON"), val);
+                        } catch (JSVirtualMachineException e) {
+                            convertVMException(context, e);
+                            return null;
+                        } catch (JSException e) {
+                            convertJSException(context, e);
+                            return null;
+                        }
                         if (context.hasPendingException()) {
                             return null;
                         }

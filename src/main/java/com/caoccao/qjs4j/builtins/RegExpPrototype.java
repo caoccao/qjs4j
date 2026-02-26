@@ -636,14 +636,14 @@ public final class RegExpPrototype {
     }
 
     private static JSValue regExpExec(JSContext context, JSObject regexpObject, JSString inputString) {
+        // ES2024 22.2.5.2 RegExpExec
+        // Step 3: Let exec be ? Get(R, "exec").
         JSValue execValue = regexpObject.get(context, PROPERTY_EXEC);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        if (!(execValue instanceof JSUndefined)) {
-            if (!(execValue instanceof JSFunction execFunction)) {
-                return context.throwTypeError("exec is not a function");
-            }
+        // Step 4: If IsCallable(exec) is true, call it
+        if (execValue instanceof JSFunction execFunction) {
             JSValue result = execFunction.call(context, regexpObject, new JSValue[]{inputString});
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -653,6 +653,7 @@ public final class RegExpPrototype {
             }
             return result;
         }
+        // Step 5-6: If exec is not callable, fall back to RegExpBuiltinExec
         if (regexpObject instanceof JSRegExp) {
             return exec(context, regexpObject, new JSValue[]{inputString});
         }

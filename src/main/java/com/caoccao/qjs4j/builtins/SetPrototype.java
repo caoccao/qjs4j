@@ -130,12 +130,12 @@ public final class SetPrototype {
                 }
             }
         } else {
-            JSObject iterator = getKeysIterator(context, record);
-            if (iterator == null) {
+            IteratorRecord iteratorRecord = getKeysIteratorRecord(context, record);
+            if (iteratorRecord == null) {
                 return JSUndefined.INSTANCE;
             }
             while (true) {
-                IteratorStep step = iteratorStep(context, iterator);
+                IteratorStep step = iteratorStep(context, iteratorRecord);
                 if (step == null) {
                     return JSUndefined.INSTANCE;
                 }
@@ -195,16 +195,25 @@ public final class SetPrototype {
         return JSUndefined.INSTANCE;
     }
 
-    private static JSObject getKeysIterator(JSContext context, SetRecord setRecord) {
+    private static IteratorRecord getKeysIteratorRecord(JSContext context, SetRecord setRecord) {
         JSValue iteratorValue = setRecord.keysFunction.call(context, setRecord.objectValue, NO_ARGS);
         if (context.hasPendingException()) {
             return null;
         }
-        if (iteratorValue instanceof JSObject iteratorObject) {
-            return iteratorObject;
+        if (!(iteratorValue instanceof JSObject iteratorObject)) {
+            context.throwTypeError("Iterator is not an object");
+            return null;
         }
-        context.throwTypeError("Iterator is not an object");
-        return null;
+        // Cache the next method per ES2024 GetIteratorDirect
+        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (!(nextMethod instanceof JSFunction nextFunction)) {
+            context.throwTypeError("Iterator next is not a function");
+            return null;
+        }
+        return new IteratorRecord(iteratorObject, nextFunction);
     }
 
     private static SetRecord getSetRecord(JSContext context, JSValue value) {
@@ -317,12 +326,12 @@ public final class SetPrototype {
 
         JSSet newSet = context.createJSSet();
         if (set.size() > record.size) {
-            JSObject iterator = getKeysIterator(context, record);
-            if (iterator == null) {
+            IteratorRecord iteratorRecord = getKeysIteratorRecord(context, record);
+            if (iteratorRecord == null) {
                 return JSUndefined.INSTANCE;
             }
             while (true) {
-                IteratorStep step = iteratorStep(context, iterator);
+                IteratorStep step = iteratorStep(context, iteratorRecord);
                 if (step == null) {
                     return JSUndefined.INSTANCE;
                 }
@@ -381,12 +390,12 @@ public final class SetPrototype {
                 }
             }
         } else {
-            JSObject iterator = getKeysIterator(context, record);
-            if (iterator == null) {
+            IteratorRecord iteratorRecord = getKeysIteratorRecord(context, record);
+            if (iteratorRecord == null) {
                 return JSUndefined.INSTANCE;
             }
             while (true) {
-                IteratorStep step = iteratorStep(context, iterator);
+                IteratorStep step = iteratorStep(context, iteratorRecord);
                 if (step == null) {
                     return JSUndefined.INSTANCE;
                 }
@@ -394,7 +403,7 @@ public final class SetPrototype {
                     break;
                 }
                 if (set.setHas(step.value)) {
-                    closeIterator(context, iterator);
+                    closeIterator(context, iteratorRecord.iteratorObject);
                     return JSBoolean.FALSE;
                 }
             }
@@ -451,12 +460,12 @@ public final class SetPrototype {
         if (set.size() < record.size) {
             return JSBoolean.FALSE;
         }
-        JSObject iterator = getKeysIterator(context, record);
-        if (iterator == null) {
+        IteratorRecord iteratorRecord = getKeysIteratorRecord(context, record);
+        if (iteratorRecord == null) {
             return JSUndefined.INSTANCE;
         }
         while (true) {
-            IteratorStep step = iteratorStep(context, iterator);
+            IteratorStep step = iteratorStep(context, iteratorRecord);
             if (step == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -464,27 +473,36 @@ public final class SetPrototype {
                 break;
             }
             if (!set.setHas(step.value)) {
-                closeIterator(context, iterator);
+                closeIterator(context, iteratorRecord.iteratorObject);
                 return JSBoolean.FALSE;
             }
         }
         return JSBoolean.TRUE;
     }
 
-    private static IteratorStep iteratorStep(JSContext context, JSObject iteratorObject) {
-        JSObject nextResult = JSIteratorHelper.iteratorNext(iteratorObject, context);
+    private static IteratorStep iteratorStep(JSContext context, IteratorRecord iteratorRecord) {
+        // Call the cached next method
+        JSValue nextResult = iteratorRecord.nextFunction.call(context, iteratorRecord.iteratorObject, NO_ARGS);
         if (context.hasPendingException()) {
             return null;
         }
-        if (nextResult == null) {
+        if (!(nextResult instanceof JSObject nextResultObject)) {
             context.throwTypeError("Iterator result must be an object");
             return null;
         }
-        JSValue done = nextResult.get("done");
+        // Use context-aware get to trigger getters
+        JSValue done = nextResultObject.get(context, PropertyKey.DONE);
+        if (context.hasPendingException()) {
+            return null;
+        }
         if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
             return new IteratorStep(JSUndefined.INSTANCE, true);
         }
-        return new IteratorStep(nextResult.get(PropertyKey.VALUE), false);
+        JSValue value = nextResultObject.get(context, PropertyKey.VALUE);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        return new IteratorStep(value, false);
     }
 
     /**
@@ -511,12 +529,12 @@ public final class SetPrototype {
         }
 
         JSSet newSet = copySet(context, set);
-        JSObject iterator = getKeysIterator(context, record);
-        if (iterator == null) {
+        IteratorRecord iteratorRecord = getKeysIteratorRecord(context, record);
+        if (iteratorRecord == null) {
             return JSUndefined.INSTANCE;
         }
         while (true) {
-            IteratorStep step = iteratorStep(context, iterator);
+            IteratorStep step = iteratorStep(context, iteratorRecord);
             if (step == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -548,12 +566,12 @@ public final class SetPrototype {
         }
 
         JSSet newSet = copySet(context, set);
-        JSObject iterator = getKeysIterator(context, record);
-        if (iterator == null) {
+        IteratorRecord iteratorRecord = getKeysIteratorRecord(context, record);
+        if (iteratorRecord == null) {
             return JSUndefined.INSTANCE;
         }
         while (true) {
-            IteratorStep step = iteratorStep(context, iterator);
+            IteratorStep step = iteratorStep(context, iteratorRecord);
             if (step == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -576,6 +594,9 @@ public final class SetPrototype {
         }
 
         return JSIterator.setValuesIterator(context, set);
+    }
+
+    private record IteratorRecord(JSObject iteratorObject, JSFunction nextFunction) {
     }
 
     private record IteratorStep(JSValue value, boolean done) {

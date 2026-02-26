@@ -590,6 +590,15 @@ public final class RegExpEngine {
             this.stateDirty = true;
         }
 
+        private boolean codePointEqualsIgnoreCaseUnicode(int leftCodePoint, int rightCodePoint) {
+            if (leftCodePoint == rightCodePoint) {
+                return true;
+            }
+            String leftString = new String(Character.toChars(leftCodePoint));
+            String rightString = new String(Character.toChars(rightCodePoint));
+            return leftString.equalsIgnoreCase(rightString);
+        }
+
         void copyCapturesFrom(ExecutionContext other) {
             stateDirty = true;
             System.arraycopy(other.captureStarts, 0, captureStarts, 0, captureCount);
@@ -963,15 +972,6 @@ public final class RegExpEngine {
 
             // Boundary exists if one is word char and the other is not
             return prevIsWord != currIsWord;
-        }
-
-        private boolean codePointEqualsIgnoreCaseUnicode(int leftCodePoint, int rightCodePoint) {
-            if (leftCodePoint == rightCodePoint) {
-                return true;
-            }
-            String leftString = new String(Character.toChars(leftCodePoint));
-            String rightString = new String(Character.toChars(rightCodePoint));
-            return leftString.equalsIgnoreCase(rightString);
         }
 
         boolean movePrevious() {
