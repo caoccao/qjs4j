@@ -95,7 +95,7 @@ public final class JSContext implements AutoCloseable {
         this.waitable = true;
         this.inCatchHandler = false;
         this.iteratorPrototypes = new HashMap<>();
-        this.jsGlobalObject = new JSGlobalObject();
+        this.jsGlobalObject = new JSGlobalObject(this);
         this.maxStackDepth = DEFAULT_MAX_STACK_DEPTH;
         this.microtaskQueue = new JSMicrotaskQueue(this);
         this.moduleCache = new HashMap<>();
@@ -1076,7 +1076,7 @@ public final class JSContext implements AutoCloseable {
      * Delegates to JSGlobalObject to set up all global functions and properties.
      */
     private void initializeGlobalObject() {
-        jsGlobalObject.initialize(this, globalObject);
+        jsGlobalObject.initialize(globalObject);
         // Cache Object.prototype for fast access in hot paths (e.g., iteratorResult, createJSObject)
         JSValue objectCtor = globalObject.get(JSObject.NAME);
         if (objectCtor instanceof JSObject objCtorObj) {

@@ -64,438 +64,11 @@ public final class JSGlobalObject {
     }
 
     private final JSConsole console;
+    private final JSContext context;
 
-    public JSGlobalObject() {
+    public JSGlobalObject(JSContext context) {
+        this.context = context;
         this.console = new JSConsole();
-    }
-
-    private void appendPercentHex(StringBuilder result, int c) {
-        result.append('%');
-        result.append(HEX_CHARS[(c >> 4) & 0xF]);
-        result.append(HEX_CHARS[c & 0xF]);
-    }
-
-    private int asciiDigitValue(char c) {
-        if (c >= '0' && c <= '9') {
-            return c - '0';
-        }
-        if (c >= 'A' && c <= 'Z') {
-            return c - 'A' + 10;
-        }
-        if (c >= 'a' && c <= 'z') {
-            return c - 'a' + 10;
-        }
-        return -1;
-    }
-
-    private int decodeHexByte(JSContext context, String str, int index) {
-        if (index >= str.length() || str.charAt(index) != '%') {
-            context.throwURIError("expecting %");
-            return -1;
-        }
-        if (index + 2 >= str.length()) {
-            context.throwURIError("expecting hex digit");
-            return -1;
-        }
-        int high = fromHex(str.charAt(index + 1));
-        int low = fromHex(str.charAt(index + 2));
-        if (high < 0 || low < 0) {
-            context.throwURIError("expecting hex digit");
-            return -1;
-        }
-        return (high << 4) | low;
-    }
-
-    /**
-     * decodeURI(encodedURI)
-     * Decode a URI that was encoded by encodeURI.
-     *
-     * @see <a href="https://tc39.es/ecma262/#sec-decodeuri-encodeduri">ECMAScript decodeURI</a>
-     */
-    public JSValue decodeURI(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue encodedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String encodedString = JSTypeConversions.toString(context, encodedValue).value();
-        return decodeURIImpl(context, encodedString, false);
-    }
-
-    /**
-     * decodeURIComponent(encodedURIComponent)
-     * Decode a URI component that was encoded by encodeURIComponent.
-     *
-     * @see <a href="https://tc39.es/ecma262/#sec-decodeuricomponent-encodeduricomponent">ECMAScript decodeURIComponent</a>
-     */
-    public JSValue decodeURIComponent(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue encodedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String encodedString = JSTypeConversions.toString(context, encodedValue).value();
-        return decodeURIImpl(context, encodedString, true);
-    }
-
-    private JSValue decodeURIImpl(JSContext context, String encodedString, boolean isComponent) {
-        if (encodedString.indexOf('%') < 0) {
-            return new JSString(encodedString);
-        }
-
-        int length = encodedString.length();
-        StringBuilder result = new StringBuilder(length);
-        int k = 0;
-        while (k < length) {
-            int c = encodedString.charAt(k);
-            if (c != '%') {
-                result.append((char) c);
-                k++;
-                continue;
-            }
-
-            if (k + 2 >= length) {
-                return context.throwURIError("expecting hex digit");
-            }
-            int high = fromHex(encodedString.charAt(k + 1));
-            int low = fromHex(encodedString.charAt(k + 2));
-            if (high < 0 || low < 0) {
-                return context.throwURIError("expecting hex digit");
-            }
-
-            int decodedByte = (high << 4) | low;
-            int percentIndex = k;
-            k += 3;
-
-            if (decodedByte < 0x80) {
-                if (!isComponent && isURIReserved(decodedByte)) {
-                    result.append('%')
-                            .append(encodedString.charAt(percentIndex + 1))
-                            .append(encodedString.charAt(percentIndex + 2));
-                } else {
-                    result.append((char) decodedByte);
-                }
-                continue;
-            }
-
-            int continuationCount;
-            int minCodePoint;
-            int codePoint;
-            if (decodedByte >= 0xC0 && decodedByte <= 0xDF) {
-                continuationCount = 1;
-                minCodePoint = 0x80;
-                codePoint = decodedByte & 0x1F;
-            } else if (decodedByte >= 0xE0 && decodedByte <= 0xEF) {
-                continuationCount = 2;
-                minCodePoint = 0x800;
-                codePoint = decodedByte & 0x0F;
-            } else if (decodedByte >= 0xF0 && decodedByte <= 0xF7) {
-                continuationCount = 3;
-                minCodePoint = 0x10000;
-                codePoint = decodedByte & 0x07;
-            } else {
-                return context.throwURIError("malformed UTF-8");
-            }
-
-            for (int i = 0; i < continuationCount; i++) {
-                if (k + 2 >= length || encodedString.charAt(k) != '%') {
-                    return context.throwURIError("expecting %");
-                }
-                int contHigh = fromHex(encodedString.charAt(k + 1));
-                int contLow = fromHex(encodedString.charAt(k + 2));
-                if (contHigh < 0 || contLow < 0) {
-                    return context.throwURIError("expecting hex digit");
-                }
-                int continuationByte = (contHigh << 4) | contLow;
-                k += 3;
-                if ((continuationByte & 0xC0) != 0x80) {
-                    return context.throwURIError("malformed UTF-8");
-                }
-                codePoint = (codePoint << 6) | (continuationByte & 0x3F);
-            }
-
-            if (codePoint < minCodePoint
-                    || codePoint > Character.MAX_CODE_POINT
-                    || (codePoint >= Character.MIN_SURROGATE && codePoint <= Character.MAX_SURROGATE)) {
-                return context.throwURIError("malformed UTF-8");
-            }
-            result.appendCodePoint(codePoint);
-        }
-        return new JSString(result.toString());
-    }
-
-    /**
-     * encodeURI(uri)
-     * Encode a URI by escaping certain characters.
-     * Does not encode: A-Z a-z 0-9 ; , / ? : @ & = + $ - _ . ! ~ * ' ( ) #
-     *
-     * @see <a href="https://tc39.es/ecma262/#sec-encodeuri-uri">ECMAScript encodeURI</a>
-     */
-    public JSValue encodeURI(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue uriValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String uriString = JSTypeConversions.toString(context, uriValue).value();
-        return encodeURIImpl(context, uriString, false);
-    }
-
-    /**
-     * encodeURIComponent(uriComponent)
-     * Encode a URI component by escaping certain characters.
-     * More aggressive than encodeURI - also encodes: ; , / ? : @ & = + $ #
-     *
-     * @see <a href="https://tc39.es/ecma262/#sec-encodeuricomponent-uricomponent">ECMAScript encodeURIComponent</a>
-     */
-    public JSValue encodeURIComponent(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue componentValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String componentString = JSTypeConversions.toString(context, componentValue).value();
-        return encodeURIImpl(context, componentString, true);
-    }
-
-    private JSValue encodeURIImpl(JSContext context, String inputString, boolean isComponent) {
-        int length = inputString.length();
-        StringBuilder result = null;
-        int k = 0;
-        while (k < length) {
-            char ch = inputString.charAt(k);
-            int c = ch;
-            if (isURIUnescaped(c, isComponent)) {
-                if (result != null) {
-                    result.append(ch);
-                }
-                k++;
-                continue;
-            }
-            if (result == null) {
-                result = new StringBuilder(length + 16);
-                result.append(inputString, 0, k);
-            }
-            if (ch >= Character.MIN_LOW_SURROGATE && ch <= Character.MAX_LOW_SURROGATE) {
-                return context.throwURIError("invalid character");
-            }
-            k++;
-            if (ch >= Character.MIN_HIGH_SURROGATE && ch <= Character.MAX_HIGH_SURROGATE) {
-                if (k >= length) {
-                    return context.throwURIError("expecting surrogate pair");
-                }
-                char c1 = inputString.charAt(k++);
-                if (c1 < Character.MIN_LOW_SURROGATE || c1 > Character.MAX_LOW_SURROGATE) {
-                    return context.throwURIError("expecting surrogate pair");
-                }
-                c = Character.toCodePoint(ch, c1);
-            }
-
-            if (c < 0x80) {
-                appendPercentHex(result, c);
-            } else if (c < 0x800) {
-                appendPercentHex(result, (c >> 6) | 0xC0);
-                appendPercentHex(result, (c & 0x3F) | 0x80);
-            } else if (c < 0x10000) {
-                appendPercentHex(result, (c >> 12) | 0xE0);
-                appendPercentHex(result, ((c >> 6) & 0x3F) | 0x80);
-                appendPercentHex(result, (c & 0x3F) | 0x80);
-            } else {
-                appendPercentHex(result, (c >> 18) | 0xF0);
-                appendPercentHex(result, ((c >> 12) & 0x3F) | 0x80);
-                appendPercentHex(result, ((c >> 6) & 0x3F) | 0x80);
-                appendPercentHex(result, (c & 0x3F) | 0x80);
-            }
-        }
-        if (result == null) {
-            return new JSString(inputString);
-        }
-        return new JSString(result.toString());
-    }
-
-    /**
-     * escape(string)
-     * Deprecated function that encodes a string for use in a URL.
-     * Encodes all characters except: A-Z a-z 0-9 @ * _ + - . /
-     * Uses %XX for characters < 256 and %uXXXX for characters >= 256.
-     *
-     * @see <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/escape">MDN escape</a>
-     */
-    public JSValue escape(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue stringValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String str = JSTypeConversions.toString(context, stringValue).value();
-
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < str.length(); i++) {
-            char c = str.charAt(i);
-
-            // Check if character should not be escaped
-            if (isUnescaped(c)) {
-                result.append(c);
-            } else {
-                // Escape the character
-                if (c < 256) {
-                    // Use %XX format for characters < 256
-                    appendPercentHex(result, c);
-                } else {
-                    // Use %uXXXX format for characters >= 256
-                    result.append('%').append('u');
-                    result.append(HEX_CHARS[(c >> 12) & 0xF]);
-                    result.append(HEX_CHARS[(c >> 8) & 0xF]);
-                    result.append(HEX_CHARS[(c >> 4) & 0xF]);
-                    result.append(HEX_CHARS[c & 0xF]);
-                }
-            }
-        }
-
-        return new JSString(result.toString());
-    }
-
-    /**
-     * eval(code)
-     * Evaluate JavaScript code in the realm context.
-     * <p>
-     * Per ES spec, eval evaluates code in the realm of the eval function itself,
-     * not the calling realm. This matters for cross-realm calls like other.eval('code').
-     *
-     * @param realmContext  the context where this eval function was created (the eval's realm)
-     * @param callerContext the context of the calling code (for scope overlay and exception propagation)
-     * @see <a href="https://tc39.es/ecma262/#sec-eval-x">ECMAScript eval</a>
-     */
-    private JSValue eval(JSContext realmContext, JSContext callerContext, JSValue thisArg, JSValue[] args) {
-        JSValue x = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-
-        // If x is not a string, return it unchanged
-        if (!(x instanceof JSString)) {
-            return x;
-        }
-
-        String code = ((JSString) x).value();
-        // Per ES2024 19.2.1.1 PerformEval: eval inherits strict mode from caller
-        if (realmContext.isStrictMode()) {
-            code = "'use strict';\n" + code;
-        }
-
-        // Scope overlay is only valid for same-realm direct eval within a function.
-        // Cross-realm eval (other.eval('code')) should not overlay the caller's scope.
-        boolean isSameRealm = (realmContext == callerContext);
-
-        // Scope overlay: capture enclosing function's local variables onto the global
-        // object so that eval code's GET_VAR/PUT_VAR can access them.
-        StackFrame callerFrame = callerContext.getVirtualMachine().getCurrentFrame();
-        // Eval is "inside a function" only if same-realm and the callerFrame is NOT the top-level program.
-        boolean isEvalInFunction = isSameRealm && callerFrame != null
-                && callerFrame.getFunction() instanceof JSBytecodeFunction
-                && callerFrame.getCaller() != null;
-        String[] localVarNames = null;
-        Map<String, JSValue> savedGlobals = null;
-        Set<String> absentKeys = null;
-        JSObject global = realmContext.getGlobalObject();
-
-        // When eval runs inside a function, snapshot global property names so we can
-        // clean up var/function bindings that should be function-scoped (not global).
-        Set<String> globalKeysBefore = null;
-        if (isEvalInFunction) {
-            globalKeysBefore = new HashSet<>();
-            for (PropertyKey propertyKey : global.ownPropertyKeys()) {
-                if (propertyKey.isString()) {
-                    globalKeysBefore.add(propertyKey.asString());
-                }
-            }
-        }
-
-        if (isEvalInFunction
-                && callerFrame.getFunction() instanceof JSBytecodeFunction bcFunc
-                && bcFunc.getBytecode().getLocalVarNames() != null) {
-            localVarNames = bcFunc.getBytecode().getLocalVarNames();
-            savedGlobals = new HashMap<>();
-            absentKeys = new HashSet<>();
-            JSValue[] locals = callerFrame.getLocals();
-            for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
-                String name = localVarNames[i];
-                if (name == null) {
-                    continue;
-                }
-                PropertyKey key = PropertyKey.fromString(name);
-                if (global.has(key)) {
-                    savedGlobals.put(name, global.get(key));
-                } else {
-                    absentKeys.add(name);
-                }
-                global.set(key, locals[i]);
-            }
-        }
-
-        try {
-            // EvalDeclarationInstantiation: check if eval code declares "var arguments"
-            // in a function with parameter expressions. Per QuickJS add_arguments_arg(),
-            // a lexical "arguments" binding exists in the argument scope when the function
-            // has parameter expressions (non-strict mode), preventing eval from redeclaring it.
-            if (isEvalInFunction
-                    && callerFrame.getFunction() instanceof JSBytecodeFunction bcFunc
-                    && bcFunc.hasParameterExpressions()
-                    && !bcFunc.isArrow()
-                    && !bcFunc.isStrict()) {
-                try {
-                    Compiler evalCompiler = new Compiler(code, "<eval>");
-                    Program evalAst = evalCompiler.parse(false);
-                    Set<String> varDecls = new HashSet<>();
-                    Set<String> lexDecls = new HashSet<>();
-                    AstUtils.collectGlobalDeclarations(evalAst, varDecls, lexDecls);
-                    if (varDecls.contains("arguments")) {
-                        throw new JSException(
-                                realmContext.throwError("SyntaxError",
-                                        "Identifier 'arguments' has already been declared"));
-                    }
-                } catch (JSException je) {
-                    throw je; // Re-throw our SyntaxError
-                } catch (Exception ignored) {
-                    // Parse error in eval code - let the normal eval handle it
-                }
-            }
-
-            JSValue result = realmContext.eval(code, "<eval>", false, true);
-
-            // Copy modified values back to caller's locals
-            if (localVarNames != null) {
-                JSValue[] locals = callerFrame.getLocals();
-                for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
-                    String name = localVarNames[i];
-                    if (name == null) {
-                        continue;
-                    }
-                    PropertyKey key = PropertyKey.fromString(name);
-                    if (global.has(key)) {
-                        locals[i] = global.get(key);
-                    }
-                }
-            }
-
-            return result;
-        } catch (JSException e) {
-            // Propagate exception to the caller's context so the caller's VM sees it
-            callerContext.setPendingException(e.getErrorValue());
-            return JSUndefined.INSTANCE;
-        } finally {
-            // Restore global object state for scope overlay
-            if (savedGlobals != null) {
-                for (var entry : savedGlobals.entrySet()) {
-                    global.set(PropertyKey.fromString(entry.getKey()), entry.getValue());
-                }
-            }
-            if (absentKeys != null) {
-                for (String name : absentKeys) {
-                    global.delete(realmContext, PropertyKey.fromString(name));
-                }
-            }
-            // Clean up eval-created bindings that should be function-scoped (not global).
-            // Per ES2024 B.3.3.3, var/function declarations in eval inside a function
-            // go to the function's variable environment, not the global.
-            if (globalKeysBefore != null) {
-                for (PropertyKey propertyKey : global.ownPropertyKeys()) {
-                    if (propertyKey.isString() && !globalKeysBefore.contains(propertyKey.asString())) {
-                        global.delete(realmContext, propertyKey);
-                    }
-                }
-            }
-        }
-    }
-
-    private int fromHex(char c) {
-        if (c >= '0' && c <= '9') {
-            return c - '0';
-        }
-        if (c >= 'a' && c <= 'f') {
-            return c - 'a' + 10;
-        }
-        if (c >= 'A' && c <= 'F') {
-            return c - 'A' + 10;
-        }
-        return -1;
     }
 
     public JSConsole getConsole() {
@@ -505,70 +78,70 @@ public final class JSGlobalObject {
     /**
      * Initialize the global object with all built-in global properties and functions.
      */
-    public void initialize(JSContext context, JSObject global) {
-        initializeGlobalObject(context, global);
+    public void initialize(JSObject global) {
+        initializeGlobalObject(global);
 
         // Built-in constructors and their prototypes
-        initializeObjectConstructor(context, global);
-        initializeBooleanConstructor(context, global);
-        initializeArrayConstructor(context, global);
-        initializeStringConstructor(context, global);
-        initializeNumberConstructor(context, global);
-        initializeFunctionConstructor(context, global);
-        initializeAsyncFunctionConstructor(context, global);
-        initializeDateConstructor(context, global);
-        initializeRegExpConstructor(context, global);
-        initializeSymbolConstructor(context, global);
-        initializeBigIntConstructor(context, global);
-        initializeMapConstructor(context, global);
-        initializeSetConstructor(context, global);
-        initializeWeakMapConstructor(context, global);
-        initializeWeakSetConstructor(context, global);
-        initializeWeakRefConstructor(context, global);
-        initializeFinalizationRegistryConstructor(context, global);
-        initializeMathObject(context, global);
-        initializeJSONObject(context, global);
-        initializeIntlObject(context, global);
-        initializeReflectObject(context, global);
-        initializeProxyConstructor(context, global);
-        initializePromiseConstructor(context, global);
-        initializeDisposableStackConstructor(context, global);
-        initializeAsyncDisposableStackConstructor(context, global);
-        initializeIteratorConstructor(context, global);
-        initializeGeneratorPrototype(context, global);
-        initializeAsyncGeneratorPrototype(context, global);
+        initializeObjectConstructor(global);
+        initializeBooleanConstructor(global);
+        initializeArrayConstructor(global);
+        initializeStringConstructor(global);
+        initializeNumberConstructor(global);
+        initializeFunctionConstructor(global);
+        initializeAsyncFunctionConstructor(global);
+        initializeDateConstructor(global);
+        initializeRegExpConstructor(global);
+        initializeSymbolConstructor(global);
+        initializeBigIntConstructor(global);
+        initializeMapConstructor(global);
+        initializeSetConstructor(global);
+        initializeWeakMapConstructor(global);
+        initializeWeakSetConstructor(global);
+        initializeWeakRefConstructor(global);
+        initializeFinalizationRegistryConstructor(global);
+        initializeMathObject(global);
+        initializeJSONObject(global);
+        initializeIntlObject(global);
+        initializeReflectObject(global);
+        initializeProxyConstructor(global);
+        initializePromiseConstructor(global);
+        initializeDisposableStackConstructor(global);
+        initializeAsyncDisposableStackConstructor(global);
+        initializeIteratorConstructor(global);
+        initializeGeneratorPrototype(global);
+        initializeAsyncGeneratorPrototype(global);
 
         // Binary data constructors
-        initializeArrayBufferConstructor(context, global);
-        initializeSharedArrayBufferConstructor(context, global);
-        initializeDataViewConstructor(context, global);
-        initializeTypedArrayConstructors(context, global);
-        initializeAtomicsObject(context, global);
+        initializeArrayBufferConstructor(global);
+        initializeSharedArrayBufferConstructor(global);
+        initializeDataViewConstructor(global);
+        initializeTypedArrayConstructors(global);
+        initializeAtomicsObject(global);
 
         // Error constructors
-        initializeErrorConstructors(context, global);
+        initializeErrorConstructors(global);
 
         // Initialize function prototype chains after all built-ins are set up.
         // Walk global properties AND context-stored objects not reachable from global
         // (iterator prototypes, generator/async-generator function prototypes).
         Set<JSObject> visited = new HashSet<>();
-        initializeFunctionPrototypeChains(context, global, visited);
+        initializeFunctionPrototypeChains(global, visited);
         for (JSObject iterProto : context.getIteratorPrototypes()) {
-            initializeFunctionPrototypeChains(context, iterProto, visited);
+            initializeFunctionPrototypeChains(iterProto, visited);
         }
         if (context.getGeneratorFunctionPrototype() != null) {
-            initializeFunctionPrototypeChains(context, context.getGeneratorFunctionPrototype(), visited);
+            initializeFunctionPrototypeChains(context.getGeneratorFunctionPrototype(), visited);
         }
         if (context.getAsyncGeneratorFunctionPrototype() != null) {
-            initializeFunctionPrototypeChains(context, context.getAsyncGeneratorFunctionPrototype(), visited);
+            initializeFunctionPrototypeChains(context.getAsyncGeneratorFunctionPrototype(), visited);
         }
         if (context.getAsyncGeneratorPrototype() != null) {
-            initializeFunctionPrototypeChains(context, context.getAsyncGeneratorPrototype(), visited);
+            initializeFunctionPrototypeChains(context.getAsyncGeneratorPrototype(), visited);
         }
 
         // Per ES2024 20.5.6.2: The [[Prototype]] of each NativeError constructor is Error.
         // This must run after initializeFunctionPrototypeChains which sets all to Function.prototype.
-        initializeNativeErrorPrototypeChains(context, global);
+        initializeNativeErrorPrototypeChains(global);
 
         // Set the global object's prototype to Object.prototype so inherited
         // methods like propertyIsEnumerable, hasOwnProperty, toString are available.
@@ -578,7 +151,7 @@ public final class JSGlobalObject {
     /**
      * Initialize ArrayBuffer constructor and prototype.
      */
-    private void initializeArrayBufferConstructor(JSContext context, JSObject global) {
+    private void initializeArrayBufferConstructor(JSObject global) {
         // Create ArrayBuffer.prototype
         JSObject arrayBufferPrototype = context.createJSObject();
         arrayBufferPrototype.defineProperty(PropertyKey.fromString("resize"), new JSNativeFunction("resize", 1, ArrayBufferPrototype::resize), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -612,7 +185,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Array constructor and prototype.
      */
-    private void initializeArrayConstructor(JSContext context, JSObject global) {
+    private void initializeArrayConstructor(JSObject global) {
         // Create Array.prototype as an Array exotic object per ES spec 23.1.3
         // (matching QuickJS JS_NewArray for JS_CLASS_ARRAY)
         JSArray arrayPrototype = new JSArray(0, 0);
@@ -682,7 +255,7 @@ public final class JSGlobalObject {
     /**
      * Initialize AsyncDisposableStack constructor and prototype.
      */
-    private void initializeAsyncDisposableStackConstructor(JSContext context, JSObject global) {
+    private void initializeAsyncDisposableStackConstructor(JSObject global) {
         JSObject asyncDisposableStackPrototype = context.createJSObject();
         asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("adopt"), new JSNativeFunction("adopt", 2, AsyncDisposableStackPrototype::adopt), PropertyDescriptor.DataState.ConfigurableWritable);
         asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("defer"), new JSNativeFunction("defer", 1, AsyncDisposableStackPrototype::defer), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -713,7 +286,7 @@ public final class JSGlobalObject {
      * Initialize AsyncFunction constructor and prototype.
      * AsyncFunction is not exposed in global scope but is available via async function constructors.
      */
-    private void initializeAsyncFunctionConstructor(JSContext context, JSObject global) {
+    private void initializeAsyncFunctionConstructor(JSObject global) {
         // Create AsyncFunction.prototype that inherits from Function.prototype
         JSObject asyncFunctionPrototype = context.createJSObject();
         context.transferPrototype(asyncFunctionPrototype, JSFunction.NAME);
@@ -745,7 +318,7 @@ public final class JSGlobalObject {
      * - AsyncGeneratorFunction.prototype.prototype = AsyncGenerator.prototype (configurable)
      * - AsyncGenerator.prototype.constructor = AsyncGeneratorFunction.prototype (configurable)
      */
-    private void initializeAsyncGeneratorPrototype(JSContext context, JSObject global) {
+    private void initializeAsyncGeneratorPrototype(JSObject global) {
         // Create AsyncIteratorPrototype (has Symbol.asyncIterator)
         JSObject asyncIteratorPrototype = context.createJSObject();
         JSNativeFunction asyncIteratorMethod = new JSNativeFunction(
@@ -814,7 +387,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Atomics object.
      */
-    private void initializeAtomicsObject(JSContext context, JSObject global) {
+    private void initializeAtomicsObject(JSObject global) {
         JSObject atomics = context.createJSObject();
         atomics.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction("add", 3, AtomicsObject::add), PropertyDescriptor.DataState.ConfigurableWritable);
         atomics.defineProperty(PropertyKey.fromString("and"), new JSNativeFunction("and", 3, AtomicsObject::and), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -838,7 +411,7 @@ public final class JSGlobalObject {
     /**
      * Initialize BigInt constructor and static methods.
      */
-    private void initializeBigIntConstructor(JSContext context, JSObject global) {
+    private void initializeBigIntConstructor(JSObject global) {
         // Create BigInt.prototype
         JSObject bigIntPrototype = context.createJSObject();
         bigIntPrototype.defineProperty(PropertyKey.fromString("toLocaleString"), new JSNativeFunction("toLocaleString", 0, BigIntPrototype::toLocaleString), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -862,7 +435,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Boolean constructor and prototype.
      */
-    private void initializeBooleanConstructor(JSContext context, JSObject global) {
+    private void initializeBooleanConstructor(JSObject global) {
         // Create Boolean.prototype as a Boolean object with [[BooleanData]] = false
         // Per QuickJS: JS_SetObjectData(ctx, ctx->class_proto[JS_CLASS_BOOLEAN], JS_NewBool(ctx, FALSE))
         JSBooleanObject booleanPrototype = new JSBooleanObject(false);
@@ -882,7 +455,7 @@ public final class JSGlobalObject {
     /**
      * Initialize console object with all console API methods.
      */
-    private void initializeConsoleObject(JSContext context, JSObject global) {
+    private void initializeConsoleObject(JSObject global) {
         JSObject consoleObj = context.createJSObject();
         consoleObj.set("assert", new JSNativeFunction("assert", 0, console::assert_));
         consoleObj.set("clear", new JSNativeFunction("clear", 0, console::clear));
@@ -910,7 +483,7 @@ public final class JSGlobalObject {
     /**
      * Initialize DataView constructor and prototype.
      */
-    private void initializeDataViewConstructor(JSContext context, JSObject global) {
+    private void initializeDataViewConstructor(JSObject global) {
         // Create DataView.prototype
         JSObject dataViewPrototype = context.createJSObject();
 
@@ -964,7 +537,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Date constructor and prototype.
      */
-    private void initializeDateConstructor(JSContext context, JSObject global) {
+    private void initializeDateConstructor(JSObject global) {
         JSObject datePrototype = context.createJSObject();
         JSNativeFunction toUTCString = new JSNativeFunction("toUTCString", 0, DatePrototype::toUTCString);
         JSNativeFunction toPrimitive = new JSNativeFunction("[Symbol.toPrimitive]", 1, DatePrototype::symbolToPrimitive);
@@ -1032,7 +605,7 @@ public final class JSGlobalObject {
     /**
      * Initialize DisposableStack constructor and prototype.
      */
-    private void initializeDisposableStackConstructor(JSContext context, JSObject global) {
+    private void initializeDisposableStackConstructor(JSObject global) {
         JSObject disposableStackPrototype = context.createJSObject();
         JSNativeFunction disposeFunction = new JSNativeFunction("dispose", 0, DisposableStackPrototype::dispose);
         disposableStackPrototype.defineProperty(PropertyKey.fromString("adopt"), new JSNativeFunction("adopt", 2, DisposableStackPrototype::adopt), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1057,14 +630,14 @@ public final class JSGlobalObject {
     /**
      * Initialize Error constructors.
      */
-    private void initializeErrorConstructors(JSContext context, JSObject global) {
+    private void initializeErrorConstructors(JSObject global) {
         Stream.of(JSErrorType.values()).forEach(type -> global.defineProperty(PropertyKey.fromString(type.name()), type.create(context), PropertyDescriptor.DataState.ConfigurableWritable));
     }
 
     /**
      * Initialize FinalizationRegistry constructor.
      */
-    private void initializeFinalizationRegistryConstructor(JSContext context, JSObject global) {
+    private void initializeFinalizationRegistryConstructor(JSObject global) {
         JSObject finalizationRegistryPrototype = context.createJSObject();
         finalizationRegistryPrototype.defineProperty(PropertyKey.fromString("register"),
                 new JSNativeFunction("register", 2, FinalizationRegistryPrototype::register), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1085,7 +658,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Function constructor and prototype.
      */
-    private void initializeFunctionConstructor(JSContext context, JSObject global) {
+    private void initializeFunctionConstructor(JSObject global) {
         // Create Function.prototype as a function (not a plain object)
         // According to ECMAScript spec, Function.prototype is itself a function
         // Use null name so toString() shows "function () {}" not "function anonymous() {}"
@@ -1149,7 +722,7 @@ public final class JSGlobalObject {
      * Recursively initialize prototype chains for all JSFunction instances in the global object.
      * This must be called after Function.prototype is set up.
      */
-    private void initializeFunctionPrototypeChains(JSContext context, JSObject obj, Set<JSObject> visitedObjectSet) {
+    private void initializeFunctionPrototypeChains(JSObject obj, Set<JSObject> visitedObjectSet) {
         // This ensures all JSFunction instances inherit from Function.prototype
         // Avoid infinite recursion by tracking visited objects
         if (visitedObjectSet.contains(obj)) {
@@ -1168,14 +741,14 @@ public final class JSGlobalObject {
             // Do not read descriptor.getValue() because data descriptors in this runtime
             // are not updated when writable properties are reassigned.
             if (descriptor.isDataDescriptor()) {
-                initializeFunctionPrototypeChainsForValue(context, obj.get(key), visitedObjectSet);
+                initializeFunctionPrototypeChainsForValue(obj.get(key), visitedObjectSet);
             }
             // Walk accessor descriptor functions.
             if (descriptor.hasGetter()) {
-                initializeFunctionPrototypeChainsForValue(context, descriptor.getGetter(), visitedObjectSet);
+                initializeFunctionPrototypeChainsForValue(descriptor.getGetter(), visitedObjectSet);
             }
             if (descriptor.hasSetter()) {
-                initializeFunctionPrototypeChainsForValue(context, descriptor.getSetter(), visitedObjectSet);
+                initializeFunctionPrototypeChainsForValue(descriptor.getSetter(), visitedObjectSet);
             }
         }
 
@@ -1183,18 +756,18 @@ public final class JSGlobalObject {
         // (e.g., %TypedArray% which is the prototype of typed array constructors)
         JSObject proto = obj.getPrototype();
         if (proto != null) {
-            initializeFunctionPrototypeChains(context, proto, visitedObjectSet);
+            initializeFunctionPrototypeChains(proto, visitedObjectSet);
         }
     }
 
-    private void initializeFunctionPrototypeChainsForValue(JSContext context, JSValue value, Set<JSObject> visitedObjectSet) {
+    private void initializeFunctionPrototypeChainsForValue(JSValue value, Set<JSObject> visitedObjectSet) {
         if (value instanceof JSFunction func) {
             if (func.getPrototype() == null) {
                 func.initializePrototypeChain(context);
             }
-            initializeFunctionPrototypeChains(context, func, visitedObjectSet);
+            initializeFunctionPrototypeChains(func, visitedObjectSet);
         } else if (value instanceof JSObject subObj) {
-            initializeFunctionPrototypeChains(context, subObj, visitedObjectSet);
+            initializeFunctionPrototypeChains(subObj, visitedObjectSet);
         }
     }
 
@@ -1208,7 +781,7 @@ public final class JSGlobalObject {
      * - GeneratorFunction.prototype.prototype = Generator.prototype (configurable)
      * - Generator.prototype.constructor = GeneratorFunction.prototype (configurable)
      */
-    private void initializeGeneratorPrototype(JSContext context, JSObject global) {
+    private void initializeGeneratorPrototype(JSObject global) {
         // Get Iterator.prototype for Generator.prototype to inherit from
         JSObject iteratorConstructor = (JSObject) global.get(JSIterator.NAME);
         JSObject iteratorPrototype = (JSObject) iteratorConstructor.get(PropertyKey.PROTOTYPE);
@@ -1257,7 +830,7 @@ public final class JSGlobalObject {
         context.setGeneratorFunctionPrototype(generatorFunctionPrototype);
     }
 
-    private void initializeGlobalObject(JSContext context, JSObject global) {
+    private void initializeGlobalObject(JSObject global) {
         // Global value properties (non-writable, non-enumerable, non-configurable)
         global.defineProperty(PropertyKey.fromString("Infinity"), JSNumber.of(Double.POSITIVE_INFINITY), PropertyDescriptor.DataState.None);
         global.defineProperty(PropertyKey.fromString("NaN"), JSNumber.of(Double.NaN), PropertyDescriptor.DataState.None);
@@ -1268,22 +841,22 @@ public final class JSGlobalObject {
         // even when called cross-realm (e.g., other.eval('code')).
         final JSContext realmContext = context;
         global.defineProperty(PropertyKey.fromString("eval"), new JSNativeFunction("eval", 1,
-                (callerCtx, thisArg, args) -> eval(realmContext, callerCtx, thisArg, args)), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("isFinite"), new JSNativeFunction("isFinite", 1, this::isFinite), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("isNaN"), new JSNativeFunction("isNaN", 1, this::isNaN), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("parseFloat"), new JSNativeFunction("parseFloat", 1, this::parseFloat), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("parseInt"), new JSNativeFunction("parseInt", 2, this::parseInt), PropertyDescriptor.DataState.ConfigurableWritable);
+                (callerCtx, thisArg, args) -> GlobalFunction.eval(realmContext, callerCtx, thisArg, args)), PropertyDescriptor.DataState.ConfigurableWritable);
+        global.defineProperty(PropertyKey.fromString("isFinite"), new JSNativeFunction("isFinite", 1, GlobalFunction::isFinite), PropertyDescriptor.DataState.ConfigurableWritable);
+        global.defineProperty(PropertyKey.fromString("isNaN"), new JSNativeFunction("isNaN", 1, GlobalFunction::isNaN), PropertyDescriptor.DataState.ConfigurableWritable);
+        global.defineProperty(PropertyKey.fromString("parseFloat"), new JSNativeFunction("parseFloat", 1, GlobalFunction::parseFloat), PropertyDescriptor.DataState.ConfigurableWritable);
+        global.defineProperty(PropertyKey.fromString("parseInt"), new JSNativeFunction("parseInt", 2, GlobalFunction::parseInt), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // URI handling functions
-        global.defineProperty(PropertyKey.fromString("decodeURI"), new JSNativeFunction("decodeURI", 1, this::decodeURI), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("decodeURIComponent"), new JSNativeFunction("decodeURIComponent", 1, this::decodeURIComponent), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("encodeURI"), new JSNativeFunction("encodeURI", 1, this::encodeURI), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("encodeURIComponent"), new JSNativeFunction("encodeURIComponent", 1, this::encodeURIComponent), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("escape"), new JSNativeFunction("escape", 1, this::escape), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("unescape"), new JSNativeFunction("unescape", 1, this::unescape), PropertyDescriptor.DataState.ConfigurableWritable);
+        global.defineProperty(PropertyKey.fromString("decodeURI"), new JSNativeFunction("decodeURI", 1, GlobalFunction::decodeURI), PropertyDescriptor.DataState.ConfigurableWritable);
+        global.defineProperty(PropertyKey.fromString("decodeURIComponent"), new JSNativeFunction("decodeURIComponent", 1, GlobalFunction::decodeURIComponent), PropertyDescriptor.DataState.ConfigurableWritable);
+        global.defineProperty(PropertyKey.fromString("encodeURI"), new JSNativeFunction("encodeURI", 1, GlobalFunction::encodeURI), PropertyDescriptor.DataState.ConfigurableWritable);
+        global.defineProperty(PropertyKey.fromString("encodeURIComponent"), new JSNativeFunction("encodeURIComponent", 1, GlobalFunction::encodeURIComponent), PropertyDescriptor.DataState.ConfigurableWritable);
+        global.defineProperty(PropertyKey.fromString("escape"), new JSNativeFunction("escape", 1, GlobalFunction::escape), PropertyDescriptor.DataState.ConfigurableWritable);
+        global.defineProperty(PropertyKey.fromString("unescape"), new JSNativeFunction("unescape", 1, GlobalFunction::unescape), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Console object for debugging
-        initializeConsoleObject(context, global);
+        initializeConsoleObject(global);
 
         // Global this reference
         global.defineProperty(PropertyKey.fromString("globalThis"), global, PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1295,7 +868,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Intl object.
      */
-    private void initializeIntlObject(JSContext context, JSObject global) {
+    private void initializeIntlObject(JSObject global) {
         JSObject intlObject = context.createJSObject();
         intlObject.set("getCanonicalLocales", new JSNativeFunction("getCanonicalLocales", 1, JSIntlObject::getCanonicalLocales));
 
@@ -1403,7 +976,7 @@ public final class JSGlobalObject {
      * Initialize Iterator constructor and prototype.
      * Based on ECMAScript 2024 Iterator specification.
      */
-    private void initializeIteratorConstructor(JSContext context, JSObject global) {
+    private void initializeIteratorConstructor(JSObject global) {
         JSObject iteratorPrototype = context.createJSObject();
 
         iteratorPrototype.defineProperty(PropertyKey.fromString("drop"), new JSNativeFunction("drop", 1, IteratorPrototype::drop), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1533,7 +1106,7 @@ public final class JSGlobalObject {
     /**
      * Initialize JSON object.
      */
-    private void initializeJSONObject(JSContext context, JSObject global) {
+    private void initializeJSONObject(JSObject global) {
         JSObject json = context.createJSObject();
         json.defineProperty(PropertyKey.fromString("parse"), new JSNativeFunction("parse", 2, JSONObject::parse), PropertyDescriptor.DataState.ConfigurableWritable);
         json.defineProperty(PropertyKey.fromString("stringify"), new JSNativeFunction("stringify", 3, JSONObject::stringify), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1547,7 +1120,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Map constructor and prototype methods.
      */
-    private void initializeMapConstructor(JSContext context, JSObject global) {
+    private void initializeMapConstructor(JSObject global) {
         // Create Map.prototype
         JSObject mapPrototype = context.createJSObject();
         mapPrototype.defineProperty(PropertyKey.fromString("clear"), new JSNativeFunction("clear", 0, MapPrototype::clear), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1586,7 +1159,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Math object.
      */
-    private void initializeMathObject(JSContext context, JSObject global) {
+    private void initializeMathObject(JSObject global) {
         JSObject math = context.createJSObject();
 
         // Math constants
@@ -1647,7 +1220,7 @@ public final class JSGlobalObject {
      * Per ES2024 20.5.6.2: The value of the [[Prototype]] internal slot of a
      * NativeError constructor is the Error constructor.
      */
-    private void initializeNativeErrorPrototypeChains(JSContext context, JSObject global) {
+    private void initializeNativeErrorPrototypeChains(JSObject global) {
         JSValue errorConstructor = global.get(JSError.NAME);
         if (!(errorConstructor instanceof JSObject errorObj)) {
             return;
@@ -1666,7 +1239,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Number constructor and prototype.
      */
-    private void initializeNumberConstructor(JSContext context, JSObject global) {
+    private void initializeNumberConstructor(JSObject global) {
         // Create Number.prototype as a Number object with [[NumberData]] = +0 (ES2024 20.1.3)
         JSNumberObject numberPrototype = new JSNumberObject(0.0);
         context.transferPrototype(numberPrototype, JSObject.NAME);
@@ -1709,7 +1282,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Object constructor and static methods.
      */
-    private void initializeObjectConstructor(JSContext context, JSObject global) {
+    private void initializeObjectConstructor(JSObject global) {
         // Create Object.prototype
         JSObject objectPrototype = context.createJSObject();
         objectPrototype.defineProperty(PropertyKey.fromString("__defineGetter__"), new JSNativeFunction("__defineGetter__", 2, ObjectPrototype::__defineGetter__), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1770,7 +1343,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Promise constructor and prototype methods.
      */
-    private void initializePromiseConstructor(JSContext context, JSObject global) {
+    private void initializePromiseConstructor(JSObject global) {
         // Create Promise.prototype
         JSObject promisePrototype = context.createJSObject();
         promisePrototype.defineProperty(PropertyKey.fromString("catch"), new JSNativeFunction("catch", 1, PromisePrototype::catchMethod), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1802,7 +1375,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Proxy constructor.
      */
-    private void initializeProxyConstructor(JSContext context, JSObject global) {
+    private void initializeProxyConstructor(JSObject global) {
         // Create Proxy constructor as JSNativeFunction
         // Proxy requires 'new' and takes 2 arguments (target, handler)
         JSNativeFunction proxyConstructor = new JSNativeFunction(JSProxy.NAME, 2, ProxyConstructor::call, true, true);
@@ -1821,7 +1394,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Reflect object.
      */
-    private void initializeReflectObject(JSContext context, JSObject global) {
+    private void initializeReflectObject(JSObject global) {
         JSObject reflect = context.createJSObject();
         reflect.defineProperty(PropertyKey.fromString("apply"), new JSNativeFunction("apply", 3, JSReflectObject::apply), PropertyDescriptor.DataState.ConfigurableWritable);
         reflect.defineProperty(PropertyKey.fromString("construct"), new JSNativeFunction("construct", 2, JSReflectObject::construct), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1844,7 +1417,7 @@ public final class JSGlobalObject {
     /**
      * Initialize RegExp constructor and prototype.
      */
-    private void initializeRegExpConstructor(JSContext context, JSObject global) {
+    private void initializeRegExpConstructor(JSObject global) {
         // Create RegExp.prototype
         JSObject regexpPrototype = context.createJSObject();
         regexpPrototype.defineProperty(PropertyKey.fromString("test"), new JSNativeFunction("test", 1, RegExpPrototype::test), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1924,7 +1497,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Set constructor and prototype methods.
      */
-    private void initializeSetConstructor(JSContext context, JSObject global) {
+    private void initializeSetConstructor(JSObject global) {
         // Create Set.prototype
         JSObject setPrototype = context.createJSObject();
         setPrototype.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction("add", 1, SetPrototype::add), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1968,7 +1541,7 @@ public final class JSGlobalObject {
     /**
      * Initialize SharedArrayBuffer constructor and prototype.
      */
-    private void initializeSharedArrayBufferConstructor(JSContext context, JSObject global) {
+    private void initializeSharedArrayBufferConstructor(JSObject global) {
         // Create SharedArrayBuffer.prototype
         JSObject sharedArrayBufferPrototype = context.createJSObject();
         sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("grow"), new JSNativeFunction("grow", 1, SharedArrayBufferPrototype::grow), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1999,7 +1572,7 @@ public final class JSGlobalObject {
     /**
      * Initialize String constructor and prototype.
      */
-    private void initializeStringConstructor(JSContext context, JSObject global) {
+    private void initializeStringConstructor(JSObject global) {
         // Create String.prototype
         JSObject stringPrototype = context.createJSObject();
         stringPrototype.defineProperty(PropertyKey.fromString("at"), new JSNativeFunction("at", 1, StringPrototype::at), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -2083,7 +1656,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Symbol constructor and static methods.
      */
-    private void initializeSymbolConstructor(JSContext context, JSObject global) {
+    private void initializeSymbolConstructor(JSObject global) {
         // Create Symbol.prototype that inherits from Object.prototype
         JSObject symbolPrototype = context.createJSObject();
         context.transferPrototype(symbolPrototype, JSObject.NAME);
@@ -2143,7 +1716,7 @@ public final class JSGlobalObject {
      * Per ES spec, creates the %TypedArray% intrinsic (shared parent) and
      * individual typed array constructors that inherit from it.
      */
-    private void initializeTypedArrayConstructors(JSContext context, JSObject global) {
+    private void initializeTypedArrayConstructors(JSObject global) {
         record TypedArrayDef(String name, JSNativeFunction.NativeCallback callback, JSConstructorType type,
                              int bytesPerElement) {
         }
@@ -2229,7 +1802,7 @@ public final class JSGlobalObject {
     /**
      * Initialize WeakMap constructor and prototype methods.
      */
-    private void initializeWeakMapConstructor(JSContext context, JSObject global) {
+    private void initializeWeakMapConstructor(JSObject global) {
         JSObject weakMapPrototype = context.createJSObject();
         weakMapPrototype.defineProperty(PropertyKey.fromString("set"), new JSNativeFunction("set", 2, WeakMapPrototype::set), PropertyDescriptor.DataState.ConfigurableWritable);
         weakMapPrototype.defineProperty(PropertyKey.fromString("get"), new JSNativeFunction("get", 1, WeakMapPrototype::get), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -2256,7 +1829,7 @@ public final class JSGlobalObject {
     /**
      * Initialize WeakRef constructor.
      */
-    private void initializeWeakRefConstructor(JSContext context, JSObject global) {
+    private void initializeWeakRefConstructor(JSObject global) {
         JSObject weakRefPrototype = context.createJSObject();
         weakRefPrototype.defineProperty(PropertyKey.fromString("deref"), new JSNativeFunction("deref", 0, WeakRefPrototype::deref), PropertyDescriptor.DataState.ConfigurableWritable);
         weakRefPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSWeakRef.NAME), PropertyDescriptor.DataState.Configurable);
@@ -2278,7 +1851,7 @@ public final class JSGlobalObject {
     /**
      * Initialize WeakSet constructor and prototype methods.
      */
-    private void initializeWeakSetConstructor(JSContext context, JSObject global) {
+    private void initializeWeakSetConstructor(JSObject global) {
         JSObject weakSetPrototype = context.createJSObject();
         weakSetPrototype.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction("add", 1, WeakSetPrototype::add), PropertyDescriptor.DataState.ConfigurableWritable);
         weakSetPrototype.defineProperty(PropertyKey.fromString("has"), new JSNativeFunction("has", 1, WeakSetPrototype::has), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -2299,269 +1872,683 @@ public final class JSGlobalObject {
         global.defineProperty(PropertyKey.fromString(JSWeakSet.NAME), weakSetConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
-    private boolean isAsciiDigit(char c) {
-        return c >= '0' && c <= '9';
-    }
+    public static class GlobalFunction {
 
-    private boolean isEcmaWhitespace(char c) {
-        return switch (c) {
-            case '\t', '\n', '\u000B', '\f', '\r', ' ', '\u00A0', '\u1680', '\u2028',
-                 '\u2029', '\u202F', '\u205F', '\u3000', '\uFEFF' -> true;
-            default -> c >= '\u2000' && c <= '\u200A';
-        };
-    }
-
-    /**
-     * isFinite(value)
-     * Determine whether a value is a finite number.
-     *
-     * @see <a href="https://tc39.es/ecma262/#sec-isfinite-number">ECMAScript isFinite</a>
-     */
-    public JSValue isFinite(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        if (value.isSymbol() || value.isSymbolObject()) {
-            return context.throwTypeError("cannot convert symbol to number");
-        }
-        if (value.isBigInt() || value.isBigIntObject()) {
-            return context.throwTypeError("cannot convert bigint to number");
-        }
-        double num = JSTypeConversions.toNumber(context, value).value();
-        return JSBoolean.valueOf(!Double.isNaN(num) && !Double.isInfinite(num));
-    }
-
-    private boolean isInfinityPrefix(String str, int start) {
-        return start + 8 <= str.length() && str.startsWith("Infinity", start);
-    }
-
-    /**
-     * isNaN(value)
-     * Determine whether a value is NaN.
-     *
-     * @see <a href="https://tc39.es/ecma262/#sec-isnan-number">ECMAScript isNaN</a>
-     */
-    public JSValue isNaN(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        if (value.isSymbol() || value.isSymbolObject()) {
-            return context.throwTypeError("cannot convert symbol to number");
-        }
-        if (value.isBigInt() || value.isBigIntObject()) {
-            return context.throwTypeError("cannot convert bigint to number");
-        }
-        double num = JSTypeConversions.toNumber(context, value).value();
-        return JSBoolean.valueOf(Double.isNaN(num));
-    }
-
-    private boolean isURIReserved(int c) {
-        return c < URI_RESERVED_TABLE.length && URI_RESERVED_TABLE[c];
-    }
-
-    private boolean isURIUnescaped(int c, boolean isComponent) {
-        if (c >= URI_UNESCAPED_TABLE.length) {
-            return false;
-        }
-        return isComponent ? URI_UNESCAPED_COMPONENT_TABLE[c] : URI_UNESCAPED_TABLE[c];
-    }
-
-    /**
-     * Helper function to check if a character should not be escaped.
-     * Returns true for: A-Z a-z 0-9 @ * _ + - . /
-     */
-    private boolean isUnescaped(char c) {
-        return (c >= 'A' && c <= 'Z') ||
-                (c >= 'a' && c <= 'z') ||
-                (c >= '0' && c <= '9') ||
-                c == '@' || c == '*' || c == '_' ||
-                c == '+' || c == '-' || c == '.' || c == '/';
-    }
-
-    /**
-     * parseFloat(string)
-     * Parse a string and return a floating point number.
-     *
-     * @see <a href="https://tc39.es/ecma262/#sec-parsefloat-string">ECMAScript parseFloat</a>
-     */
-    public JSValue parseFloat(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue input = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String inputString = JSTypeConversions.toString(context, input).value();
-        int index = skipLeadingWhitespace(inputString);
-        if (index >= inputString.length()) {
-            return JSNumber.of(Double.NaN);
+        private static void appendPercentHex(StringBuilder result, int c) {
+            result.append('%');
+            result.append(HEX_CHARS[(c >> 4) & 0xF]);
+            result.append(HEX_CHARS[c & 0xF]);
         }
 
-        int signIndex = index;
-        if (inputString.charAt(index) == '+' || inputString.charAt(index) == '-') {
-            index++;
-        }
-        if (isInfinityPrefix(inputString, index)) {
-            boolean isNegative = inputString.charAt(signIndex) == '-';
-            return JSNumber.of(isNegative ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY);
-        }
-
-        int i = index;
-        boolean hasLeadingDigits = false;
-        while (i < inputString.length() && isAsciiDigit(inputString.charAt(i))) {
-            hasLeadingDigits = true;
-            i++;
+        private static int asciiDigitValue(char c) {
+            if (c >= '0' && c <= '9') {
+                return c - '0';
+            }
+            if (c >= 'A' && c <= 'Z') {
+                return c - 'A' + 10;
+            }
+            if (c >= 'a' && c <= 'z') {
+                return c - 'a' + 10;
+            }
+            return -1;
         }
 
-        boolean hasFractionDigits = false;
-        if (i < inputString.length() && inputString.charAt(i) == '.') {
-            i++;
-            while (i < inputString.length() && isAsciiDigit(inputString.charAt(i))) {
-                hasFractionDigits = true;
-                i++;
+        /**
+         * decodeURI(encodedURI)
+         * Decode a URI that was encoded by encodeURI.
+         *
+         * @see <a href="https://tc39.es/ecma262/#sec-decodeuri-encodeduri">ECMAScript decodeURI</a>
+         */
+        public static JSValue decodeURI(JSContext context, JSValue thisArg, JSValue[] args) {
+            JSValue encodedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            String encodedString = JSTypeConversions.toString(context, encodedValue).value();
+            return decodeURIImpl(context, encodedString, false);
+        }
+
+        /**
+         * decodeURIComponent(encodedURIComponent)
+         * Decode a URI component that was encoded by encodeURIComponent.
+         *
+         * @see <a href="https://tc39.es/ecma262/#sec-decodeuricomponent-encodeduricomponent">ECMAScript decodeURIComponent</a>
+         */
+        public static JSValue decodeURIComponent(JSContext context, JSValue thisArg, JSValue[] args) {
+            JSValue encodedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            String encodedString = JSTypeConversions.toString(context, encodedValue).value();
+            return decodeURIImpl(context, encodedString, true);
+        }
+
+        private static JSValue decodeURIImpl(JSContext context, String encodedString, boolean isComponent) {
+            if (encodedString.indexOf('%') < 0) {
+                return new JSString(encodedString);
+            }
+
+            int length = encodedString.length();
+            StringBuilder result = new StringBuilder(length);
+            int k = 0;
+            while (k < length) {
+                int c = encodedString.charAt(k);
+                if (c != '%') {
+                    result.append((char) c);
+                    k++;
+                    continue;
+                }
+
+                if (k + 2 >= length) {
+                    return context.throwURIError("expecting hex digit");
+                }
+                int high = fromHex(encodedString.charAt(k + 1));
+                int low = fromHex(encodedString.charAt(k + 2));
+                if (high < 0 || low < 0) {
+                    return context.throwURIError("expecting hex digit");
+                }
+
+                int decodedByte = (high << 4) | low;
+                int percentIndex = k;
+                k += 3;
+
+                if (decodedByte < 0x80) {
+                    if (!isComponent && isURIReserved(decodedByte)) {
+                        result.append('%')
+                                .append(encodedString.charAt(percentIndex + 1))
+                                .append(encodedString.charAt(percentIndex + 2));
+                    } else {
+                        result.append((char) decodedByte);
+                    }
+                    continue;
+                }
+
+                int continuationCount;
+                int minCodePoint;
+                int codePoint;
+                if (decodedByte >= 0xC0 && decodedByte <= 0xDF) {
+                    continuationCount = 1;
+                    minCodePoint = 0x80;
+                    codePoint = decodedByte & 0x1F;
+                } else if (decodedByte >= 0xE0 && decodedByte <= 0xEF) {
+                    continuationCount = 2;
+                    minCodePoint = 0x800;
+                    codePoint = decodedByte & 0x0F;
+                } else if (decodedByte >= 0xF0 && decodedByte <= 0xF7) {
+                    continuationCount = 3;
+                    minCodePoint = 0x10000;
+                    codePoint = decodedByte & 0x07;
+                } else {
+                    return context.throwURIError("malformed UTF-8");
+                }
+
+                for (int i = 0; i < continuationCount; i++) {
+                    if (k + 2 >= length || encodedString.charAt(k) != '%') {
+                        return context.throwURIError("expecting %");
+                    }
+                    int contHigh = fromHex(encodedString.charAt(k + 1));
+                    int contLow = fromHex(encodedString.charAt(k + 2));
+                    if (contHigh < 0 || contLow < 0) {
+                        return context.throwURIError("expecting hex digit");
+                    }
+                    int continuationByte = (contHigh << 4) | contLow;
+                    k += 3;
+                    if ((continuationByte & 0xC0) != 0x80) {
+                        return context.throwURIError("malformed UTF-8");
+                    }
+                    codePoint = (codePoint << 6) | (continuationByte & 0x3F);
+                }
+
+                if (codePoint < minCodePoint
+                        || codePoint > Character.MAX_CODE_POINT
+                        || (codePoint >= Character.MIN_SURROGATE && codePoint <= Character.MAX_SURROGATE)) {
+                    return context.throwURIError("malformed UTF-8");
+                }
+                result.appendCodePoint(codePoint);
+            }
+            return new JSString(result.toString());
+        }
+
+        /**
+         * encodeURI(uri)
+         * Encode a URI by escaping certain characters.
+         * Does not encode: A-Z a-z 0-9 ; , / ? : @ & = + $ - _ . ! ~ * ' ( ) #
+         *
+         * @see <a href="https://tc39.es/ecma262/#sec-encodeuri-uri">ECMAScript encodeURI</a>
+         */
+        public static JSValue encodeURI(JSContext context, JSValue thisArg, JSValue[] args) {
+            JSValue uriValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            String uriString = JSTypeConversions.toString(context, uriValue).value();
+            return encodeURIImpl(context, uriString, false);
+        }
+
+        /**
+         * encodeURIComponent(uriComponent)
+         * Encode a URI component by escaping certain characters.
+         * More aggressive than encodeURI - also encodes: ; , / ? : @ & = + $ #
+         *
+         * @see <a href="https://tc39.es/ecma262/#sec-encodeuricomponent-uricomponent">ECMAScript encodeURIComponent</a>
+         */
+        public static JSValue encodeURIComponent(JSContext context, JSValue thisArg, JSValue[] args) {
+            JSValue componentValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            String componentString = JSTypeConversions.toString(context, componentValue).value();
+            return encodeURIImpl(context, componentString, true);
+        }
+
+        private static JSValue encodeURIImpl(JSContext context, String inputString, boolean isComponent) {
+            int length = inputString.length();
+            StringBuilder result = null;
+            int k = 0;
+            while (k < length) {
+                char ch = inputString.charAt(k);
+                int c = ch;
+                if (isURIUnescaped(c, isComponent)) {
+                    if (result != null) {
+                        result.append(ch);
+                    }
+                    k++;
+                    continue;
+                }
+                if (result == null) {
+                    result = new StringBuilder(length + 16);
+                    result.append(inputString, 0, k);
+                }
+                if (ch >= Character.MIN_LOW_SURROGATE && ch <= Character.MAX_LOW_SURROGATE) {
+                    return context.throwURIError("invalid character");
+                }
+                k++;
+                if (ch >= Character.MIN_HIGH_SURROGATE && ch <= Character.MAX_HIGH_SURROGATE) {
+                    if (k >= length) {
+                        return context.throwURIError("expecting surrogate pair");
+                    }
+                    char c1 = inputString.charAt(k++);
+                    if (c1 < Character.MIN_LOW_SURROGATE || c1 > Character.MAX_LOW_SURROGATE) {
+                        return context.throwURIError("expecting surrogate pair");
+                    }
+                    c = Character.toCodePoint(ch, c1);
+                }
+
+                if (c < 0x80) {
+                    appendPercentHex(result, c);
+                } else if (c < 0x800) {
+                    appendPercentHex(result, (c >> 6) | 0xC0);
+                    appendPercentHex(result, (c & 0x3F) | 0x80);
+                } else if (c < 0x10000) {
+                    appendPercentHex(result, (c >> 12) | 0xE0);
+                    appendPercentHex(result, ((c >> 6) & 0x3F) | 0x80);
+                    appendPercentHex(result, (c & 0x3F) | 0x80);
+                } else {
+                    appendPercentHex(result, (c >> 18) | 0xF0);
+                    appendPercentHex(result, ((c >> 12) & 0x3F) | 0x80);
+                    appendPercentHex(result, ((c >> 6) & 0x3F) | 0x80);
+                    appendPercentHex(result, (c & 0x3F) | 0x80);
+                }
+            }
+            if (result == null) {
+                return new JSString(inputString);
+            }
+            return new JSString(result.toString());
+        }
+
+        /**
+         * escape(string)
+         * Deprecated function that encodes a string for use in a URL.
+         * Encodes all characters except: A-Z a-z 0-9 @ * _ + - . /
+         * Uses %XX for characters < 256 and %uXXXX for characters >= 256.
+         *
+         * @see <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/escape">MDN escape</a>
+         */
+        public static JSValue escape(JSContext context, JSValue thisArg, JSValue[] args) {
+            JSValue stringValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            String str = JSTypeConversions.toString(context, stringValue).value();
+
+            StringBuilder result = new StringBuilder();
+            for (int i = 0; i < str.length(); i++) {
+                char c = str.charAt(i);
+
+                // Check if character should not be escaped
+                if (isUnescaped(c)) {
+                    result.append(c);
+                } else {
+                    // Escape the character
+                    if (c < 256) {
+                        // Use %XX format for characters < 256
+                        appendPercentHex(result, c);
+                    } else {
+                        // Use %uXXXX format for characters >= 256
+                        result.append('%').append('u');
+                        result.append(HEX_CHARS[(c >> 12) & 0xF]);
+                        result.append(HEX_CHARS[(c >> 8) & 0xF]);
+                        result.append(HEX_CHARS[(c >> 4) & 0xF]);
+                        result.append(HEX_CHARS[c & 0xF]);
+                    }
+                }
+            }
+
+            return new JSString(result.toString());
+        }
+
+        /**
+         * eval(code)
+         * Evaluate JavaScript code in the realm context.
+         * <p>
+         * Per ES spec, eval evaluates code in the realm of the eval function itself,
+         * not the calling realm. This matters for cross-realm calls like other.eval('code').
+         *
+         * @param realmContext  the context where this eval function was created (the eval's realm)
+         * @param callerContext the context of the calling code (for scope overlay and exception propagation)
+         * @see <a href="https://tc39.es/ecma262/#sec-eval-x">ECMAScript eval</a>
+         */
+        public static JSValue eval(JSContext realmContext, JSContext callerContext, JSValue thisArg, JSValue[] args) {
+            JSValue x = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+
+            // If x is not a string, return it unchanged
+            if (!(x instanceof JSString)) {
+                return x;
+            }
+
+            String code = ((JSString) x).value();
+            // Per ES2024 19.2.1.1 PerformEval: eval inherits strict mode from caller
+            if (realmContext.isStrictMode()) {
+                code = "'use strict';\n" + code;
+            }
+
+            // Scope overlay is only valid for same-realm direct eval within a function.
+            // Cross-realm eval (other.eval('code')) should not overlay the caller's scope.
+            boolean isSameRealm = (realmContext == callerContext);
+
+            // Scope overlay: capture enclosing function's local variables onto the global
+            // object so that eval code's GET_VAR/PUT_VAR can access them.
+            StackFrame callerFrame = callerContext.getVirtualMachine().getCurrentFrame();
+            // Eval is "inside a function" only if same-realm and the callerFrame is NOT the top-level program.
+            boolean isEvalInFunction = isSameRealm && callerFrame != null
+                    && callerFrame.getFunction() instanceof JSBytecodeFunction
+                    && callerFrame.getCaller() != null;
+            String[] localVarNames = null;
+            Map<String, JSValue> savedGlobals = null;
+            Set<String> absentKeys = null;
+            JSObject global = realmContext.getGlobalObject();
+
+            // When eval runs inside a function, snapshot global property names so we can
+            // clean up var/function bindings that should be function-scoped (not global).
+            Set<String> globalKeysBefore = null;
+            if (isEvalInFunction) {
+                globalKeysBefore = new HashSet<>();
+                for (PropertyKey propertyKey : global.ownPropertyKeys()) {
+                    if (propertyKey.isString()) {
+                        globalKeysBefore.add(propertyKey.asString());
+                    }
+                }
+            }
+
+            if (isEvalInFunction
+                    && callerFrame.getFunction() instanceof JSBytecodeFunction bcFunc
+                    && bcFunc.getBytecode().getLocalVarNames() != null) {
+                localVarNames = bcFunc.getBytecode().getLocalVarNames();
+                savedGlobals = new HashMap<>();
+                absentKeys = new HashSet<>();
+                JSValue[] locals = callerFrame.getLocals();
+                for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
+                    String name = localVarNames[i];
+                    if (name == null) {
+                        continue;
+                    }
+                    PropertyKey key = PropertyKey.fromString(name);
+                    if (global.has(key)) {
+                        savedGlobals.put(name, global.get(key));
+                    } else {
+                        absentKeys.add(name);
+                    }
+                    global.set(key, locals[i]);
+                }
+            }
+
+            try {
+                // EvalDeclarationInstantiation: check if eval code declares "var arguments"
+                // in a function with parameter expressions. Per QuickJS add_arguments_arg(),
+                // a lexical "arguments" binding exists in the argument scope when the function
+                // has parameter expressions (non-strict mode), preventing eval from redeclaring it.
+                if (isEvalInFunction
+                        && callerFrame.getFunction() instanceof JSBytecodeFunction bcFunc
+                        && bcFunc.hasParameterExpressions()
+                        && !bcFunc.isArrow()
+                        && !bcFunc.isStrict()) {
+                    try {
+                        Compiler evalCompiler = new Compiler(code, "<eval>");
+                        Program evalAst = evalCompiler.parse(false);
+                        Set<String> varDecls = new HashSet<>();
+                        Set<String> lexDecls = new HashSet<>();
+                        AstUtils.collectGlobalDeclarations(evalAst, varDecls, lexDecls);
+                        if (varDecls.contains("arguments")) {
+                            throw new JSException(
+                                    realmContext.throwError("SyntaxError",
+                                            "Identifier 'arguments' has already been declared"));
+                        }
+                    } catch (JSException je) {
+                        throw je; // Re-throw our SyntaxError
+                    } catch (Exception ignored) {
+                        // Parse error in eval code - let the normal eval handle it
+                    }
+                }
+
+                JSValue result = realmContext.eval(code, "<eval>", false, true);
+
+                // Copy modified values back to caller's locals
+                if (localVarNames != null) {
+                    JSValue[] locals = callerFrame.getLocals();
+                    for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
+                        String name = localVarNames[i];
+                        if (name == null) {
+                            continue;
+                        }
+                        PropertyKey key = PropertyKey.fromString(name);
+                        if (global.has(key)) {
+                            locals[i] = global.get(key);
+                        }
+                    }
+                }
+
+                return result;
+            } catch (JSException e) {
+                // Propagate exception to the caller's context so the caller's VM sees it
+                callerContext.setPendingException(e.getErrorValue());
+                return JSUndefined.INSTANCE;
+            } finally {
+                // Restore global object state for scope overlay
+                if (savedGlobals != null) {
+                    for (var entry : savedGlobals.entrySet()) {
+                        global.set(PropertyKey.fromString(entry.getKey()), entry.getValue());
+                    }
+                }
+                if (absentKeys != null) {
+                    for (String name : absentKeys) {
+                        global.delete(realmContext, PropertyKey.fromString(name));
+                    }
+                }
+                // Clean up eval-created bindings that should be function-scoped (not global).
+                // Per ES2024 B.3.3.3, var/function declarations in eval inside a function
+                // go to the function's variable environment, not the global.
+                if (globalKeysBefore != null) {
+                    for (PropertyKey propertyKey : global.ownPropertyKeys()) {
+                        if (propertyKey.isString() && !globalKeysBefore.contains(propertyKey.asString())) {
+                            global.delete(realmContext, propertyKey);
+                        }
+                    }
+                }
             }
         }
 
-        if (!hasLeadingDigits && !hasFractionDigits) {
-            return JSNumber.of(Double.NaN);
-        }
-
-        if (i < inputString.length() && (inputString.charAt(i) == 'e' || inputString.charAt(i) == 'E')) {
-            int exponentMarkerIndex = i;
-            i++;
-            if (i < inputString.length() && (inputString.charAt(i) == '+' || inputString.charAt(i) == '-')) {
-                i++;
+        private static int fromHex(char c) {
+            if (c >= '0' && c <= '9') {
+                return c - '0';
             }
-            int exponentDigitsStart = i;
-            while (i < inputString.length() && isAsciiDigit(inputString.charAt(i))) {
-                i++;
+            if (c >= 'a' && c <= 'f') {
+                return c - 'a' + 10;
             }
-            if (i == exponentDigitsStart) {
-                i = exponentMarkerIndex;
+            if (c >= 'A' && c <= 'F') {
+                return c - 'A' + 10;
             }
+            return -1;
         }
 
-        String validNumber = inputString.substring(signIndex, i);
-        try {
-            return JSNumber.of(Double.parseDouble(validNumber));
-        } catch (NumberFormatException ignored) {
-            return JSNumber.of(Double.NaN);
-        }
-    }
-
-    /**
-     * parseInt(string, radix)
-     * Parse a string and return an integer of the specified radix.
-     *
-     * @see <a href="https://tc39.es/ecma262/#sec-parseint-string-radix">ECMAScript parseInt</a>
-     */
-    public JSValue parseInt(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue input = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String inputString = JSTypeConversions.toString(context, input).value();
-        int index = skipLeadingWhitespace(inputString);
-        if (index >= inputString.length()) {
-            return JSNumber.of(Double.NaN);
+        private static boolean isAsciiDigit(char c) {
+            return c >= '0' && c <= '9';
         }
 
-        int sign = 1;
-        if (inputString.charAt(index) == '+') {
-            index++;
-        } else if (inputString.charAt(index) == '-') {
-            sign = -1;
-            index++;
+        private static boolean isEcmaWhitespace(char c) {
+            return switch (c) {
+                case '\t', '\n', '\u000B', '\f', '\r', ' ', '\u00A0', '\u1680', '\u2028',
+                     '\u2029', '\u202F', '\u205F', '\u3000', '\uFEFF' -> true;
+                default -> c >= '\u2000' && c <= '\u200A';
+            };
         }
 
-        int radix = 0;
-        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            JSValue radixValue = args[1];
-            if (radixValue.isSymbol() || radixValue.isSymbolObject()) {
+        /**
+         * isFinite(value)
+         * Determine whether a value is a finite number.
+         *
+         * @see <a href="https://tc39.es/ecma262/#sec-isfinite-number">ECMAScript isFinite</a>
+         */
+        public static JSValue isFinite(JSContext context, JSValue thisArg, JSValue[] args) {
+            JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            if (value.isSymbol() || value.isSymbolObject()) {
                 return context.throwTypeError("cannot convert symbol to number");
             }
-            if (radixValue.isBigInt() || radixValue.isBigIntObject()) {
+            if (value.isBigInt() || value.isBigIntObject()) {
                 return context.throwTypeError("cannot convert bigint to number");
             }
-            radix = JSTypeConversions.toInt32(context, radixValue);
+            double num = JSTypeConversions.toNumber(context, value).value();
+            return JSBoolean.valueOf(!Double.isNaN(num) && !Double.isInfinite(num));
         }
 
-        if (radix != 0 && (radix < 2 || radix > 36)) {
-            return JSNumber.of(Double.NaN);
+        private static boolean isInfinityPrefix(String str, int start) {
+            return start + 8 <= str.length() && str.startsWith("Infinity", start);
         }
 
-        boolean stripPrefix = radix == 0 || radix == 16;
-        if (radix == 0) {
-            radix = 10;
-        }
-        if (stripPrefix
-                && index + 1 < inputString.length()
-                && inputString.charAt(index) == '0'
-                && (inputString.charAt(index + 1) == 'x' || inputString.charAt(index + 1) == 'X')) {
-            index += 2;
-            radix = 16;
-        }
-
-        double result = 0.0;
-        boolean foundDigit = false;
-        while (index < inputString.length()) {
-            int digit = asciiDigitValue(inputString.charAt(index));
-            if (digit < 0 || digit >= radix) {
-                break;
+        /**
+         * isNaN(value)
+         * Determine whether a value is NaN.
+         *
+         * @see <a href="https://tc39.es/ecma262/#sec-isnan-number">ECMAScript isNaN</a>
+         */
+        public static JSValue isNaN(JSContext context, JSValue thisArg, JSValue[] args) {
+            JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            if (value.isSymbol() || value.isSymbolObject()) {
+                return context.throwTypeError("cannot convert symbol to number");
             }
-            result = result * radix + digit;
-            foundDigit = true;
-            index++;
+            if (value.isBigInt() || value.isBigIntObject()) {
+                return context.throwTypeError("cannot convert bigint to number");
+            }
+            double num = JSTypeConversions.toNumber(context, value).value();
+            return JSBoolean.valueOf(Double.isNaN(num));
         }
 
-        if (!foundDigit) {
-            return JSNumber.of(Double.NaN);
+        private static boolean isURIReserved(int c) {
+            return c < URI_RESERVED_TABLE.length && URI_RESERVED_TABLE[c];
         }
 
-        return JSNumber.of(sign * result);
-    }
-
-    private int skipLeadingWhitespace(String str) {
-        int index = 0;
-        while (index < str.length() && isEcmaWhitespace(str.charAt(index))) {
-            index++;
+        private static boolean isURIUnescaped(int c, boolean isComponent) {
+            if (c >= URI_UNESCAPED_TABLE.length) {
+                return false;
+            }
+            return isComponent ? URI_UNESCAPED_COMPONENT_TABLE[c] : URI_UNESCAPED_TABLE[c];
         }
-        return index;
-    }
 
-    /**
-     * unescape(string)
-     * Deprecated function that decodes a string encoded by escape().
-     * Decodes %XX and %uXXXX sequences.
-     *
-     * @see <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/unescape">MDN unescape</a>
-     */
-    public JSValue unescape(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue stringValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String str = JSTypeConversions.toString(context, stringValue).value();
+        /**
+         * Helper function to check if a character should not be escaped.
+         * Returns true for: A-Z a-z 0-9 @ * _ + - . /
+         */
+        private static boolean isUnescaped(char c) {
+            return (c >= 'A' && c <= 'Z') ||
+                    (c >= 'a' && c <= 'z') ||
+                    (c >= '0' && c <= '9') ||
+                    c == '@' || c == '*' || c == '_' ||
+                    c == '+' || c == '-' || c == '.' || c == '/';
+        }
 
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < str.length(); i++) {
-            char c = str.charAt(i);
+        /**
+         * parseFloat(string)
+         * Parse a string and return a floating point number.
+         *
+         * @see <a href="https://tc39.es/ecma262/#sec-parsefloat-string">ECMAScript parseFloat</a>
+         */
+        public static JSValue parseFloat(JSContext context, JSValue thisArg, JSValue[] args) {
+            JSValue input = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            String inputString = JSTypeConversions.toString(context, input).value();
+            int index = skipLeadingWhitespace(inputString);
+            if (index >= inputString.length()) {
+                return JSNumber.of(Double.NaN);
+            }
 
-            if (c == '%') {
-                // Try to parse %uXXXX format
-                if (i + 6 <= str.length() && str.charAt(i + 1) == 'u') {
-                    try {
-                        int codePoint = Integer.parseInt(str.substring(i + 2, i + 6), 16);
-                        result.append((char) codePoint);
-                        i += 5; // Skip the next 5 characters (uXXXX)
-                        continue;
-                    } catch (NumberFormatException e) {
-                        // Not a valid %uXXXX sequence, treat as literal
+            int signIndex = index;
+            if (inputString.charAt(index) == '+' || inputString.charAt(index) == '-') {
+                index++;
+            }
+            if (isInfinityPrefix(inputString, index)) {
+                boolean isNegative = inputString.charAt(signIndex) == '-';
+                return JSNumber.of(isNegative ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY);
+            }
+
+            int i = index;
+            boolean hasLeadingDigits = false;
+            while (i < inputString.length() && isAsciiDigit(inputString.charAt(i))) {
+                hasLeadingDigits = true;
+                i++;
+            }
+
+            boolean hasFractionDigits = false;
+            if (i < inputString.length() && inputString.charAt(i) == '.') {
+                i++;
+                while (i < inputString.length() && isAsciiDigit(inputString.charAt(i))) {
+                    hasFractionDigits = true;
+                    i++;
+                }
+            }
+
+            if (!hasLeadingDigits && !hasFractionDigits) {
+                return JSNumber.of(Double.NaN);
+            }
+
+            if (i < inputString.length() && (inputString.charAt(i) == 'e' || inputString.charAt(i) == 'E')) {
+                int exponentMarkerIndex = i;
+                i++;
+                if (i < inputString.length() && (inputString.charAt(i) == '+' || inputString.charAt(i) == '-')) {
+                    i++;
+                }
+                int exponentDigitsStart = i;
+                while (i < inputString.length() && isAsciiDigit(inputString.charAt(i))) {
+                    i++;
+                }
+                if (i == exponentDigitsStart) {
+                    i = exponentMarkerIndex;
+                }
+            }
+
+            String validNumber = inputString.substring(signIndex, i);
+            try {
+                return JSNumber.of(Double.parseDouble(validNumber));
+            } catch (NumberFormatException ignored) {
+                return JSNumber.of(Double.NaN);
+            }
+        }
+
+        /**
+         * parseInt(string, radix)
+         * Parse a string and return an integer of the specified radix.
+         *
+         * @see <a href="https://tc39.es/ecma262/#sec-parseint-string-radix">ECMAScript parseInt</a>
+         */
+        public static JSValue parseInt(JSContext context, JSValue thisArg, JSValue[] args) {
+            JSValue input = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            String inputString = JSTypeConversions.toString(context, input).value();
+            int index = skipLeadingWhitespace(inputString);
+            if (index >= inputString.length()) {
+                return JSNumber.of(Double.NaN);
+            }
+
+            int sign = 1;
+            if (inputString.charAt(index) == '+') {
+                index++;
+            } else if (inputString.charAt(index) == '-') {
+                sign = -1;
+                index++;
+            }
+
+            int radix = 0;
+            if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+                JSValue radixValue = args[1];
+                if (radixValue.isSymbol() || radixValue.isSymbolObject()) {
+                    return context.throwTypeError("cannot convert symbol to number");
+                }
+                if (radixValue.isBigInt() || radixValue.isBigIntObject()) {
+                    return context.throwTypeError("cannot convert bigint to number");
+                }
+                radix = JSTypeConversions.toInt32(context, radixValue);
+            }
+
+            if (radix != 0 && (radix < 2 || radix > 36)) {
+                return JSNumber.of(Double.NaN);
+            }
+
+            boolean stripPrefix = radix == 0 || radix == 16;
+            if (radix == 0) {
+                radix = 10;
+            }
+            if (stripPrefix
+                    && index + 1 < inputString.length()
+                    && inputString.charAt(index) == '0'
+                    && (inputString.charAt(index + 1) == 'x' || inputString.charAt(index + 1) == 'X')) {
+                index += 2;
+                radix = 16;
+            }
+
+            double result = 0.0;
+            boolean foundDigit = false;
+            while (index < inputString.length()) {
+                int digit = asciiDigitValue(inputString.charAt(index));
+                if (digit < 0 || digit >= radix) {
+                    break;
+                }
+                result = result * radix + digit;
+                foundDigit = true;
+                index++;
+            }
+
+            if (!foundDigit) {
+                return JSNumber.of(Double.NaN);
+            }
+
+            return JSNumber.of(sign * result);
+        }
+
+        private static int skipLeadingWhitespace(String str) {
+            int index = 0;
+            while (index < str.length() && isEcmaWhitespace(str.charAt(index))) {
+                index++;
+            }
+            return index;
+        }
+
+        /**
+         * unescape(string)
+         * Deprecated function that decodes a string encoded by escape().
+         * Decodes %XX and %uXXXX sequences.
+         *
+         * @see <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/unescape">MDN unescape</a>
+         */
+        public static JSValue unescape(JSContext context, JSValue thisArg, JSValue[] args) {
+            JSValue stringValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            String str = JSTypeConversions.toString(context, stringValue).value();
+
+            StringBuilder result = new StringBuilder();
+            for (int i = 0; i < str.length(); i++) {
+                char c = str.charAt(i);
+
+                if (c == '%') {
+                    // Try to parse %uXXXX format
+                    if (i + 6 <= str.length() && str.charAt(i + 1) == 'u') {
+                        try {
+                            int codePoint = Integer.parseInt(str.substring(i + 2, i + 6), 16);
+                            result.append((char) codePoint);
+                            i += 5; // Skip the next 5 characters (uXXXX)
+                            continue;
+                        } catch (NumberFormatException e) {
+                            // Not a valid %uXXXX sequence, treat as literal
+                        }
+                    }
+
+                    // Try to parse %XX format
+                    if (i + 3 <= str.length()) {
+                        try {
+                            int codePoint = Integer.parseInt(str.substring(i + 1, i + 3), 16);
+                            result.append((char) codePoint);
+                            i += 2; // Skip the next 2 characters (XX)
+                            continue;
+                        } catch (NumberFormatException e) {
+                            // Not a valid %XX sequence, treat as literal
+                        }
                     }
                 }
 
-                // Try to parse %XX format
-                if (i + 3 <= str.length()) {
-                    try {
-                        int codePoint = Integer.parseInt(str.substring(i + 1, i + 3), 16);
-                        result.append((char) codePoint);
-                        i += 2; // Skip the next 2 characters (XX)
-                        continue;
-                    } catch (NumberFormatException e) {
-                        // Not a valid %XX sequence, treat as literal
-                    }
-                }
+                // Not an escape sequence, append as is
+                result.append(c);
             }
 
-            // Not an escape sequence, append as is
-            result.append(c);
+            return new JSString(result.toString());
         }
-
-        return new JSString(result.toString());
     }
 }
