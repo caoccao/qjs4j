@@ -1438,16 +1438,16 @@ public final class JSGlobalObject {
         regexpPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.SEARCH), new JSNativeFunction("[Symbol.search]", 1, RegExpPrototype::symbolSearch), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Accessor properties
-        regexpPrototype.defineProperty(PropertyKey.fromString("dotAll"), new JSNativeFunction("get dotAll", 0, RegExpPrototype::getDotAll), PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("flags"), new JSNativeFunction("get flags", 0, RegExpPrototype::getFlags), PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("global"), new JSNativeFunction("get global", 0, RegExpPrototype::getGlobal), PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("hasIndices"), new JSNativeFunction("get hasIndices", 0, RegExpPrototype::getHasIndices), PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("ignoreCase"), new JSNativeFunction("get ignoreCase", 0, RegExpPrototype::getIgnoreCase), PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("multiline"), new JSNativeFunction("get multiline", 0, RegExpPrototype::getMultiline), PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("source"), new JSNativeFunction("get source", 0, RegExpPrototype::getSource), PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("sticky"), new JSNativeFunction("get sticky", 0, RegExpPrototype::getSticky), PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("unicode"), new JSNativeFunction("get unicode", 0, RegExpPrototype::getUnicode), PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("unicodeSets"), new JSNativeFunction("get unicodeSets", 0, RegExpPrototype::getUnicodeSets), PropertyDescriptor.AccessorState.Configurable);
+        regexpPrototype.defineProperty(PropertyKey.fromString("dotAll"), new JSNativeFunction("get dotAll", 0, RegExpPrototype::getDotAllAccessor), PropertyDescriptor.AccessorState.Configurable);
+        regexpPrototype.defineProperty(PropertyKey.fromString("flags"), new JSNativeFunction("get flags", 0, RegExpPrototype::getFlagsAccessor), PropertyDescriptor.AccessorState.Configurable);
+        regexpPrototype.defineProperty(PropertyKey.fromString("global"), new JSNativeFunction("get global", 0, RegExpPrototype::getGlobalAccessor), PropertyDescriptor.AccessorState.Configurable);
+        regexpPrototype.defineProperty(PropertyKey.fromString("hasIndices"), new JSNativeFunction("get hasIndices", 0, RegExpPrototype::getHasIndicesAccessor), PropertyDescriptor.AccessorState.Configurable);
+        regexpPrototype.defineProperty(PropertyKey.fromString("ignoreCase"), new JSNativeFunction("get ignoreCase", 0, RegExpPrototype::getIgnoreCaseAccessor), PropertyDescriptor.AccessorState.Configurable);
+        regexpPrototype.defineProperty(PropertyKey.fromString("multiline"), new JSNativeFunction("get multiline", 0, RegExpPrototype::getMultilineAccessor), PropertyDescriptor.AccessorState.Configurable);
+        regexpPrototype.defineProperty(PropertyKey.fromString("source"), new JSNativeFunction("get source", 0, RegExpPrototype::getSourceAccessor), PropertyDescriptor.AccessorState.Configurable);
+        regexpPrototype.defineProperty(PropertyKey.fromString("sticky"), new JSNativeFunction("get sticky", 0, RegExpPrototype::getStickyAccessor), PropertyDescriptor.AccessorState.Configurable);
+        regexpPrototype.defineProperty(PropertyKey.fromString("unicode"), new JSNativeFunction("get unicode", 0, RegExpPrototype::getUnicodeAccessor), PropertyDescriptor.AccessorState.Configurable);
+        regexpPrototype.defineProperty(PropertyKey.fromString("unicodeSets"), new JSNativeFunction("get unicodeSets", 0, RegExpPrototype::getUnicodeSetsAccessor), PropertyDescriptor.AccessorState.Configurable);
 
         // Create RegExp constructor as a function
         JSNativeFunction regexpConstructor = new JSNativeFunction(JSRegExp.NAME, 2, RegExpConstructor::call, true);

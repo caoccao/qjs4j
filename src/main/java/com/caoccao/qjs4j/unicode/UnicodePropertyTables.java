@@ -579,6 +579,7 @@ public final class UnicodePropertyTables {
     };
     // Script tables
     public static final byte[] SCRIPT_TABLE = UnicodePropertyTablesScript.SCRIPT_TABLE;
+
     private UnicodePropertyTables() {
     }
 

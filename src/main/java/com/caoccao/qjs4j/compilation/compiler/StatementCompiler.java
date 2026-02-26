@@ -74,6 +74,10 @@ final class StatementCompiler {
         loopCompiler.compileContinueStatement(contStmt);
     }
 
+    void compileDoWhileStatement(DoWhileStatement doWhileStmt) {
+        loopCompiler.compileDoWhileStatement(doWhileStmt);
+    }
+
     void compileForInStatement(ForInStatement forInStmt) {
         loopCompiler.compileForInStatement(forInStmt);
     }
@@ -664,10 +668,6 @@ final class StatementCompiler {
 
     void compileWhileStatement(WhileStatement whileStmt) {
         loopCompiler.compileWhileStatement(whileStmt);
-    }
-
-    void compileDoWhileStatement(DoWhileStatement doWhileStmt) {
-        loopCompiler.compileDoWhileStatement(doWhileStmt);
     }
 
     void compileWithStatement(WithStatement withStmt) {

@@ -30,16 +30,45 @@ import java.util.*;
  */
 public final class RegExpCompiler {
 
+    private static final long MAX_QUANTIFIER_BOUND = Integer.MAX_VALUE;
     private static final int MAX_UNICODE_CODE_POINT = 0x10FFFF;
+    private static final int MAX_UNROLLED_QUANTIFIER_REPETITIONS = 4096;
     private int captureCount;
     private List<String> groupNames;
     private Map<String, Integer> namedCaptureIndices;
     private int totalCaptureCount;
 
+    private long appendDecimalDigitWithClamp(long currentValue, int digit) {
+        if (currentValue >= MAX_QUANTIFIER_BOUND) {
+            return MAX_QUANTIFIER_BOUND;
+        }
+        long nextValue = currentValue * 10L + digit;
+        return Math.min(nextValue, MAX_QUANTIFIER_BOUND);
+    }
+
     private void appendRanges(List<Integer> ranges, int[] propertyRanges) {
         for (int propertyRange : propertyRanges) {
             ranges.add(propertyRange);
         }
+    }
+
+    private int combineTrailingLowSurrogateEscapeIfPresent(CompileContext context, int codePoint) {
+        if (!context.isUnicodeMode()) {
+            return codePoint;
+        }
+        if (!Character.isHighSurrogate((char) codePoint)) {
+            return codePoint;
+        }
+        UnicodeEscapeParseResult unicodeEscapeParseResult = tryParseUnicodeEscapeAt(context, context.pos);
+        if (unicodeEscapeParseResult == null) {
+            return codePoint;
+        }
+        int trailingCodePoint = unicodeEscapeParseResult.codePoint();
+        if (!Character.isLowSurrogate((char) trailingCodePoint)) {
+            return codePoint;
+        }
+        context.pos = unicodeEscapeParseResult.nextPos();
+        return Character.toCodePoint((char) codePoint, (char) trailingCodePoint);
     }
 
     /**
@@ -228,6 +257,15 @@ public final class RegExpCompiler {
                 break;
             }
 
+            if (context.isUnicodeSetsMode() && ch != '\\') {
+                if (isInvalidUnicodeSetsClassSinglePunctuator(ch)) {
+                    throw new RegExpSyntaxException("Invalid character in UnicodeSets character class");
+                }
+                if (isInvalidUnicodeSetsDoublePunctuator(context, ch)) {
+                    throw new RegExpSyntaxException("Invalid character in UnicodeSets character class");
+                }
+            }
+
             if (ch == '\\') {
                 context.pos++;
                 if (context.pos >= context.codePoints.length) {
@@ -405,9 +443,10 @@ public final class RegExpCompiler {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
                 context.buffer.appendU8(RegExpOpcode.RANGE.getCode());
-                // Size: 2 bytes for count + (4 ranges * 2 values * 4 bytes each)
-                context.buffer.appendU16(2 + (4 * 8));
-                context.buffer.appendU16(4); // 4 ranges
+                boolean includeUnicodeIgnoreCaseWordExtras = context.isUnicodeMode() && context.isIgnoreCase();
+                int rangeCount = includeUnicodeIgnoreCaseWordExtras ? 6 : 4;
+                context.buffer.appendU16(2 + (rangeCount * 8));
+                context.buffer.appendU16(rangeCount);
                 // Range 1: '0'-'9'
                 context.buffer.appendU32('0');
                 context.buffer.appendU32('9');
@@ -420,6 +459,14 @@ public final class RegExpCompiler {
                 // Range 4: 'a'-'z'
                 context.buffer.appendU32('a');
                 context.buffer.appendU32('z');
+                if (includeUnicodeIgnoreCaseWordExtras) {
+                    // ES Unicode ignoreCase adds canonicalized matches for \w:
+                    // U+017F LATIN SMALL LETTER LONG S and U+212A KELVIN SIGN.
+                    context.buffer.appendU32(0x017F);
+                    context.buffer.appendU32(0x017F);
+                    context.buffer.appendU32(0x212A);
+                    context.buffer.appendU32(0x212A);
+                }
                 if (isBackwardDirection) {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
@@ -431,21 +478,34 @@ public final class RegExpCompiler {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
                 context.buffer.appendU8(RegExpOpcode.NOT_RANGE.getCode());
-                // Size: 2 bytes for count + (4 ranges * 2 values * 4 bytes each)
-                context.buffer.appendU16(2 + (4 * 8));
-                context.buffer.appendU16(4); // 4 ranges
-                // Range 1: '0'-'9'
-                context.buffer.appendU32('0');
-                context.buffer.appendU32('9');
-                // Range 2: 'A'-'Z'
-                context.buffer.appendU32('A');
-                context.buffer.appendU32('Z');
-                // Range 3: '_'-'_'
-                context.buffer.appendU32('_');
-                context.buffer.appendU32('_');
-                // Range 4: 'a'-'z'
-                context.buffer.appendU32('a');
-                context.buffer.appendU32('z');
+                boolean includeUnicodeIgnoreCaseWordExtras = context.isUnicodeMode() && context.isIgnoreCase();
+                if (includeUnicodeIgnoreCaseWordExtras) {
+                    context.buffer.appendU16(2 + (6 * 8));
+                    context.buffer.appendU16(6);
+                    context.buffer.appendU32('0');
+                    context.buffer.appendU32('9');
+                    context.buffer.appendU32('A');
+                    context.buffer.appendU32('Z');
+                    context.buffer.appendU32('_');
+                    context.buffer.appendU32('_');
+                    context.buffer.appendU32('a');
+                    context.buffer.appendU32('z');
+                    context.buffer.appendU32(0x017F);
+                    context.buffer.appendU32(0x017F);
+                    context.buffer.appendU32(0x212A);
+                    context.buffer.appendU32(0x212A);
+                } else {
+                    context.buffer.appendU16(2 + (4 * 8));
+                    context.buffer.appendU16(4);
+                    context.buffer.appendU32('0');
+                    context.buffer.appendU32('9');
+                    context.buffer.appendU32('A');
+                    context.buffer.appendU32('Z');
+                    context.buffer.appendU32('_');
+                    context.buffer.appendU32('_');
+                    context.buffer.appendU32('a');
+                    context.buffer.appendU32('z');
+                }
                 if (isBackwardDirection) {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
@@ -654,7 +714,8 @@ public final class RegExpCompiler {
                         if (digitCount == 0) {
                             throw new RegExpSyntaxException("Empty unicode escape");
                         }
-                        compileLiteralChar(context, value, isBackwardDirection);
+                        int combinedCodePoint = combineTrailingLowSurrogateEscapeIfPresent(context, value);
+                        compileLiteralChar(context, combinedCodePoint, isBackwardDirection);
                     } else {
                         // Non-unicode mode: backslash-u is identity escape, '{' handled by caller
                         compileLiteralChar(context, 'u', isBackwardDirection);
@@ -672,7 +733,8 @@ public final class RegExpCompiler {
                             value = (value << 4) | hexValue(context.codePoints[context.pos + i]);
                         }
                         context.pos += 4;
-                        compileLiteralChar(context, value, isBackwardDirection);
+                        int combinedCodePoint = combineTrailingLowSurrogateEscapeIfPresent(context, value);
+                        compileLiteralChar(context, combinedCodePoint, isBackwardDirection);
                     } else if (!context.isUnicodeMode()) {
                         // AnnexB: In non-unicode mode, backslash-u without valid hex is identity escape
                         compileLiteralChar(context, 'u', isBackwardDirection);
@@ -707,6 +769,22 @@ public final class RegExpCompiler {
             context.pos++;
             if (context.pos >= context.codePoints.length) {
                 throw new RegExpSyntaxException("Incomplete group syntax");
+            }
+            InlineModifierGroupParseResult inlineModifierGroupParseResult = tryParseInlineModifierGroup(context);
+            if (inlineModifierGroupParseResult != null) {
+                int savedFlags = context.currentFlags;
+                context.currentFlags = inlineModifierGroupParseResult.scopedFlags();
+                try {
+                    compileDisjunction(context, isBackwardDirection);
+                } finally {
+                    context.currentFlags = savedFlags;
+                }
+                if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != ')') {
+                    throw new RegExpSyntaxException("Unclosed group");
+                }
+                context.pos++;
+                context.lastAtomCanRepeat = true;
+                return;
             }
             int groupType = context.codePoints[context.pos++];
             if (groupType == ':') {
@@ -796,147 +874,6 @@ public final class RegExpCompiler {
         compileLiteralChar(context, ch);
         if (isBackwardDirection) {
             context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-        }
-    }
-
-    /**
-     * Compile a \p{} or \P{} Unicode property escape.
-     * Handles both regular properties and sequence properties (v flag).
-     * Based on QuickJS parse_unicode_property + re_emit_string_list.
-     */
-    private void compileUnicodePropertyEscape(CompileContext context, boolean isInverted, boolean isBackwardDirection) {
-        // Parse the property name
-        int savedPos = context.pos;
-        int[] propertyRanges = null;
-        try {
-            propertyRanges = parseUnicodePropertyEscape(context);
-        } catch (RegExpSyntaxException e) {
-            // If we're in unicode sets mode and not inverted, try sequence properties
-            if (context.isUnicodeSetsMode() && !isInverted) {
-                context.pos = savedPos;
-                // Re-parse just the property name without resolving
-                if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '{') {
-                    throw e;
-                }
-                context.pos++;
-                int nameStart = context.pos;
-                while (context.pos < context.codePoints.length && isUnicodePropertyChar(context.codePoints[context.pos])) {
-                    context.pos++;
-                }
-                String propertyName = new String(context.codePoints, nameStart, context.pos - nameStart);
-                if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '}') {
-                    throw e;
-                }
-                context.pos++;
-
-                UnicodePropertyResolver.SequencePropertyResult seqResult =
-                        UnicodePropertyResolver.resolveSequenceProperty(propertyName);
-                if (seqResult == null) {
-                    throw e;
-                }
-
-                emitStringList(context, seqResult);
-                return;
-            }
-            throw e;
-        }
-
-        // Regular property resolved successfully
-        if (isBackwardDirection) {
-            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-        }
-        emitRanges(context, propertyRanges, isInverted);
-        if (isBackwardDirection) {
-            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-        }
-    }
-
-    /**
-     * Emit bytecode for a string list (union of single code point ranges and multi-codepoint sequences).
-     * Ported from QuickJS re_emit_string_list in libregexp.c.
-     * <p>
-     * Emits alternatives: try longest sequences first, then shorter ones, then code point ranges.
-     * Uses SPLIT_NEXT_FIRST/GOTO to create a chain of alternatives.
-     */
-    private void emitStringList(CompileContext context, UnicodePropertyResolver.SequencePropertyResult stringList) {
-        List<int[]> sequences = stringList.sequences();
-        int[] ranges = stringList.codePointRanges();
-
-        if (sequences.isEmpty()) {
-            // Simple case: only code point ranges
-            emitRanges(context, ranges, false);
-            return;
-        }
-
-        // Sort sequences by length descending (longest first)
-        List<int[]> sortedSequences = new ArrayList<>(sequences);
-        sortedSequences.sort((a, b) -> Integer.compare(b.length, a.length));
-
-        // Check for empty string and filter it out
-        boolean hasEmptyString = false;
-        List<int[]> nonEmptySequences = new ArrayList<>();
-        for (int[] seq : sortedSequences) {
-            if (seq.length == 0) {
-                hasEmptyString = true;
-            } else {
-                nonEmptySequences.add(seq);
-            }
-        }
-
-        boolean hasRanges = ranges.length > 0;
-        List<Integer> gotoPositions = new ArrayList<>();
-
-        // Emit each sequence as an alternative
-        for (int i = 0; i < nonEmptySequences.size(); i++) {
-            int[] seq = nonEmptySequences.get(i);
-            boolean isLast = !hasEmptyString && !hasRanges && i == nonEmptySequences.size() - 1;
-
-            int splitPos = -1;
-            if (!isLast) {
-                splitPos = context.buffer.size();
-                context.buffer.appendU8(RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
-                context.buffer.appendU32(0); // placeholder
-            }
-
-            // Emit each character in the sequence
-            for (int codePoint : seq) {
-                compileLiteralChar(context, codePoint);
-            }
-
-            if (!isLast) {
-                gotoPositions.add(context.buffer.size());
-                context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
-                context.buffer.appendU32(0); // placeholder
-
-                // Patch SPLIT offset: jump to after this GOTO
-                int splitOffset = context.buffer.size() - (splitPos + 5);
-                context.buffer.setU32(splitPos + 1, splitOffset);
-            }
-        }
-
-        // Emit char ranges if present
-        if (hasRanges) {
-            boolean isLast = !hasEmptyString;
-            int splitPos = -1;
-            if (!isLast) {
-                splitPos = context.buffer.size();
-                context.buffer.appendU8(RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
-                context.buffer.appendU32(0); // placeholder
-            }
-
-            emitRanges(context, ranges, false);
-
-            if (!isLast) {
-                // Patch SPLIT offset
-                int splitOffset = context.buffer.size() - (splitPos + 5);
-                context.buffer.setU32(splitPos + 1, splitOffset);
-            }
-        }
-
-        // Patch all GOTO targets to point to current position (end of all alternatives)
-        for (int gotoPos : gotoPositions) {
-            int gotoOffset = context.buffer.size() - (gotoPos + 5);
-            context.buffer.setU32(gotoPos + 1, gotoOffset);
         }
     }
 
@@ -1094,6 +1031,19 @@ public final class RegExpCompiler {
             context.buffer.appendU8(captureCount - 1);
         }
 
+        if (min > MAX_UNROLLED_QUANTIFIER_REPETITIONS) {
+            min = MAX_UNROLLED_QUANTIFIER_REPETITIONS;
+            if (max < min) {
+                max = min;
+            }
+        }
+        if (max != Integer.MAX_VALUE && max > MAX_UNROLLED_QUANTIFIER_REPETITIONS) {
+            max = MAX_UNROLLED_QUANTIFIER_REPETITIONS;
+            if (max < min) {
+                max = min;
+            }
+        }
+
         // Implement quantifier using SPLIT opcodes
         if (min == 0 && max == 1) {
             // ? quantifier: SPLIT then atom
@@ -1229,6 +1179,63 @@ public final class RegExpCompiler {
         }
     }
 
+    /**
+     * Compile a \p{} or \P{} Unicode property escape.
+     * Handles both regular properties and sequence properties (v flag).
+     * Based on QuickJS parse_unicode_property + re_emit_string_list.
+     */
+    private void compileUnicodePropertyEscape(CompileContext context, boolean isInverted, boolean isBackwardDirection) {
+        // Parse the property name
+        int savedPos = context.pos;
+        int[] propertyRanges = null;
+        try {
+            propertyRanges = parseUnicodePropertyEscape(context);
+        } catch (RegExpSyntaxException e) {
+            // If we're in unicode sets mode and not inverted, try sequence properties
+            if (context.isUnicodeSetsMode() && !isInverted) {
+                context.pos = savedPos;
+                // Re-parse just the property name without resolving
+                if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '{') {
+                    throw e;
+                }
+                context.pos++;
+                int nameStart = context.pos;
+                while (context.pos < context.codePoints.length && isUnicodePropertyChar(context.codePoints[context.pos])) {
+                    context.pos++;
+                }
+                String propertyName = new String(context.codePoints, nameStart, context.pos - nameStart);
+                if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '}') {
+                    throw e;
+                }
+                context.pos++;
+
+                UnicodePropertyResolver.SequencePropertyResult seqResult =
+                        UnicodePropertyResolver.resolveSequenceProperty(propertyName);
+                if (seqResult == null) {
+                    throw e;
+                }
+
+                emitStringList(context, seqResult);
+                return;
+            }
+            throw e;
+        }
+
+        // Regular property resolved successfully
+        if (isBackwardDirection) {
+            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+        }
+        boolean emitInvertedRanges = isInverted;
+        if (isInverted && context.isUnicodeMode() && context.isIgnoreCase()) {
+            propertyRanges = invertRanges(propertyRanges);
+            emitInvertedRanges = false;
+        }
+        emitRanges(context, propertyRanges, emitInvertedRanges);
+        if (isBackwardDirection) {
+            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+        }
+    }
+
     private void emitRanges(CompileContext context, int[] ranges, boolean inverted) {
         context.buffer.appendU8(inverted
                 ? (context.isIgnoreCase() ? RegExpOpcode.NOT_RANGE_I.getCode() : RegExpOpcode.NOT_RANGE.getCode())
@@ -1245,12 +1252,100 @@ public final class RegExpCompiler {
         }
     }
 
+    /**
+     * Emit bytecode for a string list (union of single code point ranges and multi-codepoint sequences).
+     * Ported from QuickJS re_emit_string_list in libregexp.c.
+     * <p>
+     * Emits alternatives: try longest sequences first, then shorter ones, then code point ranges.
+     * Uses SPLIT_NEXT_FIRST/GOTO to create a chain of alternatives.
+     */
+    private void emitStringList(CompileContext context, UnicodePropertyResolver.SequencePropertyResult stringList) {
+        List<int[]> sequences = stringList.sequences();
+        int[] ranges = stringList.codePointRanges();
+
+        if (sequences.isEmpty()) {
+            // Simple case: only code point ranges
+            emitRanges(context, ranges, false);
+            return;
+        }
+
+        // Sort sequences by length descending (longest first)
+        List<int[]> sortedSequences = new ArrayList<>(sequences);
+        sortedSequences.sort((a, b) -> Integer.compare(b.length, a.length));
+
+        // Check for empty string and filter it out
+        boolean hasEmptyString = false;
+        List<int[]> nonEmptySequences = new ArrayList<>();
+        for (int[] seq : sortedSequences) {
+            if (seq.length == 0) {
+                hasEmptyString = true;
+            } else {
+                nonEmptySequences.add(seq);
+            }
+        }
+
+        boolean hasRanges = ranges.length > 0;
+        List<Integer> gotoPositions = new ArrayList<>();
+
+        // Emit each sequence as an alternative
+        for (int i = 0; i < nonEmptySequences.size(); i++) {
+            int[] seq = nonEmptySequences.get(i);
+            boolean isLast = !hasEmptyString && !hasRanges && i == nonEmptySequences.size() - 1;
+
+            int splitPos = -1;
+            if (!isLast) {
+                splitPos = context.buffer.size();
+                context.buffer.appendU8(RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
+                context.buffer.appendU32(0); // placeholder
+            }
+
+            // Emit each character in the sequence
+            for (int codePoint : seq) {
+                compileLiteralChar(context, codePoint);
+            }
+
+            if (!isLast) {
+                gotoPositions.add(context.buffer.size());
+                context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
+                context.buffer.appendU32(0); // placeholder
+
+                // Patch SPLIT offset: jump to after this GOTO
+                int splitOffset = context.buffer.size() - (splitPos + 5);
+                context.buffer.setU32(splitPos + 1, splitOffset);
+            }
+        }
+
+        // Emit char ranges if present
+        if (hasRanges) {
+            boolean isLast = !hasEmptyString;
+            int splitPos = -1;
+            if (!isLast) {
+                splitPos = context.buffer.size();
+                context.buffer.appendU8(RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
+                context.buffer.appendU32(0); // placeholder
+            }
+
+            emitRanges(context, ranges, false);
+
+            if (!isLast) {
+                // Patch SPLIT offset
+                int splitOffset = context.buffer.size() - (splitPos + 5);
+                context.buffer.setU32(splitPos + 1, splitOffset);
+            }
+        }
+
+        // Patch all GOTO targets to point to current position (end of all alternatives)
+        for (int gotoPos : gotoPositions) {
+            int gotoOffset = context.buffer.size() - (gotoPos + 5);
+            context.buffer.setU32(gotoPos + 1, gotoOffset);
+        }
+    }
+
     private void ensureGroupNameSize(int size) {
         while (groupNames.size() < size) {
             groupNames.add(null);
         }
     }
-
 
     private int hexValue(int ch) {
         if (ch >= '0' && ch <= '9') {
@@ -1289,6 +1384,29 @@ public final class RegExpCompiler {
         return toIntArray(inverted);
     }
 
+    private boolean isInlineModifierFlag(int ch) {
+        return ch == 'i' || ch == 'm' || ch == 's';
+    }
+
+    private boolean isInvalidUnicodeSetsClassSinglePunctuator(int ch) {
+        return ch == '('
+                || ch == ')'
+                || ch == '['
+                || ch == '{'
+                || ch == '}'
+                || ch == '/'
+                || ch == '-'
+                || ch == '|';
+    }
+
+    private boolean isInvalidUnicodeSetsDoublePunctuator(CompileContext context, int ch) {
+        if (!isUnicodeSetsReservedDoublePunctuator(ch)) {
+            return false;
+        }
+        int nextPos = context.pos + 1;
+        return nextPos < context.codePoints.length && context.codePoints[nextPos] == ch;
+    }
+
     private boolean isJsIdentifierPart(int codePoint) {
         return codePoint == '$' || codePoint == '_' || codePoint == 0x200C || codePoint == 0x200D ||
                 Character.isUnicodeIdentifierPart(codePoint);
@@ -1316,6 +1434,28 @@ public final class RegExpCompiler {
                 (ch >= 'A' && ch <= 'Z') ||
                 (ch >= 'a' && ch <= 'z') ||
                 ch == '_';
+    }
+
+    private boolean isUnicodeSetsReservedDoublePunctuator(int ch) {
+        return ch == '&'
+                || ch == '!'
+                || ch == '#'
+                || ch == '$'
+                || ch == '%'
+                || ch == '*'
+                || ch == '+'
+                || ch == ','
+                || ch == '.'
+                || ch == ':'
+                || ch == ';'
+                || ch == '<'
+                || ch == '='
+                || ch == '>'
+                || ch == '?'
+                || ch == '@'
+                || ch == '^'
+                || ch == '`'
+                || ch == '~';
     }
 
     /**
@@ -1439,20 +1579,43 @@ public final class RegExpCompiler {
                 ranges.add((int) '_');
                 ranges.add((int) 'a');
                 ranges.add((int) 'z');
+                if (context.isUnicodeMode() && context.isIgnoreCase()) {
+                    ranges.add(0x017F);
+                    ranges.add(0x017F);
+                    ranges.add(0x212A);
+                    ranges.add(0x212A);
+                }
                 yield -1;
             }
             case 'W' -> {
                 // \W - non-word characters (not [a-zA-Z0-9_])
-                ranges.add(0);
-                ranges.add((int) '0' - 1);   // 0 .. '/'
-                ranges.add((int) '9' + 1);
-                ranges.add((int) 'A' - 1);   // ':' .. '@'
-                ranges.add((int) 'Z' + 1);
-                ranges.add((int) '_' - 1);   // '[' .. '^'
-                ranges.add((int) '_' + 1);
-                ranges.add((int) 'a' - 1);   // '`'
-                ranges.add((int) 'z' + 1);
-                ranges.add(MAX_UNICODE_CODE_POINT);
+                if (context.isUnicodeMode() && context.isIgnoreCase()) {
+                    ranges.add(0);
+                    ranges.add((int) '0' - 1);
+                    ranges.add((int) '9' + 1);
+                    ranges.add((int) 'A' - 1);
+                    ranges.add((int) 'Z' + 1);
+                    ranges.add((int) '_' - 1);
+                    ranges.add((int) '_' + 1);
+                    ranges.add((int) 'a' - 1);
+                    ranges.add((int) 'z' + 1);
+                    ranges.add(0x017E);
+                    ranges.add(0x0180);
+                    ranges.add(0x2129);
+                    ranges.add(0x212B);
+                    ranges.add(MAX_UNICODE_CODE_POINT);
+                } else {
+                    ranges.add(0);
+                    ranges.add((int) '0' - 1);   // 0 .. '/'
+                    ranges.add((int) '9' + 1);
+                    ranges.add((int) 'A' - 1);   // ':' .. '@'
+                    ranges.add((int) 'Z' + 1);
+                    ranges.add((int) '_' - 1);   // '[' .. '^'
+                    ranges.add((int) '_' + 1);
+                    ranges.add((int) 'a' - 1);   // '`'
+                    ranges.add((int) 'z' + 1);
+                    ranges.add(MAX_UNICODE_CODE_POINT);
+                }
                 yield -1;
             }
             case 's' -> {
@@ -1635,18 +1798,21 @@ public final class RegExpCompiler {
     }
 
     private int[] parseQuantifierBounds(CompileContext context) {
-        int min = 0, max;
+        long minLong = 0;
+        int min;
+        int max;
 
         // Parse first number
         while (context.pos < context.codePoints.length) {
             int ch = context.codePoints[context.pos];
             if (ch >= '0' && ch <= '9') {
-                min = min * 10 + (ch - '0');
+                minLong = appendDecimalDigitWithClamp(minLong, ch - '0');
                 context.pos++;
             } else {
                 break;
             }
         }
+        min = (int) Math.min(minLong, MAX_QUANTIFIER_BOUND);
 
         // Check for comma
         if (context.pos < context.codePoints.length && context.codePoints[context.pos] == ',') {
@@ -1656,16 +1822,17 @@ public final class RegExpCompiler {
             if (context.pos < context.codePoints.length &&
                     context.codePoints[context.pos] >= '0' &&
                     context.codePoints[context.pos] <= '9') {
-                max = 0;
+                long maxLong = 0;
                 while (context.pos < context.codePoints.length) {
                     int ch = context.codePoints[context.pos];
                     if (ch >= '0' && ch <= '9') {
-                        max = max * 10 + (ch - '0');
+                        maxLong = appendDecimalDigitWithClamp(maxLong, ch - '0');
                         context.pos++;
                     } else {
                         break;
                     }
                 }
+                max = (int) Math.min(maxLong, MAX_QUANTIFIER_BOUND);
             } else {
                 max = Integer.MAX_VALUE; // {n,} means n or more
             }
@@ -1927,6 +2094,15 @@ public final class RegExpCompiler {
         return pos < context.codePoints.length && context.codePoints[pos] == '}';
     }
 
+    private int toInlineModifierFlagBit(int ch) {
+        return switch (ch) {
+            case 'i' -> RegExpBytecode.FLAG_IGNORECASE;
+            case 'm' -> RegExpBytecode.FLAG_MULTILINE;
+            case 's' -> RegExpBytecode.FLAG_DOTALL;
+            default -> 0;
+        };
+    }
+
     private int[] toIntArray(List<Integer> values) {
         int[] result = new int[values.size()];
         for (int i = 0; i < values.size(); i++) {
@@ -1935,11 +2111,112 @@ public final class RegExpCompiler {
         return result;
     }
 
+    private InlineModifierGroupParseResult tryParseInlineModifierGroup(CompileContext context) {
+        if (context.pos >= context.codePoints.length) {
+            return null;
+        }
+        int startChar = context.codePoints[context.pos];
+        if (!(isInlineModifierFlag(startChar) || startChar == '-')) {
+            return null;
+        }
+
+        int addFlags = 0;
+        int removeFlags = 0;
+        boolean parsingRemoveFlags = false;
+        boolean sawDash = false;
+        boolean sawModifierFlag = false;
+
+        while (context.pos < context.codePoints.length) {
+            int currentChar = context.codePoints[context.pos];
+            if (currentChar == ':') {
+                if (!sawModifierFlag) {
+                    throw new RegExpSyntaxException("Invalid inline modifiers");
+                }
+                context.pos++;
+                int scopedFlags = (context.currentFlags | addFlags) & ~removeFlags;
+                return new InlineModifierGroupParseResult(scopedFlags);
+            }
+            if (currentChar == '-') {
+                if (sawDash) {
+                    throw new RegExpSyntaxException("Invalid inline modifiers");
+                }
+                sawDash = true;
+                parsingRemoveFlags = true;
+                context.pos++;
+                continue;
+            }
+            if (!isInlineModifierFlag(currentChar)) {
+                throw new RegExpSyntaxException("Invalid inline modifiers");
+            }
+            int flagBit = toInlineModifierFlagBit(currentChar);
+            if (!parsingRemoveFlags) {
+                if ((addFlags & flagBit) != 0) {
+                    throw new RegExpSyntaxException("Invalid inline modifiers");
+                }
+                addFlags |= flagBit;
+            } else {
+                if ((removeFlags & flagBit) != 0 || (addFlags & flagBit) != 0) {
+                    throw new RegExpSyntaxException("Invalid inline modifiers");
+                }
+                removeFlags |= flagBit;
+            }
+            sawModifierFlag = true;
+            context.pos++;
+        }
+
+        throw new RegExpSyntaxException("Incomplete group syntax");
+    }
+
+    private UnicodeEscapeParseResult tryParseUnicodeEscapeAt(CompileContext context, int startPos) {
+        if (startPos + 1 >= context.codePoints.length
+                || context.codePoints[startPos] != '\\'
+                || context.codePoints[startPos + 1] != 'u') {
+            return null;
+        }
+        int currentPos = startPos + 2;
+        if (currentPos < context.codePoints.length && context.codePoints[currentPos] == '{') {
+            currentPos++;
+            int value = 0;
+            int digitCount = 0;
+            while (currentPos < context.codePoints.length && context.codePoints[currentPos] != '}') {
+                int hexValue = hexValue(context.codePoints[currentPos]);
+                if (hexValue < 0) {
+                    return null;
+                }
+                value = (value << 4) | hexValue;
+                digitCount++;
+                if (digitCount > 6 || value > MAX_UNICODE_CODE_POINT) {
+                    return null;
+                }
+                currentPos++;
+            }
+            if (digitCount == 0
+                    || currentPos >= context.codePoints.length
+                    || context.codePoints[currentPos] != '}') {
+                return null;
+            }
+            return new UnicodeEscapeParseResult(value, currentPos + 1);
+        }
+        if (currentPos + 3 >= context.codePoints.length) {
+            return null;
+        }
+        int value = 0;
+        for (int i = 0; i < 4; i++) {
+            int hexValue = hexValue(context.codePoints[currentPos + i]);
+            if (hexValue < 0) {
+                return null;
+            }
+            value = (value << 4) | hexValue;
+        }
+        return new UnicodeEscapeParseResult(value, currentPos + 4);
+    }
+
     private static class CompileContext {
         final DynamicBuffer buffer;
         final int[] codePoints;
         final int flags;
         final String pattern;
+        int currentFlags;
         boolean lastAtomCanRepeat;
         int pos;
 
@@ -1947,33 +2224,34 @@ public final class RegExpCompiler {
             this.pattern = pattern;
             this.codePoints = pattern.codePoints().toArray();
             this.flags = flags;
+            this.currentFlags = flags;
             this.buffer = buffer;
             this.lastAtomCanRepeat = false;
             this.pos = 0;
         }
 
         boolean isDotAll() {
-            return (flags & RegExpBytecode.FLAG_DOTALL) != 0;
+            return (currentFlags & RegExpBytecode.FLAG_DOTALL) != 0;
         }
 
         boolean isIgnoreCase() {
-            return (flags & RegExpBytecode.FLAG_IGNORECASE) != 0;
+            return (currentFlags & RegExpBytecode.FLAG_IGNORECASE) != 0;
         }
 
         boolean isMultiline() {
-            return (flags & RegExpBytecode.FLAG_MULTILINE) != 0;
+            return (currentFlags & RegExpBytecode.FLAG_MULTILINE) != 0;
         }
 
         boolean isUnicode() {
-            return (flags & (RegExpBytecode.FLAG_UNICODE | RegExpBytecode.FLAG_UNICODE_SETS)) != 0;
+            return (currentFlags & (RegExpBytecode.FLAG_UNICODE | RegExpBytecode.FLAG_UNICODE_SETS)) != 0;
         }
 
         boolean isUnicodeMode() {
-            return (flags & (RegExpBytecode.FLAG_UNICODE | RegExpBytecode.FLAG_UNICODE_SETS)) != 0;
+            return (currentFlags & (RegExpBytecode.FLAG_UNICODE | RegExpBytecode.FLAG_UNICODE_SETS)) != 0;
         }
 
         boolean isUnicodeSetsMode() {
-            return (flags & RegExpBytecode.FLAG_UNICODE_SETS) != 0;
+            return (currentFlags & RegExpBytecode.FLAG_UNICODE_SETS) != 0;
         }
     }
 
@@ -1981,6 +2259,9 @@ public final class RegExpCompiler {
     }
 
     private record GroupNameParseResult(String name, int nextPos) {
+    }
+
+    private record InlineModifierGroupParseResult(int scopedFlags) {
     }
 
     /**
@@ -1994,5 +2275,8 @@ public final class RegExpCompiler {
         public RegExpSyntaxException(String message, Throwable cause) {
             super(message, cause);
         }
+    }
+
+    private record UnicodeEscapeParseResult(int codePoint, int nextPos) {
     }
 }

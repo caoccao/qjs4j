@@ -86,6 +86,18 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return new ContinueStatement(label, location);
     }
 
+    Statement parseDoWhileStatement() {
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.DO);
+        Statement body = parseStatement();
+        parserContext.expect(TokenType.WHILE);
+        parserContext.expect(TokenType.LPAREN);
+        Expression test = delegates.expressions.parseExpression();
+        parserContext.expect(TokenType.RPAREN);
+        parserContext.consumeSemicolon();
+        return new DoWhileStatement(body, test, location);
+    }
+
     Statement parseExpressionStatement() {
         SourceLocation location = parserContext.getLocation();
         Expression expression = delegates.expressions.parseExpression();
@@ -543,18 +555,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         Statement body = parseStatement();
 
         return new WhileStatement(test, body, location);
-    }
-
-    Statement parseDoWhileStatement() {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.DO);
-        Statement body = parseStatement();
-        parserContext.expect(TokenType.WHILE);
-        parserContext.expect(TokenType.LPAREN);
-        Expression test = delegates.expressions.parseExpression();
-        parserContext.expect(TokenType.RPAREN);
-        parserContext.consumeSemicolon();
-        return new DoWhileStatement(body, test, location);
     }
 
     Statement parseWithStatement() {

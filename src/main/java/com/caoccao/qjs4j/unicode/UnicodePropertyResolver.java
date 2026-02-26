@@ -472,6 +472,22 @@ public final class UnicodePropertyResolver {
 
     // --- Case change detection ---
 
+    private static SequencePropertyResult resolveBasicEmoji() {
+        // Basic_Emoji1: single code points (length-1 sequences -> codePointRanges)
+        int[] ranges1 = decodeBinaryProperty(PROP_BASIC_EMOJI1);
+
+        // Basic_Emoji2: each code point c becomes sequence [c, 0xFE0F]
+        int[] ranges2 = decodeBinaryProperty(PROP_BASIC_EMOJI2);
+        List<int[]> sequences = new ArrayList<>();
+        for (int i = 0; i < ranges2.length; i += 2) {
+            for (int c = ranges2[i]; c <= ranges2[i + 1]; c++) {
+                sequences.add(new int[]{c, 0xFE0F});
+            }
+        }
+
+        return new SequencePropertyResult(ranges1, sequences);
+    }
+
     /**
      * Resolve a binary property name (or alias) to code point ranges.
      * Returns null if the name is not recognized.
@@ -494,6 +510,8 @@ public final class UnicodePropertyResolver {
         }
         return ranges;
     }
+
+    // --- Range set operations ---
 
     private static int[] resolveDerivedProperty(int propIndex) {
         // These match the QuickJS enum values after the table entries
@@ -648,7 +666,17 @@ public final class UnicodePropertyResolver {
         return null;
     }
 
-    // --- Range set operations ---
+    private static SequencePropertyResult resolveEmojiKeycapSequence() {
+        // Each code point c becomes sequence [c, 0xFE0F, 0x20E3]
+        int[] ranges = decodeBinaryProperty(PROP_EMOJI_KEYCAP_SEQUENCE);
+        List<int[]> sequences = new ArrayList<>();
+        for (int i = 0; i < ranges.length; i += 2) {
+            for (int c = ranges[i]; c <= ranges[i + 1]; c++) {
+                sequences.add(new int[]{c, 0xFE0F, 0x20E3});
+            }
+        }
+        return new SequencePropertyResult(new int[0], sequences);
+    }
 
     /**
      * Resolve a General Category name (or alias) to code point ranges.
@@ -745,87 +773,44 @@ public final class UnicodePropertyResolver {
         return resolveDerivedProperty(propIndex);
     }
 
-    /**
-     * Resolve a script name (or alias) to code point ranges.
-     * Returns null if the name is not recognized.
-     */
-    public static int[] resolveScript(String name, boolean extensions) {
-        String cacheKey = (extensions ? "scx:" : "sc:") + name;
-        int[] cached = SCRIPT_CACHE.get(cacheKey);
-        if (cached != null) {
-            return cached;
-        }
+    private static SequencePropertyResult resolveRgiEmoji() {
+        // Union of all sequence properties
+        SequencePropertyResult basic = resolveBasicEmoji();
+        SequencePropertyResult keycap = resolveEmojiKeycapSequence();
+        SequencePropertyResult modifier = resolveRgiEmojiModifierSequence();
+        SequencePropertyResult flag = resolveRgiEmojiFlagSequence();
+        SequencePropertyResult tag = resolveRgiEmojiTagSequence();
+        SequencePropertyResult zwj = resolveRgiEmojiZwjSequence();
 
-        int scriptIndex = findName(SCRIPT_NAME_TABLE, name);
-        if (scriptIndex < 0) {
-            return null;
-        }
+        // Merge code point ranges
+        int[] mergedRanges = basic.codePointRanges();
+        mergedRanges = unionRanges(mergedRanges, keycap.codePointRanges());
+        mergedRanges = unionRanges(mergedRanges, modifier.codePointRanges());
+        mergedRanges = unionRanges(mergedRanges, flag.codePointRanges());
+        mergedRanges = unionRanges(mergedRanges, tag.codePointRanges());
+        mergedRanges = unionRanges(mergedRanges, zwj.codePointRanges());
 
-        int[] ranges = decodeScript(scriptIndex, extensions);
-        if (ranges != null) {
-            SCRIPT_CACHE.put(cacheKey, ranges);
-        }
-        return ranges;
+        // Merge sequences
+        List<int[]> allSequences = new ArrayList<>();
+        allSequences.addAll(basic.sequences());
+        allSequences.addAll(keycap.sequences());
+        allSequences.addAll(modifier.sequences());
+        allSequences.addAll(flag.sequences());
+        allSequences.addAll(tag.sequences());
+        allSequences.addAll(zwj.sequences());
+
+        return new SequencePropertyResult(mergedRanges, allSequences);
     }
 
-    /**
-     * Result of resolving a Unicode "property of strings" (sequence property).
-     * Used for RegExp with the {@code v} flag.
-     *
-     * @param codePointRanges single code point ranges as inclusive start/end pairs
-     * @param sequences       multi-codepoint sequences (each int[] is one sequence)
-     */
-    public record SequencePropertyResult(int[] codePointRanges, List<int[]> sequences) {
-    }
-
-    /**
-     * Resolve a Unicode "property of strings" (sequence property) by name.
-     * These are used in RegExp with the {@code v} flag for matching multi-codepoint sequences.
-     * <p>
-     * Known properties: Basic_Emoji, Emoji_Keycap_Sequence, RGI_Emoji_Modifier_Sequence,
-     * RGI_Emoji_Flag_Sequence, RGI_Emoji_Tag_Sequence, RGI_Emoji_ZWJ_Sequence, RGI_Emoji.
-     * <p>
-     * Ported from QuickJS {@code unicode_sequence_prop1()} in libunicode.c.
-     *
-     * @param name the sequence property name
-     * @return the result, or null if the name is not a known sequence property
-     */
-    public static SequencePropertyResult resolveSequenceProperty(String name) {
-        return switch (name) {
-            case "Basic_Emoji" -> resolveBasicEmoji();
-            case "Emoji_Keycap_Sequence" -> resolveEmojiKeycapSequence();
-            case "RGI_Emoji_Modifier_Sequence" -> resolveRgiEmojiModifierSequence();
-            case "RGI_Emoji_Flag_Sequence" -> resolveRgiEmojiFlagSequence();
-            case "RGI_Emoji_Tag_Sequence" -> resolveRgiEmojiTagSequence();
-            case "RGI_Emoji_ZWJ_Sequence" -> resolveRgiEmojiZwjSequence();
-            case "RGI_Emoji" -> resolveRgiEmoji();
-            default -> null;
-        };
-    }
-
-    private static SequencePropertyResult resolveBasicEmoji() {
-        // Basic_Emoji1: single code points (length-1 sequences -> codePointRanges)
-        int[] ranges1 = decodeBinaryProperty(PROP_BASIC_EMOJI1);
-
-        // Basic_Emoji2: each code point c becomes sequence [c, 0xFE0F]
-        int[] ranges2 = decodeBinaryProperty(PROP_BASIC_EMOJI2);
-        List<int[]> sequences = new ArrayList<>();
-        for (int i = 0; i < ranges2.length; i += 2) {
-            for (int c = ranges2[i]; c <= ranges2[i + 1]; c++) {
-                sequences.add(new int[]{c, 0xFE0F});
-            }
-        }
-
-        return new SequencePropertyResult(ranges1, sequences);
-    }
-
-    private static SequencePropertyResult resolveEmojiKeycapSequence() {
-        // Each code point c becomes sequence [c, 0xFE0F, 0x20E3]
-        int[] ranges = decodeBinaryProperty(PROP_EMOJI_KEYCAP_SEQUENCE);
+    private static SequencePropertyResult resolveRgiEmojiFlagSequence() {
+        // Each code point c encodes a pair: c0=c/26, c1=c%26 -> [0x1F1E6+c0, 0x1F1E6+c1]
+        int[] ranges = decodeBinaryProperty(PROP_RGI_EMOJI_FLAG_SEQUENCE);
         List<int[]> sequences = new ArrayList<>();
         for (int i = 0; i < ranges.length; i += 2) {
             for (int c = ranges[i]; c <= ranges[i + 1]; c++) {
-                sequences.add(new int[]{c, 0xFE0F, 0x20E3});
+                int c0 = c / 26;
+                int c1 = c % 26;
+                sequences.add(new int[]{0x1F1E6 + c0, 0x1F1E6 + c1});
             }
         }
         return new SequencePropertyResult(new int[0], sequences);
@@ -840,20 +825,6 @@ public final class UnicodePropertyResolver {
                 for (int j = 0; j < 5; j++) {
                     sequences.add(new int[]{c, 0x1F3FB + j});
                 }
-            }
-        }
-        return new SequencePropertyResult(new int[0], sequences);
-    }
-
-    private static SequencePropertyResult resolveRgiEmojiFlagSequence() {
-        // Each code point c encodes a pair: c0=c/26, c1=c%26 -> [0x1F1E6+c0, 0x1F1E6+c1]
-        int[] ranges = decodeBinaryProperty(PROP_RGI_EMOJI_FLAG_SEQUENCE);
-        List<int[]> sequences = new ArrayList<>();
-        for (int i = 0; i < ranges.length; i += 2) {
-            for (int c = ranges[i]; c <= ranges[i + 1]; c++) {
-                int c0 = c / 26;
-                int c1 = c % 26;
-                sequences.add(new int[]{0x1F1E6 + c0, 0x1F1E6 + c1});
             }
         }
         return new SequencePropertyResult(new int[0], sequences);
@@ -973,33 +944,52 @@ public final class UnicodePropertyResolver {
         return new SequencePropertyResult(new int[0], sequences);
     }
 
-    private static SequencePropertyResult resolveRgiEmoji() {
-        // Union of all sequence properties
-        SequencePropertyResult basic = resolveBasicEmoji();
-        SequencePropertyResult keycap = resolveEmojiKeycapSequence();
-        SequencePropertyResult modifier = resolveRgiEmojiModifierSequence();
-        SequencePropertyResult flag = resolveRgiEmojiFlagSequence();
-        SequencePropertyResult tag = resolveRgiEmojiTagSequence();
-        SequencePropertyResult zwj = resolveRgiEmojiZwjSequence();
+    /**
+     * Resolve a script name (or alias) to code point ranges.
+     * Returns null if the name is not recognized.
+     */
+    public static int[] resolveScript(String name, boolean extensions) {
+        String cacheKey = (extensions ? "scx:" : "sc:") + name;
+        int[] cached = SCRIPT_CACHE.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
 
-        // Merge code point ranges
-        int[] mergedRanges = basic.codePointRanges();
-        mergedRanges = unionRanges(mergedRanges, keycap.codePointRanges());
-        mergedRanges = unionRanges(mergedRanges, modifier.codePointRanges());
-        mergedRanges = unionRanges(mergedRanges, flag.codePointRanges());
-        mergedRanges = unionRanges(mergedRanges, tag.codePointRanges());
-        mergedRanges = unionRanges(mergedRanges, zwj.codePointRanges());
+        int scriptIndex = findName(SCRIPT_NAME_TABLE, name);
+        if (scriptIndex < 0) {
+            return null;
+        }
 
-        // Merge sequences
-        List<int[]> allSequences = new ArrayList<>();
-        allSequences.addAll(basic.sequences());
-        allSequences.addAll(keycap.sequences());
-        allSequences.addAll(modifier.sequences());
-        allSequences.addAll(flag.sequences());
-        allSequences.addAll(tag.sequences());
-        allSequences.addAll(zwj.sequences());
+        int[] ranges = decodeScript(scriptIndex, extensions);
+        if (ranges != null) {
+            SCRIPT_CACHE.put(cacheKey, ranges);
+        }
+        return ranges;
+    }
 
-        return new SequencePropertyResult(mergedRanges, allSequences);
+    /**
+     * Resolve a Unicode "property of strings" (sequence property) by name.
+     * These are used in RegExp with the {@code v} flag for matching multi-codepoint sequences.
+     * <p>
+     * Known properties: Basic_Emoji, Emoji_Keycap_Sequence, RGI_Emoji_Modifier_Sequence,
+     * RGI_Emoji_Flag_Sequence, RGI_Emoji_Tag_Sequence, RGI_Emoji_ZWJ_Sequence, RGI_Emoji.
+     * <p>
+     * Ported from QuickJS {@code unicode_sequence_prop1()} in libunicode.c.
+     *
+     * @param name the sequence property name
+     * @return the result, or null if the name is not a known sequence property
+     */
+    public static SequencePropertyResult resolveSequenceProperty(String name) {
+        return switch (name) {
+            case "Basic_Emoji" -> resolveBasicEmoji();
+            case "Emoji_Keycap_Sequence" -> resolveEmojiKeycapSequence();
+            case "RGI_Emoji_Modifier_Sequence" -> resolveRgiEmojiModifierSequence();
+            case "RGI_Emoji_Flag_Sequence" -> resolveRgiEmojiFlagSequence();
+            case "RGI_Emoji_Tag_Sequence" -> resolveRgiEmojiTagSequence();
+            case "RGI_Emoji_ZWJ_Sequence" -> resolveRgiEmojiZwjSequence();
+            case "RGI_Emoji" -> resolveRgiEmoji();
+            default -> null;
+        };
     }
 
     /**
@@ -1106,5 +1096,15 @@ public final class UnicodePropertyResolver {
         }
         int[] notAAndB = invertRanges(aAndB);
         return intersectRanges(aOrB, notAAndB);
+    }
+
+    /**
+     * Result of resolving a Unicode "property of strings" (sequence property).
+     * Used for RegExp with the {@code v} flag.
+     *
+     * @param codePointRanges single code point ranges as inclusive start/end pairs
+     * @param sequences       multi-codepoint sequences (each int[] is one sequence)
+     */
+    public record SequencePropertyResult(int[] codePointRanges, List<int[]> sequences) {
     }
 }

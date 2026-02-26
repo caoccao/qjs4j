@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.compilation.compiler;
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.regexp.RegExpLiteralValue;
 import com.caoccao.qjs4j.vm.Opcode;
 
@@ -371,10 +372,10 @@ final class ExpressionCompiler {
                     ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, regexp);
                     return;
                 } catch (Exception e) {
-                    throw new JSCompilerException("Invalid regular expression literal: " + source);
+                    throw new JSSyntaxErrorException("Invalid regular expression literal: " + source);
                 }
             }
-            throw new JSCompilerException("Invalid regular expression literal: " + source);
+            throw new JSSyntaxErrorException("Invalid regular expression literal: " + source);
         } else if (value instanceof String str) {
             ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
         } else {

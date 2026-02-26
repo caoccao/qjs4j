@@ -545,6 +545,7 @@ public final class RegExpEngine {
         final boolean ignoreCase;
         final String input;
         final boolean multiline;
+        final int[] registers;  // Registers for loop counters and position tracking (QuickJS capture[2*captureCount+...])
         final boolean unicode;
         // Flat backtrack stack: each entry is [pc, pos, captureStarts..., captureEnds..., registers..., stateOffset]
         // stored contiguously in a single int[]. stateOffset points to the entry that holds the actual
@@ -555,7 +556,6 @@ public final class RegExpEngine {
         int[] captureEnds;
         int[] captureStarts;
         int pos;  // Current position in code points
-        final int[] registers;  // Registers for loop counters and position tracking (QuickJS capture[2*captureCount+...])
         private int[] backtrackData;
         private boolean stateDirty;  // true if captures/registers modified since last state save
 
@@ -842,9 +842,13 @@ public final class RegExpEngine {
 
                 if (ignoreCase) {
                     int chLower = Character.toLowerCase(ch);
+                    int chUpper = Character.toUpperCase(ch);
                     int startLower = Character.toLowerCase(start);
                     int endLower = Character.toLowerCase(end);
-                    if (chLower >= startLower && chLower <= endLower) {
+                    int startUpper = Character.toUpperCase(start);
+                    int endUpper = Character.toUpperCase(end);
+                    if ((chLower >= startLower && chLower <= endLower)
+                            || (chUpper >= startUpper && chUpper <= endUpper)) {
                         // Character is in range, so inverted match fails
                         return false;
                     }
@@ -897,9 +901,13 @@ public final class RegExpEngine {
 
                 if (ignoreCase) {
                     int chLower = Character.toLowerCase(ch);
+                    int chUpper = Character.toUpperCase(ch);
                     int startLower = Character.toLowerCase(start);
                     int endLower = Character.toLowerCase(end);
-                    if (chLower >= startLower && chLower <= endLower) {
+                    int startUpper = Character.toUpperCase(start);
+                    int endUpper = Character.toUpperCase(end);
+                    if ((chLower >= startLower && chLower <= endLower)
+                            || (chUpper >= startUpper && chUpper <= endUpper)) {
                         pos++;
                         return true;
                     }
