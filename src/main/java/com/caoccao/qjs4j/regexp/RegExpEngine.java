@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.regexp;
 
+import com.caoccao.qjs4j.unicode.CharacterProperties;
+
 import java.util.Arrays;
 
 /**
@@ -696,7 +698,7 @@ public final class RegExpEngine {
                 int currCh = codePoints[pos + i];
 
                 if (ignoreCase) {
-                    if (Character.toLowerCase(refCh) != Character.toLowerCase(currCh)) {
+                    if (CharacterProperties.caseFold(refCh) != CharacterProperties.caseFold(currCh)) {
                         return false;
                     }
                 } else {
@@ -731,7 +733,7 @@ public final class RegExpEngine {
                 int referenceChar = codePoints[referenceIndex];
                 int currentChar = codePoints[pos - 1];
                 if (ignoreCase) {
-                    if (Character.toLowerCase(referenceChar) != Character.toLowerCase(currentChar)) {
+                    if (CharacterProperties.caseFold(referenceChar) != CharacterProperties.caseFold(currentChar)) {
                         return false;
                     }
                 } else if (referenceChar != currentChar) {
@@ -781,8 +783,9 @@ public final class RegExpEngine {
             }
             int current = codePoints[pos];
             if (current == ch ||
-                    Character.toLowerCase(current) == Character.toLowerCase(ch) ||
-                    Character.toUpperCase(current) == Character.toUpperCase(ch)) {
+                    CharacterProperties.caseFold(current) == CharacterProperties.caseFold(ch) ||
+                    Character.toUpperCase(current) == Character.toUpperCase(ch) ||
+                    codePointEqualsIgnoreCaseUnicode(current, ch)) {
                 pos++;
                 return true;
             }
@@ -841,14 +844,15 @@ public final class RegExpEngine {
                 offset += 8;
 
                 if (ignoreCase) {
-                    int chLower = Character.toLowerCase(ch);
+                    int chLower = CharacterProperties.caseFold(ch);
                     int chUpper = Character.toUpperCase(ch);
-                    int startLower = Character.toLowerCase(start);
-                    int endLower = Character.toLowerCase(end);
+                    int startLower = CharacterProperties.caseFold(start);
+                    int endLower = CharacterProperties.caseFold(end);
                     int startUpper = Character.toUpperCase(start);
                     int endUpper = Character.toUpperCase(end);
                     if ((chLower >= startLower && chLower <= endLower)
-                            || (chUpper >= startUpper && chUpper <= endUpper)) {
+                            || (chUpper >= startUpper && chUpper <= endUpper)
+                            || (start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
                         // Character is in range, so inverted match fails
                         return false;
                     }
@@ -900,14 +904,15 @@ public final class RegExpEngine {
                 offset += 8;
 
                 if (ignoreCase) {
-                    int chLower = Character.toLowerCase(ch);
+                    int chLower = CharacterProperties.caseFold(ch);
                     int chUpper = Character.toUpperCase(ch);
-                    int startLower = Character.toLowerCase(start);
-                    int endLower = Character.toLowerCase(end);
+                    int startLower = CharacterProperties.caseFold(start);
+                    int endLower = CharacterProperties.caseFold(end);
                     int startUpper = Character.toUpperCase(start);
                     int endUpper = Character.toUpperCase(end);
                     if ((chLower >= startLower && chLower <= endLower)
-                            || (chUpper >= startUpper && chUpper <= endUpper)) {
+                            || (chUpper >= startUpper && chUpper <= endUpper)
+                            || (start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
                         pos++;
                         return true;
                     }
@@ -958,6 +963,15 @@ public final class RegExpEngine {
 
             // Boundary exists if one is word char and the other is not
             return prevIsWord != currIsWord;
+        }
+
+        private boolean codePointEqualsIgnoreCaseUnicode(int leftCodePoint, int rightCodePoint) {
+            if (leftCodePoint == rightCodePoint) {
+                return true;
+            }
+            String leftString = new String(Character.toChars(leftCodePoint));
+            String rightString = new String(Character.toChars(rightCodePoint));
+            return leftString.equalsIgnoreCase(rightString);
         }
 
         boolean movePrevious() {

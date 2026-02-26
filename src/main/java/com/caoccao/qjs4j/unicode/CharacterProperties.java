@@ -45,6 +45,11 @@ public final class CharacterProperties {
             case 0x03A3 -> // Σ (GREEK CAPITAL LETTER SIGMA)
                     0x03C3; // σ (GREEK SMALL LETTER SIGMA)
 
+            // Common/simple case-folding pairs used by RegExp /ui tests
+            case 0x0390, 0x1FD3 -> 0x1FD3; // GREEK SMALL LETTER IOTA WITH DIALYTIKA AND TONOS
+            case 0x03B0, 0x1FE3 -> 0x1FE3; // GREEK SMALL LETTER UPSILON WITH DIALYTIKA AND TONOS
+            case 0xFB05, 0xFB06 -> 0xFB06; // Latin ligatures long-s-t / st
+
             // Other special cases can be added as needed
             default -> lower;
         };
