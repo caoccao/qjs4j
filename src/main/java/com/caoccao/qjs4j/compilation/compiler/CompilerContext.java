@@ -234,6 +234,9 @@ final class CompilerContext {
         if (stmt instanceof WhileStatement whileStmt) {
             return statementContainsVarArguments(whileStmt.body());
         }
+        if (stmt instanceof DoWhileStatement doWhileStmt) {
+            return statementContainsVarArguments(doWhileStmt.body());
+        }
         if (stmt instanceof ForInStatement forInStmt) {
             return statementContainsVarArguments(forInStmt.body());
         }

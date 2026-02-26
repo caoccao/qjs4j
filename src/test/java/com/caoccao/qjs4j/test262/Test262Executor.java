@@ -407,6 +407,9 @@ public class Test262Executor {
         if (global.get("setTimeout") instanceof JSUndefined) {
             global.set("setTimeout", agentHost.createSetTimeoutFunction(context));
         }
+        if (global.get("print") instanceof JSUndefined) {
+            global.set("print", new JSNativeFunction("print", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE));
+        }
 
         global.set("$262", host262);
     }

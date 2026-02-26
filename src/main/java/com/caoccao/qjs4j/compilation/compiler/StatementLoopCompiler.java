@@ -461,4 +461,32 @@ final class StatementLoopCompiler {
 
         ctx.loopStack.pop();
     }
+
+    void compileDoWhileStatement(DoWhileStatement doWhileStmt) {
+        int loopStart = ctx.emitter.currentOffset();
+        LoopContext loop = ctx.createLoopContext(loopStart, ctx.scopeDepth, ctx.scopeDepth);
+        ctx.loopStack.push(loop);
+
+        owner.compileStatement(doWhileStmt.body());
+
+        int testStart = ctx.emitter.currentOffset();
+        delegates.expressions.compileExpression(doWhileStmt.test());
+        int jumpToEnd = ctx.emitter.emitJump(Opcode.IF_FALSE);
+
+        ctx.emitter.emitOpcode(Opcode.GOTO);
+        int backJumpPos = ctx.emitter.currentOffset();
+        ctx.emitter.emitU32(loopStart - (backJumpPos + 4));
+
+        int loopEnd = ctx.emitter.currentOffset();
+        ctx.emitter.patchJump(jumpToEnd, loopEnd);
+
+        for (int breakPos : loop.breakPositions) {
+            ctx.emitter.patchJump(breakPos, loopEnd);
+        }
+        for (int continuePos : loop.continuePositions) {
+            ctx.emitter.patchJump(continuePos, testStart);
+        }
+
+        ctx.loopStack.pop();
+    }
 }

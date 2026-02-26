@@ -17,11 +17,15 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Base sealed interface for all statement nodes.
+ * Represents a do-while statement.
  */
-public sealed interface Statement extends ASTNode permits
-        ExpressionStatement, BlockStatement, IfStatement, WhileStatement, DoWhileStatement,
-        ForStatement, ForOfStatement, ForInStatement, ReturnStatement, BreakStatement, ContinueStatement,
-        ThrowStatement, TryStatement, SwitchStatement, WithStatement, VariableDeclaration,
-        LabeledStatement, Declaration {
+public record DoWhileStatement(
+        Statement body,
+        Expression test,
+        SourceLocation location
+) implements Statement {
+    @Override
+    public SourceLocation getLocation() {
+        return location;
+    }
 }

@@ -124,6 +124,19 @@ public final class StringPrototype {
                     continue;
                 }
             }
+            if (nextChar == '0') {
+                if (replacementIndex + 2 < replacementTemplate.length()) {
+                    char secondDigit = replacementTemplate.charAt(replacementIndex + 2);
+                    if (secondDigit >= '1' && secondDigit <= '9') {
+                        int captureIndex = secondDigit - '0';
+                        if (captures != null && captureIndex < captures.length) {
+                            resultBuilder.append(captures[captureIndex] != null ? captures[captureIndex] : "");
+                            replacementIndex += 3;
+                            continue;
+                        }
+                    }
+                }
+            }
             if (nextChar >= '1' && nextChar <= '9') {
                 int captureIndex = nextChar - '0';
                 int consumedDigits = 1;
@@ -220,6 +233,19 @@ public final class StringPrototype {
                     continue;
                 }
             }
+            if (nextChar == '0') {
+                if (replacementIndex + 2 < replacementTemplate.length()) {
+                    char secondDigit = replacementTemplate.charAt(replacementIndex + 2);
+                    if (secondDigit >= '1' && secondDigit <= '9') {
+                        int captureIndex = secondDigit - '0';
+                        if (captures != null && captureIndex < captures.length) {
+                            resultBuilder.append(captures[captureIndex] != null ? captures[captureIndex] : "");
+                            replacementIndex += 3;
+                            continue;
+                        }
+                    }
+                }
+            }
             if (nextChar >= '1' && nextChar <= '9') {
                 int captureIndex = nextChar - '0';
                 int consumedDigits = 1;
@@ -245,7 +271,7 @@ public final class StringPrototype {
         return resultBuilder.toString();
     }
 
-    private static String applyRegExpReplacementWithNamedCapturesObject(
+    static String applyRegExpReplacementWithNamedCapturesObject(
             JSContext context,
             JSValue replaceValue,
             String input,
@@ -363,8 +389,7 @@ public final class StringPrototype {
             JSValue namedCapturesValue
     ) {
         String[] matchCaptures = captures != null ? captures : new String[]{""};
-        boolean hasNamedCaptures = !(namedCapturesValue instanceof JSUndefined)
-                && !(namedCapturesValue instanceof JSNull);
+        boolean hasNamedCaptures = !(namedCapturesValue instanceof JSUndefined);
         int callbackArgCount = matchCaptures.length + 2 + (hasNamedCaptures ? 1 : 0);
         JSValue[] callbackArgs = new JSValue[callbackArgCount];
         for (int captureIndex = 0; captureIndex < matchCaptures.length; captureIndex++) {

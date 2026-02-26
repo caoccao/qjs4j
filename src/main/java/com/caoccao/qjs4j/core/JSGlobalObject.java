@@ -1434,7 +1434,8 @@ public final class JSGlobalObject {
         regexpPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPLIT), new JSNativeFunction("[Symbol.split]", 2, RegExpPrototype::symbolSplit), PropertyDescriptor.DataState.ConfigurableWritable);
         regexpPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.MATCH), new JSNativeFunction("[Symbol.match]", 1, RegExpPrototype::symbolMatch), PropertyDescriptor.DataState.ConfigurableWritable);
         regexpPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.MATCH_ALL), new JSNativeFunction("[Symbol.matchAll]", 1, RegExpPrototype::symbolMatchAll), PropertyDescriptor.DataState.ConfigurableWritable);
-        regexpPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.REPLACE), JSUndefined.INSTANCE, PropertyDescriptor.DataState.ConfigurableWritable);
+        regexpPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.REPLACE), new JSNativeFunction("[Symbol.replace]", 2, RegExpPrototype::symbolReplace), PropertyDescriptor.DataState.ConfigurableWritable);
+        regexpPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.SEARCH), new JSNativeFunction("[Symbol.search]", 1, RegExpPrototype::symbolSearch), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Accessor properties
         regexpPrototype.defineProperty(PropertyKey.fromString("dotAll"), new JSNativeFunction("get dotAll", 0, RegExpPrototype::getDotAll), PropertyDescriptor.AccessorState.Configurable);

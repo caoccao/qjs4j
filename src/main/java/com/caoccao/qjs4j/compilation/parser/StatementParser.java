@@ -358,6 +358,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
         return switch (parserContext.currentToken.type()) {
             case IF -> parseIfStatement();
+            case DO -> parseDoWhileStatement();
             case WHILE -> parseWhileStatement();
             case FOR -> parseForStatement();
             case RETURN -> parseReturnStatement();
@@ -542,6 +543,18 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         Statement body = parseStatement();
 
         return new WhileStatement(test, body, location);
+    }
+
+    Statement parseDoWhileStatement() {
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.DO);
+        Statement body = parseStatement();
+        parserContext.expect(TokenType.WHILE);
+        parserContext.expect(TokenType.LPAREN);
+        Expression test = delegates.expressions.parseExpression();
+        parserContext.expect(TokenType.RPAREN);
+        parserContext.consumeSemicolon();
+        return new DoWhileStatement(body, test, location);
     }
 
     Statement parseWithStatement() {

@@ -116,6 +116,8 @@ final class CompilerAnalysis {
             }
         } else if (stmt instanceof WhileStatement whileStmt) {
             collectVarNamesFromStatement(whileStmt.body(), varNames);
+        } else if (stmt instanceof DoWhileStatement doWhileStmt) {
+            collectVarNamesFromStatement(doWhileStmt.body(), varNames);
         } else if (stmt instanceof TryStatement tryStmt) {
             for (Statement s : tryStmt.block().body()) {
                 collectVarNamesFromStatement(s, varNames);
@@ -395,6 +397,8 @@ final class CompilerAnalysis {
             }
         } else if (stmt instanceof WhileStatement whileStmt) {
             scanAnnexBStatement(whileStmt.body(), lexicalBindings, result);
+        } else if (stmt instanceof DoWhileStatement doWhileStmt) {
+            scanAnnexBStatement(doWhileStmt.body(), lexicalBindings, result);
         } else if (stmt instanceof ForInStatement forInStmt) {
             Set<String> forInLexicals = new HashSet<>(lexicalBindings);
             if (forInStmt.left() instanceof VariableDeclaration varDecl && varDecl.kind() != VariableKind.VAR) {

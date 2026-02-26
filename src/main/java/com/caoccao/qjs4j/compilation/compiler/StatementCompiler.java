@@ -173,7 +173,7 @@ final class StatementCompiler {
         }
 
         // Check if the body is a loop statement — if so, the label applies to the loop
-        if (body instanceof WhileStatement || body instanceof ForStatement
+        if (body instanceof WhileStatement || body instanceof DoWhileStatement || body instanceof ForStatement
                 || body instanceof ForInStatement || body instanceof ForOfStatement) {
             // Push a labeled loop context; the loop compilation will use loopStack.peek()
             // We need to wrap the loop compilation to attach the label
@@ -343,6 +343,8 @@ final class StatementCompiler {
             compileIfStatement(ifStmt);
         } else if (stmt instanceof WhileStatement whileStmt) {
             compileWhileStatement(whileStmt);
+        } else if (stmt instanceof DoWhileStatement doWhileStmt) {
+            compileDoWhileStatement(doWhileStmt);
         } else if (stmt instanceof ForStatement forStmt) {
             compileForStatement(forStmt);
         } else if (stmt instanceof ForInStatement forInStmt) {
@@ -662,6 +664,10 @@ final class StatementCompiler {
 
     void compileWhileStatement(WhileStatement whileStmt) {
         loopCompiler.compileWhileStatement(whileStmt);
+    }
+
+    void compileDoWhileStatement(DoWhileStatement doWhileStmt) {
+        loopCompiler.compileDoWhileStatement(doWhileStmt);
     }
 
     void compileWithStatement(WithStatement withStmt) {
