@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.builtins.AtomicsObject;
 
+import java.util.Objects;
+
 /**
  * Runtime configuration options.
  */
@@ -27,11 +29,13 @@ public class JSRuntimeOptions {
     protected AtomicsObject atomicsObject;
     protected long maxMemoryUsage;
     protected long maxStackSize;
+    protected boolean shadowRealmEnabled;
 
     public JSRuntimeOptions() {
-        atomicsObject = null;
+        atomicsObject = new AtomicsObject();
         maxMemoryUsage = DEFAULT_MAX_MEMORY_USAGE;
         maxStackSize = DEFAULT_MAX_STACK_SIZE;
+        shadowRealmEnabled = false;
     }
 
     public AtomicsObject getAtomicsObject() {
@@ -46,8 +50,12 @@ public class JSRuntimeOptions {
         return maxStackSize;
     }
 
+    public boolean isShadowRealmEnabled() {
+        return shadowRealmEnabled;
+    }
+
     public JSRuntimeOptions setAtomicsObject(AtomicsObject atomicsObject) {
-        this.atomicsObject = atomicsObject;
+        this.atomicsObject = Objects.requireNonNull(atomicsObject);
         return this;
     }
 
@@ -58,6 +66,11 @@ public class JSRuntimeOptions {
 
     public JSRuntimeOptions setMaxStackSize(long maxStackSize) {
         this.maxStackSize = maxStackSize;
+        return this;
+    }
+
+    public JSRuntimeOptions setShadowRealmEnabled(boolean shadowRealmEnabled) {
+        this.shadowRealmEnabled = shadowRealmEnabled;
         return this;
     }
 }

@@ -32,7 +32,9 @@ import com.caoccao.qjs4j.vm.Bytecode;
 public final class Compiler {
     private final String fileName;
     private final String source;
+    private boolean inheritedStrictMode;
     private boolean isEval; // true if compiling eval code
+    private boolean predeclareProgramLexicalsAsLocals;
 
     public Compiler(String source, String fileName) {
         if (source == null) {
@@ -40,7 +42,9 @@ public final class Compiler {
         }
         this.source = source;
         this.fileName = fileName;
+        this.inheritedStrictMode = false;
         this.isEval = false;
+        this.predeclareProgramLexicalsAsLocals = false;
     }
 
     /**
@@ -55,6 +59,7 @@ public final class Compiler {
             Program ast = parse(isModule);
             BytecodeCompiler compiler = new BytecodeCompiler();
             compiler.setSourceCode(source);
+            compiler.setPredeclareProgramLexicalsAsLocals(predeclareProgramLexicalsAsLocals);
             Bytecode bytecode = compiler.compile(ast);
             String name = fileName != null ? fileName : (isModule ? "<module>" : "<script>");
             boolean strict = isModule || ast.strict();
@@ -77,7 +82,7 @@ public final class Compiler {
      */
     public Program parse(boolean isModule) {
         Lexer lexer = new Lexer(source);
-        Parser parser = new Parser(lexer, isModule, isEval);
+        Parser parser = new Parser(lexer, isModule, isEval, inheritedStrictMode);
         return parser.parse();
     }
 
@@ -90,6 +95,16 @@ public final class Compiler {
      */
     public Compiler setEval(boolean isEval) {
         this.isEval = isEval;
+        return this;
+    }
+
+    public Compiler setInheritedStrictMode(boolean inheritedStrictMode) {
+        this.inheritedStrictMode = inheritedStrictMode;
+        return this;
+    }
+
+    public Compiler setPredeclareProgramLexicalsAsLocals(boolean predeclareProgramLexicalsAsLocals) {
+        this.predeclareProgramLexicalsAsLocals = predeclareProgramLexicalsAsLocals;
         return this;
     }
 

@@ -358,6 +358,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 expressionLexer,
                 parserContext.moduleMode,
                 parserContext.isEval,
+                parserContext.inheritedStrictMode,
                 parserContext.functionNesting,
                 parserContext.asyncFunctionNesting);
         Expression expression = expressionParser.parseExpression();

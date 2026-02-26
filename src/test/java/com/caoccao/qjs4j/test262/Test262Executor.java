@@ -62,47 +62,48 @@ public class Test262Executor {
         List<JSRuntime> realmRuntimes = new ArrayList<>();
         Test262AgentHost agentHost = new Test262AgentHost(this);
         TestResult result;
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
-            agentHost.setSharedAtomicsObject(runtime.getAtomicsObject());
-            context.setWaitable(!test.hasFlag("CanBlockIsFalse"));
-            install262Object(context, realmRuntimes, agentHost, null);
+        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setShadowRealmEnabled(true))) {
+            try (JSContext context = runtime.createContext()) {
+                agentHost.setSharedAtomicsObject(runtime.getOptions().getAtomicsObject());
+                context.setWaitable(!test.hasFlag("CanBlockIsFalse"));
+                install262Object(context, realmRuntimes, agentHost, null);
 
-            // Load harness files unless 'raw' flag is present.
-            // Default includes (assert.js, sta.js) must load first since other
-            // harness files (e.g., asyncHelpers.js) depend on them.
-            if (!test.hasFlag("raw")) {
-                List<String> includes = new ArrayList<>(HarnessLoader.getDefaultIncludes());
-                for (String include : test.getIncludes()) {
-                    if (!includes.contains(include)) {
-                        includes.add(include);
+                // Load harness files unless 'raw' flag is present.
+                // Default includes (assert.js, sta.js) must load first since other
+                // harness files (e.g., asyncHelpers.js) depend on them.
+                if (!test.hasFlag("raw")) {
+                    List<String> includes = new ArrayList<>(HarnessLoader.getDefaultIncludes());
+                    for (String include : test.getIncludes()) {
+                        if (!includes.contains(include)) {
+                            includes.add(include);
+                        }
+                    }
+                    harnessLoader.loadIntoContext(context, includes);
+                    if (includes.contains("atomicsHelper.js")) {
+                        agentHost.installAtomicsHelperOverrides(context);
+                    }
+                } else if (!test.getIncludes().isEmpty()) {
+                    // Load only explicitly included files for raw tests
+                    List<String> includes = new ArrayList<>(test.getIncludes());
+                    harnessLoader.loadIntoContext(context, includes);
+                    if (includes.contains("atomicsHelper.js")) {
+                        agentHost.installAtomicsHelperOverrides(context);
                     }
                 }
-                harnessLoader.loadIntoContext(context, includes);
-                if (includes.contains("atomicsHelper.js")) {
-                    agentHost.installAtomicsHelperOverrides(context);
+
+                // Prepare code with strict mode if needed
+                String code = prepareCode(test);
+
+                // Execute based on flags
+                if (test.hasFlag("async")) {
+                    result = executeAsync(context, runtime, code, test);
+                } else if (test.hasFlag("module")) {
+                    result = executeModule(context, runtime, code, test);
+                } else {
+                    result = executeScript(context, runtime, code, test);
                 }
-            } else if (!test.getIncludes().isEmpty()) {
-                // Load only explicitly included files for raw tests
-                List<String> includes = new ArrayList<>(test.getIncludes());
-                harnessLoader.loadIntoContext(context, includes);
-                if (includes.contains("atomicsHelper.js")) {
-                    agentHost.installAtomicsHelperOverrides(context);
-                }
+
             }
-
-            // Prepare code with strict mode if needed
-            String code = prepareCode(test);
-
-            // Execute based on flags
-            if (test.hasFlag("async")) {
-                result = executeAsync(context, runtime, code, test);
-            } else if (test.hasFlag("module")) {
-                result = executeModule(context, runtime, code, test);
-            } else {
-                result = executeScript(context, runtime, code, test);
-            }
-
         } catch (Exception e) {
             result = handleException(e, test);
         } finally {

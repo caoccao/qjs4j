@@ -32,6 +32,7 @@ import java.util.List;
  */
 final class ParserContext {
     final boolean isEval;
+    final boolean inheritedStrictMode;
     final Lexer lexer;
     final boolean moduleMode;
     int asyncFunctionNesting;
@@ -47,11 +48,12 @@ final class ParserContext {
     boolean strictMode;
     boolean superPropertyAllowed;
 
-    ParserContext(Lexer lexer, boolean moduleMode, boolean isEval,
+    ParserContext(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
                   int functionNesting, int asyncFunctionNesting) {
         this.lexer = lexer;
         this.moduleMode = moduleMode;
         this.isEval = isEval;
+        this.inheritedStrictMode = inheritedStrictMode;
         this.functionNesting = functionNesting;
         this.asyncFunctionNesting = asyncFunctionNesting;
         this.currentToken = lexer.nextToken();
@@ -282,6 +284,9 @@ final class ParserContext {
         SourceLocation location = getLocation();
         if (match(TokenType.IDENTIFIER)) {
             String name = currentToken.value();
+            if (strictMode && isStrictReservedIdentifierName(name)) {
+                throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
+            }
             advance();
             return new Identifier(name, location);
         }
@@ -305,6 +310,13 @@ final class ParserContext {
         }
         throw new RuntimeException("Expected identifier but got " + currentToken.type() +
                 " at line " + currentToken.line() + ", column " + currentToken.column());
+    }
+
+    private boolean isStrictReservedIdentifierName(String name) {
+        return switch (name) {
+            case "implements", "interface", "package", "private", "protected", "public", "static" -> true;
+            default -> false;
+        };
     }
 
     // ---- Shared parsing utilities ----

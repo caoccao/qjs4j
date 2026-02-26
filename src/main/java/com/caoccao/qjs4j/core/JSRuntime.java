@@ -16,7 +16,6 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.builtins.AtomicsObject;
 import com.caoccao.qjs4j.memory.GarbageCollector;
 import com.caoccao.qjs4j.utils.AtomTable;
 
@@ -45,16 +44,12 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * - Stack traces
  */
 public final class JSRuntime implements AutoCloseable {
-    private final AtomicsObject atomicsObject;
     private final AtomTable atoms;
     private final List<JSContext> contexts;
     private final GarbageCollector gc;
     private final Map<String, JSSymbol> globalSymbolRegistry;
     private final Queue<Job> jobQueue;
     private final JSRuntimeOptions options;
-    private long maxMemoryUsage;
-    // Runtime limits
-    private long maxStackSize;
 
     /**
      * Create a new runtime with default options.
@@ -70,15 +65,12 @@ public final class JSRuntime implements AutoCloseable {
      * Otherwise a new AtomicsObject is created for this runtime.
      */
     public JSRuntime(JSRuntimeOptions options) {
-        this.atomicsObject = options.atomicsObject != null ? options.atomicsObject : new AtomicsObject();
         this.contexts = new ArrayList<>();
         this.gc = new GarbageCollector();
         this.atoms = new AtomTable();
         this.jobQueue = new ConcurrentLinkedQueue<>();
         this.globalSymbolRegistry = new HashMap<>();
         this.options = options;
-        this.maxStackSize = options.getMaxStackSize();
-        this.maxMemoryUsage = options.getMaxMemoryUsage();
     }
 
     @Override
@@ -125,14 +117,6 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
-     * Get the Atomics object for this runtime.
-     * Scoped per runtime (agent cluster) for proper wait/notify isolation.
-     */
-    public AtomicsObject getAtomicsObject() {
-        return atomicsObject;
-    }
-
-    /**
      * Get the atom table for this runtime.
      */
     public AtomTable getAtoms() {
@@ -165,20 +149,6 @@ public final class JSRuntime implements AutoCloseable {
             }
         }
         return null;
-    }
-
-    /**
-     * Get maximum memory usage.
-     */
-    public long getMaxMemoryUsage() {
-        return maxMemoryUsage;
-    }
-
-    /**
-     * Get maximum stack size.
-     */
-    public long getMaxStackSize() {
-        return maxStackSize;
     }
 
     /**
@@ -220,20 +190,6 @@ public final class JSRuntime implements AutoCloseable {
             }
         }
         return count;
-    }
-
-    /**
-     * Set maximum memory usage in bytes.
-     */
-    public void setMaxMemoryUsage(long bytes) {
-        this.maxMemoryUsage = bytes;
-    }
-
-    /**
-     * Set maximum stack size in bytes.
-     */
-    public void setMaxStackSize(long bytes) {
-        this.maxStackSize = bytes;
     }
 
     /**

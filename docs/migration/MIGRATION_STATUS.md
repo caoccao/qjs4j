@@ -4,6 +4,12 @@ This document tracks the progress of migrating QuickJS functionality to pure Jav
 
 ## Completed Phases
 
+### Post-QuickJS / Proposal Features (qjs4j-specific)
+- **ShadowRealm**: Implemented for test262 compatibility (QuickJS does not implement `ShadowRealm`)
+  - Constructor + `evaluate()` + `importValue()`
+  - Cross-realm callable wrapping and error wrapping semantics implemented for current test262 coverage
+  - **Runtime-gated**: disabled by default, enabled with `JSRuntimeOptions.setShadowRealmEnabled(true)`
+
 ### Phase 1-9: Foundation (Previously Completed)
 - Basic value types (String, Number, Boolean, null, undefined)
 - Object system with shape-based optimization

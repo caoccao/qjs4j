@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSErrorException;
+import com.caoccao.qjs4j.exceptions.JSException;
 
 /**
  * Implementation of Reflect object static methods.
@@ -180,6 +181,18 @@ public final class JSReflectObject {
                 return JSArrayBuffer.createForConstruct(context, function, newTarget, args);
             } catch (JSErrorException e) {
                 return context.throwError(e.getErrorType().name(), e.getMessage());
+            }
+        }
+        if (constructorType == JSConstructorType.SHARED_ARRAY_BUFFER) {
+            try {
+                return JSSharedArrayBuffer.createForConstruct(context, function, newTarget, args);
+            } catch (JSErrorException e) {
+                return context.throwError(e.getErrorType().name(), e.getMessage());
+            } catch (JSException e) {
+                if (e.getErrorValue() instanceof JSObject errorObject) {
+                    return errorObject;
+                }
+                return context.throwRangeError("Invalid array buffer length");
             }
         }
 

@@ -89,4 +89,8 @@ public final class BytecodeCompiler {
     public void setSourceCode(String sourceCode) {
         ctx.sourceCode = sourceCode;
     }
+
+    public void setPredeclareProgramLexicalsAsLocals(boolean predeclareProgramLexicalsAsLocals) {
+        ctx.predeclareProgramLexicalsAsLocals = predeclareProgramLexicalsAsLocals;
+    }
 }

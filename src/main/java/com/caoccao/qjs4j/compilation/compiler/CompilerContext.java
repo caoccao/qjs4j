@@ -44,6 +44,7 @@ final class CompilerContext {
     boolean isInAsyncFunction;
     int maxLocalCount;
     String pendingLoopLabel;
+    boolean predeclareProgramLexicalsAsLocals;
     Map<String, JSSymbol> privateSymbols;
     int scopeDepth;
     String sourceCode;
@@ -76,6 +77,7 @@ final class CompilerContext {
         this.sourceCode = null;
         this.scopeDepth = 0;
         this.privateSymbols = Map.of();
+        this.predeclareProgramLexicalsAsLocals = false;
         this.strictMode = inheritedStrictMode;
         this.varInGlobalProgram = false;
     }

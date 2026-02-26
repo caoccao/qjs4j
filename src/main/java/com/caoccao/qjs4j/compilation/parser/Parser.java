@@ -49,13 +49,17 @@ public final class Parser {
     }
 
     public Parser(Lexer lexer, boolean moduleMode, boolean isEval) {
-        this(lexer, moduleMode, isEval, 0, 0);
+        this(lexer, moduleMode, isEval, false, 0, 0);
+    }
+
+    public Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode) {
+        this(lexer, moduleMode, isEval, inheritedStrictMode, 0, 0);
     }
 
     // Package-private: used by LiteralParser for nested template expression parsing
-    Parser(Lexer lexer, boolean moduleMode, boolean isEval,
+    Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
            int functionNesting, int asyncFunctionNesting) {
-        this.parserContext = new ParserContext(lexer, moduleMode, isEval,
+        this.parserContext = new ParserContext(lexer, moduleMode, isEval, inheritedStrictMode,
                 functionNesting, asyncFunctionNesting);
         this.delegates = new ParserDelegates(parserContext);
     }
@@ -76,7 +80,7 @@ public final class Parser {
         // Pass body so directive strings are also added as expression statements
         // (required for eval completion value per ES spec)
         boolean strict = parserContext.parseDirectives(body);
-        parserContext.strictMode = strict || parserContext.moduleMode;
+        parserContext.strictMode = strict || parserContext.moduleMode || parserContext.inheritedStrictMode;
         parserContext.lexer.setStrictMode(parserContext.strictMode);
 
         while (!parserContext.match(TokenType.EOF)) {
@@ -86,7 +90,8 @@ public final class Parser {
             }
         }
 
-        return new Program(body, parserContext.moduleMode, strict || parserContext.moduleMode, location);
+        return new Program(body, parserContext.moduleMode,
+                strict || parserContext.moduleMode || parserContext.inheritedStrictMode, location);
     }
 
     // Package-private: used by LiteralParser for nested template expression parsing

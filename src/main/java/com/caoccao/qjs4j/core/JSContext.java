@@ -754,6 +754,14 @@ public final class JSContext implements AutoCloseable {
         return eval(code, filename, isModule, false);
     }
 
+    public JSValue evalWithProgramLexicalsAsLocals(String code, String filename, boolean isModule) {
+        return eval(code, filename, isModule, false, true, true, false);
+    }
+
+    public JSValue evalDirect(String code, String filename, boolean inheritedStrictMode) {
+        return eval(code, filename, false, true, false, false, inheritedStrictMode);
+    }
+
     /**
      * Eval js value.
      *
@@ -764,6 +772,13 @@ public final class JSContext implements AutoCloseable {
      * @return the js value
      */
     public JSValue eval(String code, String filename, boolean isModule, boolean isDirectEval) {
+        return eval(code, filename, isModule, isDirectEval, false, false, false);
+    }
+
+    private JSValue eval(String code, String filename, boolean isModule, boolean isDirectEval,
+                         boolean predeclareProgramLexicalsAsLocals,
+                         boolean skipGlobalDeclarationTracking,
+                         boolean inheritedStrictModeForDirectEval) {
         if (code == null || code.isEmpty()) {
             return JSUndefined.INSTANCE;
         }
@@ -777,13 +792,19 @@ public final class JSContext implements AutoCloseable {
         // Per QuickJS, eval code has is_eval=true which prevents top-level return
         if (isDirectEval) {
             compiler.setEval(true);
+            if (strictMode || inheritedStrictModeForDirectEval) {
+                compiler.setInheritedStrictMode(true);
+            }
+        }
+        if (predeclareProgramLexicalsAsLocals) {
+            compiler.setPredeclareProgramLexicalsAsLocals(true);
         }
         try {
             // Phase 1-3: Lexer → Parser → Compiler (compile to bytecode)
             JSBytecodeFunction func;
             Compiler.CompileResult compileResult = compiler.compile(isModule);
             func = compileResult.function();
-            if (!isModule && !isDirectEval) {
+            if (!isModule && !isDirectEval && !skipGlobalDeclarationTracking) {
                 // Top-level script: check GlobalDeclarationInstantiation per ES2024 16.1.7
                 func = compileResult.function();
 

@@ -333,6 +333,12 @@ final class ExpressionAssignmentParser {
                     && !(left instanceof CallExpression)) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
+            if (parserContext.strictMode && left instanceof Identifier identifier) {
+                String identifierName = identifier.name();
+                if ("eval".equals(identifierName) || "arguments".equals(identifierName)) {
+                    throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
+                }
+            }
 
             TokenType op = parserContext.currentToken.type();
             location = parserContext.getLocation();

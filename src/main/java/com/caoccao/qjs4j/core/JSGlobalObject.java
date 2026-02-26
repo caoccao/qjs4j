@@ -111,6 +111,9 @@ public final class JSGlobalObject {
         initializeReflectObject();
         initializeProxyConstructor();
         initializePromiseConstructor();
+        if (context.getRuntime().getOptions().isShadowRealmEnabled()) {
+            initializeShadowRealmConstructor();
+        }
         initializeDisposableStackConstructor();
         initializeAsyncDisposableStackConstructor();
         initializeIteratorConstructor();
@@ -394,7 +397,7 @@ public final class JSGlobalObject {
      * Initialize Atomics object.
      */
     private void initializeAtomicsObject() {
-        AtomicsObject atomicsObject = context.getRuntime().getAtomicsObject();
+        AtomicsObject atomicsObject = context.getRuntime().getOptions().getAtomicsObject();
         JSObject atomics = context.createJSObject();
         atomics.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction("add", 3, atomicsObject::add), PropertyDescriptor.DataState.ConfigurableWritable);
         atomics.defineProperty(PropertyKey.fromString("and"), new JSNativeFunction("and", 3, atomicsObject::and), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1546,6 +1549,37 @@ public final class JSGlobalObject {
     }
 
     /**
+     * Initialize ShadowRealm constructor and prototype.
+     * ShadowRealm is not provided by QuickJS; implemented per proposal/test262 behavior.
+     */
+    private void initializeShadowRealmConstructor() {
+        JSObject shadowRealmPrototype = context.createJSObject();
+        shadowRealmPrototype.defineProperty(
+                PropertyKey.fromString("evaluate"),
+                new JSNativeFunction("evaluate", 1, ShadowRealmPrototype::evaluate),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        shadowRealmPrototype.defineProperty(
+                PropertyKey.fromString("importValue"),
+                new JSNativeFunction("importValue", 2, ShadowRealmPrototype::importValue),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        shadowRealmPrototype.defineProperty(
+                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                new JSString(JSShadowRealm.NAME),
+                PropertyDescriptor.DataState.Configurable);
+
+        JSNativeFunction shadowRealmConstructor = new JSNativeFunction(
+                JSShadowRealm.NAME,
+                0,
+                ShadowRealmConstructor::call,
+                true,
+                true);
+        shadowRealmConstructor.defineProperty(PropertyKey.fromString("prototype"), shadowRealmPrototype, PropertyDescriptor.DataState.None);
+        shadowRealmPrototype.defineProperty(PropertyKey.fromString("constructor"), shadowRealmConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+
+        globalObject.defineProperty(PropertyKey.fromString(JSShadowRealm.NAME), shadowRealmConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+    }
+
+    /**
      * Initialize SharedArrayBuffer constructor and prototype.
      */
     private void initializeSharedArrayBufferConstructor() {
@@ -2233,7 +2267,10 @@ public final class JSGlobalObject {
                     }
                 }
 
-                JSValue result = realmContext.eval(code, "<eval>", false, true);
+                boolean inheritedStrictMode = callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction
+                        ? bytecodeFunction.isStrict()
+                        : callerContext.isStrictMode();
+                JSValue result = realmContext.evalDirect(code, "<eval>", inheritedStrictMode);
 
                 // Copy modified values back to caller's locals
                 if (localVarNames != null) {

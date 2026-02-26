@@ -730,6 +730,7 @@ final class FunctionClassCompiler {
         }
 
         List<int[]> destructuringParams = declareParameters(funcDecl.params(), functionContext, funcDelegates);
+        declareAndInitializeImplicitArgumentsBinding(functionContext);
 
         // Emit default parameter initialization following QuickJS pattern
         if (funcDecl.defaults() != null) {
@@ -950,6 +951,7 @@ final class FunctionClassCompiler {
         }
 
         List<int[]> destructuringParams = declareParameters(functionExpression.params(), functionContext, funcDelegates);
+        declareAndInitializeImplicitArgumentsBinding(functionContext);
 
         if (functionExpression.id() != null) {
             boolean conflictsWithParameter = false;
@@ -1120,6 +1122,7 @@ final class FunctionClassCompiler {
         methodCtx.isInAsyncFunction = functionExpression.isAsync();
 
         List<int[]> methodDestructuringParams = declareParameters(functionExpression.params(), methodCtx, methodDelegates);
+        declareAndInitializeImplicitArgumentsBinding(methodCtx);
 
         // Emit default parameter initialization following QuickJS pattern
         if (functionExpression.defaults() != null) {
@@ -1513,6 +1516,21 @@ final class FunctionClassCompiler {
         return destructuringParams;
     }
 
+    private void declareAndInitializeImplicitArgumentsBinding(CompilerContext functionContext) {
+        if (functionContext.inGlobalScope || functionContext.isInArrowFunction) {
+            return;
+        }
+        if (functionContext.currentScope().getLocal(JSArguments.NAME) != null) {
+            return;
+        }
+
+        int argumentsLocalIndex = functionContext.currentScope().declareLocal(JSArguments.NAME);
+        functionContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+        functionContext.emitter.emitU8(0);
+        functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
+        functionContext.emitter.emitU16(argumentsLocalIndex);
+    }
+
     /**
      * Emit destructuring code for pattern parameters after defaults and rest handling.
      * Reads the argument value from the synthetic parameter slot and destructures it.
@@ -1568,4 +1586,3 @@ final class FunctionClassCompiler {
         throw new JSCompilerException("private class field is already defined");
     }
 }
-

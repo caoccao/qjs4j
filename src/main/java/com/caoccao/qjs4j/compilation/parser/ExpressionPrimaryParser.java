@@ -201,6 +201,13 @@ final class ExpressionPrimaryParser {
         if (parserContext.isAssignmentOperator(parserContext.currentToken.type())) {
             TokenType op = parserContext.currentToken.type();
             SourceLocation loc = parserContext.getLocation();
+            if (parserContext.strictMode && expr instanceof Identifier identifier) {
+                String identifierName = identifier.name();
+                if ("eval".equals(identifierName) || "arguments".equals(identifierName)) {
+                    throw new JSSyntaxErrorException(
+                            "Unexpected eval or arguments in strict mode");
+                }
+            }
             parserContext.advance();
             Expression right = expressions.parseAssignmentExpression();
             AssignmentExpression.AssignmentOperator operator = switch (op) {
@@ -432,10 +439,9 @@ final class ExpressionPrimaryParser {
                 }
                 throw new JSSyntaxErrorException("'super' keyword unexpected here");
             }
-            default -> {
-                parserContext.advance();
-                yield new Literal(null, location);
-            }
+            default -> throw new JSSyntaxErrorException(
+                    "Unexpected token " + parserContext.currentToken.type() + " at line "
+                            + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
         };
     }
 

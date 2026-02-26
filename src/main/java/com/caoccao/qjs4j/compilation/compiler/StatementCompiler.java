@@ -215,10 +215,22 @@ final class StatementCompiler {
         // Following QuickJS js_closure_define_global_var pattern for eval lexical bindings.
         for (Statement stmt : program.body()) {
             if (stmt instanceof ClassDeclaration classDecl && classDecl.id() != null) {
-                String name = classDecl.id().name();
-                int localIndex = ctx.currentScope().declareLocal(name);
+                String className = classDecl.id().name();
+                int localIndex = ctx.currentScope().declareLocal(className);
                 ctx.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                ctx.tdzLocals.add(name);
+                ctx.tdzLocals.add(className);
+            } else if (ctx.predeclareProgramLexicalsAsLocals
+                    && stmt instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.kind() != VariableKind.VAR) {
+                Set<String> lexicalNames = new HashSet<>();
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                    delegates.analysis.collectPatternBindingNames(declarator.id(), lexicalNames);
+                }
+                for (String lexicalName : lexicalNames) {
+                    int localIndex = ctx.currentScope().declareLocal(lexicalName);
+                    ctx.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                    ctx.tdzLocals.add(lexicalName);
+                }
             }
         }
 

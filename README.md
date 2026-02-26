@@ -14,6 +14,7 @@ qjs4j includes features not present in the original QuickJS:
 
 - **Float16Array**: IEEE 754 half-precision (16-bit) floating point typed array support
 - **ES2024 Features**: Promise.withResolvers, Object.groupBy, Map.groupBy
+- **ShadowRealm (runtime-gated)**: Proposal feature support for test262 compatibility, enabled via `JSRuntimeOptions.setShadowRealmEnabled(true)`
 - **Enhanced Module System**: Complete ES6 module implementation with dynamic import()
 - **Microtask Queue**: Full ES2020-compliant microtask infrastructure
 

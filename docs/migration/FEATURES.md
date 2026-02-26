@@ -99,6 +99,22 @@ This document provides a comprehensive list of all JavaScript features implement
   - Promise.withResolvers() - ES2024
 - **Microtask integration**: Proper microtask queue timing
 
+### ShadowRealm (TC39 Proposal / Test262) ✅
+- **Status**: Implemented for test262 compatibility (QuickJS does not implement `ShadowRealm`)
+- **Constructor**: `new ShadowRealm()`
+- **Prototype methods**:
+  - `evaluate(sourceText)`
+  - `importValue(specifier, exportName)` (current test262-covered behavior)
+- **Cross-realm semantics**:
+  - Callable values are wrapped when crossing realms
+  - Non-callable objects are rejected
+  - Other-realm runtime errors are wrapped into caller-realm `TypeError`
+  - Caller-side syntax / validation errors use caller-realm errors
+- **Runtime gate**:
+  - Disabled by default
+  - Enable with `new JSRuntime(new JSRuntimeOptions().setShadowRealmEnabled(true))`
+  - Test262 harness enables it explicitly
+
 ### Iterators & Generators (ES2015)
 - **Iterator protocol**: Symbol.iterator, next(), {value, done}
 - **Iterator constructor**: global `Iterator`, abstract construction checks
