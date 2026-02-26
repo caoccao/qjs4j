@@ -24,8 +24,6 @@ import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import java.math.BigInteger;
 import java.util.*;
 
-import static com.caoccao.qjs4j.vm.OpcodeHandler.*;
-
 /**
  * The JavaScript virtual machine bytecode interpreter.
  * Executes compiled bytecode using a stack-based architecture.

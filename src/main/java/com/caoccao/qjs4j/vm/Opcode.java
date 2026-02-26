@@ -342,10 +342,10 @@ public enum Opcode {
     }
 
     private final int code;
+    private final Handler handler;
     private final int nPop;
     private final int nPush;
     private final int size;
-    private final Handler handler;
 
     Opcode(int code, int size, int nPop, int nPush, Handler handler) {
         this.code = code;
@@ -366,6 +366,10 @@ public enum Opcode {
         return code;
     }
 
+    public Handler getHandler() {
+        return handler;
+    }
+
     public int getNPop() {
         return nPop;
     }
@@ -376,10 +380,6 @@ public enum Opcode {
 
     public int getSize() {
         return size;
-    }
-
-    public Handler getHandler() {
-        return handler;
     }
 
 

@@ -394,21 +394,22 @@ public final class JSGlobalObject {
      * Initialize Atomics object.
      */
     private void initializeAtomicsObject() {
+        AtomicsObject atomicsObject = context.getRuntime().getAtomicsObject();
         JSObject atomics = context.createJSObject();
-        atomics.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction("add", 3, AtomicsObject::add), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("and"), new JSNativeFunction("and", 3, AtomicsObject::and), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("compareExchange"), new JSNativeFunction("compareExchange", 4, AtomicsObject::compareExchange), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("exchange"), new JSNativeFunction("exchange", 3, AtomicsObject::exchange), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("isLockFree"), new JSNativeFunction("isLockFree", 1, AtomicsObject::isLockFree), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("load"), new JSNativeFunction("load", 2, AtomicsObject::load), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("notify"), new JSNativeFunction("notify", 3, AtomicsObject::notify), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("or"), new JSNativeFunction("or", 3, AtomicsObject::or), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("pause"), new JSNativeFunction("pause", 0, AtomicsObject::pause), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("store"), new JSNativeFunction("store", 3, AtomicsObject::store), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("sub"), new JSNativeFunction("sub", 3, AtomicsObject::sub), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("wait"), new JSNativeFunction("wait", 4, AtomicsObject::wait), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("waitAsync"), new JSNativeFunction("waitAsync", 4, AtomicsObject::waitAsync), PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("xor"), new JSNativeFunction("xor", 3, AtomicsObject::xor), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction("add", 3, atomicsObject::add), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("and"), new JSNativeFunction("and", 3, atomicsObject::and), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("compareExchange"), new JSNativeFunction("compareExchange", 4, atomicsObject::compareExchange), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("exchange"), new JSNativeFunction("exchange", 3, atomicsObject::exchange), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("isLockFree"), new JSNativeFunction("isLockFree", 1, atomicsObject::isLockFree), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("load"), new JSNativeFunction("load", 2, atomicsObject::load), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("notify"), new JSNativeFunction("notify", 3, atomicsObject::notify), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("or"), new JSNativeFunction("or", 3, atomicsObject::or), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("pause"), new JSNativeFunction("pause", 0, atomicsObject::pause), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("store"), new JSNativeFunction("store", 3, atomicsObject::store), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("sub"), new JSNativeFunction("sub", 3, atomicsObject::sub), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("wait"), new JSNativeFunction("wait", 4, atomicsObject::wait), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("waitAsync"), new JSNativeFunction("waitAsync", 4, atomicsObject::waitAsync), PropertyDescriptor.DataState.ConfigurableWritable);
+        atomics.defineProperty(PropertyKey.fromString("xor"), new JSNativeFunction("xor", 3, atomicsObject::xor), PropertyDescriptor.DataState.ConfigurableWritable);
         atomics.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Atomics"), PropertyDescriptor.DataState.Configurable);
 
         globalObject.defineProperty(PropertyKey.fromString("Atomics"), atomics, PropertyDescriptor.DataState.ConfigurableWritable);

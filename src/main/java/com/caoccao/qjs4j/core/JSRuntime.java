@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.builtins.AtomicsObject;
 import com.caoccao.qjs4j.memory.GarbageCollector;
 import com.caoccao.qjs4j.utils.AtomTable;
 
@@ -44,13 +45,13 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * - Stack traces
  */
 public final class JSRuntime implements AutoCloseable {
+    private final AtomicsObject atomicsObject;
     private final AtomTable atoms;
     private final List<JSContext> contexts;
     private final GarbageCollector gc;
     private final Map<String, JSSymbol> globalSymbolRegistry;
-    private final int interruptCheckCounter;
     private final Queue<Job> jobQueue;
-    private final RuntimeOptions options;
+    private final JSRuntimeOptions options;
     private long maxMemoryUsage;
     // Runtime limits
     private long maxStackSize;
@@ -59,22 +60,25 @@ public final class JSRuntime implements AutoCloseable {
      * Create a new runtime with default options.
      */
     public JSRuntime() {
-        this(new RuntimeOptions());
+        this(new JSRuntimeOptions());
     }
 
     /**
      * Create a new runtime with custom options.
+     * If {@link JSRuntimeOptions#atomicsObject} is set, that shared instance is used
+     * so multiple runtimes in the same agent cluster can coordinate via Atomics.wait/notify.
+     * Otherwise a new AtomicsObject is created for this runtime.
      */
-    public JSRuntime(RuntimeOptions options) {
+    public JSRuntime(JSRuntimeOptions options) {
+        this.atomicsObject = options.atomicsObject != null ? options.atomicsObject : new AtomicsObject();
         this.contexts = new ArrayList<>();
         this.gc = new GarbageCollector();
         this.atoms = new AtomTable();
         this.jobQueue = new ConcurrentLinkedQueue<>();
         this.globalSymbolRegistry = new HashMap<>();
         this.options = options;
-        this.maxStackSize = options.maxStackSize;
-        this.maxMemoryUsage = options.maxMemoryUsage;
-        this.interruptCheckCounter = 0;
+        this.maxStackSize = options.getMaxStackSize();
+        this.maxMemoryUsage = options.getMaxMemoryUsage();
     }
 
     @Override
@@ -118,6 +122,14 @@ public final class JSRuntime implements AutoCloseable {
      */
     public void gc() {
         gc.collectGarbage();
+    }
+
+    /**
+     * Get the Atomics object for this runtime.
+     * Scoped per runtime (agent cluster) for proper wait/notify isolation.
+     */
+    public AtomicsObject getAtomicsObject() {
+        return atomicsObject;
     }
 
     /**
@@ -172,7 +184,7 @@ public final class JSRuntime implements AutoCloseable {
     /**
      * Get runtime options.
      */
-    public RuntimeOptions getOptions() {
+    public JSRuntimeOptions getOptions() {
         return options;
     }
 
@@ -245,32 +257,4 @@ public final class JSRuntime implements AutoCloseable {
         void run();
     }
 
-    /**
-     * Runtime configuration options.
-     */
-    public static class RuntimeOptions {
-        public boolean enableBigInt = true;
-        public boolean enableDateExtensions = false;
-        public boolean enableOperatorOverloading = false;
-        public long maxMemoryUsage = 64 * 1024 * 1024; // 64 MB default
-        public long maxStackSize = 256 * 1024; // 256 KB default
-
-        public RuntimeOptions() {
-        }
-
-        public RuntimeOptions enableBigInt(boolean enable) {
-            this.enableBigInt = enable;
-            return this;
-        }
-
-        public RuntimeOptions maxMemoryUsage(long bytes) {
-            this.maxMemoryUsage = bytes;
-            return this;
-        }
-
-        public RuntimeOptions maxStackSize(long bytes) {
-            this.maxStackSize = bytes;
-            return this;
-        }
-    }
 }

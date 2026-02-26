@@ -32,6 +32,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class AtomicsObjectTest extends BaseJavetTest {
 
+    private AtomicsObject atomics() {
+        return context.getRuntime().getAtomicsObject();
+    }
+
     @Test
     public void testAdd() {
         // Create SharedArrayBuffer and Int32Array
@@ -43,23 +47,23 @@ public class AtomicsObjectTest extends BaseJavetTest {
         arr.getBuffer().getBuffer().putInt(4, 20);
 
         // Test normal case: add to index 0
-        JSValue result = AtomicsObject.add(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(5)});
+        JSValue result = atomics().add(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(5)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(10.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(15); // new value is 10 + 5
 
         // Test add to index 1
-        result = AtomicsObject.add(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(-3)});
+        result = atomics().add(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(-3)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(20.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(17);
 
         // Test edge cases
-        JSValue error = AtomicsObject.add(context, null, new JSValue[]{arr}); // too few args
+        JSValue error = atomics().add(context, null, new JSValue[]{arr}); // too few args
         assertTypeError(error);
 
-        error = AtomicsObject.add(context, null, new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(5)}); // not typed array
+        error = atomics().add(context, null, new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(5)}); // not typed array
         assertTypeError(error);
 
-        error = AtomicsObject.add(context, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(5)}); // out of bounds
+        error = atomics().add(context, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(5)}); // out of bounds
         assertRangeError(error);
     }
 
@@ -74,12 +78,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
         arr.getBuffer().getBuffer().putInt(4, 10);
 
         // Test AND operation: 15 & 10 = 10
-        JSValue result = AtomicsObject.and(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(10)});
+        JSValue result = atomics().and(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(10)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(15.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(10); // new value
 
         // Test AND with 0: 10 & 0 = 0
-        result = AtomicsObject.and(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(0)});
+        result = atomics().and(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(0)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(10.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(0);
     }
@@ -94,12 +98,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
         arr.getBuffer().getBuffer().putInt(4, 100);
 
         // Test successful exchange: expected == current
-        JSValue result = AtomicsObject.compareExchange(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(42), new JSNumber(99)});
+        JSValue result = atomics().compareExchange(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(42), new JSNumber(99)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(99); // new value
 
         // Test failed exchange: expected != current
-        result = AtomicsObject.compareExchange(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(50), new JSNumber(200)});
+        result = atomics().compareExchange(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(50), new JSNumber(200)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(100.0); // returns current value
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(100); // unchanged
     }
@@ -114,11 +118,11 @@ public class AtomicsObjectTest extends BaseJavetTest {
         arr.getBuffer().getBuffer().putInt(4, 456);
 
         // Test exchange
-        JSValue result = AtomicsObject.exchange(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(789)});
+        JSValue result = atomics().exchange(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(789)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(123.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(789); // new value
 
-        result = AtomicsObject.exchange(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(0)});
+        result = atomics().exchange(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(0)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(456.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(0);
     }
@@ -126,20 +130,20 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testIsLockFree() {
         // Test various sizes
-        JSValue result = AtomicsObject.isLockFree(context, null, new JSValue[]{new JSNumber(1)});
+        JSValue result = atomics().isLockFree(context, null, new JSValue[]{new JSNumber(1)});
         assertThat(result.isBoolean()).isTrue(); // Implementation dependent
 
-        result = AtomicsObject.isLockFree(context, null, new JSValue[]{new JSNumber(2)});
+        result = atomics().isLockFree(context, null, new JSValue[]{new JSNumber(2)});
         assertThat(result.isBoolean()).isTrue();
 
-        result = AtomicsObject.isLockFree(context, null, new JSValue[]{new JSNumber(4)});
+        result = atomics().isLockFree(context, null, new JSValue[]{new JSNumber(4)});
         assertThat(result.isBoolean()).isTrue();
 
-        result = AtomicsObject.isLockFree(context, null, new JSValue[]{new JSNumber(8)});
+        result = atomics().isLockFree(context, null, new JSValue[]{new JSNumber(8)});
         assertThat(result.isBoolean()).isTrue();
 
         // Test invalid size
-        result = AtomicsObject.isLockFree(context, null, new JSValue[]{new JSNumber(3)});
+        result = atomics().isLockFree(context, null, new JSValue[]{new JSNumber(3)});
         assertThat(result.isBooleanFalse()).isTrue(); // Should be false for unsupported sizes
     }
 
@@ -162,10 +166,10 @@ public class AtomicsObjectTest extends BaseJavetTest {
         arr.getBuffer().getBuffer().putInt(4, 222);
 
         // Test load
-        JSValue result = AtomicsObject.load(context, null, new JSValue[]{arr, new JSNumber(0)});
+        JSValue result = atomics().load(context, null, new JSValue[]{arr, new JSNumber(0)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(111.0);
 
-        result = AtomicsObject.load(context, null, new JSValue[]{arr, new JSNumber(1)});
+        result = atomics().load(context, null, new JSValue[]{arr, new JSNumber(1)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(222.0);
     }
 
@@ -180,24 +184,24 @@ public class AtomicsObjectTest extends BaseJavetTest {
         arr.getBuffer().getBuffer().putInt(0, 0);
 
         // Test 1: Notify with non-shared buffer - should still return 0
-        JSValue result = AtomicsObject.notify(context, null, new JSValue[]{arr, new JSNumber(0)});
+        JSValue result = atomics().notify(context, null, new JSValue[]{arr, new JSNumber(0)});
         assertThat(result.isNumber()).isTrue();
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
 
         // Test 2: Invalid arguments
-        JSValue error = AtomicsObject.notify(context, null, new JSValue[]{});
+        JSValue error = atomics().notify(context, null, new JSValue[]{});
         assertTypeError(error);
 
         // Test 3: Non-TypedArray argument
-        error = AtomicsObject.notify(context, null, new JSValue[]{new JSNumber(1)});
+        error = atomics().notify(context, null, new JSValue[]{new JSNumber(1)});
         assertTypeError(error);
 
         // Test 4: Out of bounds index
-        error = AtomicsObject.notify(context, null, new JSValue[]{arr, new JSNumber(10)});
+        error = atomics().notify(context, null, new JSValue[]{arr, new JSNumber(10)});
         assertRangeError(error);
 
         // Test 5: Negative count is clamped to 0; non-shared buffers still return 0
-        JSValue negativeCountResult = AtomicsObject.notify(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(-1)});
+        JSValue negativeCountResult = atomics().notify(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(-1)});
         assertThat(negativeCountResult.isNumber()).isTrue();
         assertThat(negativeCountResult.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
     }
@@ -216,13 +220,14 @@ public class AtomicsObjectTest extends BaseJavetTest {
         CountDownLatch allWaitersStarted = new CountDownLatch(waiterCount);
         CountDownLatch allWaitersFinished = new CountDownLatch(waiterCount);
         AtomicInteger successCount = new AtomicInteger(0);
+        JSRuntime sharedRuntime = context.getRuntime();
 
-        // Create multiple waiters
+        // Create multiple waiters sharing the same runtime (agent cluster)
         for (int i = 0; i < waiterCount; i++) {
             Thread waiter = new Thread(() -> {
-                JSContext waiterCtx = new JSContext(new JSRuntime());
+                JSContext waiterCtx = new JSContext(sharedRuntime);
                 allWaitersStarted.countDown();
-                JSValue result = AtomicsObject.wait(waiterCtx, null, new JSValue[]{
+                JSValue result = sharedRuntime.getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
                         arr, new JSNumber(0), new JSNumber(200), new JSNumber(5000)
                 });
 
@@ -242,7 +247,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         Thread.sleep(100);
 
         // Notify all waiters
-        JSValue notifyResult = AtomicsObject.notify(context, null, new JSValue[]{
+        JSValue notifyResult = atomics().notify(context, null, new JSValue[]{
                 arr, new JSNumber(0), new JSNumber(waiterCount)
         });
 
@@ -265,11 +270,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
         CountDownLatch waiterStarted = new CountDownLatch(1);
         CountDownLatch waiterFinished = new CountDownLatch(1);
+        JSRuntime sharedRuntime = context.getRuntime();
 
         Thread waiter = new Thread(() -> {
-            JSContext waiterCtx = new JSContext(new JSRuntime());
+            JSContext waiterCtx = new JSContext(sharedRuntime);
             waiterStarted.countDown();
-            AtomicsObject.wait(waiterCtx, null, new JSValue[]{
+            sharedRuntime.getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
                     arr, new JSNumber(0), new JSNumber(300), new JSNumber(5000)
             });
             waiterFinished.countDown();
@@ -281,7 +287,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         Thread.sleep(100);
 
         // Notify with Integer.MAX_VALUE (equivalent to +Infinity in the spec)
-        JSValue notifyResult = AtomicsObject.notify(context, null, new JSValue[]{
+        JSValue notifyResult = atomics().notify(context, null, new JSValue[]{
                 arr, new JSNumber(0) // No count parameter means notify all
         });
 
@@ -314,12 +320,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
         arr.getBuffer().getBuffer().putInt(4, 12);
 
         // Test OR operation: 10 | 5 = 15 (0b1010 | 0b0101 = 0b1111)
-        JSValue result = AtomicsObject.or(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(5)});
+        JSValue result = atomics().or(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(5)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(10.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(15); // new value
 
         // Test OR with all bits set: 12 | 3 = 15
-        result = AtomicsObject.or(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(3)});
+        result = atomics().or(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(3)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(12.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(15);
     }
@@ -327,7 +333,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testPause() {
         // Atomics.pause() should return undefined
-        JSValue result = AtomicsObject.pause(context, null, new JSValue[]{});
+        JSValue result = atomics().pause(context, null, new JSValue[]{});
         assertThat(result.isUndefined()).isTrue();
     }
 
@@ -341,11 +347,11 @@ public class AtomicsObjectTest extends BaseJavetTest {
         arr.getBuffer().getBuffer().putInt(4, 0);
 
         // Test store
-        JSValue result = AtomicsObject.store(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(999)});
+        JSValue result = atomics().store(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(999)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(999.0); // returns stored value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(999);
 
-        result = AtomicsObject.store(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(-123)});
+        result = atomics().store(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(-123)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(-123.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(-123);
     }
@@ -361,12 +367,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
         arr.getBuffer().getBuffer().putInt(4, 25);
 
         // Test normal case: subtract from index 0
-        JSValue result = AtomicsObject.sub(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(15)});
+        JSValue result = atomics().sub(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(15)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(50.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(35); // new value is 50 - 15
 
         // Test subtract to index 1
-        result = AtomicsObject.sub(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(10)});
+        result = atomics().sub(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(10)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(25.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(15);
     }
@@ -382,29 +388,29 @@ public class AtomicsObjectTest extends BaseJavetTest {
         arr.getBuffer().getBuffer().putInt(0, 42);
 
         // Test 1: Wait with non-matching value - should return "not-equal"
-        JSValue result = AtomicsObject.wait(context, null, new JSValue[]{
+        JSValue result = atomics().wait(context, null, new JSValue[]{
                 arr, new JSNumber(0), new JSNumber(0), new JSNumber(0)
         });
         assertThat(result.isString()).isTrue();
         assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("not-equal");
 
         // Test 2: Wait with matching value and immediate timeout - should return "timed-out"
-        result = AtomicsObject.wait(context, null, new JSValue[]{
+        result = atomics().wait(context, null, new JSValue[]{
                 arr, new JSNumber(0), new JSNumber(42), new JSNumber(0)
         });
         assertThat(result.isString()).isTrue();
         assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("timed-out");
 
         // Test 3: Invalid arguments
-        JSValue error = AtomicsObject.wait(context, null, new JSValue[]{arr, new JSNumber(0)});
+        JSValue error = atomics().wait(context, null, new JSValue[]{arr, new JSNumber(0)});
         assertTypeError(error);
 
         // Test 4: Non-TypedArray argument
-        error = AtomicsObject.wait(context, null, new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(0)});
+        error = atomics().wait(context, null, new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(0)});
         assertTypeError(error);
 
         // Test 5: Out of bounds index
-        error = AtomicsObject.wait(context, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(0)});
+        error = atomics().wait(context, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(0)});
         assertRangeError(error);
     }
 
@@ -421,12 +427,13 @@ public class AtomicsObjectTest extends BaseJavetTest {
         CountDownLatch waitStarted = new CountDownLatch(1);
         CountDownLatch waitFinished = new CountDownLatch(1);
         AtomicBoolean waitSuccess = new AtomicBoolean(false);
+        JSRuntime sharedRuntime = context.getRuntime();
 
         // Thread 1: Wait
         Thread waiter = new Thread(() -> {
-            JSContext waiterCtx = new JSContext(new JSRuntime());
+            JSContext waiterCtx = new JSContext(sharedRuntime);
             waitStarted.countDown();
-            JSValue result = AtomicsObject.wait(waiterCtx, null, new JSValue[]{
+            JSValue result = sharedRuntime.getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
                     arr, new JSNumber(0), new JSNumber(100), new JSNumber(5000) // 5 second timeout
             });
 
@@ -446,7 +453,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         Thread.sleep(100);
 
         // Thread 2: Notify
-        JSValue notifyResult = AtomicsObject.notify(context, null, new JSValue[]{
+        JSValue notifyResult = atomics().notify(context, null, new JSValue[]{
                 arr, new JSNumber(0), new JSNumber(1)
         });
 
@@ -470,7 +477,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         arr.getBuffer().getBuffer().putInt(0, 42);
 
         // Test 1: waitAsync with non-matching value - should return {async: false, value: "not-equal"}
-        JSValue result = AtomicsObject.waitAsync(context, null, new JSValue[]{
+        JSValue result = atomics().waitAsync(context, null, new JSValue[]{
                 arr, new JSNumber(0), new JSNumber(0)
         });
         JSObject resultObj = result.asObject().orElseThrow();
@@ -479,7 +486,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         assertThat(((JSString) resultObj.get("value")).value()).isEqualTo("not-equal");
 
         // Test 2: waitAsync with matching value and positive timeout - should return {async: true, value: Promise}
-        result = AtomicsObject.waitAsync(context, null, new JSValue[]{
+        result = atomics().waitAsync(context, null, new JSValue[]{
                 arr, new JSNumber(0), new JSNumber(42), new JSNumber(1)
         });
         resultObj = result.asObject().orElseThrow();
@@ -495,15 +502,15 @@ public class AtomicsObjectTest extends BaseJavetTest {
         assertThat(waitPromise.getResult().asString().map(JSString::value).orElseThrow()).isEqualTo("timed-out");
 
         // Test 3: Invalid arguments
-        JSValue error = AtomicsObject.waitAsync(context, null, new JSValue[]{arr, new JSNumber(0)});
+        JSValue error = atomics().waitAsync(context, null, new JSValue[]{arr, new JSNumber(0)});
         assertTypeError(error);
 
         // Test 4: Non-TypedArray argument
-        error = AtomicsObject.waitAsync(context, null, new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(0)});
+        error = atomics().waitAsync(context, null, new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(0)});
         assertTypeError(error);
 
         // Test 5: Out of bounds index
-        error = AtomicsObject.waitAsync(context, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(0)});
+        error = atomics().waitAsync(context, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(0)});
         assertRangeError(error);
     }
 
@@ -518,12 +525,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
         arr.getBuffer().getBuffer().putInt(4, 10);
 
         // Test XOR operation: 15 ^ 10 = 5 (0b1111 ^ 0b1010 = 0b0101)
-        JSValue result = AtomicsObject.xor(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(10)});
+        JSValue result = atomics().xor(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(10)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(15.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(5); // new value
 
         // Test XOR with same value: 10 ^ 10 = 0
-        result = AtomicsObject.xor(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(10)});
+        result = atomics().xor(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(10)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(10.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(0);
     }

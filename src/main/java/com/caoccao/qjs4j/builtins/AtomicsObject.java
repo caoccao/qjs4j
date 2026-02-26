@@ -32,23 +32,89 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Implementation of Atomics object static methods.
+ * Implementation of Atomics object methods.
  * Based on ES2017 Atomics specification.
  * <p>
  * The Atomics object provides atomic operations on SharedArrayBuffer and TypedArray views.
  * These operations guarantee atomic read-modify-write sequences and memory ordering.
+ * <p>
+ * Each JSRuntime owns an AtomicsObject instance so that wait/notify coordination
+ * is scoped to the agent cluster (runtime), not shared globally across the JVM.
  */
 public final class AtomicsObject {
 
-    // Global wait lists indexed by SharedArrayBuffer + index
-    private static final Map<String, WaitList> waitLists = new ConcurrentHashMap<>();
+    // Wait lists indexed by SharedArrayBuffer + index, scoped per runtime (agent cluster)
+    private final Map<String, WaitList> waitLists = new ConcurrentHashMap<>();
+
+    private static JSValue createBigUint64(long value) {
+        BigInteger unsigned = value >= 0
+                ? BigInteger.valueOf(value)
+                : BigInteger.valueOf(value).add(BigInteger.ONE.shiftLeft(64));
+        return new JSBigInt(unsigned);
+    }
+
+    private static JSObject createWaitAsyncSyncResult(JSContext context, String value) {
+        JSObject result = context.createJSObject();
+        result.set(PropertyKey.ASYNC, JSBoolean.FALSE);
+        result.set(PropertyKey.VALUE, new JSString(value));
+        return result;
+    }
+
+    private static int getAtomicIndex(JSContext context, JSTypedArray typedArray, JSValue indexValue) {
+        if (typedArray.getBuffer().isDetached()) {
+            throw new JSTypeErrorException("TypedArray buffer is detached");
+        }
+        int typedArrayLength = typedArray.getLength();
+        final long indexLong;
+        try {
+            indexLong = JSTypeConversions.toIndex(context, indexValue);
+        } catch (JSRangeErrorException e) {
+            throw e;
+        } catch (JSErrorException e) {
+            throw e;
+        }
+        if (indexLong >= typedArrayLength) {
+            throw new JSRangeErrorException("Index out of bounds");
+        }
+        return (int) indexLong;
+    }
+
+    private static double getAtomicsWaitTimeout(JSContext context, JSValue[] args, int timeoutArgIndex) {
+        JSValue timeoutValue = args.length > timeoutArgIndex ? args[timeoutArgIndex] : JSUndefined.INSTANCE;
+        double timeoutNumber = JSTypeConversions.toNumber(context, timeoutValue).value();
+        if (Double.isNaN(timeoutNumber)) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return Math.max(timeoutNumber, 0.0);
+    }
+
+    private static String getWaitKey(IJSArrayBuffer buffer, int index) {
+        return System.identityHashCode(buffer) + ":" + index;
+    }
+
+    private static ByteBuffer requireAtomicBuffer(JSTypedArray typedArray) {
+        ByteBuffer byteBuffer = typedArray.getBuffer().getBuffer();
+        if (byteBuffer == null) {
+            throw new JSTypeErrorException("TypedArray buffer is detached");
+        }
+        return byteBuffer;
+    }
+
+    private static JSValue rethrowAsJSValue(JSContext context, JSErrorException errorException) {
+        return switch (errorException.getErrorType()) {
+            case RangeError -> context.throwRangeError(errorException.getMessage());
+            case TypeError -> context.throwTypeError(errorException.getMessage());
+            case SyntaxError -> context.throwSyntaxError(errorException.getMessage());
+            default -> context.throwError(errorException.getMessage());
+        };
+    }
 
     /**
      * Atomics.add(typedArray, index, value)
      * ES2017 24.4.3
      * Atomically adds value to the element at index and returns the old value.
      */
-    public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
             return context.throwTypeError("Atomics.add requires typedArray, index, and value");
         }
@@ -141,7 +207,7 @@ public final class AtomicsObject {
      * ES2017 24.4.4
      * Atomically computes bitwise AND and returns the old value.
      */
-    public static JSValue and(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue and(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
             return context.throwTypeError("Atomics.and requires typedArray, index, and value");
         }
@@ -233,7 +299,7 @@ public final class AtomicsObject {
      * ES2017 24.4.5
      * Atomically compares and exchanges if equal, returns the old value.
      */
-    public static JSValue compareExchange(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue compareExchange(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 4) {
             return context.throwTypeError("Atomics.compareExchange requires typedArray, index, expectedValue, and replacementValue");
         }
@@ -345,26 +411,12 @@ public final class AtomicsObject {
         return context.throwTypeError("Atomics.compareExchange invalid typed array");
     }
 
-    private static JSValue createBigUint64(long value) {
-        BigInteger unsigned = value >= 0
-                ? BigInteger.valueOf(value)
-                : BigInteger.valueOf(value).add(BigInteger.ONE.shiftLeft(64));
-        return new JSBigInt(unsigned);
-    }
-
-    private static JSObject createWaitAsyncSyncResult(JSContext context, String value) {
-        JSObject result = context.createJSObject();
-        result.set(PropertyKey.ASYNC, JSBoolean.FALSE);
-        result.set(PropertyKey.VALUE, new JSString(value));
-        return result;
-    }
-
     /**
      * Atomics.exchange(typedArray, index, value)
      * ES2017 24.4.6
      * Atomically exchanges the value at index and returns the old value.
      */
-    public static JSValue exchange(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue exchange(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
             return context.throwTypeError("Atomics.exchange requires typedArray, index, and value");
         }
@@ -452,44 +504,12 @@ public final class AtomicsObject {
         return context.throwTypeError("Atomics.exchange invalid typed array");
     }
 
-    private static int getAtomicIndex(JSContext context, JSTypedArray typedArray, JSValue indexValue) {
-        if (typedArray.getBuffer().isDetached()) {
-            throw new JSTypeErrorException("TypedArray buffer is detached");
-        }
-        int typedArrayLength = typedArray.getLength();
-        final long indexLong;
-        try {
-            indexLong = JSTypeConversions.toIndex(context, indexValue);
-        } catch (JSRangeErrorException e) {
-            throw e;
-        } catch (JSErrorException e) {
-            throw e;
-        }
-        if (indexLong >= typedArrayLength) {
-            throw new JSRangeErrorException("Index out of bounds");
-        }
-        return (int) indexLong;
-    }
-
-    private static double getAtomicsWaitTimeout(JSContext context, JSValue[] args, int timeoutArgIndex) {
-        JSValue timeoutValue = args.length > timeoutArgIndex ? args[timeoutArgIndex] : JSUndefined.INSTANCE;
-        double timeoutNumber = JSTypeConversions.toNumber(context, timeoutValue).value();
-        if (Double.isNaN(timeoutNumber)) {
-            return Double.POSITIVE_INFINITY;
-        }
-        return Math.max(timeoutNumber, 0.0);
-    }
-
-    private static String getWaitKey(IJSArrayBuffer buffer, int index) {
-        return System.identityHashCode(buffer) + ":" + index;
-    }
-
     /**
      * Atomics.isLockFree(size)
      * ES2017 24.4.2
      * Returns whether operations on a given size are lock-free.
      */
-    public static JSValue isLockFree(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue isLockFree(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
             return JSBoolean.FALSE;
         }
@@ -512,7 +532,7 @@ public final class AtomicsObject {
      * ES2017 24.4.7
      * Atomically loads and returns the value at index.
      */
-    public static JSValue load(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue load(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2) {
             return context.throwTypeError("Atomics.load requires typedArray and index");
         }
@@ -581,7 +601,7 @@ public final class AtomicsObject {
      * Notifies some agents that are sleeping in a wait on the given index.
      * Returns the number of agents that were awoken.
      */
-    public static JSValue notify(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue notify(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 1) {
             return context.throwTypeError("Atomics.notify requires typedArray");
         }
@@ -628,7 +648,7 @@ public final class AtomicsObject {
      * ES2017 24.4.8
      * Atomically computes bitwise OR and returns the old value.
      */
-    public static JSValue or(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue or(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
             return context.throwTypeError("Atomics.or requires typedArray, index, and value");
         }
@@ -721,7 +741,7 @@ public final class AtomicsObject {
      * Provides a hint to the runtime that it may be a good time to yield.
      * Useful in spin-wait loops.
      */
-    public static JSValue pause(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue pause(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length > 0) {
             JSValue iterationNumber = args[0];
             if (!(iterationNumber instanceof JSUndefined)) {
@@ -740,29 +760,12 @@ public final class AtomicsObject {
         return JSUndefined.INSTANCE;
     }
 
-    private static ByteBuffer requireAtomicBuffer(JSTypedArray typedArray) {
-        ByteBuffer byteBuffer = typedArray.getBuffer().getBuffer();
-        if (byteBuffer == null) {
-            throw new JSTypeErrorException("TypedArray buffer is detached");
-        }
-        return byteBuffer;
-    }
-
-    private static JSValue rethrowAsJSValue(JSContext context, JSErrorException errorException) {
-        return switch (errorException.getErrorType()) {
-            case RangeError -> context.throwRangeError(errorException.getMessage());
-            case TypeError -> context.throwTypeError(errorException.getMessage());
-            case SyntaxError -> context.throwSyntaxError(errorException.getMessage());
-            default -> context.throwError(errorException.getMessage());
-        };
-    }
-
     /**
      * Atomics.store(typedArray, index, value)
      * ES2017 24.4.11
      * Atomically stores value at index and returns the value.
      */
-    public static JSValue store(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue store(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
             return context.throwTypeError("Atomics.store requires typedArray, index, and value");
         }
@@ -844,7 +847,7 @@ public final class AtomicsObject {
      * ES2017 24.4.12
      * Atomically subtracts value from the element at index and returns the old value.
      */
-    public static JSValue sub(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue sub(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
             return context.throwTypeError("Atomics.sub requires typedArray, index, and value");
         }
@@ -938,7 +941,7 @@ public final class AtomicsObject {
      * Returns "ok" if woken by notify, "not-equal" if value doesn't match,
      * or "timed-out" if timeout expired.
      */
-    public static JSValue wait(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue wait(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
             return context.throwTypeError("Atomics.wait requires typedArray, index, and value");
         }
@@ -1021,7 +1024,7 @@ public final class AtomicsObject {
      * Returns {async: false, value: "not-equal"} if value doesn't match,
      * or {async: true, value: Promise} if waiting.
      */
-    public static JSValue waitAsync(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue waitAsync(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
             return context.throwTypeError("Atomics.waitAsync requires typedArray, index, and value");
         }
@@ -1116,7 +1119,7 @@ public final class AtomicsObject {
      * ES2017 24.4.14
      * Atomically computes bitwise XOR and returns the old value.
      */
-    public static JSValue xor(JSContext context, JSValue thisArg, JSValue[] args) {
+    public JSValue xor(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 3) {
             return context.throwTypeError("Atomics.xor requires typedArray, index, and value");
         }

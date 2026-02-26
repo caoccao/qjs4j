@@ -22,11 +22,6 @@ import com.caoccao.qjs4j.test262.harness.HarnessLoader;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Executes test262 test cases with proper flag handling.
@@ -65,10 +60,11 @@ public class Test262Executor {
     public TestResult execute(Test262TestCase test) {
         long startTime = System.currentTimeMillis();
         List<JSRuntime> realmRuntimes = new ArrayList<>();
-        Test262AgentHost agentHost = new Test262AgentHost();
+        Test262AgentHost agentHost = new Test262AgentHost(this);
         TestResult result;
         try (JSRuntime runtime = new JSRuntime();
              JSContext context = runtime.createContext()) {
+            agentHost.setSharedAtomicsObject(runtime.getAtomicsObject());
             context.setWaitable(!test.hasFlag("CanBlockIsFalse"));
             install262Object(context, realmRuntimes, agentHost, null);
 
@@ -325,6 +321,10 @@ public class Test262Executor {
         return "Error";
     }
 
+    public long getAsyncTimeoutMs() {
+        return asyncTimeoutMs;
+    }
+
     private TestResult handleException(Exception e, Test262TestCase test) {
         if (test.getNegative() == null) {
             // Unexpected error
@@ -351,12 +351,11 @@ public class Test262Executor {
      * Install a minimal Test262 host object ($262) with createRealm()/evalScript().
      * This is enough for cross-realm tests used by annexB RegExp compile checks.
      */
-    private void install262Object(
+    public void install262Object(
             JSContext context,
             List<JSRuntime> realmRuntimes,
             Test262AgentHost agentHost,
-            Test262Agent agent
-    ) {
+            Test262Agent agent) {
         JSObject global = context.getGlobalObject();
         JSObject host262 = context.createJSObject();
 
@@ -424,268 +423,4 @@ public class Test262Executor {
         return code;
     }
 
-    private final class Test262Agent implements AutoCloseable {
-        private final BlockingQueue<JSValue> broadcasts;
-        private final Test262AgentHost host;
-        private final String script;
-        private final Thread thread;
-        private volatile boolean closed;
-        private volatile JSRuntime runtime;
-
-        private Test262Agent(String script, List<JSRuntime> realmRuntimes, Test262AgentHost host) {
-            this.script = script;
-            this.host = host;
-            broadcasts = new LinkedBlockingQueue<>();
-            closed = false;
-            runtime = null;
-            thread = new Thread(this::run, "qjs4j-test262-agent");
-            thread.setDaemon(true);
-        }
-
-        private JSValue awaitBroadcast() {
-            while (!closed) {
-                try {
-                    JSValue value = broadcasts.poll(100, TimeUnit.MILLISECONDS);
-                    if (value != null) {
-                        return value;
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return null;
-                }
-            }
-            return null;
-        }
-
-        private void awaitClosed() {
-            try {
-                thread.join(1000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        @Override
-        public void close() {
-            closed = true;
-            thread.interrupt();
-        }
-
-        private void markLeaving() {
-            closed = true;
-        }
-
-        private void run() {
-            List<JSRuntime> agentRealmRuntimes = new ArrayList<>();
-            try (JSRuntime agentRuntime = new JSRuntime();
-                 JSContext agentContext = agentRuntime.createContext()) {
-                runtime = agentRuntime;
-                install262Object(agentContext, agentRealmRuntimes, host, this);
-                agentContext.eval(script, "<test262-agent>", false);
-                long deadline = System.currentTimeMillis() + Math.max(asyncTimeoutMs, 1000);
-                while (!closed && System.currentTimeMillis() <= deadline) {
-                    synchronized (agentRuntime) {
-                        agentRuntime.runJobs();
-                        agentContext.processMicrotasks();
-                    }
-                    try {
-                        Thread.sleep(1);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
-                synchronized (agentRuntime) {
-                    agentRuntime.runJobs();
-                    agentContext.processMicrotasks();
-                }
-            } catch (Exception e) {
-                String message = e.getMessage();
-                if (message == null || message.isEmpty()) {
-                    message = e.getClass().getSimpleName();
-                }
-                host.reports.offer("Agent error: " + message);
-            } finally {
-                runtime = null;
-                for (JSRuntime realmRuntime : agentRealmRuntimes) {
-                    realmRuntime.close();
-                }
-            }
-        }
-
-        private void sendBroadcast(JSValue sharedValue) {
-            broadcasts.offer(sharedValue);
-        }
-
-        private void start() {
-            thread.start();
-        }
-    }
-
-    private final class Test262AgentHost implements AutoCloseable {
-        private final CopyOnWriteArrayList<Test262Agent> agents;
-        private final BlockingQueue<String> reports;
-        private final AtomicLong timerIds;
-
-        private Test262AgentHost() {
-            agents = new CopyOnWriteArrayList<>();
-            reports = new LinkedBlockingQueue<>();
-            timerIds = new AtomicLong(1);
-        }
-
-        @Override
-        public void close() {
-            for (Test262Agent agent : agents) {
-                agent.close();
-            }
-            for (Test262Agent agent : agents) {
-                agent.awaitClosed();
-            }
-            agents.clear();
-            reports.clear();
-        }
-
-        private JSNativeFunction createAgentFunction(
-                JSContext context,
-                String name,
-                int length,
-                JSNativeFunction.NativeCallback callback
-        ) {
-            JSNativeFunction function = new JSNativeFunction(name, length, callback);
-            context.transferPrototype(function, JSFunction.NAME);
-            return function;
-        }
-
-        private JSObject createAgentObject(JSContext context, List<JSRuntime> realmRuntimes, Test262Agent agent) {
-            JSObject agentObject = context.createJSObject();
-            agentObject.set("sleep", createAgentFunction(context, "sleep", 1,
-                    (ctx, thisArg, args) -> {
-                        long milliseconds = 0;
-                        if (args.length > 0) {
-                            milliseconds = (long) JSTypeConversions.toInteger(ctx, args[0]);
-                        }
-                        if (milliseconds > 0) {
-                            try {
-                                Thread.sleep(milliseconds);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                            }
-                        }
-                        return JSUndefined.INSTANCE;
-                    }));
-            agentObject.set("monotonicNow", createAgentFunction(context, "monotonicNow", 0,
-                    (ctx, thisArg, args) -> JSNumber.of(System.nanoTime() / 1_000_000.0)));
-
-            if (agent == null) {
-                agentObject.set("start", createAgentFunction(context, "start", 1,
-                        (ctx, thisArg, args) -> {
-                            String script = args.length > 0
-                                    ? JSTypeConversions.toString(ctx, args[0]).value()
-                                    : "";
-                            Test262Agent newAgent = new Test262Agent(script, realmRuntimes, this);
-                            agents.add(newAgent);
-                            newAgent.start();
-                            return JSUndefined.INSTANCE;
-                        }));
-                agentObject.set("broadcast", createAgentFunction(context, "broadcast", 1,
-                        (ctx, thisArg, args) -> {
-                            JSValue sharedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                            for (Test262Agent item : agents) {
-                                item.sendBroadcast(sharedValue);
-                            }
-                            return JSUndefined.INSTANCE;
-                        }));
-                agentObject.set("getReport", createAgentFunction(context, "getReport", 0,
-                        (ctx, thisArg, args) -> {
-                            String report = reports.poll();
-                            return report == null ? JSNull.INSTANCE : new JSString(report);
-                        }));
-            } else {
-                agentObject.set("receiveBroadcast", createAgentFunction(context, "receiveBroadcast", 1,
-                        (ctx, thisArg, args) -> {
-                            if (args.length < 1 || !(args[0] instanceof JSFunction callback)) {
-                                return ctx.throwTypeError("$262.agent.receiveBroadcast callback must be a function");
-                            }
-                            JSValue broadcastValue = agent.awaitBroadcast();
-                            if (broadcastValue == null) {
-                                return JSUndefined.INSTANCE;
-                            }
-                            JSValue result = callback.call(ctx, JSUndefined.INSTANCE, new JSValue[]{broadcastValue});
-                            if (agent.runtime != null) {
-                                synchronized (agent.runtime) {
-                                    agent.runtime.runJobs();
-                                }
-                            }
-                            return result;
-                        }));
-                agentObject.set("report", createAgentFunction(context, "report", 1,
-                        (ctx, thisArg, args) -> {
-                            String report = args.length > 0
-                                    ? JSTypeConversions.toString(ctx, args[0]).value()
-                                    : "undefined";
-                            reports.offer(report);
-                            return JSUndefined.INSTANCE;
-                        }));
-                agentObject.set("leaving", createAgentFunction(context, "leaving", 0,
-                        (ctx, thisArg, args) -> {
-                            agent.markLeaving();
-                            return JSUndefined.INSTANCE;
-                        }));
-                agentObject.set("getReport", createAgentFunction(context, "getReport", 0,
-                        (ctx, thisArg, args) -> JSNull.INSTANCE));
-                agentObject.set("start", createAgentFunction(context, "start", 1,
-                        (ctx, thisArg, args) -> ctx.throwTypeError("$262.agent.start is only available on the main agent")));
-                agentObject.set("broadcast", createAgentFunction(context, "broadcast", 1,
-                        (ctx, thisArg, args) -> ctx.throwTypeError("$262.agent.broadcast is only available on the main agent")));
-            }
-            return agentObject;
-        }
-
-        private JSNativeFunction createSetTimeoutFunction(JSContext context) {
-            return createAgentFunction(context, "setTimeout", 2,
-                    (ctx, thisArg, args) -> {
-                        if (args.length < 1 || !(args[0] instanceof JSFunction callback)) {
-                            return ctx.throwTypeError("setTimeout callback must be a function");
-                        }
-                        long delayMillis = 0;
-                        if (args.length > 1) {
-                            delayMillis = Math.max(0L, (long) JSTypeConversions.toInteger(ctx, args[1]));
-                            if (ctx.hasPendingException()) {
-                                return JSUndefined.INSTANCE;
-                            }
-                        }
-                        final long scheduledDelayMillis = delayMillis;
-                        JSRuntime runtime = ctx.getRuntime();
-                        long timerId = timerIds.getAndIncrement();
-                        Thread timerThread = new Thread(() -> {
-                            try {
-                                if (scheduledDelayMillis > 0) {
-                                    Thread.sleep(scheduledDelayMillis);
-                                }
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                return;
-                            }
-                            // Only enqueue the callback as a microtask.
-                            // Do NOT call runJobs()/processMicrotasks() here
-                            // because eval() may still be running on the main thread.
-                            // The main event loop will process the microtask.
-                            ctx.enqueueMicrotask(() -> {
-                                callback.call(ctx, JSUndefined.INSTANCE, new JSValue[0]);
-                                if (ctx.hasPendingException()) {
-                                    ctx.clearAllPendingExceptions();
-                                }
-                            });
-                        }, "qjs4j-test262-setTimeout");
-                        timerThread.setDaemon(true);
-                        timerThread.start();
-                        return JSNumber.of(timerId);
-                    });
-        }
-
-        private void installAtomicsHelperOverrides(JSContext context) {
-            // Keep helper-provided getReportAsync()/tryYield()/trySleep(). The runtime now supports
-            // named function expressions used in atomicsHelper.js, so no post-load override is needed.
-        }
-    }
 }
