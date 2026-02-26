@@ -769,6 +769,240 @@ public final class UnicodePropertyResolver {
     }
 
     /**
+     * Result of resolving a Unicode "property of strings" (sequence property).
+     * Used for RegExp with the {@code v} flag.
+     *
+     * @param codePointRanges single code point ranges as inclusive start/end pairs
+     * @param sequences       multi-codepoint sequences (each int[] is one sequence)
+     */
+    public record SequencePropertyResult(int[] codePointRanges, List<int[]> sequences) {
+    }
+
+    /**
+     * Resolve a Unicode "property of strings" (sequence property) by name.
+     * These are used in RegExp with the {@code v} flag for matching multi-codepoint sequences.
+     * <p>
+     * Known properties: Basic_Emoji, Emoji_Keycap_Sequence, RGI_Emoji_Modifier_Sequence,
+     * RGI_Emoji_Flag_Sequence, RGI_Emoji_Tag_Sequence, RGI_Emoji_ZWJ_Sequence, RGI_Emoji.
+     * <p>
+     * Ported from QuickJS {@code unicode_sequence_prop1()} in libunicode.c.
+     *
+     * @param name the sequence property name
+     * @return the result, or null if the name is not a known sequence property
+     */
+    public static SequencePropertyResult resolveSequenceProperty(String name) {
+        return switch (name) {
+            case "Basic_Emoji" -> resolveBasicEmoji();
+            case "Emoji_Keycap_Sequence" -> resolveEmojiKeycapSequence();
+            case "RGI_Emoji_Modifier_Sequence" -> resolveRgiEmojiModifierSequence();
+            case "RGI_Emoji_Flag_Sequence" -> resolveRgiEmojiFlagSequence();
+            case "RGI_Emoji_Tag_Sequence" -> resolveRgiEmojiTagSequence();
+            case "RGI_Emoji_ZWJ_Sequence" -> resolveRgiEmojiZwjSequence();
+            case "RGI_Emoji" -> resolveRgiEmoji();
+            default -> null;
+        };
+    }
+
+    private static SequencePropertyResult resolveBasicEmoji() {
+        // Basic_Emoji1: single code points (length-1 sequences -> codePointRanges)
+        int[] ranges1 = decodeBinaryProperty(PROP_BASIC_EMOJI1);
+
+        // Basic_Emoji2: each code point c becomes sequence [c, 0xFE0F]
+        int[] ranges2 = decodeBinaryProperty(PROP_BASIC_EMOJI2);
+        List<int[]> sequences = new ArrayList<>();
+        for (int i = 0; i < ranges2.length; i += 2) {
+            for (int c = ranges2[i]; c <= ranges2[i + 1]; c++) {
+                sequences.add(new int[]{c, 0xFE0F});
+            }
+        }
+
+        return new SequencePropertyResult(ranges1, sequences);
+    }
+
+    private static SequencePropertyResult resolveEmojiKeycapSequence() {
+        // Each code point c becomes sequence [c, 0xFE0F, 0x20E3]
+        int[] ranges = decodeBinaryProperty(PROP_EMOJI_KEYCAP_SEQUENCE);
+        List<int[]> sequences = new ArrayList<>();
+        for (int i = 0; i < ranges.length; i += 2) {
+            for (int c = ranges[i]; c <= ranges[i + 1]; c++) {
+                sequences.add(new int[]{c, 0xFE0F, 0x20E3});
+            }
+        }
+        return new SequencePropertyResult(new int[0], sequences);
+    }
+
+    private static SequencePropertyResult resolveRgiEmojiModifierSequence() {
+        // Each code point c paired with each of 5 skin tone modifiers
+        int[] ranges = decodeBinaryProperty(PROP_EMOJI_MODIFIER_BASE);
+        List<int[]> sequences = new ArrayList<>();
+        for (int i = 0; i < ranges.length; i += 2) {
+            for (int c = ranges[i]; c <= ranges[i + 1]; c++) {
+                for (int j = 0; j < 5; j++) {
+                    sequences.add(new int[]{c, 0x1F3FB + j});
+                }
+            }
+        }
+        return new SequencePropertyResult(new int[0], sequences);
+    }
+
+    private static SequencePropertyResult resolveRgiEmojiFlagSequence() {
+        // Each code point c encodes a pair: c0=c/26, c1=c%26 -> [0x1F1E6+c0, 0x1F1E6+c1]
+        int[] ranges = decodeBinaryProperty(PROP_RGI_EMOJI_FLAG_SEQUENCE);
+        List<int[]> sequences = new ArrayList<>();
+        for (int i = 0; i < ranges.length; i += 2) {
+            for (int c = ranges[i]; c <= ranges[i + 1]; c++) {
+                int c0 = c / 26;
+                int c1 = c % 26;
+                sequences.add(new int[]{0x1F1E6 + c0, 0x1F1E6 + c1});
+            }
+        }
+        return new SequencePropertyResult(new int[0], sequences);
+    }
+
+    private static SequencePropertyResult resolveRgiEmojiTagSequence() {
+        // Each null-terminated string in the byte array becomes:
+        // [0x1F3F4, byte1+0xE0000, byte2+0xE0000, ..., 0xE007F]
+        byte[] data = UnicodePropertyTablesData.RGI_EMOJI_TAG_SEQUENCE;
+        List<int[]> sequences = new ArrayList<>();
+        int start = 0;
+        for (int i = 0; i <= data.length; i++) {
+            if (i == data.length || data[i] == 0) {
+                if (i > start) {
+                    int[] seq = new int[1 + (i - start) + 1]; // 0x1F3F4 + tag bytes + 0xE007F
+                    seq[0] = 0x1F3F4;
+                    for (int j = start; j < i; j++) {
+                        seq[1 + (j - start)] = (data[j] & 0xFF) + 0xE0000;
+                    }
+                    seq[seq.length - 1] = 0xE007F;
+                    sequences.add(seq);
+                }
+                start = i + 1;
+            }
+        }
+        return new SequencePropertyResult(new int[0], sequences);
+    }
+
+    /**
+     * Decode RGI Emoji ZWJ Sequences from the compact byte encoding.
+     * Ported directly from QuickJS {@code unicode_sequence_prop1} case
+     * {@code UNICODE_SEQUENCE_PROP_RGI_Emoji_ZWJ_Sequence} in libunicode.c.
+     * <p>
+     * Uses a flat seq[] array with placeholder slots, exactly matching QuickJS.
+     */
+    private static SequencePropertyResult resolveRgiEmojiZwjSequence() {
+        byte[] tab = UnicodePropertyTablesData.RGI_EMOJI_ZWJ_SEQUENCE;
+        List<int[]> sequences = new ArrayList<>();
+        int i = 0;
+
+        while (i < tab.length) {
+            int len = tab[i++] & 0xFF;
+            int[] seq = new int[len * 4]; // max possible size: code + modifier + FE0F + ZWJ per entry
+            int k = 0;
+            int mod = 0;
+            int modCount = 0;
+            int[] modPos = new int[2];
+            int hcPos = -1;
+
+            for (int j = 0; j < len; j++) {
+                int codeLo = tab[i++] & 0xFF;
+                int codeHi = tab[i++] & 0xFF;
+                int codeVal = codeLo | (codeHi << 8);
+
+                boolean presFlag = (codeVal >> 15) != 0;
+                int mod1 = (codeVal >> 13) & 3;
+                int code = codeVal & 0x1FFF;
+
+                int c;
+                if (code < 0x1000) {
+                    c = code + 0x2000;
+                } else {
+                    c = 0x1F000 + (code - 0x1000);
+                }
+
+                if (c == 0x1F9B0) {
+                    hcPos = k;
+                }
+                seq[k++] = c;
+                if (mod1 != 0) {
+                    mod = mod1;
+                    modPos[modCount++] = k;
+                    seq[k++] = 0; // placeholder, filled later
+                }
+                if (presFlag) {
+                    seq[k++] = 0xFE0F;
+                }
+                if (j < len - 1) {
+                    seq[k++] = 0x200D;
+                }
+            }
+
+            // Generate all variants
+            int numMod;
+            switch (mod) {
+                case 1 -> numMod = 5;
+                case 2 -> numMod = 25;
+                case 3 -> numMod = 20;
+                default -> numMod = 1;
+            }
+            int numHc = (hcPos >= 0) ? 4 : 1;
+
+            for (int hcIdx = 0; hcIdx < numHc; hcIdx++) {
+                for (int modIdx = 0; modIdx < numMod; modIdx++) {
+                    if (hcPos >= 0) {
+                        seq[hcPos] = 0x1F9B0 + hcIdx;
+                    }
+                    switch (mod) {
+                        case 1 -> seq[modPos[0]] = 0x1F3FB + modIdx;
+                        case 2, 3 -> {
+                            int i0 = modIdx / 5;
+                            int i1 = modIdx % 5;
+                            if (mod == 3 && i0 >= i1) {
+                                i0++;
+                            }
+                            seq[modPos[0]] = 0x1F3FB + i0;
+                            seq[modPos[1]] = 0x1F3FB + i1;
+                        }
+                    }
+                    int[] result = new int[k];
+                    System.arraycopy(seq, 0, result, 0, k);
+                    sequences.add(result);
+                }
+            }
+        }
+
+        return new SequencePropertyResult(new int[0], sequences);
+    }
+
+    private static SequencePropertyResult resolveRgiEmoji() {
+        // Union of all sequence properties
+        SequencePropertyResult basic = resolveBasicEmoji();
+        SequencePropertyResult keycap = resolveEmojiKeycapSequence();
+        SequencePropertyResult modifier = resolveRgiEmojiModifierSequence();
+        SequencePropertyResult flag = resolveRgiEmojiFlagSequence();
+        SequencePropertyResult tag = resolveRgiEmojiTagSequence();
+        SequencePropertyResult zwj = resolveRgiEmojiZwjSequence();
+
+        // Merge code point ranges
+        int[] mergedRanges = basic.codePointRanges();
+        mergedRanges = unionRanges(mergedRanges, keycap.codePointRanges());
+        mergedRanges = unionRanges(mergedRanges, modifier.codePointRanges());
+        mergedRanges = unionRanges(mergedRanges, flag.codePointRanges());
+        mergedRanges = unionRanges(mergedRanges, tag.codePointRanges());
+        mergedRanges = unionRanges(mergedRanges, zwj.codePointRanges());
+
+        // Merge sequences
+        List<int[]> allSequences = new ArrayList<>();
+        allSequences.addAll(basic.sequences());
+        allSequences.addAll(keycap.sequences());
+        allSequences.addAll(modifier.sequences());
+        allSequences.addAll(flag.sequences());
+        allSequences.addAll(tag.sequences());
+        allSequences.addAll(zwj.sequences());
+
+        return new SequencePropertyResult(mergedRanges, allSequences);
+    }
+
+    /**
      * Sort ranges by start value and merge overlapping/adjacent ranges.
      */
     private static int[] sortAndMergeRanges(int[] ranges) {

@@ -515,14 +515,7 @@ public final class RegExpCompiler {
                     compileLiteralChar(context, ch, isBackwardDirection);
                     break;
                 }
-                int[] propertyRanges = parseUnicodePropertyEscape(context);
-                if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-                }
-                emitRanges(context, propertyRanges, ch == 'P');
-                if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-                }
+                compileUnicodePropertyEscape(context, ch == 'P', isBackwardDirection);
             }
             case '0' -> {
                 // \0 escape: null character or legacy octal escape
@@ -803,6 +796,147 @@ public final class RegExpCompiler {
         compileLiteralChar(context, ch);
         if (isBackwardDirection) {
             context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+        }
+    }
+
+    /**
+     * Compile a \p{} or \P{} Unicode property escape.
+     * Handles both regular properties and sequence properties (v flag).
+     * Based on QuickJS parse_unicode_property + re_emit_string_list.
+     */
+    private void compileUnicodePropertyEscape(CompileContext context, boolean isInverted, boolean isBackwardDirection) {
+        // Parse the property name
+        int savedPos = context.pos;
+        int[] propertyRanges = null;
+        try {
+            propertyRanges = parseUnicodePropertyEscape(context);
+        } catch (RegExpSyntaxException e) {
+            // If we're in unicode sets mode and not inverted, try sequence properties
+            if (context.isUnicodeSetsMode() && !isInverted) {
+                context.pos = savedPos;
+                // Re-parse just the property name without resolving
+                if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '{') {
+                    throw e;
+                }
+                context.pos++;
+                int nameStart = context.pos;
+                while (context.pos < context.codePoints.length && isUnicodePropertyChar(context.codePoints[context.pos])) {
+                    context.pos++;
+                }
+                String propertyName = new String(context.codePoints, nameStart, context.pos - nameStart);
+                if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '}') {
+                    throw e;
+                }
+                context.pos++;
+
+                UnicodePropertyResolver.SequencePropertyResult seqResult =
+                        UnicodePropertyResolver.resolveSequenceProperty(propertyName);
+                if (seqResult == null) {
+                    throw e;
+                }
+
+                emitStringList(context, seqResult);
+                return;
+            }
+            throw e;
+        }
+
+        // Regular property resolved successfully
+        if (isBackwardDirection) {
+            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+        }
+        emitRanges(context, propertyRanges, isInverted);
+        if (isBackwardDirection) {
+            context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+        }
+    }
+
+    /**
+     * Emit bytecode for a string list (union of single code point ranges and multi-codepoint sequences).
+     * Ported from QuickJS re_emit_string_list in libregexp.c.
+     * <p>
+     * Emits alternatives: try longest sequences first, then shorter ones, then code point ranges.
+     * Uses SPLIT_NEXT_FIRST/GOTO to create a chain of alternatives.
+     */
+    private void emitStringList(CompileContext context, UnicodePropertyResolver.SequencePropertyResult stringList) {
+        List<int[]> sequences = stringList.sequences();
+        int[] ranges = stringList.codePointRanges();
+
+        if (sequences.isEmpty()) {
+            // Simple case: only code point ranges
+            emitRanges(context, ranges, false);
+            return;
+        }
+
+        // Sort sequences by length descending (longest first)
+        List<int[]> sortedSequences = new ArrayList<>(sequences);
+        sortedSequences.sort((a, b) -> Integer.compare(b.length, a.length));
+
+        // Check for empty string and filter it out
+        boolean hasEmptyString = false;
+        List<int[]> nonEmptySequences = new ArrayList<>();
+        for (int[] seq : sortedSequences) {
+            if (seq.length == 0) {
+                hasEmptyString = true;
+            } else {
+                nonEmptySequences.add(seq);
+            }
+        }
+
+        boolean hasRanges = ranges.length > 0;
+        List<Integer> gotoPositions = new ArrayList<>();
+
+        // Emit each sequence as an alternative
+        for (int i = 0; i < nonEmptySequences.size(); i++) {
+            int[] seq = nonEmptySequences.get(i);
+            boolean isLast = !hasEmptyString && !hasRanges && i == nonEmptySequences.size() - 1;
+
+            int splitPos = -1;
+            if (!isLast) {
+                splitPos = context.buffer.size();
+                context.buffer.appendU8(RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
+                context.buffer.appendU32(0); // placeholder
+            }
+
+            // Emit each character in the sequence
+            for (int codePoint : seq) {
+                compileLiteralChar(context, codePoint);
+            }
+
+            if (!isLast) {
+                gotoPositions.add(context.buffer.size());
+                context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
+                context.buffer.appendU32(0); // placeholder
+
+                // Patch SPLIT offset: jump to after this GOTO
+                int splitOffset = context.buffer.size() - (splitPos + 5);
+                context.buffer.setU32(splitPos + 1, splitOffset);
+            }
+        }
+
+        // Emit char ranges if present
+        if (hasRanges) {
+            boolean isLast = !hasEmptyString;
+            int splitPos = -1;
+            if (!isLast) {
+                splitPos = context.buffer.size();
+                context.buffer.appendU8(RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
+                context.buffer.appendU32(0); // placeholder
+            }
+
+            emitRanges(context, ranges, false);
+
+            if (!isLast) {
+                // Patch SPLIT offset
+                int splitOffset = context.buffer.size() - (splitPos + 5);
+                context.buffer.setU32(splitPos + 1, splitOffset);
+            }
+        }
+
+        // Patch all GOTO targets to point to current position (end of all alternatives)
+        for (int gotoPos : gotoPositions) {
+            int gotoOffset = context.buffer.size() - (gotoPos + 5);
+            context.buffer.setU32(gotoPos + 1, gotoOffset);
         }
     }
 
@@ -1831,11 +1965,15 @@ public final class RegExpCompiler {
         }
 
         boolean isUnicode() {
-            return (flags & RegExpBytecode.FLAG_UNICODE) != 0;
+            return (flags & (RegExpBytecode.FLAG_UNICODE | RegExpBytecode.FLAG_UNICODE_SETS)) != 0;
         }
 
         boolean isUnicodeMode() {
             return (flags & (RegExpBytecode.FLAG_UNICODE | RegExpBytecode.FLAG_UNICODE_SETS)) != 0;
+        }
+
+        boolean isUnicodeSetsMode() {
+            return (flags & RegExpBytecode.FLAG_UNICODE_SETS) != 0;
         }
     }
 

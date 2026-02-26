@@ -60,7 +60,7 @@ public final class RegExpEngine {
                 bytecode.isIgnoreCase(),
                 bytecode.isMultiline(),
                 bytecode.isDotAll(),
-                bytecode.isUnicode()
+                bytecode.isUnicode() || bytecode.hasUnicodeSets()
         );
 
         // Try matching at each position
