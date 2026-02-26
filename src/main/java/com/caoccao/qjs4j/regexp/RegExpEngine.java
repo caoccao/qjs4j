@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.regexp;
 
 import java.util.Arrays;
-import java.util.Stack;
 
 /**
  * Regular expression bytecode executor.
@@ -80,34 +79,27 @@ public final class RegExpEngine {
      * Execute the bytecode starting from the given instruction pointer.
      */
     private boolean execute(ExecutionContext executionContext) {
-        // Backtracking stack: stores (pc, pos, captures snapshot)
-        Stack<BacktrackPoint> backtrackStack = new Stack<>();
         byte[] bc = executionContext.bytecode;
         int pc = 0;
+        executionContext.backtrackTop = 0;
 
         while (true) {
             if (pc >= bc.length) {
-                // Ran off the end without matching - try backtracking
-                if (!backtrackStack.isEmpty()) {
-                    BacktrackPoint bp = backtrackStack.pop();
-                    pc = bp.pc;
-                    executionContext.restoreState(bp);
+                if (executionContext.hasBacktrack()) {
+                    pc = executionContext.popBacktrack();
                     continue;
                 }
                 return false;
             }
 
-            int opcode = bc[pc] & 0xFF;
-            RegExpOpcode op = RegExpOpcode.fromCode(opcode);
+            RegExpOpcode op = RegExpOpcode.fromCode(bc[pc] & 0xFF);
 
             switch (op) {
                 case CHAR -> {
                     int ch = readU16(bc, pc + 1);
                     if (!executionContext.matchChar(ch)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -118,10 +110,8 @@ public final class RegExpEngine {
                 case CHAR_I -> {
                     int ch = readU16(bc, pc + 1);
                     if (!executionContext.matchCharIgnoreCase(ch)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -132,10 +122,8 @@ public final class RegExpEngine {
                 case CHAR32 -> {
                     int ch = readU32(bc, pc + 1);
                     if (!executionContext.matchChar(ch)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -146,10 +134,8 @@ public final class RegExpEngine {
                 case CHAR32_I -> {
                     int ch = readU32(bc, pc + 1);
                     if (!executionContext.matchCharIgnoreCase(ch)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -159,10 +145,8 @@ public final class RegExpEngine {
 
                 case DOT -> {
                     if (!executionContext.matchDot()) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -172,10 +156,8 @@ public final class RegExpEngine {
 
                 case ANY -> {
                     if (!executionContext.matchAny()) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -185,10 +167,8 @@ public final class RegExpEngine {
 
                 case LINE_START, LINE_START_M -> {
                     if (!executionContext.matchLineStart(op == RegExpOpcode.LINE_START_M)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -198,10 +178,8 @@ public final class RegExpEngine {
 
                 case LINE_END, LINE_END_M -> {
                     if (!executionContext.matchLineEnd(op == RegExpOpcode.LINE_END_M)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -210,20 +188,16 @@ public final class RegExpEngine {
                 }
 
                 case MATCH -> {
-                    // Successful match
                     return true;
                 }
 
                 case LOOKAHEAD -> {
-                    // Positive lookahead: execute sub-pattern without consuming input
                     int len = readU32(bc, pc + 1);
                     byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
                     ExecutionContext assertionContext = executeLookaheadAssertion(executionContext, assertionBytecode);
                     if (assertionContext == null) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -233,16 +207,12 @@ public final class RegExpEngine {
                 }
 
                 case NEGATIVE_LOOKAHEAD -> {
-                    // Negative lookahead: execute sub-pattern, succeed if it fails
                     int len = readU32(bc, pc + 1);
                     byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
                     ExecutionContext assertionContext = executeLookaheadAssertion(executionContext, assertionBytecode);
                     if (assertionContext != null) {
-                        // Negative lookahead fails if pattern matches
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -251,15 +221,12 @@ public final class RegExpEngine {
                 }
 
                 case LOOKBEHIND -> {
-                    // Positive lookbehind: match sub-pattern ending at current position
                     int len = readU32(bc, pc + 1);
                     byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
                     ExecutionContext assertionContext = executeLookbehindAssertion(executionContext, assertionBytecode);
                     if (assertionContext == null) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -269,15 +236,12 @@ public final class RegExpEngine {
                 }
 
                 case NEGATIVE_LOOKBEHIND -> {
-                    // Negative lookbehind: succeed only when sub-pattern does not end at current position
                     int len = readU32(bc, pc + 1);
                     byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
                     ExecutionContext assertionContext = executeLookbehindAssertion(executionContext, assertionBytecode);
                     if (assertionContext != null) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -285,8 +249,8 @@ public final class RegExpEngine {
                     pc += 5 + len;
                 }
 
-                case LOOKAHEAD_MATCH, NEGATIVE_LOOKAHEAD_MATCH, LOOKBEHIND_MATCH, NEGATIVE_LOOKBEHIND_MATCH -> {
-                    // End of assertion sub-pattern
+                case LOOKAHEAD_MATCH, NEGATIVE_LOOKAHEAD_MATCH, LOOKBEHIND_MATCH,
+                     NEGATIVE_LOOKBEHIND_MATCH -> {
                     return true;
                 }
 
@@ -305,10 +269,8 @@ public final class RegExpEngine {
                 case RANGE -> {
                     int len = readU16(bc, pc + 1);
                     if (!executionContext.matchRange(bc, pc + 3, len, false)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -319,10 +281,8 @@ public final class RegExpEngine {
                 case RANGE_I -> {
                     int len = readU16(bc, pc + 1);
                     if (!executionContext.matchRange(bc, pc + 3, len, true)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -332,10 +292,8 @@ public final class RegExpEngine {
 
                 case SPACE -> {
                     if (!executionContext.matchSpace()) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -345,10 +303,8 @@ public final class RegExpEngine {
 
                 case NOT_SPACE -> {
                     if (!executionContext.matchNotSpace()) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -359,10 +315,8 @@ public final class RegExpEngine {
                 case NOT_RANGE -> {
                     int len = readU16(bc, pc + 1);
                     if (!executionContext.matchNotRange(bc, pc + 3, len, false)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -373,10 +327,8 @@ public final class RegExpEngine {
                 case NOT_RANGE_I -> {
                     int len = readU16(bc, pc + 1);
                     if (!executionContext.matchNotRange(bc, pc + 3, len, true)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -387,10 +339,8 @@ public final class RegExpEngine {
                 case BACK_REFERENCE -> {
                     int groupNum = bc[pc + 1] & 0xFF;
                     if (!executionContext.matchBackReference(groupNum, false)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -401,10 +351,8 @@ public final class RegExpEngine {
                 case BACK_REFERENCE_I -> {
                     int groupNum = bc[pc + 1] & 0xFF;
                     if (!executionContext.matchBackReference(groupNum, true)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -415,10 +363,8 @@ public final class RegExpEngine {
                 case BACKWARD_BACK_REFERENCE -> {
                     int groupNum = bc[pc + 1] & 0xFF;
                     if (!executionContext.matchBackwardBackReference(groupNum, false)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -429,10 +375,8 @@ public final class RegExpEngine {
                 case BACKWARD_BACK_REFERENCE_I -> {
                     int groupNum = bc[pc + 1] & 0xFF;
                     if (!executionContext.matchBackwardBackReference(groupNum, true)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -447,10 +391,8 @@ public final class RegExpEngine {
 
                 case WORD_BOUNDARY, WORD_BOUNDARY_I -> {
                     if (!executionContext.matchWordBoundary(op == RegExpOpcode.WORD_BOUNDARY_I)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -460,10 +402,8 @@ public final class RegExpEngine {
 
                 case NOT_WORD_BOUNDARY, NOT_WORD_BOUNDARY_I -> {
                     if (!executionContext.matchNotWordBoundary(op == RegExpOpcode.NOT_WORD_BOUNDARY_I)) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -472,33 +412,18 @@ public final class RegExpEngine {
                 }
 
                 case SPLIT_GOTO_FIRST -> {
-                    // Try goto path first, save next path for backtracking
                     int offset = readU32(bc, pc + 1);
-                    int pcNext = pc + 5; // Alternative: continue to next instruction
-                    int pcGoto = pc + 5 + offset; // First choice: jump
-
-                    // Save the next path for backtracking
-                    backtrackStack.push(executionContext.createBacktrackPoint(pcNext));
-
-                    // Take the goto path
-                    pc = pcGoto;
+                    executionContext.pushBacktrack(pc + 5);
+                    pc = pc + 5 + offset;
                 }
 
                 case SPLIT_NEXT_FIRST -> {
-                    // Try next path first, save goto path for backtracking
                     int offset = readU32(bc, pc + 1);
-                    int pcNext = pc + 5; // First choice: continue to next instruction
-                    int pcGoto = pc + 5 + offset; // Alternative: jump
-
-                    // Save the goto path for backtracking
-                    backtrackStack.push(executionContext.createBacktrackPoint(pcGoto));
-
-                    // Take the next path
-                    pc = pcNext;
+                    executionContext.pushBacktrack(pc + 5 + offset);
+                    pc += 5;
                 }
 
                 case SET_CHAR_POS -> {
-                    // Save current character position to register (QuickJS REOP_set_char_pos)
                     int regIdx = bc[pc + 1] & 0xFF;
                     if (regIdx < executionContext.registers.length) {
                         executionContext.registers[regIdx] = executionContext.pos;
@@ -507,16 +432,11 @@ public final class RegExpEngine {
                 }
 
                 case CHECK_ADVANCE -> {
-                    // Check that position has advanced from saved position (QuickJS REOP_check_advance)
-                    // If position hasn't advanced, backtrack (prevents infinite loops on zero-width atoms)
                     int regIdx = bc[pc + 1] & 0xFF;
                     if (regIdx < executionContext.registers.length
                             && executionContext.registers[regIdx] == executionContext.pos) {
-                        // No advance - fail this path
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -526,10 +446,8 @@ public final class RegExpEngine {
 
                 case PREV -> {
                     if (!executionContext.movePrevious()) {
-                        if (!backtrackStack.isEmpty()) {
-                            BacktrackPoint bp = backtrackStack.pop();
-                            pc = bp.pc;
-                            executionContext.restoreState(bp);
+                        if (executionContext.hasBacktrack()) {
+                            pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
@@ -538,7 +456,6 @@ public final class RegExpEngine {
                 }
 
                 case SAVE_RESET -> {
-                    // Reset capture groups in range [start, end] to -1
                     int startCapture = bc[pc + 1] & 0xFF;
                     int endCapture = bc[pc + 2] & 0xFF;
                     for (int i = startCapture; i <= endCapture && i < executionContext.captureCount; i++) {
@@ -549,11 +466,8 @@ public final class RegExpEngine {
                 }
 
                 default -> {
-                    // Unsupported opcode - try backtracking
-                    if (!backtrackStack.isEmpty()) {
-                        BacktrackPoint bp = backtrackStack.pop();
-                        pc = bp.pc;
-                        executionContext.restoreState(bp);
+                    if (executionContext.hasBacktrack()) {
+                        pc = executionContext.popBacktrack();
                         continue;
                     }
                     return false;
@@ -616,27 +530,11 @@ public final class RegExpEngine {
     }
 
     /**
-     * Represents a point in execution that can be backtracked to.
-     *
-     * @param pc            Program counter (instruction pointer)
-     * @param pos           Position in input string
-     * @param captureStarts Copy of capture group start positions
-     * @param captureEnds   Copy of capture group end positions
-     */
-    private record BacktrackPoint(
-            int pc,
-            int pos,
-            int[] captureStarts,
-            int[] captureEnds,
-            int[] registers
-    ) {
-    }
-
-    /**
      * Execution context for a single match attempt.
      */
     private static class ExecutionContext {
         static final int MAX_REGISTERS = 16;
+        private static final int INITIAL_BACKTRACK_CAPACITY = 64;
         final byte[] bytecode;
         final int captureCount;
         final int[] codePoints;
@@ -647,13 +545,24 @@ public final class RegExpEngine {
         final boolean multiline;
         final int[] registers;  // Registers for loop counters and position tracking (QuickJS capture[2*captureCount+...])
         final boolean unicode;
+        // Flat backtrack stack: each entry is [pc, pos, captureStarts..., captureEnds..., registers...]
+        // stored contiguously in a single int[]. Zero per-backtrack object/array allocation.
+        private final int backtrackEntrySize;
         int[] captureEnds;
         int[] captureStarts;
         int pos;  // Current position in code points
+        private int[] backtrackData;
+        int backtrackTop;
 
-        ExecutionContext(String input, byte[] bytecode, int captureCount,
-                         String[] groupNames,
-                         boolean ignoreCase, boolean multiline, boolean dotAll, boolean unicode) {
+        ExecutionContext(
+                String input,
+                byte[] bytecode,
+                int captureCount,
+                String[] groupNames,
+                boolean ignoreCase,
+                boolean multiline,
+                boolean dotAll,
+                boolean unicode) {
             this.input = input;
             this.bytecode = bytecode;
             this.codePoints = unicode ? input.codePoints().toArray() : input.chars().toArray();
@@ -668,6 +577,8 @@ public final class RegExpEngine {
             this.registers = new int[MAX_REGISTERS];
             Arrays.fill(captureStarts, -1);
             Arrays.fill(captureEnds, -1);
+            this.backtrackEntrySize = 2 + captureCount + captureCount + MAX_REGISTERS;
+            this.backtrackData = new int[backtrackEntrySize * INITIAL_BACKTRACK_CAPACITY];
         }
 
         void copyCapturesFrom(ExecutionContext other) {
@@ -675,8 +586,31 @@ public final class RegExpEngine {
             System.arraycopy(other.captureEnds, 0, captureEnds, 0, captureCount);
         }
 
-        BacktrackPoint createBacktrackPoint(int pc) {
-            return new BacktrackPoint(pc, pos, captureStarts.clone(), captureEnds.clone(), registers.clone());
+        boolean hasBacktrack() {
+            return backtrackTop > 0;
+        }
+
+        int popBacktrack() {
+            backtrackTop -= backtrackEntrySize;
+            int base = backtrackTop;
+            pos = backtrackData[base + 1];
+            System.arraycopy(backtrackData, base + 2, captureStarts, 0, captureCount);
+            System.arraycopy(backtrackData, base + 2 + captureCount, captureEnds, 0, captureCount);
+            System.arraycopy(backtrackData, base + 2 + captureCount + captureCount, registers, 0, MAX_REGISTERS);
+            return backtrackData[base];
+        }
+
+        void pushBacktrack(int pc) {
+            if (backtrackTop + backtrackEntrySize > backtrackData.length) {
+                backtrackData = Arrays.copyOf(backtrackData, backtrackData.length * 2);
+            }
+            int base = backtrackTop;
+            backtrackData[base] = pc;
+            backtrackData[base + 1] = pos;
+            System.arraycopy(captureStarts, 0, backtrackData, base + 2, captureCount);
+            System.arraycopy(captureEnds, 0, backtrackData, base + 2 + captureCount, captureCount);
+            System.arraycopy(registers, 0, backtrackData, base + 2 + captureCount + captureCount, MAX_REGISTERS);
+            backtrackTop += backtrackEntrySize;
         }
 
         MatchResult createResult(boolean matched) {
@@ -1090,13 +1024,6 @@ public final class RegExpEngine {
                 }
             }
             return groupNum;
-        }
-
-        void restoreState(BacktrackPoint bp) {
-            this.pos = bp.pos;
-            this.captureStarts = bp.captureStarts.clone();
-            this.captureEnds = bp.captureEnds.clone();
-            System.arraycopy(bp.registers, 0, this.registers, 0, bp.registers.length);
         }
 
         void saveEnd(int captureIndex) {
