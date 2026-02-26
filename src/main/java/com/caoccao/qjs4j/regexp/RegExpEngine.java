@@ -426,6 +426,7 @@ public final class RegExpEngine {
                 case SET_CHAR_POS -> {
                     int regIdx = bc[pc + 1] & 0xFF;
                     if (regIdx < executionContext.registers.length) {
+                        executionContext.stateDirty = true;
                         executionContext.registers[regIdx] = executionContext.pos;
                     }
                     pc += 2;
@@ -458,6 +459,7 @@ public final class RegExpEngine {
                 case SAVE_RESET -> {
                     int startCapture = bc[pc + 1] & 0xFF;
                     int endCapture = bc[pc + 2] & 0xFF;
+                    executionContext.stateDirty = true;
                     for (int i = startCapture; i <= endCapture && i < executionContext.captureCount; i++) {
                         executionContext.captureStarts[i] = -1;
                         executionContext.captureEnds[i] = -1;
@@ -543,16 +545,19 @@ public final class RegExpEngine {
         final boolean ignoreCase;
         final String input;
         final boolean multiline;
-        final int[] registers;  // Registers for loop counters and position tracking (QuickJS capture[2*captureCount+...])
         final boolean unicode;
-        // Flat backtrack stack: each entry is [pc, pos, captureStarts..., captureEnds..., registers...]
-        // stored contiguously in a single int[]. Zero per-backtrack object/array allocation.
+        // Flat backtrack stack: each entry is [pc, pos, captureStarts..., captureEnds..., registers..., stateOffset]
+        // stored contiguously in a single int[]. stateOffset points to the entry that holds the actual
+        // saved state — consecutive pushes with no state modifications share the same saved copy.
         private final int backtrackEntrySize;
+        private final int stateSize; // captureCount*2 + MAX_REGISTERS
+        int backtrackTop;
         int[] captureEnds;
         int[] captureStarts;
         int pos;  // Current position in code points
+        final int[] registers;  // Registers for loop counters and position tracking (QuickJS capture[2*captureCount+...])
         private int[] backtrackData;
-        int backtrackTop;
+        private boolean stateDirty;  // true if captures/registers modified since last state save
 
         ExecutionContext(
                 String input,
@@ -577,40 +582,16 @@ public final class RegExpEngine {
             this.registers = new int[MAX_REGISTERS];
             Arrays.fill(captureStarts, -1);
             Arrays.fill(captureEnds, -1);
-            this.backtrackEntrySize = 2 + captureCount + captureCount + MAX_REGISTERS;
+            this.stateSize = captureCount + captureCount + MAX_REGISTERS;
+            this.backtrackEntrySize = 2 + stateSize + 1; // pc, pos, state..., stateOffset
             this.backtrackData = new int[backtrackEntrySize * INITIAL_BACKTRACK_CAPACITY];
+            this.stateDirty = true;
         }
 
         void copyCapturesFrom(ExecutionContext other) {
+            stateDirty = true;
             System.arraycopy(other.captureStarts, 0, captureStarts, 0, captureCount);
             System.arraycopy(other.captureEnds, 0, captureEnds, 0, captureCount);
-        }
-
-        boolean hasBacktrack() {
-            return backtrackTop > 0;
-        }
-
-        int popBacktrack() {
-            backtrackTop -= backtrackEntrySize;
-            int base = backtrackTop;
-            pos = backtrackData[base + 1];
-            System.arraycopy(backtrackData, base + 2, captureStarts, 0, captureCount);
-            System.arraycopy(backtrackData, base + 2 + captureCount, captureEnds, 0, captureCount);
-            System.arraycopy(backtrackData, base + 2 + captureCount + captureCount, registers, 0, MAX_REGISTERS);
-            return backtrackData[base];
-        }
-
-        void pushBacktrack(int pc) {
-            if (backtrackTop + backtrackEntrySize > backtrackData.length) {
-                backtrackData = Arrays.copyOf(backtrackData, backtrackData.length * 2);
-            }
-            int base = backtrackTop;
-            backtrackData[base] = pc;
-            backtrackData[base + 1] = pos;
-            System.arraycopy(captureStarts, 0, backtrackData, base + 2, captureCount);
-            System.arraycopy(captureEnds, 0, backtrackData, base + 2 + captureCount, captureCount);
-            System.arraycopy(registers, 0, backtrackData, base + 2 + captureCount + captureCount, MAX_REGISTERS);
-            backtrackTop += backtrackEntrySize;
         }
 
         MatchResult createResult(boolean matched) {
@@ -664,6 +645,10 @@ public final class RegExpEngine {
             }
 
             return new MatchResult(true, startIndex, endIndex, captures, indices);
+        }
+
+        boolean hasBacktrack() {
+            return backtrackTop > 0;
         }
 
         private boolean isWordChar(int ch, boolean ignoreCase) {
@@ -975,6 +960,40 @@ public final class RegExpEngine {
             return true;
         }
 
+        int popBacktrack() {
+            backtrackTop -= backtrackEntrySize;
+            int base = backtrackTop;
+            pos = backtrackData[base + 1];
+            int stateOffset = backtrackData[base + backtrackEntrySize - 1];
+            System.arraycopy(backtrackData, stateOffset + 2, captureStarts, 0, captureCount);
+            System.arraycopy(backtrackData, stateOffset + 2 + captureCount, captureEnds, 0, captureCount);
+            System.arraycopy(backtrackData, stateOffset + 2 + captureCount + captureCount, registers, 0, MAX_REGISTERS);
+            stateDirty = true;
+            return backtrackData[base];
+        }
+
+        void pushBacktrack(int pc) {
+            if (backtrackTop + backtrackEntrySize > backtrackData.length) {
+                backtrackData = Arrays.copyOf(backtrackData, backtrackData.length * 2);
+            }
+            int base = backtrackTop;
+            backtrackData[base] = pc;
+            backtrackData[base + 1] = pos;
+            int stateOffset;
+            if (stateDirty || backtrackTop == 0) {
+                stateOffset = base;
+                System.arraycopy(captureStarts, 0, backtrackData, base + 2, captureCount);
+                System.arraycopy(captureEnds, 0, backtrackData, base + 2 + captureCount, captureCount);
+                System.arraycopy(registers, 0, backtrackData, base + 2 + captureCount + captureCount, MAX_REGISTERS);
+                stateDirty = false;
+            } else {
+                int prevBase = backtrackTop - backtrackEntrySize;
+                stateOffset = backtrackData[prevBase + backtrackEntrySize - 1];
+            }
+            backtrackData[base + backtrackEntrySize - 1] = stateOffset;
+            backtrackTop += backtrackEntrySize;
+        }
+
         private int readU16(byte[] bc, int offset) {
             return (bc[offset] & 0xFF) | ((bc[offset + 1] & 0xFF) << 8);
         }
@@ -993,6 +1012,7 @@ public final class RegExpEngine {
             if (captureCount > 0) {
                 captureStarts[0] = startPos;
             }
+            stateDirty = true;
         }
 
         private int resolveNamedBackReferenceGroup(int groupNum) {
@@ -1028,12 +1048,14 @@ public final class RegExpEngine {
 
         void saveEnd(int captureIndex) {
             if (captureIndex < captureCount) {
+                stateDirty = true;
                 captureEnds[captureIndex] = pos;
             }
         }
 
         void saveStart(int captureIndex) {
             if (captureIndex < captureCount) {
+                stateDirty = true;
                 captureStarts[captureIndex] = pos;
             }
         }
