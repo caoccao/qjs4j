@@ -65,67 +65,73 @@ public final class JSGlobalObject {
 
     private final JSConsole console;
     private final JSContext context;
+    private final JSObject globalObject;
 
     public JSGlobalObject(JSContext context) {
         this.context = context;
         this.console = new JSConsole();
+        this.globalObject = new JSObject();
     }
 
     public JSConsole getConsole() {
         return console;
     }
 
+    public JSObject getGlobalObject() {
+        return globalObject;
+    }
+
     /**
      * Initialize the global object with all built-in global properties and functions.
      */
-    public void initialize(JSObject global) {
-        initializeGlobalObject(global);
+    public void initialize() {
+        initializeGlobalObject();
 
         // Built-in constructors and their prototypes
-        initializeObjectConstructor(global);
-        initializeBooleanConstructor(global);
-        initializeArrayConstructor(global);
-        initializeStringConstructor(global);
-        initializeNumberConstructor(global);
-        initializeFunctionConstructor(global);
-        initializeAsyncFunctionConstructor(global);
-        initializeDateConstructor(global);
-        initializeRegExpConstructor(global);
-        initializeSymbolConstructor(global);
-        initializeBigIntConstructor(global);
-        initializeMapConstructor(global);
-        initializeSetConstructor(global);
-        initializeWeakMapConstructor(global);
-        initializeWeakSetConstructor(global);
-        initializeWeakRefConstructor(global);
-        initializeFinalizationRegistryConstructor(global);
-        initializeMathObject(global);
-        initializeJSONObject(global);
-        initializeIntlObject(global);
-        initializeReflectObject(global);
-        initializeProxyConstructor(global);
-        initializePromiseConstructor(global);
-        initializeDisposableStackConstructor(global);
-        initializeAsyncDisposableStackConstructor(global);
-        initializeIteratorConstructor(global);
-        initializeGeneratorPrototype(global);
-        initializeAsyncGeneratorPrototype(global);
+        initializeObjectConstructor();
+        initializeBooleanConstructor();
+        initializeArrayConstructor();
+        initializeStringConstructor();
+        initializeNumberConstructor();
+        initializeFunctionConstructor();
+        initializeAsyncFunctionConstructor();
+        initializeDateConstructor();
+        initializeRegExpConstructor();
+        initializeSymbolConstructor();
+        initializeBigIntConstructor();
+        initializeMapConstructor();
+        initializeSetConstructor();
+        initializeWeakMapConstructor();
+        initializeWeakSetConstructor();
+        initializeWeakRefConstructor();
+        initializeFinalizationRegistryConstructor();
+        initializeMathObject();
+        initializeJSONObject();
+        initializeIntlObject();
+        initializeReflectObject();
+        initializeProxyConstructor();
+        initializePromiseConstructor();
+        initializeDisposableStackConstructor();
+        initializeAsyncDisposableStackConstructor();
+        initializeIteratorConstructor();
+        initializeGeneratorPrototype();
+        initializeAsyncGeneratorPrototype();
 
         // Binary data constructors
-        initializeArrayBufferConstructor(global);
-        initializeSharedArrayBufferConstructor(global);
-        initializeDataViewConstructor(global);
-        initializeTypedArrayConstructors(global);
-        initializeAtomicsObject(global);
+        initializeArrayBufferConstructor();
+        initializeSharedArrayBufferConstructor();
+        initializeDataViewConstructor();
+        initializeTypedArrayConstructors();
+        initializeAtomicsObject();
 
         // Error constructors
-        initializeErrorConstructors(global);
+        initializeErrorConstructors();
 
         // Initialize function prototype chains after all built-ins are set up.
         // Walk global properties AND context-stored objects not reachable from global
         // (iterator prototypes, generator/async-generator function prototypes).
         Set<JSObject> visited = new HashSet<>();
-        initializeFunctionPrototypeChains(global, visited);
+        initializeFunctionPrototypeChains(globalObject, visited);
         for (JSObject iterProto : context.getIteratorPrototypes()) {
             initializeFunctionPrototypeChains(iterProto, visited);
         }
@@ -141,17 +147,17 @@ public final class JSGlobalObject {
 
         // Per ES2024 20.5.6.2: The [[Prototype]] of each NativeError constructor is Error.
         // This must run after initializeFunctionPrototypeChains which sets all to Function.prototype.
-        initializeNativeErrorPrototypeChains(global);
+        initializeNativeErrorPrototypeChains();
 
         // Set the global object's prototype to Object.prototype so inherited
         // methods like propertyIsEnumerable, hasOwnProperty, toString are available.
-        context.transferPrototype(global, JSObject.NAME);
+        context.transferPrototype(globalObject, JSObject.NAME);
     }
 
     /**
      * Initialize ArrayBuffer constructor and prototype.
      */
-    private void initializeArrayBufferConstructor(JSObject global) {
+    private void initializeArrayBufferConstructor() {
         // Create ArrayBuffer.prototype
         JSObject arrayBufferPrototype = context.createJSObject();
         arrayBufferPrototype.defineProperty(PropertyKey.fromString("resize"), new JSNativeFunction("resize", 1, ArrayBufferPrototype::resize), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -179,13 +185,13 @@ public final class JSGlobalObject {
         // Symbol.species getter
         arrayBufferConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES), new JSNativeFunction("get [Symbol.species]", 0, ArrayBufferConstructor::getSpecies), PropertyDescriptor.AccessorState.Configurable);
 
-        global.defineProperty(PropertyKey.fromString(JSArrayBuffer.NAME), arrayBufferConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSArrayBuffer.NAME), arrayBufferConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Array constructor and prototype.
      */
-    private void initializeArrayConstructor(JSObject global) {
+    private void initializeArrayConstructor() {
         // Create Array.prototype as an Array exotic object per ES spec 23.1.3
         // (matching QuickJS JS_NewArray for JS_CLASS_ARRAY)
         JSArray arrayPrototype = new JSArray(0, 0);
@@ -249,13 +255,13 @@ public final class JSGlobalObject {
         // Symbol.species getter
         arrayConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES), new JSNativeFunction("get [Symbol.species]", 0, ArrayConstructor::getSpecies), PropertyDescriptor.AccessorState.Configurable);
 
-        global.defineProperty(PropertyKey.fromString(JSArray.NAME), arrayConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSArray.NAME), arrayConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize AsyncDisposableStack constructor and prototype.
      */
-    private void initializeAsyncDisposableStackConstructor(JSObject global) {
+    private void initializeAsyncDisposableStackConstructor() {
         JSObject asyncDisposableStackPrototype = context.createJSObject();
         asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("adopt"), new JSNativeFunction("adopt", 2, AsyncDisposableStackPrototype::adopt), PropertyDescriptor.DataState.ConfigurableWritable);
         asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("defer"), new JSNativeFunction("defer", 1, AsyncDisposableStackPrototype::defer), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -279,14 +285,14 @@ public final class JSGlobalObject {
         asyncDisposableStackConstructor.setConstructorType(JSConstructorType.ASYNC_DISPOSABLE_STACK);
         asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("constructor"), asyncDisposableStackConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSAsyncDisposableStack.NAME), asyncDisposableStackConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSAsyncDisposableStack.NAME), asyncDisposableStackConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize AsyncFunction constructor and prototype.
      * AsyncFunction is not exposed in global scope but is available via async function constructors.
      */
-    private void initializeAsyncFunctionConstructor(JSObject global) {
+    private void initializeAsyncFunctionConstructor() {
         // Create AsyncFunction.prototype that inherits from Function.prototype
         JSObject asyncFunctionPrototype = context.createJSObject();
         context.transferPrototype(asyncFunctionPrototype, JSFunction.NAME);
@@ -296,7 +302,7 @@ public final class JSGlobalObject {
         // AsyncFunction is not normally exposed, but we need it for the prototype chain
         JSNativeFunction asyncFunctionConstructor = new JSNativeFunction("AsyncFunction", 1,
                 FunctionConstructor::callAsync, true);
-        JSValue functionConstructorValue = global.get(JSFunction.NAME);
+        JSValue functionConstructorValue = globalObject.get(JSFunction.NAME);
         if (functionConstructorValue instanceof JSObject functionConstructorObject) {
             asyncFunctionConstructor.setPrototype(functionConstructorObject);
         }
@@ -318,7 +324,7 @@ public final class JSGlobalObject {
      * - AsyncGeneratorFunction.prototype.prototype = AsyncGenerator.prototype (configurable)
      * - AsyncGenerator.prototype.constructor = AsyncGeneratorFunction.prototype (configurable)
      */
-    private void initializeAsyncGeneratorPrototype(JSObject global) {
+    private void initializeAsyncGeneratorPrototype() {
         // Create AsyncIteratorPrototype (has Symbol.asyncIterator)
         JSObject asyncIteratorPrototype = context.createJSObject();
         JSNativeFunction asyncIteratorMethod = new JSNativeFunction(
@@ -387,7 +393,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Atomics object.
      */
-    private void initializeAtomicsObject(JSObject global) {
+    private void initializeAtomicsObject() {
         JSObject atomics = context.createJSObject();
         atomics.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction("add", 3, AtomicsObject::add), PropertyDescriptor.DataState.ConfigurableWritable);
         atomics.defineProperty(PropertyKey.fromString("and"), new JSNativeFunction("and", 3, AtomicsObject::and), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -405,13 +411,13 @@ public final class JSGlobalObject {
         atomics.defineProperty(PropertyKey.fromString("xor"), new JSNativeFunction("xor", 3, AtomicsObject::xor), PropertyDescriptor.DataState.ConfigurableWritable);
         atomics.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Atomics"), PropertyDescriptor.DataState.Configurable);
 
-        global.defineProperty(PropertyKey.fromString("Atomics"), atomics, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("Atomics"), atomics, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize BigInt constructor and static methods.
      */
-    private void initializeBigIntConstructor(JSObject global) {
+    private void initializeBigIntConstructor() {
         // Create BigInt.prototype
         JSObject bigIntPrototype = context.createJSObject();
         bigIntPrototype.defineProperty(PropertyKey.fromString("toLocaleString"), new JSNativeFunction("toLocaleString", 0, BigIntPrototype::toLocaleString), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -429,13 +435,13 @@ public final class JSGlobalObject {
         bigIntConstructor.defineProperty(PropertyKey.fromString("asIntN"), new JSNativeFunction("asIntN", 2, BigIntConstructor::asIntN), PropertyDescriptor.DataState.ConfigurableWritable);
         bigIntConstructor.defineProperty(PropertyKey.fromString("asUintN"), new JSNativeFunction("asUintN", 2, BigIntConstructor::asUintN), PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSBigInt.NAME), bigIntConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSBigInt.NAME), bigIntConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Boolean constructor and prototype.
      */
-    private void initializeBooleanConstructor(JSObject global) {
+    private void initializeBooleanConstructor() {
         // Create Boolean.prototype as a Boolean object with [[BooleanData]] = false
         // Per QuickJS: JS_SetObjectData(ctx, ctx->class_proto[JS_CLASS_BOOLEAN], JS_NewBool(ctx, FALSE))
         JSBooleanObject booleanPrototype = new JSBooleanObject(false);
@@ -449,13 +455,13 @@ public final class JSGlobalObject {
         booleanConstructor.setConstructorType(JSConstructorType.BOOLEAN_OBJECT);
         booleanPrototype.defineProperty(PropertyKey.fromString("constructor"), booleanConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSBoolean.NAME), booleanConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSBoolean.NAME), booleanConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize console object with all console API methods.
      */
-    private void initializeConsoleObject(JSObject global) {
+    private void initializeConsoleObject() {
         JSObject consoleObj = context.createJSObject();
         consoleObj.set("assert", new JSNativeFunction("assert", 0, console::assert_));
         consoleObj.set("clear", new JSNativeFunction("clear", 0, console::clear));
@@ -477,13 +483,13 @@ public final class JSGlobalObject {
         consoleObj.set("trace", new JSNativeFunction("trace", 0, console::trace));
         consoleObj.set("warn", new JSNativeFunction("warn", 0, console::warn));
 
-        global.defineProperty(PropertyKey.fromString("console"), consoleObj, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("console"), consoleObj, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize DataView constructor and prototype.
      */
-    private void initializeDataViewConstructor(JSObject global) {
+    private void initializeDataViewConstructor() {
         // Create DataView.prototype
         JSObject dataViewPrototype = context.createJSObject();
 
@@ -531,13 +537,13 @@ public final class JSGlobalObject {
         dataViewConstructor.setConstructorType(JSConstructorType.DATA_VIEW);
         dataViewPrototype.defineProperty(PropertyKey.fromString("constructor"), dataViewConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString("DataView"), dataViewConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("DataView"), dataViewConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Date constructor and prototype.
      */
-    private void initializeDateConstructor(JSObject global) {
+    private void initializeDateConstructor() {
         JSObject datePrototype = context.createJSObject();
         JSNativeFunction toUTCString = new JSNativeFunction("toUTCString", 0, DatePrototype::toUTCString);
         JSNativeFunction toPrimitive = new JSNativeFunction("[Symbol.toPrimitive]", 1, DatePrototype::symbolToPrimitive);
@@ -599,13 +605,13 @@ public final class JSGlobalObject {
         dateConstructor.defineProperty(PropertyKey.fromString("now"), new JSNativeFunction("now", 0, DateConstructor::now), PropertyDescriptor.DataState.ConfigurableWritable);
         dateConstructor.defineProperty(PropertyKey.fromString("parse"), new JSNativeFunction("parse", 1, DateConstructor::parse), PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSDate.NAME), dateConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSDate.NAME), dateConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize DisposableStack constructor and prototype.
      */
-    private void initializeDisposableStackConstructor(JSObject global) {
+    private void initializeDisposableStackConstructor() {
         JSObject disposableStackPrototype = context.createJSObject();
         JSNativeFunction disposeFunction = new JSNativeFunction("dispose", 0, DisposableStackPrototype::dispose);
         disposableStackPrototype.defineProperty(PropertyKey.fromString("adopt"), new JSNativeFunction("adopt", 2, DisposableStackPrototype::adopt), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -624,20 +630,20 @@ public final class JSGlobalObject {
         disposableStackConstructor.setConstructorType(JSConstructorType.DISPOSABLE_STACK);
         disposableStackPrototype.defineProperty(PropertyKey.fromString("constructor"), disposableStackConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSDisposableStack.NAME), disposableStackConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSDisposableStack.NAME), disposableStackConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Error constructors.
      */
-    private void initializeErrorConstructors(JSObject global) {
-        Stream.of(JSErrorType.values()).forEach(type -> global.defineProperty(PropertyKey.fromString(type.name()), type.create(context), PropertyDescriptor.DataState.ConfigurableWritable));
+    private void initializeErrorConstructors() {
+        Stream.of(JSErrorType.values()).forEach(type -> globalObject.defineProperty(PropertyKey.fromString(type.name()), type.create(context), PropertyDescriptor.DataState.ConfigurableWritable));
     }
 
     /**
      * Initialize FinalizationRegistry constructor.
      */
-    private void initializeFinalizationRegistryConstructor(JSObject global) {
+    private void initializeFinalizationRegistryConstructor() {
         JSObject finalizationRegistryPrototype = context.createJSObject();
         finalizationRegistryPrototype.defineProperty(PropertyKey.fromString("register"),
                 new JSNativeFunction("register", 2, FinalizationRegistryPrototype::register), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -652,13 +658,13 @@ public final class JSGlobalObject {
         finalizationRegistryConstructor.setConstructorType(JSConstructorType.FINALIZATION_REGISTRY);
         finalizationRegistryPrototype.defineProperty(PropertyKey.fromString("constructor"), finalizationRegistryConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSFinalizationRegistry.NAME), finalizationRegistryConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSFinalizationRegistry.NAME), finalizationRegistryConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Function constructor and prototype.
      */
-    private void initializeFunctionConstructor(JSObject global) {
+    private void initializeFunctionConstructor() {
         // Create Function.prototype as a function (not a plain object)
         // According to ECMAScript spec, Function.prototype is itself a function
         // Use null name so toString() shows "function () {}" not "function anonymous() {}"
@@ -715,7 +721,7 @@ public final class JSGlobalObject {
         functionConstructor.defineProperty(PropertyKey.fromString("prototype"), functionPrototype, PropertyDescriptor.DataState.None);
         functionPrototype.defineProperty(PropertyKey.fromString("constructor"), functionConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSFunction.NAME), functionConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSFunction.NAME), functionConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
@@ -781,9 +787,9 @@ public final class JSGlobalObject {
      * - GeneratorFunction.prototype.prototype = Generator.prototype (configurable)
      * - Generator.prototype.constructor = GeneratorFunction.prototype (configurable)
      */
-    private void initializeGeneratorPrototype(JSObject global) {
+    private void initializeGeneratorPrototype() {
         // Get Iterator.prototype for Generator.prototype to inherit from
-        JSObject iteratorConstructor = (JSObject) global.get(JSIterator.NAME);
+        JSObject iteratorConstructor = (JSObject) globalObject.get(JSIterator.NAME);
         JSObject iteratorPrototype = (JSObject) iteratorConstructor.get(PropertyKey.PROTOTYPE);
 
         // Create Generator.prototype inheriting from Iterator.prototype
@@ -830,45 +836,45 @@ public final class JSGlobalObject {
         context.setGeneratorFunctionPrototype(generatorFunctionPrototype);
     }
 
-    private void initializeGlobalObject(JSObject global) {
+    private void initializeGlobalObject() {
         // Global value properties (non-writable, non-enumerable, non-configurable)
-        global.defineProperty(PropertyKey.fromString("Infinity"), JSNumber.of(Double.POSITIVE_INFINITY), PropertyDescriptor.DataState.None);
-        global.defineProperty(PropertyKey.fromString("NaN"), JSNumber.of(Double.NaN), PropertyDescriptor.DataState.None);
-        global.defineProperty(PropertyKey.fromString("undefined"), JSUndefined.INSTANCE, PropertyDescriptor.DataState.None);
+        globalObject.defineProperty(PropertyKey.fromString("Infinity"), JSNumber.of(Double.POSITIVE_INFINITY), PropertyDescriptor.DataState.None);
+        globalObject.defineProperty(PropertyKey.fromString("NaN"), JSNumber.of(Double.NaN), PropertyDescriptor.DataState.None);
+        globalObject.defineProperty(PropertyKey.fromString("undefined"), JSUndefined.INSTANCE, PropertyDescriptor.DataState.None);
 
         // Global function properties
         // Capture the realm context so that eval code runs in the correct realm
         // even when called cross-realm (e.g., other.eval('code')).
         final JSContext realmContext = context;
-        global.defineProperty(PropertyKey.fromString("eval"), new JSNativeFunction("eval", 1,
+        globalObject.defineProperty(PropertyKey.fromString("eval"), new JSNativeFunction("eval", 1,
                 (callerCtx, thisArg, args) -> GlobalFunction.eval(realmContext, callerCtx, thisArg, args)), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("isFinite"), new JSNativeFunction("isFinite", 1, GlobalFunction::isFinite), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("isNaN"), new JSNativeFunction("isNaN", 1, GlobalFunction::isNaN), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("parseFloat"), new JSNativeFunction("parseFloat", 1, GlobalFunction::parseFloat), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("parseInt"), new JSNativeFunction("parseInt", 2, GlobalFunction::parseInt), PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("isFinite"), new JSNativeFunction("isFinite", 1, GlobalFunction::isFinite), PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("isNaN"), new JSNativeFunction("isNaN", 1, GlobalFunction::isNaN), PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("parseFloat"), new JSNativeFunction("parseFloat", 1, GlobalFunction::parseFloat), PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("parseInt"), new JSNativeFunction("parseInt", 2, GlobalFunction::parseInt), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // URI handling functions
-        global.defineProperty(PropertyKey.fromString("decodeURI"), new JSNativeFunction("decodeURI", 1, GlobalFunction::decodeURI), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("decodeURIComponent"), new JSNativeFunction("decodeURIComponent", 1, GlobalFunction::decodeURIComponent), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("encodeURI"), new JSNativeFunction("encodeURI", 1, GlobalFunction::encodeURI), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("encodeURIComponent"), new JSNativeFunction("encodeURIComponent", 1, GlobalFunction::encodeURIComponent), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("escape"), new JSNativeFunction("escape", 1, GlobalFunction::escape), PropertyDescriptor.DataState.ConfigurableWritable);
-        global.defineProperty(PropertyKey.fromString("unescape"), new JSNativeFunction("unescape", 1, GlobalFunction::unescape), PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("decodeURI"), new JSNativeFunction("decodeURI", 1, GlobalFunction::decodeURI), PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("decodeURIComponent"), new JSNativeFunction("decodeURIComponent", 1, GlobalFunction::decodeURIComponent), PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("encodeURI"), new JSNativeFunction("encodeURI", 1, GlobalFunction::encodeURI), PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("encodeURIComponent"), new JSNativeFunction("encodeURIComponent", 1, GlobalFunction::encodeURIComponent), PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("escape"), new JSNativeFunction("escape", 1, GlobalFunction::escape), PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("unescape"), new JSNativeFunction("unescape", 1, GlobalFunction::unescape), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Console object for debugging
-        initializeConsoleObject(global);
+        initializeConsoleObject();
 
         // Global this reference
-        global.defineProperty(PropertyKey.fromString("globalThis"), global, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("globalThis"), globalObject, PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Object.prototype.toString.call(globalThis) -> [object global]
-        global.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("global"), PropertyDescriptor.DataState.Configurable);
+        globalObject.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("global"), PropertyDescriptor.DataState.Configurable);
     }
 
     /**
      * Initialize Intl object.
      */
-    private void initializeIntlObject(JSObject global) {
+    private void initializeIntlObject() {
         JSObject intlObject = context.createJSObject();
         intlObject.set("getCanonicalLocales", new JSNativeFunction("getCanonicalLocales", 1, JSIntlObject::getCanonicalLocales));
 
@@ -969,14 +975,14 @@ public final class JSGlobalObject {
         localePrototype.defineProperty(PropertyKey.fromString("constructor"), localeConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.set("Locale", localeConstructor);
 
-        global.defineProperty(PropertyKey.fromString("Intl"), intlObject, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("Intl"), intlObject, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Iterator constructor and prototype.
      * Based on ECMAScript 2024 Iterator specification.
      */
-    private void initializeIteratorConstructor(JSObject global) {
+    private void initializeIteratorConstructor() {
         JSObject iteratorPrototype = context.createJSObject();
 
         iteratorPrototype.defineProperty(PropertyKey.fromString("drop"), new JSNativeFunction("drop", 1, IteratorPrototype::drop), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1100,13 +1106,13 @@ public final class JSGlobalObject {
         wrapForValidIteratorPrototype.setPrototype(iteratorPrototype);
         context.registerIteratorPrototype("Iterator Wrap", wrapForValidIteratorPrototype);
 
-        global.defineProperty(PropertyKey.fromString(JSIterator.NAME), iteratorConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSIterator.NAME), iteratorConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize JSON object.
      */
-    private void initializeJSONObject(JSObject global) {
+    private void initializeJSONObject() {
         JSObject json = context.createJSObject();
         json.defineProperty(PropertyKey.fromString("parse"), new JSNativeFunction("parse", 2, JSONObject::parse), PropertyDescriptor.DataState.ConfigurableWritable);
         json.defineProperty(PropertyKey.fromString("stringify"), new JSNativeFunction("stringify", 3, JSONObject::stringify), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1114,13 +1120,13 @@ public final class JSGlobalObject {
         json.defineProperty(PropertyKey.fromString("isRawJSON"), new JSNativeFunction("isRawJSON", 1, JSONObject::isRawJSON), PropertyDescriptor.DataState.ConfigurableWritable);
         json.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("JSON"), PropertyDescriptor.DataState.Configurable);
 
-        global.defineProperty(PropertyKey.fromString("JSON"), json, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("JSON"), json, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Map constructor and prototype methods.
      */
-    private void initializeMapConstructor(JSObject global) {
+    private void initializeMapConstructor() {
         // Create Map.prototype
         JSObject mapPrototype = context.createJSObject();
         mapPrototype.defineProperty(PropertyKey.fromString("clear"), new JSNativeFunction("clear", 0, MapPrototype::clear), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1153,13 +1159,13 @@ public final class JSGlobalObject {
         mapConstructor.defineProperty(PropertyKey.fromString("groupBy"), new JSNativeFunction("groupBy", 2, MapConstructor::groupBy), PropertyDescriptor.DataState.ConfigurableWritable);
         mapConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES), new JSNativeFunction("get [Symbol.species]", 0, MapConstructor::getSpecies), PropertyDescriptor.AccessorState.Configurable);
 
-        global.defineProperty(PropertyKey.fromString(JSMap.NAME), mapConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSMap.NAME), mapConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Math object.
      */
-    private void initializeMathObject(JSObject global) {
+    private void initializeMathObject() {
         JSObject math = context.createJSObject();
 
         // Math constants
@@ -1212,7 +1218,7 @@ public final class JSGlobalObject {
         math.defineProperty(PropertyKey.fromString("trunc"), new JSNativeFunction("trunc", 1, MathObject::trunc), PropertyDescriptor.DataState.ConfigurableWritable);
         math.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Math"), PropertyDescriptor.DataState.Configurable);
 
-        global.defineProperty(PropertyKey.fromString("Math"), math, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("Math"), math, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
@@ -1220,8 +1226,8 @@ public final class JSGlobalObject {
      * Per ES2024 20.5.6.2: The value of the [[Prototype]] internal slot of a
      * NativeError constructor is the Error constructor.
      */
-    private void initializeNativeErrorPrototypeChains(JSObject global) {
-        JSValue errorConstructor = global.get(JSError.NAME);
+    private void initializeNativeErrorPrototypeChains() {
+        JSValue errorConstructor = globalObject.get(JSError.NAME);
         if (!(errorConstructor instanceof JSObject errorObj)) {
             return;
         }
@@ -1229,7 +1235,7 @@ public final class JSGlobalObject {
             if (type == JSErrorType.Error) {
                 continue;
             }
-            JSValue constructor = global.get(type.name());
+            JSValue constructor = globalObject.get(type.name());
             if (constructor instanceof JSObject constructorObj) {
                 constructorObj.setPrototype(errorObj);
             }
@@ -1239,7 +1245,7 @@ public final class JSGlobalObject {
     /**
      * Initialize Number constructor and prototype.
      */
-    private void initializeNumberConstructor(JSObject global) {
+    private void initializeNumberConstructor() {
         // Create Number.prototype as a Number object with [[NumberData]] = +0 (ES2024 20.1.3)
         JSNumberObject numberPrototype = new JSNumberObject(0.0);
         context.transferPrototype(numberPrototype, JSObject.NAME);
@@ -1263,8 +1269,8 @@ public final class JSGlobalObject {
         numberConstructor.defineProperty(PropertyKey.fromString("isSafeInteger"), new JSNativeFunction("isSafeInteger", 1, NumberPrototype::isSafeInteger), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // QuickJS compatibility: Number.parseInt/parseFloat are aliases of global parseInt/parseFloat.
-        JSValue globalParseInt = global.get("parseInt");
-        JSValue globalParseFloat = global.get("parseFloat");
+        JSValue globalParseInt = globalObject.get("parseInt");
+        JSValue globalParseFloat = globalObject.get("parseFloat");
         numberConstructor.defineProperty(PropertyKey.fromString("EPSILON"), JSNumber.of(Math.ulp(1.0)), PropertyDescriptor.DataState.None);
         numberConstructor.defineProperty(PropertyKey.fromString("MAX_SAFE_INTEGER"), JSNumber.of((double) NumberPrototype.MAX_SAFE_INTEGER), PropertyDescriptor.DataState.None);
         numberConstructor.defineProperty(PropertyKey.fromString("MAX_VALUE"), JSNumber.of(Double.MAX_VALUE), PropertyDescriptor.DataState.None);
@@ -1276,13 +1282,13 @@ public final class JSGlobalObject {
         numberConstructor.defineProperty(PropertyKey.fromString("parseFloat"), globalParseFloat, PropertyDescriptor.DataState.ConfigurableWritable);
         numberConstructor.defineProperty(PropertyKey.fromString("parseInt"), globalParseInt, PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSNumberObject.NAME), numberConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSNumberObject.NAME), numberConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Object constructor and static methods.
      */
-    private void initializeObjectConstructor(JSObject global) {
+    private void initializeObjectConstructor() {
         // Create Object.prototype
         JSObject objectPrototype = context.createJSObject();
         objectPrototype.defineProperty(PropertyKey.fromString("__defineGetter__"), new JSNativeFunction("__defineGetter__", 2, ObjectPrototype::__defineGetter__), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1337,13 +1343,13 @@ public final class JSGlobalObject {
         objectConstructor.defineProperty(PropertyKey.fromString("setPrototypeOf"), new JSNativeFunction("setPrototypeOf", 2, ObjectConstructor::setPrototypeOf), PropertyDescriptor.DataState.ConfigurableWritable);
         objectConstructor.defineProperty(PropertyKey.fromString("values"), new JSNativeFunction("values", 1, ObjectConstructor::values), PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSObject.NAME), objectConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSObject.NAME), objectConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Promise constructor and prototype methods.
      */
-    private void initializePromiseConstructor(JSObject global) {
+    private void initializePromiseConstructor() {
         // Create Promise.prototype
         JSObject promisePrototype = context.createJSObject();
         promisePrototype.defineProperty(PropertyKey.fromString("catch"), new JSNativeFunction("catch", 1, PromisePrototype::catchMethod), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1369,13 +1375,13 @@ public final class JSGlobalObject {
         promiseConstructor.defineProperty(PropertyKey.fromString("withResolvers"), new JSNativeFunction("withResolvers", 0, PromiseConstructor::withResolvers), PropertyDescriptor.DataState.ConfigurableWritable);
         promiseConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES), new JSNativeFunction("get [Symbol.species]", 0, PromiseConstructor::getSpecies), PropertyDescriptor.AccessorState.Configurable);
 
-        global.defineProperty(PropertyKey.fromString(JSPromise.NAME), promiseConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSPromise.NAME), promiseConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Proxy constructor.
      */
-    private void initializeProxyConstructor(JSObject global) {
+    private void initializeProxyConstructor() {
         // Create Proxy constructor as JSNativeFunction
         // Proxy requires 'new' and takes 2 arguments (target, handler)
         JSNativeFunction proxyConstructor = new JSNativeFunction(JSProxy.NAME, 2, ProxyConstructor::call, true, true);
@@ -1388,13 +1394,13 @@ public final class JSGlobalObject {
         // Add static methods.
         proxyConstructor.defineProperty(PropertyKey.fromString("revocable"), new JSNativeFunction("revocable", 2, ProxyConstructor::revocable), PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSProxy.NAME), proxyConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSProxy.NAME), proxyConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Reflect object.
      */
-    private void initializeReflectObject(JSObject global) {
+    private void initializeReflectObject() {
         JSObject reflect = context.createJSObject();
         reflect.defineProperty(PropertyKey.fromString("apply"), new JSNativeFunction("apply", 3, JSReflectObject::apply), PropertyDescriptor.DataState.ConfigurableWritable);
         reflect.defineProperty(PropertyKey.fromString("construct"), new JSNativeFunction("construct", 2, JSReflectObject::construct), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1411,13 +1417,13 @@ public final class JSGlobalObject {
         reflect.defineProperty(PropertyKey.fromString("setPrototypeOf"), new JSNativeFunction("setPrototypeOf", 2, JSReflectObject::setPrototypeOf), PropertyDescriptor.DataState.ConfigurableWritable);
         reflect.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Reflect"), PropertyDescriptor.DataState.Configurable);
 
-        global.defineProperty(PropertyKey.fromString("Reflect"), reflect, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString("Reflect"), reflect, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize RegExp constructor and prototype.
      */
-    private void initializeRegExpConstructor(JSObject global) {
+    private void initializeRegExpConstructor() {
         // Create RegExp.prototype
         JSObject regexpPrototype = context.createJSObject();
         regexpPrototype.defineProperty(PropertyKey.fromString("test"), new JSNativeFunction("test", 1, RegExpPrototype::test), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1491,13 +1497,13 @@ public final class JSGlobalObject {
         // ES2024 RegExp.escape static method
         regexpConstructor.defineProperty(PropertyKey.fromString("escape"), new JSNativeFunction("escape", 1, RegExpConstructor::escape), PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSRegExp.NAME), regexpConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSRegExp.NAME), regexpConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Set constructor and prototype methods.
      */
-    private void initializeSetConstructor(JSObject global) {
+    private void initializeSetConstructor() {
         // Create Set.prototype
         JSObject setPrototype = context.createJSObject();
         setPrototype.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction("add", 1, SetPrototype::add), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1535,13 +1541,13 @@ public final class JSGlobalObject {
         setConstructor.defineProperty(PropertyKey.fromString("groupBy"), new JSNativeFunction("groupBy", 2, SetConstructor::groupBy), PropertyDescriptor.DataState.ConfigurableWritable);
         setConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES), new JSNativeFunction("get [Symbol.species]", 0, SetConstructor::getSpecies), PropertyDescriptor.AccessorState.Configurable);
 
-        global.defineProperty(PropertyKey.fromString(JSSet.NAME), setConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSSet.NAME), setConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize SharedArrayBuffer constructor and prototype.
      */
-    private void initializeSharedArrayBufferConstructor(JSObject global) {
+    private void initializeSharedArrayBufferConstructor() {
         // Create SharedArrayBuffer.prototype
         JSObject sharedArrayBufferPrototype = context.createJSObject();
         sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("grow"), new JSNativeFunction("grow", 1, SharedArrayBufferPrototype::grow), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1566,13 +1572,13 @@ public final class JSGlobalObject {
         sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("constructor"), sharedArrayBufferConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
         sharedArrayBufferConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES), new JSNativeFunction("get [Symbol.species]", 0, SharedArrayBufferConstructor::getSpecies), PropertyDescriptor.AccessorState.Configurable);
 
-        global.defineProperty(PropertyKey.fromString(JSSharedArrayBuffer.NAME), sharedArrayBufferConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSSharedArrayBuffer.NAME), sharedArrayBufferConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize String constructor and prototype.
      */
-    private void initializeStringConstructor(JSObject global) {
+    private void initializeStringConstructor() {
         // Create String.prototype
         JSObject stringPrototype = context.createJSObject();
         stringPrototype.defineProperty(PropertyKey.fromString("at"), new JSNativeFunction("at", 1, StringPrototype::at), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1650,13 +1656,13 @@ public final class JSGlobalObject {
         stringConstructor.defineProperty(PropertyKey.fromString("fromCodePoint"), new JSNativeFunction("fromCodePoint", 1, StringConstructor::fromCodePoint), PropertyDescriptor.DataState.ConfigurableWritable);
         stringConstructor.defineProperty(PropertyKey.fromString("raw"), new JSNativeFunction("raw", 1, StringConstructor::raw), PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSString.NAME), stringConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSString.NAME), stringConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize Symbol constructor and static methods.
      */
-    private void initializeSymbolConstructor(JSObject global) {
+    private void initializeSymbolConstructor() {
         // Create Symbol.prototype that inherits from Object.prototype
         JSObject symbolPrototype = context.createJSObject();
         context.transferPrototype(symbolPrototype, JSObject.NAME);
@@ -1708,7 +1714,7 @@ public final class JSGlobalObject {
         symbolConstructor.defineProperty(PropertyKey.fromString("dispose"), JSSymbol.DISPOSE, PropertyDescriptor.DataState.None);
         symbolConstructor.defineProperty(PropertyKey.fromString("asyncDispose"), JSSymbol.ASYNC_DISPOSE, PropertyDescriptor.DataState.None);
 
-        global.defineProperty(PropertyKey.fromString(JSSymbol.NAME), symbolConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSSymbol.NAME), symbolConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
@@ -1716,12 +1722,12 @@ public final class JSGlobalObject {
      * Per ES spec, creates the %TypedArray% intrinsic (shared parent) and
      * individual typed array constructors that inherit from it.
      */
-    private void initializeTypedArrayConstructors(JSObject global) {
+    private void initializeTypedArrayConstructors() {
         record TypedArrayDef(String name, JSNativeFunction.NativeCallback callback, JSConstructorType type,
                              int bytesPerElement) {
         }
         JSValue arrayToString = JSUndefined.INSTANCE;
-        JSValue arrayConstructorValue = global.get(JSArray.NAME);
+        JSValue arrayConstructorValue = globalObject.get(JSArray.NAME);
         if (arrayConstructorValue instanceof JSObject arrayConstructor) {
             JSValue arrayPrototypeValue = arrayConstructor.get(PropertyKey.PROTOTYPE);
             if (arrayPrototypeValue instanceof JSObject arrayPrototype) {
@@ -1795,14 +1801,14 @@ public final class JSGlobalObject {
             constructor.defineProperty(PropertyKey.fromString("BYTES_PER_ELEMENT"), JSNumber.of(def.bytesPerElement), PropertyDescriptor.DataState.None);
 
             prototype.defineProperty(PropertyKey.fromString("constructor"), constructor, PropertyDescriptor.DataState.ConfigurableWritable);
-            global.defineProperty(PropertyKey.fromString(def.name), constructor, PropertyDescriptor.DataState.ConfigurableWritable);
+            globalObject.defineProperty(PropertyKey.fromString(def.name), constructor, PropertyDescriptor.DataState.ConfigurableWritable);
         }
     }
 
     /**
      * Initialize WeakMap constructor and prototype methods.
      */
-    private void initializeWeakMapConstructor(JSObject global) {
+    private void initializeWeakMapConstructor() {
         JSObject weakMapPrototype = context.createJSObject();
         weakMapPrototype.defineProperty(PropertyKey.fromString("set"), new JSNativeFunction("set", 2, WeakMapPrototype::set), PropertyDescriptor.DataState.ConfigurableWritable);
         weakMapPrototype.defineProperty(PropertyKey.fromString("get"), new JSNativeFunction("get", 1, WeakMapPrototype::get), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1823,13 +1829,13 @@ public final class JSGlobalObject {
         weakMapConstructor.setConstructorType(JSConstructorType.WEAK_MAP);
         weakMapPrototype.defineProperty(PropertyKey.fromString("constructor"), weakMapConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSWeakMap.NAME), weakMapConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSWeakMap.NAME), weakMapConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize WeakRef constructor.
      */
-    private void initializeWeakRefConstructor(JSObject global) {
+    private void initializeWeakRefConstructor() {
         JSObject weakRefPrototype = context.createJSObject();
         weakRefPrototype.defineProperty(PropertyKey.fromString("deref"), new JSNativeFunction("deref", 0, WeakRefPrototype::deref), PropertyDescriptor.DataState.ConfigurableWritable);
         weakRefPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSWeakRef.NAME), PropertyDescriptor.DataState.Configurable);
@@ -1845,13 +1851,13 @@ public final class JSGlobalObject {
         weakRefConstructor.setConstructorType(JSConstructorType.WEAK_REF);
         weakRefPrototype.defineProperty(PropertyKey.fromString("constructor"), weakRefConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSWeakRef.NAME), weakRefConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSWeakRef.NAME), weakRefConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**
      * Initialize WeakSet constructor and prototype methods.
      */
-    private void initializeWeakSetConstructor(JSObject global) {
+    private void initializeWeakSetConstructor() {
         JSObject weakSetPrototype = context.createJSObject();
         weakSetPrototype.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction("add", 1, WeakSetPrototype::add), PropertyDescriptor.DataState.ConfigurableWritable);
         weakSetPrototype.defineProperty(PropertyKey.fromString("has"), new JSNativeFunction("has", 1, WeakSetPrototype::has), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1869,7 +1875,7 @@ public final class JSGlobalObject {
         weakSetConstructor.setConstructorType(JSConstructorType.WEAK_SET);
         weakSetPrototype.defineProperty(PropertyKey.fromString("constructor"), weakSetConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
-        global.defineProperty(PropertyKey.fromString(JSWeakSet.NAME), weakSetConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(PropertyKey.fromString(JSWeakSet.NAME), weakSetConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     public static class GlobalFunction {

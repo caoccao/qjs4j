@@ -47,7 +47,6 @@ public final class JSContext implements AutoCloseable {
     // Global declaration tracking for cross-script collision detection
     // Following QuickJS global_var_obj pattern (GlobalDeclarationInstantiation)
     private final Set<String> globalLexDeclarations;
-    private final JSObject globalObject;
     private final Set<String> globalVarDeclarations;
     // Shared iterator prototypes by toStringTag (e.g., "Array Iterator" → %ArrayIteratorPrototype%)
     private final Map<String, JSObject> iteratorPrototypes;
@@ -89,7 +88,6 @@ public final class JSContext implements AutoCloseable {
     public JSContext(JSRuntime runtime) {
         this.callStack = new ArrayDeque<>();
         this.errorStackTrace = new ArrayList<>();
-        this.globalObject = new JSObject();
         this.globalLexDeclarations = new HashSet<>();
         this.globalVarDeclarations = new HashSet<>();
         this.waitable = true;
@@ -105,7 +103,7 @@ public final class JSContext implements AutoCloseable {
         this.strictMode = false;
         this.virtualMachine = new VirtualMachine(this);
 
-        this.currentThis = globalObject;
+        this.currentThis = jsGlobalObject.getGlobalObject();
         initializeGlobalObject();
     }
 
@@ -797,7 +795,7 @@ public final class JSContext implements AutoCloseable {
                     }
                     // Check for non-configurable property on global object
                     PropertyKey key = PropertyKey.fromString(name);
-                    PropertyDescriptor desc = globalObject.getOwnPropertyDescriptor(key);
+                    PropertyDescriptor desc = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
                     if (desc != null && !desc.isConfigurable()) {
                         throw new JSSyntaxErrorException(
                                 "Identifier '" + name + "' has already been declared");
@@ -828,10 +826,10 @@ public final class JSContext implements AutoCloseable {
                 // This must happen BEFORE execution so bindings exist at script start.
                 for (String name : newVarDecls) {
                     PropertyKey key = PropertyKey.fromString(name);
-                    PropertyDescriptor existing = globalObject.getOwnPropertyDescriptor(key);
+                    PropertyDescriptor existing = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
                     if (existing == null) {
                         // Property doesn't exist: create {writable, enumerable, NOT configurable}
-                        globalObject.defineProperty(key,
+                        jsGlobalObject.getGlobalObject().defineProperty(key,
                                 PropertyDescriptor.dataDescriptor(
                                         JSUndefined.INSTANCE,
                                         PropertyDescriptor.DataState.EnumerableWritable
@@ -853,7 +851,7 @@ public final class JSContext implements AutoCloseable {
                         String funcName = funcDecl.id().name();
                         if (checkedFuncNames.add(funcName)) {
                             PropertyKey key = PropertyKey.fromString(funcName);
-                            PropertyDescriptor desc = globalObject.getOwnPropertyDescriptor(key);
+                            PropertyDescriptor desc = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
                             if (desc != null && !desc.isConfigurable()) {
                                 if (desc.isAccessorDescriptor()
                                         || !(desc.isWritable() && desc.isEnumerable())) {
@@ -861,7 +859,7 @@ public final class JSContext implements AutoCloseable {
                                             "cannot define variable '" + funcName + "'");
                                 }
                             }
-                            if (desc == null && !globalObject.isExtensible()) {
+                            if (desc == null && !jsGlobalObject.getGlobalObject().isExtensible()) {
                                 throw new JSException("TypeError",
                                         "cannot define variable '" + funcName + "'");
                             }
@@ -877,7 +875,7 @@ public final class JSContext implements AutoCloseable {
             // For direct eval, inherit the caller's 'this' binding per ES2024 PerformEval.
             // In strict mode functions called without receiver, 'this' is undefined, and
             // eval('this') must see that same undefined value, not the global object.
-            JSValue evalThisArg = globalObject;
+            JSValue evalThisArg = jsGlobalObject.getGlobalObject();
             if (isDirectEval) {
                 com.caoccao.qjs4j.vm.StackFrame callerFrame = virtualMachine.getCurrentFrame();
                 if (callerFrame != null) {
@@ -923,7 +921,7 @@ public final class JSContext implements AutoCloseable {
             // Clear ALL possible dirty state to ensure clean slate for next eval()
             stackDepth = callStack.size();
             inCatchHandler = false;
-            currentThis = globalObject;
+            currentThis = jsGlobalObject.getGlobalObject();
             clearPendingException();
             clearErrorStackTrace();
         }
@@ -996,7 +994,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSObject getGlobalObject() {
-        return globalObject;
+        return jsGlobalObject.getGlobalObject();
     }
 
     public JSObject getIteratorPrototype(String tag) {
@@ -1076,9 +1074,9 @@ public final class JSContext implements AutoCloseable {
      * Delegates to JSGlobalObject to set up all global functions and properties.
      */
     private void initializeGlobalObject() {
-        jsGlobalObject.initialize(globalObject);
+        jsGlobalObject.initialize();
         // Cache Object.prototype for fast access in hot paths (e.g., iteratorResult, createJSObject)
-        JSValue objectCtor = globalObject.get(JSObject.NAME);
+        JSValue objectCtor = jsGlobalObject.getGlobalObject().get(JSObject.NAME);
         if (objectCtor instanceof JSObject objCtorObj) {
             JSValue proto = objCtorObj.get(PropertyKey.PROTOTYPE);
             if (proto instanceof JSObject protoObj) {
@@ -1199,7 +1197,7 @@ public final class JSContext implements AutoCloseable {
      * Set the current 'this' binding.
      */
     public void setCurrentThis(JSValue thisValue) {
-        this.currentThis = thisValue != null ? thisValue : globalObject;
+        this.currentThis = thisValue != null ? thisValue : jsGlobalObject.getGlobalObject();
     }
 
     /**
@@ -1362,7 +1360,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     public boolean transferPrototype(JSObject receiver, String constructorName) {
-        JSValue constructor = globalObject.get(constructorName);
+        JSValue constructor = jsGlobalObject.getGlobalObject().get(constructorName);
         if (constructor instanceof JSObject jsObject) {
             return transferPrototype(receiver, jsObject);
         }
