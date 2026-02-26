@@ -50,8 +50,8 @@ public final class JSBytecodeFunction extends JSFunction {
     private final JSObject prototype;
     private final int selfCaptureIndex;
     private final boolean strict;
-    private JSValue capturedThisArg;
     private int[] captureSourceInfos;
+    private JSValue capturedThisArg;
     private boolean classConstructor;
     private boolean derivedConstructor;
     private boolean hasParameterExpressions;
@@ -1016,6 +1016,13 @@ public final class JSBytecodeFunction extends JSFunction {
     }
 
     /**
+     * Get the captured this value for arrow functions.
+     */
+    public JSValue getCapturedThisArg() {
+        return capturedThisArg;
+    }
+
+    /**
      * Get the closure variables (captured from outer scopes).
      */
     public JSValue[] getClosureVars() {
@@ -1086,21 +1093,6 @@ public final class JSBytecodeFunction extends JSFunction {
     }
 
     /**
-     * Get the captured this value for arrow functions.
-     */
-    public JSValue getCapturedThisArg() {
-        return capturedThisArg;
-    }
-
-    /**
-     * Set the captured this value for arrow functions.
-     * Called during FCLOSURE to capture the enclosing scope's this.
-     */
-    public void setCapturedThisArg(JSValue thisArg) {
-        this.capturedThisArg = thisArg;
-    }
-
-    /**
      * Check if this is an async function.
      */
     public boolean isAsync() {
@@ -1150,6 +1142,14 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public void setCaptureSourceInfos(int[] captureSourceInfos) {
         this.captureSourceInfos = captureSourceInfos;
+    }
+
+    /**
+     * Set the captured this value for arrow functions.
+     * Called during FCLOSURE to capture the enclosing scope's this.
+     */
+    public void setCapturedThisArg(JSValue thisArg) {
+        this.capturedThisArg = thisArg;
     }
 
     /**

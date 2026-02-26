@@ -94,25 +94,25 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         int intLength = (int) length;
         int maxLength = intLength;
         boolean growable = false;
-        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            if (args[1] instanceof JSNull) {
-                return context.throwTypeError("Cannot convert undefined or null to object");
+        // GetArrayBufferMaxByteLengthOption: if Type(options) is not Object, return empty
+        if (args.length > 1 && args[1] instanceof JSObject optionsObject) {
+            boolean hadException = context.hasPendingException();
+            JSValue maxByteLengthValue = optionsObject.get(context, PropertyKey.fromString("maxByteLength"));
+            if (!hadException && context.hasPendingException()) {
+                return null;
             }
-            if (args[1] instanceof JSObject optionsObject) {
-                JSValue maxByteLengthValue = optionsObject.get("maxByteLength");
-                if (!(maxByteLengthValue instanceof JSUndefined)) {
-                    long maxLen;
-                    try {
-                        maxLen = JSTypeConversions.toIndex(context, maxByteLengthValue);
-                    } catch (IllegalArgumentException | JSRangeErrorException e) {
-                        return context.throwRangeError("Invalid array buffer max length");
-                    }
-                    if (maxLen > Integer.MAX_VALUE || maxLen < length) {
-                        return context.throwRangeError("Invalid array buffer max length");
-                    }
-                    maxLength = (int) maxLen;
-                    growable = true;
+            if (!(maxByteLengthValue instanceof JSUndefined)) {
+                long maxLen;
+                try {
+                    maxLen = JSTypeConversions.toIndex(context, maxByteLengthValue);
+                } catch (IllegalArgumentException | JSRangeErrorException e) {
+                    return context.throwRangeError("Invalid array buffer max length");
                 }
+                if (maxLen > Integer.MAX_VALUE || maxLen < length) {
+                    return context.throwRangeError("Invalid array buffer max length");
+                }
+                maxLength = (int) maxLen;
+                growable = true;
             }
         }
 

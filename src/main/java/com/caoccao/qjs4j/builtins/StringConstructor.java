@@ -92,6 +92,9 @@ public final class StringConstructor {
         for (JSValue arg : args) {
             // Convert to number
             double value = JSTypeConversions.toNumber(context, arg).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
 
             // Check if it's an integer
             if (!Double.isFinite(value) || value != Math.floor(value)) {

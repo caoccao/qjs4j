@@ -50,6 +50,10 @@ public final class JSStringObject extends JSObject {
     public static final String NAME = "String";
     private final JSString value;
 
+    public JSStringObject() {
+        this(new JSString(""));
+    }
+
     /**
      * Create a String object wrapping the given string value.
      *

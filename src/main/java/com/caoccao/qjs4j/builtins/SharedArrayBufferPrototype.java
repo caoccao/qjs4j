@@ -19,9 +19,11 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
+import java.nio.ByteBuffer;
+
 /**
  * SharedArrayBuffer.prototype methods implementation.
- * Based on ES2017 SharedArrayBuffer specification.
+ * Based on ES2024 SharedArrayBuffer specification.
  */
 public final class SharedArrayBufferPrototype {
 
@@ -103,30 +105,137 @@ public final class SharedArrayBufferPrototype {
     }
 
     /**
-     * SharedArrayBuffer.prototype.slice(begin, end)
-     * ES2017 24.2.4.3
-     * Returns a new SharedArrayBuffer with a copy of bytes from begin to end.
+     * SharedArrayBuffer.prototype.slice(start, end)
+     * ES2024 25.2.4.3
+     * Returns a new SharedArrayBuffer with a copy of bytes from start to end.
      */
     public static JSValue slice(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSharedArrayBuffer buffer)) {
             return context.throwTypeError("SharedArrayBuffer.prototype.slice called on non-SharedArrayBuffer");
         }
 
-        int byteLength = buffer.getByteLength();
+        int len = buffer.getByteLength();
 
-        // Get begin parameter
-        int begin = 0;
+        // Step 4: Let relativeStart be ? ToIntegerOrInfinity(start).
+        int first;
         if (args.length > 0) {
-            begin = JSTypeConversions.toInt32(context, args[0]);
+            double relativeStart = JSTypeConversions.toInteger(context, args[0]);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (relativeStart < 0) {
+                first = (int) Math.max(len + relativeStart, 0);
+            } else {
+                first = (int) Math.min(relativeStart, len);
+            }
+        } else {
+            first = 0;
         }
 
-        // Get end parameter (default to byteLength)
-        int end = byteLength;
+        // Step 7: If end is undefined, let relativeEnd be len; else let relativeEnd be ? ToIntegerOrInfinity(end).
+        int fin;
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            end = JSTypeConversions.toInt32(context, args[1]);
+            double relativeEnd = JSTypeConversions.toInteger(context, args[1]);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (relativeEnd < 0) {
+                fin = (int) Math.max(len + relativeEnd, 0);
+            } else {
+                fin = (int) Math.min(relativeEnd, len);
+            }
+        } else {
+            fin = len;
         }
 
-        // Perform the slice
-        return buffer.slice(begin, end);
+        int newLen = Math.max(fin - first, 0);
+
+        // Step 11: Let ctor be ? SpeciesConstructor(O, %SharedArrayBuffer%).
+        JSValue ctor = speciesConstructor(context, buffer);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        // Step 12: Let new be ? Construct(ctor, « newLen »).
+        JSValue newObj;
+        if (ctor instanceof JSUndefined) {
+            // Use default SharedArrayBuffer constructor
+            JSSharedArrayBuffer newBuffer = new JSSharedArrayBuffer(newLen);
+            context.transferPrototype(newBuffer, JSSharedArrayBuffer.NAME);
+            newObj = newBuffer;
+        } else {
+            newObj = JSReflectObject.construct(context, JSUndefined.INSTANCE,
+                    new JSValue[]{ctor, new JSArray(JSNumber.of(newLen))});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+
+        // Step 13: If new does not have an [[ArrayBufferData]] internal slot, throw a TypeError.
+        if (!(newObj instanceof JSSharedArrayBuffer newBuffer)) {
+            return context.throwTypeError("Species constructor did not return a SharedArrayBuffer");
+        }
+
+        // Step 14: If new is this, throw a TypeError.
+        if (newBuffer == buffer) {
+            return context.throwTypeError("cannot use identical SharedArrayBuffer");
+        }
+
+        // Step 15: If new.[[ArrayBufferByteLength]] < newLen, throw a TypeError.
+        if (newBuffer.getByteLength() < newLen) {
+            return context.throwTypeError("new SharedArrayBuffer is too small");
+        }
+
+        // Step 16: Copy bytes
+        if (newLen > 0) {
+            byte[] bytes = new byte[newLen];
+            ByteBuffer src = buffer.getBuffer();
+            synchronized (src) {
+                ByteBuffer source = src.duplicate();
+                source.position(first);
+                source.limit(first + newLen);
+                source.get(bytes);
+            }
+            ByteBuffer dst = newBuffer.getBuffer();
+            synchronized (dst) {
+                ByteBuffer target = dst.duplicate();
+                target.position(0);
+                target.put(bytes);
+            }
+        }
+
+        return newBuffer;
+    }
+
+    /**
+     * SpeciesConstructor(O, defaultConstructor) per ES2024 7.3.20.
+     * Returns JSUndefined.INSTANCE to use the default constructor,
+     * or the species constructor function.
+     * Sets pending exception on error.
+     */
+    private static JSValue speciesConstructor(JSContext context, JSObject obj) {
+        JSValue ctor = obj.get(context, PropertyKey.CONSTRUCTOR);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (ctor instanceof JSUndefined) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(ctor instanceof JSObject ctorObj)) {
+            context.throwTypeError("constructor is not an object");
+            return JSUndefined.INSTANCE;
+        }
+        JSValue species = ctorObj.get(context, PropertyKey.SYMBOL_SPECIES);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (species instanceof JSUndefined || species instanceof JSNull) {
+            return JSUndefined.INSTANCE;
+        }
+        if (species instanceof JSFunction) {
+            return species;
+        }
+        context.throwTypeError("Species is not a constructor");
+        return JSUndefined.INSTANCE;
     }
 }

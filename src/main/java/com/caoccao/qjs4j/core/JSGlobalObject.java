@@ -1580,8 +1580,9 @@ public final class JSGlobalObject {
      * Initialize String constructor and prototype.
      */
     private void initializeStringConstructor() {
-        // Create String.prototype
-        JSObject stringPrototype = context.createJSObject();
+        // Create String.prototype - per ES spec, it is itself a String object whose value is ""
+        JSObject stringPrototype = new JSStringObject();
+        context.transferPrototype(stringPrototype, JSObject.NAME);
         stringPrototype.defineProperty(PropertyKey.fromString("at"), new JSNativeFunction("at", 1, StringPrototype::at), PropertyDescriptor.DataState.ConfigurableWritable);
         stringPrototype.defineProperty(PropertyKey.fromString("charAt"), new JSNativeFunction("charAt", 1, StringPrototype::charAt), PropertyDescriptor.DataState.ConfigurableWritable);
         stringPrototype.defineProperty(PropertyKey.fromString("charCodeAt"), new JSNativeFunction("charCodeAt", 1, StringPrototype::charCodeAt), PropertyDescriptor.DataState.ConfigurableWritable);

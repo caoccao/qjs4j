@@ -158,7 +158,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, pair);
             }
             return IteratorResult.done(context);
-        }, "Set Iterator");
+        }, "Set Iterator", false);
     }
 
     /**
@@ -172,7 +172,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, value);
             }
             return IteratorResult.done(context);
-        }, "Set Iterator");
+        }, "Set Iterator", false);
     }
 
     /**

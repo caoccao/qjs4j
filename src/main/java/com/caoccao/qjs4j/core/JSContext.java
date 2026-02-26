@@ -590,6 +590,12 @@ public final class JSContext implements AutoCloseable {
         return jsSet;
     }
 
+    public JSStringObject createJSStringObject() {
+        JSStringObject wrapper = new JSStringObject();
+        transferPrototype(wrapper, JSStringObject.NAME);
+        return wrapper;
+    }
+
     public JSStringObject createJSStringObject(JSString value) {
         JSStringObject wrapper = new JSStringObject(value);
         transferPrototype(wrapper, JSStringObject.NAME);

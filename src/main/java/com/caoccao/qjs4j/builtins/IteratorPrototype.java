@@ -1601,18 +1601,30 @@ public final class IteratorPrototype {
      * Returns an iterator of string characters.
      */
     public static JSValue stringIterator(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSString str)) {
-            // Try to get primitive value for boxed strings
-            if (thisArg instanceof JSObject obj) {
-                JSValue primitiveValue = obj.getPrimitiveValue();
-                if (primitiveValue instanceof JSString boxedStr) {
-                    return JSIterator.stringIterator(context, boxedStr);
-                }
-            }
-            return context.throwTypeError("String iterator called on non-string");
+        // ES2024 22.1.5.1: String.prototype[@@iterator]()
+        // Step 1: Let O be ? RequireObjectCoercible(this value).
+        if (thisArg instanceof JSUndefined || thisArg instanceof JSNull) {
+            return context.throwTypeError("String.prototype[Symbol.iterator] called on null or undefined");
         }
-
-        return JSIterator.stringIterator(context, str);
+        // Step 2: Let S be ? ToString(O).
+        if (thisArg instanceof JSString str) {
+            return JSIterator.stringIterator(context, str);
+        }
+        if (thisArg instanceof JSObject obj) {
+            // Fast path for boxed strings
+            JSValue primitiveValue = obj.getPrimitiveValue();
+            if (primitiveValue instanceof JSString boxedStr) {
+                return JSIterator.stringIterator(context, boxedStr);
+            }
+            // General object: use ToString coercion (handles custom toString)
+            JSString str = JSTypeConversions.toString(context, obj);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            return JSIterator.stringIterator(context, str);
+        }
+        // Raw non-string primitive (number, boolean, symbol, bigint)
+        return context.throwTypeError("String.prototype[Symbol.iterator] requires that 'this' be a String");
     }
 
     /**

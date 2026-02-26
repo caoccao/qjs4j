@@ -61,7 +61,10 @@ public final class JSSet extends JSObject {
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
 
-            JSValue adder = setObj.get("add");
+            JSValue adder = setObj.get(context, PropertyKey.fromString("add"));
+            if (context.hasPendingException()) {
+                return null;
+            }
             if (!(adder instanceof JSFunction adderFunction)) {
                 return context.throwTypeError("set/add is not a function");
             }
@@ -95,12 +98,20 @@ public final class JSSet extends JSObject {
                     closeIterator(context, iterator);
                     return context.throwTypeError("Iterator result must be an object");
                 }
-                JSValue done = nextResult.get("done");
+                JSValue done = nextResult.get(context, PropertyKey.DONE);
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    return null;
+                }
                 if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
                     break;
                 }
 
-                JSValue value = nextResult.get(PropertyKey.VALUE);
+                JSValue value = nextResult.get(context, PropertyKey.VALUE);
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    return null;
+                }
                 JSValue adderResult;
                 try {
                     adderResult = adderFunction.call(context, setObj, new JSValue[]{value});

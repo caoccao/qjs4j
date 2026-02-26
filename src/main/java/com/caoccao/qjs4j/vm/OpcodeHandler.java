@@ -3890,8 +3890,30 @@ public final class OpcodeHandler {
     private static void internalHandleShr(ExecutionContext executionContext) {
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
-        JSValue leftPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, left, JSTypeConversions.PreferredType.NUMBER);
-        JSValue rightPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, right, JSTypeConversions.PreferredType.NUMBER);
+        JSValue leftPrimitive;
+        JSValue rightPrimitive;
+        try {
+            leftPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, left, JSTypeConversions.PreferredType.NUMBER);
+            rightPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, right, JSTypeConversions.PreferredType.NUMBER);
+        } catch (JSVirtualMachineException e) {
+            executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            return;
+        } catch (JSException e) {
+            if (e.getErrorValue() != null) {
+                executionContext.virtualMachine.pendingException = e.getErrorValue();
+            } else {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError("Error",
+                        e.getMessage() != null ? e.getMessage() : "toPrimitive");
+            }
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        executionContext.virtualMachine.capturePendingException();
+        if (executionContext.virtualMachine.pendingException != null) {
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
         if (leftPrimitive instanceof JSBigInt || rightPrimitive instanceof JSBigInt) {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("BigInts do not support >>>");
             executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
