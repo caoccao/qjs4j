@@ -624,6 +624,14 @@ public sealed abstract class JSTypedArray extends JSObject permits
     public abstract boolean isAtomicsWriteable();
 
     /**
+     * Returns true if this TypedArray is length-tracking (auto-length)
+     * on a resizable ArrayBuffer.
+     */
+    public boolean isLengthTracking() {
+        return trackRab;
+    }
+
+    /**
      * Check if this TypedArray is out of bounds due to buffer resize or detach.
      * Following QuickJS typed_array_is_oob semantics.
      */

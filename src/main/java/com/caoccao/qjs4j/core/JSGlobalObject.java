@@ -1791,15 +1791,30 @@ public final class JSGlobalObject {
         typedArrayPrototype.defineProperty(PropertyKey.fromString("findIndex"), new JSNativeFunction("findIndex", 1, TypedArrayPrototype::findIndex), PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("findLast"), new JSNativeFunction("findLast", 1, TypedArrayPrototype::findLast), PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("findLastIndex"), new JSNativeFunction("findLastIndex", 1, TypedArrayPrototype::findLastIndex), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("forEach"), new JSNativeFunction("forEach", 1, TypedArrayPrototype::forEach), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("includes"), new JSNativeFunction("includes", 1, TypedArrayPrototype::includes), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("indexOf"), new JSNativeFunction("indexOf", 1, TypedArrayPrototype::indexOf), PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("join"), new JSNativeFunction("join", 1, TypedArrayPrototype::join), PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("keys"), new JSNativeFunction("keys", 0, TypedArrayPrototype::keys), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("lastIndexOf"), new JSNativeFunction("lastIndexOf", 1, TypedArrayPrototype::lastIndexOf), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("map"), new JSNativeFunction("map", 1, TypedArrayPrototype::map), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("reduce"), new JSNativeFunction("reduce", 1, TypedArrayPrototype::reduce), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("reduceRight"), new JSNativeFunction("reduceRight", 1, TypedArrayPrototype::reduceRight), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("reverse"), new JSNativeFunction("reverse", 0, TypedArrayPrototype::reverse), PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("set"), new JSNativeFunction("set", 1, TypedArrayPrototype::set), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("slice"), new JSNativeFunction("slice", 2, TypedArrayPrototype::slice), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("some"), new JSNativeFunction("some", 1, TypedArrayPrototype::some), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("sort"), new JSNativeFunction("sort", 1, TypedArrayPrototype::sort), PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("subarray"), new JSNativeFunction("subarray", 2, TypedArrayPrototype::subarray), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("toLocaleString"), new JSNativeFunction("toLocaleString", 0, TypedArrayPrototype::toLocaleString), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("toReversed"), new JSNativeFunction("toReversed", 0, TypedArrayPrototype::toReversed), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("toSorted"), new JSNativeFunction("toSorted", 1, TypedArrayPrototype::toSorted), PropertyDescriptor.DataState.ConfigurableWritable);
         if (arrayToString instanceof JSFunction) {
             typedArrayPrototype.defineProperty(PropertyKey.fromString("toString"), arrayToString, PropertyDescriptor.DataState.ConfigurableWritable);
         } else {
             typedArrayPrototype.defineProperty(PropertyKey.fromString("toString"), new JSNativeFunction("toString", 0, TypedArrayPrototype::toString), PropertyDescriptor.DataState.ConfigurableWritable);
         }
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("with"), new JSNativeFunction("with", 2, TypedArrayPrototype::withMethod), PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("values"), valuesFunction, PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction, PropertyDescriptor.DataState.ConfigurableWritable);
 

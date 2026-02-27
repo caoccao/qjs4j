@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public final class TypedArrayPrototype {
@@ -55,6 +56,45 @@ public final class TypedArrayPrototype {
         }
         // Step 10: Get element (safe for detached/resized buffers)
         return safeGetElement(typedArray, index);
+    }
+
+    /**
+     * CompareTypedArrayElements per ES2024 23.2.4.4.
+     * Default comparison for typed array sort when no compareFn is provided.
+     */
+    private static int compareTypedArrayElements(JSValue x, JSValue y) {
+        if (x instanceof JSBigInt xBig && y instanceof JSBigInt yBig) {
+            return xBig.value().compareTo(yBig.value());
+        }
+        double dx = ((JSNumber) x).value();
+        double dy = ((JSNumber) y).value();
+        if (Double.isNaN(dx) && Double.isNaN(dy)) {
+            return 0;
+        }
+        if (Double.isNaN(dx)) {
+            return 1;
+        }
+        if (Double.isNaN(dy)) {
+            return -1;
+        }
+        if (dx < dy) {
+            return -1;
+        }
+        if (dx > dy) {
+            return 1;
+        }
+        if (dx == 0 && dy == 0) {
+            // +0 > -0 per spec
+            boolean xNeg = (Double.doubleToRawLongBits(dx) & 0x8000000000000000L) != 0;
+            boolean yNeg = (Double.doubleToRawLongBits(dy) & 0x8000000000000000L) != 0;
+            if (xNeg && !yNeg) {
+                return -1;
+            }
+            if (!xNeg && yNeg) {
+                return 1;
+            }
+        }
+        return 0;
     }
 
     public static JSValue copyWithin(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -428,6 +468,32 @@ public final class TypedArrayPrototype {
         return JSNumber.of(-1);
     }
 
+    public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.forEach");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.forEach on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
+            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
+                    ? "undefined is not a function"
+                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
+        }
+        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        int length = typedArray.getLength();
+        for (int k = 0; k < length; k++) {
+            JSValue kValue = safeGetElement(typedArray, k);
+            callbackFn.call(context, callbackThisArg,
+                    new JSValue[]{kValue, JSNumber.of(k), typedArray});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+        return JSUndefined.INSTANCE;
+    }
+
     public static JSValue getBuffer(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTypedArray typedArray = toTypedArray(context, thisArg, "get TypedArray.prototype.buffer");
         if (typedArray == null) {
@@ -480,6 +546,83 @@ public final class TypedArrayPrototype {
         return JSUndefined.INSTANCE;
     }
 
+    public static JSValue includes(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.includes");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.includes on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        int length = typedArray.getLength();
+        if (length == 0) {
+            return JSBoolean.FALSE;
+        }
+        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        int fromIndex;
+        if (fromIndexD >= length) {
+            return JSBoolean.FALSE;
+        } else if (fromIndexD < 0) {
+            fromIndex = Math.max(0, (int) (length + fromIndexD));
+        } else {
+            fromIndex = (int) fromIndexD;
+        }
+        // After coercion of fromIndex, buffer may have been detached
+        for (int k = fromIndex; k < length; k++) {
+            JSValue element = safeGetElement(typedArray, k);
+            // SameValueZero: NaN === NaN, +0 === -0
+            if (sameValueZero(element, searchElement)) {
+                return JSBoolean.TRUE;
+            }
+        }
+        return JSBoolean.FALSE;
+    }
+
+    public static JSValue indexOf(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.indexOf");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.indexOf on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        int length = typedArray.getLength();
+        if (length == 0) {
+            return JSNumber.of(-1);
+        }
+        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        // After coercion of fromIndex, check if TA went OOB (fixed-length shrink)
+        if (typedArray.isOutOfBounds()) {
+            return JSNumber.of(-1);
+        }
+        // Use ORIGINAL length for index computation and loop bounds (ES2024 taRecord caching)
+        if (fromIndexD >= length) {
+            return JSNumber.of(-1);
+        }
+        int fromIndex;
+        if (fromIndexD < 0) {
+            fromIndex = Math.max(0, (int) (length + fromIndexD));
+        } else {
+            fromIndex = (int) fromIndexD;
+        }
+        for (int k = fromIndex; k < length; k++) {
+            JSValue element = safeGetElement(typedArray, k);
+            // indexOf uses strict equality (===)
+            if (JSTypeConversions.strictEquals(element, searchElement)) {
+                return JSNumber.of(k);
+            }
+        }
+        return JSNumber.of(-1);
+    }
+
     private static boolean isBigIntTypedArray(JSTypedArray typedArray) {
         return typedArray instanceof JSBigInt64Array || typedArray instanceof JSBigUint64Array;
     }
@@ -489,16 +632,33 @@ public final class TypedArrayPrototype {
         if (typedArray == null) {
             return context.getPendingException();
         }
-        String separator = args.length > 0 && !args[0].isUndefined()
-                ? JSTypeConversions.toString(context, args[0]).value()
-                : ",";
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.join on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        // Step 3: Capture length BEFORE separator coercion
+        int length = typedArray.getLength();
+
+        // Step 4: Convert separator ONCE (may cause side effects like resizing/detaching buffer)
+        String separator;
+        if (args.length > 0 && !args[0].isUndefined()) {
+            separator = JSTypeConversions.toString(context, args[0]).value();
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        } else {
+            separator = ",";
+        }
+
+        // Use original length for iteration; elements that are now OOB become empty string
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < typedArray.getLength(); i++) {
+        for (int i = 0; i < length; i++) {
             if (i > 0) {
                 sb.append(separator);
             }
-            JSValue value = typedArray.getJSElement(i);
-            sb.append(JSTypeConversions.toString(context, value).value());
+            JSValue element = safeGetElement(typedArray, i);
+            if (!(element instanceof JSUndefined)) {
+                sb.append(JSTypeConversions.toString(context, element).value());
+            }
         }
         return new JSString(sb.toString());
     }
@@ -524,6 +684,173 @@ public final class TypedArrayPrototype {
         }, "Array Iterator");
     }
 
+    public static JSValue lastIndexOf(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.lastIndexOf");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.lastIndexOf on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        int length = typedArray.getLength();
+        if (length == 0) {
+            return JSNumber.of(-1);
+        }
+        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : length - 1;
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        // After coercion of fromIndex, check if TA went OOB (fixed-length shrink)
+        if (typedArray.isOutOfBounds()) {
+            return JSNumber.of(-1);
+        }
+        // Use ORIGINAL length for index computation and loop bounds (ES2024 taRecord caching)
+        int fromIndex;
+        if (fromIndexD >= 0) {
+            fromIndex = (int) Math.min(fromIndexD, length - 1);
+        } else {
+            fromIndex = (int) (length + fromIndexD);
+        }
+        for (int k = fromIndex; k >= 0; k--) {
+            JSValue element = safeGetElement(typedArray, k);
+            if (JSTypeConversions.strictEquals(element, searchElement)) {
+                return JSNumber.of(k);
+            }
+        }
+        return JSNumber.of(-1);
+    }
+
+    public static JSValue map(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.map");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.map on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
+            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
+                    ? "undefined is not a function"
+                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
+        }
+        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        int length = typedArray.getLength();
+
+        // TypedArraySpeciesCreate with same length
+        JSValue result = typedArraySpeciesCreate(context, typedArray, new JSValue[]{JSNumber.of(length)});
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        JSTypedArray resultArray = (JSTypedArray) result;
+
+        for (int k = 0; k < length; k++) {
+            JSValue kValue = safeGetElement(typedArray, k);
+            JSValue mappedValue = callbackFn.call(context, callbackThisArg,
+                    new JSValue[]{kValue, JSNumber.of(k), typedArray});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            resultArray.set(context, PropertyKey.fromIndex(k), mappedValue);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+        return resultArray;
+    }
+
+    public static JSValue reduce(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.reduce");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.reduce on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
+            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
+                    ? "undefined is not a function"
+                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
+        }
+        int length = typedArray.getLength();
+        int k = 0;
+        JSValue accumulator;
+        if (args.length > 1) {
+            accumulator = args[1];
+        } else {
+            if (length == 0) {
+                return context.throwTypeError("Reduce of empty array with no initial value");
+            }
+            accumulator = safeGetElement(typedArray, 0);
+            k = 1;
+        }
+        for (; k < length; k++) {
+            JSValue kValue = safeGetElement(typedArray, k);
+            accumulator = callbackFn.call(context, JSUndefined.INSTANCE,
+                    new JSValue[]{accumulator, kValue, JSNumber.of(k), typedArray});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+        return accumulator;
+    }
+
+    public static JSValue reduceRight(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.reduceRight");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.reduceRight on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
+            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
+                    ? "undefined is not a function"
+                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
+        }
+        int length = typedArray.getLength();
+        int k = length - 1;
+        JSValue accumulator;
+        if (args.length > 1) {
+            accumulator = args[1];
+        } else {
+            if (length == 0) {
+                return context.throwTypeError("Reduce of empty array with no initial value");
+            }
+            accumulator = safeGetElement(typedArray, k);
+            k--;
+        }
+        for (; k >= 0; k--) {
+            JSValue kValue = safeGetElement(typedArray, k);
+            accumulator = callbackFn.call(context, JSUndefined.INSTANCE,
+                    new JSValue[]{accumulator, kValue, JSNumber.of(k), typedArray});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+        return accumulator;
+    }
+
+    public static JSValue reverse(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.reverse");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.reverse on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        int length = typedArray.getLength();
+        int middle = length / 2;
+        for (int lower = 0; lower < middle; lower++) {
+            int upper = length - 1 - lower;
+            JSValue lowerValue = typedArray.getJSElement(lower);
+            JSValue upperValue = typedArray.getJSElement(upper);
+            typedArray.set(context, PropertyKey.fromIndex(lower), upperValue);
+            typedArray.set(context, PropertyKey.fromIndex(upper), lowerValue);
+        }
+        return typedArray;
+    }
+
     /**
      * Safe element access that returns undefined for detached/out-of-bounds typed arrays.
      * Per ES spec, IntegerIndexedElementGet returns undefined when the buffer is detached
@@ -536,23 +863,369 @@ public final class TypedArrayPrototype {
         return typedArray.getJSElement(index);
     }
 
+    /**
+     * SameValueZero comparison per ES spec.
+     * Like === except NaN equals NaN, and +0 equals -0.
+     */
+    private static boolean sameValueZero(JSValue x, JSValue y) {
+        if (JSTypeConversions.strictEquals(x, y)) {
+            return true;
+        }
+        // NaN === NaN under SameValueZero
+        if (x instanceof JSNumber xn && y instanceof JSNumber yn) {
+            return Double.isNaN(xn.value()) && Double.isNaN(yn.value());
+        }
+        return false;
+    }
+
     public static JSValue set(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.set");
+        JSTypedArray target = toTypedArray(context, thisArg, "TypedArray.prototype.set");
+        if (target == null) {
+            return context.getPendingException();
+        }
+        JSValue source = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+
+        if (source instanceof JSTypedArray srcTypedArray) {
+            return setFromTypedArray(context, target, srcTypedArray, args);
+        } else {
+            return setFromArrayLike(context, target, source, args);
+        }
+    }
+
+    private static JSValue setFromTypedArray(JSContext context, JSTypedArray target, JSTypedArray source, JSValue[] args) {
+        // Step 3: ToIntegerOrInfinity(offset) - may detach buffer
+        double targetOffsetD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (targetOffsetD < 0) {
+            return context.throwRangeError("offset is out of bounds");
+        }
+        int targetOffset = (int) targetOffsetD;
+
+        // Step 5: Check if target is OOB (after offset coercion)
+        if (target.isOutOfBounds()) {
+            return context.throwTypeError("TypedArray is detached or out of bounds");
+        }
+        int targetLength = target.getLength();
+
+        // Step 9: Check source buffer detached
+        if (source.getBuffer().isDetached()) {
+            return context.throwTypeError("Source TypedArray buffer is detached");
+        }
+        // Step 11: Check source OOB
+        if (source.isOutOfBounds()) {
+            return context.throwTypeError("Source TypedArray is out of bounds");
+        }
+        int srcLength = source.getLength();
+
+        // Step 13: Range check
+        if ((long) srcLength + targetOffset > targetLength) {
+            return context.throwRangeError("Source is too large");
+        }
+
+        // Step 14: Check content type compatibility
+        boolean targetIsBigInt = isBigIntTypedArray(target);
+        boolean sourceIsBigInt = isBigIntTypedArray(source);
+        if (targetIsBigInt != sourceIsBigInt) {
+            return context.throwTypeError("Cannot mix BigInt and non-BigInt typed arrays");
+        }
+
+        // Step 15: If same buffer, clone source values first to avoid overlap
+        boolean sameBuffer = target.getBuffer() == source.getBuffer();
+        if (sameBuffer) {
+            // Clone source values into temporary array
+            JSValue[] tempValues = new JSValue[srcLength];
+            for (int i = 0; i < srcLength; i++) {
+                tempValues[i] = source.getJSElement(i);
+            }
+            for (int i = 0; i < srcLength; i++) {
+                target.set(context, PropertyKey.fromIndex(targetOffset + i), tempValues[i]);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+        } else {
+            // Different buffers - direct copy
+            for (int i = 0; i < srcLength; i++) {
+                JSValue value = source.getJSElement(i);
+                target.set(context, PropertyKey.fromIndex(targetOffset + i), value);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+        }
+        return JSUndefined.INSTANCE;
+    }
+
+    private static JSValue setFromArrayLike(JSContext context, JSTypedArray target, JSValue source, JSValue[] args) {
+        // Step 3: ToIntegerOrInfinity(offset) - may detach buffer
+        double targetOffsetD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (targetOffsetD < 0) {
+            return context.throwRangeError("offset is out of bounds");
+        }
+        int targetOffset = (int) targetOffsetD;
+
+        // Step 5: Check if target is detached/OOB (after offset coercion)
+        if (target.isOutOfBounds()) {
+            return context.throwTypeError("TypedArray is detached or out of bounds");
+        }
+        int targetLength = target.getLength();
+
+        // Step 7: ToObject(source)
+        JSObject src = JSTypeConversions.toObject(context, source);
+        if (src == null || context.hasPendingException()) {
+            return context.hasPendingException() ? context.getPendingException()
+                    : context.throwTypeError("Cannot convert source to object");
+        }
+
+        // Step 8: Get source length
+        JSValue srcLengthValue = src.get(context, PropertyKey.LENGTH);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        long srcLength = JSTypeConversions.toLength(context, srcLengthValue);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        // Step 9: Range check
+        if (srcLength + targetOffset > targetLength) {
+            return context.throwRangeError("Source is too large");
+        }
+
+        boolean isBigInt = isBigIntTypedArray(target);
+
+        // Step 11: Loop - convert values and write
+        for (long k = 0; k < srcLength; k++) {
+            PropertyKey pk = PropertyKey.fromString(Long.toString(k));
+            JSValue value = src.get(context, pk);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+
+            // Convert value (may cause side effects including detaching/resizing buffer)
+            JSValue convertedValue;
+            if (isBigInt) {
+                convertedValue = JSTypeConversions.toBigInt(context, value);
+            } else {
+                convertedValue = JSTypeConversions.toNumber(context, value);
+            }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+
+            // After value conversion, check if buffer is still valid before writing
+            int targetIndex = (int) (targetOffset + k);
+            if (!target.getBuffer().isDetached() && !target.isOutOfBounds()
+                    && targetIndex < target.getLength()) {
+                target.set(context, PropertyKey.fromIndex(targetIndex), convertedValue);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+        }
+        return JSUndefined.INSTANCE;
+    }
+
+    public static JSValue slice(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.slice");
         if (typedArray == null) {
             return context.getPendingException();
         }
-        if (args.length == 0) {
-            return context.throwTypeError("TypedArray.prototype.set requires a source array");
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.slice on a typed array backed by a detached or out-of-bounds buffer");
         }
-        int offset = args.length > 1 ? (int) JSTypeConversions.toInteger(context, args[1]) : 0;
+        int length = typedArray.getLength();
+
+        double relativeStart = args.length > 0 ? JSTypeConversions.toInteger(context, args[0]) : 0;
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        int start;
+        if (relativeStart < 0) {
+            start = Math.max(0, (int) (length + relativeStart));
+        } else {
+            start = (int) Math.min(relativeStart, length);
+        }
+
+        int end;
+        if (args.length > 1 && !args[1].isUndefined()) {
+            double relativeEnd = JSTypeConversions.toInteger(context, args[1]);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (relativeEnd < 0) {
+                end = Math.max(0, (int) (length + relativeEnd));
+            } else {
+                end = (int) Math.min(relativeEnd, length);
+            }
+        } else {
+            end = length;
+        }
+
+        int count = Math.max(0, end - start);
+
+        // TypedArraySpeciesCreate
+        JSValue result = typedArraySpeciesCreate(context, typedArray, new JSValue[]{JSNumber.of(count)});
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        JSTypedArray resultArray = (JSTypedArray) result;
+
+        if (count > 0) {
+            if (typedArray.isOutOfBounds()) {
+                return context.throwTypeError("Cannot perform TypedArray.prototype.slice on a typed array backed by a detached or out-of-bounds buffer");
+            }
+            // Re-read length after species constructor may have resized (step 14c)
+            int currentLength = typedArray.getLength();
+            int newEnd = Math.min(end, currentLength);
+            int srcCount = Math.max(0, newEnd - start);
+
+            if (srcCount > 0 && !typedArray.getBuffer().isDetached() && !resultArray.getBuffer().isDetached()) {
+                int elementSize = typedArray.getBytesPerElement();
+                IJSArrayBuffer srcBuffer = typedArray.getBuffer();
+                IJSArrayBuffer dstBuffer = resultArray.getBuffer();
+
+                if (typedArray.getClass() == resultArray.getClass()) {
+                    // Same type: byte-by-byte copy per spec step 14g
+                    int srcByteOffset = typedArray.getByteOffset() + start * elementSize;
+                    int dstByteOffset = resultArray.getByteOffset();
+                    int byteCount = srcCount * elementSize;
+
+                    if (srcBuffer == dstBuffer) {
+                        // Same buffer: forward byte-by-byte copy per spec (step 14g.ix)
+                        // This intentionally allows overlapping writes to produce spec-defined results
+                        ByteBuffer buf = srcBuffer.getBuffer().duplicate();
+                        buf.order(srcBuffer.getBuffer().order());
+                        for (int i = 0; i < byteCount; i++) {
+                            byte b = buf.get(srcByteOffset + i);
+                            buf.put(dstByteOffset + i, b);
+                        }
+                    } else {
+                        // Different buffers: bulk copy
+                        ByteBuffer src = srcBuffer.getBuffer().duplicate();
+                        src.order(srcBuffer.getBuffer().order());
+                        ByteBuffer dst = dstBuffer.getBuffer().duplicate();
+                        dst.order(dstBuffer.getBuffer().order());
+                        byte[] temp = new byte[byteCount];
+                        src.position(srcByteOffset);
+                        src.get(temp, 0, byteCount);
+                        dst.position(dstByteOffset);
+                        dst.put(temp, 0, byteCount);
+                    }
+                } else {
+                    // Different types: per-element copy (step 14h), limited by srcCount
+                    for (int k = 0; k < srcCount; k++) {
+                        JSValue kValue = safeGetElement(typedArray, start + k);
+                        resultArray.set(context, PropertyKey.fromIndex(k), kValue);
+                        if (context.hasPendingException()) {
+                            return context.getPendingException();
+                        }
+                    }
+                }
+            }
+            // Elements beyond srcCount in result array remain zero-filled (default)
+        }
+        return resultArray;
+    }
+
+    public static JSValue some(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.some");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.some on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
+            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
+                    ? "undefined is not a function"
+                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
+        }
+        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        int length = typedArray.getLength();
+        for (int k = 0; k < length; k++) {
+            JSValue kValue = safeGetElement(typedArray, k);
+            JSValue testResult = callbackFn.call(context, callbackThisArg,
+                    new JSValue[]{kValue, JSNumber.of(k), typedArray});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (JSTypeConversions.toBoolean(testResult) == JSBoolean.TRUE) {
+                return JSBoolean.TRUE;
+            }
+        }
+        return JSBoolean.FALSE;
+    }
+
+    public static JSValue sort(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.sort");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.sort on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        JSFunction compareFn = null;
+        if (args.length > 0 && !args[0].isUndefined()) {
+            if (!(args[0] instanceof JSFunction fn)) {
+                return context.throwTypeError("compareFn is not a function");
+            }
+            compareFn = fn;
+        }
+        int length = typedArray.getLength();
+        if (length <= 1) {
+            return typedArray;
+        }
+
+        // Collect elements into array
+        JSValue[] elements = new JSValue[length];
+        for (int i = 0; i < length; i++) {
+            elements[i] = typedArray.getJSElement(i);
+        }
+
+        // Sort
+        JSFunction finalCompareFn = compareFn;
+        final boolean[] hasError = {false};
         try {
-            typedArray.setArray(context, args[0], offset);
-        } catch (JSRangeErrorException e) {
-            return context.throwRangeError(e.getMessage());
+            Arrays.sort(elements, (a, b) -> {
+                if (hasError[0]) {
+                    return 0;
+                }
+                if (finalCompareFn != null) {
+                    JSValue result = finalCompareFn.call(context, JSUndefined.INSTANCE,
+                            new JSValue[]{a, b});
+                    if (context.hasPendingException()) {
+                        hasError[0] = true;
+                        return 0;
+                    }
+                    double d = JSTypeConversions.toNumber(context, result).value();
+                    if (Double.isNaN(d)) {
+                        return 0;
+                    }
+                    return (int) Math.signum(d);
+                }
+                return compareTypedArrayElements(a, b);
+            });
         } catch (IllegalArgumentException e) {
-            return context.throwTypeError(e.getMessage());
+            // TimSort may throw if comparison is inconsistent, just ignore
         }
-        return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        // Write back
+        for (int i = 0; i < length; i++) {
+            typedArray.set(context, PropertyKey.fromIndex(i), elements[i]);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+        return typedArray;
     }
 
     public static JSValue subarray(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -560,20 +1233,267 @@ public final class TypedArrayPrototype {
         if (typedArray == null) {
             return context.getPendingException();
         }
-        int begin = args.length > 0 ? JSTypeConversions.toInt32(context, args[0]) : 0;
-        int end = args.length > 1 && !args[1].isUndefined()
-                ? JSTypeConversions.toInt32(context, args[1])
-                : typedArray.getLength();
-        JSTypedArray result = typedArray.subarray(begin, end);
-        result.setPrototype(typedArray.getPrototype());
+
+        // Step 5-7: Get srcLength (0 if OOB)
+        int srcLength = typedArray.getLength();
+
+        // Step 8-10: Compute startIndex using toInteger (handles Infinity)
+        double relativeStart = args.length > 0 ? JSTypeConversions.toInteger(context, args[0]) : 0;
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        int startIndex;
+        if (relativeStart < 0) {
+            startIndex = Math.max(0, (int) (srcLength + relativeStart));
+        } else {
+            startIndex = (int) Math.min(relativeStart, srcLength);
+        }
+
+        // Determine if end is undefined (for length-tracking detection)
+        boolean endIsUndefined = args.length <= 1 || args[1].isUndefined();
+
+        // Steps 11-12: Compute endIndex
+        int endIndex;
+        if (!endIsUndefined) {
+            double relativeEnd = JSTypeConversions.toInteger(context, args[1]);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (relativeEnd < 0) {
+                endIndex = Math.max(0, (int) (srcLength + relativeEnd));
+            } else {
+                endIndex = (int) Math.min(relativeEnd, srcLength);
+            }
+        } else {
+            endIndex = srcLength;
+        }
+
+        // Step 13-14: Compute beginByteOffset using stored byteOffset (preserved even when OOB)
+        int elementSize = typedArray.getBytesPerElement();
+        int srcByteOffset = typedArray.getByteOffset();
+        int beginByteOffset = srcByteOffset + startIndex * elementSize;
+
+        // SpeciesConstructor(O, defaultConstructor)
+        IJSArrayBuffer buffer = typedArray.getBuffer();
+        JSValue defaultConstructor = context.getGlobalObject().get(PropertyKey.fromString(typedArray.getTypedArrayName()));
+        JSValue constructorValue = typedArray.get(context, PropertyKey.CONSTRUCTOR);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        JSValue chosenConstructor;
+        if (constructorValue instanceof JSUndefined) {
+            chosenConstructor = defaultConstructor;
+        } else if (!(constructorValue instanceof JSObject constructorObj)) {
+            return context.throwTypeError("constructor is not an object");
+        } else {
+            JSValue species = constructorObj.get(context, PropertyKey.SYMBOL_SPECIES);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (species instanceof JSUndefined || species instanceof JSNull) {
+                chosenConstructor = defaultConstructor;
+            } else {
+                chosenConstructor = species;
+            }
+        }
+
+        // Step 15-16: Build argument list
+        JSValue bufferArg = (buffer instanceof JSValue bv) ? bv : typedArray;
+        JSValue[] constructArgs;
+        if (typedArray.isLengthTracking() && endIsUndefined) {
+            // Step 15: Length-tracking + end undefined → (buffer, beginByteOffset)
+            // Result will also be length-tracking
+            constructArgs = new JSValue[]{bufferArg, JSNumber.of(beginByteOffset)};
+        } else {
+            // Step 16: Fixed length → (buffer, beginByteOffset, newLength)
+            int newLength = Math.max(0, endIndex - startIndex);
+            constructArgs = new JSValue[]{bufferArg, JSNumber.of(beginByteOffset), JSNumber.of(newLength)};
+        }
+
+        // Step 17: TypedArraySpeciesCreate
+        JSValue result = JSReflectObject.constructSimple(context, chosenConstructor, constructArgs);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        // Validate result is a TypedArray (TypedArrayCreate step 2: ValidateTypedArray)
+        if (!(result instanceof JSTypedArray)) {
+            return context.throwTypeError("TypedArray species constructor did not return a TypedArray");
+        }
+
         return result;
     }
 
+    public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.toLocaleString");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.toLocaleString on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        int length = typedArray.getLength();
+
+        String separator = ",";
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < length; i++) {
+            if (i > 0) {
+                sb.append(separator);
+            }
+            // Use safeGetElement to handle OOB (buffer may have been resized during callback)
+            JSValue element = safeGetElement(typedArray, i);
+            if (!(element instanceof JSUndefined) && !(element instanceof JSNull)) {
+                // Invoke element.toLocaleString()
+                JSValue toLocaleStringFn = null;
+                if (element instanceof JSObject elementObj) {
+                    toLocaleStringFn = elementObj.get(context, PropertyKey.fromString("toLocaleString"));
+                } else {
+                    // Auto-box primitive to get toLocaleString from prototype
+                    JSObject boxed = JSTypeConversions.toObject(context, element);
+                    if (boxed != null) {
+                        toLocaleStringFn = boxed.get(context, PropertyKey.fromString("toLocaleString"));
+                    }
+                }
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (toLocaleStringFn instanceof JSFunction fn) {
+                    JSValue result = fn.call(context, element, new JSValue[0]);
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
+                    sb.append(JSTypeConversions.toString(context, result).value());
+                } else {
+                    sb.append(JSTypeConversions.toString(context, element).value());
+                }
+            }
+        }
+        return new JSString(sb.toString());
+    }
+
+    public static JSValue toReversed(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.toReversed");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.toReversed on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        int length = typedArray.getLength();
+
+        // Create new typed array of same type (not species - ignores species per spec)
+        JSValue constructor = context.getGlobalObject().get(PropertyKey.fromString(typedArray.getTypedArrayName()));
+        JSValue result = JSReflectObject.constructSimple(context, constructor,
+                new JSValue[]{JSNumber.of(length)});
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (!(result instanceof JSTypedArray resultArray)) {
+            return context.throwTypeError("TypedArray constructor did not return a TypedArray");
+        }
+
+        for (int k = 0; k < length; k++) {
+            JSValue fromValue = typedArray.getJSElement(length - 1 - k);
+            resultArray.set(context, PropertyKey.fromIndex(k), fromValue);
+        }
+        return resultArray;
+    }
+
+    public static JSValue toSorted(JSContext context, JSValue thisArg, JSValue[] args) {
+        // Step 1: Validate compareFn first (before this-value validation per spec)
+        JSFunction compareFn = null;
+        if (args.length > 0 && !args[0].isUndefined()) {
+            if (!(args[0] instanceof JSFunction fn)) {
+                return context.throwTypeError("compareFn is not a function");
+            }
+            compareFn = fn;
+        }
+
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.toSorted");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.toSorted on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        int length = typedArray.getLength();
+
+        // Create new typed array of same type (not species - ignores species per spec)
+        JSValue constructor = context.getGlobalObject().get(PropertyKey.fromString(typedArray.getTypedArrayName()));
+        JSValue result = JSReflectObject.constructSimple(context, constructor,
+                new JSValue[]{JSNumber.of(length)});
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (!(result instanceof JSTypedArray resultArray)) {
+            return context.throwTypeError("TypedArray constructor did not return a TypedArray");
+        }
+
+        // Collect elements
+        JSValue[] elements = new JSValue[length];
+        for (int i = 0; i < length; i++) {
+            elements[i] = typedArray.getJSElement(i);
+        }
+
+        // Sort
+        JSFunction finalCompareFn = compareFn;
+        final boolean[] hasError = {false};
+        try {
+            Arrays.sort(elements, (a, b) -> {
+                if (hasError[0]) {
+                    return 0;
+                }
+                if (finalCompareFn != null) {
+                    JSValue cmpResult = finalCompareFn.call(context, JSUndefined.INSTANCE,
+                            new JSValue[]{a, b});
+                    if (context.hasPendingException()) {
+                        hasError[0] = true;
+                        return 0;
+                    }
+                    double d = JSTypeConversions.toNumber(context, cmpResult).value();
+                    if (Double.isNaN(d)) {
+                        return 0;
+                    }
+                    return (int) Math.signum(d);
+                }
+                return compareTypedArrayElements(a, b);
+            });
+        } catch (IllegalArgumentException e) {
+            // TimSort may throw if comparison is inconsistent
+        }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        // Write into result
+        for (int i = 0; i < elements.length; i++) {
+            resultArray.set(context, PropertyKey.fromIndex(i), elements[i]);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+        return resultArray;
+    }
+
     public static JSValue toString(JSContext context, JSValue thisArg, JSValue[] args) {
+        // TypedArray.prototype.toString delegates to Array.prototype.join
+        // which uses the "join" method from the object
         if (thisArg.isNullOrUndefined()) {
             return context.throwTypeError("Cannot convert undefined or null to object");
-        } else if (thisArg instanceof JSTypedArray jsTypedArray) {
-            return new JSString(jsTypedArray.toString());
+        }
+        if (thisArg instanceof JSObject jsObject) {
+            JSValue joinFn = jsObject.get(context, PropertyKey.fromString("join"));
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (joinFn instanceof JSFunction fn) {
+                JSValue result = fn.call(context, thisArg, new JSValue[0]);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                return result;
+            }
         }
         return JSTypeConversions.toString(context, thisArg);
     }
@@ -662,5 +1582,73 @@ public final class TypedArrayPrototype {
             }
             return JSIterator.IteratorResult.of(context, typedArray.getJSElement(index[0]++));
         }, "Array Iterator");
+    }
+
+    public static JSValue withMethod(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.with");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.with on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        // Step 3: Snapshot length
+        int length = typedArray.getLength();
+
+        // Step 4: ToIntegerOrInfinity(index)
+        double relativeIndex = args.length > 0 ? JSTypeConversions.toInteger(context, args[0]) : 0;
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        // Steps 5-6: Compute actualIndex using ORIGINAL length
+        int actualIndex;
+        if (relativeIndex >= 0) {
+            actualIndex = (int) relativeIndex;
+        } else {
+            actualIndex = (int) (length + relativeIndex);
+        }
+
+        // Steps 7-8: Convert value (may resize/detach buffer)
+        JSValue value = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue convertedValue;
+        if (isBigIntTypedArray(typedArray)) {
+            convertedValue = JSTypeConversions.toBigInt(context, value);
+        } else {
+            convertedValue = JSTypeConversions.toNumber(context, value);
+        }
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        // Step 9: IsValidIntegerIndex checks against CURRENT state
+        if (typedArray.isOutOfBounds()) {
+            return context.throwTypeError("Cannot perform TypedArray.prototype.with on a typed array backed by a detached or out-of-bounds buffer");
+        }
+        int currentLength = typedArray.getLength();
+        if (actualIndex < 0 || actualIndex >= currentLength) {
+            return context.throwRangeError("Invalid index");
+        }
+
+        // Step 10: TypedArrayCreateSameType uses ORIGINAL length (not currentLength)
+        JSValue constructor = context.getGlobalObject().get(PropertyKey.fromString(typedArray.getTypedArrayName()));
+        JSValue result = JSReflectObject.constructSimple(context, constructor,
+                new JSValue[]{JSNumber.of(length)});
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (!(result instanceof JSTypedArray resultArray)) {
+            return context.throwTypeError("TypedArray constructor did not return a TypedArray");
+        }
+
+        // Steps 11-12: Copy elements using original length
+        for (int k = 0; k < length; k++) {
+            if (k == actualIndex) {
+                resultArray.set(context, PropertyKey.fromIndex(k), convertedValue);
+            } else {
+                JSValue fromValue = safeGetElement(typedArray, k);
+                resultArray.set(context, PropertyKey.fromIndex(k), fromValue);
+            }
+        }
+        return resultArray;
     }
 }
