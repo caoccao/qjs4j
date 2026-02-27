@@ -393,11 +393,16 @@ public final class JSPromise extends JSObject {
                         reaction.context.clearPendingException();
                     }
                 } catch (Exception e) {
-                    // If handler throws, reject the chained promise
+                    // If handler throws, reject the chained promise with the JS error value
+                    JSValue errorValue = null;
                     if (reaction.context.hasPendingException()) {
-                        JSValue error = reaction.context.getPendingException();
+                        errorValue = reaction.context.getPendingException();
                         reaction.context.clearPendingException();
-                        rejectReactionTarget(reaction, error);
+                    } else if (e instanceof JSVirtualMachineException vmException && vmException.getJsValue() != null) {
+                        errorValue = vmException.getJsValue();
+                    }
+                    if (errorValue != null) {
+                        rejectReactionTarget(reaction, errorValue);
                     } else {
                         rejectReactionTarget(reaction, new JSString("Error in promise handler: " + e.getMessage()));
                     }

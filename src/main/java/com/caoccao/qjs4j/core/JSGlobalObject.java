@@ -899,7 +899,7 @@ public final class JSGlobalObject {
         dateTimeFormatConstructor.defineProperty(PropertyKey.fromString("prototype"), dateTimeFormatPrototype, PropertyDescriptor.DataState.None);
         dateTimeFormatConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"), new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf), PropertyDescriptor.DataState.ConfigurableWritable);
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("constructor"), dateTimeFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
-        intlObject.set("DateTimeFormat", dateTimeFormatConstructor);
+        intlObject.defineProperty(PropertyKey.fromString("DateTimeFormat"), dateTimeFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject numberFormatPrototype = context.createJSObject();
         numberFormatPrototype.defineProperty(PropertyKey.fromString("format"), new JSNativeFunction("format", 1, JSIntlObject::numberFormatFormat), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -912,11 +912,14 @@ public final class JSGlobalObject {
         numberFormatConstructor.defineProperty(PropertyKey.fromString("prototype"), numberFormatPrototype, PropertyDescriptor.DataState.None);
         numberFormatConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"), new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf), PropertyDescriptor.DataState.ConfigurableWritable);
         numberFormatPrototype.defineProperty(PropertyKey.fromString("constructor"), numberFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
-        intlObject.set("NumberFormat", numberFormatConstructor);
+        intlObject.defineProperty(PropertyKey.fromString("NumberFormat"), numberFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject collatorPrototype = context.createJSObject();
-        collatorPrototype.defineProperty(PropertyKey.fromString("compare"), new JSNativeFunction("compare", 2, JSIntlObject::collatorCompare), PropertyDescriptor.DataState.ConfigurableWritable);
+        collatorPrototype.defineProperty(PropertyKey.fromString("compare"),
+                new JSNativeFunction("get compare", 0, JSIntlObject::collatorCompareGetter),
+                PropertyDescriptor.AccessorState.Configurable);
         collatorPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"), new JSNativeFunction("resolvedOptions", 0, JSIntlObject::collatorResolvedOptions), PropertyDescriptor.DataState.ConfigurableWritable);
+        collatorPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.Collator"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction collatorConstructor = new JSNativeFunction(
                 "Collator",
                 0,
@@ -925,7 +928,7 @@ public final class JSGlobalObject {
         collatorConstructor.defineProperty(PropertyKey.fromString("prototype"), collatorPrototype, PropertyDescriptor.DataState.None);
         collatorConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"), new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf), PropertyDescriptor.DataState.ConfigurableWritable);
         collatorPrototype.defineProperty(PropertyKey.fromString("constructor"), collatorConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
-        intlObject.set("Collator", collatorConstructor);
+        intlObject.defineProperty(PropertyKey.fromString("Collator"), collatorConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject pluralRulesPrototype = context.createJSObject();
         pluralRulesPrototype.defineProperty(PropertyKey.fromString("select"), new JSNativeFunction("select", 1, JSIntlObject::pluralRulesSelect), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -939,7 +942,7 @@ public final class JSGlobalObject {
         pluralRulesConstructor.defineProperty(PropertyKey.fromString("prototype"), pluralRulesPrototype, PropertyDescriptor.DataState.None);
         pluralRulesConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"), new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf), PropertyDescriptor.DataState.ConfigurableWritable);
         pluralRulesPrototype.defineProperty(PropertyKey.fromString("constructor"), pluralRulesConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
-        intlObject.set("PluralRules", pluralRulesConstructor);
+        intlObject.defineProperty(PropertyKey.fromString("PluralRules"), pluralRulesConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject relativeTimeFormatPrototype = context.createJSObject();
         relativeTimeFormatPrototype.defineProperty(PropertyKey.fromString("format"), new JSNativeFunction("format", 2, JSIntlObject::relativeTimeFormatFormat), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -953,7 +956,7 @@ public final class JSGlobalObject {
         relativeTimeFormatConstructor.defineProperty(PropertyKey.fromString("prototype"), relativeTimeFormatPrototype, PropertyDescriptor.DataState.None);
         relativeTimeFormatConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"), new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf), PropertyDescriptor.DataState.ConfigurableWritable);
         relativeTimeFormatPrototype.defineProperty(PropertyKey.fromString("constructor"), relativeTimeFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
-        intlObject.set("RelativeTimeFormat", relativeTimeFormatConstructor);
+        intlObject.defineProperty(PropertyKey.fromString("RelativeTimeFormat"), relativeTimeFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject listFormatPrototype = context.createJSObject();
         listFormatPrototype.defineProperty(PropertyKey.fromString("format"), new JSNativeFunction("format", 1, JSIntlObject::listFormatFormat), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -967,7 +970,7 @@ public final class JSGlobalObject {
         listFormatConstructor.defineProperty(PropertyKey.fromString("prototype"), listFormatPrototype, PropertyDescriptor.DataState.None);
         listFormatConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"), new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf), PropertyDescriptor.DataState.ConfigurableWritable);
         listFormatPrototype.defineProperty(PropertyKey.fromString("constructor"), listFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
-        intlObject.set("ListFormat", listFormatConstructor);
+        intlObject.defineProperty(PropertyKey.fromString("ListFormat"), listFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject localePrototype = context.createJSObject();
         localePrototype.defineProperty(PropertyKey.fromString("toString"), new JSNativeFunction("toString", 0, JSIntlObject::localeToString), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -983,7 +986,7 @@ public final class JSGlobalObject {
                 true);
         localeConstructor.defineProperty(PropertyKey.fromString("prototype"), localePrototype, PropertyDescriptor.DataState.None);
         localePrototype.defineProperty(PropertyKey.fromString("constructor"), localeConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
-        intlObject.set("Locale", localeConstructor);
+        intlObject.defineProperty(PropertyKey.fromString("Locale"), localeConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         globalObject.defineProperty(PropertyKey.fromString("Intl"), intlObject, PropertyDescriptor.DataState.ConfigurableWritable);
     }

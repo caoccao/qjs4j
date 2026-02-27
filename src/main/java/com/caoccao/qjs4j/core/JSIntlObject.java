@@ -16,22 +16,45 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
+
 import java.time.format.FormatStyle;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of Intl object and Intl.* prototype methods.
  */
 public final class JSIntlObject {
+    private static final Set<String> AVAILABLE_LOCALE_LANGUAGES;
     private static final String[] FORMAT_STYLE_VALUES = {"short", "medium", "long", "full"};
+    /**
+     * Check if a collation value is valid/supported.
+     */
+    private static final Set<String> VALID_COLLATION_TYPES = Set.of(
+            "big5han", "compat", "dict", "direct", "ducet", "emoji", "eor",
+            "gb2312", "phonebk", "phonetic", "pinyin", "reformed", "stroke",
+            "trad", "unihan", "zhuyin"
+    );
+
+    static {
+        AVAILABLE_LOCALE_LANGUAGES = Arrays.stream(Locale.getAvailableLocales())
+                .map(Locale::toLanguageTag)
+                .filter(tag -> !tag.isEmpty() && !"und".equals(tag))
+                .map(tag -> {
+                    int dashIndex = tag.indexOf('-');
+                    return dashIndex > 0 ? tag.substring(0, dashIndex).toLowerCase(Locale.ROOT) : tag.toLowerCase(Locale.ROOT);
+                })
+                .collect(Collectors.toSet());
+    }
 
     private static List<String> canonicalizeLocaleList(JSContext context, JSValue localeValue) {
         List<String> localeTags = new ArrayList<>();
-        if (localeValue == null || localeValue.isNullOrUndefined()) {
+        if (localeValue == null || localeValue instanceof JSUndefined) {
             return localeTags;
+        }
+        if (localeValue instanceof JSNull) {
+            throw new JSTypeErrorException("Cannot convert null to object");
         }
         if (localeValue instanceof JSArray localeArray) {
             for (long i = 0; i < localeArray.getLength(); i++) {
@@ -56,25 +79,143 @@ public final class JSIntlObject {
         return JSNumber.of(collator.compare(left, right));
     }
 
+    /**
+     * Getter for Intl.Collator.prototype.compare.
+     * Per ECMA-402 §10.3.3, this is an accessor property that returns a bound compare function.
+     */
+    public static JSValue collatorCompareGetter(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlCollator collator)) {
+            return context.throwTypeError("Intl.Collator.prototype.compare called on incompatible receiver");
+        }
+        // Return the cached bound compare function, creating it on first access
+        JSFunction cached = collator.getBoundCompareFunction();
+        if (cached != null) {
+            return cached;
+        }
+        JSNativeFunction boundCompare = new JSNativeFunction("", 2,
+                (ctx, thisVal, compareArgs) -> collatorCompare(ctx, collator, compareArgs));
+        context.transferPrototype(boundCompare, JSFunction.NAME);
+        collator.setBoundCompareFunction(boundCompare);
+        return boundCompare;
+    }
+
     public static JSValue collatorResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlCollator collator)) {
             return context.throwTypeError("Intl.Collator.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
         resolvedOptions.set("locale", new JSString(collator.getLocale().toLanguageTag()));
+        resolvedOptions.set("usage", new JSString(collator.getUsage()));
         resolvedOptions.set("sensitivity", new JSString(collator.getSensitivity()));
-        resolvedOptions.set("usage", new JSString("sort"));
+        resolvedOptions.set("ignorePunctuation", JSBoolean.valueOf(collator.getIgnorePunctuation()));
+        resolvedOptions.set("collation", new JSString(collator.getCollation()));
+        resolvedOptions.set("numeric", JSBoolean.valueOf(collator.getNumeric()));
+        resolvedOptions.set("caseFirst", new JSString(collator.getCaseFirst()));
         return resolvedOptions;
     }
 
     public static JSValue createCollator(JSContext context, JSObject prototype, JSValue[] args) {
         try {
             Locale locale = resolveLocale(context, args, 0);
-            String sensitivity = normalizeOption(
-                    getOptionString(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE, "sensitivity"),
-                    "variant",
-                    "base", "accent", "case", "variant");
-            JSIntlCollator collator = new JSIntlCollator(locale, sensitivity);
+            JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+
+            // Parse unicode extension keys from locale tag (e.g. en-u-kn-true-co-phonebk)
+            Map<String, String> unicodeExtensions = parseUnicodeExtensions(locale.toLanguageTag());
+
+            // Read options in ECMA-402 spec order: usage, localeMatcher, collation, numeric, caseFirst, sensitivity, ignorePunctuation
+
+            // 1. usage
+            String usage = getOptionStringChecked(context, optionsValue, "usage");
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            usage = normalizeOption(usage, "sort", "sort", "search");
+
+            // 2. localeMatcher
+            String localeMatcher = getOptionStringChecked(context, optionsValue, "localeMatcher");
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (localeMatcher != null && !"lookup".equals(localeMatcher) && !"best fit".equals(localeMatcher)) {
+                return context.throwRangeError("Invalid option value " + localeMatcher + " for property localeMatcher");
+            }
+
+            // 3. collation: option overrides extension key "co"
+            String collation = getOptionStringChecked(context, optionsValue, "collation");
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (collation == null && unicodeExtensions.containsKey("co")) {
+                String extCollation = unicodeExtensions.get("co");
+                if (isValidCollation(extCollation)) {
+                    collation = extCollation;
+                }
+            }
+            if (collation == null) {
+                collation = "default";
+            }
+
+            // 4. numeric: option overrides extension key "kn"
+            boolean numericSet = false;
+            boolean numeric = false;
+            if (optionsValue instanceof JSObject optionsObject) {
+                JSValue numericValue = optionsObject.get(context, PropertyKey.fromString("numeric"));
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (numericValue != null && !numericValue.isNullOrUndefined()) {
+                    numeric = JSTypeConversions.toBoolean(numericValue).value();
+                    numericSet = true;
+                }
+            }
+            if (!numericSet && unicodeExtensions.containsKey("kn")) {
+                String extNumeric = unicodeExtensions.get("kn");
+                // "kn" with no value or "true" → true; "false" → false
+                numeric = !"false".equals(extNumeric);
+            }
+
+            // 5. caseFirst: option overrides extension key "kf"
+            String caseFirst = getOptionStringChecked(context, optionsValue, "caseFirst");
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (caseFirst != null && !"upper".equals(caseFirst) && !"lower".equals(caseFirst) && !"false".equals(caseFirst)) {
+                return context.throwRangeError("Invalid option value " + caseFirst + " for property caseFirst");
+            }
+            if (caseFirst == null && unicodeExtensions.containsKey("kf")) {
+                String extCaseFirst = unicodeExtensions.get("kf");
+                if ("upper".equals(extCaseFirst) || "lower".equals(extCaseFirst) || "false".equals(extCaseFirst)) {
+                    caseFirst = extCaseFirst;
+                }
+            }
+            if (caseFirst == null) {
+                caseFirst = "false";
+            }
+
+            // 6. sensitivity
+            String sensitivity = getOptionStringChecked(context, optionsValue, "sensitivity");
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            sensitivity = normalizeOption(sensitivity, "variant", "base", "accent", "case", "variant");
+
+            // 7. ignorePunctuation - Thai locale defaults to true per ECMA-402
+            boolean ignorePunctuation = "th".equals(locale.getLanguage());
+            if (optionsValue instanceof JSObject optionsObject2) {
+                JSValue ipValue = optionsObject2.get(context, PropertyKey.fromString("ignorePunctuation"));
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (ipValue != null && !ipValue.isNullOrUndefined()) {
+                    ignorePunctuation = JSTypeConversions.toBoolean(ipValue).value();
+                }
+            }
+
+            // Build resolved locale: strip unicode extensions that were applied
+            Locale resolvedLocale = stripUnicodeExtensions(locale);
+
+            JSIntlCollator collator = new JSIntlCollator(resolvedLocale, sensitivity, usage, collation,
+                    numeric, caseFirst, ignorePunctuation);
             collator.setPrototype(prototype);
             return collator;
         } catch (IllegalArgumentException e) {
@@ -240,11 +381,41 @@ public final class JSIntlObject {
         if (!(optionsValue instanceof JSObject optionsObject)) {
             return null;
         }
-        JSValue rawValue = optionsObject.get(key);
-        if (rawValue == null || rawValue.isNullOrUndefined()) {
+        JSValue rawValue = optionsObject.get(context, PropertyKey.fromString(key));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (rawValue == null || rawValue instanceof JSUndefined) {
             return null;
         }
         return JSTypeConversions.toString(context, rawValue).value();
+    }
+
+    /**
+     * Like getOptionString but checks for pending exceptions after property access.
+     * Returns null if an exception occurred (caller must check context.hasPendingException()).
+     */
+    private static String getOptionStringChecked(JSContext context, JSValue optionsValue, String key) {
+        if (!(optionsValue instanceof JSObject optionsObject)) {
+            return null;
+        }
+        JSValue rawValue = optionsObject.get(context, PropertyKey.fromString(key));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (rawValue == null || rawValue instanceof JSUndefined) {
+            return null;
+        }
+        return JSTypeConversions.toString(context, rawValue).value();
+    }
+
+    private static boolean isValidCollation(String collation) {
+        if (collation == null || collation.isEmpty()) {
+            return false;
+        }
+        // "standard" and "search" are not valid for explicit collation option per ECMA-402
+        // Only recognized CLDR collation types are valid
+        return VALID_COLLATION_TYPES.contains(collation);
     }
 
     public static JSValue listFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -363,10 +534,69 @@ public final class JSIntlObject {
             throw new IllegalArgumentException("Invalid language tag: " + localeTag);
         }
         Locale locale = Locale.forLanguageTag(normalizedTag);
-        if (locale.getLanguage().isEmpty()) {
+        // "und" is valid as the undefined language tag per BCP 47
+        if (locale.getLanguage().isEmpty() && !"und".equalsIgnoreCase(normalizedTag)
+                && !normalizedTag.toLowerCase(Locale.ROOT).startsWith("und-")) {
             throw new IllegalArgumentException("Invalid language tag: " + localeTag);
         }
         return locale;
+    }
+
+    /**
+     * Parse Unicode extension keys from a BCP 47 locale tag.
+     * E.g., "en-u-kn-true-co-phonebk" → {kn=true, co=phonebk}
+     * Attribute subtags (between -u- and the first key) are ignored.
+     */
+    private static Map<String, String> parseUnicodeExtensions(String localeTag) {
+        Map<String, String> extensions = new HashMap<>();
+        if (localeTag == null) {
+            return extensions;
+        }
+        // Find the -u- extension, but not inside a private-use (-x-) tag
+        String lowerTag = localeTag.toLowerCase(Locale.ROOT);
+        int uIndex = -1;
+        String[] parts = lowerTag.split("-");
+        for (int i = 0; i < parts.length; i++) {
+            // If we hit the private-use singleton "x", stop searching
+            if ("x".equals(parts[i]) && i > 0) {
+                break;
+            }
+            if ("u".equals(parts[i]) && i > 0) {
+                uIndex = i;
+                break;
+            }
+        }
+        if (uIndex < 0) {
+            return extensions;
+        }
+        // Parse key-value pairs after -u-
+        // Keys are 2-character subtags, values are 3+ character subtags
+        String currentKey = null;
+        for (int i = uIndex + 1; i < parts.length; i++) {
+            String part = parts[i];
+            // Stop if we hit another singleton extension (single char that's not "x")
+            if (part.length() == 1) {
+                break;
+            }
+            if (part.length() == 2) {
+                // This is a key
+                if (currentKey != null && !extensions.containsKey(currentKey)) {
+                    // Previous key had no value — treat as "true"
+                    extensions.put(currentKey, "true");
+                }
+                currentKey = part;
+            } else if (currentKey != null) {
+                // This is a value for the current key
+                extensions.put(currentKey, part);
+                currentKey = null;
+            }
+            // else: attribute subtag (3+ chars before the first key), ignore
+        }
+        // Handle trailing key with no value
+        if (currentKey != null && !extensions.containsKey(currentKey)) {
+            extensions.put(currentKey, "true");
+        }
+        return extensions;
     }
 
     public static JSValue pluralRulesResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -436,12 +666,81 @@ public final class JSIntlObject {
         return Locale.forLanguageTag(canonicalLocales.get(0));
     }
 
+    /**
+     * Strip unicode extension subtags from a locale tag.
+     * E.g., "en-US-u-co-standard" → locale for "en-US"
+     */
+    private static Locale stripUnicodeExtensions(Locale locale) {
+        String tag = locale.toLanguageTag();
+        String lowerTag = tag.toLowerCase(Locale.ROOT);
+        // Don't strip if -u- only appears inside -x- (private-use) extension
+        int xIndex = lowerTag.indexOf("-x-");
+        int uIndex = lowerTag.indexOf("-u-");
+        if (uIndex < 0 || (xIndex >= 0 && xIndex < uIndex)) {
+            return locale;
+        }
+        // Find where the unicode extension ends (at the next singleton or end of string)
+        String[] parts = tag.split("-");
+        StringBuilder builder = new StringBuilder();
+        boolean inUnicodeExt = false;
+        boolean inPrivateUse = false;
+        for (String part : parts) {
+            String lowerPart = part.toLowerCase(Locale.ROOT);
+            if (!inPrivateUse && part.length() == 1 && "x".equalsIgnoreCase(part)) {
+                inPrivateUse = true;
+                if (!builder.isEmpty()) {
+                    builder.append("-");
+                }
+                builder.append(part);
+                continue;
+            }
+            if (inPrivateUse) {
+                // Everything in private-use is kept as-is
+                if (!builder.isEmpty()) {
+                    builder.append("-");
+                }
+                builder.append(part);
+                continue;
+            }
+            if (part.length() == 1 && "u".equalsIgnoreCase(part)) {
+                inUnicodeExt = true;
+                continue;
+            }
+            if (inUnicodeExt) {
+                if (part.length() == 1) {
+                    // Start of another extension
+                    inUnicodeExt = false;
+                    if (!builder.isEmpty()) {
+                        builder.append("-");
+                    }
+                    builder.append(part);
+                }
+                // Skip unicode extension subtags
+                continue;
+            }
+            if (!builder.isEmpty()) {
+                builder.append("-");
+            }
+            builder.append(part);
+        }
+        String strippedTag = builder.toString();
+        if (strippedTag.isEmpty()) {
+            return locale;
+        }
+        return Locale.forLanguageTag(strippedTag);
+    }
+
     public static JSValue supportedLocalesOf(JSContext context, JSValue thisArg, JSValue[] args) {
         try {
             JSArray localesArray = context.createJSArray();
             if (args.length > 0) {
                 for (String localeTag : canonicalizeLocaleList(context, args[0])) {
-                    localesArray.push(new JSString(localeTag));
+                    // Filter: only include locales whose language is available in the JVM
+                    Locale locale = Locale.forLanguageTag(localeTag);
+                    String language = locale.getLanguage().toLowerCase(Locale.ROOT);
+                    if (!language.isEmpty() && AVAILABLE_LOCALE_LANGUAGES.contains(language)) {
+                        localesArray.push(new JSString(localeTag));
+                    }
                 }
             }
             return localesArray;

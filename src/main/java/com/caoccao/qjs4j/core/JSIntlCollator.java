@@ -24,14 +24,26 @@ import java.util.Locale;
  */
 public final class JSIntlCollator extends JSObject {
     public static final String NAME = "Intl.Collator";
+    private final String caseFirst;
+    private final String collation;
     private final Collator collator;
+    private final boolean ignorePunctuation;
     private final Locale locale;
+    private final boolean numeric;
     private final String sensitivity;
+    private final String usage;
+    private JSFunction boundCompareFunction;
 
-    public JSIntlCollator(Locale locale, String sensitivity) {
+    public JSIntlCollator(Locale locale, String sensitivity, String usage, String collation,
+                          boolean numeric, String caseFirst, boolean ignorePunctuation) {
         super();
         this.locale = locale;
         this.sensitivity = sensitivity;
+        this.usage = usage;
+        this.collation = collation;
+        this.numeric = numeric;
+        this.caseFirst = caseFirst;
+        this.ignorePunctuation = ignorePunctuation;
         this.collator = Collator.getInstance(locale);
         switch (sensitivity) {
             case "base" -> collator.setStrength(Collator.PRIMARY);
@@ -40,17 +52,47 @@ public final class JSIntlCollator extends JSObject {
             case "variant" -> collator.setStrength(Collator.IDENTICAL);
             default -> collator.setStrength(Collator.TERTIARY);
         }
+        // Enable decomposition for canonical equivalence
+        collator.setDecomposition(Collator.CANONICAL_DECOMPOSITION);
     }
 
     public int compare(String left, String right) {
         return Integer.signum(collator.compare(left, right));
     }
 
+    public JSFunction getBoundCompareFunction() {
+        return boundCompareFunction;
+    }
+
+    public String getCaseFirst() {
+        return caseFirst;
+    }
+
+    public String getCollation() {
+        return collation;
+    }
+
+    public boolean getIgnorePunctuation() {
+        return ignorePunctuation;
+    }
+
     public Locale getLocale() {
         return locale;
     }
 
+    public boolean getNumeric() {
+        return numeric;
+    }
+
     public String getSensitivity() {
         return sensitivity;
+    }
+
+    public String getUsage() {
+        return usage;
+    }
+
+    public void setBoundCompareFunction(JSFunction boundCompareFunction) {
+        this.boundCompareFunction = boundCompareFunction;
     }
 }

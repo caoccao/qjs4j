@@ -600,21 +600,17 @@ public final class VirtualMachine {
     JSValue createSpecialObject(int objectType, StackFrame currentFrame) {
         switch (objectType) {
             case 0: // SPECIAL_OBJECT_ARGUMENTS
-                // For arrow functions, walk up the call stack to find parent non-arrow function's arguments
+                // For arrow functions, use lexically captured arguments from the defining scope
                 // Following QuickJS: arrow functions inherit arguments from enclosing scope
-                StackFrame targetFrame = currentFrame;
-                JSFunction targetFunc = targetFrame.getFunction();
-
-                // Walk up call stack while we're in arrow functions
-                while (targetFunc instanceof JSBytecodeFunction bytecodeFunc && bytecodeFunc.isArrow()) {
-                    targetFrame = targetFrame.getCaller();
-                    if (targetFrame == null) {
-                        // No parent frame, arguments is undefined (shouldn't happen in valid code)
-                        return JSUndefined.INSTANCE;
+                JSFunction currentFunc = currentFrame.getFunction();
+                if (currentFunc instanceof JSBytecodeFunction arrowFunc && arrowFunc.isArrow()) {
+                    JSValue capturedArguments = arrowFunc.getCapturedArguments();
+                    if (capturedArguments != null) {
+                        return capturedArguments;
                     }
-                    targetFunc = targetFrame.getFunction();
+                    return JSUndefined.INSTANCE;
                 }
-                return createArgumentsObject(targetFrame, targetFunc, shouldUseMappedArguments(targetFunc));
+                return createArgumentsObject(currentFrame, currentFunc, shouldUseMappedArguments(currentFunc));
 
             case 1: // SPECIAL_OBJECT_MAPPED_ARGUMENTS
                 // Legacy mapped arguments (shares with function parameters)

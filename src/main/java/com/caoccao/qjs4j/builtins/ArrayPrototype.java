@@ -2100,7 +2100,11 @@ public final class ArrayPrototype {
                 if (!(toLocaleStringValue instanceof JSFunction toLocaleStringFunction)) {
                     return context.throwTypeError("toLocaleString is not a function");
                 }
-                JSValue localeStringValue = toLocaleStringFunction.call(context, element, new JSValue[0]);
+                // Per ECMA-402, invoke toLocaleString with exactly 2 args: locales and options
+                JSValue localesArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+                JSValue localeStringValue = toLocaleStringFunction.call(context, element,
+                        new JSValue[]{localesArg, optionsArg});
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }

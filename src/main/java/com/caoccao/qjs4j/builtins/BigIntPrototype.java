@@ -18,6 +18,10 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
 
+import java.math.BigInteger;
+import java.text.NumberFormat;
+import java.util.Locale;
+
 /**
  * Implementation of BigInt.prototype methods.
  * Based on ES2020 BigInt specification.
@@ -26,12 +30,29 @@ public final class BigIntPrototype {
     /**
      * BigInt.prototype.toLocaleString(locales, options)
      * ES2020 20.2.3.2
-     * Returns a localized string representation.
-     * Simplified implementation - just calls toString.
+     * Returns a localized string representation using Intl.NumberFormat semantics.
      */
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        // For now, just delegate to toString with radix 10
-        return toString(context, thisArg, new JSValue[]{JSNumber.of(10)});
+        return thisArg.asBigIntWithDownCast()
+                .map(jsBigInt -> {
+                    BigInteger value = jsBigInt.value();
+                    Locale locale = Locale.getDefault();
+                    if (args.length > 0 && !args[0].isNullOrUndefined()) {
+                        String localeTag = JSTypeConversions.toString(context, args[0]).value();
+                        if (context.hasPendingException()) {
+                            return (JSValue) JSUndefined.INSTANCE;
+                        }
+                        try {
+                            locale = Locale.forLanguageTag(localeTag);
+                        } catch (Exception e) {
+                            return (JSValue) context.throwRangeError("Invalid language tag: " + localeTag);
+                        }
+                    }
+                    NumberFormat numberFormat = NumberFormat.getIntegerInstance(locale);
+                    numberFormat.setGroupingUsed(false);
+                    return (JSValue) new JSString(numberFormat.format(value));
+                })
+                .orElseGet(() -> context.throwTypeError("BigInt.prototype.toLocaleString requires that 'this' be a BigInt"));
     }
 
     /**

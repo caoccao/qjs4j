@@ -677,9 +677,21 @@ public final class OpcodeHandler {
                     capturedClosureVars[selfIndex] = closureFunction;
                 }
             }
-            // Arrow functions capture this from the enclosing scope
+            // Arrow functions capture this and arguments from the enclosing scope
             if (closureFunction.isArrow()) {
                 closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
+                // Capture arguments lexically: from the enclosing non-arrow function
+                JSFunction enclosingFunc = executionContext.frame.getFunction();
+                if (enclosingFunc instanceof JSBytecodeFunction enclosingBf && enclosingBf.isArrow()) {
+                    // Nested arrow: propagate captured arguments from parent arrow
+                    closureFunction.setCapturedArguments(enclosingBf.getCapturedArguments());
+                } else if (enclosingFunc != null) {
+                    // Direct arrow inside a regular function: capture arguments from current frame
+                    boolean mapped = executionContext.virtualMachine.shouldUseMappedArguments(enclosingFunc);
+                    closureFunction.setCapturedArguments(
+                            executionContext.virtualMachine.createArgumentsObject(
+                                    executionContext.frame, enclosingFunc, mapped));
+                }
             }
             closureFunction.initializePrototypeChain(executionContext.virtualMachine.context);
             stack[sp++] = closureFunction;
@@ -713,9 +725,21 @@ public final class OpcodeHandler {
                 }
                 closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
             }
-            // Arrow functions capture this from the enclosing scope
+            // Arrow functions capture this and arguments from the enclosing scope
             if (closureFunction.isArrow()) {
                 closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
+                // Capture arguments lexically: from the enclosing non-arrow function
+                JSFunction enclosingFunc = executionContext.frame.getFunction();
+                if (enclosingFunc instanceof JSBytecodeFunction enclosingBf && enclosingBf.isArrow()) {
+                    // Nested arrow: propagate captured arguments from parent arrow
+                    closureFunction.setCapturedArguments(enclosingBf.getCapturedArguments());
+                } else if (enclosingFunc != null) {
+                    // Direct arrow inside a regular function: capture arguments from current frame
+                    boolean mapped = executionContext.virtualMachine.shouldUseMappedArguments(enclosingFunc);
+                    closureFunction.setCapturedArguments(
+                            executionContext.virtualMachine.createArgumentsObject(
+                                    executionContext.frame, enclosingFunc, mapped));
+                }
             }
             closureFunction.initializePrototypeChain(executionContext.virtualMachine.context);
             stack[sp++] = closureFunction;
@@ -2748,9 +2772,9 @@ public final class OpcodeHandler {
     private static void internalHandleAnd(ExecutionContext executionContext) {
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
-        // Fast path for number AND (avoids toInt32 overhead)
+        // Fast path for number AND
         if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSNumber.of((int) leftNum.value() & (int) rightNum.value()));
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) & JSTypeConversions.toInt32(rightNum.value())));
             return;
         }
         VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
@@ -3811,7 +3835,7 @@ public final class OpcodeHandler {
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
         if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSNumber.of((int) leftNum.value() | (int) rightNum.value()));
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) | JSTypeConversions.toInt32(rightNum.value())));
             return;
         }
         VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
@@ -3882,7 +3906,7 @@ public final class OpcodeHandler {
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
         if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSNumber.of((int) leftNum.value() >> ((int) rightNum.value() & 0x1F)));
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) >> (JSTypeConversions.toInt32(rightNum.value()) & 0x1F)));
             return;
         }
         VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
@@ -3903,7 +3927,7 @@ public final class OpcodeHandler {
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
         if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSNumber.of((int) leftNum.value() << ((int) rightNum.value() & 0x1F)));
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) << (JSTypeConversions.toInt32(rightNum.value()) & 0x1F)));
             return;
         }
         VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
@@ -3955,7 +3979,7 @@ public final class OpcodeHandler {
         JSValue leftNumeric = JSTypeConversions.toNumber(executionContext.virtualMachine.context, leftPrimitive);
         JSValue rightNumeric = JSTypeConversions.toNumber(executionContext.virtualMachine.context, rightPrimitive);
         if (leftNumeric instanceof JSNumber leftNum && rightNumeric instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSNumber.of(((int) leftNum.value() >>> ((int) rightNum.value() & 0x1F)) & 0xFFFFFFFFL));
+            executionContext.virtualMachine.valueStack.push(JSNumber.of((JSTypeConversions.toInt32(leftNum.value()) >>> (JSTypeConversions.toInt32(rightNum.value()) & 0x1F)) & 0xFFFFFFFFL));
             return;
         }
         int leftInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, leftNumeric);
@@ -4006,7 +4030,7 @@ public final class OpcodeHandler {
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
         if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSNumber.of((int) leftNum.value() ^ (int) rightNum.value()));
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) ^ JSTypeConversions.toInt32(rightNum.value())));
             return;
         }
         VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);

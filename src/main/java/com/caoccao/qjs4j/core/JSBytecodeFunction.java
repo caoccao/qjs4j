@@ -51,6 +51,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private final int selfCaptureIndex;
     private final boolean strict;
     private int[] captureSourceInfos;
+    private JSValue capturedArguments;
     private JSValue capturedThisArg;
     private boolean classConstructor;
     private boolean derivedConstructor;
@@ -968,6 +969,7 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
         copiedFunction.selfLocalIndex = selfLocalIndex;
         copiedFunction.capturedThisArg = this.capturedThisArg;
+        copiedFunction.capturedArguments = this.capturedArguments;
         return copiedFunction;
     }
 
@@ -994,6 +996,7 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
         copiedFunction.selfLocalIndex = selfLocalIndex;
         copiedFunction.capturedThisArg = this.capturedThisArg;
+        copiedFunction.capturedArguments = this.capturedArguments;
         return copiedFunction;
     }
 
@@ -1013,6 +1016,14 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public int[] getCaptureSourceInfos() {
         return captureSourceInfos;
+    }
+
+    /**
+     * Get the captured arguments object for arrow functions.
+     * Arrow functions lexically inherit arguments from the enclosing non-arrow function.
+     */
+    public JSValue getCapturedArguments() {
+        return capturedArguments;
     }
 
     /**
@@ -1142,6 +1153,14 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public void setCaptureSourceInfos(int[] captureSourceInfos) {
         this.captureSourceInfos = captureSourceInfos;
+    }
+
+    /**
+     * Set the captured arguments object for arrow functions.
+     * Called during FCLOSURE to capture the enclosing non-arrow function's arguments.
+     */
+    public void setCapturedArguments(JSValue capturedArguments) {
+        this.capturedArguments = capturedArguments;
     }
 
     /**
