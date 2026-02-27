@@ -31,10 +31,16 @@ public final class SymbolPrototype {
      * Getter for the Symbol's description.
      */
     public static JSValue getDescription(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asSymbolWithDownCast()
-                .map(JSSymbol::getDescription)
-                .map(description -> (JSValue) new JSString(description))
-                .orElse(JSUndefined.INSTANCE);
+        var symbolOpt = thisArg.asSymbolWithDownCast();
+        if (symbolOpt.isEmpty()) {
+            return context.throwTypeError("Symbol.prototype.description requires that 'this' be a Symbol");
+        }
+        JSSymbol symbol = symbolOpt.get();
+        String description = symbol.getDescription();
+        if (description != null) {
+            return new JSString(description);
+        }
+        return JSUndefined.INSTANCE;
     }
 
     /**
