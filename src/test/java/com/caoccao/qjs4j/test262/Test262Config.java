@@ -80,8 +80,7 @@ public class Test262Config {
                 "import.meta",
                 "hashbang",
                 "Temporal",
-                "source-phase-imports",
-                "cross-realm");
+                "source-phase-imports");
 
         // Default: run all tests
         config.addIncludePatterns(Pattern.compile(".*\\.js$"));

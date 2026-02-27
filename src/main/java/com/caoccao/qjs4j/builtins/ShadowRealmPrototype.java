@@ -40,6 +40,106 @@ public final class ShadowRealmPrototype {
     private ShadowRealmPrototype() {
     }
 
+    private static void copyNameAndLength(JSContext callerContext, JSContext targetContext,
+                                          JSValue targetCallable, JSNativeFunction wrappedFunction) {
+        if (!(targetCallable instanceof JSObject targetObject)) {
+            throw new JSException(callerContext.throwTypeError("Wrapped target is not an object"));
+        }
+
+        double wrappedLength = 0;
+        try {
+            if (targetObject.hasOwnProperty(PropertyKey.LENGTH)) {
+                JSValue targetLength = targetObject.get(targetContext, PropertyKey.LENGTH);
+                if (targetContext.hasPendingException()) {
+                    targetContext.clearPendingException();
+                    throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
+                }
+                if (targetLength instanceof JSNumber targetLengthNumber) {
+                    double numericLength = targetLengthNumber.value();
+                    if (Double.isInfinite(numericLength)) {
+                        if (numericLength > 0) {
+                            wrappedLength = Double.POSITIVE_INFINITY;
+                        } else {
+                            wrappedLength = 0;
+                        }
+                    } else if (Double.isNaN(numericLength)) {
+                        wrappedLength = 0;
+                    } else {
+                        double truncatedLength = numericLength < 0 ? Math.ceil(numericLength) : Math.floor(numericLength);
+                        wrappedLength = Math.max(truncatedLength, 0);
+                    }
+                }
+            }
+
+            JSValue targetName = targetObject.get(targetContext, PropertyKey.NAME);
+            if (targetContext.hasPendingException()) {
+                targetContext.clearPendingException();
+                throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
+            }
+            String wrappedName = targetName instanceof JSString targetNameString ? targetNameString.value() : "";
+
+            wrappedFunction.defineProperty(PropertyKey.LENGTH,
+                    PropertyDescriptor.dataDescriptor(JSNumber.of(wrappedLength), PropertyDescriptor.DataState.Configurable));
+            wrappedFunction.defineProperty(PropertyKey.NAME,
+                    PropertyDescriptor.dataDescriptor(new JSString(wrappedName), PropertyDescriptor.DataState.Configurable));
+        } catch (JSException e) {
+            if (callerContext.hasPendingException()) {
+                throw e;
+            }
+            throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
+        } catch (RuntimeException e) {
+            throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
+        }
+    }
+
+    private static JSNativeFunction createWrappedFunction(JSContext callerContext, JSContext targetContext, JSValue targetCallable) {
+        JSNativeFunction wrappedFunction = new JSNativeFunction("", 0, (callbackContext, thisArg, args) -> {
+            JSValue[] wrappedArguments = new JSValue[args.length];
+            for (int i = 0; i < args.length; i++) {
+                JSValue wrappedArgument = getWrappedValue(targetContext, callerContext, args[i]);
+                if (targetContext.hasPendingException()) {
+                    JSValue ignored = targetContext.getPendingException();
+                    targetContext.clearPendingException();
+                    return callerContext.throwTypeError("Cross-realm argument is not wrappable");
+                }
+                wrappedArguments[i] = wrappedArgument;
+            }
+
+            try {
+                JSValue callResult;
+                if (targetCallable instanceof JSProxy targetProxy) {
+                    callResult = targetProxy.apply(targetContext, JSUndefined.INSTANCE, wrappedArguments);
+                } else if (targetCallable instanceof JSFunction targetFunction) {
+                    callResult = targetFunction.call(targetContext, JSUndefined.INSTANCE, wrappedArguments);
+                } else {
+                    return callerContext.throwTypeError("Wrapped target is not callable");
+                }
+
+                if (targetContext.hasPendingException()) {
+                    targetContext.clearPendingException();
+                    return callerContext.throwTypeError("Wrapped function threw");
+                }
+                return getWrappedValue(callerContext, targetContext, callResult);
+            } catch (JSException e) {
+                if (targetContext.hasPendingException()) {
+                    targetContext.clearPendingException();
+                }
+                return callerContext.throwTypeError("Wrapped function threw");
+            } catch (JSVirtualMachineException e) {
+                if (targetContext.hasPendingException()) {
+                    targetContext.clearPendingException();
+                }
+                return callerContext.throwTypeError("Wrapped function threw");
+            } catch (RuntimeException e) {
+                return callerContext.throwTypeError("Wrapped function threw");
+            }
+        });
+
+        copyNameAndLength(callerContext, targetContext, targetCallable, wrappedFunction);
+        wrappedFunction.initializePrototypeChain(callerContext);
+        return wrappedFunction;
+    }
+
     public static JSValue evaluate(JSContext callerContext, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSShadowRealm shadowRealm)) {
             return callerContext.throwTypeError("ShadowRealm.prototype.evaluate requires a ShadowRealm receiver");
@@ -72,6 +172,50 @@ public final class ShadowRealmPrototype {
             }
             return callerContext.throwTypeError("ShadowRealm evaluation failed");
         }
+    }
+
+    private static JSObject evaluateShadowRealmModule(JSContext shadowContext, String source, String filename) {
+        JSObject exportsObject = shadowContext.createJSObject();
+
+        Matcher exportVarMatcher = EXPORT_VAR_PATTERN.matcher(source);
+        if (exportVarMatcher.find()) {
+            String exportName = exportVarMatcher.group(1);
+            String transformedSource = exportVarMatcher.replaceFirst("var " + exportName + " = " + exportVarMatcher.group(2) + ";");
+            shadowContext.eval(transformedSource, filename, false);
+            JSValue exportValue = shadowContext.getGlobalObject().get(shadowContext, PropertyKey.fromString(exportName));
+            if (shadowContext.hasPendingException()) {
+                throw new JSException(shadowContext.getPendingException());
+            }
+            exportsObject.defineProperty(PropertyKey.fromString(exportName), exportValue, PropertyDescriptor.DataState.ConfigurableWritable);
+            return exportsObject;
+        }
+
+        if (source.contains("export ")) {
+            throw new JSCompilerException("Unsupported module export syntax");
+        }
+
+        shadowContext.eval(source, filename, false);
+        if (shadowContext.hasPendingException()) {
+            throw new JSException(shadowContext.getPendingException());
+        }
+        return exportsObject;
+    }
+
+    private static JSValue getWrappedValue(JSContext callerContext, JSContext targetContext, JSValue value) {
+        if (JSTypeChecking.isPrimitive(value)) {
+            return value;
+        }
+        if (JSTypeChecking.isCallable(value)) {
+            try {
+                return createWrappedFunction(callerContext, targetContext, value);
+            } catch (JSException e) {
+                if (callerContext.hasPendingException()) {
+                    return callerContext.getPendingException();
+                }
+                return callerContext.throwTypeError("Cannot wrap callable");
+            }
+        }
+        return callerContext.throwTypeError("Cross-realm value is not wrappable");
     }
 
     public static JSValue importValue(JSContext callerContext, JSValue thisArg, JSValue[] args) {
@@ -125,150 +269,6 @@ public final class ShadowRealmPrototype {
             rejectWithCallerTypeError(callerContext, promise, "ShadowRealm import failed");
             return promise;
         }
-    }
-
-    private static JSNativeFunction createWrappedFunction(JSContext callerContext, JSContext targetContext, JSValue targetCallable) {
-        JSNativeFunction wrappedFunction = new JSNativeFunction("", 0, (callbackContext, thisArg, args) -> {
-            JSValue[] wrappedArguments = new JSValue[args.length];
-            for (int i = 0; i < args.length; i++) {
-                JSValue wrappedArgument = getWrappedValue(targetContext, callerContext, args[i]);
-                if (targetContext.hasPendingException()) {
-                    JSValue ignored = targetContext.getPendingException();
-                    targetContext.clearPendingException();
-                    return callerContext.throwTypeError("Cross-realm argument is not wrappable");
-                }
-                wrappedArguments[i] = wrappedArgument;
-            }
-
-            try {
-                JSValue callResult;
-                if (targetCallable instanceof JSProxy targetProxy) {
-                    callResult = targetProxy.apply(targetContext, JSUndefined.INSTANCE, wrappedArguments);
-                } else if (targetCallable instanceof JSFunction targetFunction) {
-                    callResult = targetFunction.call(targetContext, JSUndefined.INSTANCE, wrappedArguments);
-                } else {
-                    return callerContext.throwTypeError("Wrapped target is not callable");
-                }
-
-                if (targetContext.hasPendingException()) {
-                    targetContext.clearPendingException();
-                    return callerContext.throwTypeError("Wrapped function threw");
-                }
-                return getWrappedValue(callerContext, targetContext, callResult);
-            } catch (JSException e) {
-                if (targetContext.hasPendingException()) {
-                    targetContext.clearPendingException();
-                }
-                return callerContext.throwTypeError("Wrapped function threw");
-            } catch (JSVirtualMachineException e) {
-                if (targetContext.hasPendingException()) {
-                    targetContext.clearPendingException();
-                }
-                return callerContext.throwTypeError("Wrapped function threw");
-            } catch (RuntimeException e) {
-                return callerContext.throwTypeError("Wrapped function threw");
-            }
-        });
-
-        copyNameAndLength(callerContext, targetContext, targetCallable, wrappedFunction);
-        wrappedFunction.initializePrototypeChain(callerContext);
-        return wrappedFunction;
-    }
-
-    private static void copyNameAndLength(JSContext callerContext, JSContext targetContext,
-                                          JSValue targetCallable, JSNativeFunction wrappedFunction) {
-        if (!(targetCallable instanceof JSObject targetObject)) {
-            throw new JSException(callerContext.throwTypeError("Wrapped target is not an object"));
-        }
-
-        double wrappedLength = 0;
-        try {
-            if (targetObject.hasOwnProperty(PropertyKey.LENGTH)) {
-                JSValue targetLength = targetObject.get(targetContext, PropertyKey.LENGTH);
-                if (targetContext.hasPendingException()) {
-                    targetContext.clearPendingException();
-                    throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
-                }
-                if (targetLength instanceof JSNumber targetLengthNumber) {
-                    double numericLength = targetLengthNumber.value();
-                    if (Double.isInfinite(numericLength)) {
-                        if (numericLength > 0) {
-                            wrappedLength = Double.POSITIVE_INFINITY;
-                        } else {
-                            wrappedLength = 0;
-                        }
-                    } else if (Double.isNaN(numericLength)) {
-                        wrappedLength = 0;
-                    } else {
-                        double truncatedLength = numericLength < 0 ? Math.ceil(numericLength) : Math.floor(numericLength);
-                        wrappedLength = Math.max(truncatedLength, 0);
-                    }
-                }
-            }
-
-            JSValue targetName = targetObject.get(targetContext, PropertyKey.NAME);
-            if (targetContext.hasPendingException()) {
-                targetContext.clearPendingException();
-                throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
-            }
-            String wrappedName = targetName instanceof JSString targetNameString ? targetNameString.value() : "";
-
-            wrappedFunction.defineProperty(PropertyKey.LENGTH,
-                    PropertyDescriptor.dataDescriptor(JSNumber.of(wrappedLength), PropertyDescriptor.DataState.Configurable));
-            wrappedFunction.defineProperty(PropertyKey.NAME,
-                    PropertyDescriptor.dataDescriptor(new JSString(wrappedName), PropertyDescriptor.DataState.Configurable));
-        } catch (JSException e) {
-            if (callerContext.hasPendingException()) {
-                throw e;
-            }
-            throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
-        } catch (RuntimeException e) {
-            throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
-        }
-    }
-
-    private static JSObject evaluateShadowRealmModule(JSContext shadowContext, String source, String filename) {
-        JSObject exportsObject = shadowContext.createJSObject();
-
-        Matcher exportVarMatcher = EXPORT_VAR_PATTERN.matcher(source);
-        if (exportVarMatcher.find()) {
-            String exportName = exportVarMatcher.group(1);
-            String transformedSource = exportVarMatcher.replaceFirst("var " + exportName + " = " + exportVarMatcher.group(2) + ";");
-            shadowContext.eval(transformedSource, filename, false);
-            JSValue exportValue = shadowContext.getGlobalObject().get(shadowContext, PropertyKey.fromString(exportName));
-            if (shadowContext.hasPendingException()) {
-                throw new JSException(shadowContext.getPendingException());
-            }
-            exportsObject.defineProperty(PropertyKey.fromString(exportName), exportValue, PropertyDescriptor.DataState.ConfigurableWritable);
-            return exportsObject;
-        }
-
-        if (source.contains("export ")) {
-            throw new JSCompilerException("Unsupported module export syntax");
-        }
-
-        shadowContext.eval(source, filename, false);
-        if (shadowContext.hasPendingException()) {
-            throw new JSException(shadowContext.getPendingException());
-        }
-        return exportsObject;
-    }
-
-    private static JSValue getWrappedValue(JSContext callerContext, JSContext targetContext, JSValue value) {
-        if (JSTypeChecking.isPrimitive(value)) {
-            return value;
-        }
-        if (JSTypeChecking.isCallable(value)) {
-            try {
-                return createWrappedFunction(callerContext, targetContext, value);
-            } catch (JSException e) {
-                if (callerContext.hasPendingException()) {
-                    return callerContext.getPendingException();
-                }
-                return callerContext.throwTypeError("Cannot wrap callable");
-            }
-        }
-        return callerContext.throwTypeError("Cross-realm value is not wrappable");
     }
 
     private static void rejectWithCallerTypeError(JSContext callerContext, JSPromise promise, String message) {

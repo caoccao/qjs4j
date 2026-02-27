@@ -16,7 +16,10 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSRuntime;
+import com.caoccao.qjs4j.core.JSShadowRealm;
+import com.caoccao.qjs4j.core.JSValue;
 
 /**
  * ShadowRealm constructor.

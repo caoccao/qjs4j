@@ -83,14 +83,14 @@ public final class BytecodeCompiler {
         return delegates;
     }
 
+    public void setPredeclareProgramLexicalsAsLocals(boolean predeclareProgramLexicalsAsLocals) {
+        ctx.predeclareProgramLexicalsAsLocals = predeclareProgramLexicalsAsLocals;
+    }
+
     /**
      * Set the original source code (used for extracting function source in toString()).
      */
     public void setSourceCode(String sourceCode) {
         ctx.sourceCode = sourceCode;
-    }
-
-    public void setPredeclareProgramLexicalsAsLocals(boolean predeclareProgramLexicalsAsLocals) {
-        ctx.predeclareProgramLexicalsAsLocals = predeclareProgramLexicalsAsLocals;
     }
 }

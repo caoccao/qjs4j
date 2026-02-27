@@ -79,6 +79,20 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         this.growable = growable;
     }
 
+    private static JSSharedArrayBuffer allocateBuffer(JSContext context, long length, long maxLength, boolean growable) {
+        if (length > Integer.MAX_VALUE) {
+            throw new JSException(context.throwRangeError("Invalid array buffer length"));
+        }
+        if (maxLength > Integer.MAX_VALUE) {
+            throw new JSException(context.throwRangeError("Invalid array buffer max length"));
+        }
+        int intLength = (int) length;
+        int intMaxLength = (int) maxLength;
+        return growable
+                ? new JSSharedArrayBuffer(intLength, intMaxLength)
+                : new JSSharedArrayBuffer(intLength);
+    }
+
     public static JSObject create(JSContext context, JSValue... args) {
         try {
             long[] validated = validateArgs(context, args);
@@ -115,20 +129,6 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
             context.transferPrototype(buffer, constructor);
         }
         return buffer;
-    }
-
-    private static JSSharedArrayBuffer allocateBuffer(JSContext context, long length, long maxLength, boolean growable) {
-        if (length > Integer.MAX_VALUE) {
-            throw new JSException(context.throwRangeError("Invalid array buffer length"));
-        }
-        if (maxLength > Integer.MAX_VALUE) {
-            throw new JSException(context.throwRangeError("Invalid array buffer max length"));
-        }
-        int intLength = (int) length;
-        int intMaxLength = (int) maxLength;
-        return growable
-                ? new JSSharedArrayBuffer(intLength, intMaxLength)
-                : new JSSharedArrayBuffer(intLength);
     }
 
     private static long[] validateArgs(JSContext context, JSValue[] args) {

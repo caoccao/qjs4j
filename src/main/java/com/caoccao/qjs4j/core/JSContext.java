@@ -754,14 +754,6 @@ public final class JSContext implements AutoCloseable {
         return eval(code, filename, isModule, false);
     }
 
-    public JSValue evalWithProgramLexicalsAsLocals(String code, String filename, boolean isModule) {
-        return eval(code, filename, isModule, false, true, true, false);
-    }
-
-    public JSValue evalDirect(String code, String filename, boolean inheritedStrictMode) {
-        return eval(code, filename, false, true, false, false, inheritedStrictMode);
-    }
-
     /**
      * Eval js value.
      *
@@ -952,6 +944,14 @@ public final class JSContext implements AutoCloseable {
             clearPendingException();
             clearErrorStackTrace();
         }
+    }
+
+    public JSValue evalDirect(String code, String filename, boolean inheritedStrictMode) {
+        return eval(code, filename, false, true, false, false, inheritedStrictMode);
+    }
+
+    public JSValue evalWithProgramLexicalsAsLocals(String code, String filename, boolean isModule) {
+        return eval(code, filename, isModule, false, true, true, false);
     }
 
     /**

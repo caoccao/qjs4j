@@ -31,8 +31,8 @@ import java.util.List;
  * that are shared across the delegate parser classes.
  */
 final class ParserContext {
-    final boolean isEval;
     final boolean inheritedStrictMode;
+    final boolean isEval;
     final Lexer lexer;
     final boolean moduleMode;
     int asyncFunctionNesting;
@@ -174,6 +174,13 @@ final class ParserContext {
                 || tokenType == TokenType.AWAIT;
     }
 
+    private boolean isStrictReservedIdentifierName(String name) {
+        return switch (name) {
+            case "implements", "interface", "package", "private", "protected", "public", "static" -> true;
+            default -> false;
+        };
+    }
+
     boolean isUsingDeclarationStart() {
         return currentToken.type() == TokenType.IDENTIFIER
                 && "using".equals(currentToken.value())
@@ -203,11 +210,11 @@ final class ParserContext {
         return !strictMode && expr instanceof CallExpression;
     }
 
+    // ---- Context management ----
+
     boolean match(TokenType type) {
         return currentToken.type() == type;
     }
-
-    // ---- Context management ----
 
     /**
      * Parse directives at the beginning of a program or function.
@@ -310,13 +317,6 @@ final class ParserContext {
         }
         throw new RuntimeException("Expected identifier but got " + currentToken.type() +
                 " at line " + currentToken.line() + ", column " + currentToken.column());
-    }
-
-    private boolean isStrictReservedIdentifierName(String name) {
-        return switch (name) {
-            case "implements", "interface", "package", "private", "protected", "public", "static" -> true;
-            default -> false;
-        };
     }
 
     // ---- Shared parsing utilities ----

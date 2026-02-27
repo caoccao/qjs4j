@@ -1489,6 +1489,21 @@ final class FunctionClassCompiler {
         return templateObject;
     }
 
+    private void declareAndInitializeImplicitArgumentsBinding(CompilerContext functionContext) {
+        if (functionContext.inGlobalScope || functionContext.isInArrowFunction) {
+            return;
+        }
+        if (functionContext.currentScope().getLocal(JSArguments.NAME) != null) {
+            return;
+        }
+
+        int argumentsLocalIndex = functionContext.currentScope().declareLocal(JSArguments.NAME);
+        functionContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+        functionContext.emitter.emitU8(0);
+        functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
+        functionContext.emitter.emitU16(argumentsLocalIndex);
+    }
+
     /**
      * Declare function parameters and emit destructuring for pattern params.
      * For Identifier params, declares as a named parameter slot.
@@ -1514,21 +1529,6 @@ final class FunctionClassCompiler {
             }
         }
         return destructuringParams;
-    }
-
-    private void declareAndInitializeImplicitArgumentsBinding(CompilerContext functionContext) {
-        if (functionContext.inGlobalScope || functionContext.isInArrowFunction) {
-            return;
-        }
-        if (functionContext.currentScope().getLocal(JSArguments.NAME) != null) {
-            return;
-        }
-
-        int argumentsLocalIndex = functionContext.currentScope().declareLocal(JSArguments.NAME);
-        functionContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-        functionContext.emitter.emitU8(0);
-        functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
-        functionContext.emitter.emitU16(argumentsLocalIndex);
     }
 
     /**
