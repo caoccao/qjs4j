@@ -143,7 +143,10 @@ public final class StringConstructor {
         }
 
         // Get the raw array
-        JSValue rawValue = cooked.get("raw");
+        JSValue rawValue = cooked.get(context, PropertyKey.fromString("raw"));
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
         if (rawValue instanceof JSUndefined || rawValue instanceof JSNull) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
@@ -157,7 +160,10 @@ public final class StringConstructor {
         }
 
         // Get length of raw array
-        JSValue lengthValue = raw.get("length");
+        JSValue lengthValue = raw.get(context, PropertyKey.LENGTH);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
         long literalSegments = JSTypeConversions.toLength(context, lengthValue);
 
         // If length is 0, return empty string
@@ -170,7 +176,10 @@ public final class StringConstructor {
         // Process each segment
         for (long i = 0; i < literalSegments; i++) {
             // Get the raw string at index i
-            JSValue nextVal = raw.get((int) i);
+            JSValue nextVal = raw.get(context, PropertyKey.fromIndex((int) i));
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
             String nextSeg = JSTypeConversions.toString(context, nextVal).value();
             result.append(nextSeg);
 

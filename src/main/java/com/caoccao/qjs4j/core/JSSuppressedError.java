@@ -34,21 +34,35 @@ public final class JSSuppressedError extends JSError {
 
     public static JSValue create(JSContext context, JSValue... args) {
         // SuppressedError(error, suppressed, message)
-        String message = "";
-        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
-            message = JSTypeConversions.toString(context, args[2]).value();
+        // Step 3: If message is not undefined, convert to string and create "message" property
+        boolean hasMessage = args.length > 2 && !(args[2] instanceof JSUndefined);
+        String messageStr = null;
+        if (hasMessage) {
+            messageStr = JSTypeConversions.toString(context, args[2]).value();
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
         }
 
-        JSSuppressedError jsSuppressedError = context.createJSSuppressedError(message);
+        // Create the error object without message (we'll add it manually in the right order)
+        JSSuppressedError jsSuppressedError = context.createJSSuppressedError("");
 
-        // Set error and suppressed properties
+        // Per spec: property creation order is message, error, suppressed
+        // Step 3b: CreateNonEnumerableDataPropertyOrThrow(O, "message", messageString)
+        if (hasMessage) {
+            jsSuppressedError.defineProperty(PropertyKey.MESSAGE,
+                    PropertyDescriptor.dataDescriptor(new JSString(messageStr), PropertyDescriptor.DataState.ConfigurableWritable));
+        }
+
+        // Step 4: CreateNonEnumerableDataPropertyOrThrow(O, "error", error)
         JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        jsSuppressedError.defineProperty(PropertyKey.ERROR,
+                PropertyDescriptor.dataDescriptor(error, PropertyDescriptor.DataState.ConfigurableWritable));
+
+        // Step 5: CreateNonEnumerableDataPropertyOrThrow(O, "suppressed", suppressed)
         JSValue suppressed = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        jsSuppressedError.set(PropertyKey.ERROR, error);
-        jsSuppressedError.set(PropertyKey.SUPPRESSED, suppressed);
+        jsSuppressedError.defineProperty(PropertyKey.SUPPRESSED,
+                PropertyDescriptor.dataDescriptor(suppressed, PropertyDescriptor.DataState.ConfigurableWritable));
 
         // InstallErrorCause(O, options)
         if (args.length > 3) {

@@ -1129,7 +1129,18 @@ final class FunctionClassCompiler {
             delegates.emitHelpers.emitDefaultParameterInit(methodCompiler, functionExpression.defaults());
         }
 
-        // Emit destructuring for pattern parameters after defaults
+        // Handle rest parameter if present
+        if (functionExpression.restParameter() != null) {
+            int firstRestIndex = functionExpression.params().size();
+            methodCtx.emitter.emitOpcode(Opcode.REST);
+            methodCtx.emitter.emitU16(firstRestIndex);
+            String restParamName = functionExpression.restParameter().argument().name();
+            int restLocalIndex = methodCtx.currentScope().declareLocal(restParamName);
+            methodCtx.emitter.emitOpcode(Opcode.PUT_LOCAL);
+            methodCtx.emitter.emitU16(restLocalIndex);
+        }
+
+        // Emit destructuring for pattern parameters after defaults and rest
         emitParameterDestructuring(functionExpression.params(), methodDestructuringParams, methodCtx, methodDelegates);
 
         // If this is a generator method, emit INITIAL_YIELD at the start

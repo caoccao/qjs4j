@@ -1974,17 +1974,26 @@ public final class OpcodeHandler {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
             executionContext.virtualMachine.context.clearPendingException();
         } else {
-            JSObject boxedObject = executionContext.virtualMachine.toObject(objectValue);
-            if (boxedObject != null) {
-                try {
-                    PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
-                    boxedObject.set(executionContext.virtualMachine.context, key, assignedValue);
-                    if (executionContext.virtualMachine.context.hasPendingException()) {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                        executionContext.virtualMachine.context.clearPendingException();
+            // In strict mode, setting a property on a primitive throws TypeError
+            if (executionContext.virtualMachine.context.isStrictMode()) {
+                PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
+                executionContext.virtualMachine.context.throwTypeError(
+                        "Cannot create property '" + key + "' on " + JSTypeChecking.typeof(objectValue) + " '" + objectValue + "'");
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.context.clearPendingException();
+            } else {
+                JSObject boxedObject = executionContext.virtualMachine.toObject(objectValue);
+                if (boxedObject != null) {
+                    try {
+                        PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
+                        boxedObject.set(executionContext.virtualMachine.context, key, assignedValue);
+                        if (executionContext.virtualMachine.context.hasPendingException()) {
+                            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                            executionContext.virtualMachine.context.clearPendingException();
+                        }
+                    } catch (JSVirtualMachineException e) {
+                        executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
                     }
-                } catch (JSVirtualMachineException e) {
-                    executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
                 }
             }
         }
@@ -2018,16 +2027,24 @@ public final class OpcodeHandler {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
             executionContext.virtualMachine.context.clearPendingException();
         } else {
-            JSObject boxedObject = executionContext.virtualMachine.toObject(objectValue);
-            if (boxedObject != null) {
-                try {
-                    boxedObject.set(executionContext.virtualMachine.context, propertyKey, fieldValue);
-                    if (executionContext.virtualMachine.context.hasPendingException()) {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                        executionContext.virtualMachine.context.clearPendingException();
+            // In strict mode, setting a property on a primitive throws TypeError
+            if (executionContext.virtualMachine.context.isStrictMode()) {
+                executionContext.virtualMachine.context.throwTypeError(
+                        "Cannot create property '" + fieldName + "' on " + JSTypeChecking.typeof(objectValue) + " '" + objectValue + "'");
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.context.clearPendingException();
+            } else {
+                JSObject boxedObject = executionContext.virtualMachine.toObject(objectValue);
+                if (boxedObject != null) {
+                    try {
+                        boxedObject.set(executionContext.virtualMachine.context, propertyKey, fieldValue);
+                        if (executionContext.virtualMachine.context.hasPendingException()) {
+                            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                            executionContext.virtualMachine.context.clearPendingException();
+                        }
+                    } catch (JSVirtualMachineException e) {
+                        executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
                     }
-                } catch (JSVirtualMachineException e) {
-                    executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
                 }
             }
         }

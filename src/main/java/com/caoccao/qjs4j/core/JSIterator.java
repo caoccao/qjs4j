@@ -190,7 +190,7 @@ public class JSIterator extends JSObject {
                 return IteratorResult.of(context, new JSString(character));
             }
             return IteratorResult.done(context);
-        }, "String Iterator");
+        }, "String Iterator", false);
     }
 
     /**

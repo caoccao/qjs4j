@@ -54,6 +54,8 @@ public final class RegExpEngine {
             return null;
         }
 
+        boolean isUnicode = bytecode.isUnicode() || bytecode.hasUnicodeSets();
+
         ExecutionContext executionContext = new ExecutionContext(
                 input,
                 bytecode.instructions(),
@@ -62,15 +64,30 @@ public final class RegExpEngine {
                 bytecode.isIgnoreCase(),
                 bytecode.isMultiline(),
                 bytecode.isDotAll(),
-                bytecode.isUnicode() || bytecode.hasUnicodeSets()
+                isUnicode
         );
 
         // Try matching at each position
-        int end = bytecode.isSticky() ? startIndex + 1 : input.length() + 1;
-        for (int pos = startIndex; pos < end; pos++) {
-            executionContext.reset(pos);
-            if (execute(executionContext)) {
-                return executionContext.createResult(true);
+        if (isUnicode) {
+            // In unicode mode, the engine works with code point indices internally.
+            // Convert startIndex from UTF-16 units to code point index.
+            int codePointStart = input.codePointCount(0, startIndex);
+            int codePointEnd = bytecode.isSticky()
+                    ? codePointStart + 1
+                    : executionContext.codePoints.length + 1;
+            for (int pos = codePointStart; pos < codePointEnd; pos++) {
+                executionContext.reset(pos);
+                if (execute(executionContext)) {
+                    return executionContext.createResult(true);
+                }
+            }
+        } else {
+            int end = bytecode.isSticky() ? startIndex + 1 : input.length() + 1;
+            for (int pos = startIndex; pos < end; pos++) {
+                executionContext.reset(pos);
+                if (execute(executionContext)) {
+                    return executionContext.createResult(true);
+                }
             }
         }
 

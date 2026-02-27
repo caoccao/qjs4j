@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.regexp.RegExpEngine;
 import com.caoccao.qjs4j.unicode.UnicodeNormalization;
+import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
 
 import java.text.Collator;
 import java.util.Locale;
@@ -28,6 +29,15 @@ import java.util.Locale;
  * Based on ES2020 String.prototype specification.
  */
 public final class StringPrototype {
+
+    /**
+     * Cached ranges for the "Case_Ignorable" Unicode binary property.
+     */
+    private static int[] caseIgnorableRanges;
+    /**
+     * Cached ranges for the "Cased" Unicode binary property.
+     */
+    private static int[] casedRanges;
 
     /**
      * String.prototype.anchor(name)
@@ -670,6 +680,15 @@ public final class StringPrototype {
         return replacement;
     }
 
+    /**
+     * ES2024 GetSubstitution for string replace/replaceAll.
+     */
+    private static String getSubstitution(String matched, String str, int position,
+                                          String[] captures, String[] groupNames, String replacement) {
+        return applyRegExpReplacementPattern(replacement, str, position, position + matched.length(),
+                captures != null ? captures : new String[]{matched}, groupNames);
+    }
+
     private static boolean hasNamedCaptures(String[] groupNames) {
         if (groupNames == null) {
             return false;
@@ -728,6 +747,111 @@ public final class StringPrototype {
         return JSNumber.of(index);
     }
 
+    /**
+     * Check if a code point is "Case_Ignorable" per Unicode property.
+     * Uses the full Unicode Case_Ignorable property table.
+     */
+    private static boolean isCaseIgnorableUnicode(int codePoint) {
+        if (caseIgnorableRanges == null) {
+            caseIgnorableRanges = UnicodePropertyResolver.resolveBinaryProperty("Case_Ignorable");
+            if (caseIgnorableRanges == null) {
+                // Fallback if tables not available
+                int type = Character.getType(codePoint);
+                return type == Character.NON_SPACING_MARK ||
+                        type == Character.ENCLOSING_MARK ||
+                        type == Character.FORMAT ||
+                        type == Character.MODIFIER_LETTER ||
+                        type == Character.MODIFIER_SYMBOL;
+            }
+        }
+        return isInRanges(codePoint, caseIgnorableRanges);
+    }
+
+    /**
+     * Check if a code point is "Cased" per Unicode property.
+     * Uses the full Unicode Cased property table.
+     */
+    private static boolean isCasedUnicode(int codePoint) {
+        if (casedRanges == null) {
+            casedRanges = UnicodePropertyResolver.resolveBinaryProperty("Cased");
+            if (casedRanges == null) {
+                // Fallback if tables not available
+                return Character.isUpperCase(codePoint) ||
+                        Character.isLowerCase(codePoint) ||
+                        Character.isTitleCase(codePoint);
+            }
+        }
+        return isInRanges(codePoint, casedRanges);
+    }
+
+    /**
+     * ES2024 WhiteSpace + LineTerminator predicate.
+     * Matches: TAB, VT, FF, SP, NBSP, BOM/ZWNBSP, USP (Unicode Space_Separator), LF, CR, LS, PS.
+     */
+    private static boolean isEcmaWhitespace(char ch) {
+        return ch == '\t' || ch == '\n' || ch == '\u000B' || ch == '\f' || ch == '\r'
+                || ch == ' ' || ch == '\u00A0' || ch == '\uFEFF'
+                || ch == '\u1680'
+                || (ch >= '\u2000' && ch <= '\u200A')
+                || ch == '\u2028' || ch == '\u2029'
+                || ch == '\u202F' || ch == '\u205F' || ch == '\u3000';
+    }
+
+    /**
+     * Test if sigma at position sigmaPos is in a "final" context.
+     * Final sigma: preceded by a cased letter (skipping case-ignorable) and
+     * NOT followed by a cased letter (skipping case-ignorable).
+     */
+    private static boolean isFinalSigma(String s, int sigmaPos) {
+        // Look backward: skip case-ignorable, check for cased
+        int k = sigmaPos;
+        int prevCodePoint = -1;
+        while (k > 0) {
+            int cp = Character.codePointBefore(s, k);
+            k -= Character.charCount(cp);
+            if (!isCaseIgnorableUnicode(cp)) {
+                prevCodePoint = cp;
+                break;
+            }
+        }
+        if (prevCodePoint == -1 || !isCasedUnicode(prevCodePoint)) {
+            return false;
+        }
+
+        // Look forward: skip case-ignorable, check for NOT cased
+        k = sigmaPos + 1;
+        while (k < s.length()) {
+            int cp = s.codePointAt(k);
+            k += Character.charCount(cp);
+            if (!isCaseIgnorableUnicode(cp)) {
+                return !isCasedUnicode(cp);
+            }
+        }
+        return true; // End of string, no following cased letter
+    }
+
+    /**
+     * Binary search to check if a code point is in any of the given ranges.
+     * Ranges are stored as [start1, end1, start2, end2, ...] (inclusive).
+     */
+    private static boolean isInRanges(int codePoint, int[] ranges) {
+        int low = 0;
+        int high = ranges.length / 2 - 1;
+        while (low <= high) {
+            int mid = (low + high) >>> 1;
+            int start = ranges[mid * 2];
+            int end = ranges[mid * 2 + 1];
+            if (codePoint < start) {
+                high = mid - 1;
+            } else if (codePoint > end) {
+                low = mid + 1;
+            } else {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static int isRegExp(JSContext context, JSValue value) {
         if (!(value instanceof JSObject obj)) {
             return 0;
@@ -773,9 +897,18 @@ public final class StringPrototype {
         }
 
         String searchStr = JSTypeConversions.toString(context, args[0]).value();
-        long position = args.length > 1 && !args[1].isUndefined()
-                ? (long) JSTypeConversions.toInteger(context, args[1])
-                : s.length();
+        // ES2024 22.1.3.9: If numPos is NaN, let pos be +∞; otherwise let pos be ToIntegerOrInfinity(numPos)
+        long position;
+        if (args.length > 1 && !args[1].isUndefined()) {
+            double numPos = JSTypeConversions.toNumber(context, args[1]).value();
+            if (Double.isNaN(numPos)) {
+                position = s.length();
+            } else {
+                position = (long) JSTypeConversions.toInteger(context, args[1]);
+            }
+        } else {
+            position = s.length();
+        }
         position = Math.max(0, Math.min(position, s.length()));
 
         int index = s.lastIndexOf(searchStr, (int) position);
@@ -819,8 +952,11 @@ public final class StringPrototype {
             }
         }
 
+        // Normalize both strings to NFC for Unicode canonical equivalence
+        String normalizedThis = java.text.Normalizer.normalize(thisStr, java.text.Normalizer.Form.NFC);
+        String normalizedThat = java.text.Normalizer.normalize(that, java.text.Normalizer.Form.NFC);
         Collator collator = Collator.getInstance(locale);
-        int result = Integer.signum(collator.compare(thisStr, that));
+        int result = Integer.signum(collator.compare(normalizedThis, normalizedThat));
         return JSNumber.of(result);
     }
 
@@ -849,64 +985,24 @@ public final class StringPrototype {
         }
 
         JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
 
-        // Convert to RegExp if not already
-        JSRegExp regexp;
-        if (regexpArg instanceof JSRegExp) {
-            regexp = (JSRegExp) regexpArg;
-        } else if (regexpArg instanceof JSUndefined) {
-            regexp = context.createJSRegExp("", "");
-        } else if (regexpArg instanceof JSString regexpStr) {
-            regexp = context.createJSRegExp(regexpStr.value(), "");
+        // Step 6: Let rx be RegExpCreate(regexp, undefined).
+        String pattern;
+        if (regexpArg instanceof JSUndefined) {
+            pattern = "";
         } else {
-            // Convert to string and create RegExp
-            String pattern = JSTypeConversions.toString(context, regexpArg).value();
-            regexp = context.createJSRegExp(pattern, "");
+            pattern = JSTypeConversions.toString(context, regexpArg).value();
         }
-
-        // Check if global flag is set
-        if (regexp.isGlobal()) {
-            // Global match: set lastIndex to 0 and collect all matches
-            regexp.setLastIndex(0);
-            JSArray results = context.createJSArray();
-            int n = 0;
-
-            while (true) {
-                // Call exec (which is like JS_RegExpExec)
-                JSValue result = RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString(s)});
-
-                if (result instanceof JSNull) {
-                    break;
-                }
-
-                // Extract the matched string (index 0 of the result array)
-                if (result instanceof JSArray resultArray) {
-                    JSValue matchStr = resultArray.get(0);
-                    if (matchStr instanceof JSString) {
-                        results.push(matchStr);
-                        n++;
-
-                        // Check for empty match to prevent infinite loop
-                        if (((JSString) matchStr).value().isEmpty()) {
-                            // Advance lastIndex to prevent infinite loop
-                            int thisIndex = regexp.getLastIndex();
-                            // Note: fullUnicode advancement not implemented yet, just advance by 1
-                            regexp.setLastIndex(thisIndex + 1);
-                        }
-                    }
-                }
-            }
-
-            // Return null if no matches found
-            if (n == 0) {
-                return JSNull.INSTANCE;
-            }
-            return results;
-        } else {
-            // Non-global match: just call exec and return result
-            return RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString(s)});
+        JSRegExp rx = context.createJSRegExp(pattern, "");
+        // Step 7: Return Invoke(rx, @@match, «S»).
+        JSValue matchFn = rx.get(context, PropertyKey.SYMBOL_MATCH);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
+        if (matchFn instanceof JSFunction matchFunction) {
+            return matchFunction.call(context, rx, new JSValue[]{str});
+        }
+        return context.throwTypeError("not a function");
     }
 
     /**
@@ -921,81 +1017,75 @@ public final class StringPrototype {
         }
 
         JSValue regexpArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        if (regexpArg instanceof JSRegExp regexp && !regexp.isGlobal()) {
-            return context.throwTypeError("String.prototype.matchAll called with a non-global RegExp argument");
+        // Step 2: If regexp is neither undefined nor null
+        if (!(regexpArg instanceof JSUndefined) && !(regexpArg instanceof JSNull)) {
+            // Step 2a: isRegExp check
+            if (isRegExp(context, regexpArg) == 1) {
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                // Step 2a.ii: Check flags contain "g"
+                if (regexpArg instanceof JSObject regObj) {
+                    JSValue flags = regObj.get(context, PropertyKey.fromString("flags"));
+                    if (context.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    if (flags instanceof JSUndefined || flags instanceof JSNull) {
+                        return context.throwTypeError("flags is null or undefined");
+                    }
+                    String flagsStr = JSTypeConversions.toString(context, flags).value();
+                    if (!flagsStr.contains("g")) {
+                        return context.throwTypeError("String.prototype.matchAll called with a non-global RegExp argument");
+                    }
+                }
+            }
+            // Step 2b: GetMethod(regexp, @@matchAll)
+            if (regexpArg instanceof JSObject regexpObj) {
+                JSValue matcher = regexpObj.get(context, PropertyKey.SYMBOL_MATCH_ALL);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                if (!(matcher instanceof JSUndefined) && !(matcher instanceof JSNull)) {
+                    if (!(matcher instanceof JSFunction matcherFunction)) {
+                        return context.throwTypeError("not a function");
+                    }
+                    return matcherFunction.call(context, regexpObj, new JSValue[]{thisArg});
+                }
+            }
         }
-        if (regexpArg instanceof JSObject regexpObj) {
-            JSValue matcher = regexpObj.get(context, PropertyKey.SYMBOL_MATCH_ALL);
+
+        // Step 3: Let S be ? ToString(O).
+        JSString str = toStringCheckObject(context, thisArg);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        // Step 4: Let rx be ? RegExpCreate(regexp, "g").
+        String pattern;
+        if (regexpArg instanceof JSRegExp inputRegExp) {
+            pattern = inputRegExp.getPattern();
+        } else if (regexpArg instanceof JSUndefined || regexpArg instanceof JSNull) {
+            pattern = regexpArg instanceof JSUndefined ? "" : "null";
+        } else {
+            pattern = JSTypeConversions.toString(context, regexpArg).value();
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (!(matcher instanceof JSUndefined) && !(matcher instanceof JSNull)) {
-                if (!(matcher instanceof JSFunction matcherFunction)) {
-                    return context.throwTypeError("not a function");
-                }
-                return matcherFunction.call(context, regexpObj, new JSValue[]{thisArg});
-            }
+        }
+        JSRegExp rx = context.createJSRegExp(pattern, "g");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
 
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
-
-        // Convert to RegExp if not already
-        JSRegExp regexp;
-        if (regexpArg instanceof JSRegExp inputRegExp) {
-            regexp = context.createJSRegExp(inputRegExp.getPattern(), "g");
-        } else if (regexpArg instanceof JSUndefined) {
-            regexp = context.createJSRegExp("", "g");
-        } else if (regexpArg instanceof JSString regexpStr) {
-            regexp = context.createJSRegExp(regexpStr.value(), "g");
-        } else {
-            // Convert to string and create RegExp with 'g' flag
-            String pattern = JSTypeConversions.toString(context, regexpArg).value();
-            regexp = context.createJSRegExp(pattern, "g");
+        // Step 5: Return ? Invoke(rx, @@matchAll, « S »).
+        JSValue matchAllMethod = rx.get(context, PropertyKey.SYMBOL_MATCH_ALL);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
-
-        // Collect all matches into an array and return an iterator
-        JSArray matches = context.createJSArray();
-        RegExpEngine engine = regexp.getEngine();
-        int lastIndex = 0;
-
-        while (lastIndex <= s.length()) {
-            RegExpEngine.MatchResult result = engine.exec(s, lastIndex);
-            if (result == null || !result.matched()) {
-                break;
-            }
-
-            // Create match array for this result
-            JSArray matchArray = context.createJSArray();
-            String[] captures = result.captures();
-            for (int i = 0; i < captures.length; i++) {
-                if (captures[i] != null) {
-                    matchArray.push(new JSString(captures[i]));
-                } else {
-                    matchArray.push(JSUndefined.INSTANCE);
-                }
-            }
-
-            // Add 'index' property and update lastIndex
-            int[][] indices = result.indices();
-            if (indices != null && indices.length > 0) {
-                matchArray.set(PropertyKey.INDEX, JSNumber.of(indices[0][0]));
-                lastIndex = indices[0][1];
-                if (lastIndex == indices[0][0]) {
-                    lastIndex++; // Prevent infinite loop on zero-width matches
-                }
-            } else {
-                break;
-            }
-
-            // Add 'input' property
-            matchArray.set(PropertyKey.INPUT, new JSString(s));
-            matchArray.set(PropertyKey.GROUPS, createNamedGroupsValue(captures, regexp.getBytecode().groupNames()));
-
-            matches.push(matchArray);
+        if (matchAllMethod instanceof JSFunction matchAllFunction) {
+            return matchAllFunction.call(context, rx, new JSValue[]{str});
         }
-
-        return JSIterator.arrayIterator(context, matches);
+        return context.throwTypeError("RegExp.prototype[Symbol.matchAll] is not a function");
     }
 
     /**
@@ -1107,18 +1197,20 @@ public final class StringPrototype {
         JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
-        long count = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
+        double countDouble = args.length > 0 ? JSTypeConversions.toInteger(context, args[0]) : 0;
 
-        if (count < 0 || Double.isInfinite(count)) {
+        if (countDouble < 0 || Double.isInfinite(countDouble)) {
             return context.throwRangeError("Invalid count value");
         }
+
+        long count = (long) countDouble;
 
         if (count == 0 || s.isEmpty()) {
             return new JSString("");
         }
 
-        StringBuilder result = new StringBuilder((int) (s.length() * count));
-        for (int i = 0; i < count; i++) {
+        StringBuilder result = new StringBuilder((int) Math.min(s.length() * count, Integer.MAX_VALUE));
+        for (long i = 0; i < count; i++) {
             result.append(s);
         }
 
@@ -1162,21 +1254,27 @@ public final class StringPrototype {
         }
 
         // Handle string search
-        String replaceStr = JSTypeConversions.toString(context, replaceValue).value();
         String searchStr = JSTypeConversions.toString(context, searchValue).value();
-
-        // Handle empty search string: insert at position 0
-        if (searchStr.isEmpty()) {
-            return new JSString(replaceStr + s);
-        }
+        boolean functionalReplace = replaceValue instanceof JSFunction;
+        String replaceStr = functionalReplace ? null : JSTypeConversions.toString(context, replaceValue).value();
 
         int index = s.indexOf(searchStr);
         if (index < 0) {
             return str;
         }
 
-        String result = s.substring(0, index) + replaceStr + s.substring(index + searchStr.length());
-        return new JSString(result);
+        String replacement;
+        if (functionalReplace) {
+            JSValue replResult = ((JSFunction) replaceValue).call(context, JSUndefined.INSTANCE,
+                    new JSValue[]{new JSString(searchStr), JSNumber.of(index), new JSString(s)});
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            replacement = JSTypeConversions.toString(context, replResult).value();
+        } else {
+            replacement = getSubstitution(searchStr, s, index, null, null, replaceStr);
+        }
+        return new JSString(s.substring(0, index) + replacement + s.substring(index + searchStr.length()));
     }
 
     /**
@@ -1192,109 +1290,82 @@ public final class StringPrototype {
 
         JSValue searchValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue replaceValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        if (searchValue instanceof JSRegExp regexp && !regexp.isGlobal()) {
-            return context.throwTypeError("String.prototype.replaceAll called with a non-global RegExp argument");
-        }
-        if (searchValue instanceof JSObject searchValueObject) {
-            JSValue replacer = searchValueObject.get(context, PropertyKey.SYMBOL_REPLACE);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!(replacer instanceof JSUndefined) && !(replacer instanceof JSNull)) {
-                if (!(replacer instanceof JSFunction replacerFunction)) {
-                    return context.throwTypeError("not a function");
+        // Step 2: If searchValue is neither undefined nor null
+        if (!(searchValue instanceof JSUndefined) && !(searchValue instanceof JSNull)) {
+            // Step 2a: isRegExp check
+            if (isRegExp(context, searchValue) == 1) {
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
                 }
-                return replacerFunction.call(context, searchValueObject, new JSValue[]{thisArg, replaceValue});
+                // Step 2a.ii: Check flags contain "g"
+                if (searchValue instanceof JSObject searchObj) {
+                    JSValue flags = searchObj.get(context, PropertyKey.fromString("flags"));
+                    if (context.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    String flagsStr = JSTypeConversions.toString(context, flags).value();
+                    if (!flagsStr.contains("g")) {
+                        return context.throwTypeError("String.prototype.replaceAll called with a non-global RegExp argument");
+                    }
+                }
+            }
+            // Step 2b: GetMethod(searchValue, @@replace)
+            if (searchValue instanceof JSObject searchValueObject) {
+                JSValue replacer = searchValueObject.get(context, PropertyKey.SYMBOL_REPLACE);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                if (!(replacer instanceof JSUndefined) && !(replacer instanceof JSNull)) {
+                    if (!(replacer instanceof JSFunction replacerFunction)) {
+                        return context.throwTypeError("not a function");
+                    }
+                    return replacerFunction.call(context, searchValueObject, new JSValue[]{thisArg, replaceValue});
+                }
             }
         }
 
         JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
-        // Handle RegExp
-        if (searchValue instanceof JSRegExp regexp) {
-            RegExpEngine engine = regexp.getEngine();
-            StringBuilder result = new StringBuilder();
-            int lastIndex = 0;
+        String searchStr = JSTypeConversions.toString(context, searchValue).value();
+        boolean functionalReplace = replaceValue instanceof JSFunction;
+        String replaceStr = functionalReplace ? null : JSTypeConversions.toString(context, replaceValue).value();
 
-            while (lastIndex <= s.length()) {
-                RegExpEngine.MatchResult matchResult = engine.exec(s, lastIndex);
+        // Collect all match positions
+        java.util.List<Integer> matchPositions = new java.util.ArrayList<>();
+        int searchLen = searchStr.length();
+        int pos = 0;
+        if (searchLen == 0) {
+            // Empty search: match at every position including end
+            for (int i = 0; i <= s.length(); i++) {
+                matchPositions.add(i);
+            }
+        } else {
+            while ((pos = s.indexOf(searchStr, pos)) >= 0) {
+                matchPositions.add(pos);
+                pos += searchLen;
+            }
+        }
 
-                if (matchResult == null || !matchResult.matched()) {
-                    // No more matches, append the rest
-                    result.append(s.substring(lastIndex));
-                    break;
-                }
-
-                int[][] indices = matchResult.indices();
-                if (indices == null || indices.length == 0) {
-                    result.append(s.substring(lastIndex));
-                    break;
-                }
-
-                int matchStart = indices[0][0];
-                int matchEnd = indices[0][1];
-
-                // Append text before match
-                result.append(s, lastIndex, matchStart);
-
-                String[] captures = matchResult.captures();
-                String replacement = applyRegExpReplacement(
-                        context,
-                        replaceValue,
-                        s,
-                        matchStart,
-                        matchEnd,
-                        captures,
-                        regexp.getBytecode().groupNames());
+        // Build result
+        StringBuilder result = new StringBuilder();
+        int endOfLastMatch = 0;
+        for (int matchPosition : matchPositions) {
+            result.append(s, endOfLastMatch, matchPosition);
+            String replacement;
+            if (functionalReplace) {
+                JSValue replResult = ((JSFunction) replaceValue).call(context, JSUndefined.INSTANCE,
+                        new JSValue[]{new JSString(searchStr), JSNumber.of(matchPosition), new JSString(s)});
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-
-                // Append replacement
-                result.append(replacement);
-
-                // Move past the match
-                lastIndex = matchEnd;
-
-                // Prevent infinite loop on zero-width matches
-                if (matchStart == matchEnd) {
-                    if (lastIndex < s.length()) {
-                        result.append(s.charAt(lastIndex));
-                        lastIndex++;
-                    } else {
-                        break;
-                    }
-                }
+                replacement = JSTypeConversions.toString(context, replResult).value();
+            } else {
+                replacement = getSubstitution(searchStr, s, matchPosition, null, null, replaceStr);
             }
-
-            return new JSString(result.toString());
+            result.append(replacement);
+            endOfLastMatch = matchPosition + searchLen;
         }
-
-        // Handle string search
-        String replaceStr = JSTypeConversions.toString(context, replaceValue).value();
-        String searchStr = JSTypeConversions.toString(context, searchValue).value();
-
-        // Handle empty search string: insert replacement at every position
-        if (searchStr.isEmpty()) {
-            StringBuilder result = new StringBuilder();
-            for (int i = 0; i < s.length(); i++) {
-                result.append(replaceStr);
-                result.append(s.charAt(i));
-            }
-            result.append(replaceStr);
-            return new JSString(result.toString());
-        }
-
-        // Handle non-empty search string
-        StringBuilder result = new StringBuilder();
-        int pos = 0;
-        int index;
-        while ((index = s.indexOf(searchStr, pos)) >= 0) {
-            result.append(s, pos, index);
-            result.append(replaceStr);
-            pos = index + searchStr.length();
-        }
-        result.append(s.substring(pos));
+        result.append(s.substring(endOfLastMatch));
         return new JSString(result.toString());
     }
 
@@ -1408,37 +1479,24 @@ public final class StringPrototype {
         }
 
         JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
 
-        // Convert to RegExp if not already
-        JSRegExp regexp;
-        if (regexpArg instanceof JSRegExp) {
-            regexp = (JSRegExp) regexpArg;
-        } else if (regexpArg instanceof JSUndefined) {
-            regexp = context.createJSRegExp("", "");
-        } else if (regexpArg instanceof JSString regexpStr) {
-            regexp = context.createJSRegExp(regexpStr.value(), "");
+        // Step 6: Let rx be RegExpCreate(regexp, undefined).
+        String pattern;
+        if (regexpArg instanceof JSUndefined) {
+            pattern = "";
         } else {
-            // Convert to string and create RegExp
-            String pattern = JSTypeConversions.toString(context, regexpArg).value();
-            regexp = context.createJSRegExp(pattern, "");
+            pattern = JSTypeConversions.toString(context, regexpArg).value();
         }
-
-        // Use QuickJS engine to find match
-        RegExpEngine engine = regexp.getEngine();
-        RegExpEngine.MatchResult result = engine.exec(s, 0);
-
-        if (result == null || !result.matched()) {
-            return JSNumber.of(-1);
+        JSRegExp rx = context.createJSRegExp(pattern, "");
+        // Step 7: Return Invoke(rx, @@search, «S»).
+        JSValue searchFn = rx.get(context, PropertyKey.SYMBOL_SEARCH);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
-
-        // Return the starting index of the match
-        int[][] indices = result.indices();
-        if (indices != null && indices.length > 0) {
-            return JSNumber.of(indices[0][0]);
+        if (searchFn instanceof JSFunction searchFunction) {
+            return searchFunction.call(context, rx, new JSValue[]{str});
         }
-
-        return JSNumber.of(-1);
+        return context.throwTypeError("not a function");
     }
 
     /**
@@ -1511,9 +1569,20 @@ public final class StringPrototype {
         String s = str.value();
 
         JSArray arr = context.createJSArray();
+        // Per ES2024 spec ordering: ToUint32(limit) before ToString(separator)
         long limit = !(limitArg instanceof JSUndefined)
                 ? JSTypeConversions.toUint32(context, limitArg)
                 : 0xFFFFFFFFL;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String separator = null;
+        if (!(separatorArg instanceof JSUndefined) && !(separatorArg instanceof JSRegExp)) {
+            separator = JSTypeConversions.toString(context, separatorArg).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
         if (limit == 0) {
             return arr;
         }
@@ -1577,9 +1646,7 @@ public final class StringPrototype {
             return arr;
         }
 
-        // Handle string separator
-        String separator = JSTypeConversions.toString(context, separatorArg).value();
-
+        // Handle string separator (already computed above)
         if (separator.isEmpty()) {
             // Split into individual characters
             for (int i = 0; i < s.length() && i < limit; i++) {
@@ -1724,7 +1791,7 @@ public final class StringPrototype {
     public static JSValue toLocaleLowerCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
         // In QuickJS, this just calls toLowerCase() - locale is ignored
-        return new JSString(str.value().toLowerCase());
+        return new JSString(toLowerCaseWithSigma(str.value()));
     }
 
     /**
@@ -1741,12 +1808,54 @@ public final class StringPrototype {
     /**
      * String.prototype.toLowerCase()
      * ES2020 21.1.3.22
+     * Handles Greek final sigma per Unicode SpecialCasing.
      */
     public static JSValue toLowerCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
-        return new JSString(str.value().toLowerCase());
+        return new JSString(toLowerCaseWithSigma(str.value()));
     }
 
+    /**
+     * Custom toLowerCase that handles the Greek final sigma rule.
+     * When U+03A3 (SIGMA) is at a "final" position (preceded by a cased letter
+     * with possible case-ignorable characters in between, and NOT followed by
+     * a cased letter), it maps to U+03C2 (final sigma) instead of U+03C3.
+     */
+    private static String toLowerCaseWithSigma(String s) {
+        boolean hasSigma = false;
+        for (int i = 0; i < s.length(); i++) {
+            if (s.charAt(i) == '\u03A3') {
+                hasSigma = true;
+                break;
+            }
+        }
+        if (!hasSigma) {
+            return s.toLowerCase();
+        }
+
+        StringBuilder result = new StringBuilder(s.length());
+        int i = 0;
+        while (i < s.length()) {
+            int codePoint = s.codePointAt(i);
+            int charCount = Character.charCount(codePoint);
+            if (codePoint == 0x03A3) {
+                // Check final sigma condition
+                if (isFinalSigma(s, i)) {
+                    result.append('\u03C2'); // final sigma
+                } else {
+                    result.append('\u03C3'); // regular sigma
+                }
+            } else {
+                result.appendCodePoint(Character.toLowerCase(codePoint));
+            }
+            i += charCount;
+        }
+        return result.toString();
+    }
+
+    /**
+     * ES2024 7.2.8 IsRegExp(argument).
+     */
     private static JSString toStringCheckObject(JSContext context, JSValue value) {
         if (value == null || value.isNullOrUndefined()) {
             context.throwTypeError("null or undefined are forbidden");
@@ -1818,7 +1927,16 @@ public final class StringPrototype {
      */
     public static JSValue trim(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
-        return new JSString(str.value().strip());
+        String s = str.value();
+        int start = 0;
+        int end = s.length();
+        while (start < end && isEcmaWhitespace(s.charAt(start))) {
+            start++;
+        }
+        while (end > start && isEcmaWhitespace(s.charAt(end - 1))) {
+            end--;
+        }
+        return new JSString(s.substring(start, end));
     }
 
     /**
@@ -1827,7 +1945,12 @@ public final class StringPrototype {
      */
     public static JSValue trimEnd(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
-        return new JSString(str.value().stripTrailing());
+        String s = str.value();
+        int end = s.length();
+        while (end > 0 && isEcmaWhitespace(s.charAt(end - 1))) {
+            end--;
+        }
+        return new JSString(s.substring(0, end));
     }
 
     /**
@@ -1836,7 +1959,12 @@ public final class StringPrototype {
      */
     public static JSValue trimStart(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
-        return new JSString(str.value().stripLeading());
+        String s = str.value();
+        int start = 0;
+        while (start < s.length() && isEcmaWhitespace(s.charAt(start))) {
+            start++;
+        }
+        return new JSString(s.substring(start));
     }
 
     /**
