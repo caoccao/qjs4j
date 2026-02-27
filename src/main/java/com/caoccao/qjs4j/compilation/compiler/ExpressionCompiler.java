@@ -458,7 +458,12 @@ final class ExpressionCompiler {
                     }
 
                     // Push value
-                    compileExpression(prop.value());
+                    if (prop.method() && prop.value() instanceof FunctionExpression methodFunc) {
+                        // Concise methods are not constructors per ES spec
+                        delegates.functions.compileFunctionExpression(methodFunc, true);
+                    } else {
+                        compileExpression(prop.value());
+                    }
 
                     // Define property
                     ctx.emitter.emitOpcode(Opcode.DEFINE_PROP);

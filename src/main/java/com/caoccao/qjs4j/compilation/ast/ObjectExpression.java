@@ -35,7 +35,8 @@ public record ObjectExpression(
             Expression value,
             String kind,
             boolean computed,
-            boolean shorthand
+            boolean shorthand,
+            boolean method
     ) {
     }
 }

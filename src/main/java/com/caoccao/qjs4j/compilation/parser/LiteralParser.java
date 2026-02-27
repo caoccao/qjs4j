@@ -285,7 +285,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                     Expression key = delegates.expressions.parsePropertyName();
 
                     FunctionExpression value = delegates.functions.parseMethod(kind, methodStartLocation, false, false);
-                    properties.add(new ObjectExpression.Property(key, value, kind, computed, false));
+                    properties.add(new ObjectExpression.Property(key, value, kind, computed, false, false));
 
                     if (parserContext.match(TokenType.COMMA)) {
                         parserContext.advance();
@@ -309,12 +309,12 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
             if (parserContext.match(TokenType.LPAREN)) {
                 // Method shorthand: name() {} or async name() {} or *name() {} or async *name() {}
                 FunctionExpression value = delegates.functions.parseMethod("method", methodStartLocation, isAsync, isGenerator);
-                properties.add(new ObjectExpression.Property(key, value, "init", computed, false));
+                properties.add(new ObjectExpression.Property(key, value, "init", computed, false, true));
             } else if (parserContext.match(TokenType.COLON)) {
                 // Regular property: key: value
                 parserContext.advance();
                 Expression value = delegates.expressions.parseAssignmentExpression();
-                properties.add(new ObjectExpression.Property(key, value, "init", computed, false));
+                properties.add(new ObjectExpression.Property(key, value, "init", computed, false, false));
             } else if (!computed && key instanceof Identifier keyId
                     && (parserContext.match(TokenType.COMMA) || parserContext.match(TokenType.RBRACE) || parserContext.match(TokenType.ASSIGN))) {
                 // Shorthand property: {x} or CoverInitializedName: {x = defaultExpr}
@@ -328,12 +328,12 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 } else {
                     value = keyId;
                 }
-                properties.add(new ObjectExpression.Property(key, value, "init", false, true));
+                properties.add(new ObjectExpression.Property(key, value, "init", false, true, false));
             } else {
                 // Fallback: expect colon
                 parserContext.expect(TokenType.COLON);
                 Expression value = delegates.expressions.parseAssignmentExpression();
-                properties.add(new ObjectExpression.Property(key, value, "init", computed, false));
+                properties.add(new ObjectExpression.Property(key, value, "init", computed, false, false));
             }
 
             if (parserContext.match(TokenType.COMMA)) {

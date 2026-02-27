@@ -25,7 +25,6 @@ import java.nio.ByteBuffer;
 public final class JSUint16Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 2;
     public static final String NAME = "Uint16Array";
-
     /**
      * Create a Uint16Array with a new buffer.
      */
@@ -102,6 +101,11 @@ public final class JSUint16Array extends JSTypedArray {
     @Override
     public String getObjectTag() {
         return "[object " + NAME + "]";
+    }
+
+    @Override
+    public String getTypedArrayName() {
+        return NAME;
     }
 
     @Override

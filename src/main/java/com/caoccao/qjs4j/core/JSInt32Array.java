@@ -25,7 +25,6 @@ import java.nio.ByteBuffer;
 public final class JSInt32Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 4;
     public static final String NAME = "Int32Array";
-
     /**
      * Create an Int32Array with a new buffer.
      */
@@ -102,6 +101,11 @@ public final class JSInt32Array extends JSTypedArray {
     @Override
     public String getObjectTag() {
         return "[object " + NAME + "]";
+    }
+
+    @Override
+    public String getTypedArrayName() {
+        return NAME;
     }
 
     @Override

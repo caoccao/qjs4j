@@ -1782,8 +1782,15 @@ public final class JSGlobalObject {
 
         JSNativeFunction valuesFunction = new JSNativeFunction("values", 0, TypedArrayPrototype::values);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("at"), new JSNativeFunction("at", 1, TypedArrayPrototype::at), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("copyWithin"), new JSNativeFunction("copyWithin", 2, TypedArrayPrototype::copyWithin), PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("entries"), new JSNativeFunction("entries", 0, TypedArrayPrototype::entries), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("every"), new JSNativeFunction("every", 1, TypedArrayPrototype::every), PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("fill"), new JSNativeFunction("fill", 1, TypedArrayPrototype::fill), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("filter"), new JSNativeFunction("filter", 1, TypedArrayPrototype::filter), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("find"), new JSNativeFunction("find", 1, TypedArrayPrototype::find), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("findIndex"), new JSNativeFunction("findIndex", 1, TypedArrayPrototype::findIndex), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("findLast"), new JSNativeFunction("findLast", 1, TypedArrayPrototype::findLast), PropertyDescriptor.DataState.ConfigurableWritable);
+        typedArrayPrototype.defineProperty(PropertyKey.fromString("findLastIndex"), new JSNativeFunction("findLastIndex", 1, TypedArrayPrototype::findLastIndex), PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("join"), new JSNativeFunction("join", 1, TypedArrayPrototype::join), PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("keys"), new JSNativeFunction("keys", 0, TypedArrayPrototype::keys), PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("set"), new JSNativeFunction("set", 1, TypedArrayPrototype::set), PropertyDescriptor.DataState.ConfigurableWritable);

@@ -25,7 +25,6 @@ import java.nio.ByteBuffer;
 public final class JSUint8Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 1;
     public static final String NAME = "Uint8Array";
-
     /**
      * Create a Uint8Array with a new buffer.
      */
@@ -102,6 +101,11 @@ public final class JSUint8Array extends JSTypedArray {
     @Override
     public String getObjectTag() {
         return "[object " + NAME + "]";
+    }
+
+    @Override
+    public String getTypedArrayName() {
+        return NAME;
     }
 
     @Override

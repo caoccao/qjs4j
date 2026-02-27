@@ -315,6 +315,11 @@ final class ParserContext {
             advance();
             return new Identifier(name, location);
         }
+        if (match(TokenType.OF)) {
+            String name = currentToken.value();
+            advance();
+            return new Identifier(name, location);
+        }
         throw new RuntimeException("Expected identifier but got " + currentToken.type() +
                 " at line " + currentToken.line() + ", column " + currentToken.column());
     }

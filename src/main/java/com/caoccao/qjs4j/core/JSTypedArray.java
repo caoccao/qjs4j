@@ -31,7 +31,11 @@ import java.util.List;
  * <p>
  * TypedArrays provide an array-like view of an underlying ArrayBuffer.
  */
-public abstract class JSTypedArray extends JSObject {
+public sealed abstract class JSTypedArray extends JSObject permits
+        JSUint8Array, JSUint8ClampedArray, JSUint16Array, JSUint32Array,
+        JSInt8Array, JSInt16Array, JSInt32Array,
+        JSFloat16Array, JSFloat32Array, JSFloat64Array,
+        JSBigInt64Array, JSBigUint64Array {
     public static final String NAME = "TypedArray";
     protected final IJSArrayBuffer buffer;
     protected final int byteLength;
@@ -433,7 +437,9 @@ public abstract class JSTypedArray extends JSObject {
             if (byteOffset > currentByteLength) {
                 return 0;
             }
-            return currentByteLength - byteOffset;
+            // Round down to element boundary for partial elements
+            int remainingBytes = currentByteLength - byteOffset;
+            return (remainingBytes / bytesPerElement) * bytesPerElement;
         }
         return byteLength;
     }
@@ -537,6 +543,14 @@ public abstract class JSTypedArray extends JSObject {
         // Add non-index own properties from the shape (string keys, then symbols)
         result.addAll(super.getOwnPropertyKeys());
         return result;
+    }
+
+    /**
+     * Get the TypedArrayName (e.g., "Int8Array", "Float64Array").
+     * Per ES spec, this is returned by the @@toStringTag getter.
+     */
+    public String getTypedArrayName() {
+        return NAME;
     }
 
     /**

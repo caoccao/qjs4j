@@ -28,7 +28,6 @@ import java.nio.ByteBuffer;
 public final class JSBigInt64Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 8;
     public static final String NAME = "BigInt64Array";
-
     /**
      * Create a BigInt64Array with a new buffer.
      */
@@ -119,6 +118,11 @@ public final class JSBigInt64Array extends JSTypedArray {
     @Override
     public String getObjectTag() {
         return "[object " + NAME + "]";
+    }
+
+    @Override
+    public String getTypedArrayName() {
+        return NAME;
     }
 
     @Override

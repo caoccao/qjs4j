@@ -144,17 +144,28 @@ public final class TypedArrayConstructor {
     }
 
     public static JSValue of(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSConstructorType constructorType = getTypedArrayConstructorType(context, thisArg, "TypedArray.of");
-        if (constructorType == null) {
+        // Per ES2024 spec: C must be a constructor, but not necessarily a TypedArray constructor
+        if (!JSTypeChecking.isConstructor(thisArg)) {
+            return context.throwTypeError("TypedArray.of called on non-constructor");
+        }
+
+        int len = args.length;
+        // TypedArrayCreate(C, [len]) - construct using the constructor
+        JSValue newObj = JSReflectObject.constructSimple(context, thisArg, new JSValue[]{JSNumber.of(len)});
+        if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        JSObject constructor = (JSObject) thisArg;
-        JSArray sourceArray = context.createJSArray(args);
-        JSValue result = constructorType.create(context, sourceArray);
-        if (result instanceof JSObject jsObject) {
-            context.transferPrototype(jsObject, constructor);
+
+        // Set each item
+        for (int k = 0; k < len; k++) {
+            if (newObj instanceof JSObject jsObj) {
+                jsObj.set(context, PropertyKey.fromIndex(k), args[k]);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
         }
-        return result;
+        return newObj;
     }
 
     private static JSTypedArray typedArrayCreate(JSContext context, JSValue constructor, long length, String methodName) {
