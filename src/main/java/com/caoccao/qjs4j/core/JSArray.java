@@ -622,6 +622,21 @@ public final class JSArray extends JSObject {
         return super.hasOwnProperty(PropertyKey.fromString(Long.toString(index)));
     }
 
+    /**
+     * Check if the prototype chain contains an exotic object (e.g., TypedArray)
+     * whose [[Set]] behavior must be respected per ES2024 OrdinarySet step 5.c.
+     */
+    private boolean hasExoticSetInPrototypeChain() {
+        JSObject proto = getPrototype();
+        while (proto != null) {
+            if (proto instanceof JSTypedArray) {
+                return true;
+            }
+            proto = proto.getPrototype();
+        }
+        return false;
+    }
+
     @Override
     public boolean hasOwnProperty(PropertyKey key) {
         if (super.hasOwnProperty(key)) {
@@ -824,6 +839,10 @@ public final class JSArray extends JSObject {
     }
 
     /**
+     * Override set by PropertyKey with context to handle array indices.
+     */
+
+    /**
      * Override set by PropertyKey to handle array indices.
      */
     @Override
@@ -831,14 +850,18 @@ public final class JSArray extends JSObject {
         set(null, key, value);
     }
 
-    /**
-     * Override set by PropertyKey with context to handle array indices.
-     */
     @Override
     public void set(JSContext context, PropertyKey key, JSValue value) {
         long index = getArrayIndex(key);
         if (index >= 0) {
-            set(context, index, value);
+            // When adding a new element (index >= length), check if the prototype
+            // chain has exotic [[Set]] behavior (e.g., TypedArray) that must be
+            // consulted per ES2024 OrdinarySet step 5.c before creating a property.
+            if (index >= length && hasExoticSetInPrototypeChain()) {
+                super.set(context, key, value);
+            } else {
+                set(context, index, value);
+            }
         } else if (key.isString() && "length".equals(key.asString())) {
             // Per ES spec ArraySetLength / QuickJS set_array_length:
             // Coerce value BEFORE the read-only test (coercion can change writable flag)

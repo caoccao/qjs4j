@@ -1865,6 +1865,20 @@ public final class JSGlobalObject {
             constructor.defineProperty(PropertyKey.fromString("BYTES_PER_ELEMENT"), JSNumber.of(def.bytesPerElement), PropertyDescriptor.DataState.None);
 
             prototype.defineProperty(PropertyKey.fromString("constructor"), constructor, PropertyDescriptor.DataState.ConfigurableWritable);
+
+            // Add Uint8Array-specific base64/hex methods
+            if (JSUint8Array.NAME.equals(def.name)) {
+                // Static methods on constructor
+                constructor.defineProperty(PropertyKey.fromString("fromBase64"), new JSNativeFunction("fromBase64", 1, Uint8ArrayBase64Hex::fromBase64), PropertyDescriptor.DataState.ConfigurableWritable);
+                constructor.defineProperty(PropertyKey.fromString("fromHex"), new JSNativeFunction("fromHex", 1, Uint8ArrayBase64Hex::fromHex), PropertyDescriptor.DataState.ConfigurableWritable);
+
+                // Prototype methods
+                prototype.defineProperty(PropertyKey.fromString("toBase64"), new JSNativeFunction("toBase64", 0, Uint8ArrayBase64Hex::toBase64), PropertyDescriptor.DataState.ConfigurableWritable);
+                prototype.defineProperty(PropertyKey.fromString("toHex"), new JSNativeFunction("toHex", 0, Uint8ArrayBase64Hex::toHex), PropertyDescriptor.DataState.ConfigurableWritable);
+                prototype.defineProperty(PropertyKey.fromString("setFromBase64"), new JSNativeFunction("setFromBase64", 1, Uint8ArrayBase64Hex::setFromBase64), PropertyDescriptor.DataState.ConfigurableWritable);
+                prototype.defineProperty(PropertyKey.fromString("setFromHex"), new JSNativeFunction("setFromHex", 1, Uint8ArrayBase64Hex::setFromHex), PropertyDescriptor.DataState.ConfigurableWritable);
+            }
+
             globalObject.defineProperty(PropertyKey.fromString(def.name), constructor, PropertyDescriptor.DataState.ConfigurableWritable);
         }
     }

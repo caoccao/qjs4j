@@ -62,12 +62,26 @@ public final class JSWeakSet extends JSObject {
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
 
-            JSValue adder = weakSetObj.get("add");
+            JSValue adder = weakSetObj.get(context, PropertyKey.fromString("add"));
+            if (context.hasPendingException()) {
+                JSValue pendingException = context.getPendingException();
+                if (pendingException instanceof JSObject pendingObject) {
+                    return pendingObject;
+                }
+                return context.throwTypeError("WeakSet constructor failed");
+            }
             if (!(adder instanceof JSFunction adderFunction)) {
                 return context.throwTypeError("set/add is not a function");
             }
 
             JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
+            if (context.hasPendingException()) {
+                JSValue pendingException = context.getPendingException();
+                if (pendingException instanceof JSObject pendingObject) {
+                    return pendingObject;
+                }
+                return context.throwTypeError("WeakSet constructor failed");
+            }
             if (!(iterator instanceof JSObject)) {
                 return context.throwTypeError("Object is not iterable");
             }
@@ -97,12 +111,28 @@ public final class JSWeakSet extends JSObject {
                     return context.throwTypeError("Iterator result must be an object");
                 }
 
-                JSValue done = nextResult.get("done");
+                JSValue done = nextResult.get(context, PropertyKey.DONE);
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    JSValue pendingException = context.getPendingException();
+                    if (pendingException instanceof JSObject pendingObject) {
+                        return pendingObject;
+                    }
+                    return context.throwTypeError("WeakSet constructor failed");
+                }
                 if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
                     break;
                 }
 
-                JSValue value = nextResult.get(PropertyKey.VALUE);
+                JSValue value = nextResult.get(context, PropertyKey.VALUE);
+                if (context.hasPendingException()) {
+                    closeIterator(context, iterator);
+                    JSValue pendingException = context.getPendingException();
+                    if (pendingException instanceof JSObject pendingObject) {
+                        return pendingObject;
+                    }
+                    return context.throwTypeError("WeakSet constructor failed");
+                }
                 JSValue adderResult;
                 try {
                     adderResult = adderFunction.call(context, weakSetObj, new JSValue[]{value});

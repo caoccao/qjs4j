@@ -6,6 +6,13 @@ import org.junit.jupiter.api.Test;
 public class TypedArrayConstructorTest extends BaseJavetTest {
 
     @Test
+    public void testBigIntElementSetConversionErrors() {
+        assertErrorWithJavet(
+                "(() => { const a = new BigInt64Array(1); a[0] = '1.2'; })()",
+                "(() => { const a = new BigUint64Array(1); a[0] = Symbol('x'); })()");
+    }
+
+    @Test
     public void testBigIntObjectArgStringToBigInt() {
         assertStringWithJavet(
                 "new BigInt64Array(['', '1'])[0].toString()",
@@ -202,6 +209,53 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
                           }
                         }
                         return true;
+                        })()""");
+    }
+
+    @Test
+    public void testTypedArrayOfConstructorBehavior() {
+        assertStringWithJavet(
+                "TypedArray.of.call(Uint8Array, 1, 2, 3).toString()",
+                """
+                        (() => {
+                          let capturedLength = -1;
+                          const ctor = function(length) {
+                            capturedLength = length;
+                            return new Uint8Array(length);
+                          };
+                          const out = TypedArray.of.call(ctor, 8, 9);
+                          return [capturedLength, out.length, out[0], out[1]].join(',');
+                        })()""");
+        assertErrorWithJavet(
+                "TypedArray.of.call({}, 1)",
+                "TypedArray.of.call(function() { return {}; }, 1)");
+    }
+
+    @Test
+    public void testTypedArrayPrototypeExoticSetWithArrayReceiver() {
+        assertStringWithJavet(
+                """
+                        (() => {
+                          const typedArray = new Uint8Array([7]);
+                          const receiverArray = [];
+                          Object.setPrototypeOf(receiverArray, typedArray);
+                          receiverArray[0] = 9;
+                          return [
+                            receiverArray.hasOwnProperty('0'),
+                            receiverArray[0],
+                            typedArray[0]
+                          ].join(',');
+                        })()""",
+                """
+                        (() => {
+                          const typedArray = new Uint8Array([7]);
+                          const receiverArray = [];
+                          Object.setPrototypeOf(receiverArray, typedArray);
+                          receiverArray[1] = 9;
+                          return [
+                            receiverArray.hasOwnProperty('1'),
+                            String(typedArray[1])
+                          ].join(',');
                         })()""");
     }
 

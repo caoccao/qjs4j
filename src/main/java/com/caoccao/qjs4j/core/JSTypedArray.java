@@ -332,8 +332,9 @@ public sealed abstract class JSTypedArray extends JSObject permits
         if (descriptor.isAccessorDescriptor()) {
             return false;
         }
-        // Step 2a: If Desc has [[Configurable]] and it's true, return false
-        if (descriptor.hasConfigurable() && descriptor.isConfigurable()) {
+        // Step 2a: If Desc has [[Configurable]] and it's false, return false
+        // (TypedArray elements have configurable: true per ES2024)
+        if (descriptor.hasConfigurable() && !descriptor.isConfigurable()) {
             return false;
         }
         if (descriptor.hasEnumerable() && !descriptor.isEnumerable()) {
@@ -808,7 +809,32 @@ public sealed abstract class JSTypedArray extends JSObject permits
             } catch (NumberFormatException e) {
                 return true;
             }
-            // Valid integer index with different receiver - fall through to OrdinarySet
+            // Valid integer index with different receiver.
+            // Per ES2024 10.4.5.5 step 3: Return ? OrdinarySet(O, P, V, Receiver).
+            // The TypedArray element acts as an own writable data property, so OrdinarySet
+            // skips prototype chain walk and goes directly to setting on the receiver.
+            if (receiver instanceof JSObject receiverObj) {
+                PropertyDescriptor existingDescriptor = receiverObj.getOwnPropertyDescriptor(key);
+                if (context.hasPendingException()) {
+                    return false;
+                }
+                if (existingDescriptor != null) {
+                    if (existingDescriptor.isAccessorDescriptor()) {
+                        return false;
+                    }
+                    if (!existingDescriptor.isWritable()) {
+                        return false;
+                    }
+                    PropertyDescriptor valueDescriptor = new PropertyDescriptor();
+                    valueDescriptor.setValue(value);
+                    return receiverObj.defineProperty(context, key, valueDescriptor);
+                }
+                if (!receiverObj.isExtensible()) {
+                    return false;
+                }
+                return receiverObj.defineProperty(context, key, value, PropertyDescriptor.DataState.All);
+            }
+            return false;
         }
         return super.setWithResult(context, key, value, receiver);
     }

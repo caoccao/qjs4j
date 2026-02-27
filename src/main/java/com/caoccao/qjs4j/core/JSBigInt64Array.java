@@ -17,6 +17,8 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -128,7 +130,16 @@ public final class JSBigInt64Array extends JSTypedArray {
 
     @Override
     protected void integerIndexedElementSet(int index, JSValue value, JSContext context) {
-        long longVal = JSTypeConversions.toBigInt64(context, value);
+        long longVal;
+        try {
+            longVal = JSTypeConversions.toBigInt64(context, value);
+        } catch (JSTypeErrorException e) {
+            context.throwTypeError(e.getMessage());
+            return;
+        } catch (JSSyntaxErrorException e) {
+            context.throwSyntaxError(e.getMessage());
+            return;
+        }
         if (!buffer.isDetached() && index >= 0 && index < getLength()) {
             ByteBuffer buf = getByteBuffer();
             buf.putLong(index * BYTES_PER_ELEMENT, longVal);

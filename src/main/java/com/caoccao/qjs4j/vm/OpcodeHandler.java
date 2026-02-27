@@ -2209,7 +2209,12 @@ public final class OpcodeHandler {
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
         String variableName = executionContext.bytecode.getAtoms()[atomIndex];
         JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
-        executionContext.virtualMachine.context.getGlobalObject().set(PropertyKey.fromString(variableName), value);
+        JSContext context = executionContext.virtualMachine.context;
+        context.getGlobalObject().set(context, PropertyKey.fromString(variableName), value);
+        if (context.hasPendingException()) {
+            executionContext.virtualMachine.pendingException = context.getPendingException();
+            context.clearPendingException();
+        }
         executionContext.pc = pc + op.getSize();
     }
 
@@ -2455,11 +2460,16 @@ public final class OpcodeHandler {
         String variableName = executionContext.bytecode.getAtoms()[atomIndex];
         JSValue value = (JSValue) executionContext.stack[executionContext.sp - 1];
         PropertyKey variableKey = PropertyKey.fromString(variableName);
-        JSObject globalObject = executionContext.virtualMachine.context.getGlobalObject();
-        if (executionContext.virtualMachine.context.isStrictMode() && !globalObject.has(variableKey)) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwReferenceError(variableName + " is not defined"));
+        JSContext context = executionContext.virtualMachine.context;
+        JSObject globalObject = context.getGlobalObject();
+        if (context.isStrictMode() && !globalObject.has(variableKey)) {
+            throw new JSVirtualMachineException(context.throwReferenceError(variableName + " is not defined"));
         }
-        globalObject.set(variableKey, value);
+        globalObject.set(context, variableKey, value);
+        if (context.hasPendingException()) {
+            executionContext.virtualMachine.pendingException = context.getPendingException();
+            context.clearPendingException();
+        }
         executionContext.pc = pc + op.getSize();
     }
 

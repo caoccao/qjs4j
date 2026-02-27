@@ -332,6 +332,21 @@ public class JSGlobalObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testGlobalAssignmentSetterErrorPropagation() {
+        assertErrorWithJavet(
+                """
+                        (() => {
+                          Object.defineProperty(globalThis, '__qjs4j_global_setter_test__', {
+                            configurable: true,
+                            set() {
+                              throw new RangeError('setter boom');
+                            }
+                          });
+                          __qjs4j_global_setter_test__ = 1;
+                        })()""");
+    }
+
+    @Test
     public void testGlobalDescriptorsAndTagWithQuickJSSemantics() {
         assertBooleanWithJavet(
                 "Object.getOwnPropertyDescriptor(globalThis, 'parseInt').writable === true",

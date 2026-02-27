@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.core.JSSymbol;
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
 
 final class ExpressionCallMemberCompiler {
@@ -76,8 +77,7 @@ final class ExpressionCallMemberCompiler {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                     compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
                 } else {
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
-                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                    throw new JSSyntaxErrorException("Unexpected private field");
                 }
             } else if (memberExpr.property() instanceof Identifier propId) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
@@ -135,8 +135,7 @@ final class ExpressionCallMemberCompiler {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                     compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
                 } else {
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
-                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                    throw new JSSyntaxErrorException("Unexpected private field");
                 }
             }
         } else {
@@ -161,13 +160,12 @@ final class ExpressionCallMemberCompiler {
             compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
             String fieldName = privateId.name();
-            JSSymbol symbol = compilerContext.privateSymbols.get(fieldName);
+            JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
             if (symbol != null) {
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                 compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
             } else {
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                throw new JSSyntaxErrorException("Unexpected private field");
             }
         } else if (memberExpr.property() instanceof Identifier propId) {
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());

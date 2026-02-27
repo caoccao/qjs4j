@@ -151,18 +151,16 @@ public final class TypedArrayConstructor {
 
         int len = args.length;
         // TypedArrayCreate(C, [len]) - construct using the constructor
-        JSValue newObj = JSReflectObject.constructSimple(context, thisArg, new JSValue[]{JSNumber.of(len)});
-        if (context.hasPendingException()) {
+        JSTypedArray newObj = typedArrayCreate(context, thisArg, len, "TypedArray.of");
+        if (newObj == null) {
             return context.getPendingException();
         }
 
         // Set each item
         for (int k = 0; k < len; k++) {
-            if (newObj instanceof JSObject jsObj) {
-                jsObj.set(context, PropertyKey.fromIndex(k), args[k]);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
+            newObj.set(context, PropertyKey.fromIndex(k), args[k]);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
             }
         }
         return newObj;

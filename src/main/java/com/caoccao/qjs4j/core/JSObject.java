@@ -1122,7 +1122,11 @@ public non-sealed class JSObject implements JSValue {
             }
             // TypedArray has exotic [[Set]] for canonical numeric index keys
             if (proto instanceof JSTypedArray typedArray) {
-                return typedArray.setWithResult(context, key, value, (JSValue) receiver);
+                boolean result = typedArray.setWithResult(context, key, value, (JSValue) receiver);
+                if (!result && throwOnFailure && !context.hasPendingException()) {
+                    return failSet(key, context, true);
+                }
+                return result;
             }
             visited.add(proto);
             int protoOffset = proto.getOwnPropertyOffset(key);

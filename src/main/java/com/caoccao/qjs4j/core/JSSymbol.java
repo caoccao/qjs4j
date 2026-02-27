@@ -118,6 +118,11 @@ public final class JSSymbol implements JSValue {
     }
 
     @Override
+    public String toString() {
+        return toJavaObject();
+    }
+
+    @Override
     public JSValueType type() {
         return JSValueType.SYMBOL;
     }

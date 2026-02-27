@@ -39,6 +39,42 @@ public class WeakSetConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    void testWeakSetConstructorAbruptCompletions() {
+        assertErrorWithJavet(
+                """
+                        new WeakSet({
+                          get [Symbol.iterator]() {
+                            throw new Error('iterator getter boom');
+                          }
+                        })""",
+                """
+                        (() => {
+                          Object.defineProperty(WeakSet.prototype, 'add', {
+                            configurable: true,
+                            get() {
+                              throw new Error('adder getter boom');
+                            }
+                          });
+                          return new WeakSet([{}]);
+                        })()""",
+                """
+                        new WeakSet({
+                          [Symbol.iterator]() {
+                            return {
+                              next() {
+                                return {
+                                  done: false,
+                                  get value() {
+                                    throw new Error('value getter boom');
+                                  }
+                                };
+                              }
+                            };
+                          }
+                        })""");
+    }
+
+    @Test
     void testWeakSetConstructorIterableEdgeCases() {
         assertBooleanWithJavet("""
                 var v1 = {};
