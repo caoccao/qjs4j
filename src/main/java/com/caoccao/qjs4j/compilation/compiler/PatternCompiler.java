@@ -24,11 +24,11 @@ import com.caoccao.qjs4j.vm.Opcode;
  * Handles assignment targets, pattern assignments, and destructuring for arrays and objects.
  */
 final class PatternCompiler {
-    private final CompilerContext ctx;
+    private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
 
-    PatternCompiler(CompilerContext ctx, CompilerDelegates delegates) {
-        this.ctx = ctx;
+    PatternCompiler(CompilerContext compilerContext, CompilerDelegates delegates) {
+        this.compilerContext = compilerContext;
         this.delegates = delegates;
     }
 
@@ -38,27 +38,27 @@ final class PatternCompiler {
         for (Expression element : arrayExpr.elements()) {
             if (element != null) {
                 // Duplicate array for property access
-                ctx.emitter.emitOpcode(Opcode.DUP);
-                ctx.emitter.emitOpcode(Opcode.PUSH_I32);
-                ctx.emitter.emitI32(index);
-                ctx.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
+                compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
+                compilerContext.emitter.emitI32(index);
+                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                 // Stack: [array, value]
 
                 if (element instanceof AssignmentExpression assignExpr
                         && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
                     // Default value: check if value is undefined
-                    ctx.emitter.emitOpcode(Opcode.DUP);
-                    ctx.emitter.emitOpcode(Opcode.IS_UNDEFINED);
-                    int jumpNotUndefined = ctx.emitter.emitJump(Opcode.IF_FALSE);
-                    ctx.emitter.emitOpcode(Opcode.DROP);
+                    compilerContext.emitter.emitOpcode(Opcode.DUP);
+                    compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
+                    int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
                     delegates.expressions.compileExpression(assignExpr.right());
-                    ctx.emitter.patchJump(jumpNotUndefined, ctx.emitter.currentOffset());
+                    compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
                     // Assign to target
                     compileAssignmentTarget(assignExpr.left());
                 } else if (element instanceof SpreadElement spreadElem) {
                     // Rest element in assignment: [...rest] = value
                     // Drop the single-element value we just got
-                    ctx.emitter.emitOpcode(Opcode.DROP);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
                     // Re-get remaining elements as array using Array.from + slice
                     compileAssignmentTarget(spreadElem.argument());
                 } else {
@@ -68,7 +68,7 @@ final class PatternCompiler {
             index++;
         }
         // Drop the array
-        ctx.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
     }
 
     void compileAssignmentTarget(Expression target) {
@@ -76,26 +76,26 @@ final class PatternCompiler {
         // Assign value to target and pop value from stack
         if (target instanceof Identifier id) {
             String name = id.name();
-            Integer localIndex = ctx.findLocalInScopes(name);
+            Integer localIndex = compilerContext.findLocalInScopes(name);
             if (localIndex != null) {
-                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
             } else {
-                Integer capturedIndex = ctx.resolveCapturedBindingIndex(name);
+                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
                 if (capturedIndex != null) {
-                    ctx.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF, capturedIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF, capturedIndex);
                 } else {
-                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
                 }
             }
         } else if (target instanceof MemberExpression memberExpr) {
-            if (ctx.isSuperMemberExpression(memberExpr)) {
+            if (compilerContext.isSuperMemberExpression(memberExpr)) {
                 // Stack starts with [value]
-                ctx.emitter.emitOpcode(Opcode.PUSH_THIS);
-                ctx.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                ctx.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
-                ctx.emitter.emitOpcode(Opcode.GET_SUPER);
+                compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
+                compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+                compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
                 delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
-                ctx.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
+                compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
             } else {
                 // Stack: [value]
                 delegates.expressions.compileExpression(memberExpr.object());
@@ -103,14 +103,14 @@ final class PatternCompiler {
                 if (memberExpr.computed()) {
                     delegates.expressions.compileExpression(memberExpr.property());
                     // Stack: [value, obj, prop] → ROT3L → [obj, prop, value]
-                    ctx.emitter.emitOpcode(Opcode.ROT3L);
-                    ctx.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                    compilerContext.emitter.emitOpcode(Opcode.ROT3L);
+                    compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                 } else if (memberExpr.property() instanceof Identifier propId) {
-                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
                 }
             }
             // PUT_* leaves value on stack; drop it
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         } else if (target instanceof ArrayExpression nestedArray) {
             compileArrayDestructuringAssignment(nestedArray);
         } else if (target instanceof ObjectExpression nestedObj) {
@@ -126,14 +126,14 @@ final class PatternCompiler {
      */
     void compileForOfValueAssignment(Pattern pattern, boolean isVar) {
         if (isVar && pattern instanceof Identifier id) {
-            Integer localIndex = ctx.findLocalInScopes(id.name());
+            Integer localIndex = compilerContext.findLocalInScopes(id.name());
             if (localIndex != null) {
-                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
-            } else if (ctx.inGlobalScope) {
-                ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+            } else if (compilerContext.inGlobalScope) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
             } else {
-                int idx = ctx.currentScope().declareLocal(id.name());
-                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, idx);
+                int idx = compilerContext.currentScope().declareLocal(id.name());
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, idx);
             }
         } else {
             compilePatternAssignment(pattern);
@@ -145,60 +145,60 @@ final class PatternCompiler {
      * The call is evaluated each iteration, then a ReferenceError is thrown.
      */
     void compileForOfWithCallExpressionTarget(ForOfStatement forOfStmt, CallExpression callExpr) {
-        ctx.enterScope();
+        compilerContext.enterScope();
 
         // Compile the iterable expression
         delegates.expressions.compileExpression(forOfStmt.right());
 
         // FOR_OF_START to get iterator
         if (forOfStmt.isAsync()) {
-            ctx.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
+            compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
         } else {
-            ctx.emitter.emitOpcode(Opcode.FOR_OF_START);
+            compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
         }
 
         // Stack: iter, next, catch_offset
-        int loopStart = ctx.emitter.currentOffset();
+        int loopStart = compilerContext.emitter.currentOffset();
 
         // FOR_OF_NEXT to get next value
         if (forOfStmt.isAsync()) {
-            ctx.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_NEXT);
-            ctx.emitter.emitOpcode(Opcode.AWAIT);
-            ctx.emitter.emitOpcode(Opcode.DUP);
-            ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "done");
+            compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_NEXT);
+            compilerContext.emitter.emitOpcode(Opcode.AWAIT);
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "done");
         } else {
-            ctx.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
+            compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
         }
 
         // Stack: iter, next, catch_offset, value, done
-        int jumpToEnd = ctx.emitter.emitJump(Opcode.IF_TRUE);
+        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
         // Stack: iter, next, catch_offset, value (or result for async)
 
         if (forOfStmt.isAsync()) {
-            ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
         }
 
         // Drop the value - we can't assign it
-        ctx.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
         // Evaluate the call expression (f() is called at runtime)
         delegates.expressions.compileExpression(callExpr);
-        ctx.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
         // Throw ReferenceError
-        ctx.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-        ctx.emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
+        compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+        compilerContext.emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
 
         // End label (when done=true)
-        ctx.emitter.patchJump(jumpToEnd, ctx.emitter.currentOffset());
+        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
         // Drop remaining value on stack
-        ctx.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
 
         // Clean up iterator: drop catch_offset, next, iter
-        ctx.emitter.emitOpcode(Opcode.DROP);
-        ctx.emitter.emitOpcode(Opcode.DROP);
-        ctx.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        ctx.exitScope();
+        compilerContext.exitScope();
     }
 
     void compileObjectDestructuringAssignment(ObjectExpression objExpr) {
@@ -214,56 +214,56 @@ final class PatternCompiler {
             }
 
             // Duplicate object for property access
-            ctx.emitter.emitOpcode(Opcode.DUP);
-            ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propName);
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propName);
             // Stack: [object, value]
 
             Expression value = prop.value();
             if (value instanceof AssignmentExpression assignExpr
                     && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
                 // Default value
-                ctx.emitter.emitOpcode(Opcode.DUP);
-                ctx.emitter.emitOpcode(Opcode.IS_UNDEFINED);
-                int jumpNotUndefined = ctx.emitter.emitJump(Opcode.IF_FALSE);
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
+                compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
+                int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
                 delegates.expressions.compileExpression(assignExpr.right());
-                ctx.emitter.patchJump(jumpNotUndefined, ctx.emitter.currentOffset());
+                compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
                 compileAssignmentTarget(assignExpr.left());
             } else {
                 compileAssignmentTarget(value);
             }
         }
         // Drop the object
-        ctx.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
     }
 
     void compilePatternAssignment(Pattern pattern) {
         if (pattern instanceof Identifier id) {
             // Simple identifier: value is on stack, just assign it
             String varName = id.name();
-            if (ctx.inGlobalScope && ctx.tdzLocals.contains(varName)) {
+            if (compilerContext.inGlobalScope && compilerContext.tdzLocals.contains(varName)) {
                 // TDZ local: let/const was pre-declared as a local for TDZ enforcement
-                Integer tdzLocal = ctx.findLocalInScopes(varName);
+                Integer tdzLocal = compilerContext.findLocalInScopes(varName);
                 if (tdzLocal != null) {
-                    ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, tdzLocal);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, tdzLocal);
                 } else {
-                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
                 }
-            } else if (ctx.inGlobalScope) {
-                ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
-            } else if (ctx.varInGlobalProgram) {
+            } else if (compilerContext.inGlobalScope) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+            } else if (compilerContext.varInGlobalProgram) {
                 // var declaration in global program inside a block (for, try, if, etc.).
                 // var is global-scoped, so use PUT_VAR — UNLESS the name is already
                 // a local (e.g., catch parameter per ES B.3.5), in which case use PUT_LOCAL.
-                Integer existingLocal = ctx.findLocalInScopes(varName);
+                Integer existingLocal = compilerContext.findLocalInScopes(varName);
                 if (existingLocal != null) {
-                    ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, existingLocal);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, existingLocal);
                 } else {
-                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
                 }
             } else {
-                int localIndex = ctx.currentScope().declareLocal(varName);
-                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                int localIndex = compilerContext.currentScope().declareLocal(varName);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
             }
         } else if (pattern instanceof ObjectPattern objPattern) {
             // Object destructuring: { proxy, revoke } = value
@@ -273,14 +273,14 @@ final class PatternCompiler {
                 String propName = ((Identifier) prop.key()).name();
 
                 // Duplicate object for each property access
-                ctx.emitter.emitOpcode(Opcode.DUP);
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
                 // Get the property value
-                ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propName);
+                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propName);
                 // Assign to the pattern (could be nested)
                 compilePatternAssignment(prop.value());
             }
             // Drop the original object
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         } else if (pattern instanceof ArrayPattern arrPattern) {
             // Array destructuring: [a, b] = value
             // Stack: [array]
@@ -301,27 +301,27 @@ final class PatternCompiler {
                 // Stack: [iterable]
 
                 // Start iteration: iterable -> iter next catch_offset
-                ctx.emitter.emitOpcode(Opcode.FOR_OF_START);
+                compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
 
                 // Process elements before rest
                 for (int i = 0; i < restIndex; i++) {
                     Pattern element = arrPattern.elements().get(i);
                     if (element != null) {
                         // Get next value: iter next -> iter next catch_offset value done
-                        ctx.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
+                        compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
                         // Stack: iter next catch_offset value done
                         // Drop done flag
-                        ctx.emitter.emitOpcode(Opcode.DROP);
+                        compilerContext.emitter.emitOpcode(Opcode.DROP);
                         // Stack: iter next catch_offset value
                         // Assign value to pattern
                         compilePatternAssignment(element);
                         // Stack: iter next catch_offset (after assignment drops the value)
                     } else {
                         // Skip element
-                        ctx.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
+                        compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
                         // Stack: iter next catch_offset value done
-                        ctx.emitter.emitOpcode(Opcode.DROP);  // Drop done
-                        ctx.emitter.emitOpcode(Opcode.DROP);  // Drop value
+                        compilerContext.emitter.emitOpcode(Opcode.DROP);  // Drop done
+                        compilerContext.emitter.emitOpcode(Opcode.DROP);  // Drop value
                         // Stack: iter next catch_offset
                     }
                 }
@@ -331,35 +331,35 @@ final class PatternCompiler {
                 // Stack: iter next catch_offset -> iter next catch_offset array
 
                 // Create empty array with 0 elements
-                ctx.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
+                compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
                 // Push initial index 0
-                ctx.emitter.emitOpcode(Opcode.PUSH_I32);
-                ctx.emitter.emitI32(0);
+                compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
+                compilerContext.emitter.emitI32(0);
 
                 // Loop to collect remaining elements
-                int labelRestNext = ctx.emitter.currentOffset();
+                int labelRestNext = compilerContext.emitter.currentOffset();
 
                 // Get next value: iter next catch_offset array idx -> iter next catch_offset array idx value done
-                ctx.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 2);  // depth = 2 (array and idx)
+                compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 2);  // depth = 2 (array and idx)
 
                 // Check if done
-                int jumpRestDone = ctx.emitter.emitJump(Opcode.IF_TRUE);
+                int jumpRestDone = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
 
                 // Not done: array idx value -> array idx
-                ctx.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
+                compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
                 // Increment index
-                ctx.emitter.emitOpcode(Opcode.INC);
+                compilerContext.emitter.emitOpcode(Opcode.INC);
                 // Continue loop - jump back to labelRestNext
-                ctx.emitter.emitOpcode(Opcode.GOTO);
-                int backJumpPos = ctx.emitter.currentOffset();
-                ctx.emitter.emitU32(labelRestNext - (backJumpPos + 4));
+                compilerContext.emitter.emitOpcode(Opcode.GOTO);
+                int backJumpPos = compilerContext.emitter.currentOffset();
+                compilerContext.emitter.emitU32(labelRestNext - (backJumpPos + 4));
 
                 // Done collecting - patch the IF_TRUE jump
-                ctx.emitter.patchJump(jumpRestDone, ctx.emitter.currentOffset());
+                compilerContext.emitter.patchJump(jumpRestDone, compilerContext.emitter.currentOffset());
                 // Stack: iter next catch_offset array idx undef
                 // Drop undef and idx
-                ctx.emitter.emitOpcode(Opcode.DROP);
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
                 // Stack: iter next catch_offset array
 
                 // Assign array to rest pattern
@@ -367,41 +367,41 @@ final class PatternCompiler {
                 compilePatternAssignment(restElement.argument());
 
                 // Clean up iterator state: drop catch_offset, next, iter
-                ctx.emitter.emitOpcode(Opcode.DROP);
-                ctx.emitter.emitOpcode(Opcode.DROP);
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else {
                 // Simple indexed access (no rest element)
                 int index = 0;
                 for (Pattern element : arrPattern.elements()) {
                     if (element != null) {
                         // Duplicate array
-                        ctx.emitter.emitOpcode(Opcode.DUP);
+                        compilerContext.emitter.emitOpcode(Opcode.DUP);
                         // Push index
-                        ctx.emitter.emitOpcode(Opcode.PUSH_I32);
-                        ctx.emitter.emitI32(index);
+                        compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
+                        compilerContext.emitter.emitI32(index);
                         // Get array element
-                        ctx.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                         // Assign to the pattern
                         compilePatternAssignment(element);
                     }
                     index++;
                 }
                 // Drop the original array
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         } else if (pattern instanceof AssignmentPattern assignPattern) {
             // Destructuring with default value: [x = defaultVal] or { y = defaultVal }
             // Stack: [value]
             // If value is undefined, use the default value instead
-            ctx.emitter.emitOpcode(Opcode.DUP);
-            ctx.emitter.emitOpcode(Opcode.IS_UNDEFINED);
-            int jumpNotUndefined = ctx.emitter.emitJump(Opcode.IF_FALSE);
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
+            int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
             // Value is undefined: drop it and use default
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
             delegates.expressions.compileExpression(assignPattern.right());
             // Patch jump target
-            ctx.emitter.patchJump(jumpNotUndefined, ctx.emitter.currentOffset());
+            compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
             // Now the stack has the resolved value; assign to the inner pattern
             compilePatternAssignment(assignPattern.left());
         } else if (pattern instanceof RestElement) {
@@ -417,7 +417,7 @@ final class PatternCompiler {
     void declarePatternVariables(Pattern pattern) {
         if (pattern instanceof Identifier id) {
             // Simple identifier: declare it as a local variable
-            ctx.currentScope().declareLocal(id.name());
+            compilerContext.currentScope().declareLocal(id.name());
         } else if (pattern instanceof ArrayPattern arrPattern) {
             // Array destructuring: declare all element variables
             for (Pattern element : arrPattern.elements()) {

@@ -31,20 +31,20 @@ import java.util.Set;
  * Extracted from BytecodeCompiler to separate statement compilation concerns.
  */
 final class StatementCompiler {
-    private final CompilerContext ctx;
+    private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
     private final StatementLoopCompiler loopCompiler;
 
-    StatementCompiler(CompilerContext ctx, CompilerDelegates delegates) {
-        this.ctx = ctx;
+    StatementCompiler(CompilerContext compilerContext, CompilerDelegates delegates) {
+        this.compilerContext = compilerContext;
         this.delegates = delegates;
-        loopCompiler = new StatementLoopCompiler(this, ctx, delegates);
+        loopCompiler = new StatementLoopCompiler(this, compilerContext, delegates);
     }
 
     void compileBlockStatement(BlockStatement block) {
-        boolean savedGlobalScope = ctx.inGlobalScope;
-        ctx.enterScope();
-        ctx.inGlobalScope = false;
+        boolean savedGlobalScope = compilerContext.inGlobalScope;
+        compilerContext.enterScope();
+        compilerContext.inGlobalScope = false;
         // Phase 0: Pre-declare block-scoped let/const variables so that function
         // declarations hoisted in Phase 1 can capture them via closure.
         preDeclareLexicalBindings(block.body());
@@ -62,8 +62,8 @@ final class StatementCompiler {
             compileStatement(stmt);
         }
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        ctx.inGlobalScope = savedGlobalScope;
-        ctx.exitScope();
+        compilerContext.inGlobalScope = savedGlobalScope;
+        compilerContext.exitScope();
     }
 
     void compileBreakStatement(BreakStatement breakStmt) {
@@ -93,7 +93,7 @@ final class StatementCompiler {
     void compileIfStatement(IfStatement ifStmt) {
         // In strict mode, function declarations are not allowed as direct body of if/else
         // (they must be at top level or inside a block). Per ES2024 B.3.3 Note.
-        if (ctx.strictMode) {
+        if (compilerContext.strictMode) {
             if (ifStmt.consequent() instanceof FunctionDeclaration
                     || ifStmt.alternate() instanceof FunctionDeclaration) {
                 throw new JSSyntaxErrorException(
@@ -105,26 +105,26 @@ final class StatementCompiler {
         delegates.expressions.compileExpression(ifStmt.test());
 
         // Jump to else/end if condition is false
-        int jumpToElse = ctx.emitter.emitJump(Opcode.IF_FALSE);
+        int jumpToElse = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
 
         // Compile consequent — wrap bare function declarations in implicit block scope
         compileImplicitBlockStatement(ifStmt.consequent());
 
         if (ifStmt.alternate() != null) {
             // Jump over else block after consequent
-            int jumpToEnd = ctx.emitter.emitJump(Opcode.GOTO);
+            int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
 
             // Patch jump to else
-            ctx.emitter.patchJump(jumpToElse, ctx.emitter.currentOffset());
+            compilerContext.emitter.patchJump(jumpToElse, compilerContext.emitter.currentOffset());
 
             // Compile alternate — wrap bare function declarations in implicit block scope
             compileImplicitBlockStatement(ifStmt.alternate());
 
             // Patch jump to end
-            ctx.emitter.patchJump(jumpToEnd, ctx.emitter.currentOffset());
+            compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
         } else {
             // Patch jump to end
-            ctx.emitter.patchJump(jumpToElse, ctx.emitter.currentOffset());
+            compilerContext.emitter.patchJump(jumpToElse, compilerContext.emitter.currentOffset());
         }
     }
 
@@ -138,11 +138,11 @@ final class StatementCompiler {
         if (stmt instanceof FunctionDeclaration funcDecl && funcDecl.id() != null) {
             // Per ES2024 B.3.3, function declarations in if-statement positions
             // are treated as if wrapped in a block scope.
-            ctx.enterScope();
-            ctx.currentScope().declareLocal(funcDecl.id().name());
+            compilerContext.enterScope();
+            compilerContext.currentScope().declareLocal(funcDecl.id().name());
             delegates.functions.compileFunctionDeclaration(funcDecl);
             delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-            ctx.exitScope();
+            compilerContext.exitScope();
         } else {
             compileStatement(stmt);
         }
@@ -154,9 +154,9 @@ final class StatementCompiler {
      */
     void compileLabeledLoop(String labelName, Statement loopStmt) {
         // We temporarily store the label name so the loop compilation methods can pick it up
-        ctx.pendingLoopLabel = labelName;
+        compilerContext.pendingLoopLabel = labelName;
         compileStatement(loopStmt);
-        ctx.pendingLoopLabel = null;
+        compilerContext.pendingLoopLabel = null;
     }
 
     /**
@@ -171,7 +171,7 @@ final class StatementCompiler {
 
         // In strict mode, function declarations are not allowed as labeled statement body
         // (they must be at top level or inside a block). Per ES2024 B.3.3 Note.
-        if (ctx.strictMode && body instanceof FunctionDeclaration) {
+        if (compilerContext.strictMode && body instanceof FunctionDeclaration) {
             throw new JSSyntaxErrorException(
                     "In strict mode code, functions can only be declared at top level or inside a block.");
         }
@@ -184,9 +184,9 @@ final class StatementCompiler {
             compileLabeledLoop(labelName, body);
         } else {
             // Regular labeled statement: only 'break label;' is valid (not continue)
-            LoopContext labelContext = new LoopContext(ctx.emitter.currentOffset(), ctx.scopeDepth, ctx.scopeDepth, labelName);
+            LoopContext labelContext = new LoopContext(compilerContext.emitter.currentOffset(), compilerContext.scopeDepth, compilerContext.scopeDepth, labelName);
             labelContext.isRegularStmt = true;
-            ctx.loopStack.push(labelContext);
+            compilerContext.loopStack.push(labelContext);
 
             // Body can be null for empty statements (label: ;)
             if (body != null) {
@@ -194,19 +194,19 @@ final class StatementCompiler {
             }
 
             // Patch all break positions to jump here
-            int breakTarget = ctx.emitter.currentOffset();
+            int breakTarget = compilerContext.emitter.currentOffset();
             for (int pos : labelContext.breakPositions) {
-                ctx.emitter.patchJump(pos, breakTarget);
+                compilerContext.emitter.patchJump(pos, breakTarget);
             }
-            ctx.loopStack.pop();
+            compilerContext.loopStack.pop();
         }
     }
 
     void compileProgram(Program program) {
-        ctx.inGlobalScope = true;
-        ctx.isGlobalProgram = true;
-        ctx.strictMode = program.strict();  // Set strict mode from program directive
-        ctx.enterScope();
+        compilerContext.inGlobalScope = true;
+        compilerContext.isGlobalProgram = true;
+        compilerContext.strictMode = program.strict();  // Set strict mode from program directive
+        compilerContext.enterScope();
 
         // Pre-declare class declarations as locals with TDZ.
         // Per ES spec EvalDeclarationInstantiation step 14: lexically declared names
@@ -216,10 +216,10 @@ final class StatementCompiler {
         for (Statement stmt : program.body()) {
             if (stmt instanceof ClassDeclaration classDecl && classDecl.id() != null) {
                 String className = classDecl.id().name();
-                int localIndex = ctx.currentScope().declareLocal(className);
-                ctx.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                ctx.tdzLocals.add(className);
-            } else if (ctx.predeclareProgramLexicalsAsLocals
+                int localIndex = compilerContext.currentScope().declareLocal(className);
+                compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                compilerContext.tdzLocals.add(className);
+            } else if (compilerContext.predeclareProgramLexicalsAsLocals
                     && stmt instanceof VariableDeclaration variableDeclaration
                     && variableDeclaration.kind() != VariableKind.VAR) {
                 Set<String> lexicalNames = new HashSet<>();
@@ -227,9 +227,9 @@ final class StatementCompiler {
                     delegates.analysis.collectPatternBindingNames(declarator.id(), lexicalNames);
                 }
                 for (String lexicalName : lexicalNames) {
-                    int localIndex = ctx.currentScope().declareLocal(lexicalName);
-                    ctx.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                    ctx.tdzLocals.add(lexicalName);
+                    int localIndex = compilerContext.currentScope().declareLocal(lexicalName);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                    compilerContext.tdzLocals.add(lexicalName);
                 }
             }
         }
@@ -306,40 +306,40 @@ final class StatementCompiler {
 
         // If last statement didn't produce a value, push undefined
         if (!lastProducesValue) {
-            ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
-        int programResultLocalIndex = ctx.currentScope().declareLocal("$program_result_" + ctx.emitter.currentOffset());
-        ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, programResultLocalIndex);
+        int programResultLocalIndex = compilerContext.currentScope().declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, programResultLocalIndex);
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, programResultLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, programResultLocalIndex);
 
         // Return the value on top of stack
-        ctx.emitter.emitOpcode(Opcode.RETURN);
+        compilerContext.emitter.emitOpcode(Opcode.RETURN);
 
-        ctx.exitScope();
-        ctx.inGlobalScope = false;
+        compilerContext.exitScope();
+        compilerContext.inGlobalScope = false;
     }
 
     void compileReturnStatement(ReturnStatement retStmt) {
         if (retStmt.argument() != null) {
             delegates.expressions.compileExpression(retStmt.argument());
         } else {
-            ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
-        int returnValueIndex = ctx.currentScope().declareLocal("$return_value_" + ctx.emitter.currentOffset());
-        ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+        int returnValueIndex = compilerContext.currentScope().declareLocal("$return_value_" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
 
         delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
 
-        if (ctx.hasActiveIteratorLoops()) {
+        if (compilerContext.hasActiveIteratorLoops()) {
             delegates.emitHelpers.emitAbruptCompletionIteratorClose();
         }
 
-        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
         // Emit RETURN_ASYNC for async functions, RETURN for sync functions
-        ctx.emitter.emitOpcode(ctx.isInAsyncFunction ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+        compilerContext.emitter.emitOpcode(compilerContext.isInAsyncFunction ? Opcode.RETURN_ASYNC : Opcode.RETURN);
     }
 
     void compileStatement(Statement stmt) {
@@ -351,7 +351,7 @@ final class StatementCompiler {
             delegates.expressions.compileExpression(exprStmt.expression());
             // Only drop the result if this is not the last statement in the program
             if (!isLastInProgram) {
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         } else if (stmt instanceof BlockStatement block) {
             compileBlockStatement(block);
@@ -380,7 +380,7 @@ final class StatementCompiler {
             // Try statements produce a value on the stack (the try/catch result).
             // Drop it when not the last statement in a program.
             if (!isLastInProgram) {
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         } else if (stmt instanceof SwitchStatement switchStmt) {
             compileSwitchStatement(switchStmt);
@@ -411,46 +411,46 @@ final class StatementCompiler {
         for (SwitchStatement.SwitchCase switchCase : switchStmt.cases()) {
             if (switchCase.test() != null) {
                 // Duplicate discriminant for comparison
-                ctx.emitter.emitOpcode(Opcode.DUP);
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
                 delegates.expressions.compileExpression(switchCase.test());
-                ctx.emitter.emitOpcode(Opcode.STRICT_EQ);
+                compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
 
                 // If no match, skip to next test
-                int jumpToNextTest = ctx.emitter.emitJump(Opcode.IF_FALSE);
+                int jumpToNextTest = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
                 // Match: drop discriminant and jump to case body
-                ctx.emitter.emitOpcode(Opcode.DROP);
-                int jumpToBody = ctx.emitter.emitJump(Opcode.GOTO);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                int jumpToBody = compilerContext.emitter.emitJump(Opcode.GOTO);
                 caseJumps.add(jumpToBody);
                 // Patch IF_FALSE to continue with next test
-                ctx.emitter.patchJump(jumpToNextTest, ctx.emitter.currentOffset());
+                compilerContext.emitter.patchJump(jumpToNextTest, compilerContext.emitter.currentOffset());
             }
         }
 
         // No case matched: drop discriminant
-        ctx.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
 
         // Jump to default or end
-        int jumpToDefault = ctx.emitter.emitJump(Opcode.GOTO);
+        int jumpToDefault = compilerContext.emitter.emitJump(Opcode.GOTO);
 
         // Compile case bodies
         // The switch body always creates a block scope for lexical declarations (let/const).
         // Per QuickJS: push_scope is unconditional for switch statements.
-        boolean savedGlobalScope = ctx.inGlobalScope;
-        ctx.enterScope();
-        ctx.inGlobalScope = false;
+        boolean savedGlobalScope = compilerContext.inGlobalScope;
+        compilerContext.enterScope();
+        compilerContext.inGlobalScope = false;
 
-        LoopContext loop = ctx.createLoopContext(ctx.emitter.currentOffset(), ctx.scopeDepth, ctx.scopeDepth);
-        ctx.loopStack.push(loop);
+        LoopContext loop = compilerContext.createLoopContext(compilerContext.emitter.currentOffset(), compilerContext.scopeDepth, compilerContext.scopeDepth);
+        compilerContext.loopStack.push(loop);
 
         int defaultBodyStart = -1;
         for (int i = 0; i < switchStmt.cases().size(); i++) {
             SwitchStatement.SwitchCase switchCase = switchStmt.cases().get(i);
 
             if (switchCase.test() != null) {
-                int bodyStart = ctx.emitter.currentOffset();
+                int bodyStart = compilerContext.emitter.currentOffset();
                 caseBodyStarts.add(bodyStart);
             } else {
-                defaultBodyStart = ctx.emitter.currentOffset();
+                defaultBodyStart = compilerContext.emitter.currentOffset();
             }
 
             for (Statement stmt : switchCase.consequent()) {
@@ -458,51 +458,51 @@ final class StatementCompiler {
             }
         }
 
-        int switchEnd = ctx.emitter.currentOffset();
+        int switchEnd = compilerContext.emitter.currentOffset();
 
         // Patch case jumps
         for (int i = 0; i < caseJumps.size(); i++) {
-            ctx.emitter.patchJump(caseJumps.get(i), caseBodyStarts.get(i));
+            compilerContext.emitter.patchJump(caseJumps.get(i), caseBodyStarts.get(i));
         }
 
         // Patch default jump
         if (defaultBodyStart >= 0) {
-            ctx.emitter.patchJump(jumpToDefault, defaultBodyStart);
+            compilerContext.emitter.patchJump(jumpToDefault, defaultBodyStart);
         } else {
-            ctx.emitter.patchJump(jumpToDefault, switchEnd);
+            compilerContext.emitter.patchJump(jumpToDefault, switchEnd);
         }
 
         // Patch break statements
         for (int breakPos : loop.breakPositions) {
-            ctx.emitter.patchJump(breakPos, switchEnd);
+            compilerContext.emitter.patchJump(breakPos, switchEnd);
         }
 
-        ctx.loopStack.pop();
+        compilerContext.loopStack.pop();
 
-        ctx.inGlobalScope = savedGlobalScope;
+        compilerContext.inGlobalScope = savedGlobalScope;
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        ctx.exitScope();
+        compilerContext.exitScope();
     }
 
     void compileThrowStatement(ThrowStatement throwStmt) {
         delegates.expressions.compileExpression(throwStmt.argument());
-        int throwValueIndex = ctx.currentScope().declareLocal("$throw_value_" + ctx.emitter.currentOffset());
-        ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, throwValueIndex);
+        int throwValueIndex = compilerContext.currentScope().declareLocal("$throw_value_" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, throwValueIndex);
 
         delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
 
-        if (ctx.hasActiveIteratorLoops()) {
+        if (compilerContext.hasActiveIteratorLoops()) {
             delegates.emitHelpers.emitAbruptCompletionIteratorClose();
         }
-        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, throwValueIndex);
-        ctx.emitter.emitOpcode(Opcode.THROW);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, throwValueIndex);
+        compilerContext.emitter.emitOpcode(Opcode.THROW);
     }
 
     private void compileTryCatchPart(TryStatement tryStmt) {
         // Mark catch handler location
         int catchJump = -1;
         if (tryStmt.handler() != null) {
-            catchJump = ctx.emitter.emitJump(Opcode.CATCH);
+            catchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
         }
 
         // Compile try block - preserve value of last expression
@@ -512,34 +512,34 @@ final class StatementCompiler {
         // NIP_CATCH pops everything down to and including the CatchOffset marker,
         // then re-pushes the try result value.
         if (tryStmt.handler() != null) {
-            ctx.emitter.emitOpcode(Opcode.NIP_CATCH);
+            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
         }
 
         // Jump over catch block
-        int jumpOverCatch = ctx.emitter.emitJump(Opcode.GOTO);
+        int jumpOverCatch = compilerContext.emitter.emitJump(Opcode.GOTO);
 
         if (tryStmt.handler() != null) {
             // Patch catch jump
-            ctx.emitter.patchJump(catchJump, ctx.emitter.currentOffset());
+            compilerContext.emitter.patchJump(catchJump, compilerContext.emitter.currentOffset());
 
             // Catch handler puts exception on stack
             TryStatement.CatchClause handler = tryStmt.handler();
 
             // Bind exception to parameter if present
             if (handler.param() != null) {
-                ctx.enterScope();
+                compilerContext.enterScope();
                 // Catch block creates a local scope - variables should use GET_LOCAL
-                boolean savedGlobalScope = ctx.inGlobalScope;
-                ctx.inGlobalScope = false;
+                boolean savedGlobalScope = compilerContext.inGlobalScope;
+                compilerContext.inGlobalScope = false;
 
                 // Declare all pattern variables and assign the exception value
                 Pattern catchParam = handler.param();
                 if (catchParam instanceof Identifier id) {
                     // Simple catch parameter: catch (e)
                     // Per B.3.5, simple catch parameters do not block Annex B var hoisting
-                    int localIndex = ctx.currentScope().declareLocal(id.name());
-                    ctx.currentScope().markSimpleCatchParam(id.name());
-                    ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    int localIndex = compilerContext.currentScope().declareLocal(id.name());
+                    compilerContext.currentScope().markSimpleCatchParam(id.name());
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
                 } else {
                     // Destructuring catch parameter: catch ({ f }) or catch ([a, b])
                     delegates.patterns.declarePatternVariables(catchParam);
@@ -556,24 +556,24 @@ final class StatementCompiler {
                         delegates.expressions.compileExpression(exprStmt.expression());
                         // Keep the value on stack for the last expression, drop otherwise
                         if (!isLast) {
-                            ctx.emitter.emitOpcode(Opcode.DROP);
+                            compilerContext.emitter.emitOpcode(Opcode.DROP);
                         }
                     } else {
                         compileStatement(stmt, false);
                         // If last statement is not an expression, push undefined
                         if (isLast) {
-                            ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+                            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                         }
                     }
                 }
                 // If block is empty, push undefined
                 if (body.isEmpty()) {
-                    ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 }
 
-                ctx.inGlobalScope = savedGlobalScope;
+                compilerContext.inGlobalScope = savedGlobalScope;
                 delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-                ctx.exitScope();
+                compilerContext.exitScope();
             } else {
                 // No parameter, compile catch body without binding
                 compileTryFinallyBlock(handler.body());
@@ -581,14 +581,14 @@ final class StatementCompiler {
         }
 
         // Patch jump over catch
-        ctx.emitter.patchJump(jumpOverCatch, ctx.emitter.currentOffset());
+        compilerContext.emitter.patchJump(jumpOverCatch, compilerContext.emitter.currentOffset());
     }
 
     /**
      * Compile a block for try/catch/finally, preserving the value of the last expression.
      */
     void compileTryFinallyBlock(BlockStatement block) {
-        ctx.enterScope();
+        compilerContext.enterScope();
         List<Statement> body = block.body();
         for (int i = 0; i < body.size(); i++) {
             boolean isLast = (i == body.size() - 1);
@@ -598,22 +598,22 @@ final class StatementCompiler {
                 delegates.expressions.compileExpression(exprStmt.expression());
                 // Keep the value on stack for the last expression, drop otherwise
                 if (!isLast) {
-                    ctx.emitter.emitOpcode(Opcode.DROP);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
                 }
             } else {
                 compileStatement(stmt, false);
                 // If last statement is not an expression, push undefined
                 if (isLast) {
-                    ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 }
             }
         }
         // If block is empty, push undefined
         if (body.isEmpty()) {
-            ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        ctx.exitScope();
+        compilerContext.exitScope();
     }
 
     void compileTryStatement(TryStatement tryStmt) {
@@ -622,23 +622,23 @@ final class StatementCompiler {
             return;
         }
 
-        int finallyCatchJump = ctx.emitter.emitJump(Opcode.CATCH);
+        int finallyCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
         compileTryCatchPart(tryStmt);
-        ctx.emitter.emitOpcode(Opcode.NIP_CATCH);
-        ctx.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
         compileTryFinallyBlock(tryStmt.finalizer());
-        int jumpAfterFinallyExceptionPath = ctx.emitter.emitJump(Opcode.GOTO);
+        int jumpAfterFinallyExceptionPath = compilerContext.emitter.emitJump(Opcode.GOTO);
 
-        ctx.emitter.patchJump(finallyCatchJump, ctx.emitter.currentOffset());
-        ctx.emitter.markCatchAsFinally(finallyCatchJump);
-        int finallyExceptionLocalIndex = ctx.currentScope().declareLocal("$finally_exception_" + ctx.emitter.currentOffset());
-        ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, finallyExceptionLocalIndex);
+        compilerContext.emitter.patchJump(finallyCatchJump, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.markCatchAsFinally(finallyCatchJump);
+        int finallyExceptionLocalIndex = compilerContext.currentScope().declareLocal("$finally_exception_" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, finallyExceptionLocalIndex);
         compileTryFinallyBlock(tryStmt.finalizer());
-        ctx.emitter.emitOpcode(Opcode.DROP);
-        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, finallyExceptionLocalIndex);
-        ctx.emitter.emitOpcode(Opcode.THROW);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, finallyExceptionLocalIndex);
+        compilerContext.emitter.emitOpcode(Opcode.THROW);
 
-        ctx.emitter.patchJump(jumpAfterFinallyExceptionPath, ctx.emitter.currentOffset());
+        compilerContext.emitter.patchJump(jumpAfterFinallyExceptionPath, compilerContext.emitter.currentOffset());
     }
 
     void compileVariableDeclaration(VariableDeclaration varDecl) {
@@ -646,13 +646,13 @@ final class StatementCompiler {
         boolean isAwaitUsingDeclaration = varDecl.kind() == VariableKind.AWAIT_USING;
         // Track whether this is a var declaration in global program scope
         // so compilePatternAssignment can use PUT_VAR for global-scoped vars.
-        boolean savedVarInGlobalProgram = ctx.varInGlobalProgram;
-        if (ctx.isGlobalProgram && varDecl.kind() == VariableKind.VAR) {
-            ctx.varInGlobalProgram = true;
+        boolean savedVarInGlobalProgram = compilerContext.varInGlobalProgram;
+        if (compilerContext.isGlobalProgram && varDecl.kind() == VariableKind.VAR) {
+            compilerContext.varInGlobalProgram = true;
         }
         for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
-            if (ctx.inGlobalScope || ctx.varInGlobalProgram) {
-                delegates.analysis.collectPatternBindingNames(declarator.id(), ctx.nonDeletableGlobalBindings);
+            if (compilerContext.inGlobalScope || compilerContext.varInGlobalProgram) {
+                delegates.analysis.collectPatternBindingNames(declarator.id(), compilerContext.nonDeletableGlobalBindings);
             }
             if (isUsingDeclaration) {
                 if (declarator.init() == null) {
@@ -670,12 +670,12 @@ final class StatementCompiler {
             if (declarator.init() != null) {
                 delegates.expressions.compileExpression(declarator.init());
             } else {
-                ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             }
             // Assign to pattern (handles Identifier, ObjectPattern, ArrayPattern)
             delegates.patterns.compilePatternAssignment(declarator.id());
         }
-        ctx.varInGlobalProgram = savedVarInGlobalProgram;
+        compilerContext.varInGlobalProgram = savedVarInGlobalProgram;
     }
 
     void compileWhileStatement(WhileStatement whileStmt) {
@@ -683,26 +683,26 @@ final class StatementCompiler {
     }
 
     void compileWithStatement(WithStatement withStmt) {
-        if (ctx.strictMode) {
+        if (compilerContext.strictMode) {
             throw new JSSyntaxErrorException("Strict mode code may not include a with statement");
         }
 
-        ctx.enterScope();
-        int withObjectLocalIndex = ctx.currentScope().declareLocal("$withObject" + ctx.scopeDepth);
+        compilerContext.enterScope();
+        int withObjectLocalIndex = compilerContext.currentScope().declareLocal("$withObject" + compilerContext.scopeDepth);
         delegates.expressions.compileExpression(withStmt.object());
-        ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, withObjectLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, withObjectLocalIndex);
 
-        ctx.pushWithObjectLocal(withObjectLocalIndex);
+        compilerContext.pushWithObjectLocal(withObjectLocalIndex);
         try {
             if (withStmt.body() != null) {
                 compileStatement(withStmt.body());
             }
         } finally {
-            ctx.popWithObjectLocal();
+            compilerContext.popWithObjectLocal();
         }
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        ctx.exitScope();
+        compilerContext.exitScope();
     }
 
     /**
@@ -718,7 +718,7 @@ final class StatementCompiler {
                     Set<String> names = new HashSet<>();
                     delegates.analysis.collectPatternBindingNames(d.id(), names);
                     for (String name : names) {
-                        ctx.currentScope().declareLocal(name);
+                        compilerContext.currentScope().declareLocal(name);
                     }
                 }
             }

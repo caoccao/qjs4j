@@ -921,6 +921,10 @@ public final class VirtualMachine {
         return currentFrame;
     }
 
+    public JSValue getLastConstructorThisArg() {
+        return lastConstructorThisArg;
+    }
+
     /**
      * Get the last yield result from generator execution.
      * Used to check if the yield was a yield* (delegation).

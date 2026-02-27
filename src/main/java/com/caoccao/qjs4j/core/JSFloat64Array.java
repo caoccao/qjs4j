@@ -25,6 +25,7 @@ import java.nio.ByteBuffer;
 public final class JSFloat64Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 8;
     public static final String NAME = "Float64Array";
+
     /**
      * Create a Float64Array with a new buffer.
      */

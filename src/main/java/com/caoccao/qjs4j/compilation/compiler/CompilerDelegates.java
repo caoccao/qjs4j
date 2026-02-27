@@ -28,12 +28,12 @@ final class CompilerDelegates {
     final PatternCompiler patterns;
     final StatementCompiler statements;
 
-    CompilerDelegates(CompilerContext ctx) {
-        this.expressions = new ExpressionCompiler(ctx, this);
-        this.statements = new StatementCompiler(ctx, this);
-        this.functions = new FunctionClassCompiler(ctx, this);
-        this.patterns = new PatternCompiler(ctx, this);
-        this.emitHelpers = new EmitHelpers(ctx, this);
-        this.analysis = new CompilerAnalysis(ctx, this);
+    CompilerDelegates(CompilerContext compilerContext) {
+        this.expressions = new ExpressionCompiler(compilerContext, this);
+        this.statements = new StatementCompiler(compilerContext, this);
+        this.functions = new FunctionClassCompiler(compilerContext, this);
+        this.patterns = new PatternCompiler(compilerContext, this);
+        this.emitHelpers = new EmitHelpers(compilerContext, this);
+        this.analysis = new CompilerAnalysis(compilerContext, this);
     }
 }

@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 public final class JSUint8ClampedArray extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 1;
     public static final String NAME = "Uint8ClampedArray";
+
     /**
      * Create a Uint8ClampedArray with a new buffer.
      */

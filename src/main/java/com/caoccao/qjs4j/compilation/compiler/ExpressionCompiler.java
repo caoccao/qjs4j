@@ -34,18 +34,18 @@ import java.util.List;
 final class ExpressionCompiler {
     private final ExpressionAssignmentCompiler assignmentCompiler;
     private final ExpressionCallMemberCompiler callMemberCompiler;
-    private final CompilerContext ctx;
+    private final CompilerContext conpilerConext;
     private final CompilerDelegates delegates;
 
-    ExpressionCompiler(CompilerContext ctx, CompilerDelegates delegates) {
-        this.ctx = ctx;
+    ExpressionCompiler(CompilerContext conpilerConext, CompilerDelegates delegates) {
+        this.conpilerConext = conpilerConext;
         this.delegates = delegates;
-        assignmentCompiler = new ExpressionAssignmentCompiler(this, ctx, delegates);
-        callMemberCompiler = new ExpressionCallMemberCompiler(this, ctx, delegates);
+        assignmentCompiler = new ExpressionAssignmentCompiler(this, conpilerConext, delegates);
+        callMemberCompiler = new ExpressionCallMemberCompiler(this, conpilerConext, delegates);
     }
 
     void compileArrayExpression(ArrayExpression arrayExpr) {
-        ctx.emitter.emitOpcode(Opcode.ARRAY_NEW);
+        conpilerConext.emitter.emitOpcode(Opcode.ARRAY_NEW);
 
         // Check if we have any spread elements or holes
         boolean hasSpread = arrayExpr.elements().stream()
@@ -57,7 +57,7 @@ final class ExpressionCompiler {
             // Simple case: no spread elements, no holes - use PUSH_ARRAY
             for (Expression element : arrayExpr.elements()) {
                 compileExpression(element);
-                ctx.emitter.emitOpcode(Opcode.PUSH_ARRAY);
+                conpilerConext.emitter.emitOpcode(Opcode.PUSH_ARRAY);
             }
         } else {
             // Complex case: has spread elements or holes
@@ -71,38 +71,38 @@ final class ExpressionCompiler {
                 if (element instanceof SpreadElement spreadElement) {
                     // Emit index if not already on stack
                     if (!needsIndex) {
-                        ctx.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
+                        conpilerConext.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
                         needsIndex = true;
                     }
                     // Compile the iterable expression
                     compileExpression(spreadElement.argument());
                     // Emit APPEND to spread elements into the array
                     // Stack: array pos iterable -> array pos
-                    ctx.emitter.emitOpcode(Opcode.APPEND);
+                    conpilerConext.emitter.emitOpcode(Opcode.APPEND);
                     // After APPEND, index is updated on stack
                     needsLength = false;
                 } else if (element != null) {
                     if (needsIndex) {
                         // We have index on stack, use DEFINE_ARRAY_EL
                         compileExpression(element);
-                        ctx.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
-                        ctx.emitter.emitOpcode(Opcode.INC);
+                        conpilerConext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
+                        conpilerConext.emitter.emitOpcode(Opcode.INC);
                         needsLength = false;
                     } else {
                         // No index on stack yet
                         // Start using index-based assignment since we have holes or spread
-                        ctx.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
+                        conpilerConext.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
                         needsIndex = true;
                         compileExpression(element);
-                        ctx.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
-                        ctx.emitter.emitOpcode(Opcode.INC);
+                        conpilerConext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
+                        conpilerConext.emitter.emitOpcode(Opcode.INC);
                         needsLength = false;
                     }
                 } else {
                     // Hole in array
                     if (needsIndex) {
                         // We have position on stack, just increment it
-                        ctx.emitter.emitOpcode(Opcode.INC);
+                        conpilerConext.emitter.emitOpcode(Opcode.INC);
                     } else {
                         idx++;
                     }
@@ -117,21 +117,21 @@ final class ExpressionCompiler {
                     // Stack: array idx
                     // QuickJS pattern: dup1 (duplicate array), put_field "length"
                     // dup1: array idx -> array array idx
-                    ctx.emitter.emitOpcode(Opcode.DUP1);  // array array idx
-                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length");  // array idx (PUT_FIELD leaves value)
-                    ctx.emitter.emitOpcode(Opcode.DROP);  // array
+                    conpilerConext.emitter.emitOpcode(Opcode.DUP1);  // array array idx
+                    conpilerConext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length");  // array idx (PUT_FIELD leaves value)
+                    conpilerConext.emitter.emitOpcode(Opcode.DROP);  // array
                 } else {
                     // Stack: array (idx is compile-time constant)
                     // QuickJS pattern: dup, push idx, swap, put_field "length", drop
-                    ctx.emitter.emitOpcode(Opcode.DUP);  // array array
-                    ctx.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);  // array array idx
-                    ctx.emitter.emitOpcode(Opcode.SWAP);  // array idx array
-                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length");  // array idx
-                    ctx.emitter.emitOpcode(Opcode.DROP);  // array
+                    conpilerConext.emitter.emitOpcode(Opcode.DUP);  // array array
+                    conpilerConext.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);  // array array idx
+                    conpilerConext.emitter.emitOpcode(Opcode.SWAP);  // array idx array
+                    conpilerConext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length");  // array idx
+                    conpilerConext.emitter.emitOpcode(Opcode.DROP);  // array
                 }
             } else if (needsIndex) {
                 // No trailing hole, just drop the index
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                conpilerConext.emitter.emitOpcode(Opcode.DROP);
             }
         }
     }
@@ -147,7 +147,7 @@ final class ExpressionCompiler {
         // Emit the AWAIT opcode
         // This will convert the value to a promise (if it isn't already)
         // and pause execution until the promise resolves
-        ctx.emitter.emitOpcode(Opcode.AWAIT);
+        conpilerConext.emitter.emitOpcode(Opcode.AWAIT);
     }
 
     void compileBinaryExpression(BinaryExpression binExpr) {
@@ -162,32 +162,32 @@ final class ExpressionCompiler {
             case LOGICAL_AND -> {
                 // left && right: if left is falsy, return left; otherwise evaluate and return right
                 compileExpression(binExpr.left());
-                ctx.emitter.emitOpcode(Opcode.DUP);
-                int jumpEnd = ctx.emitter.emitJump(Opcode.IF_FALSE);
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                conpilerConext.emitter.emitOpcode(Opcode.DUP);
+                int jumpEnd = conpilerConext.emitter.emitJump(Opcode.IF_FALSE);
+                conpilerConext.emitter.emitOpcode(Opcode.DROP);
                 compileExpression(binExpr.right());
-                ctx.emitter.patchJump(jumpEnd, ctx.emitter.currentOffset());
+                conpilerConext.emitter.patchJump(jumpEnd, conpilerConext.emitter.currentOffset());
                 return;
             }
             case LOGICAL_OR -> {
                 // left || right: if left is truthy, return left; otherwise evaluate and return right
                 compileExpression(binExpr.left());
-                ctx.emitter.emitOpcode(Opcode.DUP);
-                int jumpEnd = ctx.emitter.emitJump(Opcode.IF_TRUE);
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                conpilerConext.emitter.emitOpcode(Opcode.DUP);
+                int jumpEnd = conpilerConext.emitter.emitJump(Opcode.IF_TRUE);
+                conpilerConext.emitter.emitOpcode(Opcode.DROP);
                 compileExpression(binExpr.right());
-                ctx.emitter.patchJump(jumpEnd, ctx.emitter.currentOffset());
+                conpilerConext.emitter.patchJump(jumpEnd, conpilerConext.emitter.currentOffset());
                 return;
             }
             case NULLISH_COALESCING -> {
                 // left ?? right: if left is not null/undefined, return left; otherwise evaluate and return right
                 compileExpression(binExpr.left());
-                ctx.emitter.emitOpcode(Opcode.DUP);
-                ctx.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
-                int jumpEnd = ctx.emitter.emitJump(Opcode.IF_FALSE);
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                conpilerConext.emitter.emitOpcode(Opcode.DUP);
+                conpilerConext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+                int jumpEnd = conpilerConext.emitter.emitJump(Opcode.IF_FALSE);
+                conpilerConext.emitter.emitOpcode(Opcode.DROP);
                 compileExpression(binExpr.right());
-                ctx.emitter.patchJump(jumpEnd, ctx.emitter.currentOffset());
+                conpilerConext.emitter.patchJump(jumpEnd, conpilerConext.emitter.currentOffset());
                 return;
             }
             default -> {
@@ -227,7 +227,7 @@ final class ExpressionCompiler {
             default -> throw new JSCompilerException("Unknown binary operator: " + binExpr.operator());
         };
 
-        ctx.emitter.emitOpcode(op);
+        conpilerConext.emitter.emitOpcode(op);
     }
 
     void compileCallExpression(CallExpression callExpr) {
@@ -247,22 +247,22 @@ final class ExpressionCompiler {
         compileExpression(condExpr.test());
 
         // Jump to alternate if false
-        int jumpToAlternate = ctx.emitter.emitJump(Opcode.IF_FALSE);
+        int jumpToAlternate = conpilerConext.emitter.emitJump(Opcode.IF_FALSE);
 
         // Compile consequent
         compileExpression(condExpr.consequent());
 
         // Jump over alternate
-        int jumpToEnd = ctx.emitter.emitJump(Opcode.GOTO);
+        int jumpToEnd = conpilerConext.emitter.emitJump(Opcode.GOTO);
 
         // Patch jump to alternate
-        ctx.emitter.patchJump(jumpToAlternate, ctx.emitter.currentOffset());
+        conpilerConext.emitter.patchJump(jumpToAlternate, conpilerConext.emitter.currentOffset());
 
         // Compile alternate
         compileExpression(condExpr.alternate());
 
         // Patch jump to end
-        ctx.emitter.patchJump(jumpToEnd, ctx.emitter.currentOffset());
+        conpilerConext.emitter.patchJump(jumpToEnd, conpilerConext.emitter.currentOffset());
     }
 
     void compileExpression(Expression expr) {
@@ -314,17 +314,17 @@ final class ExpressionCompiler {
 
         // Handle 'this' keyword
         if ("this".equals(name)) {
-            ctx.emitter.emitOpcode(Opcode.PUSH_THIS);
+            conpilerConext.emitter.emitOpcode(Opcode.PUSH_THIS);
             return;
         }
 
         // Handle 'new.target' meta-property
         if ("new.target".equals(name)) {
-            ctx.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 3);
+            conpilerConext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 3);
             return;
         }
 
-        if (ctx.hasActiveWithObject()) {
+        if (conpilerConext.hasActiveWithObject()) {
             emitWithAwareIdentifierLookup(name);
             return;
         }
@@ -336,31 +336,31 @@ final class ExpressionCompiler {
         Object value = literal.value();
 
         if (value == null) {
-            ctx.emitter.emitOpcode(Opcode.NULL);
+            conpilerConext.emitter.emitOpcode(Opcode.NULL);
         } else if (value instanceof Boolean bool) {
-            ctx.emitter.emitOpcode(bool ? Opcode.PUSH_TRUE : Opcode.PUSH_FALSE);
+            conpilerConext.emitter.emitOpcode(bool ? Opcode.PUSH_TRUE : Opcode.PUSH_FALSE);
         } else if (value instanceof BigInteger bigInt) {
             // Check BigInteger before Number since BigInteger extends Number.
             // Match QuickJS: emit PUSH_BIGINT_I32 when the literal fits in signed i32.
             if (bigInt.compareTo(BigInteger.valueOf(Integer.MIN_VALUE)) >= 0
                     && bigInt.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) <= 0) {
-                ctx.emitter.emitOpcode(Opcode.PUSH_BIGINT_I32);
-                ctx.emitter.emitI32(bigInt.intValue());
+                conpilerConext.emitter.emitOpcode(Opcode.PUSH_BIGINT_I32);
+                conpilerConext.emitter.emitI32(bigInt.intValue());
             } else {
-                ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSBigInt(bigInt));
+                conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSBigInt(bigInt));
             }
         } else if (value instanceof Number num) {
             // Try to emit as i32 if it's an integer in range
             if (num instanceof Integer || num instanceof Long) {
                 long longValue = num.longValue();
                 if (longValue >= Integer.MIN_VALUE && longValue <= Integer.MAX_VALUE) {
-                    ctx.emitter.emitOpcode(Opcode.PUSH_I32);
-                    ctx.emitter.emitI32((int) longValue);
+                    conpilerConext.emitter.emitOpcode(Opcode.PUSH_I32);
+                    conpilerConext.emitter.emitI32((int) longValue);
                     return;
                 }
             }
             // Otherwise emit as constant
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(num.doubleValue()));
+            conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(num.doubleValue()));
         } else if (value instanceof RegExpLiteralValue regExpLiteralValue) {
             String source = regExpLiteralValue.source();
             int lastSlash = source.lastIndexOf('/');
@@ -369,7 +369,7 @@ final class ExpressionCompiler {
                 String flags = lastSlash < source.length() - 1 ? source.substring(lastSlash + 1) : "";
                 try {
                     JSRegExp regexp = new JSRegExp(pattern, flags);
-                    ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, regexp);
+                    conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, regexp);
                     return;
                 } catch (Exception e) {
                     throw new JSSyntaxErrorException("Invalid regular expression literal: " + source);
@@ -377,7 +377,7 @@ final class ExpressionCompiler {
             }
             throw new JSSyntaxErrorException("Invalid regular expression literal: " + source);
         } else if (value instanceof String str) {
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
+            conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
         } else {
             // Other types as constants
             throw new JSCompilerException("Unsupported literal type: " + value.getClass());
@@ -416,7 +416,7 @@ final class ExpressionCompiler {
     }
 
     void compileObjectExpression(ObjectExpression objExpr) {
-        ctx.emitter.emitOpcode(Opcode.OBJECT_NEW);
+        conpilerConext.emitter.emitOpcode(Opcode.OBJECT_NEW);
 
         for (ObjectExpression.Property prop : objExpr.properties()) {
             String kind = prop.kind();
@@ -428,7 +428,7 @@ final class ExpressionCompiler {
                 if (prop.computed()) {
                     compileExpression(prop.key());
                 } else if (prop.key() instanceof Identifier id) {
-                    ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+                    conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
                 } else {
                     compileExpression(prop.key());
                 }
@@ -439,7 +439,7 @@ final class ExpressionCompiler {
                 // DEFINE_METHOD_COMPUTED with flags: kind (1=get, 2=set) | enumerable (4)
                 int methodKind = "get".equals(kind) ? 1 : 2;
                 int flags = methodKind | 4; // enumerable = true for object literal properties
-                ctx.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, flags);
+                conpilerConext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, flags);
             } else {
                 // Regular property: key: value
                 // ES2015 B.3.1: __proto__ in object literal sets prototype
@@ -448,11 +448,11 @@ final class ExpressionCompiler {
                         && "__proto__".equals(id.name())) {
                     // Stack: obj -> obj proto -> obj
                     compileExpression(prop.value());
-                    ctx.emitter.emitOpcode(Opcode.SET_PROTO);
+                    conpilerConext.emitter.emitOpcode(Opcode.SET_PROTO);
                 } else {
                     // Push key
                     if (prop.key() instanceof Identifier id && !prop.computed()) {
-                        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+                        conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
                     } else {
                         compileExpression(prop.key());
                     }
@@ -466,7 +466,7 @@ final class ExpressionCompiler {
                     }
 
                     // Define property
-                    ctx.emitter.emitOpcode(Opcode.DEFINE_PROP);
+                    conpilerConext.emitter.emitOpcode(Opcode.DEFINE_PROP);
                 }
             }
         }
@@ -475,13 +475,13 @@ final class ExpressionCompiler {
     void compilePrivateInExpression(PrivateIdentifier privateIdentifier, Expression right) {
         compileExpression(right);
 
-        JSSymbol symbol = ctx.privateSymbols != null ? ctx.privateSymbols.get(privateIdentifier.name()) : null;
+        JSSymbol symbol = conpilerConext.privateSymbols != null ? conpilerConext.privateSymbols.get(privateIdentifier.name()) : null;
         if (symbol == null) {
             throw new JSCompilerException("undefined private field '#" + privateIdentifier.name() + "'");
         }
 
-        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-        ctx.emitter.emitOpcode(Opcode.PRIVATE_IN);
+        conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+        conpilerConext.emitter.emitOpcode(Opcode.PRIVATE_IN);
     }
 
     void compileSequenceExpression(SequenceExpression seqExpr) {
@@ -494,7 +494,7 @@ final class ExpressionCompiler {
 
             // Drop the value of all expressions except the last one
             if (i < expressions.size() - 1) {
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                conpilerConext.emitter.emitOpcode(Opcode.DROP);
             }
         }
         // The last expression's value remains on the stack
@@ -518,35 +518,35 @@ final class ExpressionCompiler {
             compileExpression(memberExpr.object());
 
             // Duplicate it (one copy for 'this', one for property access)
-            ctx.emitter.emitOpcode(Opcode.DUP);
+            conpilerConext.emitter.emitOpcode(Opcode.DUP);
 
             // Get the method
             if (memberExpr.computed()) {
                 // obj[expr]
                 compileExpression(memberExpr.property());
-                ctx.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                conpilerConext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else if (memberExpr.property() instanceof Identifier propId) {
                 // obj.prop
-                ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                conpilerConext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
             }
 
             // Now stack is: receiver, method
             // Swap so method is on top: method, receiver
-            ctx.emitter.emitOpcode(Opcode.SWAP);
+            conpilerConext.emitter.emitOpcode(Opcode.SWAP);
         } else {
             // Regular function call: func`template`
             // Compile the tag function first (will be the callee)
             compileExpression(taggedTemplate.tag());
 
             // Add undefined as receiver/thisArg
-            ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+            conpilerConext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
         // Stack is now: function, receiver
 
         // QuickJS behavior: each call site uses a stable, frozen template object.
         // Build it once in the constant pool and pass it as the first argument.
-        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, delegates.functions.createTaggedTemplateObject(template));
+        conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, delegates.functions.createTaggedTemplateObject(template));
         // Stack: function, receiver, template_object
 
         // Add substitution expressions as additional arguments
@@ -557,8 +557,8 @@ final class ExpressionCompiler {
         // Call the tag function
         // argCount = 1 (template array) + number of expressions
         int argCount = 1 + expressions.size();
-        ctx.emitter.emitOpcode(Opcode.CALL);
-        ctx.emitter.emitU16(argCount);
+        conpilerConext.emitter.emitOpcode(Opcode.CALL);
+        conpilerConext.emitter.emitU16(argCount);
     }
 
     void compileTemplateLiteral(TemplateLiteral templateLiteral) {
@@ -570,7 +570,7 @@ final class ExpressionCompiler {
 
         if (quasis.isEmpty()) {
             // Empty template literal
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(""));
+            conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(""));
             return;
         }
 
@@ -579,7 +579,7 @@ final class ExpressionCompiler {
         if (firstQuasi == null) {
             throw new JSCompilerException("Invalid escape sequence in untagged template literal");
         }
-        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(firstQuasi));
+        conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(firstQuasi));
 
         // Add each expression and subsequent quasi using string concatenation (ADD)
         for (int i = 0; i < expressions.size(); i++) {
@@ -587,10 +587,10 @@ final class ExpressionCompiler {
             compileExpression(expressions.get(i));
 
             // Template substitutions use ToString coercion (not + operator default hint).
-            ctx.emitter.emitOpcode(Opcode.TO_STRING);
+            conpilerConext.emitter.emitOpcode(Opcode.TO_STRING);
 
             // Concatenate using ADD after explicit ToString on the substitution.
-            ctx.emitter.emitOpcode(Opcode.ADD);
+            conpilerConext.emitter.emitOpcode(Opcode.ADD);
 
             // Add the next quasi if it exists
             if (i + 1 < quasis.size()) {
@@ -599,8 +599,8 @@ final class ExpressionCompiler {
                     throw new JSCompilerException("Invalid escape sequence in untagged template literal");
                 }
                 if (!quasi.isEmpty()) {
-                    ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
-                    ctx.emitter.emitOpcode(Opcode.ADD);
+                    conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
+                    conpilerConext.emitter.emitOpcode(Opcode.ADD);
                 }
             }
         }
@@ -621,26 +621,26 @@ final class ExpressionCompiler {
                     compileExpression(memberExpr.property());
                 } else if (memberExpr.property() instanceof Identifier propId) {
                     // obj.prop
-                    ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.name()));
+                    conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.name()));
                 }
 
-                ctx.emitter.emitOpcode(Opcode.DELETE);
+                conpilerConext.emitter.emitOpcode(Opcode.DELETE);
             } else if (operand instanceof Identifier id) {
                 // Match QuickJS scope_delete_var lowering:
                 // - local/arg/closure/implicit arguments bindings => false
                 // - unresolved/global binding => DELETE_VAR runtime check
-                boolean isLocalBinding = ctx.findLocalInScopes(id.name()) != null
-                        || ctx.resolveCapturedBindingIndex(id.name()) != null
-                        || (JSArguments.NAME.equals(id.name()) && !ctx.inGlobalScope)
-                        || ctx.nonDeletableGlobalBindings.contains(id.name());
+                boolean isLocalBinding = conpilerConext.findLocalInScopes(id.name()) != null
+                        || conpilerConext.resolveCapturedBindingIndex(id.name()) != null
+                        || (JSArguments.NAME.equals(id.name()) && !conpilerConext.inGlobalScope)
+                        || conpilerConext.nonDeletableGlobalBindings.contains(id.name());
                 if (isLocalBinding) {
-                    ctx.emitter.emitOpcode(Opcode.PUSH_FALSE);
+                    conpilerConext.emitter.emitOpcode(Opcode.PUSH_FALSE);
                 } else {
-                    ctx.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, id.name());
+                    conpilerConext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, id.name());
                 }
             } else {
                 // delete literal / non-reference expression => true
-                ctx.emitter.emitOpcode(Opcode.PUSH_TRUE);
+                conpilerConext.emitter.emitOpcode(Opcode.PUSH_TRUE);
             }
             return;
         }
@@ -658,17 +658,17 @@ final class ExpressionCompiler {
             if (operand instanceof Identifier id) {
                 // Simple variable: get, inc/dec, set/put
                 compileExpression(operand);
-                ctx.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
+                conpilerConext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
                         : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
-                Integer localIndex = ctx.findLocalInScopes(id.name());
+                Integer localIndex = conpilerConext.findLocalInScopes(id.name());
                 if (localIndex != null) {
-                    ctx.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOCAL : Opcode.PUT_LOCAL, localIndex);
+                    conpilerConext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOCAL : Opcode.PUT_LOCAL, localIndex);
                 } else {
-                    Integer capturedIndex = ctx.resolveCapturedBindingIndex(id.name());
+                    Integer capturedIndex = conpilerConext.resolveCapturedBindingIndex(id.name());
                     if (capturedIndex != null) {
-                        ctx.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF, capturedIndex);
+                        conpilerConext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF, capturedIndex);
                     } else {
-                        ctx.emitter.emitOpcodeAtom(isPrefix ? Opcode.SET_VAR : Opcode.PUT_VAR, id.name());
+                        conpilerConext.emitter.emitOpcodeAtom(isPrefix ? Opcode.SET_VAR : Opcode.PUT_VAR, id.name());
                     }
                 }
             } else if (operand instanceof MemberExpression memberExpr) {
@@ -679,25 +679,25 @@ final class ExpressionCompiler {
 
                     if (isPrefix) {
                         // Prefix: ++arr[i] - returns new value
-                        ctx.emitter.emitOpcode(Opcode.DUP2);
-                        ctx.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-                        ctx.emitter.emitOpcode(Opcode.PLUS); // ToNumber conversion
-                        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
-                        ctx.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
+                        conpilerConext.emitter.emitOpcode(Opcode.DUP2);
+                        conpilerConext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                        conpilerConext.emitter.emitOpcode(Opcode.PLUS); // ToNumber conversion
+                        conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
+                        conpilerConext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
                         // Stack: [obj, prop, new_val] — already in QuickJS order
-                        ctx.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                        conpilerConext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                     } else {
                         // Postfix: arr[i]++ - returns old value (must be ToNumber'd per ES spec)
-                        ctx.emitter.emitOpcode(Opcode.DUP2); // obj prop obj prop
-                        ctx.emitter.emitOpcode(Opcode.GET_ARRAY_EL); // obj prop old_val
-                        ctx.emitter.emitOpcode(Opcode.PLUS); // obj prop old_numeric (ToNumber conversion)
-                        ctx.emitter.emitOpcode(Opcode.DUP); // obj prop old_numeric old_numeric
-                        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
-                        ctx.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj prop old_val new_val
+                        conpilerConext.emitter.emitOpcode(Opcode.DUP2); // obj prop obj prop
+                        conpilerConext.emitter.emitOpcode(Opcode.GET_ARRAY_EL); // obj prop old_val
+                        conpilerConext.emitter.emitOpcode(Opcode.PLUS); // obj prop old_numeric (ToNumber conversion)
+                        conpilerConext.emitter.emitOpcode(Opcode.DUP); // obj prop old_numeric old_numeric
+                        conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
+                        conpilerConext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj prop old_val new_val
                         // PERM4 to rearrange: [obj, prop, old_val, new_val] -> [old_val, obj, prop, new_val]
-                        ctx.emitter.emitOpcode(Opcode.PERM4); // old_val obj prop new_val
-                        ctx.emitter.emitOpcode(Opcode.PUT_ARRAY_EL); // old_val new_val
-                        ctx.emitter.emitOpcode(Opcode.DROP); // old_val
+                        conpilerConext.emitter.emitOpcode(Opcode.PERM4); // old_val obj prop new_val
+                        conpilerConext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL); // old_val new_val
+                        conpilerConext.emitter.emitOpcode(Opcode.DROP); // old_val
                     }
                 } else {
                     // Object property: obj.prop or obj.#field
@@ -706,34 +706,34 @@ final class ExpressionCompiler {
 
                         if (isPrefix) {
                             // Prefix: ++obj.prop - returns new value
-                            ctx.emitter.emitOpcode(Opcode.DUP);
-                            ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
-                            ctx.emitter.emitOpcode(Opcode.PLUS); // ToNumber conversion
-                            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
-                            ctx.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
+                            conpilerConext.emitter.emitOpcode(Opcode.DUP);
+                            conpilerConext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                            conpilerConext.emitter.emitOpcode(Opcode.PLUS); // ToNumber conversion
+                            conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
+                            conpilerConext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
                             // Stack: [obj, new_val] -> need [new_val, obj] for PUT_FIELD
-                            ctx.emitter.emitOpcode(Opcode.SWAP);
+                            conpilerConext.emitter.emitOpcode(Opcode.SWAP);
                             // PUT_FIELD pops obj, peeks new_val, leaves [new_val]
-                            ctx.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+                            conpilerConext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
                         } else {
                             // Postfix: obj.prop++ - returns old value (must be ToNumber'd per ES spec)
-                            ctx.emitter.emitOpcode(Opcode.DUP); // obj obj
-                            ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name()); // obj old_val
-                            ctx.emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
-                            ctx.emitter.emitOpcode(Opcode.DUP); // obj old_numeric old_numeric
-                            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
-                            ctx.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj old_val new_val
+                            conpilerConext.emitter.emitOpcode(Opcode.DUP); // obj obj
+                            conpilerConext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name()); // obj old_val
+                            conpilerConext.emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
+                            conpilerConext.emitter.emitOpcode(Opcode.DUP); // obj old_numeric old_numeric
+                            conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
+                            conpilerConext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj old_val new_val
                             // Stack: [obj, old_val, new_val] - need [old_val, new_val, obj] for PUT_FIELD
                             // ROT3L: [old_val, new_val, obj]
-                            ctx.emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
+                            conpilerConext.emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
                             // PUT_FIELD pops obj, peeks new_val, leaves [old_val, new_val]
-                            ctx.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name()); // old_val new_val
-                            ctx.emitter.emitOpcode(Opcode.DROP); // old_val
+                            conpilerConext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name()); // old_val new_val
+                            conpilerConext.emitter.emitOpcode(Opcode.DROP); // old_val
                         }
                     } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
                         // Private field: obj.#field
                         String fieldName = privateId.name();
-                        JSSymbol symbol = ctx.privateSymbols.get(fieldName);
+                        JSSymbol symbol = conpilerConext.privateSymbols.get(fieldName);
                         if (symbol == null) {
                             throw new JSCompilerException("Private field not found: #" + fieldName);
                         }
@@ -742,35 +742,35 @@ final class ExpressionCompiler {
 
                         if (isPrefix) {
                             // Prefix: ++obj.#field - returns new value
-                            ctx.emitter.emitOpcode(Opcode.DUP); // obj obj
-                            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                            ctx.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
-                            ctx.emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
-                            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
-                            ctx.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj new_val
-                            ctx.emitter.emitOpcode(Opcode.DUP); // obj new_val new_val
-                            ctx.emitter.emitOpcode(Opcode.ROT3R); // new_val obj new_val
-                            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // new_val obj new_val symbol
-                            ctx.emitter.emitOpcode(Opcode.SWAP); // new_val obj symbol new_val
-                            ctx.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // new_val
+                            conpilerConext.emitter.emitOpcode(Opcode.DUP); // obj obj
+                            conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                            conpilerConext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
+                            conpilerConext.emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
+                            conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
+                            conpilerConext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj new_val
+                            conpilerConext.emitter.emitOpcode(Opcode.DUP); // obj new_val new_val
+                            conpilerConext.emitter.emitOpcode(Opcode.ROT3R); // new_val obj new_val
+                            conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // new_val obj new_val symbol
+                            conpilerConext.emitter.emitOpcode(Opcode.SWAP); // new_val obj symbol new_val
+                            conpilerConext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // new_val
                         } else {
                             // Postfix: obj.#field++ - returns old value (must be ToNumber'd per ES spec)
-                            ctx.emitter.emitOpcode(Opcode.DUP); // obj obj
-                            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                            ctx.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
-                            ctx.emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
-                            ctx.emitter.emitOpcode(Opcode.DUP); // obj old_numeric old_numeric
-                            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
-                            ctx.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj old_val new_val
-                            ctx.emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
-                            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // old_val new_val obj symbol
+                            conpilerConext.emitter.emitOpcode(Opcode.DUP); // obj obj
+                            conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                            conpilerConext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
+                            conpilerConext.emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
+                            conpilerConext.emitter.emitOpcode(Opcode.DUP); // obj old_numeric old_numeric
+                            conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
+                            conpilerConext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj old_val new_val
+                            conpilerConext.emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
+                            conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // old_val new_val obj symbol
                             // Need: obj symbol new_val for PUT_PRIVATE_FIELD
                             // Have: old_val new_val obj symbol
                             // SWAP to get: old_val new_val symbol obj
-                            ctx.emitter.emitOpcode(Opcode.SWAP); // old_val new_val symbol obj
+                            conpilerConext.emitter.emitOpcode(Opcode.SWAP); // old_val new_val symbol obj
                             // ROT3L to get: old_val obj symbol new_val
-                            ctx.emitter.emitOpcode(Opcode.ROT3L); // old_val obj symbol new_val
-                            ctx.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // old_val
+                            conpilerConext.emitter.emitOpcode(Opcode.ROT3L); // old_val obj symbol new_val
+                            conpilerConext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // old_val
                         }
                     } else {
                         throw new JSCompilerException("Invalid member expression property for increment/decrement");
@@ -779,9 +779,9 @@ final class ExpressionCompiler {
             } else if (operand instanceof CallExpression) {
                 // Annex B: CallExpression as increment/decrement target throws ReferenceError at runtime.
                 compileExpression(operand);
-                ctx.emitter.emitOpcode(Opcode.DROP);
-                ctx.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid increment/decrement operand");
-                ctx.emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
+                conpilerConext.emitter.emitOpcode(Opcode.DROP);
+                conpilerConext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid increment/decrement operand");
+                conpilerConext.emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
             } else {
                 throw new JSCompilerException("Invalid operand for increment/decrement operator");
             }
@@ -792,33 +792,33 @@ final class ExpressionCompiler {
                 && unaryExpr.operand() instanceof Identifier id) {
             String name = id.name();
             if ("this".equals(name)) {
-                ctx.emitter.emitOpcode(Opcode.PUSH_THIS);
-            } else if (JSArguments.NAME.equals(name) && !ctx.inGlobalScope
-                    && (!ctx.isInArrowFunction || ctx.hasEnclosingArgumentsBinding)
-                    && ctx.findLocalInScopes(name) == null) {
-                ctx.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                ctx.emitter.emitU8(0);
+                conpilerConext.emitter.emitOpcode(Opcode.PUSH_THIS);
+            } else if (JSArguments.NAME.equals(name) && !conpilerConext.inGlobalScope
+                    && (!conpilerConext.isInArrowFunction || conpilerConext.hasEnclosingArgumentsBinding)
+                    && conpilerConext.findLocalInScopes(name) == null) {
+                conpilerConext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                conpilerConext.emitter.emitU8(0);
             } else {
-                Integer localIndex = ctx.findLocalInScopes(name);
+                Integer localIndex = conpilerConext.findLocalInScopes(name);
                 if (localIndex != null) {
                     // Use GET_LOC_CHECK for TDZ locals - typeof of an uninitialized
                     // lexical binding throws ReferenceError per ES spec
-                    if (ctx.tdzLocals.contains(name)) {
-                        ctx.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
+                    if (conpilerConext.tdzLocals.contains(name)) {
+                        conpilerConext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
                     } else {
-                        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                        conpilerConext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
                     }
                 } else {
-                    Integer capturedIndex = ctx.resolveCapturedBindingIndex(name);
+                    Integer capturedIndex = conpilerConext.resolveCapturedBindingIndex(name);
                     if (capturedIndex != null) {
-                        ctx.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
+                        conpilerConext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
                     } else {
-                        ctx.emitter.emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
-                        ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
+                        conpilerConext.emitter.emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
+                        conpilerConext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
                     }
                 }
             }
-            ctx.emitter.emitOpcode(Opcode.TYPEOF);
+            conpilerConext.emitter.emitOpcode(Opcode.TYPEOF);
             return;
         }
 
@@ -831,13 +831,13 @@ final class ExpressionCompiler {
             case PLUS -> Opcode.PLUS;
             case TYPEOF -> Opcode.TYPEOF;
             case VOID -> {
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                conpilerConext.emitter.emitOpcode(Opcode.DROP);
                 yield Opcode.UNDEFINED;
             }
             default -> throw new JSCompilerException("Unknown unary operator: " + unaryExpr.operator());
         };
 
-        ctx.emitter.emitOpcode(op);
+        conpilerConext.emitter.emitOpcode(op);
     }
 
     void compileYieldExpression(YieldExpression yieldExpr) {
@@ -846,16 +846,16 @@ final class ExpressionCompiler {
             compileExpression(yieldExpr.argument());
         } else {
             // No argument means yield undefined
-            ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+            conpilerConext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
         // Emit the appropriate yield opcode
         if (yieldExpr.delegate()) {
             // yield* delegates to another generator/iterable
-            ctx.emitter.emitOpcode(ctx.isInAsyncFunction ? Opcode.ASYNC_YIELD_STAR : Opcode.YIELD_STAR);
+            conpilerConext.emitter.emitOpcode(conpilerConext.isInAsyncFunction ? Opcode.ASYNC_YIELD_STAR : Opcode.YIELD_STAR);
         } else {
             // Regular yield
-            ctx.emitter.emitOpcode(Opcode.YIELD);
+            conpilerConext.emitter.emitOpcode(Opcode.YIELD);
         }
     }
 
@@ -865,15 +865,15 @@ final class ExpressionCompiler {
         // This must happen BEFORE the 'arguments' special handling so that
         // explicit `var arguments` or `let arguments` declarations take precedence.
         // Following QuickJS: arguments is resolved through normal variable lookup first.
-        Integer localIndex = ctx.findLocalInScopes(name);
+        Integer localIndex = conpilerConext.findLocalInScopes(name);
 
         if (localIndex != null) {
             // Use GET_LOC_CHECK for TDZ locals (let/const/class in program scope)
             // to throw ReferenceError if accessed before initialization
-            if (ctx.tdzLocals.contains(name)) {
-                ctx.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
+            if (conpilerConext.tdzLocals.contains(name)) {
+                conpilerConext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
             } else {
-                ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                conpilerConext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
             }
             return;
         }
@@ -884,26 +884,26 @@ final class ExpressionCompiler {
         // For arrow functions without enclosing regular function: resolve as normal variable
         // Following QuickJS: arrow functions inherit arguments from enclosing scope,
         // but only if there is an enclosing scope with arguments binding
-        if (JSArguments.NAME.equals(name) && !ctx.inGlobalScope
-                && (!ctx.isInArrowFunction || ctx.hasEnclosingArgumentsBinding)) {
+        if (JSArguments.NAME.equals(name) && !conpilerConext.inGlobalScope
+                && (!conpilerConext.isInArrowFunction || conpilerConext.hasEnclosingArgumentsBinding)) {
             // Emit SPECIAL_OBJECT opcode with type 0 (SPECIAL_OBJECT_ARGUMENTS)
             // The VM will handle differently for arrow vs regular functions
-            ctx.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-            ctx.emitter.emitU8(0);  // Type 0 = arguments object
+            conpilerConext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+            conpilerConext.emitter.emitU8(0);  // Type 0 = arguments object
             return;
         }
 
-        Integer capturedIndex = ctx.resolveCapturedBindingIndex(name);
+        Integer capturedIndex = conpilerConext.resolveCapturedBindingIndex(name);
         if (capturedIndex != null) {
-            ctx.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
+            conpilerConext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
         } else {
             // Not found in local scopes, use global variable
-            ctx.emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
+            conpilerConext.emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
         }
     }
 
     private void emitWithAwareIdentifierLookup(String name) {
-        List<Integer> withObjectLocals = ctx.getActiveWithObjectLocals();
+        List<Integer> withObjectLocals = conpilerConext.getActiveWithObjectLocals();
         emitWithAwareIdentifierLookup(name, withObjectLocals, 0);
     }
 
@@ -914,19 +914,19 @@ final class ExpressionCompiler {
         }
 
         int withObjectLocalIndex = withObjectLocals.get(withDepth);
-        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, withObjectLocalIndex);
-        ctx.emitter.emitOpcode(Opcode.DUP);
-        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
-        ctx.emitter.emitOpcode(Opcode.ROT3L);
-        ctx.emitter.emitOpcode(Opcode.IN);
+        conpilerConext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, withObjectLocalIndex);
+        conpilerConext.emitter.emitOpcode(Opcode.DUP);
+        conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        conpilerConext.emitter.emitOpcode(Opcode.ROT3L);
+        conpilerConext.emitter.emitOpcode(Opcode.IN);
 
-        int jumpToFallback = ctx.emitter.emitJump(Opcode.IF_FALSE);
-        ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
-        int jumpToEnd = ctx.emitter.emitJump(Opcode.GOTO);
+        int jumpToFallback = conpilerConext.emitter.emitJump(Opcode.IF_FALSE);
+        conpilerConext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
+        int jumpToEnd = conpilerConext.emitter.emitJump(Opcode.GOTO);
 
-        ctx.emitter.patchJump(jumpToFallback, ctx.emitter.currentOffset());
-        ctx.emitter.emitOpcode(Opcode.DROP);
+        conpilerConext.emitter.patchJump(jumpToFallback, conpilerConext.emitter.currentOffset());
+        conpilerConext.emitter.emitOpcode(Opcode.DROP);
         emitWithAwareIdentifierLookup(name, withObjectLocals, withDepth + 1);
-        ctx.emitter.patchJump(jumpToEnd, ctx.emitter.currentOffset());
+        conpilerConext.emitter.patchJump(jumpToEnd, conpilerConext.emitter.currentOffset());
     }
 }

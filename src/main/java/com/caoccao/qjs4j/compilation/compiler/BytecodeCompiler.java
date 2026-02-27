@@ -30,7 +30,7 @@ import com.caoccao.qjs4j.vm.Bytecode;
  * All shared mutable state is held in {@link CompilerContext}.
  */
 public final class BytecodeCompiler {
-    private final CompilerContext ctx;
+    private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
 
     public BytecodeCompiler() {
@@ -48,8 +48,8 @@ public final class BytecodeCompiler {
     }
 
     BytecodeCompiler(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver) {
-        this.ctx = new CompilerContext(inheritedStrictMode, parentCaptureResolver);
-        this.delegates = new CompilerDelegates(ctx);
+        this.compilerContext = new CompilerContext(inheritedStrictMode, parentCaptureResolver);
+        this.delegates = new CompilerDelegates(compilerContext);
     }
 
     /**
@@ -64,7 +64,7 @@ public final class BytecodeCompiler {
         } else {
             throw new JSCompilerException("Expected Program node");
         }
-        return ctx.emitter.build(ctx.maxLocalCount);
+        return compilerContext.emitter.build(compilerContext.maxLocalCount);
     }
 
     /**
@@ -72,7 +72,7 @@ public final class BytecodeCompiler {
      * Used by delegate classes to access nested compiler state.
      */
     CompilerContext context() {
-        return ctx;
+        return compilerContext;
     }
 
     /**
@@ -84,13 +84,13 @@ public final class BytecodeCompiler {
     }
 
     public void setPredeclareProgramLexicalsAsLocals(boolean predeclareProgramLexicalsAsLocals) {
-        ctx.predeclareProgramLexicalsAsLocals = predeclareProgramLexicalsAsLocals;
+        compilerContext.predeclareProgramLexicalsAsLocals = predeclareProgramLexicalsAsLocals;
     }
 
     /**
      * Set the original source code (used for extracting function source in toString()).
      */
     public void setSourceCode(String sourceCode) {
-        ctx.sourceCode = sourceCode;
+        compilerContext.sourceCode = sourceCode;
     }
 }

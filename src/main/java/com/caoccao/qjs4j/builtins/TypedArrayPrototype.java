@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -892,72 +891,6 @@ public final class TypedArrayPrototype {
         }
     }
 
-    private static JSValue setFromTypedArray(JSContext context, JSTypedArray target, JSTypedArray source, JSValue[] args) {
-        // Step 3: ToIntegerOrInfinity(offset) - may detach buffer
-        double targetOffsetD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        if (targetOffsetD < 0) {
-            return context.throwRangeError("offset is out of bounds");
-        }
-        int targetOffset = (int) targetOffsetD;
-
-        // Step 5: Check if target is OOB (after offset coercion)
-        if (target.isOutOfBounds()) {
-            return context.throwTypeError("TypedArray is detached or out of bounds");
-        }
-        int targetLength = target.getLength();
-
-        // Step 9: Check source buffer detached
-        if (source.getBuffer().isDetached()) {
-            return context.throwTypeError("Source TypedArray buffer is detached");
-        }
-        // Step 11: Check source OOB
-        if (source.isOutOfBounds()) {
-            return context.throwTypeError("Source TypedArray is out of bounds");
-        }
-        int srcLength = source.getLength();
-
-        // Step 13: Range check
-        if ((long) srcLength + targetOffset > targetLength) {
-            return context.throwRangeError("Source is too large");
-        }
-
-        // Step 14: Check content type compatibility
-        boolean targetIsBigInt = isBigIntTypedArray(target);
-        boolean sourceIsBigInt = isBigIntTypedArray(source);
-        if (targetIsBigInt != sourceIsBigInt) {
-            return context.throwTypeError("Cannot mix BigInt and non-BigInt typed arrays");
-        }
-
-        // Step 15: If same buffer, clone source values first to avoid overlap
-        boolean sameBuffer = target.getBuffer() == source.getBuffer();
-        if (sameBuffer) {
-            // Clone source values into temporary array
-            JSValue[] tempValues = new JSValue[srcLength];
-            for (int i = 0; i < srcLength; i++) {
-                tempValues[i] = source.getJSElement(i);
-            }
-            for (int i = 0; i < srcLength; i++) {
-                target.set(context, PropertyKey.fromIndex(targetOffset + i), tempValues[i]);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-            }
-        } else {
-            // Different buffers - direct copy
-            for (int i = 0; i < srcLength; i++) {
-                JSValue value = source.getJSElement(i);
-                target.set(context, PropertyKey.fromIndex(targetOffset + i), value);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-            }
-        }
-        return JSUndefined.INSTANCE;
-    }
-
     private static JSValue setFromArrayLike(JSContext context, JSTypedArray target, JSValue source, JSValue[] args) {
         // Step 3: ToIntegerOrInfinity(offset) - may detach buffer
         double targetOffsetD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
@@ -1023,6 +956,72 @@ public final class TypedArrayPrototype {
             if (!target.getBuffer().isDetached() && !target.isOutOfBounds()
                     && targetIndex < target.getLength()) {
                 target.set(context, PropertyKey.fromIndex(targetIndex), convertedValue);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+        }
+        return JSUndefined.INSTANCE;
+    }
+
+    private static JSValue setFromTypedArray(JSContext context, JSTypedArray target, JSTypedArray source, JSValue[] args) {
+        // Step 3: ToIntegerOrInfinity(offset) - may detach buffer
+        double targetOffsetD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (targetOffsetD < 0) {
+            return context.throwRangeError("offset is out of bounds");
+        }
+        int targetOffset = (int) targetOffsetD;
+
+        // Step 5: Check if target is OOB (after offset coercion)
+        if (target.isOutOfBounds()) {
+            return context.throwTypeError("TypedArray is detached or out of bounds");
+        }
+        int targetLength = target.getLength();
+
+        // Step 9: Check source buffer detached
+        if (source.getBuffer().isDetached()) {
+            return context.throwTypeError("Source TypedArray buffer is detached");
+        }
+        // Step 11: Check source OOB
+        if (source.isOutOfBounds()) {
+            return context.throwTypeError("Source TypedArray is out of bounds");
+        }
+        int srcLength = source.getLength();
+
+        // Step 13: Range check
+        if ((long) srcLength + targetOffset > targetLength) {
+            return context.throwRangeError("Source is too large");
+        }
+
+        // Step 14: Check content type compatibility
+        boolean targetIsBigInt = isBigIntTypedArray(target);
+        boolean sourceIsBigInt = isBigIntTypedArray(source);
+        if (targetIsBigInt != sourceIsBigInt) {
+            return context.throwTypeError("Cannot mix BigInt and non-BigInt typed arrays");
+        }
+
+        // Step 15: If same buffer, clone source values first to avoid overlap
+        boolean sameBuffer = target.getBuffer() == source.getBuffer();
+        if (sameBuffer) {
+            // Clone source values into temporary array
+            JSValue[] tempValues = new JSValue[srcLength];
+            for (int i = 0; i < srcLength; i++) {
+                tempValues[i] = source.getJSElement(i);
+            }
+            for (int i = 0; i < srcLength; i++) {
+                target.set(context, PropertyKey.fromIndex(targetOffset + i), tempValues[i]);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+        } else {
+            // Different buffers - direct copy
+            for (int i = 0; i < srcLength; i++) {
+                JSValue value = source.getJSElement(i);
+                target.set(context, PropertyKey.fromIndex(targetOffset + i), value);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }

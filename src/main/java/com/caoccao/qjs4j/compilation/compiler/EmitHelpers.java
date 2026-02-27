@@ -30,18 +30,18 @@ import java.util.List;
  * such as iterator close, captured values, method calls, and using disposal.
  */
 final class EmitHelpers {
-    private final CompilerContext ctx;
+    private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
 
-    EmitHelpers(CompilerContext ctx, CompilerDelegates delegates) {
-        this.ctx = ctx;
+    EmitHelpers(CompilerContext compilerContext, CompilerDelegates delegates) {
+        this.compilerContext = compilerContext;
         this.delegates = delegates;
     }
 
     void emitAbruptCompletionIteratorClose() {
-        for (LoopContext loopContext : ctx.loopStack) {
+        for (LoopContext loopContext : compilerContext.loopStack) {
             if (loopContext.hasIterator) {
-                ctx.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
+                compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
             }
         }
     }
@@ -53,21 +53,21 @@ final class EmitHelpers {
      * (bypassing the block-scoped lexical binding).
      */
     void emitAnnexBVarStore(String functionName) {
-        if (ctx.inGlobalScope) {
-            ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
+        if (compilerContext.inGlobalScope) {
+            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
         } else {
-            Integer funcScopeLocal = ctx.annexBFunctionScopeLocals.get(functionName);
+            Integer funcScopeLocal = compilerContext.annexBFunctionScopeLocals.get(functionName);
             if (funcScopeLocal != null) {
-                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, funcScopeLocal);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, funcScopeLocal);
             } else {
                 // Fallback: store as global var (shouldn't normally happen)
-                ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
+                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
             }
         }
     }
 
     void emitArgumentsArrayWithSpread(List<Expression> arguments) {
-        ctx.emitter.emitOpcode(Opcode.ARRAY_NEW);
+        compilerContext.emitter.emitOpcode(Opcode.ARRAY_NEW);
 
         boolean hasSpread = arguments.stream()
                 .anyMatch(arg -> arg instanceof SpreadElement);
@@ -75,7 +75,7 @@ final class EmitHelpers {
         if (!hasSpread) {
             for (Expression arg : arguments) {
                 delegates.expressions.compileExpression(arg);
-                ctx.emitter.emitOpcode(Opcode.PUSH_ARRAY);
+                compilerContext.emitter.emitOpcode(Opcode.PUSH_ARRAY);
             }
             return;
         }
@@ -86,23 +86,23 @@ final class EmitHelpers {
         for (Expression arg : arguments) {
             if (arg instanceof SpreadElement spreadElement) {
                 if (!needsIndex) {
-                    ctx.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
+                    compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
                     needsIndex = true;
                 }
                 delegates.expressions.compileExpression(spreadElement.argument());
-                ctx.emitter.emitOpcode(Opcode.APPEND);
+                compilerContext.emitter.emitOpcode(Opcode.APPEND);
             } else if (needsIndex) {
                 delegates.expressions.compileExpression(arg);
-                ctx.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
-                ctx.emitter.emitOpcode(Opcode.INC);
+                compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
+                compilerContext.emitter.emitOpcode(Opcode.INC);
             } else {
                 delegates.expressions.compileExpression(arg);
-                ctx.emitter.emitOpcode(Opcode.PUSH_ARRAY);
+                compilerContext.emitter.emitOpcode(Opcode.PUSH_ARRAY);
                 idx++;
             }
         }
         if (needsIndex) {
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
     }
 
@@ -144,6 +144,9 @@ final class EmitHelpers {
                                    JSBytecodeFunction methodFunc, String methodName) {
         String kind = method.kind();
         boolean isComputedKey = method.computed() && !(method.key() instanceof Literal);
+        // Use FCLOSURE when method captures outer variables, PUSH_CONST otherwise
+        Opcode pushMethodOpcode = methodFunc.getCaptureSourceInfos() != null
+                ? Opcode.FCLOSURE : Opcode.PUSH_CONST;
 
         if ("get".equals(kind) || "set".equals(kind)) {
             // Getter/setter: use DEFINE_METHOD_COMPUTED with accessor flags
@@ -151,24 +154,24 @@ final class EmitHelpers {
             if (isComputedKey) {
                 delegates.expressions.compileExpression(method.key());
             } else {
-                ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
             }
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
+            compilerContext.emitter.emitOpcodeConstant(pushMethodOpcode, methodFunc);
             int methodKind = "get".equals(kind) ? 1 : 2;
             // Class properties are not enumerable (no enumerable flag)
-            ctx.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind);
+            compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind);
         } else if (isComputedKey) {
             // Computed key method: evaluate key expression and use DEFINE_METHOD_COMPUTED
             // Stack: ... obj -> ... obj key method -> ... obj
             delegates.expressions.compileExpression(method.key());
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
+            compilerContext.emitter.emitOpcodeConstant(pushMethodOpcode, methodFunc);
             // flags = 0 for regular method (not getter/setter), not enumerable
-            ctx.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 0);
+            compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 0);
         } else {
             // Regular method: use DEFINE_METHOD with atom name
             // Stack: ... obj -> ... obj method -> ... obj
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, methodFunc);
-            ctx.emitter.emitOpcodeAtom(Opcode.DEFINE_METHOD, methodName);
+            compilerContext.emitter.emitOpcodeConstant(pushMethodOpcode, methodFunc);
+            compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_METHOD, methodName);
         }
     }
 
@@ -188,26 +191,26 @@ final class EmitHelpers {
      */
     void emitCloseLocForPattern(Pattern pattern) {
         if (pattern instanceof Identifier id) {
-            Integer localIdx = ctx.findLocalInScopes(id.name());
+            Integer localIdx = compilerContext.findLocalInScopes(id.name());
             if (localIdx != null) {
-                ctx.emitter.emitOpcodeU16(Opcode.CLOSE_LOC, localIdx);
+                compilerContext.emitter.emitOpcodeU16(Opcode.CLOSE_LOC, localIdx);
             }
         }
         // Destructuring patterns would need recursive handling here
     }
 
     void emitConditionalVarInit(String name) {
-        ctx.emitter.emitOpcodeAtom(Opcode.PUSH_ATOM_VALUE, name);
-        ctx.emitter.emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
-        ctx.emitter.emitOpcode(Opcode.IN);
-        int skipJump = ctx.emitter.emitJump(Opcode.IF_TRUE);
-        ctx.emitter.emitOpcode(Opcode.UNDEFINED);
-        ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
-        ctx.emitter.patchJump(skipJump, ctx.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeAtom(Opcode.PUSH_ATOM_VALUE, name);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
+        compilerContext.emitter.emitOpcode(Opcode.IN);
+        int skipJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
+        compilerContext.emitter.patchJump(skipJump, compilerContext.emitter.currentOffset());
     }
 
     void emitCurrentScopeUsingDisposal() {
-        emitScopeUsingDisposal(ctx.currentScope());
+        emitScopeUsingDisposal(compilerContext.currentScope());
     }
 
     void emitDefaultParameterInit(BytecodeCompiler functionCompiler, List<Expression> defaults) {
@@ -243,17 +246,17 @@ final class EmitHelpers {
     void emitGetSuperValue(MemberExpression memberExpr, boolean keepReceiverForCall) {
         // Stack start: []
         // Push current this as receiver for super property resolution.
-        ctx.emitter.emitOpcode(Opcode.PUSH_THIS);
+        compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
         if (keepReceiverForCall) {
             // Keep one copy of receiver for the eventual CALL/APPLY thisArg.
-            ctx.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
         }
         // Resolve super base: [[HomeObject]].[[Prototype]]
-        ctx.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-        ctx.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
-        ctx.emitter.emitOpcode(Opcode.GET_SUPER);
+        compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+        compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+        compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
         emitSuperPropertyKey(memberExpr);
-        ctx.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
+        compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
     }
 
     /**
@@ -263,53 +266,53 @@ final class EmitHelpers {
      * Following QuickJS close_scopes pattern for iterator cleanup.
      */
     void emitIteratorCloseForLoopsUntil(LoopContext target) {
-        for (LoopContext loopCtx : ctx.loopStack) {
+        for (LoopContext loopCtx : compilerContext.loopStack) {
             if (loopCtx == target) {
                 break;
             }
             if (loopCtx.hasIterator) {
-                ctx.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
+                compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
             }
         }
     }
 
     void emitMethodCallOnLocalObject(int localIndex, String methodName, int argCount) {
-        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
-        ctx.emitter.emitOpcode(Opcode.DUP);
-        ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, methodName);
-        ctx.emitter.emitOpcode(Opcode.SWAP);
-        ctx.emitter.emitOpcodeU16(Opcode.CALL, argCount);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, methodName);
+        compilerContext.emitter.emitOpcode(Opcode.SWAP);
+        compilerContext.emitter.emitOpcodeU16(Opcode.CALL, argCount);
     }
 
     void emitMethodCallWithSingleArgOnLocalObject(int localIndex, String methodName) {
-        int argLocalIndex = ctx.currentScope().declareLocal("$using_arg_" + ctx.emitter.currentOffset());
-        ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, argLocalIndex);
+        int argLocalIndex = compilerContext.currentScope().declareLocal("$using_arg_" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, argLocalIndex);
 
-        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
-        ctx.emitter.emitOpcode(Opcode.DUP);
-        ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, methodName);
-        ctx.emitter.emitOpcode(Opcode.SWAP);
-        ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, argLocalIndex);
-        ctx.emitter.emitOpcodeU16(Opcode.CALL, 1);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, methodName);
+        compilerContext.emitter.emitOpcode(Opcode.SWAP);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, argLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 1);
     }
 
     void emitNonComputedPublicFieldKey(Expression key) {
         if (key instanceof Identifier id) {
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
             return;
         }
         if (key instanceof Literal literal) {
             Object value = literal.value();
             if (value == null) {
-                ctx.emitter.emitOpcode(Opcode.NULL);
+                compilerContext.emitter.emitOpcode(Opcode.NULL);
             } else if (value instanceof Boolean bool) {
-                ctx.emitter.emitOpcode(bool ? Opcode.PUSH_TRUE : Opcode.PUSH_FALSE);
+                compilerContext.emitter.emitOpcode(bool ? Opcode.PUSH_TRUE : Opcode.PUSH_FALSE);
             } else if (value instanceof BigInteger bigInt) {
-                ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSBigInt(bigInt));
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSBigInt(bigInt));
             } else if (value instanceof Number num) {
-                ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(num.doubleValue()));
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(num.doubleValue()));
             } else if (value instanceof String str) {
-                ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
             } else {
                 throw new JSCompilerException("Unsupported field key literal type: " + value.getClass());
             }
@@ -326,11 +329,11 @@ final class EmitHelpers {
 
         if (scope.isUsingStackAsync()) {
             emitMethodCallOnLocalObject(usingStackLocalIndex, "disposeAsync", 0);
-            ctx.emitter.emitOpcode(Opcode.AWAIT);
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.AWAIT);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         } else {
             emitMethodCallOnLocalObject(usingStackLocalIndex, "dispose", 0);
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
     }
 
@@ -338,7 +341,7 @@ final class EmitHelpers {
         if (memberExpr.computed()) {
             delegates.expressions.compileExpression(memberExpr.property());
         } else if (memberExpr.property() instanceof Identifier propId) {
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.name()));
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.name()));
         } else if (memberExpr.property() instanceof PrivateIdentifier) {
             throw new JSCompilerException("super private fields are not supported");
         } else {
@@ -347,7 +350,7 @@ final class EmitHelpers {
     }
 
     void emitUsingDisposalsForScopeDepthGreaterThan(int targetScopeDepth) {
-        for (CompilerScope scope : ctx.scopes) {
+        for (CompilerScope scope : compilerContext.scopes) {
             if (scope.getScopeDepth() > targetScopeDepth) {
                 emitScopeUsingDisposal(scope);
             }
@@ -355,7 +358,7 @@ final class EmitHelpers {
     }
 
     int ensureUsingStackLocal(boolean asyncUsingDeclaration) {
-        CompilerScope scope = ctx.currentScope();
+        CompilerScope scope = compilerContext.currentScope();
         Integer existingLocalIndex = scope.getUsingStackLocalIndex();
         if (existingLocalIndex != null) {
             if (asyncUsingDeclaration && !scope.isUsingStackAsync()) {
@@ -364,13 +367,13 @@ final class EmitHelpers {
             return existingLocalIndex;
         }
 
-        boolean useAsyncStack = asyncUsingDeclaration || ctx.isInAsyncFunction;
+        boolean useAsyncStack = asyncUsingDeclaration || compilerContext.isInAsyncFunction;
         String constructorName = useAsyncStack ? JSAsyncDisposableStack.NAME : JSDisposableStack.NAME;
-        int stackLocalIndex = scope.declareLocal("$using_stack_" + scope.getScopeDepth() + "_" + ctx.emitter.currentOffset());
+        int stackLocalIndex = scope.declareLocal("$using_stack_" + scope.getScopeDepth() + "_" + compilerContext.emitter.currentOffset());
 
-        ctx.emitter.emitOpcodeAtom(Opcode.GET_VAR, constructorName);
-        ctx.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 0);
-        ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, stackLocalIndex);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, constructorName);
+        compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 0);
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, stackLocalIndex);
 
         scope.setUsingStackLocal(stackLocalIndex, useAsyncStack);
         return stackLocalIndex;

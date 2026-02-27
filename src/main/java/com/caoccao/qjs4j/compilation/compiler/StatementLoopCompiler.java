@@ -21,13 +21,13 @@ import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
 final class StatementLoopCompiler {
-    private final CompilerContext ctx;
+    private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
     private final StatementCompiler owner;
 
-    StatementLoopCompiler(StatementCompiler owner, CompilerContext ctx, CompilerDelegates delegates) {
+    StatementLoopCompiler(StatementCompiler owner, CompilerContext compilerContext, CompilerDelegates delegates) {
         this.owner = owner;
-        this.ctx = ctx;
+        this.compilerContext = compilerContext;
         this.delegates = delegates;
     }
 
@@ -35,7 +35,7 @@ final class StatementLoopCompiler {
         if (breakStmt.label() != null) {
             String labelName = breakStmt.label().name();
             LoopContext target = null;
-            for (LoopContext loopCtx : ctx.loopStack) {
+            for (LoopContext loopCtx : compilerContext.loopStack) {
                 if (labelName.equals(loopCtx.label)) {
                     target = loopCtx;
                     break;
@@ -46,14 +46,14 @@ final class StatementLoopCompiler {
             }
             delegates.emitHelpers.emitIteratorCloseForLoopsUntil(target);
             delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(target.breakTargetScopeDepth);
-            int jumpPos = ctx.emitter.emitJump(Opcode.GOTO);
+            int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             target.breakPositions.add(jumpPos);
         } else {
-            if (ctx.loopStack.isEmpty()) {
+            if (compilerContext.loopStack.isEmpty()) {
                 throw new JSCompilerException("Break statement outside of loop");
             }
             LoopContext loopContext = null;
-            for (LoopContext loopCtx : ctx.loopStack) {
+            for (LoopContext loopCtx : compilerContext.loopStack) {
                 if (!loopCtx.isRegularStmt) {
                     loopContext = loopCtx;
                     break;
@@ -63,7 +63,7 @@ final class StatementLoopCompiler {
                 throw new JSCompilerException("Break statement outside of loop");
             }
             delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(loopContext.breakTargetScopeDepth);
-            int jumpPos = ctx.emitter.emitJump(Opcode.GOTO);
+            int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             loopContext.breakPositions.add(jumpPos);
         }
     }
@@ -72,7 +72,7 @@ final class StatementLoopCompiler {
         if (contStmt.label() != null) {
             String labelName = contStmt.label().name();
             LoopContext target = null;
-            for (LoopContext loopCtx : ctx.loopStack) {
+            for (LoopContext loopCtx : compilerContext.loopStack) {
                 if (labelName.equals(loopCtx.label) && !loopCtx.isRegularStmt) {
                     target = loopCtx;
                     break;
@@ -83,11 +83,11 @@ final class StatementLoopCompiler {
             }
             delegates.emitHelpers.emitIteratorCloseForLoopsUntil(target);
             delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(target.continueTargetScopeDepth);
-            int jumpPos = ctx.emitter.emitJump(Opcode.GOTO);
+            int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             target.continuePositions.add(jumpPos);
         } else {
             LoopContext loopContext = null;
-            for (LoopContext loopCtx : ctx.loopStack) {
+            for (LoopContext loopCtx : compilerContext.loopStack) {
                 if (!loopCtx.isRegularStmt) {
                     loopContext = loopCtx;
                     break;
@@ -97,37 +97,37 @@ final class StatementLoopCompiler {
                 throw new JSCompilerException("Continue statement outside of loop");
             }
             delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(loopContext.continueTargetScopeDepth);
-            int jumpPos = ctx.emitter.emitJump(Opcode.GOTO);
+            int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             loopContext.continuePositions.add(jumpPos);
         }
     }
 
     void compileDoWhileStatement(DoWhileStatement doWhileStmt) {
-        int loopStart = ctx.emitter.currentOffset();
-        LoopContext loop = ctx.createLoopContext(loopStart, ctx.scopeDepth, ctx.scopeDepth);
-        ctx.loopStack.push(loop);
+        int loopStart = compilerContext.emitter.currentOffset();
+        LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth, compilerContext.scopeDepth);
+        compilerContext.loopStack.push(loop);
 
         owner.compileStatement(doWhileStmt.body());
 
-        int testStart = ctx.emitter.currentOffset();
+        int testStart = compilerContext.emitter.currentOffset();
         delegates.expressions.compileExpression(doWhileStmt.test());
-        int jumpToEnd = ctx.emitter.emitJump(Opcode.IF_FALSE);
+        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
 
-        ctx.emitter.emitOpcode(Opcode.GOTO);
-        int backJumpPos = ctx.emitter.currentOffset();
-        ctx.emitter.emitU32(loopStart - (backJumpPos + 4));
+        compilerContext.emitter.emitOpcode(Opcode.GOTO);
+        int backJumpPos = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.emitU32(loopStart - (backJumpPos + 4));
 
-        int loopEnd = ctx.emitter.currentOffset();
-        ctx.emitter.patchJump(jumpToEnd, loopEnd);
+        int loopEnd = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.patchJump(jumpToEnd, loopEnd);
 
         for (int breakPos : loop.breakPositions) {
-            ctx.emitter.patchJump(breakPos, loopEnd);
+            compilerContext.emitter.patchJump(breakPos, loopEnd);
         }
         for (int continuePos : loop.continuePositions) {
-            ctx.emitter.patchJump(continuePos, testStart);
+            compilerContext.emitter.patchJump(continuePos, testStart);
         }
 
-        ctx.loopStack.pop();
+        compilerContext.loopStack.pop();
     }
 
     void compileForInStatement(ForInStatement forInStmt) {
@@ -147,49 +147,49 @@ final class StatementLoopCompiler {
             varName = id.name();
 
             if (varDecl.kind() == VariableKind.VAR) {
-                ctx.currentScope().declareLocal(varName);
+                compilerContext.currentScope().declareLocal(varName);
             }
         }
 
-        ctx.enterScope();
+        compilerContext.enterScope();
 
         Integer varIndex = null;
         if (!isExpressionBased) {
             if (varDecl.kind() != VariableKind.VAR) {
-                ctx.currentScope().declareLocal(varName);
+                compilerContext.currentScope().declareLocal(varName);
             }
-            varIndex = ctx.findLocalInScopes(varName);
+            varIndex = compilerContext.findLocalInScopes(varName);
         }
 
         if (!isExpressionBased && varDecl != null && varDecl.declarations().get(0).init() != null) {
             delegates.expressions.compileExpression(varDecl.declarations().get(0).init());
             if (varIndex != null) {
-                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
             } else {
-                ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
             }
         }
 
         delegates.expressions.compileExpression(forInStmt.right());
-        ctx.emitter.emitOpcode(Opcode.FOR_IN_START);
+        compilerContext.emitter.emitOpcode(Opcode.FOR_IN_START);
 
-        int loopStart = ctx.emitter.currentOffset();
-        LoopContext loop = ctx.createLoopContext(loopStart, ctx.scopeDepth - 1, ctx.scopeDepth);
-        ctx.loopStack.push(loop);
+        int loopStart = compilerContext.emitter.currentOffset();
+        LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth - 1, compilerContext.scopeDepth);
+        compilerContext.loopStack.push(loop);
 
-        ctx.emitter.emitOpcode(Opcode.FOR_IN_NEXT);
-        ctx.emitter.emitOpcode(Opcode.DUP);
-        ctx.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
-        int jumpToEnd = ctx.emitter.emitJump(Opcode.IF_TRUE);
+        compilerContext.emitter.emitOpcode(Opcode.FOR_IN_NEXT);
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
 
         if (isExpressionBased) {
             Expression leftExpr = (Expression) forInStmt.left();
             if (leftExpr instanceof Identifier id) {
-                Integer localIdx = ctx.findLocalInScopes(id.name());
+                Integer localIdx = compilerContext.findLocalInScopes(id.name());
                 if (localIdx != null) {
-                    ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIdx);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIdx);
                 } else {
-                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
                 }
             } else if (leftExpr instanceof MemberExpression memberExpr) {
                 delegates.expressions.compileExpression(memberExpr.object());
@@ -198,63 +198,63 @@ final class StatementLoopCompiler {
                     throw new JSCompilerException("Computed member expression in for-in not yet supported");
                 } else {
                     String propName = ((Identifier) memberExpr.property()).name();
-                    ctx.emitter.emitOpcode(Opcode.SWAP);
-                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propName);
-                    ctx.emitter.emitOpcode(Opcode.DROP);
+                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propName);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
                 }
             } else if (leftExpr instanceof CallExpression) {
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
                 delegates.expressions.compileExpression(leftExpr);
-                ctx.emitter.emitOpcode(Opcode.DROP);
-                ctx.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-                ctx.emitter.emitU8(5);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+                compilerContext.emitter.emitU8(5);
             } else {
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         } else if (varIndex != null) {
-            ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
         } else {
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
         owner.compileStatement(forInStmt.body());
 
         if (!isExpressionBased && varDecl != null && varDecl.kind() != VariableKind.VAR && varIndex != null) {
-            ctx.emitter.emitOpcodeU16(Opcode.CLOSE_LOC, varIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.CLOSE_LOC, varIndex);
         }
 
-        ctx.emitter.emitOpcode(Opcode.GOTO);
-        int backJumpPos = ctx.emitter.currentOffset();
-        ctx.emitter.emitU32(loopStart - (backJumpPos + 4));
+        compilerContext.emitter.emitOpcode(Opcode.GOTO);
+        int backJumpPos = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.emitU32(loopStart - (backJumpPos + 4));
 
-        ctx.emitter.patchJump(jumpToEnd, ctx.emitter.currentOffset());
-        ctx.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
 
         for (int breakPos : loop.breakPositions) {
-            ctx.emitter.patchJump(breakPos, ctx.emitter.currentOffset());
+            compilerContext.emitter.patchJump(breakPos, compilerContext.emitter.currentOffset());
         }
         for (int continuePos : loop.continuePositions) {
-            ctx.emitter.patchJump(continuePos, loopStart);
+            compilerContext.emitter.patchJump(continuePos, loopStart);
         }
 
-        ctx.emitter.emitOpcode(Opcode.FOR_IN_END);
+        compilerContext.emitter.emitOpcode(Opcode.FOR_IN_END);
 
-        ctx.loopStack.pop();
+        compilerContext.loopStack.pop();
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        ctx.exitScope();
+        compilerContext.exitScope();
     }
 
     private void compileForOfExpressionTargetAssignment(Expression leftExpression) {
         if (leftExpression instanceof Identifier id) {
-            Integer localIndex = ctx.findLocalInScopes(id.name());
+            Integer localIndex = compilerContext.findLocalInScopes(id.name());
             if (localIndex != null) {
-                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
             } else {
-                Integer capturedIndex = ctx.resolveCapturedBindingIndex(id.name());
+                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(id.name());
                 if (capturedIndex != null) {
-                    ctx.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF, capturedIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF, capturedIndex);
                 } else {
-                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
                 }
             }
             return;
@@ -268,22 +268,22 @@ final class StatementLoopCompiler {
                 throw new JSCompilerException("Invalid for-of assignment target");
             }
             delegates.expressions.compileExpression(memberExpression.object());
-            ctx.emitter.emitOpcode(Opcode.SWAP);
-            ctx.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propertyIdentifier.name());
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propertyIdentifier.name());
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
             return;
         }
 
         if (leftExpression instanceof CallExpression) {
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
             delegates.expressions.compileExpression(leftExpression);
-            ctx.emitter.emitOpcode(Opcode.DROP);
-            ctx.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-            ctx.emitter.emitU8(5);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+            compilerContext.emitter.emitU8(5);
             return;
         }
 
-        ctx.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
     }
 
     void compileForOfStatement(ForOfStatement forOfStmt) {
@@ -305,49 +305,49 @@ final class StatementLoopCompiler {
             pattern = varDecl.declarations().get(0).id();
             isVar = varDecl.kind() == VariableKind.VAR;
 
-            if (isVar && !ctx.inGlobalScope) {
+            if (isVar && !compilerContext.inGlobalScope) {
                 delegates.patterns.declarePatternVariables(pattern);
             }
         }
 
-        ctx.enterScope();
+        compilerContext.enterScope();
         delegates.expressions.compileExpression(forOfStmt.right());
 
         if (forOfStmt.isAsync()) {
-            ctx.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
+            compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
         } else {
-            ctx.emitter.emitOpcode(Opcode.FOR_OF_START);
+            compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
         }
 
-        if (!isExpressionBased && (!isVar || ctx.inGlobalScope)) {
+        if (!isExpressionBased && (!isVar || compilerContext.inGlobalScope)) {
             delegates.patterns.declarePatternVariables(pattern);
         }
 
-        boolean savedInGlobalScope = ctx.inGlobalScope;
-        ctx.inGlobalScope = false;
+        boolean savedInGlobalScope = compilerContext.inGlobalScope;
+        compilerContext.inGlobalScope = false;
 
-        int loopStart = ctx.emitter.currentOffset();
-        LoopContext loop = ctx.createLoopContext(loopStart, ctx.scopeDepth - 1, ctx.scopeDepth);
+        int loopStart = compilerContext.emitter.currentOffset();
+        LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth - 1, compilerContext.scopeDepth);
         loop.hasIterator = true;
-        ctx.loopStack.push(loop);
+        compilerContext.loopStack.push(loop);
 
         int jumpToEnd;
 
         if (forOfStmt.isAsync()) {
-            ctx.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_NEXT);
-            ctx.emitter.emitOpcode(Opcode.AWAIT);
-            ctx.emitter.emitOpcode(Opcode.DUP);
-            ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "done");
-            jumpToEnd = ctx.emitter.emitJump(Opcode.IF_TRUE);
-            ctx.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
+            compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_NEXT);
+            compilerContext.emitter.emitOpcode(Opcode.AWAIT);
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "done");
+            jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
             if (isExpressionBased) {
                 compileForOfExpressionTargetAssignment((Expression) forOfStmt.left());
             } else {
                 delegates.patterns.compileForOfValueAssignment(pattern, isVar);
             }
         } else {
-            ctx.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
-            jumpToEnd = ctx.emitter.emitJump(Opcode.IF_TRUE);
+            compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
+            jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
             if (isExpressionBased) {
                 compileForOfExpressionTargetAssignment((Expression) forOfStmt.left());
             } else {
@@ -361,34 +361,34 @@ final class StatementLoopCompiler {
             delegates.emitHelpers.emitCloseLocForPattern(pattern);
         }
 
-        ctx.emitter.emitOpcode(Opcode.GOTO);
-        int backJumpPos = ctx.emitter.currentOffset();
-        ctx.emitter.emitU32(loopStart - (backJumpPos + 4));
+        compilerContext.emitter.emitOpcode(Opcode.GOTO);
+        int backJumpPos = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.emitU32(loopStart - (backJumpPos + 4));
 
-        int loopEnd = ctx.emitter.currentOffset();
-        ctx.emitter.patchJump(jumpToEnd, loopEnd);
+        int loopEnd = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.patchJump(jumpToEnd, loopEnd);
 
         if (forOfStmt.isAsync()) {
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         } else {
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
-        int breakTarget = ctx.emitter.currentOffset();
-        ctx.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
+        int breakTarget = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
 
         for (int breakPos : loop.breakPositions) {
-            ctx.emitter.patchJump(breakPos, breakTarget);
+            compilerContext.emitter.patchJump(breakPos, breakTarget);
         }
         for (int continuePos : loop.continuePositions) {
-            ctx.emitter.patchJump(continuePos, loopStart);
+            compilerContext.emitter.patchJump(continuePos, loopStart);
         }
 
-        ctx.loopStack.pop();
-        ctx.inGlobalScope = savedInGlobalScope;
+        compilerContext.loopStack.pop();
+        compilerContext.inGlobalScope = savedInGlobalScope;
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        ctx.exitScope();
+        compilerContext.exitScope();
     }
 
     void compileForStatement(ForStatement forStmt) {
@@ -398,33 +398,33 @@ final class StatementLoopCompiler {
             initCompiled = true;
         }
 
-        ctx.enterScope();
+        compilerContext.enterScope();
 
         if (!initCompiled && forStmt.init() != null) {
             if (forStmt.init() instanceof VariableDeclaration varDecl) {
-                boolean savedInGlobalScope = ctx.inGlobalScope;
-                if (ctx.inGlobalScope && varDecl.kind() != VariableKind.VAR) {
-                    ctx.inGlobalScope = false;
+                boolean savedInGlobalScope = compilerContext.inGlobalScope;
+                if (compilerContext.inGlobalScope && varDecl.kind() != VariableKind.VAR) {
+                    compilerContext.inGlobalScope = false;
                 }
                 owner.compileVariableDeclaration(varDecl);
-                ctx.inGlobalScope = savedInGlobalScope;
+                compilerContext.inGlobalScope = savedInGlobalScope;
             } else if (forStmt.init() instanceof Expression expr) {
                 delegates.expressions.compileExpression(expr);
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else if (forStmt.init() instanceof ExpressionStatement exprStmt) {
                 delegates.expressions.compileExpression(exprStmt.expression());
-                ctx.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         }
 
-        int loopStart = ctx.emitter.currentOffset();
-        LoopContext loop = ctx.createLoopContext(loopStart, ctx.scopeDepth - 1, ctx.scopeDepth);
-        ctx.loopStack.push(loop);
+        int loopStart = compilerContext.emitter.currentOffset();
+        LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth - 1, compilerContext.scopeDepth);
+        compilerContext.loopStack.push(loop);
 
         int jumpToEnd = -1;
         if (forStmt.test() != null) {
             delegates.expressions.compileExpression(forStmt.test());
-            jumpToEnd = ctx.emitter.emitJump(Opcode.IF_FALSE);
+            jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
         }
 
         owner.compileStatement(forStmt.body());
@@ -434,59 +434,59 @@ final class StatementLoopCompiler {
             delegates.emitHelpers.emitCloseLocForPattern(varDeclForClose);
         }
 
-        int updateStart = ctx.emitter.currentOffset();
+        int updateStart = compilerContext.emitter.currentOffset();
 
         if (forStmt.update() != null) {
             delegates.expressions.compileExpression(forStmt.update());
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
-        ctx.emitter.emitOpcode(Opcode.GOTO);
-        int backJumpPos = ctx.emitter.currentOffset();
-        ctx.emitter.emitU32(loopStart - (backJumpPos + 4));
+        compilerContext.emitter.emitOpcode(Opcode.GOTO);
+        int backJumpPos = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.emitU32(loopStart - (backJumpPos + 4));
 
-        int loopEnd = ctx.emitter.currentOffset();
+        int loopEnd = compilerContext.emitter.currentOffset();
 
         if (jumpToEnd != -1) {
-            ctx.emitter.patchJump(jumpToEnd, loopEnd);
+            compilerContext.emitter.patchJump(jumpToEnd, loopEnd);
         }
 
         for (int breakPos : loop.breakPositions) {
-            ctx.emitter.patchJump(breakPos, loopEnd);
+            compilerContext.emitter.patchJump(breakPos, loopEnd);
         }
         for (int continuePos : loop.continuePositions) {
-            ctx.emitter.patchJump(continuePos, updateStart);
+            compilerContext.emitter.patchJump(continuePos, updateStart);
         }
 
-        ctx.loopStack.pop();
+        compilerContext.loopStack.pop();
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        ctx.exitScope();
+        compilerContext.exitScope();
     }
 
     void compileWhileStatement(WhileStatement whileStmt) {
-        int loopStart = ctx.emitter.currentOffset();
-        LoopContext loop = ctx.createLoopContext(loopStart, ctx.scopeDepth, ctx.scopeDepth);
-        ctx.loopStack.push(loop);
+        int loopStart = compilerContext.emitter.currentOffset();
+        LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth, compilerContext.scopeDepth);
+        compilerContext.loopStack.push(loop);
 
         delegates.expressions.compileExpression(whileStmt.test());
-        int jumpToEnd = ctx.emitter.emitJump(Opcode.IF_FALSE);
+        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
 
         owner.compileStatement(whileStmt.body());
 
-        ctx.emitter.emitOpcode(Opcode.GOTO);
-        int backJumpPos = ctx.emitter.currentOffset();
-        ctx.emitter.emitU32(loopStart - (backJumpPos + 4));
+        compilerContext.emitter.emitOpcode(Opcode.GOTO);
+        int backJumpPos = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.emitU32(loopStart - (backJumpPos + 4));
 
-        int loopEnd = ctx.emitter.currentOffset();
-        ctx.emitter.patchJump(jumpToEnd, loopEnd);
+        int loopEnd = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.patchJump(jumpToEnd, loopEnd);
 
         for (int breakPos : loop.breakPositions) {
-            ctx.emitter.patchJump(breakPos, loopEnd);
+            compilerContext.emitter.patchJump(breakPos, loopEnd);
         }
         for (int continuePos : loop.continuePositions) {
-            ctx.emitter.patchJump(continuePos, loopStart);
+            compilerContext.emitter.patchJump(continuePos, loopStart);
         }
 
-        ctx.loopStack.pop();
+        compilerContext.loopStack.pop();
     }
 }

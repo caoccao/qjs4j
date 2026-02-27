@@ -27,11 +27,11 @@ import java.util.List;
 import java.util.Map;
 
 final class FunctionClassFieldCompiler {
-    private final CompilerContext ctx;
+    private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
 
-    FunctionClassFieldCompiler(CompilerContext ctx, CompilerDelegates delegates) {
-        this.ctx = ctx;
+    FunctionClassFieldCompiler(CompilerContext compilerContext, CompilerDelegates delegates) {
+        this.compilerContext = compilerContext;
         this.delegates = delegates;
     }
 
@@ -43,14 +43,14 @@ final class FunctionClassFieldCompiler {
             throw new JSCompilerException("Computed field key symbol not found");
         }
 
-        ctx.emitter.emitOpcode(Opcode.SWAP);
-        ctx.emitter.emitOpcode(Opcode.DUP);
-        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
+        compilerContext.emitter.emitOpcode(Opcode.SWAP);
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
         delegates.expressions.compileExpression(field.key());
-        ctx.emitter.emitOpcode(Opcode.TO_PROPKEY);
-        ctx.emitter.emitOpcode(Opcode.DEFINE_PROP);
-        ctx.emitter.emitOpcode(Opcode.DROP);
-        ctx.emitter.emitOpcode(Opcode.SWAP);
+        compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
+        compilerContext.emitter.emitOpcode(Opcode.DEFINE_PROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.SWAP);
     }
 
     void compileFieldInitialization(List<ClassDeclaration.PropertyDefinition> fields,
@@ -59,7 +59,7 @@ final class FunctionClassFieldCompiler {
         for (ClassDeclaration.PropertyDefinition field : fields) {
             boolean isPrivate = field.isPrivate();
 
-            ctx.emitter.emitOpcode(Opcode.PUSH_THIS);
+            compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
 
             if (isPrivate) {
                 if (!(field.key() instanceof PrivateIdentifier privateId)) {
@@ -70,17 +70,17 @@ final class FunctionClassFieldCompiler {
                 if (field.value() != null) {
                     delegates.expressions.compileExpression(field.value());
                 } else {
-                    ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 }
 
                 JSSymbol symbol = privateSymbols.get(fieldName);
                 if (symbol != null) {
-                    ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                    ctx.emitter.emitOpcode(Opcode.SWAP);
-                    ctx.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
+                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                    compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
                 } else {
-                    ctx.emitter.emitOpcode(Opcode.DROP);
-                    ctx.emitter.emitOpcode(Opcode.DROP);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
                     continue;
                 }
             } else {
@@ -89,10 +89,10 @@ final class FunctionClassFieldCompiler {
                     if (computedFieldSymbol == null) {
                         throw new JSCompilerException("Computed field key not found");
                     }
-                    ctx.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                    ctx.emitter.emitU8(2);
-                    ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
-                    ctx.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                    compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                    compilerContext.emitter.emitU8(2);
+                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
+                    compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                 } else {
                     delegates.emitHelpers.emitNonComputedPublicFieldKey(field.key());
                 }
@@ -100,13 +100,13 @@ final class FunctionClassFieldCompiler {
                 if (field.value() != null) {
                     delegates.expressions.compileExpression(field.value());
                 } else {
-                    ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 }
 
-                ctx.emitter.emitOpcode(Opcode.DEFINE_PROP);
+                compilerContext.emitter.emitOpcode(Opcode.DEFINE_PROP);
             }
 
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
     }
 }

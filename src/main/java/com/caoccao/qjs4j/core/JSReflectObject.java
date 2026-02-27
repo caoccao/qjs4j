@@ -155,6 +155,13 @@ public final class JSReflectObject {
                 }
             }
 
+            // Check if this is a derived constructor
+            boolean isDerived = function instanceof JSBytecodeFunction bcFunc
+                    && bcFunc.isDerivedConstructor();
+            // For derived constructors, use JSUndefined as initial this
+            // (this must be initialized by super() call)
+            JSValue constructThis = isDerived ? JSUndefined.INSTANCE : thisObject;
+
             JSValue savedNewTarget = context.getConstructorNewTarget();
             JSContext constructorContext = function.getRealmContext() != null ? function.getRealmContext() : context;
             JSValue savedConstructorContextNewTarget = null;
@@ -169,11 +176,11 @@ public final class JSReflectObject {
                 if (function instanceof JSNativeFunction nativeFunc) {
                     savedNativeConstructorContextNewTarget = constructorContext.getNativeConstructorNewTarget();
                     constructorContext.setNativeConstructorNewTarget(newTarget);
-                    result = nativeFunc.call(context, thisObject, args);
+                    result = nativeFunc.call(context, constructThis, args);
                 } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
-                    result = constructorContext.getVirtualMachine().execute(bytecodeFunction, thisObject, args, newTarget);
+                    result = constructorContext.getVirtualMachine().execute(bytecodeFunction, constructThis, args, newTarget);
                 } else {
-                    result = function.call(constructorContext, thisObject, args);
+                    result = function.call(constructorContext, constructThis, args);
                 }
                 if (constructorContext != context && constructorContext.hasPendingException()) {
                     context.setPendingException(constructorContext.getPendingException());
@@ -192,7 +199,26 @@ public final class JSReflectObject {
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            return result instanceof JSObject ? result : thisObject;
+            if (result instanceof JSObject) {
+                return result;
+            }
+            if (isDerived) {
+                if (!(result instanceof JSUndefined)) {
+                    return context.throwTypeError("Derived constructors may only return object or undefined");
+                }
+                // Use lastConstructorThisArg saved by RETURN/RETURN_UNDEF before frame was popped
+                JSValue finalThis = constructorContext.getVirtualMachine().getLastConstructorThisArg();
+                if (finalThis == null || finalThis instanceof JSUndefined) {
+                    return context.throwReferenceError(
+                            "Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
+                }
+                if (finalThis instanceof JSObject) {
+                    return finalThis;
+                }
+                return context.throwReferenceError(
+                        "Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
+            }
+            return thisObject;
         }
 
         // ArrayBuffer/SharedArrayBuffer: ES spec requires OrdinaryCreateFromConstructor

@@ -28,6 +28,7 @@ import java.nio.ByteBuffer;
 public final class JSBigUint64Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 8;
     public static final String NAME = "BigUint64Array";
+
     /**
      * Create a BigUint64Array with a new buffer.
      */

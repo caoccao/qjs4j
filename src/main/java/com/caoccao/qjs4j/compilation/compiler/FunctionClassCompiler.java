@@ -30,14 +30,14 @@ import java.util.*;
  * constructs (methods, fields, static blocks, private members, etc.).
  */
 final class FunctionClassCompiler {
-    private final CompilerContext ctx;
+    private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
     private final FunctionClassFieldCompiler fieldCompiler;
 
-    FunctionClassCompiler(CompilerContext ctx, CompilerDelegates delegates) {
-        this.ctx = ctx;
+    FunctionClassCompiler(CompilerContext compilerContext, CompilerDelegates delegates) {
+        this.compilerContext = compilerContext;
         this.delegates = delegates;
-        fieldCompiler = new FunctionClassFieldCompiler(ctx, delegates);
+        fieldCompiler = new FunctionClassFieldCompiler(compilerContext, delegates);
     }
 
     /**
@@ -91,10 +91,10 @@ final class FunctionClassCompiler {
     void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(ctx.strictMode, ctx.captureResolver);
+        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver);
         CompilerContext functionContext = functionCompiler.context();
         CompilerDelegates funcDelegates = functionCompiler.delegates();
-        functionContext.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
+        functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
         functionContext.enterScope();
@@ -105,14 +105,14 @@ final class FunctionClassCompiler {
         // If the parent is a regular function (not arrow, not global program), it has arguments binding.
         // If the parent is also an arrow, inherit whatever it has.
         // The global program is not a function and doesn't provide 'arguments'.
-        if (ctx.isInArrowFunction) {
-            functionContext.hasEnclosingArgumentsBinding = ctx.hasEnclosingArgumentsBinding;
+        if (compilerContext.isInArrowFunction) {
+            functionContext.hasEnclosingArgumentsBinding = compilerContext.hasEnclosingArgumentsBinding;
         } else {
-            functionContext.hasEnclosingArgumentsBinding = !ctx.isGlobalProgram;
+            functionContext.hasEnclosingArgumentsBinding = !compilerContext.isGlobalProgram;
         }
 
         // Check for "use strict" directive if body is a block statement
-        if (arrowExpr.body() instanceof BlockStatement block && ctx.hasUseStrictDirective(block)) {
+        if (arrowExpr.body() instanceof BlockStatement block && compilerContext.hasUseStrictDirective(block)) {
             functionContext.strictMode = true;
         }
 
@@ -199,7 +199,7 @@ final class FunctionClassCompiler {
         String functionName = "";
 
         // Extract function source code from original source
-        String functionSource = ctx.extractSourceCode(arrowExpr.getLocation());
+        String functionSource = compilerContext.extractSourceCode(arrowExpr.getLocation());
 
         // Create JSBytecodeFunction
         // Arrow functions cannot be constructors
@@ -224,7 +224,7 @@ final class FunctionClassCompiler {
 
         delegates.emitHelpers.emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool
-        ctx.emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
     }
 
     void compileClassDeclaration(ClassDeclaration classDecl) {
@@ -236,7 +236,7 @@ final class FunctionClassCompiler {
         if (classDecl.superClass() != null) {
             delegates.expressions.compileExpression(classDecl.superClass());
         } else {
-            ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
         // Stack: superClass
 
@@ -317,27 +317,29 @@ final class FunctionClassCompiler {
 
         // Set the source code for the constructor to be the entire class definition
         // This matches JavaScript behavior where class.toString() returns the class source
-        if (ctx.sourceCode != null && classDecl.location() != null) {
+        if (compilerContext.sourceCode != null && classDecl.location() != null) {
             int startPos = classDecl.location().offset();
             int endPos = classDecl.location().endOffset();
-            if (startPos >= 0 && endPos <= ctx.sourceCode.length()) {
-                String classSource = ctx.sourceCode.substring(startPos, endPos);
+            if (startPos >= 0 && endPos <= compilerContext.sourceCode.length()) {
+                String classSource = compilerContext.sourceCode.substring(startPos, endPos);
                 constructorFunc.setSourceCode(classSource);
             }
         }
 
-        // Emit constructor in constant pool
-        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, constructorFunc);
+        // Emit constructor: use FCLOSURE when it captures outer variables, PUSH_CONST otherwise
+        Opcode constructorPushOpcode = constructorFunc.getCaptureSourceInfos() != null
+                ? Opcode.FCLOSURE : Opcode.PUSH_CONST;
+        compilerContext.emitter.emitOpcodeConstant(constructorPushOpcode, constructorFunc);
         // Stack: superClass constructor
 
         // Emit DEFINE_CLASS opcode with class name
-        ctx.emitter.emitOpcodeAtom(Opcode.DEFINE_CLASS, className);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_CLASS, className);
         // Stack: proto constructor
 
         // Now compile methods and add them to the prototype
         // After DEFINE_CLASS: Stack is proto constructor (constructor on TOP)
         // For simplicity, swap so proto is on top: constructor proto
-        ctx.emitter.emitOpcode(Opcode.SWAP);
+        compilerContext.emitter.emitOpcode(Opcode.SWAP);
         // Stack: constructor proto
 
         for (ClassDeclaration.MethodDefinition method : methods) {
@@ -347,13 +349,13 @@ final class FunctionClassCompiler {
                 // For static methods, constructor is the target
                 // Current: constructor proto
                 // Need to add method to constructor, so swap to get constructor on top
-                ctx.emitter.emitOpcode(Opcode.SWAP);
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
                 // Stack: proto constructor
 
                 // Compile method. Static methods share the same private name scope.
                 JSBytecodeFunction methodFunc = compileMethodAsFunction(
                         method,
-                        ctx.getMethodName(method),
+                        compilerContext.getMethodName(method),
                         false,
                         List.of(),
                         privateSymbols,
@@ -362,12 +364,12 @@ final class FunctionClassCompiler {
                         false
                 );
 
-                String methodName = ctx.getMethodName(method);
+                String methodName = compilerContext.getMethodName(method);
                 delegates.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
                 // Stack: proto constructor (method added to constructor)
 
                 // Swap back to restore order: constructor proto
-                ctx.emitter.emitOpcode(Opcode.SWAP);
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
                 // Stack: constructor proto
             } else {
                 // For instance methods, proto is the target
@@ -376,7 +378,7 @@ final class FunctionClassCompiler {
                 // Pass private symbols to methods so they can access private fields
                 JSBytecodeFunction methodFunc = compileMethodAsFunction(
                         method,
-                        ctx.getMethodName(method),
+                        compilerContext.getMethodName(method),
                         false,
                         List.of(),
                         privateSymbols,
@@ -385,7 +387,7 @@ final class FunctionClassCompiler {
                         false
                 );
 
-                String methodName = ctx.getMethodName(method);
+                String methodName = compilerContext.getMethodName(method);
                 delegates.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
                 // Stack: constructor proto (method added to proto)
             }
@@ -400,7 +402,7 @@ final class FunctionClassCompiler {
         }
 
         // Swap back to original order: proto constructor
-        ctx.emitter.emitOpcode(Opcode.SWAP);
+        compilerContext.emitter.emitOpcode(Opcode.SWAP);
         // Stack: proto constructor
 
         // Execute static initializers (static fields and static blocks) in source order.
@@ -418,52 +420,54 @@ final class FunctionClassCompiler {
 
             // Stack: proto constructor
             // DUP the constructor to use as 'this'
-            ctx.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
             // Stack: proto constructor constructor
 
-            // Push the static initializer function
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, staticInitializerFunc);
+            // Push the static initializer function: use FCLOSURE if it captures outer variables
+            Opcode staticInitPushOpcode = staticInitializerFunc.getCaptureSourceInfos() != null
+                    ? Opcode.FCLOSURE : Opcode.PUSH_CONST;
+            compilerContext.emitter.emitOpcodeConstant(staticInitPushOpcode, staticInitializerFunc);
             // Stack: proto constructor constructor func
 
             // SWAP so we have: proto constructor func constructor
-            ctx.emitter.emitOpcode(Opcode.SWAP);
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
             // Stack: proto constructor func constructor
 
             // Call the function with 0 arguments, using constructor as 'this'
-            ctx.emitter.emitOpcodeU16(Opcode.CALL, 0);
+            compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 0);
             // Stack: proto constructor returnValue
 
             // Drop the return value
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
             // Stack: proto constructor
         }
 
         // Drop prototype, keep constructor
-        ctx.emitter.emitOpcode(Opcode.NIP);
+        compilerContext.emitter.emitOpcode(Opcode.NIP);
         // Stack: constructor
 
         // Store the class constructor in a variable
         if (classDecl.id() != null) {
             String varName = classDecl.id().name();
-            if (!ctx.inGlobalScope) {
-                ctx.currentScope().declareLocal(varName);
-                Integer localIndex = ctx.currentScope().getLocal(varName);
+            if (!compilerContext.inGlobalScope) {
+                compilerContext.currentScope().declareLocal(varName);
+                Integer localIndex = compilerContext.currentScope().getLocal(varName);
                 if (localIndex != null) {
-                    ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
                 }
-            } else if (ctx.tdzLocals.contains(varName)) {
+            } else if (compilerContext.tdzLocals.contains(varName)) {
                 // TDZ local: class was pre-declared as a local for TDZ enforcement
-                Integer localIndex = ctx.findLocalInScopes(varName);
+                Integer localIndex = compilerContext.findLocalInScopes(varName);
                 if (localIndex != null) {
-                    ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
                     // Also store as global variable so class methods (compiled with separate
                     // BytecodeCompiler contexts) can access this class via GET_VAR
-                    ctx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
-                    ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
                 }
             } else {
-                ctx.nonDeletableGlobalBindings.add(varName);
-                ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                compilerContext.nonDeletableGlobalBindings.add(varName);
+                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
             }
         } else {
             // Anonymous class expression - leave on stack
@@ -481,7 +485,7 @@ final class FunctionClassCompiler {
         if (classExpr.superClass() != null) {
             delegates.expressions.compileExpression(classExpr.superClass());
         } else {
-            ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
         // Stack: superClass
 
@@ -560,36 +564,38 @@ final class FunctionClassCompiler {
 
         // Set the source code for the constructor to be the entire class definition
         // This matches JavaScript behavior where class.toString() returns the class source
-        if (ctx.sourceCode != null && classExpr.location() != null) {
+        if (compilerContext.sourceCode != null && classExpr.location() != null) {
             int startPos = classExpr.location().offset();
             int endPos = classExpr.location().endOffset();
-            if (startPos >= 0 && endPos <= ctx.sourceCode.length()) {
-                String classSource = ctx.sourceCode.substring(startPos, endPos);
+            if (startPos >= 0 && endPos <= compilerContext.sourceCode.length()) {
+                String classSource = compilerContext.sourceCode.substring(startPos, endPos);
                 constructorFunc.setSourceCode(classSource);
             }
         }
 
-        // Emit constructor in constant pool
-        ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, constructorFunc);
+        // Emit constructor: use FCLOSURE when it captures outer variables, PUSH_CONST otherwise
+        Opcode constructorPushOpcode = constructorFunc.getCaptureSourceInfos() != null
+                ? Opcode.FCLOSURE : Opcode.PUSH_CONST;
+        compilerContext.emitter.emitOpcodeConstant(constructorPushOpcode, constructorFunc);
         // Stack: superClass constructor
 
         // Emit DEFINE_CLASS opcode with class name
-        ctx.emitter.emitOpcodeAtom(Opcode.DEFINE_CLASS, className);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_CLASS, className);
         // Stack: proto constructor
 
         // Compile methods
-        ctx.emitter.emitOpcode(Opcode.SWAP);
+        compilerContext.emitter.emitOpcode(Opcode.SWAP);
         // Stack: constructor proto
 
         for (ClassDeclaration.MethodDefinition method : methods) {
             if (method.isStatic()) {
                 // For static methods, constructor is the target object
-                ctx.emitter.emitOpcode(Opcode.SWAP);
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
                 // Stack: proto constructor
 
                 JSBytecodeFunction methodFunc = compileMethodAsFunction(
                         method,
-                        ctx.getMethodName(method),
+                        compilerContext.getMethodName(method),
                         false,
                         List.of(),
                         privateSymbols,
@@ -598,17 +604,17 @@ final class FunctionClassCompiler {
                         false
                 );
 
-                String methodName = ctx.getMethodName(method);
+                String methodName = compilerContext.getMethodName(method);
                 delegates.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
                 // Stack: proto constructor
 
                 // Restore canonical order for next iteration
-                ctx.emitter.emitOpcode(Opcode.SWAP);
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
                 // Stack: constructor proto
             } else {
                 JSBytecodeFunction methodFunc = compileMethodAsFunction(
                         method,
-                        ctx.getMethodName(method),
+                        compilerContext.getMethodName(method),
                         false,
                         List.of(),
                         privateSymbols,
@@ -617,7 +623,7 @@ final class FunctionClassCompiler {
                         false
                 );
 
-                String methodName = ctx.getMethodName(method);
+                String methodName = compilerContext.getMethodName(method);
                 delegates.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
                 // Stack: constructor proto
             }
@@ -631,7 +637,7 @@ final class FunctionClassCompiler {
         }
 
         // Swap back to: proto constructor
-        ctx.emitter.emitOpcode(Opcode.SWAP);
+        compilerContext.emitter.emitOpcode(Opcode.SWAP);
         // Stack: proto constructor
 
         // Execute static initializers (static fields and static blocks) in source order.
@@ -648,28 +654,30 @@ final class FunctionClassCompiler {
 
             // Stack: proto constructor
             // DUP the constructor to use as 'this'
-            ctx.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
             // Stack: proto constructor constructor
 
-            // Push the static initializer function
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, staticInitializerFunc);
+            // Push the static initializer function: use FCLOSURE if it captures outer variables
+            Opcode staticInitPushOpcode = staticInitializerFunc.getCaptureSourceInfos() != null
+                    ? Opcode.FCLOSURE : Opcode.PUSH_CONST;
+            compilerContext.emitter.emitOpcodeConstant(staticInitPushOpcode, staticInitializerFunc);
             // Stack: proto constructor constructor func
 
             // SWAP so we have: proto constructor func constructor
-            ctx.emitter.emitOpcode(Opcode.SWAP);
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
             // Stack: proto constructor func constructor
 
             // Call the function with 0 arguments, using constructor as 'this'
-            ctx.emitter.emitOpcodeU16(Opcode.CALL, 0);
+            compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 0);
             // Stack: proto constructor returnValue
 
             // Drop the return value
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
             // Stack: proto constructor
         }
 
         // Drop prototype, keep constructor on stack
-        ctx.emitter.emitOpcode(Opcode.NIP);
+        compilerContext.emitter.emitOpcode(Opcode.NIP);
         // Stack: constructor
 
         // For class expressions, we leave the constructor on the stack
@@ -705,18 +713,18 @@ final class FunctionClassCompiler {
         // binding in the current scope, even if a parent scope has the same name (e.g.,
         // a parameter). This prevents the function object from overwriting the parent binding.
         String functionName = funcDecl.id().name();
-        if (!ctx.inGlobalScope) {
-            if (ctx.currentScope().getLocal(functionName) == null) {
-                ctx.currentScope().declareLocal(functionName);
+        if (!compilerContext.inGlobalScope) {
+            if (compilerContext.currentScope().getLocal(functionName) == null) {
+                compilerContext.currentScope().declareLocal(functionName);
             }
         }
 
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(ctx.strictMode, ctx.captureResolver);
+        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver);
         CompilerContext functionContext = functionCompiler.context();
         CompilerDelegates funcDelegates = functionCompiler.delegates();
-        functionContext.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
+        functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
         functionContext.enterScope();
@@ -725,7 +733,7 @@ final class FunctionClassCompiler {
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
-        if (ctx.hasUseStrictDirective(funcDecl.body())) {
+        if (compilerContext.hasUseStrictDirective(funcDecl.body())) {
             functionContext.strictMode = true;
         }
 
@@ -816,10 +824,10 @@ final class FunctionClassCompiler {
 
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
-        boolean isStrict = functionContext.strictMode || ctx.hasUseStrictDirective(funcDecl.body());
+        boolean isStrict = functionContext.strictMode || compilerContext.hasUseStrictDirective(funcDecl.body());
 
         // Extract function source code from original source
-        String functionSource = ctx.extractSourceCode(funcDecl.getLocation());
+        String functionSource = compilerContext.extractSourceCode(funcDecl.getLocation());
 
         // Trim trailing whitespace from the extracted source
         // This is needed because the parser's end offset may include whitespace after the closing brace
@@ -885,39 +893,39 @@ final class FunctionClassCompiler {
 
         delegates.emitHelpers.emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool
-        ctx.emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
 
         // Store the function in a variable with its name
         // Per B.3.3.1: the Annex B runtime hook only fires if no enclosing block
         // scope has a lexical binding for the same name (otherwise replacing this
         // function with var F would produce an Early Error).
-        boolean isAnnexB = ctx.annexBFunctionNames.contains(functionName)
-                && !ctx.hasEnclosingBlockScopeLocal(functionName);
-        Integer localIndex = ctx.findLocalInScopes(functionName);
+        boolean isAnnexB = compilerContext.annexBFunctionNames.contains(functionName)
+                && !compilerContext.hasEnclosingBlockScopeLocal(functionName);
+        Integer localIndex = compilerContext.findLocalInScopes(functionName);
         if (localIndex != null) {
             if (isAnnexB) {
                 // Annex B.3.3 runtime hook: store in both block scope and var scope
-                ctx.emitter.emitOpcode(Opcode.DUP);
-                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
                 delegates.emitHelpers.emitAnnexBVarStore(functionName);
             } else {
-                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
             }
         } else {
             // Declare the function as a global variable or in the current scope
-            if (ctx.inGlobalScope) {
-                ctx.nonDeletableGlobalBindings.add(functionName);
-                ctx.emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
+            if (compilerContext.inGlobalScope) {
+                compilerContext.nonDeletableGlobalBindings.add(functionName);
+                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
             } else {
                 // Declare it as a local
-                localIndex = ctx.currentScope().declareLocal(functionName);
+                localIndex = compilerContext.currentScope().declareLocal(functionName);
                 if (isAnnexB) {
                     // Annex B.3.3 runtime hook: store in both block scope and var scope
-                    ctx.emitter.emitOpcode(Opcode.DUP);
-                    ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcode(Opcode.DUP);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
                     delegates.emitHelpers.emitAnnexBVarStore(functionName);
                 } else {
-                    ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
                 }
             }
         }
@@ -934,10 +942,10 @@ final class FunctionClassCompiler {
     private void compileFunctionExpressionInternal(FunctionExpression functionExpression, boolean forceNonConstructor) {
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(ctx.strictMode, ctx.captureResolver);
+        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver);
         CompilerContext functionContext = functionCompiler.context();
         CompilerDelegates funcDelegates = functionCompiler.delegates();
-        functionContext.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
+        functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
         functionContext.enterScope();
@@ -946,7 +954,7 @@ final class FunctionClassCompiler {
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
-        if (ctx.hasUseStrictDirective(functionExpression.body())) {
+        if (compilerContext.hasUseStrictDirective(functionExpression.body())) {
             functionContext.strictMode = true;
         }
 
@@ -1056,10 +1064,10 @@ final class FunctionClassCompiler {
 
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
-        boolean isStrict = functionContext.strictMode || ctx.hasUseStrictDirective(functionExpression.body());
+        boolean isStrict = functionContext.strictMode || compilerContext.hasUseStrictDirective(functionExpression.body());
 
         // Extract function source code from original source
-        String functionSource = ctx.extractSourceCode(functionExpression.getLocation());
+        String functionSource = compilerContext.extractSourceCode(functionExpression.getLocation());
 
         // Create JSBytecodeFunction
         int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter() != null);
@@ -1091,7 +1099,7 @@ final class FunctionClassCompiler {
 
         delegates.emitHelpers.emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool
-        ctx.emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, function);
     }
 
     /**
@@ -1108,10 +1116,11 @@ final class FunctionClassCompiler {
             IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
             Map<String, JSBytecodeFunction> privateInstanceMethodFunctions,
             boolean isConstructor) {
-        BytecodeCompiler methodCompiler = new BytecodeCompiler();
+        // Pass parent captureResolver so class methods can capture outer scope variables (closures)
+        BytecodeCompiler methodCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
         CompilerContext methodCtx = methodCompiler.context();
         CompilerDelegates methodDelegates = methodCompiler.delegates();
-        methodCtx.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
+        methodCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         methodCtx.privateSymbols = privateSymbols;  // Make private symbols available in method
 
         FunctionExpression functionExpression = method.value();
@@ -1180,24 +1189,18 @@ final class FunctionClassCompiler {
         // Build the method bytecode
         Bytecode methodBytecode = methodCtx.emitter.build(localCount);
 
-        // Convert private symbols to closure variable array
-        JSValue[] closureVars = new JSValue[privateSymbols.size()];
-        int idx = 0;
-        for (JSSymbol symbol : privateSymbols.values()) {
-            closureVars[idx++] = symbol;
-        }
-
         // Create JSBytecodeFunction for the method
+        // Private symbols are accessed via PUSH_CONST (bytecode constants), not closureVars
         int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter() != null);
 
         // Extract method source code from original source for Function.prototype.toString
-        String methodSource = ctx.extractSourceCode(functionExpression.getLocation());
+        String methodSource = compilerContext.extractSourceCode(functionExpression.getLocation());
 
         JSBytecodeFunction methodFunc = new JSBytecodeFunction(
                 methodBytecode,
                 methodName,
                 definedArgCount,
-                closureVars,     // closure vars contain private symbols
+                new JSValue[0],  // closureVars empty; private symbols use PUSH_CONST, captures use VarRefs
                 null,            // prototype
                 isConstructor,   // isConstructor - true for class constructors, false for methods
                 functionExpression.isAsync(),
@@ -1207,6 +1210,10 @@ final class FunctionClassCompiler {
                 methodSource     // source code for toString()
         );
         methodFunc.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter()));
+
+        // Set up capture source infos for outer variable closure capture
+        delegates.emitHelpers.emitCapturedValues(methodCompiler, methodFunc);
+
         return methodFunc;
     }
 
@@ -1216,7 +1223,7 @@ final class FunctionClassCompiler {
             IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
         LinkedHashMap<String, JSBytecodeFunction> privateMethodFunctions = new LinkedHashMap<>();
         for (ClassDeclaration.MethodDefinition method : privateMethods) {
-            String methodName = ctx.getMethodName(method);
+            String methodName = compilerContext.getMethodName(method);
             JSBytecodeFunction methodFunc = compileMethodAsFunction(
                     method,
                     methodName,
@@ -1240,12 +1247,12 @@ final class FunctionClassCompiler {
             if (symbol == null) {
                 throw new JSCompilerException("Private method symbol not found: #" + entry.getKey());
             }
-            ctx.emitter.emitOpcode(Opcode.PUSH_THIS);
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.getValue());
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-            ctx.emitter.emitOpcode(Opcode.SWAP);
-            ctx.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
-            ctx.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.getValue());
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
     }
 
@@ -1257,10 +1264,11 @@ final class FunctionClassCompiler {
             ClassDeclaration.StaticBlock staticBlock,
             String className,
             Map<String, JSSymbol> privateSymbols) {
-        BytecodeCompiler blockCompiler = new BytecodeCompiler();
+        // Pass parent captureResolver so static blocks can capture outer scope variables
+        BytecodeCompiler blockCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
         CompilerContext blockCtx = blockCompiler.context();
         CompilerDelegates blockDelegates = blockCompiler.delegates();
-        blockCtx.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
+        blockCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         blockCtx.privateSymbols = privateSymbols;
 
         blockCtx.enterScope();
@@ -1284,7 +1292,7 @@ final class FunctionClassCompiler {
 
         Bytecode blockBytecode = blockCtx.emitter.build(localCount);
 
-        return new JSBytecodeFunction(
+        JSBytecodeFunction blockFunc = new JSBytecodeFunction(
                 blockBytecode,
                 "<static initializer>",  // Static blocks are anonymous
                 0,                        // no parameters
@@ -1297,6 +1305,11 @@ final class FunctionClassCompiler {
                 true,                     // strict mode
                 "static { [initializer] }"
         );
+
+        // Set up capture source infos for outer variable closure capture
+        delegates.emitHelpers.emitCapturedValues(blockCompiler, blockFunc);
+
+        return blockFunc;
     }
 
     /**
@@ -1308,10 +1321,11 @@ final class FunctionClassCompiler {
             IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
             Map<String, JSSymbol> privateSymbols,
             String className) {
-        BytecodeCompiler initializerCompiler = new BytecodeCompiler();
+        // Pass parent captureResolver so static field initializers can capture outer scope variables
+        BytecodeCompiler initializerCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
         CompilerContext initCtx = initializerCompiler.context();
         CompilerDelegates initDelegates = initializerCompiler.delegates();
-        initCtx.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
+        initCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         initCtx.privateSymbols = privateSymbols;
 
         initCtx.enterScope();
@@ -1373,7 +1387,7 @@ final class FunctionClassCompiler {
         initCtx.exitScope();
         Bytecode initializerBytecode = initCtx.emitter.build(localCount);
 
-        return new JSBytecodeFunction(
+        JSBytecodeFunction initFunc = new JSBytecodeFunction(
                 initializerBytecode,
                 "<static field initializer>",
                 0,
@@ -1386,6 +1400,11 @@ final class FunctionClassCompiler {
                 true,
                 "static field initializer for " + className
         );
+
+        // Set up capture source infos for outer variable closure capture
+        delegates.emitHelpers.emitCapturedValues(initializerCompiler, initFunc);
+
+        return initFunc;
     }
 
     /**
@@ -1398,10 +1417,11 @@ final class FunctionClassCompiler {
             Map<String, JSSymbol> privateSymbols,
             IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
             Map<String, JSBytecodeFunction> privateInstanceMethodFunctions) {
-        BytecodeCompiler constructorCompiler = new BytecodeCompiler();
+        // Pass parent captureResolver so default constructors can capture outer scope variables
+        BytecodeCompiler constructorCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
         CompilerContext ctorCtx = constructorCompiler.context();
         CompilerDelegates ctorDelegates = constructorCompiler.delegates();
-        ctorCtx.nonDeletableGlobalBindings.addAll(ctx.nonDeletableGlobalBindings);
+        ctorCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         ctorCtx.privateSymbols = privateSymbols;  // Make private symbols available
 
         ctorCtx.enterScope();
@@ -1432,7 +1452,7 @@ final class FunctionClassCompiler {
 
         Bytecode constructorBytecode = ctorCtx.emitter.build(localCount);
 
-        return new JSBytecodeFunction(
+        JSBytecodeFunction ctorFunc = new JSBytecodeFunction(
                 constructorBytecode,
                 className,
                 0,               // no parameters
@@ -1445,6 +1465,11 @@ final class FunctionClassCompiler {
                 true,            // strict mode
                 "constructor() { [default] }"
         );
+
+        // Set up capture source infos for outer variable closure capture
+        delegates.emitHelpers.emitCapturedValues(constructorCompiler, ctorFunc);
+
+        return ctorFunc;
     }
 
     Map<String, JSSymbol> createPrivateSymbols(List<ClassDeclaration.ClassElement> classElements) {
@@ -1570,14 +1595,14 @@ final class FunctionClassCompiler {
             }
 
             // Stack before: constructor proto
-            ctx.emitter.emitOpcode(Opcode.SWAP); // proto constructor
-            ctx.emitter.emitOpcode(Opcode.DUP);  // proto constructor constructor
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.getValue()); // proto constructor constructor method
-            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // proto constructor constructor method symbol
-            ctx.emitter.emitOpcode(Opcode.SWAP); // proto constructor constructor symbol method
-            ctx.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD); // proto constructor constructor
-            ctx.emitter.emitOpcode(Opcode.DROP); // proto constructor
-            ctx.emitter.emitOpcode(Opcode.SWAP); // constructor proto
+            compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor
+            compilerContext.emitter.emitOpcode(Opcode.DUP);  // proto constructor constructor
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.getValue()); // proto constructor constructor method
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // proto constructor constructor method symbol
+            compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor constructor symbol method
+            compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD); // proto constructor constructor
+            compilerContext.emitter.emitOpcode(Opcode.DROP); // proto constructor
+            compilerContext.emitter.emitOpcode(Opcode.SWAP); // constructor proto
         }
     }
 

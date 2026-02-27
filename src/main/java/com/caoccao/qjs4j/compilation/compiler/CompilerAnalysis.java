@@ -29,11 +29,11 @@ import java.util.Set;
  * and global program binding registration.
  */
 final class CompilerAnalysis {
-    private final CompilerContext ctx;
+    private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
 
-    CompilerAnalysis(CompilerContext ctx, CompilerDelegates delegates) {
-        this.ctx = ctx;
+    CompilerAnalysis(CompilerContext compilerContext, CompilerDelegates delegates) {
+        this.compilerContext = compilerContext;
         this.delegates = delegates;
     }
 
@@ -152,7 +152,7 @@ final class CompilerAnalysis {
      *                       including "arguments" when the function has an implicit arguments binding
      */
     void hoistFunctionBodyAnnexBDeclarations(List<Statement> body, Set<String> parameterNames) {
-        if (ctx.strictMode) {
+        if (compilerContext.strictMode) {
             return; // Annex B does not apply in strict mode
         }
 
@@ -189,17 +189,17 @@ final class CompilerAnalysis {
             if (parameterNames.contains(name)) {
                 continue;
             }
-            ctx.annexBFunctionNames.add(name);
-            Integer existingLocal = ctx.findLocalInScopes(name);
+            compilerContext.annexBFunctionNames.add(name);
+            Integer existingLocal = compilerContext.findLocalInScopes(name);
             if (existingLocal != null) {
                 // Already exists (e.g., explicit var declaration)
-                ctx.annexBFunctionScopeLocals.put(name, existingLocal);
+                compilerContext.annexBFunctionScopeLocals.put(name, existingLocal);
             } else if (!alreadyDeclared.contains(name)) {
                 // Create new local in function scope, initialized to undefined
-                int localIndex = ctx.currentScope().declareLocal(name);
-                ctx.annexBFunctionScopeLocals.put(name, localIndex);
-                ctx.emitter.emitOpcode(Opcode.UNDEFINED);
-                ctx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                int localIndex = compilerContext.currentScope().declareLocal(name);
+                compilerContext.annexBFunctionScopeLocals.put(name, localIndex);
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
             }
         }
     }
@@ -216,8 +216,8 @@ final class CompilerAnalysis {
         for (Statement stmt : body) {
             if (stmt instanceof FunctionDeclaration functionDeclaration && functionDeclaration.id() != null) {
                 String functionName = functionDeclaration.id().name();
-                if (ctx.currentScope().getLocal(functionName) == null) {
-                    ctx.currentScope().declareLocal(functionName);
+                if (compilerContext.currentScope().getLocal(functionName) == null) {
+                    compilerContext.currentScope().declareLocal(functionName);
                 }
             }
         }
@@ -249,8 +249,8 @@ final class CompilerAnalysis {
             }
         }
         for (String varName : varNames) {
-            if (ctx.currentScope().getLocal(varName) == null) {
-                ctx.currentScope().declareLocal(varName);
+            if (compilerContext.currentScope().getLocal(varName) == null) {
+                compilerContext.currentScope().declareLocal(varName);
             }
         }
     }
@@ -259,15 +259,15 @@ final class CompilerAnalysis {
         for (Statement stmt : body) {
             if (stmt instanceof VariableDeclaration varDecl) {
                 for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
-                    collectPatternBindingNames(declarator.id(), ctx.nonDeletableGlobalBindings);
+                    collectPatternBindingNames(declarator.id(), compilerContext.nonDeletableGlobalBindings);
                 }
             } else if (stmt instanceof FunctionDeclaration funcDecl) {
                 if (funcDecl.id() != null) {
-                    ctx.nonDeletableGlobalBindings.add(funcDecl.id().name());
+                    compilerContext.nonDeletableGlobalBindings.add(funcDecl.id().name());
                 }
             } else if (stmt instanceof ClassDeclaration classDecl) {
                 if (classDecl.id() != null) {
-                    ctx.nonDeletableGlobalBindings.add(classDecl.id().name());
+                    compilerContext.nonDeletableGlobalBindings.add(classDecl.id().name());
                 }
             }
         }
@@ -297,7 +297,7 @@ final class CompilerAnalysis {
     }
 
     void scanAnnexBFunctions(List<Statement> programBody, Set<String> declaredFuncVarNames) {
-        if (ctx.strictMode) {
+        if (compilerContext.strictMode) {
             return; // Annex B does not apply in strict mode
         }
         // Collect top-level lexical bindings (let/const) from the program body.
@@ -313,7 +313,7 @@ final class CompilerAnalysis {
             scanAnnexBStatement(stmt, topLevelLexicals, candidates);
         }
         for (String name : candidates) {
-            ctx.annexBFunctionNames.add(name);
+            compilerContext.annexBFunctionNames.add(name);
             if (!declaredFuncVarNames.contains(name)) {
                 // Create initial var binding only if the property doesn't already exist
                 // on the global object (ES2024 CreateGlobalVarBinding semantics).
