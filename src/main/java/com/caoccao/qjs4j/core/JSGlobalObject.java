@@ -688,7 +688,7 @@ public final class JSGlobalObject {
         // the getter returns undefined. For strict, arrow, async, generator functions
         // or setter calls, it throws TypeError.
         JSNativeFunction throwTypeError = new JSNativeFunction(
-                "throwTypeError",
+                "",
                 0,
                 (childContext, thisObj, args) -> {
                     if (thisObj instanceof JSBytecodeFunction bytecodeFunc) {
@@ -699,6 +699,12 @@ public final class JSGlobalObject {
                     return childContext.throwTypeError(
                             "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them");
                 });
+        // Per ES spec 10.2.4: %ThrowTypeError% is frozen with non-configurable length and name.
+        throwTypeError.defineProperty(PropertyKey.LENGTH,
+                PropertyDescriptor.dataDescriptor(JSNumber.of(0), PropertyDescriptor.DataState.None));
+        throwTypeError.defineProperty(PropertyKey.NAME,
+                PropertyDescriptor.dataDescriptor(new JSString(""), PropertyDescriptor.DataState.None));
+        throwTypeError.preventExtensions();
         // Store as the %ThrowTypeError% intrinsic for sharing with strict arguments.callee
         context.setThrowTypeErrorIntrinsic(throwTypeError);
 

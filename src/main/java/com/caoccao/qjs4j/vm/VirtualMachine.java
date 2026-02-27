@@ -507,8 +507,10 @@ public final class VirtualMachine {
             }
             argumentsObject = new JSArguments(context, args, false, function, mappedVarRefs);
         } else {
-            boolean isStrict = function instanceof JSBytecodeFunction bytecodeFunction && bytecodeFunction.isStrict();
-            argumentsObject = new JSArguments(context, args, isStrict, isStrict ? null : function);
+            // Per ES2024 10.4.4.6 CreateUnmappedArgumentsObject: all unmapped arguments objects
+            // have ThrowTypeError accessor for callee, whether the function is strict or has
+            // non-simple parameters. Pass isStrict=true so callee uses the shared intrinsic.
+            argumentsObject = new JSArguments(context, args, true, null);
         }
         context.transferPrototype(argumentsObject, JSObject.NAME);
         frame.setArgumentsObject(mapped, argumentsObject);
