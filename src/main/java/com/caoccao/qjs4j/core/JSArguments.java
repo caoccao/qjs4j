@@ -82,7 +82,7 @@ public final class JSArguments extends JSObject {
             JSFunction callee,
             VarRef[] mappedVarRefs) {
         super();
-        this.argumentValues = args != null ? args : new JSValue[0];
+        this.argumentValues = args != null ? args : JSValue.NO_ARGS;
         this.isStrict = isStrict;
         this.parameterVarRefs = mappedVarRefs;
 
@@ -300,7 +300,7 @@ public final class JSArguments extends JSObject {
         PropertyDescriptor current = getOwnPropertyDescriptor(key);
         JSValue currentValue = JSUndefined.INSTANCE;
         if (current != null && current.getGetter() != null) {
-            currentValue = current.getGetter().call(context, this, new JSValue[0]);
+            currentValue = current.getGetter().call(context, this, JSValue.NO_ARGS);
         }
 
         // Replace the accessor with a data property, preserving enumerable/configurable

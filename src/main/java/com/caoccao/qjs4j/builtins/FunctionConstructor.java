@@ -134,7 +134,7 @@ public final class FunctionConstructor {
             func.initializePrototypeChain(context);
 
             // Execute the compiled code to get the function object
-            JSValue result = context.getVirtualMachine().execute(func, context.getGlobalObject(), new JSValue[0]);
+            JSValue result = context.getVirtualMachine().execute(func, context.getGlobalObject(), JSValue.NO_ARGS);
             if (result instanceof JSObject resultObject) {
                 JSValue constructorNewTarget = context.getNativeConstructorNewTarget();
                 if (constructorNewTarget instanceof JSObject newTargetObject) {

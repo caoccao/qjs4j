@@ -208,7 +208,7 @@ final class FunctionClassCompiler {
                 functionBytecode,
                 functionName,
                 definedArgCount,
-                new JSValue[0],
+                JSValue.NO_ARGS,
                 null,            // prototype - arrow functions don't have prototype
                 false,           // isConstructor - arrow functions cannot be constructors
                 arrowExpr.isAsync(),
@@ -879,7 +879,7 @@ final class FunctionClassCompiler {
                 functionBytecode,
                 functionName,
                 definedArgCount,
-                new JSValue[0],
+                JSValue.NO_ARGS,
                 null,            // prototype - will be set by VM
                 isFuncConstructor,
                 funcDecl.isAsync(),
@@ -1080,7 +1080,7 @@ final class FunctionClassCompiler {
                 functionBytecode,
                 functionName,
                 definedArgCount,
-                new JSValue[0],
+                JSValue.NO_ARGS,
                 null,            // prototype - will be set by VM
                 isFuncConstructor,
                 functionExpression.isAsync(),
@@ -1200,7 +1200,7 @@ final class FunctionClassCompiler {
                 methodBytecode,
                 methodName,
                 definedArgCount,
-                new JSValue[0],  // closureVars empty; private symbols use PUSH_CONST, captures use VarRefs
+                JSValue.NO_ARGS, // closureVars empty; private symbols use PUSH_CONST, captures use VarRefs
                 null,            // prototype
                 isConstructor,   // isConstructor - true for class constructors, false for methods
                 functionExpression.isAsync(),
@@ -1296,7 +1296,7 @@ final class FunctionClassCompiler {
                 blockBytecode,
                 "<static initializer>",  // Static blocks are anonymous
                 0,                        // no parameters
-                new JSValue[0],           // no closure vars
+                JSValue.NO_ARGS,          // no closure vars
                 null,                     // no prototype
                 false,                    // not a constructor
                 false,                    // not async
@@ -1391,7 +1391,7 @@ final class FunctionClassCompiler {
                 initializerBytecode,
                 "<static field initializer>",
                 0,
-                new JSValue[0],
+                JSValue.NO_ARGS,
                 null,
                 false,
                 false,
@@ -1456,7 +1456,7 @@ final class FunctionClassCompiler {
                 constructorBytecode,
                 className,
                 0,               // no parameters
-                new JSValue[0],  // no closure vars
+                JSValue.NO_ARGS, // no closure vars
                 null,            // prototype will be set by VM
                 true,            // isConstructor
                 false,           // not async

@@ -2335,12 +2335,12 @@ public final class ArrayPrototype {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
         if (thisArg.isArray()) {
-            return join(context, thisArg, new JSValue[0]);
+            return join(context, thisArg, JSValue.NO_ARGS);
         }
         if (thisArg instanceof JSObject jsObject) {
             JSValue joinValue = jsObject.get("join");
             if (joinValue instanceof JSFunction joinFn) {
-                return joinFn.call(context, thisArg, new JSValue[0]);
+                return joinFn.call(context, thisArg, JSValue.NO_ARGS);
             }
             return ObjectPrototype.toString(context, jsObject, args);
         }

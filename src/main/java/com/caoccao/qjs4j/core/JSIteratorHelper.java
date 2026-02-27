@@ -35,7 +35,7 @@ public final class JSIteratorHelper {
         }
         JSValue returnMethod = iteratorObj.get(context, PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunc) {
-            returnFunc.call(context, iterator, new JSValue[0]);
+            returnFunc.call(context, iterator, JSValue.NO_ARGS);
         }
     }
 
@@ -133,7 +133,7 @@ public final class JSIteratorHelper {
         }
 
         // Call the iterator method to get the iterator
-        JSValue iterator = iteratorFunc.call(context, iterable, new JSValue[0]);
+        JSValue iterator = iteratorFunc.call(context, iterable, JSValue.NO_ARGS);
         if (context.hasPendingException()) {
             return null;
         }
@@ -214,7 +214,7 @@ public final class JSIteratorHelper {
         }
 
         // Call(method, items) to get the iterator
-        JSValue iterator = iteratorFunc.call(context, items, new JSValue[0]);
+        JSValue iterator = iteratorFunc.call(context, items, JSValue.NO_ARGS);
         if (context.hasPendingException()) {
             return null;
         }
@@ -237,7 +237,7 @@ public final class JSIteratorHelper {
         JSArray result = context.createJSArray();
         while (true) {
             // IteratorStep: Call iterator.next()
-            JSValue nextResult = nextFunc.call(context, iterator, new JSValue[0]);
+            JSValue nextResult = nextFunc.call(context, iterator, JSValue.NO_ARGS);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -296,7 +296,7 @@ public final class JSIteratorHelper {
             return null;
         }
 
-        JSValue result = nextFunc.call(context, iterator, new JSValue[0]);
+        JSValue result = nextFunc.call(context, iterator, JSValue.NO_ARGS);
 
         // Result should be an object with value and done properties
         if (result instanceof JSObject resultObj) {

@@ -22,7 +22,6 @@ import com.caoccao.qjs4j.core.*;
  * Represents a call frame (activation record) on the call stack.
  */
 public final class StackFrame {
-    private static final JSValue[] EMPTY_VALUES = new JSValue[0];
     private static final VarRef[] EMPTY_VARREFS = new VarRef[0];
 
     private final JSValue[] arguments;  // Original arguments passed to function
@@ -80,16 +79,16 @@ public final class StackFrame {
             VarRef[] funcVarRefs = bytecodeFunc.getVarRefs();
             if (funcVarRefs != null) {
                 this.varRefs = funcVarRefs;
-                this.closureVars = EMPTY_VALUES;
+                this.closureVars = JSValue.NO_ARGS;
             } else if (bytecodeFunc.getClosureVars() != null) {
                 this.closureVars = bytecodeFunc.getClosureVars();
                 this.varRefs = EMPTY_VARREFS;
             } else {
-                this.closureVars = EMPTY_VALUES;
+                this.closureVars = JSValue.NO_ARGS;
                 this.varRefs = EMPTY_VARREFS;
             }
         } else {
-            this.closureVars = EMPTY_VALUES;
+            this.closureVars = JSValue.NO_ARGS;
             this.varRefs = EMPTY_VARREFS;
         }
         this.programCounter = 0;

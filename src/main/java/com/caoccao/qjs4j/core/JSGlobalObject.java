@@ -1038,7 +1038,7 @@ public final class JSGlobalObject {
             if (!(returnMethod instanceof JSFunction returnFunction)) {
                 return childContext.throwTypeError("not a function");
             }
-            return returnFunction.call(childContext, thisObject, new JSValue[0]);
+            return returnFunction.call(childContext, thisObject, JSValue.NO_ARGS);
         }), PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSNativeFunction iteratorConstructor = new JSNativeFunction(JSIterator.NAME, 0, IteratorConstructor::call, true, true);

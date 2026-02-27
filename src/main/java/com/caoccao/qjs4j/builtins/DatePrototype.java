@@ -286,7 +286,7 @@ public final class DatePrototype {
                 return context.getPendingException();
             }
             if (method instanceof JSFunction function) {
-                JSValue result = function.call(context, object, new JSValue[0]);
+                JSValue result = function.call(context, object, JSValue.NO_ARGS);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -485,7 +485,7 @@ public final class DatePrototype {
             if (!Double.isFinite(date.getTimeValue())) {
                 return JSNull.INSTANCE;
             }
-            return toISOString(context, date, new JSValue[0]);
+            return toISOString(context, date, JSValue.NO_ARGS);
         }
 
         // Step 1: Let O be ? ToObject(this value).
@@ -513,7 +513,7 @@ public final class DatePrototype {
         if (!(method instanceof JSFunction function)) {
             return context.throwTypeError("object needs toISOString method");
         }
-        return function.call(context, obj, new JSValue[0]);
+        return function.call(context, obj, JSValue.NO_ARGS);
     }
 
     public static JSValue toLocaleDateString(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -1358,7 +1358,7 @@ public final class TypedArrayPrototype {
                     return context.getPendingException();
                 }
                 if (toLocaleStringFn instanceof JSFunction fn) {
-                    JSValue result = fn.call(context, element, new JSValue[0]);
+                    JSValue result = fn.call(context, element, JSValue.NO_ARGS);
                     if (context.hasPendingException()) {
                         return context.getPendingException();
                     }
@@ -1487,7 +1487,7 @@ public final class TypedArrayPrototype {
                 return context.getPendingException();
             }
             if (joinFn instanceof JSFunction fn) {
-                JSValue result = fn.call(context, thisArg, new JSValue[0]);
+                JSValue result = fn.call(context, thisArg, JSValue.NO_ARGS);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }

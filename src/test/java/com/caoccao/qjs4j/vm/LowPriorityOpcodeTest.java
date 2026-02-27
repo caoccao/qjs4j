@@ -63,7 +63,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         locEmitter.emitOpcodeU16(Opcode.GET_LOC, 0);
         locEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue locResult = execute(locEmitter, 1, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue locResult = execute(locEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(locResult).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) locResult).value()).isEqualTo(6);
 
@@ -76,7 +76,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         stringAddLocEmitter.emitOpcodeU16(Opcode.GET_LOC, 0);
         stringAddLocEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue stringAddLocResult = execute(stringAddLocEmitter, 1, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue stringAddLocResult = execute(stringAddLocEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(stringAddLocResult).isInstanceOf(JSString.class);
         assertThat(((JSString) stringAddLocResult).value()).isEqualTo("ab");
 
@@ -89,7 +89,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         getArrayEl3Emitter.emitOpcode(Opcode.NIP);
         getArrayEl3Emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue getArrayEl3Result = execute(getArrayEl3Emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue getArrayEl3Result = execute(getArrayEl3Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(getArrayEl3Result).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) getArrayEl3Result).value()).isEqualTo(5);
 
@@ -99,7 +99,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         getArrayEl3ErrorEmitter.emitOpcode(Opcode.GET_ARRAY_EL3);
         getArrayEl3ErrorEmitter.emitOpcode(Opcode.RETURN);
 
-        assertThatThrownBy(() -> execute(getArrayEl3ErrorEmitter, 0, new JSValue[0], JSUndefined.INSTANCE))
+        assertThatThrownBy(() -> execute(getArrayEl3ErrorEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("value has no property");
     }
@@ -154,7 +154,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         argEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue argResult = execute(
-                argEmitter, 4, new JSValue[0], JSUndefined.INSTANCE,
+                argEmitter, 4, JSValue.NO_ARGS, JSUndefined.INSTANCE,
                 new JSNumber(1), new JSNumber(2), new JSNumber(3), new JSNumber(4));
         assertThat(argResult).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) argResult).value()).isEqualTo(389);
@@ -266,7 +266,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.ADD);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue result = execute(emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue result = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(result).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) result).value()).isEqualTo(25);
     }
@@ -298,7 +298,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.ADD);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue result = execute(emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue result = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(result).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) result).value()).isEqualTo(7);
     }
@@ -347,7 +347,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.ADD);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue result = execute(emitter, 4, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue result = execute(emitter, 4, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(result).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) result).value()).isEqualTo(340);
     }
@@ -366,7 +366,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         shortPushEmitter.emitOpcode(Opcode.ADD);
         shortPushEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue shortPushResult = execute(shortPushEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue shortPushResult = execute(shortPushEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(shortPushResult).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) shortPushResult).value()).isEqualTo(-999);
 
@@ -377,7 +377,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         const8Emitter.emitU8(0);
         const8Emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue const8Result = execute(const8Emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue const8Result = execute(const8Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(const8Result).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) const8Result).value()).isEqualTo(42);
 
@@ -393,7 +393,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         closure8Emitter.emitOpcode(Opcode.CALL0);
         closure8Emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue closure8Result = execute(closure8Emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue closure8Result = execute(closure8Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(closure8Result).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) closure8Result).value()).isEqualTo(77);
     }

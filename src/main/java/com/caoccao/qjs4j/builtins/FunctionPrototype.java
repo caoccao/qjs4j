@@ -131,7 +131,7 @@ public final class FunctionPrototype {
 
     private static JSValue[] buildArgumentList(JSContext context, JSValue arrayArg) {
         if (arrayArg == null || arrayArg instanceof JSUndefined || arrayArg instanceof JSNull) {
-            return new JSValue[0];
+            return JSValue.NO_ARGS;
         }
         if (!(arrayArg instanceof JSObject arrayLike)) {
             context.throwTypeError("CreateListFromArrayLike called on non-object");

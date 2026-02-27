@@ -374,7 +374,7 @@ public final class JSConsole {
             return formatRegExp(regexp);
         }
         if (object instanceof JSDate) {
-            JSValue isoValue = DatePrototype.toISOString(context, object, new JSValue[0]);
+            JSValue isoValue = DatePrototype.toISOString(context, object, JSValue.NO_ARGS);
             if (!context.hasPendingException() && isoValue instanceof JSString jsString) {
                 return jsString.value();
             }

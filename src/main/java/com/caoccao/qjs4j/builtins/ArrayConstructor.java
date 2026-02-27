@@ -110,7 +110,7 @@ public final class ArrayConstructor {
             // Step 6.a: If IsConstructor(C), let A be Construct(C, « »), else let A be ArrayCreate(0).
             JSObject A;
             if (JSTypeChecking.isConstructor(C)) {
-                JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[0]);
+                JSValue constructed = JSReflectObject.constructSimple(context, C, JSValue.NO_ARGS);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -292,7 +292,7 @@ public final class ArrayConstructor {
 
             // Async iterable path
             if (usingAsyncIterator instanceof JSFunction asyncIterFunc) {
-                JSValue iterResult = asyncIterFunc.call(context, arrayLike, new JSValue[0]);
+                JSValue iterResult = asyncIterFunc.call(context, arrayLike, JSValue.NO_ARGS);
                 JSAsyncIterator asyncIterator = null;
                 if (iterResult instanceof JSAsyncIterator ai) {
                     asyncIterator = ai;
@@ -308,7 +308,7 @@ public final class ArrayConstructor {
 
             // Sync iterable path (wrap as async)
             if (usingSyncIterator instanceof JSFunction syncIterFunc) {
-                JSValue iterResult = syncIterFunc.call(context, arrayLike, new JSValue[0]);
+                JSValue iterResult = syncIterFunc.call(context, arrayLike, JSValue.NO_ARGS);
                 JSAsyncIterator asyncIterator = null;
                 if (iterResult instanceof JSIterator syncIter) {
                     asyncIterator = JSAsyncIterator.fromIterator(syncIter, context);
@@ -508,7 +508,7 @@ public final class ArrayConstructor {
         // Per ES spec: If IsConstructor(C), let A be Construct(C), else ArrayCreate(0)
         JSObject A;
         if (JSTypeChecking.isConstructor(C)) {
-            JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[0]);
+            JSValue constructed = JSReflectObject.constructSimple(context, C, JSValue.NO_ARGS);
             if (context.hasPendingException()) {
                 JSValue pendingException = context.getPendingException();
                 context.clearAllPendingExceptions();

@@ -1429,7 +1429,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(valuesFn).isSameAs(iteratorFn);
 
         // Test that calling Symbol.iterator works
-        JSValue iteratorResult = ((JSFunction) iteratorFn).call(context, arr, new JSValue[0]);
+        JSValue iteratorResult = ((JSFunction) iteratorFn).call(context, arr, JSValue.NO_ARGS);
         assertThat(iteratorResult.isIterator()).isTrue();
 
         // Test iteration

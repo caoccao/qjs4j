@@ -711,7 +711,7 @@ public final class JSTypeConversions {
                     return JSUndefined.INSTANCE;
                 }
                 if (method instanceof JSFunction func) {
-                    JSValue result = func.call(context, obj, new JSValue[0]);
+                    JSValue result = func.call(context, obj, JSValue.NO_ARGS);
                     if (context.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }

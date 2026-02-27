@@ -55,7 +55,7 @@ public final class BytecodeEmitter {
      */
     public Bytecode build(int localCount, String[] localVarNames) {
         byte[] instructions = code.toByteArray();
-        JSValue[] constants = constantPool.toArray(new JSValue[0]);
+        JSValue[] constants = constantPool.toArray(JSValue.NO_ARGS);
         String[] atoms = atomPool.toArray(new String[0]);
 
         return new Bytecode(instructions, constants, atoms, localCount, localVarNames);

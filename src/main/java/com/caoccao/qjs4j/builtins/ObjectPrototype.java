@@ -552,7 +552,7 @@ public final class ObjectPrototype {
                     if (getter == null) {
                         return JSUndefined.INSTANCE;
                     }
-                    return getter.call(context, receiver, new JSValue[0]);
+                    return getter.call(context, receiver, JSValue.NO_ARGS);
                 }
                 JSValue value = descriptor.getValue();
                 return value != null ? value : JSUndefined.INSTANCE;

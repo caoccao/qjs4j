@@ -30,7 +30,6 @@ import java.util.List;
 public final class IteratorPrototype {
     private static final PropertyKey[] ITERATOR_RESULT_KEYS = {PropertyKey.VALUE, PropertyKey.DONE};
     private static final List<PropertyKey> ITERATOR_RESULT_KEY_LIST = List.of(PropertyKey.VALUE, PropertyKey.DONE);
-    private static final JSValue[] NO_ARGS = new JSValue[0];
 
     private IteratorPrototype() {
     }
@@ -165,7 +164,7 @@ public final class IteratorPrototype {
         if (!(returnMethod instanceof JSFunction returnFunction)) {
             return context.throwTypeError("not a function");
         }
-        JSValue result = callSafe(context, returnFunction, iteratorObject, NO_ARGS);
+        JSValue result = callSafe(context, returnFunction, iteratorObject, JSValue.NO_ARGS);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -264,7 +263,7 @@ public final class IteratorPrototype {
                 while (sourceIndex[0] < sources.size()) {
                     if (currentIterator[0] == null) {
                         ConcatSource source = sources.get(sourceIndex[0]);
-                        JSValue iteratorValue = source.iteratorMethod().call(childContext, source.sourceObject(), NO_ARGS);
+                        JSValue iteratorValue = source.iteratorMethod().call(childContext, source.sourceObject(), JSValue.NO_ARGS);
                         if (childContext.hasPendingException()) {
                             done[0] = true;
                             return childContext.getPendingException();
@@ -324,7 +323,7 @@ public final class IteratorPrototype {
                 if (!(returnMethod instanceof JSFunction returnFunctionValue)) {
                     return childContext.throwTypeError("not a function");
                 }
-                JSValue result = returnFunctionValue.call(childContext, iter, NO_ARGS);
+                JSValue result = returnFunctionValue.call(childContext, iter, JSValue.NO_ARGS);
                 if (childContext.hasPendingException()) {
                     return childContext.getPendingException();
                 }
@@ -369,7 +368,7 @@ public final class IteratorPrototype {
             if (!(returnMethod instanceof JSFunction returnFunctionValue)) {
                 return childContext.throwTypeError("not a function");
             }
-            JSValue result = returnFunctionValue.call(childContext, iteratorObject, NO_ARGS);
+            JSValue result = returnFunctionValue.call(childContext, iteratorObject, JSValue.NO_ARGS);
             if (childContext.hasPendingException()) {
                 return childContext.getPendingException();
             }
@@ -437,7 +436,7 @@ public final class IteratorPrototype {
             if (!(returnMethod instanceof JSFunction returnFunc)) {
                 return childContext.throwTypeError("not a function");
             }
-            return returnFunc.call(childContext, wrappedIterator, NO_ARGS);
+            return returnFunc.call(childContext, wrappedIterator, JSValue.NO_ARGS);
         });
 
         return createIteratorObject(context, nextFunction, returnFunction, "Iterator Wrap");
@@ -926,7 +925,7 @@ public final class IteratorPrototype {
                             closeIteratorIgnoringResult(childContext, iteratorObject);
                             return childContext.throwTypeError("not a function");
                         }
-                        JSValue mappedIteratorValue = iteratorFunction.call(childContext, mappedObject, NO_ARGS);
+                        JSValue mappedIteratorValue = iteratorFunction.call(childContext, mappedObject, JSValue.NO_ARGS);
                         if (childContext.hasPendingException()) {
                             done[0] = true;
                             closeIteratorIgnoringResult(childContext, iteratorObject);
@@ -976,7 +975,7 @@ public final class IteratorPrototype {
             if (!(returnMethod instanceof JSFunction returnFunctionValue)) {
                 return childContext.throwTypeError("not a function");
             }
-            JSValue result = callSafe(childContext, returnFunctionValue, iteratorObject, NO_ARGS);
+            JSValue result = callSafe(childContext, returnFunctionValue, iteratorObject, JSValue.NO_ARGS);
             if (childContext.hasPendingException()) {
                 return childContext.getPendingException();
             }
@@ -1059,7 +1058,7 @@ public final class IteratorPrototype {
             if (!(iteratorMethod instanceof JSFunction iteratorFunction)) {
                 return context.throwTypeError("not a function");
             }
-            JSValue iterValue = iteratorFunction.call(context, callThis, NO_ARGS);
+            JSValue iterValue = iteratorFunction.call(context, callThis, JSValue.NO_ARGS);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1136,7 +1135,7 @@ public final class IteratorPrototype {
                 context.throwTypeError("Symbol.iterator is not a function");
                 return null;
             }
-            JSValue iterValue = callSafe(context, iterFunc, objObject, NO_ARGS);
+            JSValue iterValue = callSafe(context, iterFunc, objObject, JSValue.NO_ARGS);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -1280,7 +1279,7 @@ public final class IteratorPrototype {
                 }
                 continue;
             }
-            JSValue innerResult = callSafe(context, returnFunc, iterator, NO_ARGS);
+            JSValue innerResult = callSafe(context, returnFunc, iterator, JSValue.NO_ARGS);
             if (context.hasPendingException()) {
                 if (!isThrow) {
                     pendingError = context.getPendingException();
@@ -1316,7 +1315,7 @@ public final class IteratorPrototype {
             context.throwTypeError("not a function");
             return null;
         }
-        JSValue resultValue = callSafe(context, function, iteratorObject, NO_ARGS);
+        JSValue resultValue = callSafe(context, function, iteratorObject, JSValue.NO_ARGS);
         if (context.hasPendingException()) {
             return null;
         }
@@ -1791,7 +1790,7 @@ public final class IteratorPrototype {
         if (!(iteratorMethod instanceof JSFunction iteratorFunction)) {
             return context.throwTypeError("iterables is not iterable");
         }
-        JSValue inputIterValue = callSafe(context, iteratorFunction, iterablesObject, NO_ARGS);
+        JSValue inputIterValue = callSafe(context, iteratorFunction, iterablesObject, JSValue.NO_ARGS);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1854,7 +1853,7 @@ public final class IteratorPrototype {
                     iteratorCloseAll(iters, error, context);
                     return context.getPendingException();
                 }
-                JSValue padIterValue = callSafe(context, padIterFunc, paddingObject, NO_ARGS);
+                JSValue padIterValue = callSafe(context, padIterFunc, paddingObject, JSValue.NO_ARGS);
                 if (context.hasPendingException()) {
                     iteratorCloseAll(iters, context.getPendingException(), context);
                     return context.getPendingException();

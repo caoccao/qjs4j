@@ -77,7 +77,7 @@ public final class SuperHelper {
 
             // If method is a function, bind it to the current instance
             if (method instanceof JSFunction func) {
-                return new JSBoundFunction(func, instance, new JSValue[0]);
+                return new JSBoundFunction(func, instance, JSValue.NO_ARGS);
             }
 
             return method;

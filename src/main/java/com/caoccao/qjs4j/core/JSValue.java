@@ -27,6 +27,8 @@ public sealed interface JSValue extends JSStackValue permits
         JSUndefined, JSNull, JSBoolean, JSNumber, JSString,
         JSObject, JSSymbol, JSBigInt {
 
+    JSValue[] NO_ARGS = new JSValue[0];
+
     /**
      * Attempt to cast this value to JSArray.
      *

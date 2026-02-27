@@ -28,7 +28,6 @@ import java.util.List;
  */
 public final class JSAsyncDisposableStack extends JSObject {
     public static final String NAME = "AsyncDisposableStack";
-    private static final JSValue[] NO_ARGS = new JSValue[0];
     private static final String SUPPRESSED_ERROR_MESSAGE = "An error was suppressed during disposal.";
     private final List<DisposeRecord> disposeRecords;
     private boolean disposed;
@@ -74,7 +73,7 @@ public final class JSAsyncDisposableStack extends JSObject {
         if (!(onDisposeAsync instanceof JSFunction disposeCallback)) {
             return context.throwTypeError("AsyncDisposableStack.defer requires a function");
         }
-        disposeRecords.add(new DisposeRecord(disposeCallback, JSUndefined.INSTANCE, NO_ARGS));
+        disposeRecords.add(new DisposeRecord(disposeCallback, JSUndefined.INSTANCE, JSValue.NO_ARGS));
         return JSUndefined.INSTANCE;
     }
 
@@ -197,7 +196,7 @@ public final class JSAsyncDisposableStack extends JSObject {
             disposeMethod = syncDisposeMethod;
         }
 
-        disposeRecords.add(new DisposeRecord(disposeMethod, objectValue, NO_ARGS));
+        disposeRecords.add(new DisposeRecord(disposeMethod, objectValue, JSValue.NO_ARGS));
         return value;
     }
 

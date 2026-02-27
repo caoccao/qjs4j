@@ -914,7 +914,7 @@ public final class JSContext implements AutoCloseable {
                     evalThisArg = callerFrame.getThisArg();
                 }
             }
-            JSValue result = virtualMachine.execute(func, evalThisArg, new JSValue[0]);
+            JSValue result = virtualMachine.execute(func, evalThisArg, JSValue.NO_ARGS);
 
             // Check if there's a pending exception
             if (hasPendingException()) {

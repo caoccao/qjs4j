@@ -73,7 +73,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Get first value
-        JSValue result1 = AsyncGeneratorPrototype.next(context, generator, new JSValue[0]);
+        JSValue result1 = AsyncGeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         JSPromise promise1 = (JSPromise) result1;
         assertThat(awaitPromise(promise1)).isTrue();
 
@@ -82,7 +82,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         assertThat(resultObj1.get("done")).isEqualTo(JSBoolean.FALSE);
 
         // Get second value (should be done)
-        JSValue result2 = AsyncGeneratorPrototype.next(context, generator, new JSValue[0]);
+        JSValue result2 = AsyncGeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         JSPromise promise2 = (JSPromise) result2;
         assertThat(awaitPromise(promise2)).isTrue();
 
@@ -98,7 +98,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Test next() method
-        JSValue result = AsyncGeneratorPrototype.next(context, generator, new JSValue[0]);
+        JSValue result = AsyncGeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         JSPromise promise = result.asPromise().orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
 
@@ -113,7 +113,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testNextOnNonAsyncGenerator() {
         // Test next() called on non-async generator
-        JSValue result = AsyncGeneratorPrototype.next(context, new JSString("not a generator"), new JSValue[0]);
+        JSValue result = AsyncGeneratorPrototype.next(context, new JSString("not a generator"), JSValue.NO_ARGS);
         JSPromise promise = result.asPromise().orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);

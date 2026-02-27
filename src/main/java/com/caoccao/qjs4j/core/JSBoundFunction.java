@@ -38,7 +38,7 @@ public final class JSBoundFunction extends JSFunction {
         super(); // Initialize as JSObject
         this.target = target;
         this.boundThis = boundThis;
-        this.boundArgs = boundArgs != null ? boundArgs.clone() : new JSValue[0];
+        this.boundArgs = boundArgs != null ? boundArgs.clone() : JSValue.NO_ARGS;
         this.computedLength = computedLength;
         this.computedName = computedName != null ? computedName : "bound ";
 

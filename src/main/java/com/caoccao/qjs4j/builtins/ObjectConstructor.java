@@ -1071,7 +1071,7 @@ public final class ObjectConstructor {
                 }
             }
         }
-        return context.createJSArray(keyList.toArray(new JSValue[0]), true);
+        return context.createJSArray(keyList.toArray(JSValue.NO_ARGS), true);
     }
 
     /**
@@ -1381,6 +1381,6 @@ public final class ObjectConstructor {
                 }
             }
         }
-        return context.createJSArray(values.toArray(new JSValue[0]), true);
+        return context.createJSArray(values.toArray(JSValue.NO_ARGS), true);
     }
 }

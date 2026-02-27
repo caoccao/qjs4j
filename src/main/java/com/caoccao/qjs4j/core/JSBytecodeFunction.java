@@ -68,7 +68,7 @@ public final class JSBytecodeFunction extends JSFunction {
      * @param length   Number of formal parameters
      */
     public JSBytecodeFunction(Bytecode bytecode, String name, int length) {
-        this(bytecode, name, length, new JSValue[0], null, true, false, false, false, false, null, -1);
+        this(bytecode, name, length, JSValue.NO_ARGS, null, true, false, false, false, false, null, -1);
     }
 
     /**
@@ -80,7 +80,7 @@ public final class JSBytecodeFunction extends JSFunction {
      * @param strict   Whether the function is in strict mode
      */
     public JSBytecodeFunction(Bytecode bytecode, String name, int length, boolean strict) {
-        this(bytecode, name, length, new JSValue[0], null, true, false, false, false, strict, null, -1);
+        this(bytecode, name, length, JSValue.NO_ARGS, null, true, false, false, false, strict, null, -1);
     }
 
     /**
@@ -93,7 +93,7 @@ public final class JSBytecodeFunction extends JSFunction {
      * @param sourceCode The original source code of the function (for toString())
      */
     public JSBytecodeFunction(Bytecode bytecode, String name, int length, boolean strict, String sourceCode) {
-        this(bytecode, name, length, new JSValue[0], null, true, false, false, false, strict, sourceCode, -1);
+        this(bytecode, name, length, JSValue.NO_ARGS, null, true, false, false, false, strict, sourceCode, -1);
     }
 
     /**
@@ -134,7 +134,7 @@ public final class JSBytecodeFunction extends JSFunction {
         this.bytecode = bytecode;
         this.name = name != null ? name : "";
         this.length = length;
-        this.closureVars = closureVars != null ? closureVars : new JSValue[0];
+        this.closureVars = closureVars != null ? closureVars : JSValue.NO_ARGS;
         this.prototype = prototype;
         this.isConstructor = isConstructor;
         this.isAsync = isAsync;
@@ -303,7 +303,7 @@ public final class JSBytecodeFunction extends JSFunction {
                     context.clearAllPendingExceptions();
                     return JSAsyncIterator.createRejectedPromise(context, typeError);
                 }
-                JSValue closeResult = returnFunction.call(context, delegateIterator, new JSValue[0]);
+                JSValue closeResult = returnFunction.call(context, delegateIterator, JSValue.NO_ARGS);
                 if (context.hasPendingException()) {
                     JSValue exception = context.getPendingException();
                     context.clearAllPendingExceptions();
@@ -375,7 +375,7 @@ public final class JSBytecodeFunction extends JSFunction {
                             if (childContext.hasPendingException()) {
                                 childContext.clearAllPendingExceptions();
                             } else if (returnMethodValue instanceof JSFunction returnFunction) {
-                                JSValue closeResult = returnFunction.call(childContext, delegateIterator, new JSValue[0]);
+                                JSValue closeResult = returnFunction.call(childContext, delegateIterator, JSValue.NO_ARGS);
                                 if (childContext.hasPendingException()) {
                                     childContext.clearAllPendingExceptions();
                                 } else if (!(closeResult instanceof JSObject)) {
@@ -472,7 +472,7 @@ public final class JSBytecodeFunction extends JSFunction {
                                 if (context.hasPendingException()) {
                                     context.clearAllPendingExceptions();
                                 } else if (returnMethodValue instanceof JSFunction returnFunction) {
-                                    JSValue closeResult = returnFunction.call(context, delegateIterator, new JSValue[0]);
+                                    JSValue closeResult = returnFunction.call(context, delegateIterator, JSValue.NO_ARGS);
                                     if (context.hasPendingException()) {
                                         context.clearAllPendingExceptions();
                                     } else if (!(closeResult instanceof JSObject)) {
@@ -982,7 +982,7 @@ public final class JSBytecodeFunction extends JSFunction {
                 bytecode,
                 name,
                 length,
-                new JSValue[0],
+                JSValue.NO_ARGS,
                 prototype,
                 isConstructor,
                 isAsync,

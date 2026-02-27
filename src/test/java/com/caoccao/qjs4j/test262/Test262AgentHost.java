@@ -177,7 +177,7 @@ final class Test262AgentHost implements AutoCloseable {
                         // because eval() may still be running on the main thread.
                         // The main event loop will process the microtask.
                         ctx.enqueueMicrotask(() -> {
-                            callback.call(ctx, JSUndefined.INSTANCE, new JSValue[0]);
+                            callback.call(ctx, JSUndefined.INSTANCE, JSValue.NO_ARGS);
                             if (ctx.hasPendingException()) {
                                 ctx.clearAllPendingExceptions();
                             }

@@ -53,7 +53,7 @@ public final class PromisePrototype {
         JSNativeFunction onFulfilledWrapper = PromiseConstructor.createBuiltinFunction(context, "", 1,
                 (childContext, thisValue, funcArgs) -> {
                     JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                    JSValue onFinallyResult = onFinally.call(childContext, JSUndefined.INSTANCE, new JSValue[0]);
+                    JSValue onFinallyResult = onFinally.call(childContext, JSUndefined.INSTANCE, JSValue.NO_ARGS);
                     if (childContext.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }
@@ -69,7 +69,7 @@ public final class PromisePrototype {
         JSNativeFunction onRejectedWrapper = PromiseConstructor.createBuiltinFunction(context, "", 1,
                 (childContext, thisValue, funcArgs) -> {
                     JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                    JSValue onFinallyResult = onFinally.call(childContext, JSUndefined.INSTANCE, new JSValue[0]);
+                    JSValue onFinallyResult = onFinally.call(childContext, JSUndefined.INSTANCE, JSValue.NO_ARGS);
                     if (childContext.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }

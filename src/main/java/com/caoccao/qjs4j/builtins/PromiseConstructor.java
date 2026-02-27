@@ -659,7 +659,7 @@ public final class PromiseConstructor {
         }
 
         JSValue callback = args[0];
-        JSValue[] callbackArgs = args.length > 1 ? Arrays.copyOfRange(args, 1, args.length) : new JSValue[0];
+        JSValue[] callbackArgs = args.length > 1 ? Arrays.copyOfRange(args, 1, args.length) : JSValue.NO_ARGS;
         JSValue callbackResult = callCallable(context, callback, JSUndefined.INSTANCE, callbackArgs);
         if (context.hasPendingException()) {
             return rejectAbruptPromise(context, promiseCapability);

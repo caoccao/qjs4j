@@ -360,7 +360,7 @@ public class JSAsyncIterator extends JSObject {
         JSValue asyncIteratorMethod = obj.get(PropertyKey.SYMBOL_ASYNC_ITERATOR);
 
         if (asyncIteratorMethod instanceof JSFunction asyncIterFunc) {
-            JSValue result = asyncIterFunc.call(context, iterable, new JSValue[0]);
+            JSValue result = asyncIterFunc.call(context, iterable, JSValue.NO_ARGS);
             if (result instanceof JSAsyncIterator asyncIter) {
                 return asyncIter;
             }
@@ -377,7 +377,7 @@ public class JSAsyncIterator extends JSObject {
         JSValue iteratorMethod = obj.get(PropertyKey.SYMBOL_ITERATOR);
 
         if (iteratorMethod instanceof JSFunction iterFunc) {
-            JSValue result = iterFunc.call(context, iterable, new JSValue[0]);
+            JSValue result = iterFunc.call(context, iterable, JSValue.NO_ARGS);
             if (result instanceof JSIterator syncIter) {
                 return fromIterator(syncIter, context);
             }
@@ -567,7 +567,7 @@ public class JSAsyncIterator extends JSObject {
             return null;
         }
         JSAsyncIterator asyncIter = new JSAsyncIterator(() -> {
-            JSValue result = nextFunc.call(context, iterObj, new JSValue[0]);
+            JSValue result = nextFunc.call(context, iterObj, JSValue.NO_ARGS);
             if (result instanceof JSPromise promise) {
                 return promise;
             }
@@ -592,7 +592,7 @@ public class JSAsyncIterator extends JSObject {
             // Per ES spec: IfAbruptRejectPromise - catch sync iterator next() exceptions
             JSValue result;
             try {
-                result = nextFunc.call(context, iterObj, new JSValue[0]);
+                result = nextFunc.call(context, iterObj, JSValue.NO_ARGS);
             } catch (Exception e) {
                 return createRejectedPromise(
                         context,
@@ -643,7 +643,7 @@ public class JSAsyncIterator extends JSObject {
         if (!(returnMethod instanceof JSFunction returnFunc)) {
             return null;
         }
-        JSValue result = returnFunc.call(context, iter, new JSValue[0]);
+        JSValue result = returnFunc.call(context, iter, JSValue.NO_ARGS);
         if (context.hasPendingException()) {
             JSPromise rejected = context.createJSPromise();
             rejected.reject(consumePendingException(context));

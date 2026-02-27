@@ -54,7 +54,7 @@ public final class JSMap extends JSObject {
         JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunction) {
             try {
-                returnFunction.call(context, iterator, new JSValue[0]);
+                returnFunction.call(context, iterator, JSValue.NO_ARGS);
             } catch (RuntimeException ignored) {
                 // Per spec, the original error takes precedence over iterator close errors
             }

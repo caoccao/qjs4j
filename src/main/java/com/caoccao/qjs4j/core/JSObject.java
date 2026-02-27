@@ -56,7 +56,7 @@ public non-sealed class JSObject implements JSValue {
      */
     public JSObject() {
         this.shape = new JSShape();  // Each object gets its own shape
-        this.propertyValues = new JSValue[0];
+        this.propertyValues = JSValue.NO_ARGS;
         this.sparseProperties = null;
         this.prototype = null;
     }
@@ -810,7 +810,7 @@ public non-sealed class JSObject implements JSValue {
                     }
                     try {
                         // Call the getter with the ORIGINAL receiver as 'this', not the prototype
-                        JSValue result = getter.call(context, receiver, new JSValue[0]);
+                        JSValue result = getter.call(context, receiver, JSValue.NO_ARGS);
                         // Check if getter threw an exception - return the error value or undefined
                         if (context.hasPendingException()) {
                             return result != null ? result : context.getPendingException();

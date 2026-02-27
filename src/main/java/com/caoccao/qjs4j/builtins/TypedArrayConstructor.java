@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 public final class TypedArrayConstructor {
-    private static final JSValue[] NO_ARGS = new JSValue[0];
 
     private TypedArrayConstructor() {
     }
@@ -62,7 +61,7 @@ public final class TypedArrayConstructor {
             if (!(iteratorMethod instanceof JSFunction iteratorFunction)) {
                 return context.throwTypeError("value is not iterable");
             }
-            JSValue iterator = iteratorFunction.call(context, items, NO_ARGS);
+            JSValue iterator = iteratorFunction.call(context, items, JSValue.NO_ARGS);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }

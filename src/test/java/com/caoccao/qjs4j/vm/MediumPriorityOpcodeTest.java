@@ -85,7 +85,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.DROP);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue copied = execute(emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue copied = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(copied).isSameAs(target);
         assertThat(target.get("a")).isSameAs(JSUndefined.INSTANCE);
         assertThat(target.get("b")).isInstanceOf(JSNumber.class);
@@ -100,7 +100,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         typeErrorEmitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 6);
         typeErrorEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
-        assertThatThrownBy(() -> execute(typeErrorEmitter, 0, new JSValue[0], JSUndefined.INSTANCE))
+        assertThatThrownBy(() -> execute(typeErrorEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("copy target must be an object");
     }
@@ -118,7 +118,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         emitter.emitU8(0);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue classCtorValue = execute(emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue classCtorValue = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(classCtorValue).isSameAs(constructor);
         assertThat(classCtorValue).isInstanceOf(JSObject.class);
         JSObject classCtor = (JSObject) classCtorValue;
@@ -135,7 +135,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         fallbackEmitter.emitU8(0);
         fallbackEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue fallbackCtor = execute(fallbackEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue fallbackCtor = execute(fallbackEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(fallbackCtor).isSameAs(constructor);
         assertThat(((JSString) ((JSObject) fallbackCtor).get("name")).value()).isEqualTo("FallbackClass");
     }
@@ -162,7 +162,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue getterValue = execute(emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue getterValue = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(getterValue).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) getterValue).value()).isEqualTo(42);
 
@@ -196,7 +196,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         getArrayEl2Emitter.emitOpcode(Opcode.ADD);
         getArrayEl2Emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue getArrayEl2Result = execute(getArrayEl2Emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue getArrayEl2Result = execute(getArrayEl2Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(getArrayEl2Result).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) getArrayEl2Result).value()).isEqualTo(22);
 
@@ -205,7 +205,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         getLengthStringEmitter.emitOpcode(Opcode.GET_LENGTH);
         getLengthStringEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue getLengthStringResult = execute(getLengthStringEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue getLengthStringResult = execute(getLengthStringEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(getLengthStringResult).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) getLengthStringResult).value()).isEqualTo(4);
     }
@@ -223,7 +223,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         locRefEmitter.emitOpcodeU16(Opcode.GET_LOC, 0);
         locRefEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue locRefResult = execute(locRefEmitter, 1, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue locRefResult = execute(locRefEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(locRefResult).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) locRefResult).value()).isEqualTo(9);
 
@@ -239,7 +239,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         argRefEmitter.emitOpcode(Opcode.GET_REF_VALUE);
         argRefEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue argRefResult = execute(argRefEmitter, 0, new JSValue[0], JSUndefined.INSTANCE, new JSNumber(5));
+        JSValue argRefResult = execute(argRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE, new JSNumber(5));
         assertThat(argRefResult).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) argRefResult).value()).isEqualTo(12);
 
@@ -265,7 +265,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         varRefEmitter.emitOpcodeAtom(Opcode.GET_VAR, "g");
         varRefEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue varRefResult = execute(varRefEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue varRefResult = execute(varRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(varRefResult).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) varRefResult).value()).isEqualTo(7);
     }
@@ -280,7 +280,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.NIP_CATCH);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue result = execute(emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue result = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(result).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) result).value()).isEqualTo(2);
 
@@ -289,7 +289,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         noCatchEmitter.emitOpcode(Opcode.NIP_CATCH);
         noCatchEmitter.emitOpcode(Opcode.RETURN);
 
-        assertThatThrownBy(() -> execute(noCatchEmitter, 0, new JSValue[0], JSUndefined.INSTANCE))
+        assertThatThrownBy(() -> execute(noCatchEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("nip_catch");
     }
@@ -305,7 +305,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         getRefEmitter.emitOpcode(Opcode.GET_REF_VALUE);
         getRefEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue getRefResult = execute(getRefEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue getRefResult = execute(getRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(getRefResult).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) getRefResult).value()).isEqualTo(1);
 
@@ -318,7 +318,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         putRefEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "x");
         putRefEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue putRefResult = execute(putRefEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue putRefResult = execute(putRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(putRefResult).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) putRefResult).value()).isEqualTo(5);
 
@@ -330,7 +330,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         nonStrictGlobalEmitter.emitOpcodeAtom(Opcode.GET_VAR, "newGlobalRef");
         nonStrictGlobalEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue nonStrictResult = executeWithStrict(false, nonStrictGlobalEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue nonStrictResult = executeWithStrict(false, nonStrictGlobalEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(nonStrictResult).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) nonStrictResult).value()).isEqualTo(11);
 
@@ -340,7 +340,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         strictMissingGetEmitter.emitOpcode(Opcode.GET_REF_VALUE);
         strictMissingGetEmitter.emitOpcode(Opcode.RETURN);
 
-        assertThatThrownBy(() -> execute(strictMissingGetEmitter, 0, new JSValue[0], JSUndefined.INSTANCE))
+        assertThatThrownBy(() -> execute(strictMissingGetEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("missing is not defined");
 
@@ -351,7 +351,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         strictMissingPutEmitter.emitOpcode(Opcode.PUT_REF_VALUE);
         strictMissingPutEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
-        assertThatThrownBy(() -> execute(strictMissingPutEmitter, 0, new JSValue[0], JSUndefined.INSTANCE))
+        assertThatThrownBy(() -> execute(strictMissingPutEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("missing is not defined");
     }
@@ -363,7 +363,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         pushBigIntI32Emitter.emitI32(Integer.MIN_VALUE);
         pushBigIntI32Emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue minBigIntResult = execute(pushBigIntI32Emitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue minBigIntResult = execute(pushBigIntI32Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(minBigIntResult).isInstanceOf(JSBigInt.class);
         assertThat(((JSBigInt) minBigIntResult).value().intValueExact()).isEqualTo(Integer.MIN_VALUE);
 
@@ -372,7 +372,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         pushBigIntI32MaxEmitter.emitI32(Integer.MAX_VALUE);
         pushBigIntI32MaxEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue maxBigIntResult = execute(pushBigIntI32MaxEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue maxBigIntResult = execute(pushBigIntI32MaxEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(maxBigIntResult).isInstanceOf(JSBigInt.class);
         assertThat(((JSBigInt) maxBigIntResult).value().intValueExact()).isEqualTo(Integer.MAX_VALUE);
 
@@ -381,7 +381,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         deleteVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "tmpDeleteVar");
         deleteVarEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue deletedResult = executeWithStrict(false, deleteVarEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue deletedResult = executeWithStrict(false, deleteVarEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(deletedResult).isEqualTo(JSBoolean.TRUE);
         assertThat(context.getGlobalObject().get("tmpDeleteVar")).isSameAs(JSUndefined.INSTANCE);
 
@@ -389,7 +389,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         deleteMissingVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "missingDeleteVar");
         deleteMissingVarEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue deleteMissingResult = executeWithStrict(false, deleteMissingVarEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue deleteMissingResult = executeWithStrict(false, deleteMissingVarEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(deleteMissingResult).isEqualTo(JSBoolean.TRUE);
 
         context.getGlobalObject().defineProperty(
@@ -399,7 +399,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         deleteLockedVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "lockedDeleteVar");
         deleteLockedVarEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue deleteLockedResult = executeWithStrict(false, deleteLockedVarEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue deleteLockedResult = executeWithStrict(false, deleteLockedVarEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(deleteLockedResult).isEqualTo(JSBoolean.FALSE);
         assertThat(context.getGlobalObject().get("lockedDeleteVar")).isInstanceOf(JSNumber.class);
     }
@@ -413,7 +413,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         setNameEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "name");
         setNameEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue setNameResult = execute(setNameEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue setNameResult = execute(setNameEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(setNameResult).isInstanceOf(JSString.class);
         assertThat(((JSString) setNameResult).value()).isEqualTo("renamed");
 
@@ -425,7 +425,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         setNameComputedEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "name");
         setNameComputedEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue setNameComputedResult = execute(setNameComputedEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue setNameComputedResult = execute(setNameComputedEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(setNameComputedResult).isInstanceOf(JSString.class);
         assertThat(((JSString) setNameComputedResult).value()).isEqualTo("dynamic");
 
@@ -437,7 +437,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         setNameSymbolEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "name");
         setNameSymbolEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue setNameSymbolResult = execute(setNameSymbolEmitter, 0, new JSValue[0], JSUndefined.INSTANCE);
+        JSValue setNameSymbolResult = execute(setNameSymbolEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(setNameSymbolResult).isInstanceOf(JSString.class);
         assertThat(((JSString) setNameSymbolResult).value()).isEqualTo("[s]");
     }
@@ -449,7 +449,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         getLocCheckEmitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, 0);
         getLocCheckEmitter.emitOpcode(Opcode.RETURN);
 
-        assertThatThrownBy(() -> execute(getLocCheckEmitter, 1, new JSValue[0], JSUndefined.INSTANCE))
+        assertThatThrownBy(() -> execute(getLocCheckEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("variable is uninitialized");
 
@@ -458,7 +458,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         getLocCheckThisEmitter.emitOpcodeU16(Opcode.GET_LOC_CHECKTHIS, 0);
         getLocCheckThisEmitter.emitOpcode(Opcode.RETURN);
 
-        assertThatThrownBy(() -> execute(getLocCheckThisEmitter, 1, new JSValue[0], JSUndefined.INSTANCE))
+        assertThatThrownBy(() -> execute(getLocCheckThisEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("variable is uninitialized");
 
@@ -468,7 +468,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         putLocCheckEmitter.emitOpcodeU16(Opcode.PUT_LOC_CHECK, 0);
         putLocCheckEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
-        assertThatThrownBy(() -> execute(putLocCheckEmitter, 1, new JSValue[0], JSUndefined.INSTANCE))
+        assertThatThrownBy(() -> execute(putLocCheckEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("variable is uninitialized");
 
@@ -478,7 +478,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         setLocCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_CHECK, 0);
         setLocCheckEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
-        assertThatThrownBy(() -> execute(setLocCheckEmitter, 1, new JSValue[0], JSUndefined.INSTANCE))
+        assertThatThrownBy(() -> execute(setLocCheckEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("variable is uninitialized");
 
@@ -490,7 +490,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         putLocCheckInitEmitter.emitOpcodeU16(Opcode.PUT_LOC_CHECK_INIT, 0);
         putLocCheckInitEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
-        assertThatThrownBy(() -> execute(putLocCheckInitEmitter, 1, new JSValue[0], JSUndefined.INSTANCE))
+        assertThatThrownBy(() -> execute(putLocCheckInitEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("'this' can be initialized only once");
 

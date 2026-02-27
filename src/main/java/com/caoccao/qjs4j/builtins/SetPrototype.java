@@ -23,7 +23,6 @@ import com.caoccao.qjs4j.core.*;
  * Based on ES2020 Set specification.
  */
 public final class SetPrototype {
-    private static final JSValue[] NO_ARGS = new JSValue[0];
 
     /**
      * Set.prototype.add(value)
@@ -70,7 +69,7 @@ public final class SetPrototype {
         if (!(returnMethod instanceof JSFunction returnFunction)) {
             return;
         }
-        returnFunction.call(context, iteratorObject, NO_ARGS);
+        returnFunction.call(context, iteratorObject, JSValue.NO_ARGS);
     }
 
     private static JSSet copySet(JSContext context, JSSet sourceSet) {
@@ -196,7 +195,7 @@ public final class SetPrototype {
     }
 
     private static IteratorRecord getKeysIteratorRecord(JSContext context, SetRecord setRecord) {
-        JSValue iteratorValue = setRecord.keysFunction.call(context, setRecord.objectValue, NO_ARGS);
+        JSValue iteratorValue = setRecord.keysFunction.call(context, setRecord.objectValue, JSValue.NO_ARGS);
         if (context.hasPendingException()) {
             return null;
         }
@@ -482,7 +481,7 @@ public final class SetPrototype {
 
     private static IteratorStep iteratorStep(JSContext context, IteratorRecord iteratorRecord) {
         // Call the cached next method
-        JSValue nextResult = iteratorRecord.nextFunction.call(context, iteratorRecord.iteratorObject, NO_ARGS);
+        JSValue nextResult = iteratorRecord.nextFunction.call(context, iteratorRecord.iteratorObject, JSValue.NO_ARGS);
         if (context.hasPendingException()) {
             return null;
         }

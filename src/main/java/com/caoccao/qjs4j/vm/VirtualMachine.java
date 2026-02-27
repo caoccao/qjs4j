@@ -32,7 +32,6 @@ public final class VirtualMachine {
     static final BigInteger BIGINT_NEGATIVE_ONE = BigInteger.valueOf(-1);
     static final BigInteger BIGINT_ONE = BigInteger.ONE;
     static final BigInteger BIGINT_ZERO = BigInteger.ZERO;
-    static final JSValue[] EMPTY_ARGS = new JSValue[0];
     static final int INTERRUPT_CHECK_INTERVAL = 0xFFFF; // Check every ~65K opcodes
     static final JSObject UNINITIALIZED_MARKER = new JSObject();
     final JSContext context;
@@ -77,7 +76,7 @@ public final class VirtualMachine {
         this.executionDeadline = 0;
         this.executionDeadlineNanos = 0;
         this.interruptCounter = 0;
-        this.forOfTempValues = EMPTY_ARGS;
+        this.forOfTempValues = JSValue.NO_ARGS;
     }
 
     static PendingExceptionAction handlePendingExceptionForExecute(ExecutionContext executionContext) {
@@ -173,7 +172,7 @@ public final class VirtualMachine {
 
     JSValue[] buildApplyArguments(JSValue argsArrayValue, boolean allowNullOrUndefined) {
         if (allowNullOrUndefined && argsArrayValue.isNullOrUndefined()) {
-            return EMPTY_ARGS;
+            return JSValue.NO_ARGS;
         }
         if (!(argsArrayValue instanceof JSObject arrayLike)) {
             context.throwTypeError("CreateListFromArrayLike called on non-object");
