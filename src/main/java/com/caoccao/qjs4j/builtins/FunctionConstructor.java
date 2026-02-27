@@ -17,10 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
-import com.caoccao.qjs4j.core.JSBytecodeFunction;
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSTypeConversions;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
@@ -54,22 +51,22 @@ public final class FunctionConstructor {
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         return callWithWrapper(context, args, "(function anonymous(", "\n) {\n", "\n})", "<Function>",
-                "Failed to create function: ");
+                "Failed to create function: ", JSFunction.NAME);
     }
 
     public static JSValue callAsync(JSContext context, JSValue thisArg, JSValue[] args) {
         return callWithWrapper(context, args, "(async function anonymous(", "\n) {\n", "\n})",
-                "<AsyncFunction>", "Failed to create async function: ");
+                "<AsyncFunction>", "Failed to create async function: ", "AsyncFunction");
     }
 
     public static JSValue callAsyncGenerator(JSContext context, JSValue thisArg, JSValue[] args) {
         return callWithWrapper(context, args, "(async function* anonymous(", "\n) {\n", "\n})",
-                "<AsyncGeneratorFunction>", "Failed to create async generator function: ");
+                "<AsyncGeneratorFunction>", "Failed to create async generator function: ", "AsyncGeneratorFunction");
     }
 
     public static JSValue callGenerator(JSContext context, JSValue thisArg, JSValue[] args) {
         return callWithWrapper(context, args, "(function* anonymous(", "\n) {\n", "\n})",
-                "<GeneratorFunction>", "Failed to create generator function: ");
+                "<GeneratorFunction>", "Failed to create generator function: ", "GeneratorFunction");
     }
 
     private static JSValue callWithWrapper(
@@ -79,7 +76,8 @@ public final class FunctionConstructor {
             String parameterSuffix,
             String bodySuffix,
             String filename,
-            String errorPrefix) {
+            String errorPrefix,
+            String intrinsicDefaultPrototypeName) {
         // Extract parameter names and function body
         List<String> paramNames = new ArrayList<>();
         String body = "";
@@ -137,7 +135,22 @@ public final class FunctionConstructor {
 
             // Execute the compiled code to get the function object
             JSValue result = context.getVirtualMachine().execute(func, context.getGlobalObject(), new JSValue[0]);
-
+            if (result instanceof JSObject resultObject) {
+                JSValue constructorNewTarget = context.getNativeConstructorNewTarget();
+                if (constructorNewTarget instanceof JSObject newTargetObject) {
+                    JSObject resolvedPrototype = context.getPrototypeFromConstructor(
+                            newTargetObject,
+                            intrinsicDefaultPrototypeName);
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
+                    if (resolvedPrototype != null) {
+                        resultObject.setPrototype(resolvedPrototype);
+                    }
+                } else {
+                    context.transferPrototype(resultObject, intrinsicDefaultPrototypeName);
+                }
+            }
             return result;
         } catch (JSCompilerException | JSSyntaxErrorException e) {
             return context.throwSyntaxError(e.getMessage());

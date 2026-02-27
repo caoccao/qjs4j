@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
+import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
@@ -154,6 +155,8 @@ public final class ShadowRealmPrototype {
             compilerCheck.setPredeclareProgramLexicalsAsLocals(true);
             compilerCheck.compile(false);
         } catch (JSCompilerException e) {
+            return callerContext.throwSyntaxError(e.getMessage());
+        } catch (JSErrorException e) {
             return callerContext.throwSyntaxError(e.getMessage());
         }
 

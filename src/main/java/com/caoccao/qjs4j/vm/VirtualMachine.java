@@ -283,30 +283,26 @@ public final class VirtualMachine {
         JSConstructorType constructorType = function.getConstructorType();
         if (constructorType == null) {
             JSObject thisObject = new JSObject();
+            String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
             if (newTarget instanceof JSObject newTargetObject) {
-                if (!context.transferPrototypeFromConstructor(thisObject, newTargetObject)) {
-                    if (context.hasPendingException()) {
-                        JSValue exception = context.getPendingException();
-                        throw new JSVirtualMachineException(exception.toString(), exception);
-                    }
-                    // ES spec GetPrototypeFromConstructor step 4a: GetFunctionRealm(constructor)
-                    // If newTarget is a revoked Proxy, throw TypeError
-                    if (newTargetObject instanceof JSProxy proxy && proxy.isRevoked()) {
-                        JSContext proxyContext = proxy.getProxyContext();
-                        throw new JSVirtualMachineException(
-                                proxyContext.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked"));
-                    }
-                    context.transferPrototypeFromConstructor(thisObject, function);
-                    if (context.hasPendingException()) {
-                        JSValue exception = context.getPendingException();
-                        throw new JSVirtualMachineException(exception.toString(), exception);
-                    }
-                }
-            } else {
-                context.transferPrototypeFromConstructor(thisObject, function);
+                JSObject resolvedPrototype = context.getPrototypeFromConstructor(
+                        newTargetObject,
+                        intrinsicDefaultPrototypeName);
                 if (context.hasPendingException()) {
                     JSValue exception = context.getPendingException();
                     throw new JSVirtualMachineException(exception.toString(), exception);
+                }
+                if (resolvedPrototype != null) {
+                    thisObject.setPrototype(resolvedPrototype);
+                }
+            } else {
+                JSObject resolvedPrototype = context.getPrototypeFromConstructor(function, intrinsicDefaultPrototypeName);
+                if (context.hasPendingException()) {
+                    JSValue exception = context.getPendingException();
+                    throw new JSVirtualMachineException(exception.toString(), exception);
+                }
+                if (resolvedPrototype != null) {
+                    thisObject.setPrototype(resolvedPrototype);
                 }
             }
 
@@ -319,29 +315,52 @@ public final class VirtualMachine {
             JSValue constructThis = isDerived ? JSUndefined.INSTANCE : thisObject;
 
             JSValue result;
-            if (function instanceof JSNativeFunction nativeFunc) {
-                JSValue savedNewTarget = context.getConstructorNewTarget();
-                context.setConstructorNewTarget(newTarget);
-                try {
+            JSContext constructorContext = function.getRealmContext() != null ? function.getRealmContext() : context;
+            JSValue savedNewTarget = context.getConstructorNewTarget();
+            JSValue savedConstructorContextNewTarget = null;
+            JSValue savedNativeConstructorContextNewTarget = null;
+            context.setConstructorNewTarget(newTarget);
+            if (constructorContext != context) {
+                savedConstructorContextNewTarget = constructorContext.getConstructorNewTarget();
+                constructorContext.setConstructorNewTarget(newTarget);
+            }
+            try {
+                if (function instanceof JSNativeFunction nativeFunc) {
+                    savedNativeConstructorContextNewTarget = constructorContext.getNativeConstructorNewTarget();
+                    constructorContext.setNativeConstructorNewTarget(newTarget);
                     result = nativeFunc.call(context, constructThis, args);
-                } finally {
-                    context.setConstructorNewTarget(savedNewTarget);
-                }
-                if (context.hasPendingException()) {
-                    JSValue exception = context.getPendingException();
-                    String errorMessage = "Unhandled exception in constructor";
-                    if (exception instanceof JSObject errorObj) {
-                        JSValue messageValue = errorObj.get(PropertyKey.MESSAGE);
-                        if (messageValue instanceof JSString messageString) {
-                            errorMessage = messageString.value();
+                    if (context.hasPendingException()) {
+                        JSValue exception = context.getPendingException();
+                        String errorMessage = "Unhandled exception in constructor";
+                        if (exception instanceof JSObject errorObj) {
+                            JSValue messageValue = errorObj.get(PropertyKey.MESSAGE);
+                            if (messageValue instanceof JSString messageString) {
+                                errorMessage = messageString.value();
+                            }
                         }
+                        throw new JSVirtualMachineException(errorMessage);
                     }
-                    throw new JSVirtualMachineException(errorMessage);
+                } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
+                    result = constructorContext.getVirtualMachine().execute(bytecodeFunction, constructThis, args, newTarget);
+                    if (constructorContext != context && constructorContext.hasPendingException()) {
+                        context.setPendingException(constructorContext.getPendingException());
+                        constructorContext.clearPendingException();
+                    }
+                } else {
+                    result = function.call(constructorContext, constructThis, args);
+                    if (constructorContext != context && constructorContext.hasPendingException()) {
+                        context.setPendingException(constructorContext.getPendingException());
+                        constructorContext.clearPendingException();
+                    }
                 }
-            } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
-                result = execute(bytecodeFunction, constructThis, args, newTarget);
-            } else {
-                result = JSUndefined.INSTANCE;
+            } finally {
+                context.setConstructorNewTarget(savedNewTarget);
+                if (function instanceof JSNativeFunction) {
+                    constructorContext.setNativeConstructorNewTarget(savedNativeConstructorContextNewTarget);
+                }
+                if (constructorContext != context) {
+                    constructorContext.setConstructorNewTarget(savedConstructorContextNewTarget);
+                }
             }
 
             // ES spec step 13: validate constructor return value
@@ -358,7 +377,9 @@ public final class VirtualMachine {
                 // If super() was never called, this is still uninitialized (JSUndefined)
                 // In that case throw ReferenceError
                 // Use lastConstructorThisArg saved by RETURN/RETURN_UNDEF before frame was popped
-                JSValue finalThis = lastConstructorThisArg;
+                JSValue finalThis = constructorContext == context
+                        ? lastConstructorThisArg
+                        : constructorContext.getVirtualMachine().lastConstructorThisArg;
                 if (finalThis == null || finalThis instanceof JSUndefined) {
                     throw new JSVirtualMachineException(
                             context.throwReferenceError("Must call super constructor in derived class before accessing 'this' or returning from derived constructor"));
@@ -391,13 +412,13 @@ public final class VirtualMachine {
         if (result instanceof JSObject jsObject && !jsObject.isProxy()) {
             JSObject resolvedPrototype = null;
             if (newTarget instanceof JSObject newTargetObject) {
-                JSValue proto = newTargetObject.get(context, PropertyKey.PROTOTYPE);
+                String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
+                resolvedPrototype = context.getPrototypeFromConstructor(
+                        newTargetObject,
+                        intrinsicDefaultPrototypeName);
                 if (context.hasPendingException()) {
                     throw new JSVirtualMachineException(context.getPendingException().toString(),
                             context.getPendingException());
-                }
-                if (proto instanceof JSObject protoObj) {
-                    resolvedPrototype = protoObj;
                 }
             }
             if (resolvedPrototype != null) {
@@ -1002,8 +1023,7 @@ public final class VirtualMachine {
      */
     JSValue proxyApply(JSProxy proxy, JSValue thisArg, JSValue[] args) {
         if (proxy.isRevoked()) {
-            JSContext proxyContext = proxy.getProxyContext();
-            throw new JSException(proxyContext.throwTypeError("Cannot perform 'apply' on a proxy that has been revoked"));
+            throw new JSException(context.throwTypeError("Cannot perform 'apply' on a proxy that has been revoked"));
         }
 
         JSValue target = proxy.getTarget();
@@ -1059,8 +1079,7 @@ public final class VirtualMachine {
      */
     JSValue proxyConstruct(JSProxy proxy, JSValue[] args, JSValue newTarget) {
         if (proxy.isRevoked()) {
-            JSContext proxyContext = proxy.getProxyContext();
-            throw new JSException(proxyContext.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked"));
+            throw new JSException(context.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked"));
         }
 
         JSValue target = proxy.getTarget();

@@ -377,8 +377,7 @@ public class Test262Executor {
 
         host262.set("createRealm", new JSNativeFunction("createRealm", 0,
                 (ctx, thisArg, args) -> {
-                    JSRuntime realmRuntime = new JSRuntime();
-                    realmRuntimes.add(realmRuntime);
+                    JSRuntime realmRuntime = context.getRuntime();
                     JSContext realmContext = realmRuntime.createContext();
                     install262Object(realmContext, realmRuntimes, agentHost, null);
 

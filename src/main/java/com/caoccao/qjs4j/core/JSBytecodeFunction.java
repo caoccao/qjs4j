@@ -606,7 +606,7 @@ public final class JSBytecodeFunction extends JSFunction {
             // Per ES spec, execute up to INITIAL_YIELD to evaluate parameter defaults.
             // Errors during parameter initialization propagate from the function call.
             executionContext.getVirtualMachine().executeGenerator(generatorState, executionContext);
-            JSGenerator generatorDriver = new JSGenerator(context, generatorState);
+            JSGenerator generatorDriver = new JSGenerator(executionContext, generatorState);
             final JSObject[] delegatedYieldStarIteratorHolder = new JSObject[]{null};
             final boolean functionSourceHasFinally = sourceCode != null && sourceCode.contains("finally");
             final JSAsyncGenerator.AsyncGeneratorFunction[] asyncGeneratorRequestExecutorHolder =
@@ -879,17 +879,17 @@ public final class JSBytecodeFunction extends JSFunction {
                 return promise;
             };
 
-            JSAsyncGenerator asyncGenerator = new JSAsyncGenerator(asyncGeneratorRequestExecutorHolder[0], context);
+            JSAsyncGenerator asyncGenerator = new JSAsyncGenerator(asyncGeneratorRequestExecutorHolder[0], executionContext);
 
             JSValue asyncGeneratorInstancePrototype = this.get(PropertyKey.PROTOTYPE);
             if (asyncGeneratorInstancePrototype instanceof JSObject asyncGeneratorInstancePrototypeObject) {
                 asyncGenerator.setPrototype(asyncGeneratorInstancePrototypeObject);
             } else {
-                JSObject asyncGeneratorPrototype = context.getAsyncGeneratorPrototype();
+                JSObject asyncGeneratorPrototype = executionContext.getAsyncGeneratorPrototype();
                 if (asyncGeneratorPrototype != null) {
                     asyncGenerator.setPrototype(asyncGeneratorPrototype);
                 } else {
-                    JSObject asyncGeneratorFunctionPrototype = context.getAsyncGeneratorFunctionPrototype();
+                    JSObject asyncGeneratorFunctionPrototype = executionContext.getAsyncGeneratorFunctionPrototype();
                     if (asyncGeneratorFunctionPrototype != null) {
                         JSValue fallbackAsyncGeneratorPrototype = asyncGeneratorFunctionPrototype.get(PropertyKey.PROTOTYPE);
                         if (fallbackAsyncGeneratorPrototype instanceof JSObject fallbackAsyncGeneratorPrototypeObject) {
@@ -918,7 +918,7 @@ public final class JSBytecodeFunction extends JSFunction {
             // Create generator object with proper prototype chain
             // In QuickJS, js_create_from_ctor gets prototype from the generator function's
             // "prototype" property and creates JS_CLASS_GENERATOR object
-            JSGenerator generatorObj = new JSGenerator(context, generatorState);
+            JSGenerator generatorObj = new JSGenerator(executionContext, generatorState);
 
             // Set prototype: use this function's prototype property (which inherits from Generator.prototype)
             JSValue funcPrototype = this.get(PropertyKey.PROTOTYPE);
@@ -926,7 +926,7 @@ public final class JSBytecodeFunction extends JSFunction {
                 generatorObj.setPrototype(protoObj);
             } else {
                 // Fallback: use Generator.prototype from context
-                JSObject generatorFunctionPrototype = context.getGeneratorFunctionPrototype();
+                JSObject generatorFunctionPrototype = executionContext.getGeneratorFunctionPrototype();
                 if (generatorFunctionPrototype != null) {
                     JSValue genProto = generatorFunctionPrototype.get(PropertyKey.PROTOTYPE);
                     if (genProto instanceof JSObject genProtoObj) {

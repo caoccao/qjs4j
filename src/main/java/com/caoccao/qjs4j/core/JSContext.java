@@ -71,6 +71,7 @@ public final class JSContext implements AutoCloseable {
     private JSObject generatorFunctionPrototype;
     private boolean inCatchHandler;
     private int maxStackDepth;
+    private JSValue nativeConstructorNewTarget;
     // Exception state
     private JSValue pendingException;
     // Promise rejection callback
@@ -102,6 +103,7 @@ public final class JSContext implements AutoCloseable {
         this.stackDepth = 0;
         this.strictMode = false;
         this.virtualMachine = new VirtualMachine(this);
+        this.nativeConstructorNewTarget = null;
 
         this.currentThis = jsGlobalObject.getGlobalObject();
         initializeGlobalObject();
@@ -303,10 +305,21 @@ public final class JSContext implements AutoCloseable {
             return null;
         }
 
-        // Step 5: If IsConstructor(C) is true, cross-realm check
-        if (JSTypeChecking.isConstructor(ctor)) {
-            // Simplified: single-realm engine, skip cross-realm check
-            // QuickJS sets C = undefined if constructor is from a different realm
+        // Step 5: If IsConstructor(C) is true, cross-realm check.
+        // ES2024 10.4.2.3 ArraySpeciesCreate step 6.a-c:
+        // if constructor realm differs and C is that realm's intrinsic %Array%,
+        // treat C as undefined.
+        if (JSTypeChecking.isConstructor(ctor) && ctor instanceof JSObject ctorObject) {
+            JSContext constructorRealm = getFunctionRealm(ctorObject);
+            if (hasPendingException()) {
+                return null;
+            }
+            if (constructorRealm != this) {
+                JSValue realmArrayConstructor = constructorRealm.getGlobalObject().get(JSArray.NAME);
+                if (ctor == realmArrayConstructor) {
+                    ctor = JSUndefined.INSTANCE;
+                }
+            }
         }
 
         // Step 6: If Type(C) is Object, get Symbol.species
@@ -1012,6 +1025,34 @@ public final class JSContext implements AutoCloseable {
         return new ArrayList<>(errorStackTrace);
     }
 
+    public JSContext getFunctionRealm(JSObject constructor) {
+        return getFunctionRealmInternal(constructor, 0);
+    }
+
+    private JSContext getFunctionRealmInternal(JSValue value, int depth) {
+        if (depth > 1000) {
+            throwTypeError("too much recursion");
+            return this;
+        }
+        if (value instanceof JSBoundFunction boundFunction) {
+            return getFunctionRealmInternal(boundFunction.getTarget(), depth + 1);
+        }
+        if (value instanceof JSProxy proxy) {
+            if (proxy.isRevoked()) {
+                throwTypeError("Cannot perform 'get' on a proxy that has been revoked");
+                return this;
+            }
+            return getFunctionRealmInternal(proxy.getTarget(), depth + 1);
+        }
+        if (value instanceof JSFunction function) {
+            JSContext functionContext = function.getHomeContext();
+            if (functionContext != null) {
+                return functionContext;
+            }
+        }
+        return this;
+    }
+
     /**
      * Get the GeneratorFunction prototype (internal use only).
      * Used for setting up prototype chains for generator functions.
@@ -1022,6 +1063,122 @@ public final class JSContext implements AutoCloseable {
 
     public JSObject getGlobalObject() {
         return jsGlobalObject.getGlobalObject();
+    }
+
+    public String getIntrinsicDefaultPrototypeName(JSFunction function) {
+        JSConstructorType constructorType = function.getConstructorType();
+        if (constructorType != null) {
+            return switch (constructorType) {
+                case AGGREGATE_ERROR -> JSAggregateError.NAME;
+                case ARRAY -> JSArray.NAME;
+                case ARRAY_BUFFER -> JSArrayBuffer.NAME;
+                case ASYNC_DISPOSABLE_STACK -> JSAsyncDisposableStack.NAME;
+                case BIG_INT_OBJECT -> JSBigIntObject.NAME;
+                case BOOLEAN_OBJECT -> JSBooleanObject.NAME;
+                case DATA_VIEW -> JSDataView.NAME;
+                case DATE -> JSDate.NAME;
+                case DISPOSABLE_STACK -> JSDisposableStack.NAME;
+                case ERROR -> JSError.NAME;
+                case EVAL_ERROR -> JSEvalError.NAME;
+                case FINALIZATION_REGISTRY -> JSFinalizationRegistry.NAME;
+                case MAP -> JSMap.NAME;
+                case NUMBER_OBJECT -> JSNumberObject.NAME;
+                case PROMISE -> JSPromise.NAME;
+                case PROXY -> JSObject.NAME;
+                case RANGE_ERROR -> JSRangeError.NAME;
+                case REFERENCE_ERROR -> JSReferenceError.NAME;
+                case REGEXP -> JSRegExp.NAME;
+                case SET -> JSSet.NAME;
+                case SHARED_ARRAY_BUFFER -> JSSharedArrayBuffer.NAME;
+                case STRING_OBJECT -> JSStringObject.NAME;
+                case SUPPRESSED_ERROR -> JSSuppressedError.NAME;
+                case SYMBOL_OBJECT -> JSSymbolObject.NAME;
+                case SYNTAX_ERROR -> JSSyntaxError.NAME;
+                case TYPED_ARRAY_BIGINT64 -> JSBigInt64Array.NAME;
+                case TYPED_ARRAY_BIGUINT64 -> JSBigUint64Array.NAME;
+                case TYPED_ARRAY_FLOAT16 -> JSFloat16Array.NAME;
+                case TYPED_ARRAY_FLOAT32 -> JSFloat32Array.NAME;
+                case TYPED_ARRAY_FLOAT64 -> JSFloat64Array.NAME;
+                case TYPED_ARRAY_INT16 -> JSInt16Array.NAME;
+                case TYPED_ARRAY_INT32 -> JSInt32Array.NAME;
+                case TYPED_ARRAY_INT8 -> JSInt8Array.NAME;
+                case TYPED_ARRAY_UINT16 -> JSUint16Array.NAME;
+                case TYPED_ARRAY_UINT32 -> JSUint32Array.NAME;
+                case TYPED_ARRAY_UINT8 -> JSUint8Array.NAME;
+                case TYPED_ARRAY_UINT8_CLAMPED -> JSUint8ClampedArray.NAME;
+                case TYPE_ERROR -> JSTypeError.NAME;
+                case URI_ERROR -> JSURIError.NAME;
+                case WEAK_MAP -> JSWeakMap.NAME;
+                case WEAK_REF -> JSWeakRef.NAME;
+                case WEAK_SET -> JSWeakSet.NAME;
+            };
+        }
+        if (function instanceof JSClass) {
+            return JSObject.NAME;
+        }
+        String functionName = function.getName();
+        if (JSFunction.NAME.equals(functionName)) {
+            return JSFunction.NAME;
+        }
+        if ("GeneratorFunction".equals(functionName)) {
+            return "GeneratorFunction";
+        }
+        if ("AsyncFunction".equals(functionName)) {
+            return "AsyncFunction";
+        }
+        if ("AsyncGeneratorFunction".equals(functionName)) {
+            return "AsyncGeneratorFunction";
+        }
+        if (JSIterator.NAME.equals(functionName)) {
+            return JSIterator.NAME;
+        }
+        return JSObject.NAME;
+    }
+
+    private JSObject getIntrinsicPrototype(JSContext realmContext, String intrinsicDefaultPrototypeName) {
+        if (JSObject.NAME.equals(intrinsicDefaultPrototypeName)) {
+            return realmContext.getObjectPrototype();
+        }
+        if ("GeneratorFunction".equals(intrinsicDefaultPrototypeName)) {
+            JSObject generatorFunctionPrototype = realmContext.getGeneratorFunctionPrototype();
+            if (generatorFunctionPrototype != null) {
+                return generatorFunctionPrototype;
+            }
+            return realmContext.getObjectPrototype();
+        }
+        if ("AsyncGeneratorFunction".equals(intrinsicDefaultPrototypeName)) {
+            JSObject asyncGeneratorFunctionPrototype = realmContext.getAsyncGeneratorFunctionPrototype();
+            if (asyncGeneratorFunctionPrototype != null) {
+                return asyncGeneratorFunctionPrototype;
+            }
+            return realmContext.getObjectPrototype();
+        }
+        if ("AsyncFunction".equals(intrinsicDefaultPrototypeName)) {
+            JSObject asyncFunctionConstructor = realmContext.getAsyncFunctionConstructor();
+            if (asyncFunctionConstructor != null) {
+                JSValue asyncFunctionPrototype = asyncFunctionConstructor.get(PropertyKey.PROTOTYPE);
+                if (asyncFunctionPrototype instanceof JSObject asyncFunctionPrototypeObject) {
+                    return asyncFunctionPrototypeObject;
+                }
+            }
+            JSValue fallbackFunctionConstructor = realmContext.getGlobalObject().get(JSFunction.NAME);
+            if (fallbackFunctionConstructor instanceof JSObject fallbackFunctionObject) {
+                JSValue fallbackFunctionPrototype = fallbackFunctionObject.get(PropertyKey.PROTOTYPE);
+                if (fallbackFunctionPrototype instanceof JSObject fallbackFunctionPrototypeObject) {
+                    return fallbackFunctionPrototypeObject;
+                }
+            }
+            return realmContext.getObjectPrototype();
+        }
+
+        JSValue intrinsicConstructor = realmContext.getGlobalObject().get(intrinsicDefaultPrototypeName);
+        if (intrinsicConstructor instanceof JSObject intrinsicObject) {
+            JSValue intrinsicPrototype = intrinsicObject.get(PropertyKey.PROTOTYPE);
+            if (intrinsicPrototype instanceof JSObject intrinsicPrototypeObject) {
+                return intrinsicPrototypeObject;
+            }
+        }
+        return realmContext.getObjectPrototype();
     }
 
     public JSObject getIteratorPrototype(String tag) {
@@ -1050,6 +1207,10 @@ public final class JSContext implements AutoCloseable {
         return moduleCache.get(specifier);
     }
 
+    public JSValue getNativeConstructorNewTarget() {
+        return nativeConstructorNewTarget;
+    }
+
     public JSObject getObjectPrototype() {
         return cachedObjectPrototype;
     }
@@ -1060,6 +1221,22 @@ public final class JSContext implements AutoCloseable {
 
     public IJSPromiseRejectCallback getPromiseRejectCallback() {
         return promiseRejectCallback;
+    }
+
+    public JSObject getPrototypeFromConstructor(JSObject constructor, String intrinsicDefaultPrototypeName) {
+        JSValue prototype = constructor.get(this, PropertyKey.PROTOTYPE);
+        if (hasPendingException()) {
+            return null;
+        }
+        if (prototype instanceof JSObject prototypeObject) {
+            return prototypeObject;
+        }
+
+        JSContext functionRealm = getFunctionRealm(constructor);
+        if (hasPendingException()) {
+            return null;
+        }
+        return getIntrinsicPrototype(functionRealm, intrinsicDefaultPrototypeName);
     }
 
     public JSRuntime getRuntime() {
@@ -1242,6 +1419,10 @@ public final class JSContext implements AutoCloseable {
         this.maxStackDepth = depth;
     }
 
+    public void setNativeConstructorNewTarget(JSValue newTarget) {
+        this.nativeConstructorNewTarget = newTarget;
+    }
+
     /**
      * Set the pending exception.
      */
@@ -1408,15 +1589,12 @@ public final class JSContext implements AutoCloseable {
      * This is used by constructor paths that must observe accessors and propagate abrupt completions.
      */
     public boolean transferPrototypeFromConstructor(JSObject receiver, JSObject constructor) {
-        JSValue prototype = constructor.get(this, PropertyKey.PROTOTYPE);
-        if (hasPendingException()) {
+        JSObject prototype = getPrototypeFromConstructor(constructor, JSObject.NAME);
+        if (prototype == null) {
             return false;
         }
-        if (prototype instanceof JSObject prototypeObject) {
-            receiver.setPrototype(prototypeObject);
-            return true;
-        }
-        return false;
+        receiver.setPrototype(prototype);
+        return true;
     }
 
     /**

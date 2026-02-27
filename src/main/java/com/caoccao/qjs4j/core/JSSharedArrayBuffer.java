@@ -113,12 +113,9 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
 
         JSObject resolvedPrototype = null;
         if (newTarget instanceof JSObject newTargetObject) {
-            JSValue prototypeValue = newTargetObject.get(context, PropertyKey.PROTOTYPE);
+            resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, NAME);
             if (context.hasPendingException()) {
                 throw new JSException(context.getPendingException());
-            }
-            if (prototypeValue instanceof JSObject prototypeObject) {
-                resolvedPrototype = prototypeObject;
             }
         }
 
@@ -126,7 +123,13 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         if (resolvedPrototype != null) {
             buffer.setPrototype(resolvedPrototype);
         } else if (constructor != null) {
-            context.transferPrototype(buffer, constructor);
+            JSObject constructorPrototype = context.getPrototypeFromConstructor(constructor, NAME);
+            if (context.hasPendingException()) {
+                throw new JSException(context.getPendingException());
+            }
+            if (constructorPrototype != null) {
+                buffer.setPrototype(constructorPrototype);
+            }
         }
         return buffer;
     }

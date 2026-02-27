@@ -2267,7 +2267,8 @@ public final class JSGlobalObject {
                     }
                 }
 
-                boolean inheritedStrictMode = callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction
+                boolean inheritedStrictMode = callerFrame != null
+                        && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction
                         ? bytecodeFunction.isStrict()
                         : callerContext.isStrictMode();
                 JSValue result = realmContext.evalDirect(code, "<eval>", inheritedStrictMode);

@@ -2844,10 +2844,13 @@ public final class OpcodeHandler {
                 isClassCtor = bytecodeFunc.isClassConstructor();
             }
             if (isClassCtor) {
+                JSContext errorContext = function.getRealmContext() != null
+                        ? function.getRealmContext()
+                        : executionContext.virtualMachine.context;
                 executionContext.virtualMachine.resetPropertyAccessTracking();
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("Class constructor " + function.getName()
+                executionContext.virtualMachine.pendingException = errorContext.throwTypeError("Class constructor " + function.getName()
                         + " cannot be invoked without 'new'");
-                executionContext.virtualMachine.context.clearPendingException();
+                errorContext.clearPendingException();
                 executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
                 return;
             }
@@ -2855,14 +2858,17 @@ public final class OpcodeHandler {
             if (function instanceof JSNativeFunction nativeFunc) {
                 // Check if this function requires 'new'
                 if (nativeFunc.requiresNew()) {
+                    JSContext errorContext = nativeFunc.getRealmContext() != null
+                            ? nativeFunc.getRealmContext()
+                            : executionContext.virtualMachine.context;
                     String constructorName = nativeFunc.getName() != null ? nativeFunc.getName() : "constructor";
                     executionContext.virtualMachine.resetPropertyAccessTracking();
                     String errorMessage = switch (constructorName) {
                         case JSPromise.NAME -> "Promise constructor cannot be invoked without 'new'";
                         default -> "Constructor " + constructorName + " requires 'new'";
                     };
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError(errorMessage);
-                    executionContext.virtualMachine.context.clearPendingException();
+                    executionContext.virtualMachine.pendingException = errorContext.throwTypeError(errorMessage);
+                    errorContext.clearPendingException();
                     executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
                     return;
                 }

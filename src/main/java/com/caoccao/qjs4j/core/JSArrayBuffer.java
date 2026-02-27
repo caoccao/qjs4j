@@ -130,12 +130,9 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         // Step 2: OrdinaryCreateFromConstructor - access newTarget.prototype
         JSObject resolvedPrototype = null;
         if (newTarget instanceof JSObject newTargetObject) {
-            JSValue proto = newTargetObject.get(context, PropertyKey.PROTOTYPE);
+            resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, NAME);
             if (context.hasPendingException()) {
                 throw new JSException(context.getPendingException());
-            }
-            if (proto instanceof JSObject protoObj) {
-                resolvedPrototype = protoObj;
             }
         }
 
@@ -146,7 +143,13 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         if (resolvedPrototype != null) {
             buf.setPrototype(resolvedPrototype);
         } else if (constructor != null) {
-            context.transferPrototype(buf, constructor);
+            JSObject constructorPrototype = context.getPrototypeFromConstructor(constructor, NAME);
+            if (context.hasPendingException()) {
+                throw new JSException(context.getPendingException());
+            }
+            if (constructorPrototype != null) {
+                buf.setPrototype(constructorPrototype);
+            }
         }
         return buf;
     }

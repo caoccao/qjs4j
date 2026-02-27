@@ -128,7 +128,8 @@ public final class JSClass extends JSFunction {
      */
     @Override
     public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
-        return context.throwTypeError("Class constructor " + name + " cannot be invoked without 'new'");
+        JSContext executionContext = getHomeContext() != null ? getHomeContext() : context;
+        return executionContext.throwTypeError("Class constructor " + name + " cannot be invoked without 'new'");
     }
 
     /**
@@ -139,6 +140,7 @@ public final class JSClass extends JSFunction {
      * @return The new instance
      */
     public JSObject construct(JSContext context, JSValue[] args) {
+        JSContext executionContext = getHomeContext() != null ? getHomeContext() : context;
         // Create new instance with this class's prototype
         JSObject instance = new JSObject();
         instance.setPrototype(prototype);
@@ -157,7 +159,7 @@ public final class JSClass extends JSFunction {
         }
 
         // Call the constructor with the instance as 'this'
-        JSValue constructorResult = constructor.call(context, instance, args);
+        JSValue constructorResult = constructor.call(executionContext, instance, args);
 
         // If constructor explicitly returns an object, use that
         // Otherwise, return the instance

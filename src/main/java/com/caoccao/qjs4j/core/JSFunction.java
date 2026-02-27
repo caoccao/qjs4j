@@ -49,6 +49,10 @@ public abstract sealed class JSFunction extends JSObject
      */
     public abstract String getName();
 
+    public JSContext getRealmContext() {
+        return homeContext;
+    }
+
     /**
      * Initialize the function's prototype chain to inherit from Function.prototype.
      * This should be called after creation when the context is available.
