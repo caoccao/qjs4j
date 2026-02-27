@@ -74,11 +74,8 @@ public class Test262Config {
         Test262Config config = new Test262Config();
 
         // Define unsupported features
-        config.addUnsupportedFeatures("Intl.Segmenter",
-                "Intl.DisplayNames",
-                "top-level-await",
+        config.addUnsupportedFeatures(
                 "import.meta",
-                "hashbang",
                 "Temporal",
                 "source-phase-imports");
 
