@@ -891,6 +891,8 @@ public final class JSGlobalObject {
         JSObject dateTimeFormatPrototype = context.createJSObject();
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("format"), new JSNativeFunction("format", 1, JSIntlObject::dateTimeFormatFormat), PropertyDescriptor.DataState.ConfigurableWritable);
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"), new JSNativeFunction("resolvedOptions", 0, JSIntlObject::dateTimeFormatResolvedOptions), PropertyDescriptor.DataState.ConfigurableWritable);
+        dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"), new JSNativeFunction("formatToParts", 1, JSIntlObject::dateTimeFormatFormatToParts), PropertyDescriptor.DataState.ConfigurableWritable);
+        dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("formatRangeToParts"), new JSNativeFunction("formatRangeToParts", 2, JSIntlObject::dateTimeFormatFormatRangeToParts), PropertyDescriptor.DataState.ConfigurableWritable);
         JSNativeFunction dateTimeFormatConstructor = new JSNativeFunction(
                 "DateTimeFormat",
                 0,

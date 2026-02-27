@@ -74,15 +74,16 @@ public class BigIntPrototypeTest extends BaseJavetTest {
     @Test
     public void testToLocaleString() {
         JSBigInt bigInt = new JSBigInt(BigInteger.valueOf(12345));
-        // Normal case: default
-        JSValue result = BigIntPrototype.toLocaleString(context, bigInt, new JSValue[]{});
+        // Normal case: with locale — grouping is enabled by default per Intl.NumberFormat spec
+        JSValue result = BigIntPrototype.toLocaleString(context, bigInt, new JSValue[]{new JSString("en-US")});
         JSString str = result.asString().orElseThrow();
-        assertThat(str.value()).isEqualTo("12345");
+        assertThat(str.value()).isEqualTo("12,345");
 
-        // Normal case: with arguments (ignored in simplified implementation)
-        result = BigIntPrototype.toLocaleString(context, bigInt, new JSValue[]{new JSString("en-US")});
+        // Normal case: small number (no grouping needed)
+        JSBigInt smallBigInt = new JSBigInt(BigInteger.valueOf(123));
+        result = BigIntPrototype.toLocaleString(context, smallBigInt, new JSValue[]{new JSString("en-US")});
         str = result.asString().orElseThrow();
-        assertThat(str.value()).isEqualTo("12345");
+        assertThat(str.value()).isEqualTo("123");
 
         // Edge case: called on non-BigInt
         result = BigIntPrototype.toLocaleString(context, new JSString("not a bigint"), new JSValue[]{});

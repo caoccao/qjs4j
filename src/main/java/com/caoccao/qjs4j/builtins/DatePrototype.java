@@ -517,15 +517,44 @@ public final class DatePrototype {
     }
 
     public static JSValue toLocaleDateString(JSContext context, JSValue thisArg, JSValue[] args) {
-        return getDateString(context, thisArg, FORMAT_LOCALE, PART_DATE);
+        return formatWithDateTimeFormat(context, thisArg, args, "toLocaleDateString", "date", "date");
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        return getDateString(context, thisArg, FORMAT_LOCALE, PART_ALL);
+        return formatWithDateTimeFormat(context, thisArg, args, "toLocaleString", "any", "all");
     }
 
     public static JSValue toLocaleTimeString(JSContext context, JSValue thisArg, JSValue[] args) {
-        return getDateString(context, thisArg, FORMAT_LOCALE, PART_TIME);
+        return formatWithDateTimeFormat(context, thisArg, args, "toLocaleTimeString", "time", "time");
+    }
+
+    /**
+     * Delegate to Intl.DateTimeFormat for locale-aware formatting.
+     * Per ECMA-402, Date.prototype.toLocale*String methods use DateTimeFormat internally.
+     * The required/defaults parameters follow ToDateTimeOptions(options, required, defaults).
+     */
+    private static JSValue formatWithDateTimeFormat(JSContext context, JSValue thisArg, JSValue[] args,
+                                                     String methodName, String required, String defaults) {
+        JSDate date = requireDate(context, thisArg, methodName);
+        if (date == null) {
+            return context.getPendingException();
+        }
+        double timeValue = date.getTimeValue();
+        if (Double.isNaN(timeValue)) {
+            return new JSString("Invalid Date");
+        }
+        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue[] dtfArgs = {locales, options};
+        JSValue dtf = JSIntlObject.createDateTimeFormat(context, null, dtfArgs, required, defaults);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (dtf instanceof JSIntlDateTimeFormat dateTimeFormat) {
+            return new JSString(dateTimeFormat.format(timeValue));
+        }
+        // Fallback if DateTimeFormat creation fails unexpectedly
+        return getDateString(context, thisArg, FORMAT_LOCALE, PART_ALL);
     }
 
     private static JSNumber toNumberOrThrow(JSContext context, JSValue value) {

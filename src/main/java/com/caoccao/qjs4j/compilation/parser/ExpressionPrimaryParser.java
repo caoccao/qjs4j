@@ -149,7 +149,24 @@ final class ExpressionPrimaryParser {
             return new NewExpression(callee, args, location);
         }
 
-        return expressions.parsePrimaryExpression();
+        Expression expr = expressions.parsePrimaryExpression();
+        while (true) {
+            if (parserContext.match(TokenType.DOT)) {
+                parserContext.advance();
+                SourceLocation memberLocation = parserContext.getLocation();
+                Expression property = expressions.parsePropertyName();
+                expr = new MemberExpression(expr, property, false, memberLocation);
+            } else if (parserContext.match(TokenType.LBRACKET)) {
+                parserContext.advance();
+                SourceLocation memberLocation = parserContext.getLocation();
+                Expression property = expressions.parseExpression();
+                parserContext.expect(TokenType.RBRACKET);
+                expr = new MemberExpression(expr, property, true, memberLocation);
+            } else {
+                break;
+            }
+        }
+        return expr;
     }
 
     Expression parsePostPrimaryExpression(Expression expr, SourceLocation location) {

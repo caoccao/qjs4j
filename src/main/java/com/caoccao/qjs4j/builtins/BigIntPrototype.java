@@ -18,10 +18,6 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
 
-import java.math.BigInteger;
-import java.text.NumberFormat;
-import java.util.Locale;
-
 /**
  * Implementation of BigInt.prototype methods.
  * Based on ES2020 BigInt specification.
@@ -29,28 +25,26 @@ import java.util.Locale;
 public final class BigIntPrototype {
     /**
      * BigInt.prototype.toLocaleString(locales, options)
-     * ES2020 20.2.3.2
-     * Returns a localized string representation using Intl.NumberFormat semantics.
+     * ES2024 21.2.3.2
+     * Delegates to Intl.NumberFormat per the specification:
+     * 1. Let x = thisBigIntValue(this)
+     * 2. Let numberFormat = Construct(%NumberFormat%, [locales, options])
+     * 3. Return FormatNumeric(numberFormat, x)
      */
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
         return thisArg.asBigIntWithDownCast()
                 .map(jsBigInt -> {
-                    BigInteger value = jsBigInt.value();
-                    Locale locale = Locale.getDefault();
-                    if (args.length > 0 && !args[0].isNullOrUndefined()) {
-                        String localeTag = JSTypeConversions.toString(context, args[0]).value();
-                        if (context.hasPendingException()) {
-                            return (JSValue) JSUndefined.INSTANCE;
-                        }
-                        try {
-                            locale = Locale.forLanguageTag(localeTag);
-                        } catch (Exception e) {
-                            return (JSValue) context.throwRangeError("Invalid language tag: " + localeTag);
-                        }
+                    // Construct Intl.NumberFormat with the provided locales and options.
+                    // This reuses the same createNumberFormat path that new Intl.NumberFormat() uses,
+                    // ensuring identical validation, option parsing, and exception behavior.
+                    JSValue numberFormatValue = JSIntlObject.createNumberFormat(context, null, args);
+                    if (context.hasPendingException()) {
+                        return (JSValue) JSUndefined.INSTANCE;
                     }
-                    NumberFormat numberFormat = NumberFormat.getIntegerInstance(locale);
-                    numberFormat.setGroupingUsed(false);
-                    return (JSValue) new JSString(numberFormat.format(value));
+                    if (!(numberFormatValue instanceof JSIntlNumberFormat numberFormat)) {
+                        return (JSValue) JSUndefined.INSTANCE;
+                    }
+                    return (JSValue) new JSString(numberFormat.format(jsBigInt.value()));
                 })
                 .orElseGet(() -> context.throwTypeError("BigInt.prototype.toLocaleString requires that 'this' be a BigInt"));
     }
