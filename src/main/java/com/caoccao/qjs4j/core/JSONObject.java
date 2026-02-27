@@ -20,8 +20,10 @@ import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
@@ -31,11 +33,10 @@ import java.util.WeakHashMap;
 public final class JSONObject {
 
     /**
-     * Internal marker for rawJSON objects using Java-level identity tracking.
-     * This avoids exposing the marker as a visible Symbol property on the object.
-     * WeakHashMap allows GC of unreferenced rawJSON objects.
+     * Internal marker for rawJSON objects using weak-key tracking.
+     * This avoids exposing marker properties while allowing GC cleanup.
      */
-    private static final WeakHashMap<JSObject, Boolean> RAW_JSON_OBJECTS = new WeakHashMap<>();
+    private static final Map<JSObject, Boolean> RAW_JSON_OBJECTS = new WeakHashMap<>();
 
     // ========== Safe Function Call Helpers ==========
 
@@ -1413,7 +1414,7 @@ public final class JSONObject {
         final String text;
         // Source tracking for primitive values within structured types (arrays/objects)
         // Tracks both the source text and original parsed value per (parent, key) pair
-        private final IdentityHashMap<JSValue, java.util.Map<String, SourceEntry>> elementSources = new IdentityHashMap<>();
+        private final IdentityHashMap<JSValue, Map<String, SourceEntry>> elementSources = new IdentityHashMap<>();
         // Track whether a value is a structured type (object/array)
         private final IdentityHashMap<JSValue, int[]> structuredRanges = new IdentityHashMap<>();
 
@@ -1445,7 +1446,7 @@ public final class JSONObject {
          */
         String getSourceForValue(String key, JSValue holder, JSValue currentValue) {
             if (holder instanceof JSObject) {
-                java.util.Map<String, SourceEntry> sources = elementSources.get(holder);
+                Map<String, SourceEntry> sources = elementSources.get(holder);
                 if (sources != null) {
                     SourceEntry entry = sources.get(key);
                     if (entry != null) {
@@ -1478,7 +1479,7 @@ public final class JSONObject {
             if (sourceStart < 0 || sourceEnd < 0) {
                 return;
             }
-            elementSources.computeIfAbsent(parent, k -> new java.util.HashMap<>())
+                elementSources.computeIfAbsent(parent, k -> new HashMap<>())
                     .put(key, new SourceEntry(text.substring(sourceStart, sourceEnd), parsedValue));
         }
 

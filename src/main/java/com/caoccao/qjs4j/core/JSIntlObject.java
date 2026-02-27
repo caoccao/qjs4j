@@ -534,15 +534,25 @@ public final class JSIntlObject {
             }
 
             // Resolve calendar from locale unicode extension if not specified in options
+            Map<String, String> unicodeExtensions = parseUnicodeExtensions(locale.toLanguageTag());
             if (calendar == null) {
-                Map<String, String> unicodeExtensions = parseUnicodeExtensions(locale.toLanguageTag());
                 if (unicodeExtensions.containsKey("ca")) {
                     calendar = canonicalizeCalendar(unicodeExtensions.get("ca"));
                 }
             }
+            if (calendar == null) {
+                calendar = "gregory";
+            }
 
-            // Strip invalid unicode extension keys from locale
-            Locale resolvedLocale = stripUnicodeExtensions(locale);
+            if (numberingSystem == null && unicodeExtensions.containsKey("nu")) {
+                String localeNumberingSystem = unicodeExtensions.get("nu").toLowerCase(Locale.ROOT);
+                if (isSupportedDateTimeNumberingSystem(localeNumberingSystem)) {
+                    numberingSystem = localeNumberingSystem;
+                }
+            }
+
+            // Keep supported numbering system locale extension, but strip calendar extension.
+            Locale resolvedLocale = stripCalendarUnicodeExtension(locale);
 
             JSIntlDateTimeFormat dateTimeFormat = new JSIntlDateTimeFormat(
                     resolvedLocale, dateStyle, timeStyle, calendar, numberingSystem, timeZone,
@@ -762,15 +772,29 @@ public final class JSIntlObject {
         if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
             return context.throwTypeError("Intl.DateTimeFormat.prototype.format called on incompatible receiver");
         }
-        double epochMillis;
-        if (args.length == 0 || args[0].isUndefined()) {
-            epochMillis = System.currentTimeMillis();
-        } else if (args[0] instanceof JSDate jsDate) {
-            epochMillis = jsDate.getTimeValue();
-        } else {
-            epochMillis = JSTypeConversions.toNumber(context, args[0]).value();
+        double epochMillis = toDateTimeEpochMillis(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE, true);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
         return new JSString(dateTimeFormat.format(epochMillis));
+    }
+
+    /**
+     * Getter for Intl.DateTimeFormat.prototype.format.
+     */
+    public static JSValue dateTimeFormatFormatGetter(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
+            return context.throwTypeError("Intl.DateTimeFormat.prototype.format called on incompatible receiver");
+        }
+        JSFunction cachedBoundFormatFunction = dateTimeFormat.getBoundFormatFunction();
+        if (cachedBoundFormatFunction != null) {
+            return cachedBoundFormatFunction;
+        }
+        JSNativeFunction boundFormatFunction = new JSNativeFunction("", 1,
+                (childContext, thisValue, formatArgs) -> dateTimeFormatFormat(childContext, dateTimeFormat, formatArgs));
+        context.transferPrototype(boundFormatFunction, JSFunction.NAME);
+        dateTimeFormat.setBoundFormatFunction(boundFormatFunction);
+        return boundFormatFunction;
     }
 
     /**
@@ -780,17 +804,98 @@ public final class JSIntlObject {
         if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
             return context.throwTypeError("Intl.DateTimeFormat.prototype.formatToParts called on incompatible receiver");
         }
-        double dateValue;
-        if (args.length == 0 || args[0] instanceof JSUndefined) {
-            dateValue = System.currentTimeMillis();
-        } else {
-            dateValue = JSTypeConversions.toNumber(context, args[0]).value();
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        double dateValue = toDateTimeEpochMillis(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE, true);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
         List<JSIntlDateTimeFormat.DatePart> partsList = dateTimeFormat.formatToPartsList(dateValue);
         return datePartsToJSArray(context, partsList);
+    }
+
+    /**
+     * Intl.DateTimeFormat.prototype.formatRange(startDate, endDate)
+     */
+    public static JSValue dateTimeFormatFormatRange(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
+            return context.throwTypeError("Intl.DateTimeFormat.prototype.formatRange called on incompatible receiver");
+        }
+        JSValue startArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue endArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        if (startArg instanceof JSUndefined || endArg instanceof JSUndefined) {
+            return context.throwTypeError("start date or end date is undefined");
+        }
+        double startDate = toDateTimeEpochMillis(context, startArg, false);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        double endDate = toDateTimeEpochMillis(context, endArg, false);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        if (Double.compare(startDate, endDate) == 0) {
+            return new JSString(dateTimeFormat.format(startDate));
+        }
+
+        List<JSIntlDateTimeFormat.DatePart> startParts = dateTimeFormat.formatToPartsList(startDate);
+        List<JSIntlDateTimeFormat.DatePart> endParts = dateTimeFormat.formatToPartsList(endDate);
+
+        StringBuilder resultBuilder = new StringBuilder();
+        if (startParts.equals(endParts)) {
+            for (JSIntlDateTimeFormat.DatePart startPart : startParts) {
+                resultBuilder.append(startPart.value());
+            }
+            return new JSString(resultBuilder.toString());
+        }
+
+        boolean isYearSame = true;
+        int comparablePartCount = Math.min(startParts.size(), endParts.size());
+        for (int index = 0; index < comparablePartCount; index++) {
+            JSIntlDateTimeFormat.DatePart startPart = startParts.get(index);
+            JSIntlDateTimeFormat.DatePart endPart = endParts.get(index);
+            if ("year".equals(startPart.type()) && !startPart.equals(endPart)) {
+                isYearSame = false;
+                break;
+            }
+        }
+        boolean canCollapse = dateTimeFormat.hasTextMonth() && isYearSame && startParts.size() == endParts.size();
+        if (canCollapse) {
+            int firstDifferenceIndex = -1;
+            int lastDifferenceIndex = -1;
+            for (int index = 0; index < startParts.size(); index++) {
+                if (!startParts.get(index).equals(endParts.get(index))) {
+                    if (firstDifferenceIndex < 0) {
+                        firstDifferenceIndex = index;
+                    }
+                    lastDifferenceIndex = index;
+                }
+            }
+            if (firstDifferenceIndex >= 0) {
+                for (int index = 0; index < firstDifferenceIndex; index++) {
+                    resultBuilder.append(startParts.get(index).value());
+                }
+                for (int index = firstDifferenceIndex; index <= lastDifferenceIndex; index++) {
+                    resultBuilder.append(startParts.get(index).value());
+                }
+                resultBuilder.append(" \u2013 ");
+                for (int index = firstDifferenceIndex; index <= lastDifferenceIndex; index++) {
+                    resultBuilder.append(endParts.get(index).value());
+                }
+                for (int index = lastDifferenceIndex + 1; index < startParts.size(); index++) {
+                    resultBuilder.append(startParts.get(index).value());
+                }
+                return new JSString(resultBuilder.toString());
+            }
+        }
+
+        for (JSIntlDateTimeFormat.DatePart startPart : startParts) {
+            resultBuilder.append(startPart.value());
+        }
+        resultBuilder.append(" \u2013 ");
+        for (JSIntlDateTimeFormat.DatePart endPart : endParts) {
+            resultBuilder.append(endPart.value());
+        }
+        return new JSString(resultBuilder.toString());
     }
 
     /**
@@ -808,23 +913,13 @@ public final class JSIntlObject {
             return context.throwTypeError("start date or end date is undefined");
         }
 
-        double startDate = JSTypeConversions.toNumber(context, startArg).value();
+        double startDate = toDateTimeEpochMillis(context, startArg, false);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        double endDate = JSTypeConversions.toNumber(context, endArg).value();
+        double endDate = toDateTimeEpochMillis(context, endArg, false);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
-        }
-
-        // Apply TimeClip: NaN, Infinity, or abs(time) > 8.64e15 → RangeError
-        if (Double.isNaN(startDate) || Double.isInfinite(startDate)
-                || Math.abs(startDate) > 8.64e15) {
-            return context.throwRangeError("Invalid time value");
-        }
-        if (Double.isNaN(endDate) || Double.isInfinite(endDate)
-                || Math.abs(endDate) > 8.64e15) {
-            return context.throwRangeError("Invalid time value");
         }
 
         List<JSIntlDateTimeFormat.DatePart> startParts = dateTimeFormat.formatToPartsList(startDate);
@@ -897,6 +992,28 @@ public final class JSIntlObject {
             result.push(createPartObject(context, part.type(), part.value(), "endRange"));
         }
         return result;
+    }
+
+    private static double toDateTimeEpochMillis(JSContext context, JSValue value, boolean useCurrentTimeForUndefined) {
+        if (useCurrentTimeForUndefined && value instanceof JSUndefined) {
+            return System.currentTimeMillis();
+        }
+
+        double epochMillis;
+        if (value instanceof JSDate jsDate) {
+            epochMillis = jsDate.getTimeValue();
+        } else {
+            epochMillis = JSTypeConversions.toNumber(context, value).value();
+            if (context.hasPendingException()) {
+                return Double.NaN;
+            }
+        }
+
+        if (!Double.isFinite(epochMillis) || Math.abs(epochMillis) > 8.64e15) {
+            context.throwRangeError("Invalid time value");
+            return Double.NaN;
+        }
+        return epochMillis;
     }
 
     private static JSObject createPartObject(JSContext context, String type, String value, String source) {
@@ -1456,6 +1573,85 @@ public final class JSIntlObject {
             return locale;
         }
         return Locale.forLanguageTag(strippedTag);
+    }
+
+    private static Locale stripCalendarUnicodeExtension(Locale locale) {
+        String languageTag = locale.toLanguageTag();
+        String[] parts = languageTag.split("-");
+        StringBuilder builder = new StringBuilder();
+        for (int index = 0; index < parts.length; index++) {
+            String part = parts[index];
+            if ("u".equalsIgnoreCase(part)) {
+                if (builder.length() > 0) {
+                    builder.append('-');
+                }
+                builder.append(part);
+                index++;
+                while (index < parts.length) {
+                    String key = parts[index];
+                    if (key.length() != 2) {
+                        index++;
+                        continue;
+                    }
+
+                    if ("ca".equalsIgnoreCase(key)) {
+                        index++;
+                        while (index < parts.length && parts[index].length() > 2) {
+                            index++;
+                        }
+                        continue;
+                    }
+
+                    boolean keepKey = false;
+                    if ("hc".equalsIgnoreCase(key)) {
+                        keepKey = true;
+                    } else if ("nu".equalsIgnoreCase(key)) {
+                        int valueIndex = index + 1;
+                        if (valueIndex < parts.length && parts[valueIndex].length() > 2) {
+                            String value = parts[valueIndex].toLowerCase(Locale.ROOT);
+                            keepKey = isSupportedDateTimeNumberingSystem(value);
+                        }
+                    }
+
+                    if (keepKey) {
+                        builder.append('-').append(key);
+                    }
+                    index++;
+                    while (index < parts.length && parts[index].length() > 2) {
+                        if (keepKey) {
+                            builder.append('-').append(parts[index]);
+                        }
+                        index++;
+                    }
+                }
+                String filteredTag = builder.toString();
+                if (filteredTag.endsWith("-u")) {
+                    filteredTag = filteredTag.substring(0, filteredTag.length() - 2);
+                    if (filteredTag.endsWith("-")) {
+                        filteredTag = filteredTag.substring(0, filteredTag.length() - 1);
+                    }
+                }
+                if (filteredTag.isEmpty()) {
+                    return locale;
+                }
+                return Locale.forLanguageTag(filteredTag);
+            }
+            if (builder.length() > 0) {
+                builder.append('-');
+            }
+            builder.append(part);
+        }
+        return locale;
+    }
+
+    private static boolean isSupportedDateTimeNumberingSystem(String numberingSystem) {
+        if (numberingSystem == null) {
+            return false;
+        }
+        return "latn".equals(numberingSystem)
+                || "arab".equals(numberingSystem)
+                || "deva".equals(numberingSystem)
+                || "hanidec".equals(numberingSystem);
     }
 
     public static JSValue supportedLocalesOf(JSContext context, JSValue thisArg, JSValue[] args) {

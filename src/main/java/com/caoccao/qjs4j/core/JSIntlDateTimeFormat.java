@@ -53,6 +53,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
     private final String timeZoneNameOption;
     private final String weekdayOption;
     private final String yearOption;
+    private JSFunction boundFormatFunction;
 
         private static final int[] CHINESE_LUNAR_YEAR_INFO = {
             0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260, 0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2,
@@ -72,6 +73,8 @@ public final class JSIntlDateTimeFormat extends JSObject {
             0x0b5a0, 0x056d0, 0x055b2, 0x049b0, 0x0a577, 0x0a4b0, 0x0aa50, 0x1b255, 0x06d20, 0x0ada0,
             0x14b63
         };
+        private static final String[] HEAVENLY_STEMS = {"甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"};
+        private static final String[] EARTHLY_BRANCHES = {"子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"};
 
     /**
      * A typed part from date formatting.
@@ -115,8 +118,12 @@ public final class JSIntlDateTimeFormat extends JSObject {
         ZoneId zoneId = resolveZoneId();
         ZonedDateTime dateTime = ZonedDateTime.ofInstant(
                 Instant.ofEpochMilli((long) epochMillis), zoneId);
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(formatPattern, locale);
-        return formatter.withZone(zoneId).format(dateTime);
+        List<DatePart> parts = decomposeParts(dateTime, zoneId);
+        StringBuilder result = new StringBuilder();
+        for (DatePart part : parts) {
+            result.append(part.value());
+        }
+        return applyNumberingSystem(result.toString());
     }
 
     /**
@@ -138,6 +145,10 @@ public final class JSIntlDateTimeFormat extends JSObject {
 
     public FormatStyle getDateStyle() {
         return dateStyle;
+    }
+
+    public JSFunction getBoundFormatFunction() {
+        return boundFormatFunction;
     }
 
     public String getDayOption() {
@@ -204,6 +215,10 @@ public final class JSIntlDateTimeFormat extends JSObject {
         return yearOption;
     }
 
+    public void setBoundFormatFunction(JSFunction boundFormatFunction) {
+        this.boundFormatFunction = boundFormatFunction;
+    }
+
     /**
      * Build the format pattern based on options.
      * For dateStyle/timeStyle, uses Java's localized pattern.
@@ -253,7 +268,11 @@ public final class JSIntlDateTimeFormat extends JSObject {
         FormatStyle baseStyle = useTextMonth ? FormatStyle.MEDIUM : FormatStyle.SHORT;
         String basePattern = DateTimeFormatterBuilder.getLocalizedDateTimePattern(
                 baseStyle, null, IsoChronology.INSTANCE, locale);
-        return adjustPatternFields(basePattern, true);
+        String adjustedPattern = adjustPatternFields(basePattern, true);
+        if (eraOption != null && !"chinese".equals(calendar) && !"dangi".equals(calendar) && adjustedPattern.indexOf('G') < 0) {
+            adjustedPattern = adjustedPattern + " G";
+        }
+        return adjustedPattern;
     }
 
     /**
@@ -261,6 +280,15 @@ public final class JSIntlDateTimeFormat extends JSObject {
      */
     private String buildTimeSubPattern() {
         StringBuilder pattern = new StringBuilder();
+        boolean hasClockField = hourOption != null || minuteOption != null || secondOption != null || fractionalSecondDigits != null;
+        if (!hasClockField && dayPeriodOption != null) {
+            switch (dayPeriodOption) {
+                case "long" -> pattern.append("BBBB");
+                case "narrow" -> pattern.append("BBBBB");
+                default -> pattern.append("B");
+            }
+            return pattern.toString();
+        }
         if (hourOption != null) {
             boolean use12Hour = hourCycle == null || "h12".equals(hourCycle) || "h11".equals(hourCycle);
             char hourChar = use12Hour ? 'h' : 'H';
@@ -450,6 +478,17 @@ public final class JSIntlDateTimeFormat extends JSObject {
         boolean useLunarParts = isChineseOrDangiCalendar();
         if (useLunarParts) {
             lunarDate = toChineseLunarDate(dateTime.toLocalDate());
+            if (isLunarYearOnlyPattern()) {
+                String yearName = chineseYearName(lunarDate.relatedYear());
+                if ("zh".equals(locale.getLanguage())) {
+                    parts.add(new DatePart("yearName", yearName));
+                    parts.add(new DatePart("literal", "年"));
+                } else {
+                    parts.add(new DatePart("relatedYear", Integer.toString(lunarDate.relatedYear())));
+                    parts.add(new DatePart("yearName", yearName));
+                }
+                return parts;
+            }
         }
         int i = 0;
         while (i < formatPattern.length()) {
@@ -470,6 +509,11 @@ public final class JSIntlDateTimeFormat extends JSObject {
                     i++;
                 }
                 int fieldWidth = i - fieldStart;
+                if (useLunarParts && c == 'y' && lunarDate != null) {
+                    parts.add(new DatePart("relatedYear", Integer.toString(lunarDate.relatedYear())));
+                    parts.add(new DatePart("yearName", chineseYearName(lunarDate.relatedYear())));
+                    continue;
+                }
                 String type = fieldCharToType(c, useLunarParts);
                 String value = formatField(dateTime, zoneId, c, fieldWidth, lunarDate);
                 if ("second".equals(type) && fractionalSecondDigits != null
@@ -515,6 +559,13 @@ public final class JSIntlDateTimeFormat extends JSObject {
      * Format a single field from a ZonedDateTime.
      */
     private String formatField(ZonedDateTime dateTime, ZoneId zoneId, char field, int width, LunarDate lunarDate) {
+        if ((field == 'a' || field == 'b' || field == 'B') && dayPeriodOption != null && "en".equals(locale.getLanguage())) {
+            return resolveEnglishDayPeriod(dateTime.getHour(), dayPeriodOption);
+        }
+        if (field == 'G' && eraOption != null) {
+            int year = dateTime.getYear();
+            return resolveEraValue(year);
+        }
         if (lunarDate != null) {
             if (field == 'y') {
                 return Integer.toString(lunarDate.relatedYear());
@@ -534,6 +585,102 @@ public final class JSIntlDateTimeFormat extends JSObject {
         }
         String pattern = String.valueOf(field).repeat(width);
         return DateTimeFormatter.ofPattern(pattern, locale).withZone(zoneId).format(dateTime);
+    }
+
+    private String resolveEraValue(int isoYear) {
+        if (calendar == null || "gregory".equals(calendar)) {
+            return isoYear <= 0 ? "BC" : "AD";
+        }
+        if ("japanese".equals(calendar)) {
+            if (isoYear >= 2019) {
+                return "Reiwa";
+            }
+            if (isoYear >= 1989) {
+                return "Heisei";
+            }
+            if (isoYear >= 1926) {
+                return "Showa";
+            }
+            if (isoYear >= 1912) {
+                return "Taisho";
+            }
+            if (isoYear >= 1868) {
+                return "Meiji";
+            }
+            if (isoYear > 0) {
+                return "Pre-Meiji";
+            }
+            return "Before Common Era";
+        }
+        if ("roc".equals(calendar)) {
+            return isoYear >= 1912 ? "Minguo" : "Before R.O.C.";
+        }
+        if ("buddhist".equals(calendar)
+                || "ethioaa".equals(calendar)
+                || "hebrew".equals(calendar)
+                || "indian".equals(calendar)
+                || "persian".equals(calendar)) {
+            return calendar;
+        }
+        return isoYear <= 0 ? "BC" : "AD";
+    }
+
+    private boolean isLunarYearOnlyPattern() {
+        boolean hasDateOnlyYear = yearOption != null
+                && monthOption == null
+                && dayOption == null
+                && weekdayOption == null;
+        boolean hasNoTimeFields = dayPeriodOption == null
+                && hourOption == null
+                && minuteOption == null
+                && secondOption == null
+                && fractionalSecondDigits == null
+                && timeZoneNameOption == null;
+        return hasDateOnlyYear && hasNoTimeFields;
+    }
+
+    private static String resolveEnglishDayPeriod(int hourOfDay, String dayPeriodStyle) {
+        if (hourOfDay == 12) {
+            return "narrow".equals(dayPeriodStyle) ? "n" : "noon";
+        }
+        if (hourOfDay >= 6 && hourOfDay < 12) {
+            return "in the morning";
+        }
+        if (hourOfDay >= 13 && hourOfDay < 18) {
+            return "in the afternoon";
+        }
+        if (hourOfDay >= 18 && hourOfDay < 21) {
+            return "in the evening";
+        }
+        return "at night";
+    }
+
+    private String applyNumberingSystem(String text) {
+        if (numberingSystem == null) {
+            return text;
+        }
+        String digitMap;
+        switch (numberingSystem) {
+            case "arab" -> digitMap = "٠١٢٣٤٥٦٧٨٩";
+            case "deva" -> digitMap = "०१२३४५६७८९";
+            case "hanidec" -> digitMap = "〇一二三四五六七八九";
+            default -> {
+                return text;
+            }
+        }
+
+        StringBuilder builder = new StringBuilder(text.length());
+        for (int index = 0; index < text.length(); index++) {
+            char character = text.charAt(index);
+            if (character >= '0' && character <= '9') {
+                builder.append(digitMap.charAt(character - '0'));
+            } else if (character == '.' && "arab".equals(numberingSystem)) {
+                builder.append('٫');
+            } else {
+                builder.append(character);
+            }
+        }
+        return builder.toString();
     }
 
     private boolean isChineseOrDangiCalendar() {
@@ -636,6 +783,12 @@ public final class JSIntlDateTimeFormat extends JSObject {
         int yearInfo = CHINESE_LUNAR_YEAR_INFO[year - 1900];
         int monthMask = 0x10000 >> month;
         return (yearInfo & monthMask) != 0 ? 30 : 29;
+    }
+
+    private static String chineseYearName(int relatedYear) {
+        int stemIndex = Math.floorMod(relatedYear - 4, 10);
+        int branchIndex = Math.floorMod(relatedYear - 4, 12);
+        return HEAVENLY_STEMS[stemIndex] + EARTHLY_BRANCHES[branchIndex];
     }
 
     private record LunarDate(int relatedYear, int month, int day) {
