@@ -19,6 +19,9 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+
 import java.math.BigInteger;
 
 /**
@@ -97,7 +100,9 @@ public final class BigIntConstructor {
                 return context.throwRangeError("The number " + num +
                         " cannot be converted to a BigInt because it is not an integer");
             }
-            return new JSBigInt((long) value);
+            // Use BigDecimal for exact conversion to handle values outside long range
+            BigInteger bigIntValue = new BigDecimal(value).toBigInteger();
+            return new JSBigInt(bigIntValue);
         } else if (arg instanceof JSString str) {
             String strValue = str.value().trim();
             try {

@@ -134,6 +134,10 @@ public final class JSIntlDisplayNames extends JSObject {
         if (code.contains("_")) {
             return false;
         }
+        // Reject leading/trailing separator or consecutive separators
+        if (code.endsWith("-")) {
+            return false;
+        }
         // Reject "root"
         if ("root".equalsIgnoreCase(code)) {
             return false;

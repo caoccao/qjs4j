@@ -172,7 +172,12 @@ public final class JSIntlObject {
         }
         LinkedHashSet<String> canonicalLocales = new LinkedHashSet<>();
         for (String localeTag : localeTags) {
-            canonicalLocales.add(parseLocaleTag(localeTag).toLanguageTag());
+            try {
+                canonicalLocales.add(parseLocaleTag(localeTag).toLanguageTag());
+            } catch (IllegalArgumentException e) {
+                context.throwRangeError("Incorrect locale information provided");
+                return new ArrayList<>();
+            }
         }
         return new ArrayList<>(canonicalLocales);
     }
@@ -729,11 +734,43 @@ public final class JSIntlObject {
                 return context.throwRangeError("Value " + localeMatcher + " out of range for Intl.NumberFormat options property localeMatcher");
             }
 
-            String style = normalizeOption(
-                    getOptionString(context, optionsValue, "style"),
-                    "decimal",
-                    "decimal", "currency", "percent");
+            String style = getOptionString(context, optionsValue, "style");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            // Accept "unit" and other styles
+            if (style == null || style.isBlank()) {
+                style = "decimal";
+            } else if (!"decimal".equals(style) && !"currency".equals(style) && !"percent".equals(style) && !"unit".equals(style)) {
+                return context.throwRangeError("Invalid option value: " + style);
+            }
+
             String currency = getOptionString(context, optionsValue, "currency");
+
+            // Parse unit and unitDisplay for unit style
+            String unit = getOptionString(context, optionsValue, "unit");
+            if ("unit".equals(style) && (unit == null || unit.isBlank())) {
+                return context.throwRangeError("Unit is required with unit style");
+            }
+            String unitDisplay = getOptionString(context, optionsValue, "unitDisplay");
+            if (unitDisplay == null) {
+                unitDisplay = "short";
+            }
+
+            // Parse signDisplay
+            String signDisplay = getOptionString(context, optionsValue, "signDisplay");
+            if (signDisplay == null) {
+                signDisplay = "auto";
+            }
+
+            // Parse roundingMode
+            String roundingMode = getOptionString(context, optionsValue, "roundingMode");
+            if (roundingMode == null) {
+                roundingMode = "halfExpand";
+            }
+
+            // Parse numberingSystem
+            String numberingSystem = getOptionString(context, optionsValue, "numberingSystem");
 
             // Validate currency: must be 3 ASCII letter ISO 4217 code
             if (currency != null) {
@@ -825,7 +862,8 @@ public final class JSIntlObject {
 
             JSIntlNumberFormat numberFormat = new JSIntlNumberFormat(locale, style, currency,
                     useGrouping, minimumIntegerDigits, minimumFractionDigits, maximumFractionDigits,
-                    useSignificantDigits, maximumSignificantDigits);
+                    useSignificantDigits, maximumSignificantDigits,
+                    unit, unitDisplay, signDisplay, roundingMode, numberingSystem);
             numberFormat.setPrototype(prototype);
             return numberFormat;
         } catch (IllegalArgumentException e) {
@@ -1454,6 +1492,347 @@ public final class JSIntlObject {
         return result;
     }
 
+    // =========================================================================
+    // Intl.NumberFormat.prototype.formatToParts
+    // =========================================================================
+
+    public static JSValue numberFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
+            return context.throwTypeError("Intl.NumberFormat.prototype.formatToParts called on incompatible receiver");
+        }
+        if (args.length == 0) {
+            return numberFormat.formatToParts(context, Double.NaN);
+        }
+        JSValue arg = args[0];
+        if (arg instanceof JSString str) {
+            return numberFormat.formatToParts(context, str.value());
+        }
+        double numValue = JSTypeConversions.toNumber(context, arg).value();
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return numberFormat.formatToParts(context, numValue);
+    }
+
+    // =========================================================================
+    // Intl.ListFormat.prototype.formatToParts
+    // =========================================================================
+
+    public static JSValue listFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlListFormat listFormat)) {
+            return context.throwTypeError("Intl.ListFormat.prototype.formatToParts called on incompatible receiver");
+        }
+        List<String> values = new ArrayList<>();
+        if (args.length > 0 && args[0] instanceof JSArray arr) {
+            for (int i = 0; i < arr.getLength(); i++) {
+                JSValue item = arr.get(context, PropertyKey.fromIndex(i));
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                values.add(JSTypeConversions.toString(context, item).value());
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            }
+        }
+        List<JSIntlDurationFormat.ListFormatPart> parts = JSIntlDurationFormat.formatListToParts(listFormat, values);
+        JSArray result = context.createJSArray();
+        for (int i = 0; i < parts.size(); i++) {
+            JSIntlDurationFormat.ListFormatPart part = parts.get(i);
+            JSObject partObj = context.createJSObject();
+            partObj.set("type", new JSString(part.type()));
+            partObj.set("value", new JSString(part.value()));
+            result.set(context, i, partObj);
+        }
+        return result;
+    }
+
+    // =========================================================================
+    // Intl.DurationFormat
+    // =========================================================================
+
+    /**
+     * Intl.DurationFormat constructor.
+     */
+    public static JSValue createDurationFormat(JSContext context, JSObject prototype, JSValue[] args) {
+        JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "DurationFormat");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        // Resolve locale
+        Locale locale = resolveLocale(context, args, 0);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        // Get options object (optional, defaults to undefined)
+        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSObject options = null;
+        if (optionsArg instanceof JSObject opt) {
+            options = opt;
+        } else if (!(optionsArg instanceof JSUndefined)) {
+            return context.throwTypeError("Options is not an object");
+        }
+
+        // Read localeMatcher (not in resolvedOptions, but read from options)
+        if (options != null) {
+            String localeMatcher = getOptionStringChecked(context, options, "localeMatcher");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (localeMatcher != null) {
+                if (!"lookup".equals(localeMatcher) && !"best fit".equals(localeMatcher)) {
+                    return context.throwRangeError("localeMatcher must be \"lookup\" or \"best fit\"");
+                }
+            }
+        }
+
+        // Read numberingSystem
+        String numberingSystem = options != null ? getOptionStringChecked(context, options, "numberingSystem") : null;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (numberingSystem != null && !UNICODE_TYPE_PATTERN.matcher(numberingSystem).matches()) {
+            return context.throwRangeError("Invalid numberingSystem: " + numberingSystem);
+        }
+        if (numberingSystem == null) {
+            numberingSystem = "latn";
+        }
+
+        // Read style (default "short")
+        String style = options != null ? getOptionStringChecked(context, options, "style") : null;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (style == null) {
+            style = "short";
+        } else if (!"long".equals(style) && !"short".equals(style) && !"narrow".equals(style) && !"digital".equals(style)) {
+            return context.throwRangeError("Value " + style + " out of range for Intl.DurationFormat options property style");
+        }
+
+        // Process unit options
+        String prevStyle = null;
+        String[] unitStyles = new String[10];
+        String[] unitDisplays = new String[10];
+
+        for (int i = 0; i < JSIntlDurationFormat.UNIT_NAMES.length; i++) {
+            String unitName = JSIntlDurationFormat.UNIT_NAMES[i];
+
+            // Read unit style from options
+            String unitStyle = options != null ? getOptionStringChecked(context, options, unitName) : null;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+
+            // Track whether the unit style was explicitly provided
+            boolean unitStyleExplicit = (unitStyle != null);
+
+            // Read unit display from options
+            String display = options != null ? getOptionStringChecked(context, options, unitName + "Display") : null;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+
+            // Get valid styles for this unit
+            String[] validStyles = JSIntlDurationFormat.getValidStylesForUnit(i);
+
+            // Validate unit style
+            if (unitStyle != null) {
+                boolean valid = false;
+                for (String vs : validStyles) {
+                    if (vs.equals(unitStyle)) {
+                        valid = true;
+                        break;
+                    }
+                }
+                if (!valid) {
+                    return context.throwRangeError("Value " + unitStyle + " out of range for Intl.DurationFormat options property " + unitName);
+                }
+            }
+
+            // Apply defaults if unit style not specified
+            if (unitStyle == null) {
+                if ("digital".equals(style)) {
+                    unitStyle = JSIntlDurationFormat.getDigitalDefault(i);
+                } else if (prevStyle != null && ("numeric".equals(prevStyle) || "2-digit".equals(prevStyle))) {
+                    unitStyle = "numeric";
+                } else {
+                    unitStyle = style;
+                    // For date units with digital style base, ensure the style is valid
+                    if ("digital".equals(unitStyle)) {
+                        unitStyle = "short"; // fallback for date units
+                    }
+                }
+            }
+
+            // Style conflict check (spec step 6/9)
+            if (prevStyle != null && ("numeric".equals(prevStyle) || "2-digit".equals(prevStyle))) {
+                if (!"numeric".equals(unitStyle) && !"2-digit".equals(unitStyle)) {
+                    return context.throwRangeError("Cannot use style \"" + unitStyle + "\" for " + unitName +
+                            " when previous unit uses \"" + prevStyle + "\" style");
+                }
+                // Upgrade minutes/seconds to 2-digit
+                if ("minutes".equals(unitName) || "seconds".equals(unitName)) {
+                    unitStyle = "2-digit";
+                }
+            }
+
+            // Display default: "always" when unit style was explicitly set in options,
+            // "auto" when unit style was defaulted from the base style or digital defaults
+            if (display == null) {
+                if (unitStyleExplicit && !"digital".equals(style)) {
+                    display = "always";
+                } else {
+                    display = "auto";
+                }
+            } else if (!"auto".equals(display) && !"always".equals(display)) {
+                return context.throwRangeError("Value " + display + " out of range for Intl.DurationFormat options property " + unitName + "Display");
+            }
+
+            unitStyles[i] = unitStyle;
+            unitDisplays[i] = display;
+
+            // Update prevStyle - only propagate for time/subsecond units
+            prevStyle = unitStyle;
+        }
+
+        // In digital mode, when hoursDisplay was explicitly set in options,
+        // set minutesDisplay and secondsDisplay to "always" if they weren't
+        // explicitly set. This ensures minutes:seconds pair is always shown
+        // in digital format even when hours is hidden (hoursDisplay="auto").
+        if ("digital".equals(style) && options != null) {
+            JSValue hoursDisplayVal = options.get(context, PropertyKey.fromString("hoursDisplay"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            boolean hoursDisplayExplicit = hoursDisplayVal != null && !(hoursDisplayVal instanceof JSUndefined);
+            if (hoursDisplayExplicit) {
+                JSValue minutesDisplayVal = options.get(context, PropertyKey.fromString("minutesDisplay"));
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                boolean minutesDisplayExplicit = minutesDisplayVal != null && !(minutesDisplayVal instanceof JSUndefined);
+                if (!minutesDisplayExplicit) {
+                    unitDisplays[5] = "always"; // minutes
+                }
+                JSValue secondsDisplayVal = options.get(context, PropertyKey.fromString("secondsDisplay"));
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                boolean secondsDisplayExplicit = secondsDisplayVal != null && !(secondsDisplayVal instanceof JSUndefined);
+                if (!secondsDisplayExplicit) {
+                    unitDisplays[6] = "always"; // seconds
+                }
+            }
+        }
+
+        // Read fractionalDigits
+        Integer fractionalDigits = null;
+        if (options != null) {
+            JSValue fdValue = options.get(context, PropertyKey.fromString("fractionalDigits"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (fdValue != null && !(fdValue instanceof JSUndefined)) {
+                double fdDouble = JSTypeConversions.toNumber(context, fdValue).value();
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                int fd = (int) fdDouble;
+                if (Double.isNaN(fdDouble) || fd < 0 || fd > 9 || fdDouble != fd) {
+                    return context.throwRangeError("fractionalDigits value is out of range");
+                }
+                fractionalDigits = fd;
+            }
+        }
+
+        JSIntlDurationFormat durationFormat = new JSIntlDurationFormat(locale, numberingSystem, style,
+                unitStyles, unitDisplays, fractionalDigits);
+        if (resolvedPrototype != null) {
+            durationFormat.setPrototype(resolvedPrototype);
+        }
+        return durationFormat;
+    }
+
+    /**
+     * Intl.DurationFormat.prototype.format(duration)
+     */
+    public static JSValue durationFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlDurationFormat durationFormat)) {
+            return context.throwTypeError("Intl.DurationFormat.prototype.format called on incompatible receiver");
+        }
+        if (args.length == 0) {
+            return context.throwTypeError("Invalid duration value");
+        }
+
+        Map<String, Double> durationRecord = JSIntlDurationFormat.toDurationRecord(context, args[0]);
+        if (durationRecord == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        String result = durationFormat.formatDuration(durationRecord);
+        return new JSString(result);
+    }
+
+    /**
+     * Intl.DurationFormat.prototype.formatToParts(duration)
+     */
+    public static JSValue durationFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlDurationFormat durationFormat)) {
+            return context.throwTypeError("Intl.DurationFormat.prototype.formatToParts called on incompatible receiver");
+        }
+        if (args.length == 0) {
+            return context.throwTypeError("Invalid duration value");
+        }
+
+        Map<String, Double> durationRecord = JSIntlDurationFormat.toDurationRecord(context, args[0]);
+        if (durationRecord == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        List<JSIntlDurationFormat.FormatPart> parts = durationFormat.partitionDurationFormatPattern(durationRecord);
+        JSArray result = context.createJSArray();
+        for (int i = 0; i < parts.size(); i++) {
+            JSIntlDurationFormat.FormatPart part = parts.get(i);
+            JSObject partObj = context.createJSObject();
+            partObj.set("type", new JSString(part.type()));
+            partObj.set("value", new JSString(part.value()));
+            if (part.unit() != null) {
+                partObj.set("unit", new JSString(part.unit()));
+            }
+            result.set(context, i, partObj);
+        }
+        return result;
+    }
+
+    /**
+     * Intl.DurationFormat.prototype.resolvedOptions()
+     */
+    public static JSValue durationFormatResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlDurationFormat df)) {
+            return context.throwTypeError("Intl.DurationFormat.prototype.resolvedOptions called on incompatible receiver");
+        }
+        JSObject result = context.createJSObject();
+        result.set("locale", new JSString(df.getLocale().toLanguageTag()));
+        result.set("numberingSystem", new JSString(df.getNumberingSystem()));
+        result.set("style", new JSString(df.getStyle()));
+
+        // Add unit styles and displays in table order
+        for (int i = 0; i < JSIntlDurationFormat.UNIT_NAMES.length; i++) {
+            String unitName = JSIntlDurationFormat.UNIT_NAMES[i];
+            result.set(unitName, new JSString(df.getUnitStyle(i)));
+            result.set(unitName + "Display", new JSString(df.getUnitDisplay(i)));
+        }
+
+        // Add fractionalDigits only if explicitly set
+        if (df.getFractionalDigits() != null) {
+            result.set("fractionalDigits", new JSNumber(df.getFractionalDigits()));
+        }
+
+        return result;
+    }
+
     private static String getOptionString(JSContext context, JSValue optionsValue, String key) {
         if (!(optionsValue instanceof JSObject optionsObject)) {
             return null;
@@ -1699,12 +2078,93 @@ public final class JSIntlObject {
         if (normalizedTag.isEmpty()) {
             throw new IllegalArgumentException("Invalid language tag: " + localeTag);
         }
-        Locale locale = Locale.forLanguageTag(normalizedTag);
-        if (locale.getLanguage().isEmpty() && !"und".equalsIgnoreCase(normalizedTag)
-                && !normalizedTag.toLowerCase(Locale.ROOT).startsWith("und-")) {
-            throw new IllegalArgumentException("Invalid language tag: " + localeTag);
+        // Additional BCP 47 structural validation that Java's Locale.Builder doesn't enforce
+        validateBcp47Structure(normalizedTag);
+        try {
+            return new Locale.Builder().setLanguageTag(normalizedTag).build();
+        } catch (java.util.IllformedLocaleException e) {
+            throw new IllegalArgumentException("Invalid language tag: " + localeTag, e);
         }
-        return locale;
+    }
+
+    /**
+     * Validate BCP 47 structural constraints not enforced by Java's Locale.Builder.
+     * - 4+ letter primary language subtags cannot be followed by extlang subtags
+     * - Variant subtags must not be duplicated
+     * - Extension singletons must not be duplicated
+     */
+    private static void validateBcp47Structure(String tag) {
+        String[] parts = tag.split("-");
+        if (parts.length == 0) {
+            throw new IllegalArgumentException("Invalid language tag: " + tag);
+        }
+
+        String primaryLanguage = parts[0];
+        // Primary language must be all ASCII alpha
+        if (!primaryLanguage.matches("[a-zA-Z]+")) {
+            throw new IllegalArgumentException("Invalid language tag: " + tag);
+        }
+
+        // If primary language is 4+ letters, next subtag cannot be a 3-letter extlang
+        if (primaryLanguage.length() >= 4 && parts.length > 1) {
+            String nextSubtag = parts[1];
+            if (nextSubtag.matches("[a-zA-Z]{3}")) {
+                throw new IllegalArgumentException(
+                        "Invalid language tag: 4+ letter language cannot have extlang subtag: " + tag);
+            }
+        }
+
+        // Collect variants and extension singletons to check for duplicates
+        Set<String> variants = new HashSet<>();
+        Set<Character> extensionSingletons = new HashSet<>();
+        boolean inVariants = false;
+        boolean inExtensions = false;
+        boolean inPrivateUse = false;
+
+        for (int i = 1; i < parts.length; i++) {
+            String part = parts[i].toLowerCase(Locale.ROOT);
+            int length = part.length();
+
+            if (inPrivateUse) {
+                continue;
+            }
+
+            // Private use prefix
+            if ("x".equals(part)) {
+                inPrivateUse = true;
+                continue;
+            }
+
+            // Extension singleton (single letter/digit, not 'x')
+            if (length == 1) {
+                char singleton = part.charAt(0);
+                inExtensions = true;
+                inVariants = false;
+                if (!extensionSingletons.add(singleton)) {
+                    throw new IllegalArgumentException(
+                            "Invalid language tag: duplicate extension singleton '" + singleton + "': " + tag);
+                }
+                continue;
+            }
+
+            if (inExtensions) {
+                // Extension key-value subtags; skip
+                continue;
+            }
+
+            // Before extensions: could be script (4 alpha), region (2 alpha or 3 digit), or variant
+            // Variant: 5-8 alphanum, or 4 alphanum starting with digit
+            boolean isVariant = (length >= 5 && length <= 8) ||
+                    (length == 4 && Character.isDigit(part.charAt(0)));
+
+            if (isVariant || inVariants) {
+                inVariants = true;
+                if (!variants.add(part)) {
+                    throw new IllegalArgumentException(
+                            "Invalid language tag: duplicate variant '" + part + "': " + tag);
+                }
+            }
+        }
     }
 
     /**

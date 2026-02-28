@@ -937,8 +937,35 @@ public final class JSGlobalObject {
         displayNamesPrototype.defineProperty(PropertyKey.fromString("constructor"), displayNamesConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("DisplayNames"), displayNamesConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
+        JSObject durationFormatPrototype = context.createJSObject();
+        durationFormatPrototype.defineProperty(PropertyKey.fromString("format"),
+                new JSNativeFunction("format", 1, JSIntlObject::durationFormatFormat),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        durationFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"),
+                new JSNativeFunction("formatToParts", 1, JSIntlObject::durationFormatFormatToParts),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        durationFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"),
+                new JSNativeFunction("resolvedOptions", 0, JSIntlObject::durationFormatResolvedOptions),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        durationFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                new JSString("Intl.DurationFormat"),
+                PropertyDescriptor.DataState.Configurable);
+        JSNativeFunction durationFormatConstructor = new JSNativeFunction(
+                "DurationFormat",
+                0,
+                (childContext, thisArg, args) -> JSIntlObject.createDurationFormat(childContext, durationFormatPrototype, args),
+                true,
+                true);
+        durationFormatConstructor.defineProperty(PropertyKey.fromString("prototype"), durationFormatPrototype, PropertyDescriptor.DataState.None);
+        durationFormatConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"),
+                new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        durationFormatPrototype.defineProperty(PropertyKey.fromString("constructor"), durationFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        intlObject.defineProperty(PropertyKey.fromString("DurationFormat"), durationFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+
         JSObject numberFormatPrototype = context.createJSObject();
         numberFormatPrototype.defineProperty(PropertyKey.fromString("format"), new JSNativeFunction("format", 1, JSIntlObject::numberFormatFormat), PropertyDescriptor.DataState.ConfigurableWritable);
+        numberFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"), new JSNativeFunction("formatToParts", 1, JSIntlObject::numberFormatFormatToParts), PropertyDescriptor.DataState.ConfigurableWritable);
         numberFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"), new JSNativeFunction("resolvedOptions", 0, JSIntlObject::numberFormatResolvedOptions), PropertyDescriptor.DataState.ConfigurableWritable);
         JSNativeFunction numberFormatConstructor = new JSNativeFunction(
                 "NumberFormat",
@@ -996,6 +1023,7 @@ public final class JSGlobalObject {
 
         JSObject listFormatPrototype = context.createJSObject();
         listFormatPrototype.defineProperty(PropertyKey.fromString("format"), new JSNativeFunction("format", 1, JSIntlObject::listFormatFormat), PropertyDescriptor.DataState.ConfigurableWritable);
+        listFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"), new JSNativeFunction("formatToParts", 1, JSIntlObject::listFormatFormatToParts), PropertyDescriptor.DataState.ConfigurableWritable);
         listFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"), new JSNativeFunction("resolvedOptions", 0, JSIntlObject::listFormatResolvedOptions), PropertyDescriptor.DataState.ConfigurableWritable);
         JSNativeFunction listFormatConstructor = new JSNativeFunction(
                 "ListFormat",

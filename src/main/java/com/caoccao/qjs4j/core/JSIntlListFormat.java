@@ -42,10 +42,24 @@ public final class JSIntlListFormat extends JSObject {
         if (values.size() == 1) {
             return values.get(0);
         }
+
+        // Unit type: no conjunction word, just separators
+        if ("unit".equals(type)) {
+            String separator = "narrow".equals(style) ? " " : ", ";
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < values.size(); i++) {
+                if (i > 0) {
+                    sb.append(separator);
+                }
+                sb.append(values.get(i));
+            }
+            return sb.toString();
+        }
+
+        // Conjunction/disjunction types: use conjunction word
         String conjunction = switch (type) {
             case "disjunction" -> "or";
-            case "unit" -> style.equals("narrow") ? "/" : "and";
-            default -> style.equals("short") ? "&" : "and";
+            default -> "short".equals(style) ? "&" : "and";
         };
         if (values.size() == 2) {
             return values.get(0) + " " + conjunction + " " + values.get(1);
