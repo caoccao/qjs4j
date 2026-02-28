@@ -421,6 +421,18 @@ final class ExpressionCompiler {
         for (ObjectExpression.Property prop : objExpr.properties()) {
             String kind = prop.kind();
 
+            if ("spread".equals(kind)) {
+                // Object spread: {...expr}
+                // Stack: obj -> obj expr null -> obj (via COPY_DATA_PROPERTIES)
+                compileExpression(prop.value());
+                conpilerConext.emitter.emitOpcode(Opcode.NULL);
+                // mask=6: target@sp[-3](offset 2), source@sp[-2](offset 1), exclude@sp[-1](offset 0)
+                conpilerConext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 6);
+                conpilerConext.emitter.emitOpcode(Opcode.DROP);
+                conpilerConext.emitter.emitOpcode(Opcode.DROP);
+                continue;
+            }
+
             if ("get".equals(kind) || "set".equals(kind)) {
                 // Getter/setter property: use DEFINE_METHOD_COMPUTED
                 // Stack: obj -> obj key method -> obj

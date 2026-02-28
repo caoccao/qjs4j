@@ -24,6 +24,7 @@ import java.util.List;
 public record CallExpression(
         Expression callee,
         List<Expression> arguments,
+        boolean optional,
         SourceLocation location
 ) implements Expression {
     @Override

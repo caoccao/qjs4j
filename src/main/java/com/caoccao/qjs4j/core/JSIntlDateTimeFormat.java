@@ -225,17 +225,109 @@ public final class JSIntlDateTimeFormat extends JSObject {
      * For component options, builds a custom pattern.
      */
     private String buildFormatPattern() {
+        String pattern;
         if (dateStyle != null && timeStyle != null) {
-            return DateTimeFormatterBuilder.getLocalizedDateTimePattern(
+            pattern = DateTimeFormatterBuilder.getLocalizedDateTimePattern(
                     dateStyle, timeStyle, IsoChronology.INSTANCE, locale);
         } else if (dateStyle != null) {
-            return DateTimeFormatterBuilder.getLocalizedDateTimePattern(
+            pattern = DateTimeFormatterBuilder.getLocalizedDateTimePattern(
                     dateStyle, null, IsoChronology.INSTANCE, locale);
         } else if (timeStyle != null) {
-            return DateTimeFormatterBuilder.getLocalizedDateTimePattern(
+            pattern = DateTimeFormatterBuilder.getLocalizedDateTimePattern(
                     null, timeStyle, IsoChronology.INSTANCE, locale);
+        } else {
+            return buildComponentPattern();
         }
-        return buildComponentPattern();
+        // Apply hourCycle override to the localized pattern.
+        // Java's localized pattern reflects the locale's default hour cycle,
+        // but ECMA-402 allows overriding via hourCycle option or -u-hc- extension.
+        if (hourCycle != null && (timeStyle != null)) {
+            pattern = applyHourCycleToPattern(pattern, hourCycle);
+        }
+        return pattern;
+    }
+
+    /**
+     * Adjust hour-related fields and AM/PM markers in a pattern to match the requested hourCycle.
+     * h11=K(0-11), h12=h(1-12), h23=H(0-23), h24=k(1-24).
+     */
+    private static String applyHourCycleToPattern(String pattern, String hc) {
+        boolean want24 = "h23".equals(hc) || "h24".equals(hc);
+        char targetHourChar = switch (hc) {
+            case "h11" -> 'K';
+            case "h12" -> 'h';
+            case "h23" -> 'H';
+            case "h24" -> 'k';
+            default -> 'h';
+        };
+        StringBuilder sb = new StringBuilder(pattern.length());
+        boolean inQuote = false;
+        for (int i = 0; i < pattern.length(); i++) {
+            char c = pattern.charAt(i);
+            if (c == '\'') {
+                inQuote = !inQuote;
+                sb.append(c);
+            } else if (inQuote) {
+                sb.append(c);
+            } else if (c == 'h' || c == 'H' || c == 'K' || c == 'k') {
+                // Replace any hour field letter with the target
+                sb.append(targetHourChar);
+            } else if (c == 'a' || c == 'b' || c == 'B') {
+                if (want24) {
+                    // Remove AM/PM / dayPeriod markers for 24-hour cycles.
+                    // Remove the space before the marker (separator between time and AM/PM)
+                    while (sb.length() > 0 && sb.charAt(sb.length() - 1) == ' ') {
+                        sb.deleteCharAt(sb.length() - 1);
+                    }
+                    // Skip all consecutive 'a'/'b'/'B' characters
+                    while (i + 1 < pattern.length() && pattern.charAt(i + 1) == c) {
+                        i++;
+                    }
+                    // Do NOT remove the trailing space — it may separate from timezone name
+                } else {
+                    sb.append(c);
+                }
+            } else {
+                sb.append(c);
+            }
+        }
+        // For 12-hour cycles, if no AM/PM marker exists, add one after the time fields
+        if (!want24) {
+            String result = sb.toString();
+            boolean hasAmPm = false;
+            boolean inQ = false;
+            for (int i = 0; i < result.length(); i++) {
+                char c = result.charAt(i);
+                if (c == '\'') inQ = !inQ;
+                else if (!inQ && (c == 'a' || c == 'b' || c == 'B')) {
+                    hasAmPm = true;
+                    break;
+                }
+            }
+            if (!hasAmPm) {
+                // Find the last hour/minute/second field position and insert " a" after it
+                int lastTimeField = -1;
+                inQ = false;
+                for (int i = 0; i < result.length(); i++) {
+                    char c = result.charAt(i);
+                    if (c == '\'') inQ = !inQ;
+                    else if (!inQ && (c == 'h' || c == 'H' || c == 'K' || c == 'k'
+                            || c == 'm' || c == 's' || c == 'S')) {
+                        lastTimeField = i;
+                    }
+                }
+                if (lastTimeField >= 0) {
+                    // Find end of field run
+                    int insertPos = lastTimeField + 1;
+                    while (insertPos < result.length() && result.charAt(insertPos) == result.charAt(lastTimeField)) {
+                        insertPos++;
+                    }
+                    result = result.substring(0, insertPos) + " a" + result.substring(insertPos);
+                }
+                return result;
+            }
+        }
+        return sb.toString();
     }
 
     /**
@@ -806,7 +898,16 @@ public final class JSIntlDateTimeFormat extends JSObject {
             try {
                 return ZoneId.of(timeZone);
             } catch (Exception e) {
-                // fall through to default
+                // Try ZoneId.SHORT_IDS for abbreviated timezone names (EST, MST, HST, etc.)
+                try {
+                    return ZoneId.of(timeZone, ZoneId.SHORT_IDS);
+                } catch (Exception e2) {
+                    // Fall back to java.util.TimeZone which knows more aliases
+                    java.util.TimeZone tz = java.util.TimeZone.getTimeZone(timeZone);
+                    if (!"GMT".equals(tz.getID()) || "GMT".equalsIgnoreCase(timeZone)) {
+                        return tz.toZoneId();
+                    }
+                }
             }
         }
         return ZoneId.systemDefault();

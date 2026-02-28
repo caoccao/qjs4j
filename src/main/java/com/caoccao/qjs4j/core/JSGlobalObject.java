@@ -893,6 +893,7 @@ public final class JSGlobalObject {
     private void initializeIntlObject() {
         JSObject intlObject = context.createJSObject();
         intlObject.set("getCanonicalLocales", new JSNativeFunction("getCanonicalLocales", 1, JSIntlObject::getCanonicalLocales));
+        intlObject.defineProperty(PropertyKey.fromString("supportedValuesOf"), new JSNativeFunction("supportedValuesOf", 1, JSIntlObject::supportedValuesOf_Intl), PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject dateTimeFormatPrototype = context.createJSObject();
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("format"),
@@ -902,6 +903,7 @@ public final class JSGlobalObject {
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"), new JSNativeFunction("formatToParts", 1, JSIntlObject::dateTimeFormatFormatToParts), PropertyDescriptor.DataState.ConfigurableWritable);
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("formatRange"), new JSNativeFunction("formatRange", 2, JSIntlObject::dateTimeFormatFormatRange), PropertyDescriptor.DataState.ConfigurableWritable);
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("formatRangeToParts"), new JSNativeFunction("formatRangeToParts", 2, JSIntlObject::dateTimeFormatFormatRangeToParts), PropertyDescriptor.DataState.ConfigurableWritable);
+        dateTimeFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.DateTimeFormat"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction dateTimeFormatConstructor = new JSNativeFunction(
                 "DateTimeFormat",
                 0,
@@ -911,6 +913,29 @@ public final class JSGlobalObject {
         dateTimeFormatConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"), new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf), PropertyDescriptor.DataState.ConfigurableWritable);
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("constructor"), dateTimeFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("DateTimeFormat"), dateTimeFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+
+        JSObject displayNamesPrototype = context.createJSObject();
+        displayNamesPrototype.defineProperty(PropertyKey.fromString("of"),
+                new JSNativeFunction("of", 1, JSIntlObject::displayNamesOf),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        displayNamesPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"),
+                new JSNativeFunction("resolvedOptions", 0, JSIntlObject::displayNamesResolvedOptions),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        displayNamesPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                new JSString("Intl.DisplayNames"),
+                PropertyDescriptor.DataState.Configurable);
+        JSNativeFunction displayNamesConstructor = new JSNativeFunction(
+                "DisplayNames",
+                2,
+                (childContext, thisArg, args) -> JSIntlObject.createDisplayNames(childContext, displayNamesPrototype, args),
+                true,
+                true);
+        displayNamesConstructor.defineProperty(PropertyKey.fromString("prototype"), displayNamesPrototype, PropertyDescriptor.DataState.None);
+        displayNamesConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"),
+                new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        displayNamesPrototype.defineProperty(PropertyKey.fromString("constructor"), displayNamesConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        intlObject.defineProperty(PropertyKey.fromString("DisplayNames"), displayNamesConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject numberFormatPrototype = context.createJSObject();
         numberFormatPrototype.defineProperty(PropertyKey.fromString("format"), new JSNativeFunction("format", 1, JSIntlObject::numberFormatFormat), PropertyDescriptor.DataState.ConfigurableWritable);

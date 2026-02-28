@@ -23,6 +23,7 @@ public record MemberExpression(
         Expression object,
         Expression property,
         boolean computed,
+        boolean optional,
         SourceLocation location
 ) implements Expression {
     @Override

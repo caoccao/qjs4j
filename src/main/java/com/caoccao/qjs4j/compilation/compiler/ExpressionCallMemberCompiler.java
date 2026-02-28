@@ -155,6 +155,32 @@ final class ExpressionCallMemberCompiler {
 
         owner.compileExpression(memberExpr.object());
 
+        if (memberExpr.optional()) {
+            // Optional chaining: obj?.prop
+            // Stack: obj -> DUP -> IS_UNDEFINED_OR_NULL -> IF_TRUE(undef) -> access -> GOTO(end) -> undef: DROP UNDEFINED -> end:
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+            int jumpToUndefined = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+
+            // Normal property access
+            emitPropertyAccess(memberExpr);
+
+            int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
+
+            // Undefined path
+            compilerContext.emitter.patchJump(jumpToUndefined, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+
+            // End
+            compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+            return;
+        }
+
+        emitPropertyAccess(memberExpr);
+    }
+
+    private void emitPropertyAccess(MemberExpression memberExpr) {
         if (memberExpr.computed()) {
             owner.compileExpression(memberExpr.property());
             compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);

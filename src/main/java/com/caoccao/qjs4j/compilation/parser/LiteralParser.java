@@ -243,6 +243,20 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
         List<ObjectExpression.Property> properties = new ArrayList<>();
 
         while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+            // Spread property: {...expr}
+            if (parserContext.match(TokenType.ELLIPSIS)) {
+                SourceLocation spreadLocation = parserContext.getLocation();
+                parserContext.advance(); // consume ELLIPSIS
+                Expression argument = delegates.expressions.parseAssignmentExpression();
+                properties.add(new ObjectExpression.Property(null, argument, "spread", false, false, false));
+                if (parserContext.match(TokenType.COMMA)) {
+                    parserContext.advance();
+                } else {
+                    break;
+                }
+                continue;
+            }
+
             boolean isAsync = false;
             boolean isGenerator = false;
 
