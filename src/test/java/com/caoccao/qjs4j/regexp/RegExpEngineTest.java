@@ -433,4 +433,49 @@ public class RegExpEngineTest extends BaseJavetTest {
                 .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("unknown unicode property name");
     }
+
+    @Test
+    public void testOptionalGroupWithAlternationInStarLoop() {
+        // Basic: alternation without star, without optional
+        assertThat(matches("^(a|b)$", "", "a")).as("basic alt a").isTrue();
+        assertThat(matches("^(a|b)$", "", "b")).as("basic alt b").isTrue();
+
+        // Optional alternation (no star)
+        assertThat(matches("^(a|b)?$", "", "")).as("opt alt empty").isTrue();
+        assertThat(matches("^(a|b)?$", "", "a")).as("opt alt a").isTrue();
+
+        // Star without alternation
+        assertThat(matches("^(x)?$", "", "")).as("opt x empty").isTrue();
+        assertThat(matches("^(xa?)*$", "", "x")).as("star xa? x").isTrue();
+        assertThat(matches("^(xa?)*$", "", "xa")).as("star xa? xa").isTrue();
+
+        // Non-capturing optional alternation in star - simplest case
+        assertThat(matches("^(?:a|b)*$", "", "a")).as("nc star alt a").isTrue();
+        assertThat(matches("^(?:a|b)+$", "", "a")).as("nc plus alt a").isTrue();
+
+        // Optional alternation - no star
+        assertThat(matches("^x(?:a|b)?$", "", "x")).as("nc x opt alt").isTrue();
+        assertThat(matches("^x(?:a|b)?$", "", "xa")).as("nc xa opt alt").isTrue();
+
+        // Star of simple optional
+        assertThat(matches("^(?:xa?)*$", "", "x")).as("nc star xa?").isTrue();
+
+        // Star of alternation without optional
+        assertThat(matches("^(?:x(?:a|b))*$", "", "xa")).as("nc star x-alt xa").isTrue();
+
+        // Now the previously-failing combo: optional alternation in star
+        assertThat(matches("^(?:x(?:a|b)?)*$", "", "x")).as("nc star x opt-alt x").isTrue();
+        assertThat(matches("^(?:x(?:a|b)?)*$", "", "xa")).as("nc star x opt-alt xa").isTrue();
+
+        // Capturing optional alternation in star
+        assertThat(matches("^(x(a|b)?)*$", "", "x")).as("star x matches").isTrue();
+        assertThat(matches("^(x(a|b)?)*$", "", "xa")).as("star xa matches").isTrue();
+        assertThat(matches("^(x(a|b)?)*$", "", "xaxb")).as("star xaxb matches").isTrue();
+
+        // Original failing patterns from the bug report
+        assertThat(matches("^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$", "i", "ab-t-cd"))
+                .as("pattern with alternation in star").isTrue();
+        assertThat(matches("^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$", "i", "ab-t-cd-ab"))
+                .as("pattern with alternation in star, matching alternation").isTrue();
+    }
 }

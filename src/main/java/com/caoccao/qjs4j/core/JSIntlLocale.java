@@ -25,11 +25,31 @@ public final class JSIntlLocale extends JSObject {
     public static final String NAME = "Intl.Locale";
     private final Locale locale;
     private final String tag;
+    private final String calendar;
+    private final String caseFirst;
+    private final String collation;
+    private final String hourCycle;
+    private final String numberingSystem;
+    private final boolean numeric;
+    private final boolean numericSet;
 
     public JSIntlLocale(Locale locale, String tag) {
+        this(locale, tag, null, null, null, null, null, false, false);
+    }
+
+    public JSIntlLocale(Locale locale, String tag, String calendar, String caseFirst,
+                        String collation, String hourCycle, String numberingSystem,
+                        boolean numeric, boolean numericSet) {
         super();
         this.locale = locale;
         this.tag = tag;
+        this.calendar = calendar;
+        this.caseFirst = caseFirst;
+        this.collation = collation;
+        this.hourCycle = hourCycle;
+        this.numberingSystem = numberingSystem;
+        this.numeric = numeric;
+        this.numericSet = numericSet;
     }
 
     public String getBaseName() {
@@ -44,12 +64,40 @@ public final class JSIntlLocale extends JSObject {
         return sb.toString();
     }
 
+    public String getCalendar() {
+        return calendar;
+    }
+
+    public String getCaseFirst() {
+        return caseFirst;
+    }
+
+    public String getCollation() {
+        return collation;
+    }
+
+    public String getHourCycle() {
+        return hourCycle;
+    }
+
     public String getLanguage() {
         return locale.getLanguage();
     }
 
     public Locale getLocale() {
         return locale;
+    }
+
+    public String getNumberingSystem() {
+        return numberingSystem;
+    }
+
+    public boolean getNumeric() {
+        return numeric;
+    }
+
+    public boolean isNumericSet() {
+        return numericSet;
     }
 
     public String getRegion() {

@@ -892,7 +892,8 @@ public final class JSGlobalObject {
      */
     private void initializeIntlObject() {
         JSObject intlObject = context.createJSObject();
-        intlObject.set("getCanonicalLocales", new JSNativeFunction("getCanonicalLocales", 1, JSIntlObject::getCanonicalLocales));
+        intlObject.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl"), PropertyDescriptor.DataState.Configurable);
+        intlObject.defineProperty(PropertyKey.fromString("getCanonicalLocales"), new JSNativeFunction("getCanonicalLocales", 1, JSIntlObject::getCanonicalLocales), PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("supportedValuesOf"), new JSNativeFunction("supportedValuesOf", 1, JSIntlObject::supportedValuesOf_Intl), PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject dateTimeFormatPrototype = context.createJSObject();
@@ -1039,7 +1040,13 @@ public final class JSGlobalObject {
         JSObject localePrototype = context.createJSObject();
         localePrototype.defineProperty(PropertyKey.fromString("toString"), new JSNativeFunction("toString", 0, JSIntlObject::localeToString), PropertyDescriptor.DataState.ConfigurableWritable);
         localePrototype.defineProperty(PropertyKey.fromString("baseName"), new JSNativeFunction("get baseName", 0, JSIntlObject::localeGetBaseName), PropertyDescriptor.AccessorState.Configurable);
+        localePrototype.defineProperty(PropertyKey.fromString("calendar"), new JSNativeFunction("get calendar", 0, JSIntlObject::localeGetCalendar), PropertyDescriptor.AccessorState.Configurable);
+        localePrototype.defineProperty(PropertyKey.fromString("caseFirst"), new JSNativeFunction("get caseFirst", 0, JSIntlObject::localeGetCaseFirst), PropertyDescriptor.AccessorState.Configurable);
+        localePrototype.defineProperty(PropertyKey.fromString("collation"), new JSNativeFunction("get collation", 0, JSIntlObject::localeGetCollation), PropertyDescriptor.AccessorState.Configurable);
+        localePrototype.defineProperty(PropertyKey.fromString("hourCycle"), new JSNativeFunction("get hourCycle", 0, JSIntlObject::localeGetHourCycle), PropertyDescriptor.AccessorState.Configurable);
         localePrototype.defineProperty(PropertyKey.fromString("language"), new JSNativeFunction("get language", 0, JSIntlObject::localeGetLanguage), PropertyDescriptor.AccessorState.Configurable);
+        localePrototype.defineProperty(PropertyKey.fromString("numberingSystem"), new JSNativeFunction("get numberingSystem", 0, JSIntlObject::localeGetNumberingSystem), PropertyDescriptor.AccessorState.Configurable);
+        localePrototype.defineProperty(PropertyKey.fromString("numeric"), new JSNativeFunction("get numeric", 0, JSIntlObject::localeGetNumeric), PropertyDescriptor.AccessorState.Configurable);
         localePrototype.defineProperty(PropertyKey.fromString("script"), new JSNativeFunction("get script", 0, JSIntlObject::localeGetScript), PropertyDescriptor.AccessorState.Configurable);
         localePrototype.defineProperty(PropertyKey.fromString("region"), new JSNativeFunction("get region", 0, JSIntlObject::localeGetRegion), PropertyDescriptor.AccessorState.Configurable);
         JSNativeFunction localeConstructor = new JSNativeFunction(

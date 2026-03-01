@@ -361,6 +361,14 @@ public final class JSIntlNumberFormat extends JSObject {
         return locale;
     }
 
+    public int getMinimumIntegerDigits() {
+        return minimumIntegerDigits;
+    }
+
+    public boolean getUseGrouping() {
+        return useGrouping;
+    }
+
     public String getStyle() {
         return style;
     }

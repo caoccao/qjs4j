@@ -724,7 +724,7 @@ public final class RegExpEngine {
                 int currCh = codePoints[pos + i];
 
                 if (ignoreCase) {
-                    if (CharacterProperties.caseFold(refCh) != CharacterProperties.caseFold(currCh)) {
+                    if (canonicalize(refCh) != canonicalize(currCh)) {
                         return false;
                     }
                 } else {
@@ -759,7 +759,7 @@ public final class RegExpEngine {
                 int referenceChar = codePoints[referenceIndex];
                 int currentChar = codePoints[pos - 1];
                 if (ignoreCase) {
-                    if (CharacterProperties.caseFold(referenceChar) != CharacterProperties.caseFold(currentChar)) {
+                    if (canonicalize(referenceChar) != canonicalize(currentChar)) {
                         return false;
                     }
                 } else if (referenceChar != currentChar) {
@@ -808,10 +808,7 @@ public final class RegExpEngine {
                 return false;
             }
             int current = codePoints[pos];
-            if (current == ch ||
-                    CharacterProperties.caseFold(current) == CharacterProperties.caseFold(ch) ||
-                    Character.toUpperCase(current) == Character.toUpperCase(ch) ||
-                    codePointEqualsIgnoreCaseUnicode(current, ch)) {
+            if (current == ch || canonicalize(current) == canonicalize(ch)) {
                 pos++;
                 return true;
             }
@@ -870,15 +867,11 @@ public final class RegExpEngine {
                 offset += 8;
 
                 if (ignoreCase) {
-                    int chLower = CharacterProperties.caseFold(ch);
-                    int chUpper = Character.toUpperCase(ch);
-                    int startLower = CharacterProperties.caseFold(start);
-                    int endLower = CharacterProperties.caseFold(end);
-                    int startUpper = Character.toUpperCase(start);
-                    int endUpper = Character.toUpperCase(end);
-                    if ((chLower >= startLower && chLower <= endLower)
-                            || (chUpper >= startUpper && chUpper <= endUpper)
-                            || (start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
+                    int canonCh = canonicalize(ch);
+                    int canonStart = canonicalize(start);
+                    int canonEnd = canonicalize(end);
+                    if ((canonCh >= canonStart && canonCh <= canonEnd)
+                            || (unicode && start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
                         // Character is in range, so inverted match fails
                         return false;
                     }
@@ -913,6 +906,23 @@ public final class RegExpEngine {
             return !matchWordBoundary(ignoreCase);
         }
 
+        /**
+         * ES spec Canonicalize for case-insensitive matching.
+         * Non-Unicode mode: toUpperCase, but if ch >= 128 and result < 128, return ch unchanged.
+         * Unicode mode: simple case fold.
+         */
+        private int canonicalize(int ch) {
+            if (unicode) {
+                return CharacterProperties.caseFold(ch);
+            }
+            int upper = Character.toUpperCase(ch);
+            // ES2024 22.2.2.8.2: if ch >= 128 and upper < 128, return ch unchanged
+            if (ch >= 128 && upper < 128) {
+                return ch;
+            }
+            return upper;
+        }
+
         boolean matchRange(byte[] bc, int offset, int len, boolean ignoreCase) {
             if (pos >= codePoints.length) {
                 return false;
@@ -930,15 +940,11 @@ public final class RegExpEngine {
                 offset += 8;
 
                 if (ignoreCase) {
-                    int chLower = CharacterProperties.caseFold(ch);
-                    int chUpper = Character.toUpperCase(ch);
-                    int startLower = CharacterProperties.caseFold(start);
-                    int endLower = CharacterProperties.caseFold(end);
-                    int startUpper = Character.toUpperCase(start);
-                    int endUpper = Character.toUpperCase(end);
-                    if ((chLower >= startLower && chLower <= endLower)
-                            || (chUpper >= startUpper && chUpper <= endUpper)
-                            || (start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
+                    int canonCh = canonicalize(ch);
+                    int canonStart = canonicalize(start);
+                    int canonEnd = canonicalize(end);
+                    if ((canonCh >= canonStart && canonCh <= canonEnd)
+                            || (unicode && start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
                         pos++;
                         return true;
                     }

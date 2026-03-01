@@ -1061,6 +1061,10 @@ public final class RegExpCompiler {
             }
         }
 
+        // Allocate a unique register for this quantifier's advance check to avoid
+        // conflicts with nested quantifiers that also use SET_CHAR_POS/CHECK_ADVANCE.
+        int advReg = addZeroAdvanceCheck ? context.nextAdvanceCheckRegister++ : 0;
+
         // Implement quantifier using SPLIT opcodes
         if (min == 0 && max == 1) {
             // ? quantifier: SPLIT then atom
@@ -1068,7 +1072,7 @@ public final class RegExpCompiler {
             // Non-greedy: try skip first, then atom
             if (addZeroAdvanceCheck) {
                 context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
-                context.buffer.appendU8(0);
+                context.buffer.appendU8(advReg);
             }
             context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
                     RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
@@ -1076,7 +1080,7 @@ public final class RegExpCompiler {
             context.buffer.append(atomCode);
             if (addZeroAdvanceCheck) {
                 context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
-                context.buffer.appendU8(0);
+                context.buffer.appendU8(advReg);
             }
         } else if (min == 0 && max == Integer.MAX_VALUE) {
             // * quantifier: SPLIT (skip or continue), SET_CHAR_POS?, atom, CHECK_ADVANCE?, GOTO back
@@ -1089,12 +1093,12 @@ public final class RegExpCompiler {
             context.buffer.appendU32(atomSize + 5 + advCheckSize); // Skip atom + GOTO + advance checks
             if (addZeroAdvanceCheck) {
                 context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
-                context.buffer.appendU8(0); // register 0
+                context.buffer.appendU8(advReg);
             }
             context.buffer.append(atomCode);
             if (addZeroAdvanceCheck) {
                 context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
-                context.buffer.appendU8(0); // register 0
+                context.buffer.appendU8(advReg);
             }
             context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
             int offset = loopStart - (context.buffer.size() + 4);
@@ -1113,10 +1117,10 @@ public final class RegExpCompiler {
                 int skipSize = 2 + atomSize + 2 + 5;
                 context.buffer.appendU32(skipSize);
                 context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
-                context.buffer.appendU8(0);
+                context.buffer.appendU8(advReg);
                 context.buffer.append(atomCode);
                 context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
-                context.buffer.appendU8(0);
+                context.buffer.appendU8(advReg);
                 context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
                 int gotoOffset = loopStart - (context.buffer.size() + 4);
                 context.buffer.appendU32(gotoOffset);
@@ -1143,12 +1147,12 @@ public final class RegExpCompiler {
                     context.buffer.appendU32(atomSize + 5 + advCheckSize);
                     if (addZeroAdvanceCheck) {
                         context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
-                        context.buffer.appendU8(0);
+                        context.buffer.appendU8(advReg);
                     }
                     context.buffer.append(atomCode);
                     if (addZeroAdvanceCheck) {
                         context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
-                        context.buffer.appendU8(0);
+                        context.buffer.appendU8(advReg);
                     }
                     context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
                     int offset = loopStart - (context.buffer.size() + 4);
@@ -1158,7 +1162,7 @@ public final class RegExpCompiler {
                     for (int i = 0; i < remaining; i++) {
                         if (addZeroAdvanceCheck) {
                             context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
-                            context.buffer.appendU8(0);
+                            context.buffer.appendU8(advReg);
                         }
                         context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
                                 RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
@@ -1166,7 +1170,7 @@ public final class RegExpCompiler {
                         context.buffer.append(atomCode);
                         if (addZeroAdvanceCheck) {
                             context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
-                            context.buffer.appendU8(0);
+                            context.buffer.appendU8(advReg);
                         }
                     }
                 }
@@ -2635,6 +2639,7 @@ public final class RegExpCompiler {
         final String pattern;
         int currentFlags;
         boolean lastAtomCanRepeat;
+        int nextAdvanceCheckRegister;
         int pos;
 
         CompileContext(String pattern, int flags, DynamicBuffer buffer) {
@@ -2644,6 +2649,7 @@ public final class RegExpCompiler {
             this.currentFlags = flags;
             this.buffer = buffer;
             this.lastAtomCanRepeat = false;
+            this.nextAdvanceCheckRegister = 0;
             this.pos = 0;
         }
 

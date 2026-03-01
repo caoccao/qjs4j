@@ -241,12 +241,10 @@ public final class JSIntlDisplayNames extends JSObject {
         try {
             Currency currency = Currency.getInstance(code.toUpperCase(java.util.Locale.ROOT));
             String displayName = currency.getDisplayName(locale);
-            if (displayName.isEmpty() || displayName.equals(code.toUpperCase(java.util.Locale.ROOT))) {
-                if ("none".equals(fallback)) {
-                    return JSUndefined.INSTANCE;
-                }
-                return new JSString(code);
+            if (displayName.isEmpty()) {
+                displayName = code.toUpperCase(java.util.Locale.ROOT);
             }
+            // Valid currency code → always return display name (even if it equals code)
             return new JSString(displayName);
         } catch (IllegalArgumentException e) {
             if ("none".equals(fallback)) {
@@ -255,6 +253,13 @@ public final class JSIntlDisplayNames extends JSObject {
             return new JSString(code);
         }
     }
+
+    private static final Set<String> KNOWN_CALENDARS = Set.of(
+            "buddhist", "chinese", "coptic", "dangi", "ethioaa", "ethiopic",
+            "gregory", "hebrew", "indian", "islamic-civil",
+            "islamic-tbla", "islamic-umalqura", "iso8601",
+            "japanese", "persian", "roc"
+    );
 
     private JSValue ofCalendar(JSContext context, String code) {
         if (!CALENDAR_KEY.matcher(code).matches()) {
@@ -266,7 +271,11 @@ public final class JSIntlDisplayNames extends JSObject {
             context.throwRangeError("invalid calendar code for DisplayNames: " + code);
             return null;
         }
-        // Calendar display names are not widely available in Java, fallback to code
+        String lowerCode = code.toLowerCase(java.util.Locale.ROOT);
+        if (KNOWN_CALENDARS.contains(lowerCode)) {
+            // Return display name for known calendars (using code as display name)
+            return new JSString(code);
+        }
         if ("none".equals(fallback)) {
             return JSUndefined.INSTANCE;
         }

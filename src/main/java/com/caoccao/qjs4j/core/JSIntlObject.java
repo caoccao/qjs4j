@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 import java.time.ZoneId;
@@ -35,13 +36,30 @@ public final class JSIntlObject {
      */
     private static final Pattern UNICODE_TYPE_PATTERN = Pattern.compile(
             "^[a-zA-Z0-9]{3,8}(-[a-zA-Z0-9]{3,8})*$");
+
+    /**
+     * Supported numbering systems with simple digit mappings (per ECMA-402 Table 10).
+     * Used by supportedValuesOf("numberingSystem") and validated in constructors.
+     */
+    private static final Set<String> SUPPORTED_NUMBERING_SYSTEMS = Set.of(
+            "adlm", "ahom", "arab", "arabext", "bali", "beng", "bhks",
+            "brah", "cakm", "cham", "deva", "diak", "fullwide", "gong",
+            "gonm", "gujr", "guru", "hanidec", "hmng", "hmnp", "java",
+            "kali", "kawi", "khmr", "knda", "lana", "lanatham", "laoo", "latn",
+            "lepc", "limb", "mathbold", "mathdbl", "mathmono", "mathsanb",
+            "mathsans", "mlym", "modi", "mong", "mroo", "mtei", "mymr",
+            "mymrshan", "mymrtlng", "nagm", "newa", "nkoo", "olck", "orya",
+            "osma", "rohg", "saur", "segment", "shrd", "sind", "sinh",
+            "sora", "sund", "takr", "talu", "tamldec", "tnsa", "telu", "thai",
+            "tibt", "tirh", "vaii", "wara", "wcho"
+    );
     /**
      * Check if a collation value is valid/supported.
      */
     private static final Set<String> VALID_COLLATION_TYPES = Set.of(
             "big5han", "compat", "dict", "direct", "ducet", "emoji", "eor",
-            "gb2312", "phonebk", "phonetic", "pinyin", "reformed", "stroke",
-            "trad", "unihan", "zhuyin"
+            "gb2312", "phonebk", "phonetic", "pinyin", "reformed", "searchjl",
+            "stroke", "trad", "unihan", "zhuyin"
     );
 
     static {
@@ -150,7 +168,22 @@ public final class JSIntlObject {
             }
             // Step 6: Iterate from 0 to len
             for (long i = 0; i < length; i++) {
-                JSValue element = localeObject.get(context, PropertyKey.fromString(String.valueOf(i)));
+                PropertyKey pk = PropertyKey.fromString(String.valueOf(i));
+                // Step 7b: Let kPresent be HasProperty(O, Pk)
+                boolean kPresent;
+                try {
+                    kPresent = localeObject.has(pk);
+                } catch (JSException e) {
+                    // Proxy has trap may throw
+                    return localeTags;
+                }
+                if (context.hasPendingException()) {
+                    return localeTags;
+                }
+                if (!kPresent) {
+                    continue;
+                }
+                JSValue element = localeObject.get(context, pk);
                 if (context.hasPendingException()) {
                     return localeTags;
                 }
@@ -164,7 +197,12 @@ public final class JSIntlObject {
                                     + " is not a well-formed currency value");
                     return localeTags;
                 }
-                localeTags.add(JSTypeConversions.toString(context, element).value());
+                // Per ECMA-402, if element has [[InitializedLocale]], use its [[Locale]] tag
+                if (element instanceof JSIntlLocale intlLocale) {
+                    localeTags.add(intlLocale.getTag());
+                } else {
+                    localeTags.add(JSTypeConversions.toString(context, element).value());
+                }
                 if (context.hasPendingException()) {
                     return localeTags;
                 }
@@ -173,9 +211,9 @@ public final class JSIntlObject {
         LinkedHashSet<String> canonicalLocales = new LinkedHashSet<>();
         for (String localeTag : localeTags) {
             try {
-                canonicalLocales.add(parseLocaleTag(localeTag).toLanguageTag());
+                canonicalLocales.add(canonicalizeLocaleTag(localeTag));
             } catch (IllegalArgumentException e) {
-                context.throwRangeError("Incorrect locale information provided");
+                context.throwRangeError("Invalid language tag: " + localeTag);
                 return new ArrayList<>();
             }
         }
@@ -707,9 +745,123 @@ public final class JSIntlObject {
             return context.throwTypeError("Intl.Locale requires a locale argument");
         }
         try {
-            String localeTag = JSTypeConversions.toString(context, args[0]).value();
+            String localeTag;
+            if (args[0] instanceof JSIntlLocale inputLocale) {
+                localeTag = inputLocale.getTag();
+            } else {
+                localeTag = JSTypeConversions.toString(context, args[0]).value();
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            }
+
+            // Parse options (second argument)
+            JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+
+            // Read option values before any tag modification
+            String calendarOpt = getOptionString(context, optionsValue, "calendar");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            String caseFirstOpt = getOptionString(context, optionsValue, "caseFirst");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            String collationOpt = getOptionString(context, optionsValue, "collation");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            String hourCycleOpt = getOptionString(context, optionsValue, "hourCycle");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            String numberingSystemOpt = getOptionString(context, optionsValue, "numberingSystem");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            String numericStr = getOptionString(context, optionsValue, "numeric");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            String languageOpt = getOptionString(context, optionsValue, "language");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            String scriptOpt = getOptionString(context, optionsValue, "script");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            String regionOpt = getOptionString(context, optionsValue, "region");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+
             Locale locale = parseLocaleTag(localeTag);
-            JSIntlLocale intlLocale = new JSIntlLocale(locale, locale.toLanguageTag());
+
+            // Apply language/script/region overrides from options
+            Locale.Builder builder = new Locale.Builder().setLocale(locale);
+            if (languageOpt != null && !languageOpt.isEmpty()) {
+                builder.setLanguage(languageOpt);
+            }
+            if (scriptOpt != null && !scriptOpt.isEmpty()) {
+                builder.setScript(scriptOpt);
+            }
+            if (regionOpt != null && !regionOpt.isEmpty()) {
+                builder.setRegion(regionOpt);
+            }
+
+            // Parse existing unicode extensions from locale tag
+            Map<String, String> existingExtensions = parseUnicodeExtensions(locale.toLanguageTag());
+
+            // Apply unicode extension options (options override tag extensions)
+            String calendar = calendarOpt != null ? calendarOpt : existingExtensions.get("ca");
+            String caseFirst = caseFirstOpt != null ? caseFirstOpt : existingExtensions.get("kf");
+            String collation = collationOpt != null ? collationOpt : existingExtensions.get("co");
+            String hourCycle = hourCycleOpt != null ? hourCycleOpt : existingExtensions.get("hc");
+            String numberingSystem = numberingSystemOpt != null ? numberingSystemOpt : existingExtensions.get("nu");
+            boolean numericSet = false;
+            boolean numeric = false;
+            if (numericStr != null) {
+                numeric = "true".equals(numericStr);
+                numericSet = true;
+            } else {
+                String knValue = existingExtensions.get("kn");
+                if (knValue != null) {
+                    numeric = "true".equals(knValue) || knValue.isEmpty();
+                    numericSet = true;
+                }
+            }
+
+            // Build unicode extension string
+            StringBuilder uExt = new StringBuilder();
+            if (calendar != null) {
+                uExt.append("-ca-").append(calendar);
+            }
+            if (collation != null) {
+                uExt.append("-co-").append(collation);
+            }
+            if (hourCycle != null) {
+                uExt.append("-hc-").append(hourCycle);
+            }
+            if (caseFirst != null) {
+                uExt.append("-kf-").append(caseFirst);
+            }
+            if (numericSet) {
+                uExt.append("-kn-").append(numeric ? "true" : "false");
+            }
+            if (numberingSystem != null) {
+                uExt.append("-nu-").append(numberingSystem);
+            }
+            if (!uExt.isEmpty()) {
+                builder.setExtension('u', uExt.substring(1)); // remove leading '-'
+            }
+
+            locale = builder.build();
+            String tag = canonicalizeLocaleTag(locale.toLanguageTag());
+
+            JSIntlLocale intlLocale = new JSIntlLocale(locale, tag,
+                    calendar, caseFirst, collation, hourCycle, numberingSystem,
+                    numeric, numericSet);
             intlLocale.setPrototype(prototype);
             return intlLocale;
         } catch (IllegalArgumentException e) {
@@ -771,6 +923,9 @@ public final class JSIntlObject {
 
             // Parse numberingSystem
             String numberingSystem = getOptionString(context, optionsValue, "numberingSystem");
+            if (numberingSystem != null && !SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystem)) {
+                numberingSystem = null;
+            }
 
             // Validate currency: must be 3 ASCII letter ISO 4217 code
             if (currency != null) {
@@ -895,15 +1050,21 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
+            JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
             String style = normalizeOption(
-                    getOptionString(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE, "style"),
+                    getOptionString(context, optionsValue, "style"),
                     "long",
                     "long", "short", "narrow");
             String numeric = normalizeOption(
-                    getOptionString(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE, "numeric"),
+                    getOptionString(context, optionsValue, "numeric"),
                     "always",
                     "always", "auto");
-            JSIntlRelativeTimeFormat relativeTimeFormat = new JSIntlRelativeTimeFormat(locale, style, numeric);
+            String numberingSystem = getOptionString(context, optionsValue, "numberingSystem");
+            if (numberingSystem != null && !SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystem)) {
+                numberingSystem = null;
+            }
+            JSIntlRelativeTimeFormat relativeTimeFormat = new JSIntlRelativeTimeFormat(
+                    locale, style, numeric, numberingSystem);
             relativeTimeFormat.setPrototype(prototype);
             return relativeTimeFormat;
         } catch (IllegalArgumentException e) {
@@ -1289,19 +1450,23 @@ public final class JSIntlObject {
         List<String> values;
         switch (key) {
             case "calendar" -> {
+                // Per ECMA-402 and calendars-required-by-intl-era-monthcode test
+                // "islamic" and "islamic-rgsa" are excluded because DateTimeFormat
+                // resolves them to "islamic-civil" (they are not canonical calendar IDs)
                 values = new ArrayList<>(List.of(
                         "buddhist", "chinese", "coptic", "dangi", "ethioaa", "ethiopic",
-                        "gregory", "hebrew", "indian", "islamic", "islamic-civil",
-                        "islamic-rgsa", "islamic-tbla", "islamic-umalqura", "iso8601",
+                        "gregory", "hebrew", "indian", "islamic-civil",
+                        "islamic-tbla", "islamic-umalqura", "iso8601",
                         "japanese", "persian", "roc"
                 ));
             }
             case "collation" -> {
+                // Per ECMA-402: must NOT include "standard" or "search"
+                // "compat" not accepted by any major Collator implementation
                 values = new ArrayList<>(List.of(
-                        "big5han", "compat", "dict", "direct", "ducet", "emoji", "eor",
+                        "big5han", "dict", "direct", "ducet", "emoji", "eor",
                         "gb2312", "phonebk", "phonetic", "pinyin", "reformed",
-                        "search", "searchjl", "standard", "stroke", "trad",
-                        "unihan", "zhuyin"
+                        "searchjl", "stroke", "trad", "unihan", "zhuyin"
                 ));
             }
             case "currency" -> {
@@ -1312,25 +1477,41 @@ public final class JSIntlObject {
                         .collect(Collectors.toList());
             }
             case "numberingSystem" -> {
-                values = new ArrayList<>(List.of(
-                        "adlm", "ahom", "arab", "arabext", "bali", "beng", "bhks",
-                        "brah", "cakm", "cham", "deva", "diak", "fullwide", "gonm",
-                        "gujr", "guru", "hanidec", "hmng", "hmnp", "java", "kali",
-                        "khmr", "knda", "lana", "lanatham", "laoo", "latn", "lepc",
-                        "limb", "mathbold", "mathdbl", "mathmono", "mathsanb",
-                        "mathsans", "mlym", "modi", "mong", "mroo", "mtei", "mymr",
-                        "mymrshan", "mymrtlng", "newa", "nkoo", "olck", "orya",
-                        "osma", "rohg", "saur", "segment", "shrd", "sind", "sinh",
-                        "sora", "sund", "takr", "talu", "tamldec", "telu", "thai",
-                        "tibt", "tirh", "vaii", "wara", "wcho"
-                ));
+                values = new ArrayList<>(SUPPORTED_NUMBERING_SYSTEMS);
+                Collections.sort(values);
             }
             case "timeZone" -> {
                 Set<String> zoneIds = ZoneId.getAvailableZoneIds();
+                // IANA canonical timezone names: include Etc/GMT+N, Etc/GMT-N, UTC
+                // Exclude SystemV/, EST/MST/HST (deprecated short names), and non-canonical aliases
+                Set<String> nonCanonical = Set.of(
+                        "EST", "MST", "HST", "GMT0", "Etc/GMT0", "Etc/Greenwich",
+                        "Etc/UCT", "Etc/Universal", "Etc/Zulu", "UCT", "GMT-0",
+                        "GMT+0", "Universal", "Zulu", "Greenwich", "Etc/GMT-0", "Etc/GMT+0",
+                        "Etc/GMT", "Etc/UTC", "GMT",
+                        "US/Alaska", "US/Aleutian", "US/Arizona", "US/Central",
+                        "US/East-Indiana", "US/Eastern", "US/Hawaii", "US/Indiana-Starke",
+                        "US/Michigan", "US/Mountain", "US/Pacific", "US/Samoa",
+                        "Canada/Atlantic", "Canada/Central", "Canada/Eastern",
+                        "Canada/Mountain", "Canada/Newfoundland", "Canada/Pacific",
+                        "Canada/Saskatchewan", "Canada/Yukon",
+                        "Australia/ACT", "Australia/Canberra", "Australia/LHI",
+                        "Australia/NSW", "Australia/North", "Australia/Queensland",
+                        "Australia/South", "Australia/Tasmania", "Australia/Victoria",
+                        "Australia/West", "Australia/Yancowinna",
+                        "Brazil/Acre", "Brazil/DeNoronha", "Brazil/East", "Brazil/West",
+                        "Chile/Continental", "Chile/EasterIsland",
+                        "Mexico/BajaNorte", "Mexico/BajaSur", "Mexico/General",
+                        "NZ", "NZ-CHAT", "Navajo", "PRC", "ROC", "ROK", "W-SU",
+                        "Cuba", "Egypt", "Eire", "Hongkong", "Iceland", "Iran", "Israel",
+                        "Jamaica", "Japan", "Kwajalein", "Libya", "Poland", "Portugal",
+                        "Singapore", "Turkey"
+                );
                 values = zoneIds.stream()
                         .filter(id -> !id.startsWith("SystemV/")
-                                && !id.equals("EST") && !id.equals("MST") && !id.equals("HST")
-                                && !id.startsWith("Etc/"))
+                                && !nonCanonical.contains(id)
+                                && !id.equals("EST5EDT") && !id.equals("CST6CDT")
+                                && !id.equals("MST7MDT") && !id.equals("PST8PDT"))
                         .sorted()
                         .collect(Collectors.toList());
             }
@@ -1588,16 +1769,42 @@ public final class JSIntlObject {
             }
         }
 
-        // Read numberingSystem
-        String numberingSystem = options != null ? getOptionStringChecked(context, options, "numberingSystem") : null;
+        // Read numberingSystem from options
+        String numberingSystemOption = options != null ? getOptionStringChecked(context, options, "numberingSystem") : null;
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        if (numberingSystem != null && !UNICODE_TYPE_PATTERN.matcher(numberingSystem).matches()) {
-            return context.throwRangeError("Invalid numberingSystem: " + numberingSystem);
+        if (numberingSystemOption != null && !UNICODE_TYPE_PATTERN.matcher(numberingSystemOption).matches()) {
+            return context.throwRangeError("Invalid numberingSystem: " + numberingSystemOption);
         }
-        if (numberingSystem == null) {
+
+        // Parse unicode extension "nu" from locale
+        Map<String, String> unicodeExtensions = parseUnicodeExtensions(locale.toLanguageTag());
+        String extensionNu = unicodeExtensions.get("nu");
+
+        // Resolve numberingSystem: options > unicode extension > default
+        String numberingSystem;
+        boolean useExtensionInLocale = false;
+        if (numberingSystemOption != null && SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystemOption)) {
+            numberingSystem = numberingSystemOption;
+            // Extension is reflected in locale only if it matches the option
+            if (numberingSystem.equals(extensionNu)) {
+                useExtensionInLocale = true;
+            }
+        } else if (extensionNu != null && SUPPORTED_NUMBERING_SYSTEMS.contains(extensionNu)) {
+            numberingSystem = extensionNu;
+            useExtensionInLocale = true;
+        } else {
             numberingSystem = "latn";
+        }
+
+        // Build resolved locale: strip existing unicode extensions and re-add if needed
+        Locale strippedLocale = stripUnicodeExtensions(locale);
+        if (useExtensionInLocale) {
+            locale = new Locale.Builder().setLocale(strippedLocale)
+                    .setUnicodeLocaleKeyword("nu", numberingSystem).build();
+        } else {
+            locale = strippedLocale;
         }
 
         // Read style (default "short")
@@ -1879,7 +2086,12 @@ public final class JSIntlObject {
             case "zh" -> "pinyin".equals(collation) || "stroke".equals(collation)
                     || "zhuyin".equals(collation) || "big5han".equals(collation)
                     || "gb2312".equals(collation) || "unihan".equals(collation);
-            case "ja", "ko" -> "unihan".equals(collation);
+            case "ja", "ko" -> "unihan".equals(collation) || "searchjl".equals(collation);
+            case "si" -> "dict".equals(collation);
+            case "sv" -> "reformed".equals(collation);
+            case "en" -> "ducet".equals(collation) || "emoji".equals(collation) || "eor".equals(collation);
+            case "ln" -> "phonetic".equals(collation);
+            case "hi" -> "direct".equals(collation);
             default -> false;
         };
     }
@@ -1949,6 +2161,53 @@ public final class JSIntlObject {
         resolvedOptions.set("style", new JSString(listFormat.getStyle()));
         resolvedOptions.set("type", new JSString(listFormat.getType()));
         return resolvedOptions;
+    }
+
+    public static JSValue localeGetCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.calendar called on incompatible receiver");
+        }
+        String calendar = intlLocale.getCalendar();
+        return calendar != null ? new JSString(calendar) : JSUndefined.INSTANCE;
+    }
+
+    public static JSValue localeGetCaseFirst(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.caseFirst called on incompatible receiver");
+        }
+        String caseFirst = intlLocale.getCaseFirst();
+        return caseFirst != null ? new JSString(caseFirst) : JSUndefined.INSTANCE;
+    }
+
+    public static JSValue localeGetCollation(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.collation called on incompatible receiver");
+        }
+        String collation = intlLocale.getCollation();
+        return collation != null ? new JSString(collation) : JSUndefined.INSTANCE;
+    }
+
+    public static JSValue localeGetHourCycle(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.hourCycle called on incompatible receiver");
+        }
+        String hourCycle = intlLocale.getHourCycle();
+        return hourCycle != null ? new JSString(hourCycle) : JSUndefined.INSTANCE;
+    }
+
+    public static JSValue localeGetNumberingSystem(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.numberingSystem called on incompatible receiver");
+        }
+        String numberingSystem = intlLocale.getNumberingSystem();
+        return numberingSystem != null ? new JSString(numberingSystem) : JSUndefined.INSTANCE;
+    }
+
+    public static JSValue localeGetNumeric(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.numeric called on incompatible receiver");
+        }
+        return intlLocale.isNumericSet() ? JSBoolean.valueOf(intlLocale.getNumeric()) : JSBoolean.FALSE;
     }
 
     public static JSValue localeGetBaseName(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -2050,10 +2309,21 @@ public final class JSIntlObject {
         }
         JSObject resolvedOptions = context.createJSObject();
         resolvedOptions.set("locale", new JSString(numberFormat.getLocale().toLanguageTag()));
+        resolvedOptions.set("numberingSystem", new JSString(
+                numberFormat.getNumberingSystem() != null ? numberFormat.getNumberingSystem() : "latn"));
         resolvedOptions.set("style", new JSString(numberFormat.getStyle()));
-        if (numberFormat.getCurrency() != null) {
+        if ("currency".equals(numberFormat.getStyle()) && numberFormat.getCurrency() != null) {
             resolvedOptions.set("currency", new JSString(numberFormat.getCurrency().toUpperCase(Locale.ROOT)));
         }
+        if ("unit".equals(numberFormat.getStyle()) && numberFormat.getUnit() != null) {
+            resolvedOptions.set("unit", new JSString(numberFormat.getUnit()));
+            resolvedOptions.set("unitDisplay", new JSString(
+                    numberFormat.getUnitDisplay() != null ? numberFormat.getUnitDisplay() : "short"));
+        }
+        resolvedOptions.set("minimumIntegerDigits", JSNumber.of(numberFormat.getMinimumIntegerDigits()));
+        resolvedOptions.set("useGrouping", JSBoolean.valueOf(numberFormat.getUseGrouping()));
+        resolvedOptions.set("signDisplay", new JSString(numberFormat.getSignDisplay()));
+        resolvedOptions.set("roundingMode", new JSString(numberFormat.getRoundingMode()));
         return resolvedOptions;
     }
 
@@ -2070,14 +2340,673 @@ public final class JSIntlObject {
         };
     }
 
+    // ---- CLDR Language Alias Data ----
+    // Maps: old language code → new language code
+    // Some entries have additional script/region that are added only if not already present
+    private static final Map<String, String> LANGUAGE_ALIASES = new HashMap<>();
+    // Maps: old language → script to add if not already present
+    private static final Map<String, String> LANGUAGE_SCRIPT_ADDITIONS = new HashMap<>();
+    // Maps: old language → region to add if not already present
+    private static final Map<String, String> LANGUAGE_REGION_ADDITIONS = new HashMap<>();
+
+    static {
+        // 3-letter to 2-letter language aliases
+        LANGUAGE_ALIASES.put("aar", "aa"); LANGUAGE_ALIASES.put("abk", "ab"); LANGUAGE_ALIASES.put("afr", "af");
+        LANGUAGE_ALIASES.put("aka", "ak"); LANGUAGE_ALIASES.put("amh", "am"); LANGUAGE_ALIASES.put("ara", "ar");
+        LANGUAGE_ALIASES.put("arg", "an"); LANGUAGE_ALIASES.put("asm", "as"); LANGUAGE_ALIASES.put("ava", "av");
+        LANGUAGE_ALIASES.put("ave", "ae"); LANGUAGE_ALIASES.put("aym", "ay"); LANGUAGE_ALIASES.put("aze", "az");
+        LANGUAGE_ALIASES.put("bak", "ba"); LANGUAGE_ALIASES.put("bam", "bm"); LANGUAGE_ALIASES.put("bel", "be");
+        LANGUAGE_ALIASES.put("ben", "bn"); LANGUAGE_ALIASES.put("bis", "bi"); LANGUAGE_ALIASES.put("bod", "bo");
+        LANGUAGE_ALIASES.put("bos", "bs"); LANGUAGE_ALIASES.put("bre", "br"); LANGUAGE_ALIASES.put("bul", "bg");
+        LANGUAGE_ALIASES.put("cat", "ca"); LANGUAGE_ALIASES.put("ces", "cs"); LANGUAGE_ALIASES.put("cha", "ch");
+        LANGUAGE_ALIASES.put("che", "ce"); LANGUAGE_ALIASES.put("chu", "cu"); LANGUAGE_ALIASES.put("chv", "cv");
+        LANGUAGE_ALIASES.put("cor", "kw"); LANGUAGE_ALIASES.put("cos", "co"); LANGUAGE_ALIASES.put("cre", "cr");
+        LANGUAGE_ALIASES.put("cym", "cy"); LANGUAGE_ALIASES.put("dan", "da"); LANGUAGE_ALIASES.put("deu", "de");
+        LANGUAGE_ALIASES.put("div", "dv"); LANGUAGE_ALIASES.put("dzo", "dz"); LANGUAGE_ALIASES.put("ell", "el");
+        LANGUAGE_ALIASES.put("eng", "en"); LANGUAGE_ALIASES.put("epo", "eo"); LANGUAGE_ALIASES.put("est", "et");
+        LANGUAGE_ALIASES.put("eus", "eu"); LANGUAGE_ALIASES.put("ewe", "ee"); LANGUAGE_ALIASES.put("fao", "fo");
+        LANGUAGE_ALIASES.put("fas", "fa"); LANGUAGE_ALIASES.put("fij", "fj"); LANGUAGE_ALIASES.put("fin", "fi");
+        LANGUAGE_ALIASES.put("fra", "fr"); LANGUAGE_ALIASES.put("fry", "fy"); LANGUAGE_ALIASES.put("ful", "ff");
+        LANGUAGE_ALIASES.put("gla", "gd"); LANGUAGE_ALIASES.put("gle", "ga"); LANGUAGE_ALIASES.put("glg", "gl");
+        LANGUAGE_ALIASES.put("glv", "gv"); LANGUAGE_ALIASES.put("grn", "gn"); LANGUAGE_ALIASES.put("guj", "gu");
+        LANGUAGE_ALIASES.put("hat", "ht"); LANGUAGE_ALIASES.put("hau", "ha"); LANGUAGE_ALIASES.put("hbs", "sr");
+        LANGUAGE_ALIASES.put("heb", "he"); LANGUAGE_ALIASES.put("her", "hz"); LANGUAGE_ALIASES.put("hin", "hi");
+        LANGUAGE_ALIASES.put("hmo", "ho"); LANGUAGE_ALIASES.put("hrv", "hr"); LANGUAGE_ALIASES.put("hun", "hu");
+        LANGUAGE_ALIASES.put("hye", "hy"); LANGUAGE_ALIASES.put("ibo", "ig"); LANGUAGE_ALIASES.put("ido", "io");
+        LANGUAGE_ALIASES.put("iii", "ii"); LANGUAGE_ALIASES.put("iku", "iu"); LANGUAGE_ALIASES.put("ile", "ie");
+        LANGUAGE_ALIASES.put("ina", "ia"); LANGUAGE_ALIASES.put("ind", "id"); LANGUAGE_ALIASES.put("ipk", "ik");
+        LANGUAGE_ALIASES.put("isl", "is"); LANGUAGE_ALIASES.put("ita", "it"); LANGUAGE_ALIASES.put("jav", "jv");
+        LANGUAGE_ALIASES.put("jpn", "ja"); LANGUAGE_ALIASES.put("kal", "kl"); LANGUAGE_ALIASES.put("kan", "kn");
+        LANGUAGE_ALIASES.put("kas", "ks"); LANGUAGE_ALIASES.put("kat", "ka"); LANGUAGE_ALIASES.put("kau", "kr");
+        LANGUAGE_ALIASES.put("kaz", "kk"); LANGUAGE_ALIASES.put("khm", "km"); LANGUAGE_ALIASES.put("kik", "ki");
+        LANGUAGE_ALIASES.put("kin", "rw"); LANGUAGE_ALIASES.put("kir", "ky"); LANGUAGE_ALIASES.put("kom", "kv");
+        LANGUAGE_ALIASES.put("kon", "kg"); LANGUAGE_ALIASES.put("kor", "ko"); LANGUAGE_ALIASES.put("kua", "kj");
+        LANGUAGE_ALIASES.put("kur", "ku"); LANGUAGE_ALIASES.put("lao", "lo"); LANGUAGE_ALIASES.put("lat", "la");
+        LANGUAGE_ALIASES.put("lav", "lv"); LANGUAGE_ALIASES.put("lim", "li"); LANGUAGE_ALIASES.put("lin", "ln");
+        LANGUAGE_ALIASES.put("lit", "lt"); LANGUAGE_ALIASES.put("ltz", "lb"); LANGUAGE_ALIASES.put("lub", "lu");
+        LANGUAGE_ALIASES.put("lug", "lg"); LANGUAGE_ALIASES.put("mah", "mh"); LANGUAGE_ALIASES.put("mal", "ml");
+        LANGUAGE_ALIASES.put("mar", "mr"); LANGUAGE_ALIASES.put("mkd", "mk"); LANGUAGE_ALIASES.put("mlg", "mg");
+        LANGUAGE_ALIASES.put("mlt", "mt"); LANGUAGE_ALIASES.put("mon", "mn"); LANGUAGE_ALIASES.put("mri", "mi");
+        LANGUAGE_ALIASES.put("msa", "ms"); LANGUAGE_ALIASES.put("mya", "my"); LANGUAGE_ALIASES.put("nau", "na");
+        LANGUAGE_ALIASES.put("nav", "nv"); LANGUAGE_ALIASES.put("nbl", "nr"); LANGUAGE_ALIASES.put("nde", "nd");
+        LANGUAGE_ALIASES.put("ndo", "ng"); LANGUAGE_ALIASES.put("nep", "ne"); LANGUAGE_ALIASES.put("nld", "nl");
+        LANGUAGE_ALIASES.put("nno", "nn"); LANGUAGE_ALIASES.put("nob", "nb"); LANGUAGE_ALIASES.put("nor", "no");
+        LANGUAGE_ALIASES.put("nya", "ny"); LANGUAGE_ALIASES.put("oci", "oc"); LANGUAGE_ALIASES.put("oji", "oj");
+        LANGUAGE_ALIASES.put("ori", "or"); LANGUAGE_ALIASES.put("orm", "om"); LANGUAGE_ALIASES.put("oss", "os");
+        LANGUAGE_ALIASES.put("pan", "pa"); LANGUAGE_ALIASES.put("pli", "pi"); LANGUAGE_ALIASES.put("pol", "pl");
+        LANGUAGE_ALIASES.put("por", "pt"); LANGUAGE_ALIASES.put("pus", "ps"); LANGUAGE_ALIASES.put("que", "qu");
+        LANGUAGE_ALIASES.put("roh", "rm"); LANGUAGE_ALIASES.put("ron", "ro"); LANGUAGE_ALIASES.put("run", "rn");
+        LANGUAGE_ALIASES.put("rus", "ru"); LANGUAGE_ALIASES.put("sag", "sg"); LANGUAGE_ALIASES.put("san", "sa");
+        LANGUAGE_ALIASES.put("sin", "si"); LANGUAGE_ALIASES.put("slk", "sk"); LANGUAGE_ALIASES.put("slv", "sl");
+        LANGUAGE_ALIASES.put("sme", "se"); LANGUAGE_ALIASES.put("smo", "sm"); LANGUAGE_ALIASES.put("sna", "sn");
+        LANGUAGE_ALIASES.put("snd", "sd"); LANGUAGE_ALIASES.put("som", "so"); LANGUAGE_ALIASES.put("sot", "st");
+        LANGUAGE_ALIASES.put("spa", "es"); LANGUAGE_ALIASES.put("sqi", "sq"); LANGUAGE_ALIASES.put("srd", "sc");
+        LANGUAGE_ALIASES.put("srp", "sr"); LANGUAGE_ALIASES.put("ssw", "ss"); LANGUAGE_ALIASES.put("sun", "su");
+        LANGUAGE_ALIASES.put("swa", "sw"); LANGUAGE_ALIASES.put("swe", "sv"); LANGUAGE_ALIASES.put("tah", "ty");
+        LANGUAGE_ALIASES.put("tam", "ta"); LANGUAGE_ALIASES.put("tat", "tt"); LANGUAGE_ALIASES.put("tel", "te");
+        LANGUAGE_ALIASES.put("tgk", "tg"); LANGUAGE_ALIASES.put("tgl", "tl"); LANGUAGE_ALIASES.put("tha", "th");
+        LANGUAGE_ALIASES.put("tir", "ti"); LANGUAGE_ALIASES.put("ton", "to"); LANGUAGE_ALIASES.put("tsn", "tn");
+        LANGUAGE_ALIASES.put("tso", "ts"); LANGUAGE_ALIASES.put("tuk", "tk"); LANGUAGE_ALIASES.put("tur", "tr");
+        LANGUAGE_ALIASES.put("twi", "tw"); LANGUAGE_ALIASES.put("uig", "ug"); LANGUAGE_ALIASES.put("ukr", "uk");
+        LANGUAGE_ALIASES.put("urd", "ur"); LANGUAGE_ALIASES.put("uzb", "uz"); LANGUAGE_ALIASES.put("ven", "ve");
+        LANGUAGE_ALIASES.put("vie", "vi"); LANGUAGE_ALIASES.put("vol", "vo"); LANGUAGE_ALIASES.put("wln", "wa");
+        LANGUAGE_ALIASES.put("wol", "wo"); LANGUAGE_ALIASES.put("xho", "xh"); LANGUAGE_ALIASES.put("yid", "yi");
+        LANGUAGE_ALIASES.put("yor", "yo"); LANGUAGE_ALIASES.put("zha", "za"); LANGUAGE_ALIASES.put("zho", "zh");
+        LANGUAGE_ALIASES.put("zul", "zu");
+
+        // Deprecated 2-letter codes
+        LANGUAGE_ALIASES.put("mo", "ro");
+        LANGUAGE_ALIASES.put("jw", "jv");
+        LANGUAGE_ALIASES.put("tl", "fil");
+
+        // Complex language aliases (language maps to different language + script)
+        LANGUAGE_ALIASES.put("cmn", "zh");
+        LANGUAGE_ALIASES.put("sh", "sr");
+        LANGUAGE_SCRIPT_ADDITIONS.put("sh", "Latn");
+        LANGUAGE_ALIASES.put("cnr", "sr");
+        LANGUAGE_REGION_ADDITIONS.put("cnr", "ME");
+
+        // Sign language aliases
+        LANGUAGE_ALIASES.put("sgn-gr", "gss");
+        LANGUAGE_ALIASES.put("sgn-be-fr", "sfb");
+        LANGUAGE_ALIASES.put("sgn-be-nl", "vgt");
+        LANGUAGE_ALIASES.put("sgn-ch-de", "sgg");
+    }
+
+    // ---- Region Alias Data ----
+    // Maps: old region → {language/script → new region}
+    // Default replacement is first, specific language/script replacements follow
+    private static final Map<String, String> REGION_ALIASES = new HashMap<>();
+    private static final Map<String, Map<String, String>> REGION_ALIASES_BY_LANG = new HashMap<>();
+
+    static {
+        REGION_ALIASES.put("DD", "DE"); REGION_ALIASES.put("YD", "YE");
+        REGION_ALIASES.put("AN", "CW"); REGION_ALIASES.put("BU", "MM");
+        REGION_ALIASES.put("CS", "RS"); REGION_ALIASES.put("TP", "TL");
+        REGION_ALIASES.put("YU", "RS"); REGION_ALIASES.put("ZR", "CD");
+        REGION_ALIASES.put("200", "CZ"); REGION_ALIASES.put("530", "CW");
+        REGION_ALIASES.put("532", "CW"); REGION_ALIASES.put("536", "SA");
+        REGION_ALIASES.put("582", "FM"); REGION_ALIASES.put("736", "SD");
+        REGION_ALIASES.put("890", "RS");
+
+        // SU (Soviet Union) and 810 → default RU, but hy→AM, ka→GE, etc.
+        REGION_ALIASES.put("SU", "RU");
+        REGION_ALIASES.put("810", "RU");
+        Map<String, String> suByLang = new HashMap<>();
+        suByLang.put("hy", "AM"); suByLang.put("ka", "GE"); suByLang.put("az", "AZ");
+        suByLang.put("be", "BY"); suByLang.put("et", "EE"); suByLang.put("lv", "LV");
+        suByLang.put("lt", "LT"); suByLang.put("tk", "TM"); suByLang.put("uk", "UA");
+        suByLang.put("uz", "UZ"); suByLang.put("kk", "KZ"); suByLang.put("ky", "KG");
+        suByLang.put("tg", "TJ"); suByLang.put("mn", "MN");
+        REGION_ALIASES_BY_LANG.put("SU", suByLang);
+        REGION_ALIASES_BY_LANG.put("810", suByLang);
+
+        // NT (Neutral Zone) → SA (for az)
+        REGION_ALIASES.put("NT", "SA");
+        Map<String, String> ntByLang = new HashMap<>();
+        ntByLang.put("az", "SA");
+        REGION_ALIASES_BY_LANG.put("NT", ntByLang);
+    }
+
+    // Script-based region resolution for SU/810
+    private static final Map<String, String> REGION_BY_SCRIPT = new HashMap<>();
+    static {
+        REGION_BY_SCRIPT.put("Armn", "AM"); REGION_BY_SCRIPT.put("Geor", "GE");
+    }
+
+    // ---- Variant Alias Data ----
+    private static final Map<String, String> VARIANT_ALIASES = new HashMap<>();
+    private static final Map<String, String> VARIANT_TO_LANGUAGE = new HashMap<>();
+    static {
+        VARIANT_ALIASES.put("heploc", "alalc97");
+        // When heploc is replaced by alalc97, hepburn should also be removed
+        // (heploc was a sub-variant of hepburn)
+        // hy-arevela → hy (remove variant, language stays hy)
+        VARIANT_TO_LANGUAGE.put("arevela", "hy");
+        // hy-arevmda → hyw (remove variant, change language to hyw)
+        VARIANT_TO_LANGUAGE.put("arevmda", "hyw");
+    }
+
+    // ---- Unicode Extension Value Aliases ----
+    private static final Map<String, Map<String, String>> UNICODE_EXT_VALUE_ALIASES = new HashMap<>();
+    static {
+        // ca (calendar)
+        Map<String, String> calendarAliases = new HashMap<>();
+        calendarAliases.put("ethiopic-amete-alem", "ethioaa");
+        calendarAliases.put("islamicc", "islamic-civil");
+        UNICODE_EXT_VALUE_ALIASES.put("ca", calendarAliases);
+
+        // ks (collation strength)
+        Map<String, String> colStrengthAliases = new HashMap<>();
+        colStrengthAliases.put("primary", "level1");
+        colStrengthAliases.put("secondary", "level2");
+        colStrengthAliases.put("tertiary", "level3");
+        colStrengthAliases.put("quaternary", "level4");
+        colStrengthAliases.put("identical", "level5");
+        UNICODE_EXT_VALUE_ALIASES.put("ks", colStrengthAliases);
+
+        // ms (measurement system)
+        Map<String, String> msAliases = new HashMap<>();
+        msAliases.put("imperial", "uksystem");
+        UNICODE_EXT_VALUE_ALIASES.put("ms", msAliases);
+    }
+
+    // Unicode extension keys where "yes" → "true" (which means omit the value)
+    private static final Set<String> UNICODE_EXT_BOOLEAN_KEYS = Set.of("kb", "kc", "kh", "kk", "kn");
+
+    // ---- Subdivision Aliases ----
+    private static final Map<String, String> SUBDIVISION_ALIASES = new HashMap<>();
+    static {
+        SUBDIVISION_ALIASES.put("no23", "no50");
+        SUBDIVISION_ALIASES.put("cn11", "cnbj");
+        SUBDIVISION_ALIASES.put("cz10a", "cz110");
+        SUBDIVISION_ALIASES.put("fra", "frges");
+        SUBDIVISION_ALIASES.put("frg", "frges");
+        SUBDIVISION_ALIASES.put("lud", "lucl");
+    }
+
+    // ---- Timezone Aliases ----
+    private static final Map<String, String> TIMEZONE_ALIASES = new HashMap<>();
+    static {
+        TIMEZONE_ALIASES.put("cnckg", "cnsha");
+        TIMEZONE_ALIASES.put("eire", "iedub");
+        TIMEZONE_ALIASES.put("est", "papty");
+        TIMEZONE_ALIASES.put("gmt0", "gmt");
+        TIMEZONE_ALIASES.put("uct", "utc");
+        TIMEZONE_ALIASES.put("zulu", "utc");
+    }
+
+    // ---- Transform Extension tvalue Aliases ----
+    private static final Map<String, Map<String, String>> TVALUE_ALIASES = new HashMap<>();
+    static {
+        Map<String, String> m0Aliases = new HashMap<>();
+        m0Aliases.put("names", "prprname");
+        TVALUE_ALIASES.put("m0", m0Aliases);
+    }
+
+    /**
+     * Canonicalize a locale tag string per ECMA-402 CanonicalizeUnicodeLocaleId.
+     * Applies CLDR language/region/variant aliases, sorts variants, and canonicalizes extensions.
+     */
+    static String canonicalizeLocaleTag(String localeTag) {
+        // First, let Java parse and normalize basic structure (case normalization, grandfathered tag mapping)
+        Locale locale = parseLocaleTag(localeTag);
+        String javaTag = locale.toLanguageTag();
+
+        // Strip private-use suffixes that Java adds for grandfathered tags
+        // e.g. "xtg-x-cel-gaulish" → "xtg", "en-GB-x-oed" → needs special handling
+        javaTag = stripJavaGrandfatheredPrivateUse(localeTag, javaTag);
+
+        // Now parse and canonicalize the tag further
+        return applyCLDRCanonicalization(javaTag);
+    }
+
+    /**
+     * Fix Java's handling of grandfathered tags that add unnecessary -x- private use.
+     */
+    private static String stripJavaGrandfatheredPrivateUse(String originalTag, String javaTag) {
+        String lowerOriginal = originalTag.toLowerCase(Locale.ROOT);
+        // cel-gaulish → xtg (Java gives xtg-x-cel-gaulish)
+        if (lowerOriginal.equals("cel-gaulish") && javaTag.contains("-x-")) {
+            return javaTag.substring(0, javaTag.indexOf("-x-"));
+        }
+        // zh-min → nan (Java gives nan-x-zh-min)
+        if (lowerOriginal.equals("zh-min") && javaTag.contains("-x-")) {
+            return javaTag.substring(0, javaTag.indexOf("-x-"));
+        }
+        // zh-guoyu → zh (Java gives cmn which still needs aliasing)
+        if (lowerOriginal.equals("zh-guoyu")) {
+            return "zh";
+        }
+        return javaTag;
+    }
+
+    /**
+     * Apply CLDR canonicalization to a tag that has already been through Java's Locale processing.
+     */
+    private static String applyCLDRCanonicalization(String tag) {
+        // Parse the tag into components
+        List<String> parts = new ArrayList<>(Arrays.asList(tag.split("-")));
+        if (parts.isEmpty()) {
+            return tag;
+        }
+
+        // Find boundary indices for different subtag types
+        String language = parts.get(0).toLowerCase(Locale.ROOT);
+        int idx = 1;
+        String script = "";
+        String region = "";
+        List<String> variants = new ArrayList<>();
+        Map<Character, String> extensions = new LinkedHashMap<>();
+
+        // Check for sign language prefix mappings first (sgn-XX → replacement)
+        String signKey = language;
+        if (idx < parts.size()) {
+            signKey += "-" + parts.get(idx).toLowerCase(Locale.ROOT);
+            if (idx + 1 < parts.size()) {
+                String threePartKey = signKey + "-" + parts.get(idx + 1).toLowerCase(Locale.ROOT);
+                if (LANGUAGE_ALIASES.containsKey(threePartKey)) {
+                    return LANGUAGE_ALIASES.get(threePartKey);
+                }
+            }
+            if (LANGUAGE_ALIASES.containsKey(signKey) && language.equals("sgn")) {
+                return LANGUAGE_ALIASES.get(signKey);
+            }
+        }
+
+        // Apply language alias
+        String newLanguage = LANGUAGE_ALIASES.get(language);
+        if (newLanguage != null) {
+            language = newLanguage;
+        }
+
+        // Parse script (4 alpha letters, title case after Java processing)
+        if (idx < parts.size() && parts.get(idx).length() == 4 && parts.get(idx).chars().allMatch(Character::isLetter)) {
+            script = parts.get(idx);
+            idx++;
+        }
+
+        // For complex language aliases: add script if not already present
+        String scriptAddition = LANGUAGE_SCRIPT_ADDITIONS.get(parts.get(0).toLowerCase(Locale.ROOT));
+        if (scriptAddition != null && script.isEmpty()) {
+            script = scriptAddition;
+        }
+
+        // Parse region (2 alpha or 3 digits)
+        if (idx < parts.size()) {
+            String p = parts.get(idx);
+            if ((p.length() == 2 && p.chars().allMatch(Character::isLetter)) ||
+                    (p.length() == 3 && p.chars().allMatch(Character::isDigit))) {
+                region = p.toUpperCase(Locale.ROOT);
+                idx++;
+            }
+        }
+
+        // For complex language aliases: add region if not already present
+        String regionAddition = LANGUAGE_REGION_ADDITIONS.get(parts.get(0).toLowerCase(Locale.ROOT));
+        if (regionAddition != null && region.isEmpty()) {
+            region = regionAddition;
+        }
+
+        // Apply region alias
+        if (!region.isEmpty()) {
+            String regionUpper = region.toUpperCase(Locale.ROOT);
+            if (REGION_ALIASES.containsKey(regionUpper)) {
+                // Check language/script-specific replacements
+                Map<String, String> byLang = REGION_ALIASES_BY_LANG.get(regionUpper);
+                if (byLang != null && byLang.containsKey(language)) {
+                    region = byLang.get(language);
+                } else if (byLang != null && !script.isEmpty() && REGION_BY_SCRIPT.containsKey(script)) {
+                    region = REGION_BY_SCRIPT.get(script);
+                } else {
+                    region = REGION_ALIASES.get(regionUpper);
+                }
+            }
+        }
+
+        // Parse variants
+        while (idx < parts.size()) {
+            String p = parts.get(idx);
+            if (p.length() == 1) {
+                break; // Extension singleton
+            }
+            boolean isVariant = (p.length() >= 5 && p.length() <= 8) ||
+                    (p.length() == 4 && Character.isDigit(p.charAt(0)));
+            if (!isVariant) {
+                break;
+            }
+            String lowerVariant = p.toLowerCase(Locale.ROOT);
+            // Check variant-to-language mappings (e.g., hy-arevela → hy, hy-arevmda → hyw)
+            if (VARIANT_TO_LANGUAGE.containsKey(lowerVariant)) {
+                language = VARIANT_TO_LANGUAGE.get(lowerVariant);
+                // Don't add this variant
+            } else {
+                // Apply variant alias
+                String aliased = VARIANT_ALIASES.getOrDefault(lowerVariant, lowerVariant);
+                variants.add(aliased);
+            }
+            idx++;
+        }
+
+        // When heploc → alalc97, remove the companion hepburn variant
+        if (variants.contains("alalc97")) {
+            variants.remove("hepburn");
+        }
+
+        // Sort variants alphabetically per CLDR canonicalization
+        variants.sort(String.CASE_INSENSITIVE_ORDER);
+
+        // Parse extensions
+        while (idx < parts.size()) {
+            String p = parts.get(idx);
+            if (p.length() == 1 && !p.equalsIgnoreCase("x")) {
+                char singleton = p.toLowerCase(Locale.ROOT).charAt(0);
+                StringBuilder extValue = new StringBuilder();
+                idx++;
+                while (idx < parts.size() && parts.get(idx).length() > 1) {
+                    if (!extValue.isEmpty()) {
+                        extValue.append("-");
+                    }
+                    extValue.append(parts.get(idx).toLowerCase(Locale.ROOT));
+                    idx++;
+                }
+                extensions.put(singleton, extValue.toString());
+            } else if (p.equalsIgnoreCase("x")) {
+                // Private use
+                StringBuilder privateUse = new StringBuilder("x");
+                idx++;
+                while (idx < parts.size()) {
+                    privateUse.append("-").append(parts.get(idx));
+                    idx++;
+                }
+                extensions.put('x', privateUse.toString());
+            } else {
+                idx++;
+            }
+        }
+
+        // Canonicalize unicode extension (u)
+        if (extensions.containsKey('u')) {
+            extensions.put('u', canonicalizeUnicodeExtension(extensions.get('u')));
+        }
+
+        // Canonicalize transform extension (t)
+        if (extensions.containsKey('t')) {
+            extensions.put('t', canonicalizeTransformExtension(extensions.get('t')));
+        }
+
+        // Reconstruct the tag
+        StringBuilder result = new StringBuilder(language);
+        if (!script.isEmpty()) {
+            // Title case for script
+            result.append("-").append(Character.toUpperCase(script.charAt(0)))
+                    .append(script.substring(1).toLowerCase(Locale.ROOT));
+        }
+        if (!region.isEmpty()) {
+            result.append("-").append(region.toUpperCase(Locale.ROOT));
+        }
+        for (String variant : variants) {
+            result.append("-").append(variant);
+        }
+        // Extensions in singleton order
+        List<Character> sortedSingletons = new ArrayList<>(extensions.keySet());
+        sortedSingletons.sort(Character::compare);
+        for (char singleton : sortedSingletons) {
+            String extValue = extensions.get(singleton);
+            if (singleton == 'x') {
+                result.append("-").append(extValue);
+            } else {
+                result.append("-").append(singleton);
+                if (!extValue.isEmpty()) {
+                    result.append("-").append(extValue);
+                }
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Canonicalize a Unicode extension value string (the part after "u-").
+     * Sort key-value pairs by key, apply value aliases, handle boolean keys.
+     */
+    private static String canonicalizeUnicodeExtension(String extValue) {
+        if (extValue == null || extValue.isEmpty()) {
+            return extValue;
+        }
+        String[] parts = extValue.split("-");
+        List<String> attributes = new ArrayList<>();
+        Map<String, List<String>> keywords = new LinkedHashMap<>();
+        String currentKey = null;
+        List<String> currentValues = new ArrayList<>();
+
+        for (String part : parts) {
+            if (part.length() == 2 && Character.isLetter(part.charAt(0))) {
+                // New keyword key
+                if (currentKey != null) {
+                    keywords.put(currentKey, new ArrayList<>(currentValues));
+                    currentValues.clear();
+                }
+                currentKey = part;
+            } else if (currentKey != null) {
+                currentValues.add(part);
+            } else {
+                // Attribute (before any key)
+                attributes.add(part);
+            }
+        }
+        if (currentKey != null) {
+            keywords.put(currentKey, new ArrayList<>(currentValues));
+        }
+
+        // Sort keywords by key
+        Map<String, List<String>> sortedKeywords = new TreeMap<>(keywords);
+
+        // Apply value aliases and boolean canonicalization
+        for (Map.Entry<String, List<String>> entry : sortedKeywords.entrySet()) {
+            String key = entry.getKey();
+            List<String> values = entry.getValue();
+            String joinedValue = String.join("-", values);
+
+            // Apply value aliases
+            Map<String, String> valueAliases = UNICODE_EXT_VALUE_ALIASES.get(key);
+            if (valueAliases != null && valueAliases.containsKey(joinedValue)) {
+                String replacement = valueAliases.get(joinedValue);
+                entry.setValue(replacement.isEmpty() ? List.of() : List.of(replacement.split("-")));
+            }
+
+            // Handle "rg" and "sd" subdivision aliases
+            if (("rg".equals(key) || "sd".equals(key)) && !values.isEmpty()) {
+                String sdValue = String.join("-", values);
+                if (SUBDIVISION_ALIASES.containsKey(sdValue)) {
+                    entry.setValue(List.of(SUBDIVISION_ALIASES.get(sdValue)));
+                }
+            }
+
+            // Handle "tz" timezone aliases
+            if ("tz".equals(key) && !values.isEmpty()) {
+                String tzValue = String.join("-", values);
+                if (TIMEZONE_ALIASES.containsKey(tzValue)) {
+                    entry.setValue(List.of(TIMEZONE_ALIASES.get(tzValue)));
+                }
+            }
+
+            // Handle boolean keys where "yes" → "true" → omit value
+            if (UNICODE_EXT_BOOLEAN_KEYS.contains(key)) {
+                String val = String.join("-", entry.getValue());
+                if ("yes".equals(val) || "true".equals(val)) {
+                    entry.setValue(List.of()); // Empty value (meaning "true", the default)
+                }
+            }
+        }
+
+        // Reconstruct
+        StringBuilder result = new StringBuilder();
+        for (String attr : attributes) {
+            if (!result.isEmpty()) {
+                result.append("-");
+            }
+            result.append(attr);
+        }
+        for (Map.Entry<String, List<String>> entry : sortedKeywords.entrySet()) {
+            if (!result.isEmpty()) {
+                result.append("-");
+            }
+            result.append(entry.getKey());
+            List<String> values = entry.getValue();
+            if (!values.isEmpty()) {
+                result.append("-").append(String.join("-", values));
+            }
+        }
+        return result.toString();
+    }
+
+    /**
+     * Canonicalize a Transform extension value string (the part after "t-").
+     * Sort tfield keys, sort tlang variants, canonicalize tlang, replace deprecated tvalues.
+     */
+    private static String canonicalizeTransformExtension(String extValue) {
+        if (extValue == null || extValue.isEmpty()) {
+            return extValue;
+        }
+        String[] parts = extValue.split("-");
+        int idx = 0;
+
+        // Parse tlang (optional) - starts with a language subtag
+        String tlang = null;
+        StringBuilder tlangBuilder = new StringBuilder();
+        if (idx < parts.length && parts[idx].length() >= 2 && parts[idx].chars().allMatch(Character::isLetter)) {
+            // This is a language subtag
+            tlangBuilder.append(parts[idx]);
+            idx++;
+            // Parse optional script, region, variants
+            List<String> tlangVariants = new ArrayList<>();
+            String tlangScript = "";
+            String tlangRegion = "";
+
+            // Script
+            if (idx < parts.length && parts[idx].length() == 4 && parts[idx].chars().allMatch(Character::isLetter)) {
+                tlangScript = parts[idx];
+                idx++;
+            }
+            // Region
+            if (idx < parts.length) {
+                String p = parts[idx];
+                if ((p.length() == 2 && p.chars().allMatch(Character::isLetter)) ||
+                        (p.length() == 3 && p.chars().allMatch(Character::isDigit))) {
+                    tlangRegion = p;
+                    idx++;
+                }
+            }
+            // Variants
+            while (idx < parts.length && parts[idx].length() > 1 &&
+                    !isTransformFieldKey(parts[idx])) {
+                boolean isVariant = (parts[idx].length() >= 5 && parts[idx].length() <= 8) ||
+                        (parts[idx].length() == 4 && Character.isDigit(parts[idx].charAt(0)));
+                if (!isVariant) {
+                    break;
+                }
+                tlangVariants.add(parts[idx].toLowerCase(Locale.ROOT));
+                idx++;
+            }
+
+            // Sort tlang variants
+            tlangVariants.sort(String.CASE_INSENSITIVE_ORDER);
+
+            // Canonicalize tlang language (apply aliases like iw→he)
+            String tlangLang = tlangBuilder.toString().toLowerCase(Locale.ROOT);
+            // Java's legacy code mapping
+            if ("iw".equals(tlangLang)) {
+                tlangLang = "he";
+            } else if ("in".equals(tlangLang)) {
+                tlangLang = "id";
+            } else if ("ji".equals(tlangLang)) {
+                tlangLang = "yi";
+            }
+            // CLDR language aliases
+            String aliased = LANGUAGE_ALIASES.get(tlangLang);
+            if (aliased != null) {
+                tlangLang = aliased;
+            }
+
+            StringBuilder tlangResult = new StringBuilder(tlangLang);
+            if (!tlangScript.isEmpty()) {
+                tlangResult.append("-").append(tlangScript.toLowerCase(Locale.ROOT));
+            }
+            if (!tlangRegion.isEmpty()) {
+                tlangResult.append("-").append(tlangRegion.toLowerCase(Locale.ROOT));
+            }
+            for (String v : tlangVariants) {
+                tlangResult.append("-").append(v);
+            }
+            tlang = tlangResult.toString();
+        }
+
+        // Parse tfields (key-value pairs where key is 2 chars starting with letter/digit)
+        Map<String, List<String>> tfields = new TreeMap<>(); // TreeMap for sorted order
+        while (idx < parts.length) {
+            if (isTransformFieldKey(parts[idx])) {
+                String key = parts[idx].toLowerCase(Locale.ROOT);
+                idx++;
+                List<String> values = new ArrayList<>();
+                while (idx < parts.length && !isTransformFieldKey(parts[idx])) {
+                    values.add(parts[idx].toLowerCase(Locale.ROOT));
+                    idx++;
+                }
+                // Apply tvalue aliases
+                Map<String, String> aliases = TVALUE_ALIASES.get(key);
+                if (aliases != null) {
+                    String joinedValue = String.join("-", values);
+                    if (aliases.containsKey(joinedValue)) {
+                        String replacement = aliases.get(joinedValue);
+                        values = new ArrayList<>(Arrays.asList(replacement.split("-")));
+                    }
+                }
+                tfields.put(key, values);
+            } else {
+                idx++;
+            }
+        }
+
+        // Reconstruct
+        StringBuilder result = new StringBuilder();
+        if (tlang != null) {
+            result.append(tlang);
+        }
+        for (Map.Entry<String, List<String>> entry : tfields.entrySet()) {
+            if (!result.isEmpty()) {
+                result.append("-");
+            }
+            result.append(entry.getKey());
+            if (!entry.getValue().isEmpty()) {
+                result.append("-").append(String.join("-", entry.getValue()));
+            }
+        }
+        return result.toString();
+    }
+
+    /**
+     * Check if a string is a transform extension field key (2 chars: letter/digit + letter/digit).
+     */
+    private static boolean isTransformFieldKey(String s) {
+        if (s.length() != 2) {
+            return false;
+        }
+        char c0 = s.charAt(0);
+        char c1 = s.charAt(1);
+        // BCP 47 / UTS 35: tkey = alpha digit
+        return Character.isLetter(c0) && Character.isDigit(c1);
+    }
+
     private static Locale parseLocaleTag(String localeTag) {
         if (localeTag == null) {
             throw new IllegalArgumentException("Invalid language tag: null");
         }
-        String normalizedTag = localeTag.strip();
-        if (normalizedTag.isEmpty()) {
+        // Tags with leading/trailing whitespace or internal whitespace are invalid
+        if (localeTag.isEmpty() || !localeTag.equals(localeTag.strip())) {
             throw new IllegalArgumentException("Invalid language tag: " + localeTag);
         }
+        String normalizedTag = localeTag;
         // Additional BCP 47 structural validation that Java's Locale.Builder doesn't enforce
         validateBcp47Structure(normalizedTag);
         try {
@@ -2105,64 +3034,244 @@ public final class JSIntlObject {
             throw new IllegalArgumentException("Invalid language tag: " + tag);
         }
 
-        // If primary language is 4+ letters, next subtag cannot be a 3-letter extlang
-        if (primaryLanguage.length() >= 4 && parts.length > 1) {
-            String nextSubtag = parts[1];
-            if (nextSubtag.matches("[a-zA-Z]{3}")) {
-                throw new IllegalArgumentException(
-                        "Invalid language tag: 4+ letter language cannot have extlang subtag: " + tag);
+        // Per UTS 35: language = 2-3 alpha or 5-8 alpha
+        // 1-letter (i, x) and 4-letter primary subtags are invalid
+        int langLen = primaryLanguage.length();
+        if (langLen < 2 || langLen == 4 || langLen > 8) {
+            throw new IllegalArgumentException("Invalid language tag: " + tag);
+        }
+
+        // Parse subtags in strict positional order: script?, region?, variants*, extensions*, privateuse?
+        int idx = 1;
+        boolean scriptSeen = false;
+        boolean regionSeen = false;
+        Set<String> variants = new HashSet<>();
+        Set<Character> extensionSingletons = new HashSet<>();
+
+        // Optional script (4 alpha)
+        if (idx < parts.length) {
+            String p = parts[idx];
+            if (p.length() == 4 && p.chars().allMatch(c -> Character.isLetter((char) c))) {
+                scriptSeen = true;
+                idx++;
             }
         }
 
-        // Collect variants and extension singletons to check for duplicates
-        Set<String> variants = new HashSet<>();
-        Set<Character> extensionSingletons = new HashSet<>();
-        boolean inVariants = false;
-        boolean inExtensions = false;
-        boolean inPrivateUse = false;
+        // Optional region (2 alpha or 3 digit)
+        if (idx < parts.length) {
+            String p = parts[idx];
+            if ((p.length() == 2 && p.chars().allMatch(c -> Character.isLetter((char) c))) ||
+                    (p.length() == 3 && p.chars().allMatch(c -> Character.isDigit((char) c)))) {
+                regionSeen = true;
+                idx++;
+            }
+        }
 
-        for (int i = 1; i < parts.length; i++) {
-            String part = parts[i].toLowerCase(Locale.ROOT);
-            int length = part.length();
+        // Variants (5-8 alphanum or 4 starting with digit)
+        while (idx < parts.length) {
+            String p = parts[idx].toLowerCase(Locale.ROOT);
+            boolean isVariant = (p.length() >= 5 && p.length() <= 8) ||
+                    (p.length() == 4 && Character.isDigit(p.charAt(0)));
+            if (!isVariant) {
+                break;
+            }
+            if (!variants.add(p)) {
+                throw new IllegalArgumentException(
+                        "Invalid language tag: duplicate variant '" + p + "': " + tag);
+            }
+            idx++;
+        }
+
+        // Extensions and private use
+        boolean inPrivateUse = false;
+        char currentSingleton = 0;
+        while (idx < parts.length) {
+            String p = parts[idx];
+            String pLower = p.toLowerCase(Locale.ROOT);
 
             if (inPrivateUse) {
+                idx++;
                 continue;
             }
 
             // Private use prefix
-            if ("x".equals(part)) {
+            if ("x".equalsIgnoreCase(p)) {
                 inPrivateUse = true;
+                idx++;
                 continue;
             }
 
-            // Extension singleton (single letter/digit, not 'x')
-            if (length == 1) {
-                char singleton = part.charAt(0);
-                inExtensions = true;
-                inVariants = false;
+            // Extension singleton
+            if (p.length() == 1) {
+                char singleton = pLower.charAt(0);
+                if (!Character.isLetterOrDigit(singleton)) {
+                    throw new IllegalArgumentException("Invalid language tag: " + tag);
+                }
                 if (!extensionSingletons.add(singleton)) {
                     throw new IllegalArgumentException(
                             "Invalid language tag: duplicate extension singleton '" + singleton + "': " + tag);
                 }
-                continue;
-            }
-
-            if (inExtensions) {
-                // Extension key-value subtags; skip
-                continue;
-            }
-
-            // Before extensions: could be script (4 alpha), region (2 alpha or 3 digit), or variant
-            // Variant: 5-8 alphanum, or 4 alphanum starting with digit
-            boolean isVariant = (length >= 5 && length <= 8) ||
-                    (length == 4 && Character.isDigit(part.charAt(0)));
-
-            if (isVariant || inVariants) {
-                inVariants = true;
-                if (!variants.add(part)) {
-                    throw new IllegalArgumentException(
-                            "Invalid language tag: duplicate variant '" + part + "': " + tag);
+                currentSingleton = singleton;
+                idx++;
+                // Must have at least one extension subtag
+                boolean hasValue = false;
+                while (idx < parts.length && parts[idx].length() > 1) {
+                    String extSubtag = parts[idx].toLowerCase(Locale.ROOT);
+                    // Validate Unicode extension keys (u-extension)
+                    if (currentSingleton == 'u' && extSubtag.length() == 2) {
+                        char c1 = extSubtag.charAt(1);
+                        if (Character.isDigit(c1)) {
+                            throw new IllegalArgumentException(
+                                    "Invalid language tag: Unicode extension key second char must be letter: " + tag);
+                        }
+                    }
+                    hasValue = true;
+                    idx++;
                 }
+                if (!hasValue) {
+                    throw new IllegalArgumentException(
+                            "Invalid language tag: extension singleton without value: " + tag);
+                }
+                continue;
+            }
+
+            // If we get here, the subtag doesn't fit any valid position
+            throw new IllegalArgumentException("Invalid language tag: " + tag);
+        }
+
+        // Validate transform extension structure
+        if (extensionSingletons.contains('t')) {
+            validateTransformExtension(tag, parts);
+        }
+    }
+
+    /**
+     * Validate the structure of a transform extension (t-extension) in a BCP 47 tag.
+     * Per UTS 35: t-extension = "t" ("-" tlang)? ("-" tfield)*
+     * tlang = unicode_language_id (2-3 or 5-8 alpha language, optional script/region/variants)
+     * tfield = tkey tvalue+ (tkey = 2 chars alphanum+alpha, tvalue = 3-8 alphanum)
+     */
+    private static void validateTransformExtension(String tag, String[] allParts) {
+        // Find the t-extension start
+        int tStart = -1;
+        for (int i = 0; i < allParts.length; i++) {
+            if (allParts[i].length() == 1 && allParts[i].equalsIgnoreCase("t")) {
+                tStart = i + 1;
+                break;
+            }
+        }
+        if (tStart < 0 || tStart >= allParts.length) {
+            throw new IllegalArgumentException("Invalid language tag: empty t-extension: " + tag);
+        }
+
+        // Find the end of the t-extension (next singleton or end)
+        int tEnd = allParts.length;
+        for (int i = tStart; i < allParts.length; i++) {
+            if (allParts[i].length() == 1) {
+                tEnd = i;
+                break;
+            }
+        }
+
+        if (tStart == tEnd) {
+            throw new IllegalArgumentException("Invalid language tag: empty t-extension: " + tag);
+        }
+
+        // Collect t-extension subtags
+        List<String> parts = new ArrayList<>();
+        for (int i = tStart; i < tEnd; i++) {
+            parts.add(allParts[i].toLowerCase(Locale.ROOT));
+        }
+
+        int idx = 0;
+        String first = parts.get(0);
+
+        // Determine if first subtag is a tlang language
+        // Language: 2-3 alpha or 5-8 alpha. NOT 4 alpha (that would be invalid) or 1, 9+ alpha.
+        boolean hasTlang = false;
+        if (first.chars().allMatch(Character::isLetter)) {
+            if (first.length() == 4) {
+                throw new IllegalArgumentException("Invalid language tag: invalid tlang in t-extension: " + tag);
+            }
+            if (first.length() >= 9) {
+                throw new IllegalArgumentException("Invalid language tag: invalid tlang in t-extension: " + tag);
+            }
+            if ((first.length() >= 2 && first.length() <= 3) || (first.length() >= 5 && first.length() <= 8)) {
+                hasTlang = true;
+            }
+        }
+
+        if (hasTlang) {
+            idx++; // consume language
+
+            // Check for invalid extlang (3 alpha after language) — not allowed in unicode_language_id
+            if (idx < parts.size()) {
+                String next = parts.get(idx);
+                if (next.length() == 3 && next.chars().allMatch(Character::isLetter)) {
+                    throw new IllegalArgumentException(
+                            "Invalid language tag: extlang not allowed in tlang: " + tag);
+                }
+            }
+
+            // Optional script (4 alpha)
+            if (idx < parts.size()) {
+                String next = parts.get(idx);
+                if (next.length() == 4 && next.chars().allMatch(Character::isLetter)) {
+                    idx++;
+                    // Check duplicate script
+                    if (idx < parts.size()) {
+                        String afterScript = parts.get(idx);
+                        if (afterScript.length() == 4 && afterScript.chars().allMatch(Character::isLetter)) {
+                            throw new IllegalArgumentException(
+                                    "Invalid language tag: duplicate script in tlang: " + tag);
+                        }
+                    }
+                }
+            }
+
+            // Optional region (2 alpha or 3 digit)
+            if (idx < parts.size()) {
+                String next = parts.get(idx);
+                if ((next.length() == 2 && next.chars().allMatch(Character::isLetter)) ||
+                        (next.length() == 3 && next.chars().allMatch(Character::isDigit))) {
+                    idx++;
+                }
+            }
+
+            // Optional variants (5-8 alphanum or 4 starting with digit)
+            while (idx < parts.size()) {
+                String next = parts.get(idx);
+                boolean isVariant = (next.length() >= 5 && next.length() <= 8) ||
+                        (next.length() == 4 && Character.isDigit(next.charAt(0)));
+                if (!isVariant) {
+                    break;
+                }
+                idx++;
+            }
+        }
+
+        // Validate tfields
+        while (idx < parts.size()) {
+            String field = parts.get(idx);
+            if (field.length() == 2 && Character.isLetter(field.charAt(0)) && Character.isDigit(field.charAt(1))) {
+                idx++;
+                boolean hasValue = false;
+                while (idx < parts.size()) {
+                    String val = parts.get(idx);
+                    if (val.length() == 2 && Character.isLetter(val.charAt(0)) && Character.isDigit(val.charAt(1))) {
+                        break; // Next tfield key
+                    }
+                    if (val.length() < 3 || val.length() > 8) {
+                        throw new IllegalArgumentException("Invalid language tag: invalid tvalue: " + tag);
+                    }
+                    hasValue = true;
+                    idx++;
+                }
+                if (!hasValue) {
+                    throw new IllegalArgumentException("Invalid language tag: tfield key without value: " + tag);
+                }
+            } else {
+                throw new IllegalArgumentException("Invalid language tag: unexpected subtag in t-extension: " + tag);
             }
         }
     }
@@ -2302,6 +3411,7 @@ public final class JSIntlObject {
         resolvedOptions.set("locale", new JSString(relativeTimeFormat.getLocale().toLanguageTag()));
         resolvedOptions.set("style", new JSString(relativeTimeFormat.getStyle()));
         resolvedOptions.set("numeric", new JSString(relativeTimeFormat.getNumeric()));
+        resolvedOptions.set("numberingSystem", new JSString(relativeTimeFormat.getNumberingSystem()));
         return resolvedOptions;
     }
 
@@ -2575,10 +3685,7 @@ public final class JSIntlObject {
         if (numberingSystem == null) {
             return false;
         }
-        return "latn".equals(numberingSystem)
-                || "arab".equals(numberingSystem)
-                || "deva".equals(numberingSystem)
-                || "hanidec".equals(numberingSystem);
+        return SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystem);
     }
 
     public static JSValue supportedLocalesOf(JSContext context, JSValue thisArg, JSValue[] args) {

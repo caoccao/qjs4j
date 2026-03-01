@@ -616,6 +616,76 @@ public class RegExpConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    void testNestedOptionalGroupInStarLoop() {
+        // Optional group with alternation inside a * quantifier
+        // Previously failed due to advance-check register collision between nested quantifiers
+        assertBooleanWithJavet(
+                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd')",
+                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?(-(ef|gh))?)*$/.test('ab-t-cd')",
+                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en')",
+                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{4}))?(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en')");
+
+        // Should also match with actual extension content
+        assertBooleanWithJavet(
+                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd-ab')",
+                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en-us')");
+
+        // Zero iterations of * should still work
+        assertBooleanWithJavet(
+                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab')",
+                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en')");
+
+        // Non-match should still return false
+        assertBooleanWithJavet(
+                "!/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-123')");
+
+        // BCP 47 locale-like pattern: the original motivating case
+        assertBooleanWithJavet("""
+                var alpha = "[a-z]";
+                var digit = "[0-9]";
+                var alphanum = "[a-z0-9]";
+                var language = "(" + alpha + "{2,3}|" + alpha + "{5,8})";
+                var script = "(" + alpha + "{4})";
+                var region = "(" + alpha + "{2}|" + digit + "{3})";
+                var variant = "(" + alphanum + "{5,8}|(?:" + digit + alphanum + "{3}))";
+                var tlang = "(" + language + "(-" + script + ")?(-" + region + ")?(-" + variant + ")*)";
+                var tfield = "(" + alpha + digit + "(-" + alphanum + "{3,8})+)";
+                var te = "(t((-" + tlang + "(-" + tfield + ")*)|(-" + tfield + ")+))";
+                var keyword = "(" + alphanum + alpha + "(-" + alphanum + "{3,8})*)";
+                var attribute = "(" + alphanum + "{3,8})";
+                var ule = "(u((-" + keyword + ")+|((-" + attribute + ")+(-" + keyword + ")*)))";
+                var other = "([0-9a-sv-wy-z](-" + alphanum + "{2,8})+)";
+                var ext = "(" + ule + "|" + te + "|" + other + ")";
+                var re = new RegExp("^" + language + "(-" + ext + ")*$", "i");
+                re.test("en-t-en") && re.test("en-t-he") && re.test("en-t-en-latn")
+                    && re.test("en-t-d0-ascii") && re.test("zh-Hans-CN-t-ca-u-ca-x-t-u".split("-x-")[0])
+                    && re.test("sl-t-sl-rozaj-biske-1994")""");
+    }
+
+    @Test
+    void testCaseInsensitiveNonAscii() {
+        // Turkish dotless-i (U+0131) should NOT match [a-z] in non-Unicode mode
+        // Per ES spec, if ch >= 128 and toUpperCase(ch) < 128, ch is not canonicalized
+        assertBooleanWithJavet(
+                "!/^[a-z]+$/i.test('\\u0131d')",
+                "!/^[a-z]$/i.test('\\u0131')");
+
+        // But regular ASCII case-insensitive still works
+        assertBooleanWithJavet(
+                "/^[a-z]+$/i.test('Hello')",
+                "/^[a-z]+$/i.test('ABC')");
+
+        // Kelvin sign (U+212A) should NOT match [a-z] in non-Unicode mode either
+        assertBooleanWithJavet("!/^[a-z]$/i.test('\\u212A')");
+
+        // Long s (U+017F) should NOT match [a-z] in non-Unicode mode
+        assertBooleanWithJavet("!/^[a-z]$/i.test('\\u017F')");
+
+        // In Unicode mode, case folding applies differently
+        assertBooleanWithJavet("/^[a-z]$/iu.test('\\u212A')");
+    }
+
+    @Test
     void testUnicodeFlagBehavior() {
         // Unicode flag basic test
         assertBooleanWithJavet("/test/u.test('test')");

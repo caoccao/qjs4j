@@ -219,4 +219,70 @@ public class JSIntlObjectTest extends BaseJavetTest {
                 .isInstanceOf(JSException.class)
                 .hasMessageContaining("RangeError");
     }
+
+    @Test
+    public void testTransformExtensionCanonicalization() {
+        // Script in t-extension should be lowercased (not title-cased like main locale)
+        assertStringWithJavet(
+                "Intl.getCanonicalLocales('und-Latn-t-und-Hani-m0-prprname')[0]",
+                "Intl.getCanonicalLocales('en-t-en-Latn')[0]");
+
+        // Language in t-extension should be lowercased and aliased
+        assertStringWithJavet(
+                "Intl.getCanonicalLocales('en-t-iw')[0]");
+
+        // Region in t-extension should be lowercased
+        assertStringWithJavet(
+                "Intl.getCanonicalLocales('en-t-en-US')[0]");
+
+        // Tfield keys sorted, values lowercased
+        assertStringWithJavet(
+                "Intl.getCanonicalLocales('DE-T-M0-DIN-K0-QWERTZ')[0]");
+
+        // Variant subtags in tlang sorted alphabetically
+        assertStringWithJavet(
+                "Intl.getCanonicalLocales('sl-t-sl-rozaj-biske-1994')[0]");
+
+        // Valid t-extension tags should be accepted unchanged when already canonical
+        assertStringWithJavet(
+                "Intl.getCanonicalLocales('en-t-en')[0]",
+                "Intl.getCanonicalLocales('en-t-en-latn')[0]",
+                "Intl.getCanonicalLocales('en-t-d0-ascii')[0]",
+                "Intl.getCanonicalLocales('en-t-m0-true')[0]");
+    }
+
+    @Test
+    public void testWhitespaceTagRejection() {
+        // Tags with leading/trailing whitespace should be rejected
+        assertErrorWithJavet(
+                "Intl.getCanonicalLocales(' en')",
+                "Intl.getCanonicalLocales('en ')",
+                "Intl.getCanonicalLocales(' en ')");
+    }
+
+    @Test
+    public void testSupportedValuesOfCalendars() {
+        // Required calendars should be present
+        assertBooleanWithJavet(
+                "Intl.supportedValuesOf('calendar').includes('islamic-civil')",
+                "Intl.supportedValuesOf('calendar').includes('islamic-tbla')",
+                "Intl.supportedValuesOf('calendar').includes('islamic-umalqura')",
+                "Intl.supportedValuesOf('calendar').includes('gregory')");
+
+        // The list should be sorted
+        assertBooleanWithJavet("""
+                var calendars = Intl.supportedValuesOf('calendar');
+                JSON.stringify(calendars) === JSON.stringify(calendars.slice().sort())""");
+    }
+
+    @Test
+    public void testInvalidTagsRejected() {
+        // Empty string, lone singletons, and private-use only tags are invalid
+        assertErrorWithJavet(
+                "Intl.getCanonicalLocales('')",
+                "Intl.getCanonicalLocales('i')",
+                "Intl.getCanonicalLocales('x')",
+                "Intl.getCanonicalLocales('x-foo')");
+
+    }
 }
