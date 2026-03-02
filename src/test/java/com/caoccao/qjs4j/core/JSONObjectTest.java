@@ -168,7 +168,7 @@ public class JSONObjectTest extends BaseJavetTest {
         assertPendingException(context);
 
         // Edge case: no arguments
-        result = jsonObject().parse(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = jsonObject().parse(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertSyntaxError(result);
         assertPendingException(context);
 
@@ -928,7 +928,7 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(result.isUndefined()).isTrue();
 
         // Edge case: no arguments
-        result = jsonObject().stringify(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = jsonObject().stringify(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(result.isUndefined()).isTrue();
 
         // Edge case: stringify object with undefined values (should be omitted in simplified implementation)

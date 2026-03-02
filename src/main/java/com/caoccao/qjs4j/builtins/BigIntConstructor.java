@@ -22,8 +22,6 @@ import com.caoccao.qjs4j.exceptions.JSErrorException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
-import java.math.BigInteger;
-
 /**
  * Implementation of BigInt constructor and static methods.
  * Based on ES2020 BigInt specification.

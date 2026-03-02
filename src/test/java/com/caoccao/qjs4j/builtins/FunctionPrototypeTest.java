@@ -89,7 +89,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on non-function
-        result = FunctionPrototype.apply(context, new JSString("not a function"), new JSValue[]{});
+        result = FunctionPrototype.apply(context, new JSString("not a function"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
                     assertThat(name.value()).isEqualTo("TypeError"));
@@ -136,7 +136,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         assertThat(callResult).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(15.0)); // 10 + 5
 
         // Edge case: called on non-function
-        result = FunctionPrototype.bind(context, new JSString("not a function"), new JSValue[]{});
+        result = FunctionPrototype.bind(context, new JSString("not a function"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
                     assertThat(name.value()).isEqualTo("TypeError"));
@@ -179,11 +179,11 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
 
         // Normal case: call with no thisArg and no arguments
-        result = FunctionPrototype.call(context, testFunc, new JSValue[]{});
+        result = FunctionPrototype.call(context, testFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
 
         // Edge case: called on non-function
-        result = FunctionPrototype.call(context, new JSString("not a function"), new JSValue[]{});
+        result = FunctionPrototype.call(context, new JSString("not a function"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
                     assertThat(name.value()).isEqualTo("TypeError"));
@@ -253,15 +253,15 @@ public class FunctionPrototypeTest extends BaseJavetTest {
                 new JSString("return 42;")
         });
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
-            JSValue callResult = func.call(context, JSUndefined.INSTANCE, new JSValue[]{});
+            JSValue callResult = func.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
             assertThat(callResult).isInstanceOfSatisfying(JSNumber.class, num ->
                     assertThat(num.value()).isEqualTo(42.0));
         });
 
         // Normal case: function with empty body
-        result = FunctionConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = FunctionConstructor.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
-            JSValue callResult = func.call(context, JSUndefined.INSTANCE, new JSValue[]{});
+            JSValue callResult = func.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
             assertThat(callResult).isEqualTo(JSUndefined.INSTANCE);
         });
 
@@ -383,16 +383,16 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     public void testGetLength() {
         // Normal case: function with length
         JSFunction testFunc = new JSNativeFunction("test", 3, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        JSValue result = FunctionPrototype.getLength(context, testFunc, new JSValue[]{});
+        JSValue result = FunctionPrototype.getLength(context, testFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(3.0));
 
         // Normal case: function with zero length
         JSFunction zeroFunc = new JSNativeFunction("zero", 0, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        result = FunctionPrototype.getLength(context, zeroFunc, new JSValue[]{});
+        result = FunctionPrototype.getLength(context, zeroFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
 
         // Edge case: called on non-function
-        result = FunctionPrototype.getLength(context, new JSString("not a function"), new JSValue[]{});
+        result = FunctionPrototype.getLength(context, new JSString("not a function"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
                     assertThat(name.value()).isEqualTo("TypeError"));
@@ -404,16 +404,16 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     public void testGetName() {
         // Normal case: function with name
         JSFunction testFunc = new JSNativeFunction("myFunction", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        JSValue result = FunctionPrototype.getName(context, testFunc, new JSValue[]{});
+        JSValue result = FunctionPrototype.getName(context, testFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("myFunction"));
 
         // Normal case: function without name
         JSFunction anonFunc = new JSNativeFunction("", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        result = FunctionPrototype.getName(context, anonFunc, new JSValue[]{});
+        result = FunctionPrototype.getName(context, anonFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo(""));
 
         // Edge case: called on non-function
-        result = FunctionPrototype.getName(context, new JSString("not a function"), new JSValue[]{});
+        result = FunctionPrototype.getName(context, new JSString("not a function"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
                     assertThat(name.value()).isEqualTo("TypeError"));
@@ -504,16 +504,16 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     public void testToString() {
         // Normal case: function with name (QuickJS format)
         JSFunction testFunc = new JSNativeFunction("testFunction", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        JSValue result = FunctionPrototype.toString_(context, testFunc, new JSValue[]{});
+        JSValue result = FunctionPrototype.toString_(context, testFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("function testFunction() { [native code] }"));
 
         // Normal case: function without name
         JSFunction anonFunc = new JSNativeFunction("", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        result = FunctionPrototype.toString_(context, anonFunc, new JSValue[]{});
+        result = FunctionPrototype.toString_(context, anonFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("function () { [native code] }"));
 
         // Edge case: called on non-function
-        result = FunctionPrototype.toString_(context, new JSString("not a function"), new JSValue[]{});
+        result = FunctionPrototype.toString_(context, new JSString("not a function"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
                     assertThat(name.value()).isEqualTo("TypeError"));

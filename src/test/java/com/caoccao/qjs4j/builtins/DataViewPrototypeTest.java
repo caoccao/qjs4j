@@ -33,11 +33,11 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSArrayBuffer buffer = new JSArrayBuffer(16);
         JSDataView dataView = new JSDataView(buffer);
 
-        JSValue result = DataViewPrototype.getBuffer(context, dataView, new JSValue[]{});
+        JSValue result = DataViewPrototype.getBuffer(context, dataView, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(buffer);
 
         // Edge case: called on non-DataView
-        result = DataViewPrototype.getBuffer(context, new JSString("not a dataview"), new JSValue[]{});
+        result = DataViewPrototype.getBuffer(context, new JSString("not a dataview"), JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -47,16 +47,16 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSArrayBuffer buffer = new JSArrayBuffer(16);
         JSDataView dataView = new JSDataView(buffer);
 
-        JSValue result = DataViewPrototype.getByteLength(context, dataView, new JSValue[]{});
+        JSValue result = DataViewPrototype.getByteLength(context, dataView, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(16.0));
 
         // With offset and length
         JSDataView dataView2 = new JSDataView(buffer, 4, 8);
-        result = DataViewPrototype.getByteLength(context, dataView2, new JSValue[]{});
+        result = DataViewPrototype.getByteLength(context, dataView2, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(8.0));
 
         // Edge case: called on non-DataView
-        result = DataViewPrototype.getByteLength(context, new JSNumber(123), new JSValue[]{});
+        result = DataViewPrototype.getByteLength(context, new JSNumber(123), JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -66,16 +66,16 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSArrayBuffer buffer = new JSArrayBuffer(16);
         JSDataView dataView = new JSDataView(buffer);
 
-        JSValue result = DataViewPrototype.getByteOffset(context, dataView, new JSValue[]{});
+        JSValue result = DataViewPrototype.getByteOffset(context, dataView, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(0.0));
 
         // With offset
         JSDataView dataView2 = new JSDataView(buffer, 4, 8);
-        result = DataViewPrototype.getByteOffset(context, dataView2, new JSValue[]{});
+        result = DataViewPrototype.getByteOffset(context, dataView2, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(4.0));
 
         // Edge case: called on non-DataView
-        result = DataViewPrototype.getByteOffset(context, new JSObject(), new JSValue[]{});
+        result = DataViewPrototype.getByteOffset(context, new JSObject(), JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -419,14 +419,14 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSDataView detachedView = new JSDataView(detachedBuffer);
         detachedBuffer.detach();
 
-        JSValue result = DataViewPrototype.getBuffer(context, detachedView, new JSValue[]{});
+        JSValue result = DataViewPrototype.getBuffer(context, detachedView, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(detachedBuffer);
 
-        result = DataViewPrototype.getByteLength(context, detachedView, new JSValue[]{});
+        result = DataViewPrototype.getByteLength(context, detachedView, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
 
-        result = DataViewPrototype.getByteOffset(context, detachedView, new JSValue[]{});
+        result = DataViewPrototype.getByteOffset(context, detachedView, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
 
@@ -434,14 +434,14 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSDataView outOfBoundsView = new JSDataView(resizableBuffer, 8, 8);
         resizableBuffer.resize(4);
 
-        result = DataViewPrototype.getBuffer(context, outOfBoundsView, new JSValue[]{});
+        result = DataViewPrototype.getBuffer(context, outOfBoundsView, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(resizableBuffer);
 
-        result = DataViewPrototype.getByteLength(context, outOfBoundsView, new JSValue[]{});
+        result = DataViewPrototype.getByteLength(context, outOfBoundsView, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
 
-        result = DataViewPrototype.getByteOffset(context, outOfBoundsView, new JSValue[]{});
+        result = DataViewPrototype.getByteOffset(context, outOfBoundsView, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }

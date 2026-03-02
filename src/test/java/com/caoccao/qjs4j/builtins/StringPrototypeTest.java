@@ -83,7 +83,7 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("o"));
 
         // Default index 0
-        result = StringPrototype.charAt(context, str, new JSValue[]{});
+        result = StringPrototype.charAt(context, str, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("h"));
 
         // Out of bounds
@@ -117,7 +117,7 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(111.0));
 
         // Default index 0
-        result = StringPrototype.charCodeAt(context, str, new JSValue[]{});
+        result = StringPrototype.charCodeAt(context, str, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(104.0));
 
         // Out of bounds
@@ -163,7 +163,7 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello world test"));
 
         // No args
-        result = StringPrototype.concat(context, str, new JSValue[]{});
+        result = StringPrototype.concat(context, str, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
 
         // Non-string args
@@ -299,7 +299,7 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertThat(empty.value().length()).isEqualTo(0);
 
         JSValue nonString = new JSNumber(123);
-        assertThat(StringPrototype.getLength(context, nonString, new JSValue[]{}).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
+        assertThat(StringPrototype.getLength(context, nonString, JSValue.NO_ARGS).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
 
         assertIntegerWithJavet("'hello world'.length",
                 "'你好世界'.length",
@@ -318,19 +318,19 @@ public class StringPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testHtmlMethodArgumentChecks() {
-        StringPrototype.blink(context, JSUndefined.INSTANCE, new JSValue[]{});
+        StringPrototype.blink(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertPendingException(context);
 
-        StringPrototype.anchor(context, new JSString("x"), new JSValue[]{});
+        StringPrototype.anchor(context, new JSString("x"), JSValue.NO_ARGS);
         assertPendingException(context);
 
-        StringPrototype.fontcolor(context, new JSString("x"), new JSValue[]{});
+        StringPrototype.fontcolor(context, new JSString("x"), JSValue.NO_ARGS);
         assertPendingException(context);
 
-        StringPrototype.fontsize(context, new JSString("x"), new JSValue[]{});
+        StringPrototype.fontsize(context, new JSString("x"), JSValue.NO_ARGS);
         assertPendingException(context);
 
-        StringPrototype.link(context, new JSString("x"), new JSValue[]{});
+        StringPrototype.link(context, new JSString("x"), JSValue.NO_ARGS);
         assertPendingException(context);
     }
 
@@ -399,10 +399,10 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'hello\\uD83D\\uDE00world'.isWellFormed()");
 
         // Test unpaired surrogates
-        JSValue result = StringPrototype.isWellFormed(context, new JSString("hello\uD800world"), new JSValue[]{});
+        JSValue result = StringPrototype.isWellFormed(context, new JSString("hello\uD800world"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSBoolean.class, jsBool -> assertThat(jsBool.value()).isFalse());
 
-        result = StringPrototype.isWellFormed(context, new JSString("\uDFFFtest"), new JSValue[]{});
+        result = StringPrototype.isWellFormed(context, new JSString("\uDFFFtest"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSBoolean.class, jsBool -> assertThat(jsBool.value()).isFalse());
     }
 
@@ -830,7 +830,7 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertThat(arr.get(1)).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("world"));
 
         // No separator
-        result = StringPrototype.split(context, str, new JSValue[]{});
+        result = StringPrototype.split(context, str, JSValue.NO_ARGS);
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(1);
         assertThat(arr.get(0)).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
@@ -1100,38 +1100,38 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testToLowerCase() {
         JSString upper = new JSString("HELLO WORLD");
-        JSValue result = StringPrototype.toLowerCase(context, upper, new JSValue[]{});
+        JSValue result = StringPrototype.toLowerCase(context, upper, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
 
         // Already lower
-        result = StringPrototype.toLowerCase(context, str, new JSValue[]{});
+        result = StringPrototype.toLowerCase(context, str, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
 
         // Mixed
         JSString mixed = new JSString("HeLLo WoRLd");
-        result = StringPrototype.toLowerCase(context, mixed, new JSValue[]{});
+        result = StringPrototype.toLowerCase(context, mixed, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.toLowerCase(context, empty, new JSValue[]{});
+        result = StringPrototype.toLowerCase(context, empty, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
     }
 
     @Test
     public void testToString() {
         // Normal case
-        JSValue result = StringPrototype.toString_(context, str, new JSValue[]{});
+        JSValue result = StringPrototype.toString_(context, str, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.toString_(context, empty, new JSValue[]{});
+        result = StringPrototype.toString_(context, empty, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
 
         // Non-string thisArg
         try {
-            StringPrototype.toString_(context, new JSNumber(42), new JSValue[]{});
+            StringPrototype.toString_(context, new JSNumber(42), JSValue.NO_ARGS);
         } catch (Exception e) {
             assertThat(e.getMessage()).isEqualTo("TypeError: String.prototype.toString requires that 'this' be a String");
         }
@@ -1141,22 +1141,22 @@ public class StringPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToUpperCase() {
-        JSValue result = StringPrototype.toUpperCase(context, str, new JSValue[]{});
+        JSValue result = StringPrototype.toUpperCase(context, str, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("HELLO WORLD"));
 
         // Already upper
         JSString upper = new JSString("HELLO WORLD");
-        result = StringPrototype.toUpperCase(context, upper, new JSValue[]{});
+        result = StringPrototype.toUpperCase(context, upper, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("HELLO WORLD"));
 
         // Mixed
         JSString mixed = new JSString("HeLLo WoRLd");
-        result = StringPrototype.toUpperCase(context, mixed, new JSValue[]{});
+        result = StringPrototype.toUpperCase(context, mixed, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("HELLO WORLD"));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.toUpperCase(context, empty, new JSValue[]{});
+        result = StringPrototype.toUpperCase(context, empty, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
     }
 
@@ -1171,38 +1171,38 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'hello\\uD83D\\uDE00world'.toWellFormed()");
 
         // Test unpaired surrogates get replaced with U+FFFD
-        JSValue result = StringPrototype.toWellFormed(context, new JSString("hello\uD800world"), new JSValue[]{});
+        JSValue result = StringPrototype.toWellFormed(context, new JSString("hello\uD800world"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr ->
                 assertThat(jsStr.value()).isEqualTo("hello\uFFFDworld"));
 
-        result = StringPrototype.toWellFormed(context, new JSString("\uDFFFtest"), new JSValue[]{});
+        result = StringPrototype.toWellFormed(context, new JSString("\uDFFFtest"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr ->
                 assertThat(jsStr.value()).isEqualTo("\uFFFDtest"));
 
         // Already well-formed should return same string
         JSString wellFormed = new JSString("hello");
-        result = StringPrototype.toWellFormed(context, wellFormed, new JSValue[]{});
+        result = StringPrototype.toWellFormed(context, wellFormed, JSValue.NO_ARGS);
         assertThat(result).isSameAs(wellFormed);
     }
 
     @Test
     public void testTrim() {
         JSString spaced = new JSString("  hello world  ");
-        JSValue result = StringPrototype.trim(context, spaced, new JSValue[]{});
+        JSValue result = StringPrototype.trim(context, spaced, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
 
         // No spaces
-        result = StringPrototype.trim(context, str, new JSValue[]{});
+        result = StringPrototype.trim(context, str, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
 
         // Only spaces
         JSString spaces = new JSString("   ");
-        result = StringPrototype.trim(context, spaces, new JSValue[]{});
+        result = StringPrototype.trim(context, spaces, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.trim(context, empty, new JSValue[]{});
+        result = StringPrototype.trim(context, empty, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
     }
 

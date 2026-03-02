@@ -45,7 +45,7 @@ public class SymbolConstructorTest extends BaseJavetTest {
         assertThat(symbol.getDescription()).isNull();
 
         // Normal case: no arguments
-        result = SymbolConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = SymbolConstructor.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         symbol = result.asSymbol().orElseThrow();
         assertThat(symbol.getDescription()).isNull();
 
@@ -59,49 +59,49 @@ public class SymbolConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGetAsyncDispose() {
-        JSValue result = SymbolConstructor.getAsyncDispose(context, JSUndefined.INSTANCE, new JSValue[]{});
+        JSValue result = SymbolConstructor.getAsyncDispose(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         JSSymbol symbol = result.asSymbol().orElseThrow();
         assertThat(symbol).isEqualTo(JSSymbol.ASYNC_DISPOSE);
     }
 
     @Test
     public void testGetDispose() {
-        JSValue result = SymbolConstructor.getDispose(context, JSUndefined.INSTANCE, new JSValue[]{});
+        JSValue result = SymbolConstructor.getDispose(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         JSSymbol symbol = result.asSymbol().orElseThrow();
         assertThat(symbol).isEqualTo(JSSymbol.DISPOSE);
     }
 
     @Test
     public void testGetHasInstance() {
-        JSValue result = SymbolConstructor.getHasInstance(context, JSUndefined.INSTANCE, new JSValue[]{});
+        JSValue result = SymbolConstructor.getHasInstance(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         JSSymbol symbol = result.asSymbol().orElseThrow();
         assertThat(symbol).isEqualTo(JSSymbol.HAS_INSTANCE);
     }
 
     @Test
     public void testGetIsConcatSpreadable() {
-        JSValue result = SymbolConstructor.getIsConcatSpreadable(context, JSUndefined.INSTANCE, new JSValue[]{});
+        JSValue result = SymbolConstructor.getIsConcatSpreadable(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         JSSymbol symbol = result.asSymbol().orElseThrow();
         assertThat(symbol).isEqualTo(JSSymbol.IS_CONCAT_SPREADABLE);
     }
 
     @Test
     public void testGetIterator() {
-        JSValue result = SymbolConstructor.getIterator(context, JSUndefined.INSTANCE, new JSValue[]{});
+        JSValue result = SymbolConstructor.getIterator(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         JSSymbol symbol = result.asSymbol().orElseThrow();
         assertThat(symbol).isEqualTo(JSSymbol.ITERATOR);
     }
 
     @Test
     public void testGetToPrimitive() {
-        JSValue result = SymbolConstructor.getToPrimitive(context, JSUndefined.INSTANCE, new JSValue[]{});
+        JSValue result = SymbolConstructor.getToPrimitive(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         JSSymbol symbol = result.asSymbol().orElseThrow();
         assertThat(symbol).isEqualTo(JSSymbol.TO_PRIMITIVE);
     }
 
     @Test
     public void testGetToStringTag() {
-        JSValue result = SymbolConstructor.getToStringTag(context, JSUndefined.INSTANCE, new JSValue[]{});
+        JSValue result = SymbolConstructor.getToStringTag(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         JSSymbol symbol = result.asSymbol().orElseThrow();
         assertThat(symbol).isEqualTo(JSSymbol.TO_STRING_TAG);
     }
@@ -119,7 +119,7 @@ public class SymbolConstructorTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Edge case: no arguments
-        result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
 
@@ -163,7 +163,7 @@ public class SymbolConstructorTest extends BaseJavetTest {
         assertThat(symbol4.getDescription()).isEqualTo("123");
 
         // Edge case: no arguments coerces undefined to "undefined" key
-        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         JSSymbol symbol5 = result.asSymbol().orElseThrow();
         assertThat(symbol5.getDescription()).isEqualTo("undefined");
 

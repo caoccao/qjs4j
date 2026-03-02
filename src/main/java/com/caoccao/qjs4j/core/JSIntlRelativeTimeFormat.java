@@ -25,8 +25,8 @@ import java.util.Locale;
 public final class JSIntlRelativeTimeFormat extends JSObject {
     public static final String NAME = "Intl.RelativeTimeFormat";
     private final Locale locale;
-    private final String numeric;
     private final String numberingSystem;
+    private final String numeric;
     private final String style;
 
     public JSIntlRelativeTimeFormat(Locale locale, String style, String numeric, String numberingSystem) {
@@ -72,12 +72,12 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
         return locale;
     }
 
-    public String getNumeric() {
-        return numeric;
-    }
-
     public String getNumberingSystem() {
         return numberingSystem;
+    }
+
+    public String getNumeric() {
+        return numeric;
     }
 
     public String getStyle() {

@@ -43,7 +43,7 @@ public class RegExpPrototypeTest extends BaseJavetTest {
         assertThat(matchArray.get("input")).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
 
         // Edge case: called on non-RegExp
-        result = RegExpPrototype.exec(context, new JSString("not a regexp"), new JSValue[]{});
+        result = RegExpPrototype.exec(context, new JSString("not a regexp"), JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -64,21 +64,21 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     public void testGetFlags() {
         // Normal case: no flags
         JSRegExp regexp = new JSRegExp("test", "");
-        JSValue result = RegExpPrototype.getFlags(context, regexp, new JSValue[]{});
+        JSValue result = RegExpPrototype.getFlags(context, regexp, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
 
         // Normal case: multiple flags
         JSRegExp withFlags = new JSRegExp("hello", "gim");
-        result = RegExpPrototype.getFlags(context, withFlags, new JSValue[]{});
+        result = RegExpPrototype.getFlags(context, withFlags, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("gim"));
 
         // Normal case: single flag
         JSRegExp singleFlag = new JSRegExp("world", "i");
-        result = RegExpPrototype.getFlags(context, singleFlag, new JSValue[]{});
+        result = RegExpPrototype.getFlags(context, singleFlag, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("i"));
 
         // Edge case: called on non-RegExp
-        result = RegExpPrototype.getFlags(context, new JSString("not a regexp"), new JSValue[]{});
+        result = RegExpPrototype.getFlags(context, new JSString("not a regexp"), JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -87,21 +87,21 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     public void testGetGlobal() {
         // Normal case: global flag set
         JSRegExp global = new JSRegExp("test", "g");
-        JSValue result = RegExpPrototype.getGlobal(context, global, new JSValue[]{});
+        JSValue result = RegExpPrototype.getGlobal(context, global, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: global flag not set
         JSRegExp nonGlobal = new JSRegExp("test", "i");
-        result = RegExpPrototype.getGlobal(context, nonGlobal, new JSValue[]{});
+        result = RegExpPrototype.getGlobal(context, nonGlobal, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: no flags
         JSRegExp noFlags = new JSRegExp("test", "");
-        result = RegExpPrototype.getGlobal(context, noFlags, new JSValue[]{});
+        result = RegExpPrototype.getGlobal(context, noFlags, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: called on non-RegExp
-        result = RegExpPrototype.getGlobal(context, new JSString("not a regexp"), new JSValue[]{});
+        result = RegExpPrototype.getGlobal(context, new JSString("not a regexp"), JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
     }
 
@@ -109,21 +109,21 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     public void testGetIgnoreCase() {
         // Normal case: ignoreCase flag set
         JSRegExp ignoreCase = new JSRegExp("test", "i");
-        JSValue result = RegExpPrototype.getIgnoreCase(context, ignoreCase, new JSValue[]{});
+        JSValue result = RegExpPrototype.getIgnoreCase(context, ignoreCase, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: ignoreCase flag not set
         JSRegExp caseSensitive = new JSRegExp("test", "g");
-        result = RegExpPrototype.getIgnoreCase(context, caseSensitive, new JSValue[]{});
+        result = RegExpPrototype.getIgnoreCase(context, caseSensitive, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: no flags
         JSRegExp noFlags = new JSRegExp("test", "");
-        result = RegExpPrototype.getIgnoreCase(context, noFlags, new JSValue[]{});
+        result = RegExpPrototype.getIgnoreCase(context, noFlags, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: called on non-RegExp
-        result = RegExpPrototype.getIgnoreCase(context, new JSString("not a regexp"), new JSValue[]{});
+        result = RegExpPrototype.getIgnoreCase(context, new JSString("not a regexp"), JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
     }
 
@@ -131,21 +131,21 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     public void testGetMultiline() {
         // Normal case: multiline flag set
         JSRegExp multiline = new JSRegExp("test", "m");
-        JSValue result = RegExpPrototype.getMultiline(context, multiline, new JSValue[]{});
+        JSValue result = RegExpPrototype.getMultiline(context, multiline, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: multiline flag not set
         JSRegExp singleLine = new JSRegExp("test", "g");
-        result = RegExpPrototype.getMultiline(context, singleLine, new JSValue[]{});
+        result = RegExpPrototype.getMultiline(context, singleLine, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: no flags
         JSRegExp noFlags = new JSRegExp("test", "");
-        result = RegExpPrototype.getMultiline(context, noFlags, new JSValue[]{});
+        result = RegExpPrototype.getMultiline(context, noFlags, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: called on non-RegExp
-        result = RegExpPrototype.getMultiline(context, new JSString("not a regexp"), new JSValue[]{});
+        result = RegExpPrototype.getMultiline(context, new JSString("not a regexp"), JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
     }
 
@@ -153,16 +153,16 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     public void testGetSource() {
         // Normal case: simple pattern
         JSRegExp regexp = new JSRegExp("test", "");
-        JSValue result = RegExpPrototype.getSource(context, regexp, new JSValue[]{});
+        JSValue result = RegExpPrototype.getSource(context, regexp, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("test"));
 
         // Normal case: pattern with special characters
         JSRegExp special = new JSRegExp("test", "i");
-        result = RegExpPrototype.getSource(context, special, new JSValue[]{});
+        result = RegExpPrototype.getSource(context, special, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("test"));
 
         // Edge case: called on non-RegExp
-        result = RegExpPrototype.getSource(context, new JSString("not a regexp"), new JSValue[]{});
+        result = RegExpPrototype.getSource(context, new JSString("not a regexp"), JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
 
@@ -477,11 +477,11 @@ public class RegExpPrototypeTest extends BaseJavetTest {
         assertThat(global.getLastIndex()).isEqualTo(9); // After second match
 
         // Normal case: no arguments (empty string)
-        result = RegExpPrototype.test(context, regexp, new JSValue[]{});
+        result = RegExpPrototype.test(context, regexp, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: called on non-RegExp
-        result = RegExpPrototype.test(context, new JSString("not a regexp"), new JSValue[]{});
+        result = RegExpPrototype.test(context, new JSString("not a regexp"), JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -490,21 +490,21 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     public void testToStringMethod() {
         // Normal case: simple regex
         JSRegExp regexp = new JSRegExp("test", "");
-        JSValue result = RegExpPrototype.toStringMethod(context, regexp, new JSValue[]{});
+        JSValue result = RegExpPrototype.toStringMethod(context, regexp, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("/test/"));
 
         // Normal case: regex with flags
         JSRegExp withFlags = new JSRegExp("hello", "gi");
-        result = RegExpPrototype.toStringMethod(context, withFlags, new JSValue[]{});
+        result = RegExpPrototype.toStringMethod(context, withFlags, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("/hello/gi"));
 
         // Normal case: pattern with special characters
         JSRegExp special = new JSRegExp("test", "m");
-        result = RegExpPrototype.toStringMethod(context, special, new JSValue[]{});
+        result = RegExpPrototype.toStringMethod(context, special, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("/test/m"));
 
         // Edge case: called on non-RegExp
-        result = RegExpPrototype.toStringMethod(context, new JSString("not a regexp"), new JSValue[]{});
+        result = RegExpPrototype.toStringMethod(context, new JSString("not a regexp"), JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }

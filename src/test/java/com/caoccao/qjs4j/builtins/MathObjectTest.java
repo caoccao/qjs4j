@@ -54,7 +54,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(Double.POSITIVE_INFINITY);
 
         // Edge case: no arguments
-        result = MathObject.abs(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.abs(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: string coercion
@@ -86,7 +86,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(Math.cbrt(3));
 
         // Edge case: no arguments
-        result = MathObject.cbrt(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.cbrt(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 
@@ -109,7 +109,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: no arguments
-        result = MathObject.ceil(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.ceil(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 
@@ -158,7 +158,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
 
         // Edge case: no arguments
-        result = MathObject.exp(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.exp(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 
@@ -190,7 +190,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: no arguments
-        result = MathObject.floor(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.floor(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 
@@ -207,7 +207,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
 
         // Edge case: no arguments
-        result = MathObject.sinh(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.sinh(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 
@@ -224,7 +224,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
 
         // Edge case: no arguments
-        result = MathObject.asinh(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.asinh(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 
@@ -245,7 +245,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
 
         // Edge case: no arguments
-        result = MathObject.asin(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.asin(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 
@@ -298,7 +298,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(-1.0);
 
         // Edge case: no arguments
-        result = MathObject.max(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.max(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(Double.NEGATIVE_INFINITY);
     }
 
@@ -327,7 +327,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(-10.0);
 
         // Edge case: no arguments
-        result = MathObject.min(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.min(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(Double.POSITIVE_INFINITY);
     }
 
@@ -362,14 +362,14 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: no arguments
-        result = MathObject.pow(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.pow(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 
     @Test
     public void testRandom() {
         // Normal case: random number
-        JSValue result = MathObject.random(context, JSUndefined.INSTANCE, new JSValue[]{});
+        JSValue result = MathObject.random(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         double randomValue = result.asNumber().map(JSNumber::value).orElseThrow();
         assertThat(randomValue >= 0.0 && randomValue < 1.0).isTrue();
 
@@ -398,7 +398,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: no arguments
-        result = MathObject.round(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.round(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 
@@ -436,7 +436,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: no arguments
-        result = MathObject.sign(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.sign(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 
@@ -459,7 +459,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(6.0);
 
         // Edge case: no arguments
-        result = MathObject.clz32(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.clz32(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(32.0);
     }
 
@@ -482,7 +482,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: no arguments
-        result = MathObject.sqrt(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.sqrt(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 
@@ -561,7 +561,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(1.0, offset(1e-10));
 
         // Edge case: no arguments
-        result = MathObject.sin(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.sin(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 
@@ -588,7 +588,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(Double.POSITIVE_INFINITY);
 
         // Edge case: no arguments
-        result = MathObject.trunc(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = MathObject.trunc(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
     }
 }

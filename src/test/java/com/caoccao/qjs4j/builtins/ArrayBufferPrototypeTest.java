@@ -31,20 +31,20 @@ public class ArrayBufferPrototypeTest extends BaseTest {
     public void testGetByteLength() {
         // Normal case: various buffer sizes
         JSArrayBuffer buffer = new JSArrayBuffer(16);
-        JSValue result = ArrayBufferPrototype.getByteLength(context, buffer, new JSValue[]{});
+        JSValue result = ArrayBufferPrototype.getByteLength(context, buffer, JSValue.NO_ARGS);
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(16.0);
 
         buffer = new JSArrayBuffer(0);
-        result = ArrayBufferPrototype.getByteLength(context, buffer, new JSValue[]{});
+        result = ArrayBufferPrototype.getByteLength(context, buffer, JSValue.NO_ARGS);
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
 
         buffer = new JSArrayBuffer(1024);
-        result = ArrayBufferPrototype.getByteLength(context, buffer, new JSValue[]{});
+        result = ArrayBufferPrototype.getByteLength(context, buffer, JSValue.NO_ARGS);
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1024.0);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = ArrayBufferPrototype.getByteLength(context, nonBuffer, new JSValue[]{});
+        result = ArrayBufferPrototype.getByteLength(context, nonBuffer, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -53,17 +53,17 @@ public class ArrayBufferPrototypeTest extends BaseTest {
     public void testGetDetached() {
         // Normal case: non-detached buffer
         JSArrayBuffer buffer = new JSArrayBuffer(16);
-        JSValue result = ArrayBufferPrototype.getDetached(context, buffer, new JSValue[]{});
+        JSValue result = ArrayBufferPrototype.getDetached(context, buffer, JSValue.NO_ARGS);
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Normal case: detached buffer
         buffer.detach();
-        result = ArrayBufferPrototype.getDetached(context, buffer, new JSValue[]{});
+        result = ArrayBufferPrototype.getDetached(context, buffer, JSValue.NO_ARGS);
         assertThat(result.isBooleanTrue()).isTrue();
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = ArrayBufferPrototype.getDetached(context, nonBuffer, new JSValue[]{});
+        result = ArrayBufferPrototype.getDetached(context, nonBuffer, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -72,17 +72,17 @@ public class ArrayBufferPrototypeTest extends BaseTest {
     public void testGetMaxByteLength() {
         // Normal case: non-resizable buffer
         JSArrayBuffer buffer = new JSArrayBuffer(16);
-        JSValue result = ArrayBufferPrototype.getMaxByteLength(context, buffer, new JSValue[]{});
+        JSValue result = ArrayBufferPrototype.getMaxByteLength(context, buffer, JSValue.NO_ARGS);
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(16.0);
 
         // Normal case: resizable buffer
         JSArrayBuffer resizableBuffer = new JSArrayBuffer(16, 64);
-        result = ArrayBufferPrototype.getMaxByteLength(context, resizableBuffer, new JSValue[]{});
+        result = ArrayBufferPrototype.getMaxByteLength(context, resizableBuffer, JSValue.NO_ARGS);
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(64.0);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = ArrayBufferPrototype.getMaxByteLength(context, nonBuffer, new JSValue[]{});
+        result = ArrayBufferPrototype.getMaxByteLength(context, nonBuffer, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -91,17 +91,17 @@ public class ArrayBufferPrototypeTest extends BaseTest {
     public void testGetResizable() {
         // Normal case: non-resizable buffer
         JSArrayBuffer buffer = new JSArrayBuffer(16);
-        JSValue result = ArrayBufferPrototype.getResizable(context, buffer, new JSValue[]{});
+        JSValue result = ArrayBufferPrototype.getResizable(context, buffer, JSValue.NO_ARGS);
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Normal case: resizable buffer
         JSArrayBuffer resizableBuffer = new JSArrayBuffer(16, 64);
-        result = ArrayBufferPrototype.getResizable(context, resizableBuffer, new JSValue[]{});
+        result = ArrayBufferPrototype.getResizable(context, resizableBuffer, JSValue.NO_ARGS);
         assertThat(result.isBooleanTrue()).isTrue();
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = ArrayBufferPrototype.getResizable(context, nonBuffer, new JSValue[]{});
+        result = ArrayBufferPrototype.getResizable(context, nonBuffer, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -110,11 +110,11 @@ public class ArrayBufferPrototypeTest extends BaseTest {
     public void testGetToStringTag() {
         // Normal case: any this value should return "ArrayBuffer"
         JSArrayBuffer buffer = new JSArrayBuffer(16);
-        JSValue result = ArrayBufferPrototype.getToStringTag(context, buffer, new JSValue[]{});
+        JSValue result = ArrayBufferPrototype.getToStringTag(context, buffer, JSValue.NO_ARGS);
         assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("ArrayBuffer");
 
         // It's a getter that returns a constant, so it works with any thisArg
-        result = ArrayBufferPrototype.getToStringTag(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = ArrayBufferPrototype.getToStringTag(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("ArrayBuffer");
     }
 
@@ -157,7 +157,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
 
         // Edge case: no arguments (ToIndex(undefined) = 0, resizes to 0 per ES2024 spec)
         JSArrayBuffer buffer3 = new JSArrayBuffer(16, 64);
-        result = ArrayBufferPrototype.resize(context, buffer3, new JSValue[]{});
+        result = ArrayBufferPrototype.resize(context, buffer3, JSValue.NO_ARGS);
         assertThat(result.isUndefined()).isTrue();
         assertThat(buffer3.getByteLength()).isEqualTo(0);
     }
@@ -167,7 +167,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         JSArrayBuffer buffer = new JSArrayBuffer(16);
 
         // Normal case: slice entire buffer
-        JSValue result = ArrayBufferPrototype.slice(context, buffer, new JSValue[]{});
+        JSValue result = ArrayBufferPrototype.slice(context, buffer, JSValue.NO_ARGS);
         JSArrayBuffer sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(16);
 
@@ -208,13 +208,13 @@ public class ArrayBufferPrototypeTest extends BaseTest {
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = ArrayBufferPrototype.slice(context, nonBuffer, new JSValue[]{});
+        result = ArrayBufferPrototype.slice(context, nonBuffer, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
 
         // Edge case: slice on detached buffer
         buffer.detach();
-        result = ArrayBufferPrototype.slice(context, buffer, new JSValue[]{});
+        result = ArrayBufferPrototype.slice(context, buffer, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -223,7 +223,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
     public void testTransfer() {
         // Normal case: transfer with same size
         JSArrayBuffer buffer = new JSArrayBuffer(16);
-        JSValue result = ArrayBufferPrototype.transfer(context, buffer, new JSValue[]{});
+        JSValue result = ArrayBufferPrototype.transfer(context, buffer, JSValue.NO_ARGS);
         JSArrayBuffer transferred = result.asArrayBuffer().orElseThrow();
         assertThat(transferred.getByteLength()).isEqualTo(16);
         assertThat(buffer.isDetached()).isTrue();
@@ -254,13 +254,13 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Edge case: transfer already detached buffer
         JSArrayBuffer detachedBuffer = new JSArrayBuffer(16);
         detachedBuffer.detach();
-        result = ArrayBufferPrototype.transfer(context, detachedBuffer, new JSValue[]{});
+        result = ArrayBufferPrototype.transfer(context, detachedBuffer, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = ArrayBufferPrototype.transfer(context, nonBuffer, new JSValue[]{});
+        result = ArrayBufferPrototype.transfer(context, nonBuffer, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -269,7 +269,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
     public void testTransferToFixedLength() {
         // Normal case: transfer to fixed-length with same size
         JSArrayBuffer buffer = new JSArrayBuffer(16);
-        JSValue result = ArrayBufferPrototype.transferToFixedLength(context, buffer, new JSValue[]{});
+        JSValue result = ArrayBufferPrototype.transferToFixedLength(context, buffer, JSValue.NO_ARGS);
         JSArrayBuffer transferred = result.asArrayBuffer().orElseThrow();
         assertThat(transferred.getByteLength()).isEqualTo(16);
         assertThat(transferred.isResizable()).isFalse();
@@ -302,13 +302,13 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Edge case: transfer already detached buffer
         JSArrayBuffer detachedBuffer = new JSArrayBuffer(16);
         detachedBuffer.detach();
-        result = ArrayBufferPrototype.transferToFixedLength(context, detachedBuffer, new JSValue[]{});
+        result = ArrayBufferPrototype.transferToFixedLength(context, detachedBuffer, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = ArrayBufferPrototype.transferToFixedLength(context, nonBuffer, new JSValue[]{});
+        result = ArrayBufferPrototype.transferToFixedLength(context, nonBuffer, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }

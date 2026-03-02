@@ -698,7 +698,7 @@ public final class ObjectPrototype {
             return context.getPendingException();
         }
         if (toStringMethod instanceof JSFunction func) {
-            return func.call(context, thisArg, new JSValue[]{});
+            return func.call(context, thisArg, JSValue.NO_ARGS);
         }
         return context.throwTypeError("toString is not a function");
     }

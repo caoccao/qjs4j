@@ -254,7 +254,7 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertThat(bigInt.value()).isEqualTo(BigInteger.ZERO);
 
         // Edge case: no arguments
-        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
 

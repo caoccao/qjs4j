@@ -607,6 +607,23 @@ public final class RegExpEngine {
             this.stateDirty = true;
         }
 
+        /**
+         * ES spec Canonicalize for case-insensitive matching.
+         * Non-Unicode mode: toUpperCase, but if ch >= 128 and result < 128, return ch unchanged.
+         * Unicode mode: simple case fold.
+         */
+        private int canonicalize(int ch) {
+            if (unicode) {
+                return CharacterProperties.caseFold(ch);
+            }
+            int upper = Character.toUpperCase(ch);
+            // ES2024 22.2.2.8.2: if ch >= 128 and upper < 128, return ch unchanged
+            if (ch >= 128 && upper < 128) {
+                return ch;
+            }
+            return upper;
+        }
+
         private boolean codePointEqualsIgnoreCaseUnicode(int leftCodePoint, int rightCodePoint) {
             if (leftCodePoint == rightCodePoint) {
                 return true;
@@ -904,23 +921,6 @@ public final class RegExpEngine {
 
         boolean matchNotWordBoundary(boolean ignoreCase) {
             return !matchWordBoundary(ignoreCase);
-        }
-
-        /**
-         * ES spec Canonicalize for case-insensitive matching.
-         * Non-Unicode mode: toUpperCase, but if ch >= 128 and result < 128, return ch unchanged.
-         * Unicode mode: simple case fold.
-         */
-        private int canonicalize(int ch) {
-            if (unicode) {
-                return CharacterProperties.caseFold(ch);
-            }
-            int upper = Character.toUpperCase(ch);
-            // ES2024 22.2.2.8.2: if ch >= 128 and upper < 128, return ch unchanged
-            if (ch >= 128 && upper < 128) {
-                return ch;
-            }
-            return upper;
         }
 
         boolean matchRange(byte[] bc, int offset, int len, boolean ignoreCase) {

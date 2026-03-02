@@ -109,7 +109,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThat(set.setHas(new JSNumber(42))).isTrue();
 
         // Edge case: no arguments (adds undefined)
-        result = SetPrototype.add(context, set, new JSValue[]{});
+        result = SetPrototype.add(context, set, JSValue.NO_ARGS);
         assertThat(result).isSameAs(set);
         assertThat(set.size()).isEqualTo(3); // Should add undefined, increasing size
 
@@ -248,12 +248,12 @@ public class SetPrototypeTest extends BaseJavetTest {
         set.setAdd(new JSString("value2"));
 
         // Normal case: clear set
-        JSValue result = SetPrototype.clear(context, set, new JSValue[]{});
+        JSValue result = SetPrototype.clear(context, set, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
         assertThat(set.size()).isEqualTo(0);
 
         // Edge case: called on non-Set
-        assertTypeError(SetPrototype.clear(context, new JSString("not set"), new JSValue[]{}));
+        assertTypeError(SetPrototype.clear(context, new JSString("not set"), JSValue.NO_ARGS));
         assertPendingException(context);
     }
 
@@ -323,7 +323,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThat(set.size()).isEqualTo(1);
 
         // Normal case: no arguments
-        result = SetPrototype.delete(context, set, new JSValue[]{});
+        result = SetPrototype.delete(context, set, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: called on non-Set
@@ -564,7 +564,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThat(resultStr).contains("value2");
 
         // Edge case: no callback function
-        assertTypeError(SetPrototype.forEach(context, set, new JSValue[]{}));
+        assertTypeError(SetPrototype.forEach(context, set, JSValue.NO_ARGS));
         assertPendingException(context);
 
         // Edge case: non-function callback
@@ -857,17 +857,17 @@ public class SetPrototypeTest extends BaseJavetTest {
         JSSet set = new JSSet();
 
         // Normal case: empty set
-        JSValue result = SetPrototype.getSize(context, set, new JSValue[]{});
+        JSValue result = SetPrototype.getSize(context, set, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(0.0));
 
         // Normal case: set with values
         set.setAdd(new JSString("value1"));
         set.setAdd(new JSString("value2"));
-        result = SetPrototype.getSize(context, set, new JSValue[]{});
+        result = SetPrototype.getSize(context, set, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(2.0));
 
         // Edge case: called on non-Set
-        assertTypeError(SetPrototype.getSize(context, new JSString("not set"), new JSValue[]{}));
+        assertTypeError(SetPrototype.getSize(context, new JSString("not set"), JSValue.NO_ARGS));
         assertPendingException(context);
 
         assertIntegerWithJavet(
@@ -889,7 +889,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: no arguments
-        result = SetPrototype.has(context, set, new JSValue[]{});
+        result = SetPrototype.has(context, set, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: called on non-Set

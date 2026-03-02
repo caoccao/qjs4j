@@ -48,17 +48,17 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         });
 
         // Test the custom generator
-        JSValue result = GeneratorPrototype.next(context, generator, new JSValue[]{});
+        JSValue result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         JSObject iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("first"));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
 
-        result = GeneratorPrototype.next(context, generator, new JSValue[]{});
+        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("second"));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
 
-        result = GeneratorPrototype.next(context, generator, new JSValue[]{});
+        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
@@ -77,7 +77,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         JSGenerator generator = JSGenerator.fromArray(context, emptyArray);
 
         // Normal case: next() on empty generator
-        JSValue result = GeneratorPrototype.next(context, generator, new JSValue[]{});
+        JSValue result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         JSObject iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
@@ -142,31 +142,31 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         JSGenerator generator = JSGenerator.fromArray(context, array);
 
         // Normal case: first next() call
-        JSValue result = GeneratorPrototype.next(context, generator, new JSValue[]{});
+        JSValue result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         JSObject iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(1.0));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: second next() call
-        result = GeneratorPrototype.next(context, generator, new JSValue[]{});
+        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(2.0));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: third next() call
-        result = GeneratorPrototype.next(context, generator, new JSValue[]{});
+        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(3.0));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: fourth next() call (done)
-        result = GeneratorPrototype.next(context, generator, new JSValue[]{});
+        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: subsequent calls after done
-        result = GeneratorPrototype.next(context, generator, new JSValue[]{});
+        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
@@ -178,7 +178,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Edge case: called on non-generator
-        result = GeneratorPrototype.next(context, new JSString("not a generator"), new JSValue[]{});
+        result = GeneratorPrototype.next(context, new JSString("not a generator"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
                     assertThat(name.value()).isEqualTo("TypeError"));
@@ -186,7 +186,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on null
-        result = GeneratorPrototype.next(context, JSNull.INSTANCE, new JSValue[]{});
+        result = GeneratorPrototype.next(context, JSNull.INSTANCE, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
                     assertThat(name.value()).isEqualTo("TypeError"));
@@ -223,14 +223,14 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
         // Normal case: subsequent next() calls after return
         // QuickJS: completed generator's next() returns {value: undefined, done: true}
-        result = GeneratorPrototype.next(context, generator, new JSValue[]{});
+        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: return without value (undefined)
         JSGenerator generator2 = JSGenerator.fromArray(context, array);
-        result = GeneratorPrototype.returnMethod(context, generator2, new JSValue[]{});
+        result = GeneratorPrototype.returnMethod(context, generator2, JSValue.NO_ARGS);
         iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
@@ -301,7 +301,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
         // Normal case: throw without exception (undefined)
         JSGenerator generator2 = JSGenerator.fromArray(context, array);
-        result = GeneratorPrototype.throwMethod(context, generator2, new JSValue[]{});
+        result = GeneratorPrototype.throwMethod(context, generator2, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isNotNull();
             assertThat(error.get("message")).isNotNull();

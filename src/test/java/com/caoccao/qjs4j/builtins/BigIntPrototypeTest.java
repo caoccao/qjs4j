@@ -86,7 +86,7 @@ public class BigIntPrototypeTest extends BaseJavetTest {
         assertThat(str.value()).isEqualTo("123");
 
         // Edge case: called on non-BigInt
-        result = BigIntPrototype.toLocaleString(context, new JSString("not a bigint"), new JSValue[]{});
+        result = BigIntPrototype.toLocaleString(context, new JSString("not a bigint"), JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -95,7 +95,7 @@ public class BigIntPrototypeTest extends BaseJavetTest {
     public void testToString() {
         JSBigInt bigInt = new JSBigInt(BigInteger.valueOf(12345));
         // Normal case: default radix (10)
-        JSValue result = BigIntPrototype.toString(context, bigInt, new JSValue[]{});
+        JSValue result = BigIntPrototype.toString(context, bigInt, JSValue.NO_ARGS);
         JSString str = result.asString().orElseThrow();
         assertThat(str.value()).isEqualTo("12345");
 
@@ -116,7 +116,7 @@ public class BigIntPrototypeTest extends BaseJavetTest {
 
         // Normal case: negative BigInt
         JSBigInt negativeBigInt = new JSBigInt(BigInteger.valueOf(-12345));
-        result = BigIntPrototype.toString(context, negativeBigInt, new JSValue[]{});
+        result = BigIntPrototype.toString(context, negativeBigInt, JSValue.NO_ARGS);
         str = result.asString().orElseThrow();
         assertThat(str.value()).isEqualTo("-12345");
 
@@ -141,7 +141,7 @@ public class BigIntPrototypeTest extends BaseJavetTest {
         assertPendingException(context);
 
         // Edge case: called on non-BigInt
-        result = BigIntPrototype.toString(context, new JSString("not a bigint"), new JSValue[]{});
+        result = BigIntPrototype.toString(context, new JSString("not a bigint"), JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
 
@@ -152,11 +152,11 @@ public class BigIntPrototypeTest extends BaseJavetTest {
     public void testValueOf() {
         JSBigInt bigInt = new JSBigInt(BigInteger.valueOf(12345));
         // Normal case: BigInt
-        JSValue result = BigIntPrototype.valueOf(context, bigInt, new JSValue[]{});
+        JSValue result = BigIntPrototype.valueOf(context, bigInt, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(bigInt);
 
         // Edge case: called on non-BigInt
-        result = BigIntPrototype.valueOf(context, new JSString("not a bigint"), new JSValue[]{});
+        result = BigIntPrototype.valueOf(context, new JSString("not a bigint"), JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
 

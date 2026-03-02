@@ -27,24 +27,27 @@ import java.util.regex.Pattern;
  */
 public final class JSIntlDisplayNames extends JSObject {
     public static final String NAME = "Intl.DisplayNames";
-
-    private static final Pattern LANGUAGE_SUBTAG = Pattern.compile("^[a-zA-Z]{2,3}$|^[a-zA-Z]{5,8}$");
-    private static final Pattern SCRIPT_SUBTAG = Pattern.compile("^[a-zA-Z]{4}$");
-    private static final Pattern REGION_SUBTAG = Pattern.compile("^[a-zA-Z]{2}$|^[0-9]{3}$");
-    private static final Pattern VARIANT_SUBTAG = Pattern.compile("^[a-zA-Z0-9]{5,8}$|^[0-9][a-zA-Z0-9]{3}$");
-    private static final Pattern CURRENCY_CODE = Pattern.compile("^[a-zA-Z]{3}$");
     private static final Pattern CALENDAR_KEY = Pattern.compile("^[a-zA-Z0-9]{3,8}(-[a-zA-Z0-9]{3,8})*$");
-
+    private static final Pattern CURRENCY_CODE = Pattern.compile("^[a-zA-Z]{3}$");
+    private static final Set<String> KNOWN_CALENDARS = Set.of(
+            "buddhist", "chinese", "coptic", "dangi", "ethioaa", "ethiopic",
+            "gregory", "hebrew", "indian", "islamic-civil",
+            "islamic-tbla", "islamic-umalqura", "iso8601",
+            "japanese", "persian", "roc"
+    );
+    private static final Pattern LANGUAGE_SUBTAG = Pattern.compile("^[a-zA-Z]{2,3}$|^[a-zA-Z]{5,8}$");
+    private static final Pattern REGION_SUBTAG = Pattern.compile("^[a-zA-Z]{2}$|^[0-9]{3}$");
+    private static final Pattern SCRIPT_SUBTAG = Pattern.compile("^[a-zA-Z]{4}$");
     private static final Set<String> VALID_DATE_TIME_FIELDS = Set.of(
             "era", "year", "quarter", "month", "weekOfYear", "weekday",
             "day", "dayPeriod", "hour", "minute", "second", "timeZoneName"
     );
-
+    private static final Pattern VARIANT_SUBTAG = Pattern.compile("^[a-zA-Z0-9]{5,8}$|^[0-9][a-zA-Z0-9]{3}$");
+    private final String fallback;
+    private final String languageDisplay;
     private final Locale locale;
     private final String style;
     private final String type;
-    private final String fallback;
-    private final String languageDisplay;
 
     public JSIntlDisplayNames(Locale locale, String style, String type, String fallback, String languageDisplay) {
         this.locale = locale;
@@ -52,73 +55,6 @@ public final class JSIntlDisplayNames extends JSObject {
         this.type = type;
         this.fallback = fallback;
         this.languageDisplay = languageDisplay;
-    }
-
-    public Locale getLocale() {
-        return locale;
-    }
-
-    public String getStyle() {
-        return style;
-    }
-
-    public String getType() {
-        return type;
-    }
-
-    public String getFallback() {
-        return fallback;
-    }
-
-    public String getLanguageDisplay() {
-        return languageDisplay;
-    }
-
-    /**
-     * Intl.DisplayNames.prototype.of(code)
-     * Returns a display name string for the given code, or undefined if fallback is "none" and no name found.
-     */
-    public JSValue of(JSContext context, String code) {
-        if (code == null || code.isEmpty()) {
-            context.throwRangeError("invalid code for DisplayNames: " + code);
-            return null;
-        }
-        return switch (type) {
-            case "language" -> ofLanguage(context, code);
-            case "region" -> ofRegion(context, code);
-            case "script" -> ofScript(context, code);
-            case "currency" -> ofCurrency(context, code);
-            case "calendar" -> ofCalendar(context, code);
-            case "dateTimeField" -> ofDateTimeField(context, code);
-            default -> {
-                context.throwRangeError("invalid type: " + type);
-                yield null;
-            }
-        };
-    }
-
-    private JSValue ofLanguage(JSContext context, String code) {
-        // Validate: must be a structurally valid unicode_language_id
-        // unicode_language_id = unicode_language_subtag ("-" unicode_script_subtag)? ("-" unicode_region_subtag)? ("-" unicode_variant_subtag)*
-        if (!isStructurallyValidLanguageTag(code)) {
-            context.throwRangeError("invalid language code for DisplayNames: " + code);
-            return null;
-        }
-        Locale codeLocale = Locale.forLanguageTag(code);
-        String displayName;
-        if ("standard".equals(languageDisplay)) {
-            displayName = codeLocale.getDisplayName(locale);
-        } else {
-            // "dialect" mode - default
-            displayName = codeLocale.getDisplayName(locale);
-        }
-        if (displayName.isEmpty() || displayName.equals(code)) {
-            if ("none".equals(fallback)) {
-                return JSUndefined.INSTANCE;
-            }
-            return new JSString(code);
-        }
-        return new JSString(displayName);
     }
 
     /**
@@ -198,6 +134,127 @@ public final class JSIntlDisplayNames extends JSObject {
         return true;
     }
 
+    public String getFallback() {
+        return fallback;
+    }
+
+    public String getLanguageDisplay() {
+        return languageDisplay;
+    }
+
+    public Locale getLocale() {
+        return locale;
+    }
+
+    public String getStyle() {
+        return style;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    /**
+     * Intl.DisplayNames.prototype.of(code)
+     * Returns a display name string for the given code, or undefined if fallback is "none" and no name found.
+     */
+    public JSValue of(JSContext context, String code) {
+        if (code == null || code.isEmpty()) {
+            context.throwRangeError("invalid code for DisplayNames: " + code);
+            return null;
+        }
+        return switch (type) {
+            case "language" -> ofLanguage(context, code);
+            case "region" -> ofRegion(context, code);
+            case "script" -> ofScript(context, code);
+            case "currency" -> ofCurrency(context, code);
+            case "calendar" -> ofCalendar(context, code);
+            case "dateTimeField" -> ofDateTimeField(context, code);
+            default -> {
+                context.throwRangeError("invalid type: " + type);
+                yield null;
+            }
+        };
+    }
+
+    private JSValue ofCalendar(JSContext context, String code) {
+        if (!CALENDAR_KEY.matcher(code).matches()) {
+            context.throwRangeError("invalid calendar code for DisplayNames: " + code);
+            return null;
+        }
+        // Reject underscore separator
+        if (code.contains("_")) {
+            context.throwRangeError("invalid calendar code for DisplayNames: " + code);
+            return null;
+        }
+        String lowerCode = code.toLowerCase(java.util.Locale.ROOT);
+        if (KNOWN_CALENDARS.contains(lowerCode)) {
+            // Return display name for known calendars (using code as display name)
+            return new JSString(code);
+        }
+        if ("none".equals(fallback)) {
+            return JSUndefined.INSTANCE;
+        }
+        return new JSString(code);
+    }
+
+    private JSValue ofCurrency(JSContext context, String code) {
+        if (!CURRENCY_CODE.matcher(code).matches()) {
+            context.throwRangeError("invalid currency code for DisplayNames: " + code);
+            return null;
+        }
+        try {
+            Currency currency = Currency.getInstance(code.toUpperCase(java.util.Locale.ROOT));
+            String displayName = currency.getDisplayName(locale);
+            if (displayName.isEmpty()) {
+                displayName = code.toUpperCase(java.util.Locale.ROOT);
+            }
+            // Valid currency code → always return display name (even if it equals code)
+            return new JSString(displayName);
+        } catch (IllegalArgumentException e) {
+            if ("none".equals(fallback)) {
+                return JSUndefined.INSTANCE;
+            }
+            return new JSString(code);
+        }
+    }
+
+    private JSValue ofDateTimeField(JSContext context, String code) {
+        if (!VALID_DATE_TIME_FIELDS.contains(code)) {
+            context.throwRangeError("invalid dateTimeField code for DisplayNames: " + code);
+            return null;
+        }
+        // dateTimeField display names not available via standard Java APIs, use fallback
+        if ("none".equals(fallback)) {
+            return JSUndefined.INSTANCE;
+        }
+        return new JSString(code);
+    }
+
+    private JSValue ofLanguage(JSContext context, String code) {
+        // Validate: must be a structurally valid unicode_language_id
+        // unicode_language_id = unicode_language_subtag ("-" unicode_script_subtag)? ("-" unicode_region_subtag)? ("-" unicode_variant_subtag)*
+        if (!isStructurallyValidLanguageTag(code)) {
+            context.throwRangeError("invalid language code for DisplayNames: " + code);
+            return null;
+        }
+        Locale codeLocale = Locale.forLanguageTag(code);
+        String displayName;
+        if ("standard".equals(languageDisplay)) {
+            displayName = codeLocale.getDisplayName(locale);
+        } else {
+            // "dialect" mode - default
+            displayName = codeLocale.getDisplayName(locale);
+        }
+        if (displayName.isEmpty() || displayName.equals(code)) {
+            if ("none".equals(fallback)) {
+                return JSUndefined.INSTANCE;
+            }
+            return new JSString(code);
+        }
+        return new JSString(displayName);
+    }
+
     private JSValue ofRegion(JSContext context, String code) {
         if (!REGION_SUBTAG.matcher(code).matches()) {
             context.throwRangeError("invalid region code for DisplayNames: " + code);
@@ -231,66 +288,5 @@ public final class JSIntlDisplayNames extends JSObject {
             return new JSString(code);
         }
         return new JSString(displayName);
-    }
-
-    private JSValue ofCurrency(JSContext context, String code) {
-        if (!CURRENCY_CODE.matcher(code).matches()) {
-            context.throwRangeError("invalid currency code for DisplayNames: " + code);
-            return null;
-        }
-        try {
-            Currency currency = Currency.getInstance(code.toUpperCase(java.util.Locale.ROOT));
-            String displayName = currency.getDisplayName(locale);
-            if (displayName.isEmpty()) {
-                displayName = code.toUpperCase(java.util.Locale.ROOT);
-            }
-            // Valid currency code → always return display name (even if it equals code)
-            return new JSString(displayName);
-        } catch (IllegalArgumentException e) {
-            if ("none".equals(fallback)) {
-                return JSUndefined.INSTANCE;
-            }
-            return new JSString(code);
-        }
-    }
-
-    private static final Set<String> KNOWN_CALENDARS = Set.of(
-            "buddhist", "chinese", "coptic", "dangi", "ethioaa", "ethiopic",
-            "gregory", "hebrew", "indian", "islamic-civil",
-            "islamic-tbla", "islamic-umalqura", "iso8601",
-            "japanese", "persian", "roc"
-    );
-
-    private JSValue ofCalendar(JSContext context, String code) {
-        if (!CALENDAR_KEY.matcher(code).matches()) {
-            context.throwRangeError("invalid calendar code for DisplayNames: " + code);
-            return null;
-        }
-        // Reject underscore separator
-        if (code.contains("_")) {
-            context.throwRangeError("invalid calendar code for DisplayNames: " + code);
-            return null;
-        }
-        String lowerCode = code.toLowerCase(java.util.Locale.ROOT);
-        if (KNOWN_CALENDARS.contains(lowerCode)) {
-            // Return display name for known calendars (using code as display name)
-            return new JSString(code);
-        }
-        if ("none".equals(fallback)) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(code);
-    }
-
-    private JSValue ofDateTimeField(JSContext context, String code) {
-        if (!VALID_DATE_TIME_FIELDS.contains(code)) {
-            context.throwRangeError("invalid dateTimeField code for DisplayNames: " + code);
-            return null;
-        }
-        // dateTimeField display names not available via standard Java APIs, use fallback
-        if ("none".equals(fallback)) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(code);
     }
 }

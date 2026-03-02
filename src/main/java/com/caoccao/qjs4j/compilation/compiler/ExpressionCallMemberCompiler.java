@@ -180,24 +180,6 @@ final class ExpressionCallMemberCompiler {
         emitPropertyAccess(memberExpr);
     }
 
-    private void emitPropertyAccess(MemberExpression memberExpr) {
-        if (memberExpr.computed()) {
-            owner.compileExpression(memberExpr.property());
-            compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
-            String fieldName = privateId.name();
-            JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
-            if (symbol != null) {
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
-            } else {
-                throw new JSSyntaxErrorException("Unexpected private field");
-            }
-        } else if (memberExpr.property() instanceof Identifier propId) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
-        }
-    }
-
     void compileNewExpression(NewExpression newExpr) {
         boolean hasSpread = newExpr.arguments().stream().anyMatch(arg -> arg instanceof SpreadElement);
 
@@ -214,5 +196,23 @@ final class ExpressionCallMemberCompiler {
             owner.compileExpression(arg);
         }
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, newExpr.arguments().size());
+    }
+
+    private void emitPropertyAccess(MemberExpression memberExpr) {
+        if (memberExpr.computed()) {
+            owner.compileExpression(memberExpr.property());
+            compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+        } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
+            String fieldName = privateId.name();
+            JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
+            if (symbol != null) {
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
+            } else {
+                throw new JSSyntaxErrorException("Unexpected private field");
+            }
+        } else if (memberExpr.property() instanceof Identifier propId) {
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+        }
     }
 }

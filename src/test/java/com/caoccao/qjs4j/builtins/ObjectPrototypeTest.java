@@ -55,7 +55,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(target);
 
         // Edge case: no arguments
-        result = ObjectPrototype.assign(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = ObjectPrototype.assign(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
 
@@ -93,7 +93,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertPendingException(context);
 
         // Edge case: no arguments
-        result = ObjectPrototype.create(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = ObjectPrototype.create(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -232,7 +232,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE); // "1" != "a"
 
         // Edge case: no arguments
-        result = ObjectPrototype.hasOwnProperty(context, obj, new JSValue[]{});
+        result = ObjectPrototype.hasOwnProperty(context, obj, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: called on non-object primitive (should ToObject per spec)
@@ -359,7 +359,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Edge case: no arguments
-        result = ObjectPrototype.__lookupGetter__(context, obj, new JSValue[]{});
+        result = ObjectPrototype.__lookupGetter__(context, obj, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Edge case: null thisArg
@@ -396,7 +396,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Edge case: no arguments
-        result = ObjectPrototype.__lookupSetter__(context, obj, new JSValue[]{});
+        result = ObjectPrototype.__lookupSetter__(context, obj, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Edge case: null thisArg
@@ -431,7 +431,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         JSObject obj = new JSObject(proto);
 
         // Normal case: get __proto__
-        JSValue result = ObjectPrototype.__proto__Getter(context, obj, new JSValue[]{});
+        JSValue result = ObjectPrototype.__proto__Getter(context, obj, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(proto);
 
         // Normal case: set __proto__ to another object
@@ -447,7 +447,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(obj.getPrototype()).isNull();
 
         // Edge case: get __proto__ on non-object primitive (should ToObject per spec)
-        result = ObjectPrototype.__proto__Getter(context, new JSString("test"), new JSValue[]{});
+        result = ObjectPrototype.__proto__Getter(context, new JSString("test"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOf(JSObject.class); // Returns String.prototype
 
         // Edge case: set __proto__ on non-object
@@ -491,11 +491,11 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         JSObject obj = context.createJSObject();
 
         // Normal case: object without custom toString
-        JSValue result = ObjectPrototype.toLocaleString(context, obj, new JSValue[]{});
+        JSValue result = ObjectPrototype.toLocaleString(context, obj, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("[object Object]"));
 
         // Edge case: null thisArg
-        result = ObjectPrototype.toLocaleString(context, JSNull.INSTANCE, new JSValue[]{});
+        result = ObjectPrototype.toLocaleString(context, JSNull.INSTANCE, JSValue.NO_ARGS);
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -503,38 +503,38 @@ public class ObjectPrototypeTest extends BaseJavetTest {
     @Test
     public void testToString() {
         // Normal case: undefined
-        JSValue result = ObjectPrototype.toString(context, JSUndefined.INSTANCE, new JSValue[]{});
+        JSValue result = ObjectPrototype.toString(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Undefined]"));
 
         // Normal case: null
-        result = ObjectPrototype.toString(context, JSNull.INSTANCE, new JSValue[]{});
+        result = ObjectPrototype.toString(context, JSNull.INSTANCE, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Null]"));
 
         // Normal case: object
         JSObject obj = new JSObject();
-        result = ObjectPrototype.toString(context, obj, new JSValue[]{});
+        result = ObjectPrototype.toString(context, obj, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Object]"));
 
         // Normal case: array
         JSArray arr = new JSArray();
-        result = ObjectPrototype.toString(context, arr, new JSValue[]{});
+        result = ObjectPrototype.toString(context, arr, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Array]"));
 
         // Normal case: function
         JSFunction func = new JSNativeFunction("test", 0, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
-        result = ObjectPrototype.toString(context, func, new JSValue[]{});
+        result = ObjectPrototype.toString(context, func, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Function]"));
 
         // Normal case: string
-        result = ObjectPrototype.toString(context, new JSString("test"), new JSValue[]{});
+        result = ObjectPrototype.toString(context, new JSString("test"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object String]"));
 
         // Normal case: number
-        result = ObjectPrototype.toString(context, new JSNumber(42), new JSValue[]{});
+        result = ObjectPrototype.toString(context, new JSNumber(42), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Number]"));
 
         // Normal case: boolean
-        result = ObjectPrototype.toString(context, JSBoolean.TRUE, new JSValue[]{});
+        result = ObjectPrototype.toString(context, JSBoolean.TRUE, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Boolean]"));
     }
 
@@ -544,16 +544,16 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         obj.set("a", new JSNumber(1));
 
         // Normal case: object
-        JSValue result = ObjectPrototype.valueOf(context, obj, new JSValue[]{});
+        JSValue result = ObjectPrototype.valueOf(context, obj, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(obj);
 
         // Normal case: primitive (should ToObject - return a wrapper)
         JSString str = new JSString("hello");
-        result = ObjectPrototype.valueOf(context, str, new JSValue[]{});
+        result = ObjectPrototype.valueOf(context, str, JSValue.NO_ARGS);
         assertThat(result).isInstanceOf(JSObject.class);
 
         // Normal case: null (should throw TypeError per spec)
-        assertTypeError(ObjectPrototype.valueOf(context, JSNull.INSTANCE, new JSValue[]{}));
+        assertTypeError(ObjectPrototype.valueOf(context, JSNull.INSTANCE, JSValue.NO_ARGS));
         assertPendingException(context);
     }
 

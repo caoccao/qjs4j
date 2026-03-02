@@ -43,6 +43,29 @@ public class RegExpConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    void testCaseInsensitiveNonAscii() {
+        // Turkish dotless-i (U+0131) should NOT match [a-z] in non-Unicode mode
+        // Per ES spec, if ch >= 128 and toUpperCase(ch) < 128, ch is not canonicalized
+        assertBooleanWithJavet(
+                "!/^[a-z]+$/i.test('\\u0131d')",
+                "!/^[a-z]$/i.test('\\u0131')");
+
+        // But regular ASCII case-insensitive still works
+        assertBooleanWithJavet(
+                "/^[a-z]+$/i.test('Hello')",
+                "/^[a-z]+$/i.test('ABC')");
+
+        // Kelvin sign (U+212A) should NOT match [a-z] in non-Unicode mode either
+        assertBooleanWithJavet("!/^[a-z]$/i.test('\\u212A')");
+
+        // Long s (U+017F) should NOT match [a-z] in non-Unicode mode
+        assertBooleanWithJavet("!/^[a-z]$/i.test('\\u017F')");
+
+        // In Unicode mode, case folding applies differently
+        assertBooleanWithJavet("/^[a-z]$/iu.test('\\u212A')");
+    }
+
+    @Test
     void testComplexPatterns() {
         // Email-like pattern
         assertBooleanWithJavet("/^[a-z]+@[a-z]+\\.[a-z]+$/.test('test@example.com')");
@@ -218,61 +241,61 @@ public class RegExpConstructorTest extends BaseJavetTest {
     public void testGetFlags() {
         JSRegExp regexp = new JSRegExp("test", "gimsuy");
 
-        JSValue result = RegExpPrototype.getFlags(context, regexp, new JSValue[]{});
+        JSValue result = RegExpPrototype.getFlags(context, regexp, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("gimsuy"));
 
         // Edge case: no flags
         JSRegExp regexp2 = new JSRegExp("test", "");
-        result = RegExpPrototype.getFlags(context, regexp2, new JSValue[]{});
+        result = RegExpPrototype.getFlags(context, regexp2, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo(""));
 
         // Edge case: called on non-RegExp
-        assertTypeError(RegExpPrototype.getFlags(context, new JSArray(), new JSValue[]{}));
+        assertTypeError(RegExpPrototype.getFlags(context, new JSArray(), JSValue.NO_ARGS));
         assertPendingException(context);
     }
 
     @Test
     public void testGetGlobal() {
         JSRegExp regexp1 = new JSRegExp("test", "g");
-        JSValue result = RegExpPrototype.getGlobal(context, regexp1, new JSValue[]{});
+        JSValue result = RegExpPrototype.getGlobal(context, regexp1, JSValue.NO_ARGS);
         assertThat(result.isBooleanTrue()).isTrue();
 
         JSRegExp regexp2 = new JSRegExp("test", "i");
-        result = RegExpPrototype.getGlobal(context, regexp2, new JSValue[]{});
+        result = RegExpPrototype.getGlobal(context, regexp2, JSValue.NO_ARGS);
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: called on non-RegExp (should return undefined)
-        result = RegExpPrototype.getGlobal(context, new JSString("not regexp"), new JSValue[]{});
+        result = RegExpPrototype.getGlobal(context, new JSString("not regexp"), JSValue.NO_ARGS);
         assertThat(result.isUndefined()).isTrue();
     }
 
     @Test
     public void testGetIgnoreCase() {
         JSRegExp regexp1 = new JSRegExp("test", "i");
-        JSValue result = RegExpPrototype.getIgnoreCase(context, regexp1, new JSValue[]{});
+        JSValue result = RegExpPrototype.getIgnoreCase(context, regexp1, JSValue.NO_ARGS);
         assertThat(result.isBooleanTrue()).isTrue();
 
         JSRegExp regexp2 = new JSRegExp("test", "g");
-        result = RegExpPrototype.getIgnoreCase(context, regexp2, new JSValue[]{});
+        result = RegExpPrototype.getIgnoreCase(context, regexp2, JSValue.NO_ARGS);
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: called on non-RegExp (should return undefined)
-        result = RegExpPrototype.getIgnoreCase(context, JSNull.INSTANCE, new JSValue[]{});
+        result = RegExpPrototype.getIgnoreCase(context, JSNull.INSTANCE, JSValue.NO_ARGS);
         assertThat(result.isUndefined()).isTrue();
     }
 
     @Test
     public void testGetMultiline() {
         JSRegExp regexp1 = new JSRegExp("test", "m");
-        JSValue result = RegExpPrototype.getMultiline(context, regexp1, new JSValue[]{});
+        JSValue result = RegExpPrototype.getMultiline(context, regexp1, JSValue.NO_ARGS);
         assertThat(result.isBooleanTrue()).isTrue();
 
         JSRegExp regexp2 = new JSRegExp("test", "");
-        result = RegExpPrototype.getMultiline(context, regexp2, new JSValue[]{});
+        result = RegExpPrototype.getMultiline(context, regexp2, JSValue.NO_ARGS);
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: called on non-RegExp (should return undefined)
-        result = RegExpPrototype.getMultiline(context, JSBoolean.TRUE, new JSValue[]{});
+        result = RegExpPrototype.getMultiline(context, JSBoolean.TRUE, JSValue.NO_ARGS);
         assertThat(result.isUndefined()).isTrue();
     }
 
@@ -280,11 +303,11 @@ public class RegExpConstructorTest extends BaseJavetTest {
     public void testGetSource() {
         JSRegExp regexp = new JSRegExp("hello", "");
 
-        JSValue result = RegExpPrototype.getSource(context, regexp, new JSValue[]{});
+        JSValue result = RegExpPrototype.getSource(context, regexp, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("hello"));
 
         // Edge case: called on non-RegExp
-        assertTypeError(RegExpPrototype.getSource(context, JSUndefined.INSTANCE, new JSValue[]{}));
+        assertTypeError(RegExpPrototype.getSource(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
         assertPendingException(context);
     }
 
@@ -352,6 +375,53 @@ public class RegExpConstructorTest extends BaseJavetTest {
         // ^ and $ with multiline
         assertBooleanWithJavet("/^test/m.test('line1\\ntest')");
         assertBooleanWithJavet("/test$/m.test('test\\nline2')");
+    }
+
+    @Test
+    void testNestedOptionalGroupInStarLoop() {
+        // Optional group with alternation inside a * quantifier
+        // Previously failed due to advance-check register collision between nested quantifiers
+        assertBooleanWithJavet(
+                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd')",
+                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?(-(ef|gh))?)*$/.test('ab-t-cd')",
+                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en')",
+                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{4}))?(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en')");
+
+        // Should also match with actual extension content
+        assertBooleanWithJavet(
+                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd-ab')",
+                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en-us')");
+
+        // Zero iterations of * should still work
+        assertBooleanWithJavet(
+                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab')",
+                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en')");
+
+        // Non-match should still return false
+        assertBooleanWithJavet(
+                "!/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-123')");
+
+        // BCP 47 locale-like pattern: the original motivating case
+        assertBooleanWithJavet("""
+                var alpha = "[a-z]";
+                var digit = "[0-9]";
+                var alphanum = "[a-z0-9]";
+                var language = "(" + alpha + "{2,3}|" + alpha + "{5,8})";
+                var script = "(" + alpha + "{4})";
+                var region = "(" + alpha + "{2}|" + digit + "{3})";
+                var variant = "(" + alphanum + "{5,8}|(?:" + digit + alphanum + "{3}))";
+                var tlang = "(" + language + "(-" + script + ")?(-" + region + ")?(-" + variant + ")*)";
+                var tfield = "(" + alpha + digit + "(-" + alphanum + "{3,8})+)";
+                var te = "(t((-" + tlang + "(-" + tfield + ")*)|(-" + tfield + ")+))";
+                var keyword = "(" + alphanum + alpha + "(-" + alphanum + "{3,8})*)";
+                var attribute = "(" + alphanum + "{3,8})";
+                var ule = "(u((-" + keyword + ")+|((-" + attribute + ")+(-" + keyword + ")*)))";
+                var other = "([0-9a-sv-wy-z](-" + alphanum + "{2,8})+)";
+                var ext = "(" + ule + "|" + te + "|" + other + ")";
+                var re = new RegExp("^" + language + "(-" + ext + ")*$", "i");
+                re.test("en-t-en") && re.test("en-t-he") && re.test("en-t-en-latn")
+                    && re.test("en-t-d0-ascii") && re.test("zh-Hans-CN-t-ca-u-ca-x-t-u".split("-x-")[0])
+                    && re.test("sl-t-sl-rozaj-biske-1994")""");
     }
 
     @Test
@@ -521,7 +591,7 @@ public class RegExpConstructorTest extends BaseJavetTest {
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: no arguments (should test against "")
-        result = RegExpPrototype.test(context, regexp, new JSValue[]{});
+        result = RegExpPrototype.test(context, regexp, JSValue.NO_ARGS);
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: called on non-RegExp
@@ -572,16 +642,16 @@ public class RegExpConstructorTest extends BaseJavetTest {
     public void testToString() {
         JSRegExp regexp = new JSRegExp("test", "gi");
 
-        JSValue result = RegExpPrototype.toStringMethod(context, regexp, new JSValue[]{});
+        JSValue result = RegExpPrototype.toStringMethod(context, regexp, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("/test/gi"));
 
         // Edge case: empty pattern (should be /(?:)/ per ES spec)
         JSRegExp regexp2 = new JSRegExp("", "");
-        result = RegExpPrototype.toStringMethod(context, regexp2, new JSValue[]{});
+        result = RegExpPrototype.toStringMethod(context, regexp2, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("/(?:)/"));
 
         // Edge case: called on non-RegExp
-        assertTypeError(RegExpPrototype.toStringMethod(context, new JSString("not regexp"), new JSValue[]{}));
+        assertTypeError(RegExpPrototype.toStringMethod(context, new JSString("not regexp"), JSValue.NO_ARGS));
         assertPendingException(context);
     }
 
@@ -613,76 +683,6 @@ public class RegExpConstructorTest extends BaseJavetTest {
         assertStringWithJavet(
                 "new RegExp().toString()",
                 "RegExp().toString()");
-    }
-
-    @Test
-    void testNestedOptionalGroupInStarLoop() {
-        // Optional group with alternation inside a * quantifier
-        // Previously failed due to advance-check register collision between nested quantifiers
-        assertBooleanWithJavet(
-                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd')",
-                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?(-(ef|gh))?)*$/.test('ab-t-cd')",
-                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en')",
-                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{4}))?(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en')");
-
-        // Should also match with actual extension content
-        assertBooleanWithJavet(
-                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd-ab')",
-                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en-us')");
-
-        // Zero iterations of * should still work
-        assertBooleanWithJavet(
-                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab')",
-                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en')");
-
-        // Non-match should still return false
-        assertBooleanWithJavet(
-                "!/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-123')");
-
-        // BCP 47 locale-like pattern: the original motivating case
-        assertBooleanWithJavet("""
-                var alpha = "[a-z]";
-                var digit = "[0-9]";
-                var alphanum = "[a-z0-9]";
-                var language = "(" + alpha + "{2,3}|" + alpha + "{5,8})";
-                var script = "(" + alpha + "{4})";
-                var region = "(" + alpha + "{2}|" + digit + "{3})";
-                var variant = "(" + alphanum + "{5,8}|(?:" + digit + alphanum + "{3}))";
-                var tlang = "(" + language + "(-" + script + ")?(-" + region + ")?(-" + variant + ")*)";
-                var tfield = "(" + alpha + digit + "(-" + alphanum + "{3,8})+)";
-                var te = "(t((-" + tlang + "(-" + tfield + ")*)|(-" + tfield + ")+))";
-                var keyword = "(" + alphanum + alpha + "(-" + alphanum + "{3,8})*)";
-                var attribute = "(" + alphanum + "{3,8})";
-                var ule = "(u((-" + keyword + ")+|((-" + attribute + ")+(-" + keyword + ")*)))";
-                var other = "([0-9a-sv-wy-z](-" + alphanum + "{2,8})+)";
-                var ext = "(" + ule + "|" + te + "|" + other + ")";
-                var re = new RegExp("^" + language + "(-" + ext + ")*$", "i");
-                re.test("en-t-en") && re.test("en-t-he") && re.test("en-t-en-latn")
-                    && re.test("en-t-d0-ascii") && re.test("zh-Hans-CN-t-ca-u-ca-x-t-u".split("-x-")[0])
-                    && re.test("sl-t-sl-rozaj-biske-1994")""");
-    }
-
-    @Test
-    void testCaseInsensitiveNonAscii() {
-        // Turkish dotless-i (U+0131) should NOT match [a-z] in non-Unicode mode
-        // Per ES spec, if ch >= 128 and toUpperCase(ch) < 128, ch is not canonicalized
-        assertBooleanWithJavet(
-                "!/^[a-z]+$/i.test('\\u0131d')",
-                "!/^[a-z]$/i.test('\\u0131')");
-
-        // But regular ASCII case-insensitive still works
-        assertBooleanWithJavet(
-                "/^[a-z]+$/i.test('Hello')",
-                "/^[a-z]+$/i.test('ABC')");
-
-        // Kelvin sign (U+212A) should NOT match [a-z] in non-Unicode mode either
-        assertBooleanWithJavet("!/^[a-z]$/i.test('\\u212A')");
-
-        // Long s (U+017F) should NOT match [a-z] in non-Unicode mode
-        assertBooleanWithJavet("!/^[a-z]$/i.test('\\u017F')");
-
-        // In Unicode mode, case folding applies differently
-        assertBooleanWithJavet("/^[a-z]$/iu.test('\\u212A')");
     }
 
     @Test

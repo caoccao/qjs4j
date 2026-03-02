@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.core;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
-import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.*;
 
@@ -28,100 +27,35 @@ import java.util.*;
  * Stores all resolved options per the Intl.DurationFormat proposal.
  */
 public final class JSIntlDurationFormat extends JSObject {
+    /**
+     * Valid styles per unit category.
+     */
+    public static final String[] DATE_UNIT_STYLES = {"long", "short", "narrow"};
     public static final String NAME = "Intl.DurationFormat";
-
-    /** Units in table order. */
-    public static final String[] UNIT_NAMES = {
-            "years", "months", "weeks", "days", "hours", "minutes",
-            "seconds", "milliseconds", "microseconds", "nanoseconds"
-    };
-
-    /** Singular unit names (for NumberFormat unit option). */
+    /**
+     * Singular unit names (for NumberFormat unit option).
+     */
     public static final String[] SINGULAR_UNIT_NAMES = {
             "year", "month", "week", "day", "hour", "minute",
             "second", "millisecond", "microsecond", "nanosecond"
     };
-
-    /** Valid styles per unit category. */
-    public static final String[] DATE_UNIT_STYLES = {"long", "short", "narrow"};
-    public static final String[] TIME_UNIT_STYLES = {"long", "short", "narrow", "numeric", "2-digit"};
     public static final String[] SUBSECOND_UNIT_STYLES = {"long", "short", "narrow", "numeric"};
-
-    /** Digital defaults per unit (null means no digital default, use outer style). */
+    public static final String[] TIME_UNIT_STYLES = {"long", "short", "narrow", "numeric", "2-digit"};
+    /**
+     * Units in table order.
+     */
+    public static final String[] UNIT_NAMES = {
+            "years", "months", "weeks", "days", "hours", "minutes",
+            "seconds", "milliseconds", "microseconds", "nanoseconds"
+    };
+    /**
+     * Digital defaults per unit (null means no digital default, use outer style).
+     */
     private static final String[] DIGITAL_DEFAULTS = {
             "long", "long", "long", "long",    // years, months, weeks, days
             "numeric", "numeric", "numeric",    // hours, minutes, seconds
             "numeric", "numeric", "numeric"     // milliseconds, microseconds, nanoseconds
     };
-
-    private final Locale locale;
-    private final String numberingSystem;
-    private final String style;
-    private final String[] unitStyles;
-    private final String[] unitDisplays;
-    private final Integer fractionalDigits;
-
-    public JSIntlDurationFormat(Locale locale, String numberingSystem, String style,
-                                String[] unitStyles, String[] unitDisplays,
-                                Integer fractionalDigits) {
-        super();
-        this.locale = locale;
-        this.numberingSystem = numberingSystem;
-        this.style = style;
-        this.unitStyles = unitStyles.clone();
-        this.unitDisplays = unitDisplays.clone();
-        this.fractionalDigits = fractionalDigits;
-    }
-
-    public Locale getLocale() {
-        return locale;
-    }
-
-    public String getNumberingSystem() {
-        return numberingSystem;
-    }
-
-    public String getStyle() {
-        return style;
-    }
-
-    public String getUnitStyle(int index) {
-        return unitStyles[index];
-    }
-
-    public String getUnitDisplay(int index) {
-        return unitDisplays[index];
-    }
-
-    public Integer getFractionalDigits() {
-        return fractionalDigits;
-    }
-
-    /**
-     * Returns the valid unit styles for the given unit index.
-     */
-    public static String[] getValidStylesForUnit(int unitIndex) {
-        if (unitIndex <= 3) {
-            return DATE_UNIT_STYLES;
-        } else if (unitIndex <= 6) {
-            return TIME_UNIT_STYLES;
-        } else {
-            return SUBSECOND_UNIT_STYLES;
-        }
-    }
-
-    /**
-     * Returns the digital default style for the given unit index.
-     */
-    public static String getDigitalDefault(int unitIndex) {
-        return DIGITAL_DEFAULTS[unitIndex];
-    }
-
-    // =========================================================================
-    // Unit formatting helpers — produce the same output as our Intl.NumberFormat
-    // with style "unit" so that the test262 harness matches.
-    // =========================================================================
-
     /**
      * Unit display data for en locale.
      * Pattern: {singularLong, otherLong, singularShort, otherShort, narrow}
@@ -142,10 +76,337 @@ public final class JSIntlDurationFormat extends JSObject {
         EN_UNIT_DATA.put("nanosecond", new String[]{"nanosecond", "nanoseconds", "ns", "ns", "ns"});
     }
 
+    private final Integer fractionalDigits;
+    private final Locale locale;
+    private final String numberingSystem;
+    private final String style;
+    private final String[] unitDisplays;
+    private final String[] unitStyles;
+
+    public JSIntlDurationFormat(Locale locale, String numberingSystem, String style,
+                                String[] unitStyles, String[] unitDisplays,
+                                Integer fractionalDigits) {
+        super();
+        this.locale = locale;
+        this.numberingSystem = numberingSystem;
+        this.style = style;
+        this.unitStyles = unitStyles.clone();
+        this.unitDisplays = unitDisplays.clone();
+        this.fractionalDigits = fractionalDigits;
+    }
+
+    /**
+     * Split a formatted number string into integer/decimal/fraction parts.
+     */
+    private static void addNumberPartsToList(List<FormatPart> parts, String formatted) {
+        int dotIndex = formatted.indexOf('.');
+        if (dotIndex >= 0) {
+            parts.add(new FormatPart("integer", formatted.substring(0, dotIndex), null));
+            parts.add(new FormatPart("decimal", ".", null));
+            if (dotIndex + 1 < formatted.length()) {
+                parts.add(new FormatPart("fraction", formatted.substring(dotIndex + 1), null));
+            }
+        } else {
+            parts.add(new FormatPart("integer", formatted, null));
+        }
+    }
+
+    /**
+     * Compute the fractional value by combining sub-second units via BigDecimal.
+     * Equivalent to the harness durationToFractional function.
+     *
+     * @param durationValues map of unit name to double value
+     * @param baseUnit       "seconds", "milliseconds", or "microseconds"
+     * @return the combined fractional value as BigDecimal
+     */
+    public static BigDecimal computeFractionalValue(Map<String, Double> durationValues, String baseUnit) {
+        double seconds = durationValues.getOrDefault("seconds", 0.0);
+        double milliseconds = durationValues.getOrDefault("milliseconds", 0.0);
+        double microseconds = durationValues.getOrDefault("microseconds", 0.0);
+        double nanoseconds = durationValues.getOrDefault("nanoseconds", 0.0);
+
+        int exponent;
+        switch (baseUnit) {
+            case "seconds" -> exponent = 9;
+            case "milliseconds" -> exponent = 6;
+            case "microseconds" -> exponent = 3;
+            default -> throw new IllegalArgumentException("Invalid base unit: " + baseUnit);
+        }
+
+        // Check if no sub-units are present
+        boolean noSubUnits = switch (exponent) {
+            case 9 -> milliseconds == 0 && microseconds == 0 && nanoseconds == 0;
+            case 6 -> microseconds == 0 && nanoseconds == 0;
+            case 3 -> nanoseconds == 0;
+            default -> false;
+        };
+
+        if (noSubUnits) {
+            // Return simple value
+            return switch (baseUnit) {
+                case "seconds" -> BigDecimal.valueOf(seconds);
+                case "milliseconds" -> BigDecimal.valueOf(milliseconds);
+                case "microseconds" -> BigDecimal.valueOf(microseconds);
+                default -> BigDecimal.ZERO;
+            };
+        }
+
+        // Use BigInteger for precision (matching the harness BigInt approach)
+        // Use BigDecimal for exact conversion to handle values outside long range
+        BigInteger ns = new BigDecimal(nanoseconds).toBigInteger();
+        switch (exponent) {
+            case 9:
+                ns = ns.add(new BigDecimal(seconds).toBigInteger().multiply(BigInteger.valueOf(1_000_000_000L)));
+                // fallthrough
+            case 6:
+                ns = ns.add(new BigDecimal(milliseconds).toBigInteger().multiply(BigInteger.valueOf(1_000_000L)));
+                // fallthrough
+            case 3:
+                ns = ns.add(new BigDecimal(microseconds).toBigInteger().multiply(BigInteger.valueOf(1_000L)));
+        }
+
+        BigInteger divisor = BigInteger.TEN.pow(exponent);
+        BigInteger[] quotientAndRemainder = ns.divideAndRemainder(divisor);
+        BigInteger quotient = quotientAndRemainder[0];
+        BigInteger remainder = quotientAndRemainder[1];
+
+        // Build the decimal string "{quotient}.{paddedRemainder}"
+        String remainderStr = remainder.abs().toString();
+        // Pad to exponent digits
+        while (remainderStr.length() < exponent) {
+            remainderStr = "0" + remainderStr;
+        }
+
+        String decimalStr = quotient.toString() + "." + remainderStr;
+        return new BigDecimal(decimalStr);
+    }
+
+    /**
+     * Format a BigDecimal number for precise fractional seconds.
+     */
+    public static String formatBigDecimalNumber(BigDecimal value, int minimumIntegerDigits,
+                                                int minimumFractionDigits, int maximumFractionDigits,
+                                                boolean useGrouping, boolean truncate, Locale locale) {
+        NumberFormat format = NumberFormat.getNumberInstance(locale);
+        format.setGroupingUsed(useGrouping);
+        format.setMinimumIntegerDigits(minimumIntegerDigits);
+        if (minimumFractionDigits >= 0) {
+            format.setMinimumFractionDigits(minimumFractionDigits);
+        }
+        if (maximumFractionDigits >= 0) {
+            format.setMaximumFractionDigits(maximumFractionDigits);
+        }
+        if (truncate) {
+            format.setRoundingMode(RoundingMode.DOWN);
+        }
+        return format.format(value);
+    }
+
+    /**
+     * Simplified ListFormat.formatToParts that matches our JSIntlListFormat logic.
+     * For "unit" type: separators are ", " (long/short) or " " (narrow),
+     * with no conjunction word (unlike "conjunction" type which uses "and"/"or").
+     */
+    public static List<ListFormatPart> formatListToParts(JSIntlListFormat listFormat, List<String> values) {
+        List<ListFormatPart> parts = new ArrayList<>();
+        if (values.isEmpty()) {
+            return parts;
+        }
+        if (values.size() == 1) {
+            parts.add(new ListFormatPart("element", values.get(0)));
+            return parts;
+        }
+
+        JSIntlListFormat.ListPatterns patterns = listFormat.getPatterns();
+
+        if (values.size() == 2) {
+            parts.add(new ListFormatPart("element", values.get(0)));
+            parts.add(new ListFormatPart("literal", patterns.pairSep()));
+            parts.add(new ListFormatPart("element", values.get(1)));
+            return parts;
+        }
+
+        // 3+ items: use start/middle/end separators
+        int n = values.size();
+        parts.add(new ListFormatPart("element", values.get(0)));
+        parts.add(new ListFormatPart("literal", patterns.startSep()));
+        for (int i = 1; i < n - 1; i++) {
+            parts.add(new ListFormatPart("element", values.get(i)));
+            if (i < n - 2) {
+                parts.add(new ListFormatPart("literal", patterns.middleSep()));
+            } else {
+                parts.add(new ListFormatPart("literal", patterns.endSep()));
+            }
+        }
+        parts.add(new ListFormatPart("element", values.get(n - 1)));
+
+        return parts;
+    }
+
+    /**
+     * Format a BigDecimal for numeric/2-digit style.
+     */
+    public static String formatNumericBigDecimal(BigDecimal value, boolean is2Digit, boolean suppressSign,
+                                                 int minFractionDigits, int maxFractionDigits,
+                                                 boolean truncate, Locale locale) {
+        BigDecimal formatValue = suppressSign ? value.abs() : value;
+        int minIntDigits = is2Digit ? 2 : 1;
+        NumberFormat format = NumberFormat.getNumberInstance(locale);
+        format.setGroupingUsed(false);
+        format.setMinimumIntegerDigits(minIntDigits);
+        if (minFractionDigits >= 0) {
+            format.setMinimumFractionDigits(minFractionDigits);
+        }
+        if (maxFractionDigits >= 0) {
+            format.setMaximumFractionDigits(maxFractionDigits);
+        }
+        if (truncate) {
+            format.setRoundingMode(RoundingMode.DOWN);
+        }
+        return format.format(formatValue);
+    }
+
+    /**
+     * Format a number for numeric/2-digit style with options for sign suppression.
+     */
+    public static String formatNumericValue(double value, boolean is2Digit, boolean suppressSign,
+                                            int minFractionDigits, int maxFractionDigits,
+                                            boolean truncate, Locale locale) {
+        double formatValue = suppressSign ? Math.abs(value) : value;
+        boolean isNegativeZero = !suppressSign && Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
+
+        int minIntDigits = is2Digit ? 2 : 1;
+        String result = formatPlainNumber(formatValue, minIntDigits, minFractionDigits, maxFractionDigits,
+                false, truncate, locale);
+
+        if (isNegativeZero) {
+            result = "-" + formatPlainNumber(0.0, minIntDigits, minFractionDigits, maxFractionDigits,
+                    false, truncate, locale);
+        }
+        return result;
+    }
+
+    // =========================================================================
+    // Unit formatting helpers — produce the same output as our Intl.NumberFormat
+    // with style "unit" so that the test262 harness matches.
+    // =========================================================================
+
+    /**
+     * Format a plain number (numeric/2-digit style) matching Intl.NumberFormat default output.
+     */
+    public static String formatPlainNumber(double value, int minimumIntegerDigits,
+                                           int minimumFractionDigits, int maximumFractionDigits,
+                                           boolean useGrouping, boolean truncate, Locale locale) {
+        NumberFormat format = NumberFormat.getNumberInstance(locale);
+        format.setGroupingUsed(useGrouping);
+        format.setMinimumIntegerDigits(minimumIntegerDigits);
+        if (minimumFractionDigits >= 0) {
+            format.setMinimumFractionDigits(minimumFractionDigits);
+        }
+        if (maximumFractionDigits >= 0) {
+            format.setMaximumFractionDigits(maximumFractionDigits);
+        }
+        if (truncate) {
+            format.setRoundingMode(RoundingMode.DOWN);
+        }
+        return format.format(value);
+    }
+
+    /**
+     * Format a BigDecimal value to parts for numeric style (used for fractional seconds).
+     */
+    public static List<FormatPart> formatToPartsBigDecimal(BigDecimal value, boolean is2Digit, boolean suppressSign,
+                                                           int minFractionDigits, int maxFractionDigits,
+                                                           boolean truncate, Locale locale) {
+        List<FormatPart> parts = new ArrayList<>();
+        BigDecimal formatValue = suppressSign ? value.abs() : value;
+        boolean isNegative = formatValue.signum() < 0;
+
+        if (isNegative) {
+            parts.add(new FormatPart("minusSign", "-", null));
+            formatValue = formatValue.abs();
+        }
+
+        int minIntDigits = is2Digit ? 2 : 1;
+        String formatted = formatBigDecimalNumber(formatValue, minIntDigits, minFractionDigits, maxFractionDigits,
+                false, truncate, locale);
+        addNumberPartsToList(parts, formatted);
+        return parts;
+    }
+
+    /**
+     * Format a value to parts for numeric/2-digit style.
+     */
+    public static List<FormatPart> formatToPartsNumeric(double value, boolean is2Digit, boolean suppressSign,
+                                                        int minFractionDigits, int maxFractionDigits,
+                                                        boolean truncate, Locale locale) {
+        List<FormatPart> parts = new ArrayList<>();
+        double formatValue = suppressSign ? Math.abs(value) : value;
+        boolean isNegativeZero = !suppressSign && Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
+        boolean isNegative = formatValue < 0 || isNegativeZero;
+
+        if (isNegative) {
+            parts.add(new FormatPart("minusSign", "-", null));
+            formatValue = Math.abs(formatValue);
+        }
+
+        int minIntDigits = is2Digit ? 2 : 1;
+        String formatted = formatPlainNumber(formatValue, minIntDigits, minFractionDigits, maxFractionDigits,
+                false, truncate, locale);
+        addNumberPartsToList(parts, formatted);
+        return parts;
+    }
+
+    /**
+     * Format a value to parts for unit style formatting.
+     */
+    public static List<FormatPart> formatToPartsWithUnit(double value, String singularUnit, String unitDisplay,
+                                                         boolean suppressSign, Locale locale) {
+        List<FormatPart> parts = new ArrayList<>();
+        double formatValue = suppressSign ? Math.abs(value) : value;
+        boolean isNegativeZero = !suppressSign && Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
+        boolean isNegative = formatValue < 0 || isNegativeZero;
+
+        if (isNegative) {
+            parts.add(new FormatPart("minusSign", "-", null));
+            formatValue = Math.abs(formatValue);
+        }
+
+        // Format the absolute number
+        String numberStr = formatPlainNumber(formatValue, 1, -1, -1, true, false, locale);
+        addNumberPartsToList(parts, numberStr);
+
+        // Add unit
+        String[] unitData = EN_UNIT_DATA.get(singularUnit);
+        if (unitData != null) {
+            boolean isSingular = (Math.abs(suppressSign ? Math.abs(value) : value) == 1.0);
+            if (isNegative) {
+                isSingular = false; // -1 uses plural in unit format for sign considerations
+            }
+            // Actually for English, abs(value)==1 → singular regardless of sign
+            isSingular = (formatValue == 1.0);
+
+            String unitString;
+            switch (unitDisplay) {
+                case "long" -> unitString = isSingular ? unitData[0] : unitData[1];
+                case "short" -> unitString = isSingular ? unitData[2] : unitData[3];
+                case "narrow" -> unitString = unitData[4];
+                default -> unitString = isSingular ? unitData[0] : unitData[1];
+            }
+
+            if (!"narrow".equals(unitDisplay)) {
+                parts.add(new FormatPart("literal", " ", null));
+            }
+            parts.add(new FormatPart("unit", unitString, null));
+        }
+
+        return parts;
+    }
+
     /**
      * Format a number with unit display, matching Intl.NumberFormat({style:"unit",...}).format() output.
      *
-     * @param value       the number to format
+     * @param value        the number to format
      * @param singularUnit the singular unit name (e.g., "year")
      * @param unitDisplay  "long", "short", or "narrow"
      * @param suppressSign if true, format absolute value (signDisplay: "never")
@@ -221,88 +482,23 @@ public final class JSIntlDurationFormat extends JSObject {
     }
 
     /**
-     * Format a plain number (numeric/2-digit style) matching Intl.NumberFormat default output.
+     * Returns the digital default style for the given unit index.
      */
-    public static String formatPlainNumber(double value, int minimumIntegerDigits,
-                                           int minimumFractionDigits, int maximumFractionDigits,
-                                           boolean useGrouping, boolean truncate, Locale locale) {
-        NumberFormat format = NumberFormat.getNumberInstance(locale);
-        format.setGroupingUsed(useGrouping);
-        format.setMinimumIntegerDigits(minimumIntegerDigits);
-        if (minimumFractionDigits >= 0) {
-            format.setMinimumFractionDigits(minimumFractionDigits);
-        }
-        if (maximumFractionDigits >= 0) {
-            format.setMaximumFractionDigits(maximumFractionDigits);
-        }
-        if (truncate) {
-            format.setRoundingMode(RoundingMode.DOWN);
-        }
-        return format.format(value);
+    public static String getDigitalDefault(int unitIndex) {
+        return DIGITAL_DEFAULTS[unitIndex];
     }
 
     /**
-     * Format a BigDecimal number for precise fractional seconds.
+     * Returns the valid unit styles for the given unit index.
      */
-    public static String formatBigDecimalNumber(BigDecimal value, int minimumIntegerDigits,
-                                                int minimumFractionDigits, int maximumFractionDigits,
-                                                boolean useGrouping, boolean truncate, Locale locale) {
-        NumberFormat format = NumberFormat.getNumberInstance(locale);
-        format.setGroupingUsed(useGrouping);
-        format.setMinimumIntegerDigits(minimumIntegerDigits);
-        if (minimumFractionDigits >= 0) {
-            format.setMinimumFractionDigits(minimumFractionDigits);
+    public static String[] getValidStylesForUnit(int unitIndex) {
+        if (unitIndex <= 3) {
+            return DATE_UNIT_STYLES;
+        } else if (unitIndex <= 6) {
+            return TIME_UNIT_STYLES;
+        } else {
+            return SUBSECOND_UNIT_STYLES;
         }
-        if (maximumFractionDigits >= 0) {
-            format.setMaximumFractionDigits(maximumFractionDigits);
-        }
-        if (truncate) {
-            format.setRoundingMode(RoundingMode.DOWN);
-        }
-        return format.format(value);
-    }
-
-    /**
-     * Format a number for numeric/2-digit style with options for sign suppression.
-     */
-    public static String formatNumericValue(double value, boolean is2Digit, boolean suppressSign,
-                                            int minFractionDigits, int maxFractionDigits,
-                                            boolean truncate, Locale locale) {
-        double formatValue = suppressSign ? Math.abs(value) : value;
-        boolean isNegativeZero = !suppressSign && Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
-
-        int minIntDigits = is2Digit ? 2 : 1;
-        String result = formatPlainNumber(formatValue, minIntDigits, minFractionDigits, maxFractionDigits,
-                false, truncate, locale);
-
-        if (isNegativeZero) {
-            result = "-" + formatPlainNumber(0.0, minIntDigits, minFractionDigits, maxFractionDigits,
-                    false, truncate, locale);
-        }
-        return result;
-    }
-
-    /**
-     * Format a BigDecimal for numeric/2-digit style.
-     */
-    public static String formatNumericBigDecimal(BigDecimal value, boolean is2Digit, boolean suppressSign,
-                                                 int minFractionDigits, int maxFractionDigits,
-                                                 boolean truncate, Locale locale) {
-        BigDecimal formatValue = suppressSign ? value.abs() : value;
-        int minIntDigits = is2Digit ? 2 : 1;
-        NumberFormat format = NumberFormat.getNumberInstance(locale);
-        format.setGroupingUsed(false);
-        format.setMinimumIntegerDigits(minIntDigits);
-        if (minFractionDigits >= 0) {
-            format.setMinimumFractionDigits(minFractionDigits);
-        }
-        if (maxFractionDigits >= 0) {
-            format.setMaximumFractionDigits(maxFractionDigits);
-        }
-        if (truncate) {
-            format.setRoundingMode(RoundingMode.DOWN);
-        }
-        return format.format(formatValue);
     }
 
     // =========================================================================
@@ -310,190 +506,188 @@ public final class JSIntlDurationFormat extends JSObject {
     // =========================================================================
 
     /**
-     * Represents a single part in formatToParts output.
+     * IsValidDurationRecord — checks sign consistency and range limits.
      */
-    public record FormatPart(String type, String value, String unit) {
+    private static boolean isValidDurationRecord(JSContext context, Map<String, Double> record) {
+        // Check mixed signs: all non-zero values must have the same sign
+        int positiveCount = 0;
+        int negativeCount = 0;
+        for (double value : record.values()) {
+            if (value > 0) {
+                positiveCount++;
+            }
+            if (value < 0) {
+                negativeCount++;
+            }
+        }
+        if (positiveCount > 0 && negativeCount > 0) {
+            context.throwRangeError("Mixed-sign duration is not allowed");
+            return false;
+        }
+
+        // Check years, months, weeks: abs < 2^32
+        double twoTo32 = 4294967296.0; // 2^32
+        for (String unit : new String[]{"years", "months", "weeks"}) {
+            double value = record.getOrDefault(unit, 0.0);
+            if (Math.abs(value) >= twoTo32) {
+                context.throwRangeError("Duration " + unit + " value out of range");
+                return false;
+            }
+        }
+
+        // Check normalizedSeconds: abs < 2^53
+        // Use BigInteger for exact computation to avoid floating-point imprecision.
+        // The spec computes: days*86400 + hours*3600 + minutes*60 + seconds
+        //   + milliseconds*10^-3 + microseconds*10^-6 + nanoseconds*10^-9
+        // We scale everything to nanoseconds to use integer arithmetic:
+        //   normalizedNanos = (days*86400 + hours*3600 + minutes*60 + seconds) * 10^9
+        //                   + milliseconds * 10^6 + microseconds * 10^3 + nanoseconds
+        // Then check: abs(normalizedNanos) >= 2^53 * 10^9
+        double days = record.getOrDefault("days", 0.0);
+        double hours = record.getOrDefault("hours", 0.0);
+        double minutes = record.getOrDefault("minutes", 0.0);
+        double seconds = record.getOrDefault("seconds", 0.0);
+        double milliseconds = record.getOrDefault("milliseconds", 0.0);
+        double microseconds = record.getOrDefault("microseconds", 0.0);
+        double nanoseconds = record.getOrDefault("nanoseconds", 0.0);
+
+        // Convert doubles to their exact BigInteger values (since all are integers per prior check)
+        // Use BigDecimal for exact conversion to handle values larger than Long.MAX_VALUE
+        BigInteger bdDays = new BigDecimal(days).toBigInteger();
+        BigInteger bdHours = new BigDecimal(hours).toBigInteger();
+        BigInteger bdMinutes = new BigDecimal(minutes).toBigInteger();
+        BigInteger bdSeconds = new BigDecimal(seconds).toBigInteger();
+        BigInteger bdMilliseconds = new BigDecimal(milliseconds).toBigInteger();
+        BigInteger bdMicroseconds = new BigDecimal(microseconds).toBigInteger();
+        BigInteger bdNanoseconds = new BigDecimal(nanoseconds).toBigInteger();
+
+        BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
+        BigInteger normalizedNanos = bdDays.multiply(BigInteger.valueOf(86400L))
+                .add(bdHours.multiply(BigInteger.valueOf(3600L)))
+                .add(bdMinutes.multiply(BigInteger.valueOf(60L)))
+                .add(bdSeconds)
+                .multiply(BILLION)
+                .add(bdMilliseconds.multiply(BigInteger.valueOf(1_000_000L)))
+                .add(bdMicroseconds.multiply(BigInteger.valueOf(1_000L)))
+                .add(bdNanoseconds);
+
+        // limit = 2^53 * 10^9
+        BigInteger limit = BigInteger.valueOf(9007199254740992L).multiply(BILLION);
+        if (normalizedNanos.abs().compareTo(limit) >= 0) {
+            context.throwRangeError("Duration total seconds out of range");
+            return false;
+        }
+
+        return true;
     }
 
     /**
-     * Format a value to parts for unit style formatting.
+     * Validate and extract a duration record from a JSValue.
+     * Returns null if the value is invalid (exception already thrown on context).
      */
-    public static List<FormatPart> formatToPartsWithUnit(double value, String singularUnit, String unitDisplay,
-                                                         boolean suppressSign, Locale locale) {
-        List<FormatPart> parts = new ArrayList<>();
-        double formatValue = suppressSign ? Math.abs(value) : value;
-        boolean isNegativeZero = !suppressSign && Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
-        boolean isNegative = formatValue < 0 || isNegativeZero;
-
-        if (isNegative) {
-            parts.add(new FormatPart("minusSign", "-", null));
-            formatValue = Math.abs(formatValue);
+    public static Map<String, Double> toDurationRecord(JSContext context, JSValue input) {
+        // Step 1: If Type(input) is String, throw RangeError (temporal duration string)
+        if (input instanceof JSString) {
+            context.throwRangeError("Invalid duration");
+            return null;
         }
 
-        // Format the absolute number
-        String numberStr = formatPlainNumber(formatValue, 1, -1, -1, true, false, locale);
-        addNumberPartsToList(parts, numberStr);
-
-        // Add unit
-        String[] unitData = EN_UNIT_DATA.get(singularUnit);
-        if (unitData != null) {
-            boolean isSingular = (Math.abs(suppressSign ? Math.abs(value) : value) == 1.0);
-            if (isNegative) {
-                isSingular = false; // -1 uses plural in unit format for sign considerations
-            }
-            // Actually for English, abs(value)==1 → singular regardless of sign
-            isSingular = (formatValue == 1.0);
-
-            String unitString;
-            switch (unitDisplay) {
-                case "long" -> unitString = isSingular ? unitData[0] : unitData[1];
-                case "short" -> unitString = isSingular ? unitData[2] : unitData[3];
-                case "narrow" -> unitString = unitData[4];
-                default -> unitString = isSingular ? unitData[0] : unitData[1];
-            }
-
-            if (!"narrow".equals(unitDisplay)) {
-                parts.add(new FormatPart("literal", " ", null));
-            }
-            parts.add(new FormatPart("unit", unitString, null));
+        // Step 2: If Type(input) is not Object, throw TypeError
+        if (!(input instanceof JSObject inputObj)) {
+            context.throwTypeError("Invalid duration value");
+            return null;
         }
 
-        return parts;
+        Map<String, Double> result = new LinkedHashMap<>();
+        boolean anyDefined = false;
+
+        for (String unitName : UNIT_NAMES) {
+            JSValue val = inputObj.get(context, PropertyKey.fromString(unitName));
+            if (context.hasPendingException()) {
+                return null;
+            }
+
+            if (val == null || val instanceof JSUndefined) {
+                result.put(unitName, 0.0);
+            } else {
+                anyDefined = true;
+                double numericValue = JSTypeConversions.toNumber(context, val).value();
+                if (context.hasPendingException()) {
+                    return null;
+                }
+                if (Double.isNaN(numericValue) || Double.isInfinite(numericValue)) {
+                    context.throwRangeError("Invalid duration value for " + unitName);
+                    return null;
+                }
+                // Duration values must be integers
+                if (numericValue != Math.floor(numericValue)) {
+                    context.throwRangeError("Duration " + unitName + " must be an integer");
+                    return null;
+                }
+                // Convert -0 to 0
+                if (numericValue == 0.0) {
+                    numericValue = 0.0;
+                }
+                result.put(unitName, numericValue);
+            }
+        }
+
+        // If no properties were defined, throw TypeError
+        if (!anyDefined) {
+            context.throwTypeError("Invalid duration value");
+            return null;
+        }
+
+        // Validate: IsValidDurationRecord
+        if (!isValidDurationRecord(context, result)) {
+            return null;
+        }
+
+        return result;
     }
 
     /**
-     * Format a value to parts for numeric/2-digit style.
+     * Format a duration to a string (Intl.DurationFormat.prototype.format).
      */
-    public static List<FormatPart> formatToPartsNumeric(double value, boolean is2Digit, boolean suppressSign,
-                                                        int minFractionDigits, int maxFractionDigits,
-                                                        boolean truncate, Locale locale) {
-        List<FormatPart> parts = new ArrayList<>();
-        double formatValue = suppressSign ? Math.abs(value) : value;
-        boolean isNegativeZero = !suppressSign && Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
-        boolean isNegative = formatValue < 0 || isNegativeZero;
-
-        if (isNegative) {
-            parts.add(new FormatPart("minusSign", "-", null));
-            formatValue = Math.abs(formatValue);
+    public String formatDuration(Map<String, Double> durationValues) {
+        List<FormatPart> parts = partitionDurationFormatPattern(durationValues);
+        StringBuilder sb = new StringBuilder();
+        for (FormatPart part : parts) {
+            sb.append(part.value());
         }
-
-        int minIntDigits = is2Digit ? 2 : 1;
-        String formatted = formatPlainNumber(formatValue, minIntDigits, minFractionDigits, maxFractionDigits,
-                false, truncate, locale);
-        addNumberPartsToList(parts, formatted);
-        return parts;
+        return sb.toString();
     }
 
-    /**
-     * Format a BigDecimal value to parts for numeric style (used for fractional seconds).
-     */
-    public static List<FormatPart> formatToPartsBigDecimal(BigDecimal value, boolean is2Digit, boolean suppressSign,
-                                                           int minFractionDigits, int maxFractionDigits,
-                                                           boolean truncate, Locale locale) {
-        List<FormatPart> parts = new ArrayList<>();
-        BigDecimal formatValue = suppressSign ? value.abs() : value;
-        boolean isNegative = formatValue.signum() < 0;
-
-        if (isNegative) {
-            parts.add(new FormatPart("minusSign", "-", null));
-            formatValue = formatValue.abs();
-        }
-
-        int minIntDigits = is2Digit ? 2 : 1;
-        String formatted = formatBigDecimalNumber(formatValue, minIntDigits, minFractionDigits, maxFractionDigits,
-                false, truncate, locale);
-        addNumberPartsToList(parts, formatted);
-        return parts;
+    public Integer getFractionalDigits() {
+        return fractionalDigits;
     }
 
-    /**
-     * Split a formatted number string into integer/decimal/fraction parts.
-     */
-    private static void addNumberPartsToList(List<FormatPart> parts, String formatted) {
-        int dotIndex = formatted.indexOf('.');
-        if (dotIndex >= 0) {
-            parts.add(new FormatPart("integer", formatted.substring(0, dotIndex), null));
-            parts.add(new FormatPart("decimal", ".", null));
-            if (dotIndex + 1 < formatted.length()) {
-                parts.add(new FormatPart("fraction", formatted.substring(dotIndex + 1), null));
-            }
-        } else {
-            parts.add(new FormatPart("integer", formatted, null));
-        }
+    public Locale getLocale() {
+        return locale;
     }
 
     // =========================================================================
     // Duration formatting — implements PartitionDurationFormatPattern
     // =========================================================================
 
-    /**
-     * Compute the fractional value by combining sub-second units via BigDecimal.
-     * Equivalent to the harness durationToFractional function.
-     *
-     * @param durationValues map of unit name to double value
-     * @param baseUnit       "seconds", "milliseconds", or "microseconds"
-     * @return the combined fractional value as BigDecimal
-     */
-    public static BigDecimal computeFractionalValue(Map<String, Double> durationValues, String baseUnit) {
-        double seconds = durationValues.getOrDefault("seconds", 0.0);
-        double milliseconds = durationValues.getOrDefault("milliseconds", 0.0);
-        double microseconds = durationValues.getOrDefault("microseconds", 0.0);
-        double nanoseconds = durationValues.getOrDefault("nanoseconds", 0.0);
+    public String getNumberingSystem() {
+        return numberingSystem;
+    }
 
-        int exponent;
-        switch (baseUnit) {
-            case "seconds" -> exponent = 9;
-            case "milliseconds" -> exponent = 6;
-            case "microseconds" -> exponent = 3;
-            default -> throw new IllegalArgumentException("Invalid base unit: " + baseUnit);
-        }
+    public String getStyle() {
+        return style;
+    }
 
-        // Check if no sub-units are present
-        boolean noSubUnits = switch (exponent) {
-            case 9 -> milliseconds == 0 && microseconds == 0 && nanoseconds == 0;
-            case 6 -> microseconds == 0 && nanoseconds == 0;
-            case 3 -> nanoseconds == 0;
-            default -> false;
-        };
+    public String getUnitDisplay(int index) {
+        return unitDisplays[index];
+    }
 
-        if (noSubUnits) {
-            // Return simple value
-            return switch (baseUnit) {
-                case "seconds" -> BigDecimal.valueOf(seconds);
-                case "milliseconds" -> BigDecimal.valueOf(milliseconds);
-                case "microseconds" -> BigDecimal.valueOf(microseconds);
-                default -> BigDecimal.ZERO;
-            };
-        }
+    // =========================================================================
+    // ListFormat formatToParts helper
+    // =========================================================================
 
-        // Use BigInteger for precision (matching the harness BigInt approach)
-        // Use BigDecimal for exact conversion to handle values outside long range
-        BigInteger ns = new BigDecimal(nanoseconds).toBigInteger();
-        switch (exponent) {
-            case 9:
-                ns = ns.add(new BigDecimal(seconds).toBigInteger().multiply(BigInteger.valueOf(1_000_000_000L)));
-                // fallthrough
-            case 6:
-                ns = ns.add(new BigDecimal(milliseconds).toBigInteger().multiply(BigInteger.valueOf(1_000_000L)));
-                // fallthrough
-            case 3:
-                ns = ns.add(new BigDecimal(microseconds).toBigInteger().multiply(BigInteger.valueOf(1_000L)));
-        }
-
-        BigInteger divisor = BigInteger.TEN.pow(exponent);
-        BigInteger[] quotientAndRemainder = ns.divideAndRemainder(divisor);
-        BigInteger quotient = quotientAndRemainder[0];
-        BigInteger remainder = quotientAndRemainder[1];
-
-        // Build the decimal string "{quotient}.{paddedRemainder}"
-        String remainderStr = remainder.abs().toString();
-        // Pad to exponent digits
-        while (remainderStr.length() < exponent) {
-            remainderStr = "0" + remainderStr;
-        }
-
-        String decimalStr = quotient.toString() + "." + remainderStr;
-        return new BigDecimal(decimalStr);
+    public String getUnitStyle(int index) {
+        return unitStyles[index];
     }
 
     /**
@@ -659,226 +853,16 @@ public final class JSIntlDurationFormat extends JSObject {
         return flattened;
     }
 
-    /**
-     * Format a duration to a string (Intl.DurationFormat.prototype.format).
-     */
-    public String formatDuration(Map<String, Double> durationValues) {
-        List<FormatPart> parts = partitionDurationFormatPattern(durationValues);
-        StringBuilder sb = new StringBuilder();
-        for (FormatPart part : parts) {
-            sb.append(part.value());
-        }
-        return sb.toString();
-    }
-
-    // =========================================================================
-    // ListFormat formatToParts helper
-    // =========================================================================
-
-    public record ListFormatPart(String type, String value) {
-    }
-
-    /**
-     * Simplified ListFormat.formatToParts that matches our JSIntlListFormat logic.
-     * For "unit" type: separators are ", " (long/short) or " " (narrow),
-     * with no conjunction word (unlike "conjunction" type which uses "and"/"or").
-     */
-    public static List<ListFormatPart> formatListToParts(JSIntlListFormat listFormat, List<String> values) {
-        List<ListFormatPart> parts = new ArrayList<>();
-        if (values.isEmpty()) {
-            return parts;
-        }
-        if (values.size() == 1) {
-            parts.add(new ListFormatPart("element", values.get(0)));
-            return parts;
-        }
-
-        String type = listFormat.getType();
-        String style = listFormat.getStyle();
-
-        if (values.size() == 2) {
-            String separator;
-            if ("unit".equals(type)) {
-                // Unit type: use ", " for long/short, " " for narrow (no conjunction word)
-                separator = "narrow".equals(style) ? " " : ", ";
-            } else if ("disjunction".equals(type)) {
-                separator = " or ";
-            } else {
-                separator = "short".equals(style) ? " & " : " and ";
-            }
-            parts.add(new ListFormatPart("element", values.get(0)));
-            parts.add(new ListFormatPart("literal", separator));
-            parts.add(new ListFormatPart("element", values.get(1)));
-            return parts;
-        }
-
-        // 3+ items
-        for (int i = 0; i < values.size(); i++) {
-            if (i > 0) {
-                String separator;
-                if ("unit".equals(type)) {
-                    // Unit type: always use ", " (long/short) or " " (narrow)
-                    separator = "narrow".equals(style) ? " " : ", ";
-                } else if (i == values.size() - 1) {
-                    // Last element: use conjunction
-                    if ("disjunction".equals(type)) {
-                        separator = ", or ";
-                    } else {
-                        separator = "short".equals(style) ? ", & " : ", and ";
-                    }
-                } else {
-                    separator = ", ";
-                }
-                parts.add(new ListFormatPart("literal", separator));
-            }
-            parts.add(new ListFormatPart("element", values.get(i)));
-        }
-
-        return parts;
-    }
-
     // =========================================================================
     // ToDurationRecord validation
     // =========================================================================
 
     /**
-     * Validate and extract a duration record from a JSValue.
-     * Returns null if the value is invalid (exception already thrown on context).
+     * Represents a single part in formatToParts output.
      */
-    public static Map<String, Double> toDurationRecord(JSContext context, JSValue input) {
-        // Step 1: If Type(input) is String, throw RangeError (temporal duration string)
-        if (input instanceof JSString) {
-            context.throwRangeError("Invalid duration");
-            return null;
-        }
-
-        // Step 2: If Type(input) is not Object, throw TypeError
-        if (!(input instanceof JSObject inputObj)) {
-            context.throwTypeError("Invalid duration value");
-            return null;
-        }
-
-        Map<String, Double> result = new LinkedHashMap<>();
-        boolean anyDefined = false;
-
-        for (String unitName : UNIT_NAMES) {
-            JSValue val = inputObj.get(context, PropertyKey.fromString(unitName));
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            if (val == null || val instanceof JSUndefined) {
-                result.put(unitName, 0.0);
-            } else {
-                anyDefined = true;
-                double numericValue = JSTypeConversions.toNumber(context, val).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
-                if (Double.isNaN(numericValue) || Double.isInfinite(numericValue)) {
-                    context.throwRangeError("Invalid duration value for " + unitName);
-                    return null;
-                }
-                // Duration values must be integers
-                if (numericValue != Math.floor(numericValue)) {
-                    context.throwRangeError("Duration " + unitName + " must be an integer");
-                    return null;
-                }
-                // Convert -0 to 0
-                if (numericValue == 0.0) {
-                    numericValue = 0.0;
-                }
-                result.put(unitName, numericValue);
-            }
-        }
-
-        // If no properties were defined, throw TypeError
-        if (!anyDefined) {
-            context.throwTypeError("Invalid duration value");
-            return null;
-        }
-
-        // Validate: IsValidDurationRecord
-        if (!isValidDurationRecord(context, result)) {
-            return null;
-        }
-
-        return result;
+    public record FormatPart(String type, String value, String unit) {
     }
 
-    /**
-     * IsValidDurationRecord — checks sign consistency and range limits.
-     */
-    private static boolean isValidDurationRecord(JSContext context, Map<String, Double> record) {
-        // Check mixed signs: all non-zero values must have the same sign
-        int positiveCount = 0;
-        int negativeCount = 0;
-        for (double value : record.values()) {
-            if (value > 0) {
-                positiveCount++;
-            }
-            if (value < 0) {
-                negativeCount++;
-            }
-        }
-        if (positiveCount > 0 && negativeCount > 0) {
-            context.throwRangeError("Mixed-sign duration is not allowed");
-            return false;
-        }
-
-        // Check years, months, weeks: abs < 2^32
-        double twoTo32 = 4294967296.0; // 2^32
-        for (String unit : new String[]{"years", "months", "weeks"}) {
-            double value = record.getOrDefault(unit, 0.0);
-            if (Math.abs(value) >= twoTo32) {
-                context.throwRangeError("Duration " + unit + " value out of range");
-                return false;
-            }
-        }
-
-        // Check normalizedSeconds: abs < 2^53
-        // Use BigInteger for exact computation to avoid floating-point imprecision.
-        // The spec computes: days*86400 + hours*3600 + minutes*60 + seconds
-        //   + milliseconds*10^-3 + microseconds*10^-6 + nanoseconds*10^-9
-        // We scale everything to nanoseconds to use integer arithmetic:
-        //   normalizedNanos = (days*86400 + hours*3600 + minutes*60 + seconds) * 10^9
-        //                   + milliseconds * 10^6 + microseconds * 10^3 + nanoseconds
-        // Then check: abs(normalizedNanos) >= 2^53 * 10^9
-        double days = record.getOrDefault("days", 0.0);
-        double hours = record.getOrDefault("hours", 0.0);
-        double minutes = record.getOrDefault("minutes", 0.0);
-        double seconds = record.getOrDefault("seconds", 0.0);
-        double milliseconds = record.getOrDefault("milliseconds", 0.0);
-        double microseconds = record.getOrDefault("microseconds", 0.0);
-        double nanoseconds = record.getOrDefault("nanoseconds", 0.0);
-
-        // Convert doubles to their exact BigInteger values (since all are integers per prior check)
-        // Use BigDecimal for exact conversion to handle values larger than Long.MAX_VALUE
-        BigInteger bdDays = new BigDecimal(days).toBigInteger();
-        BigInteger bdHours = new BigDecimal(hours).toBigInteger();
-        BigInteger bdMinutes = new BigDecimal(minutes).toBigInteger();
-        BigInteger bdSeconds = new BigDecimal(seconds).toBigInteger();
-        BigInteger bdMilliseconds = new BigDecimal(milliseconds).toBigInteger();
-        BigInteger bdMicroseconds = new BigDecimal(microseconds).toBigInteger();
-        BigInteger bdNanoseconds = new BigDecimal(nanoseconds).toBigInteger();
-
-        BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
-        BigInteger normalizedNanos = bdDays.multiply(BigInteger.valueOf(86400L))
-                .add(bdHours.multiply(BigInteger.valueOf(3600L)))
-                .add(bdMinutes.multiply(BigInteger.valueOf(60L)))
-                .add(bdSeconds)
-                .multiply(BILLION)
-                .add(bdMilliseconds.multiply(BigInteger.valueOf(1_000_000L)))
-                .add(bdMicroseconds.multiply(BigInteger.valueOf(1_000L)))
-                .add(bdNanoseconds);
-
-        // limit = 2^53 * 10^9
-        BigInteger limit = BigInteger.valueOf(9007199254740992L).multiply(BILLION);
-        if (normalizedNanos.abs().compareTo(limit) >= 0) {
-            context.throwRangeError("Duration total seconds out of range");
-            return false;
-        }
-
-        return true;
+    public record ListFormatPart(String type, String value) {
     }
 }

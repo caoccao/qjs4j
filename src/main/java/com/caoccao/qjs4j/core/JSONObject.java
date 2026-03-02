@@ -19,12 +19,7 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.*;
 
 /**
  * Implementation of JavaScript JSON object.
@@ -201,7 +196,7 @@ public final class JSONObject {
      * Now supports context.source (json-parse-with-source proposal).
      */
     private JSValue internalizeJSONProperty(JSContext context, JSValue holder, String name,
-                                              JSFunction reviver, ParseContext parseContext) {
+                                            JSFunction reviver, ParseContext parseContext) {
         JSValue val;
         try {
             val = ((JSObject) holder).get(context, PropertyKey.fromString(name));
@@ -1199,7 +1194,7 @@ public final class JSONObject {
      * Based on QuickJS array branch in js_json_to_str.
      */
     private boolean stringifyArrayWithContext(JSContext context, StringifyContext ctx, StringBuilder sb,
-                                               JSObject arr, String currentIndent, String newIndent) {
+                                              JSObject arr, String currentIndent, String newIndent) {
         sb.append('[');
         long arrayLength;
         try {
@@ -1263,7 +1258,7 @@ public final class JSONObject {
      * Based on QuickJS object branch in js_json_to_str.
      */
     private boolean stringifyObjectWithContext(JSContext context, StringifyContext ctx, StringBuilder sb,
-                                                JSObject obj, String currentIndent, String newIndent) {
+                                               JSObject obj, String currentIndent, String newIndent) {
         sb.append('{');
         boolean hasContent = false;
 
@@ -1487,7 +1482,7 @@ public final class JSONObject {
             if (sourceStart < 0 || sourceEnd < 0) {
                 return;
             }
-                elementSources.computeIfAbsent(parent, k -> new HashMap<>())
+            elementSources.computeIfAbsent(parent, k -> new HashMap<>())
                     .put(key, new SourceEntry(text.substring(sourceStart, sourceEnd), parsedValue));
         }
 

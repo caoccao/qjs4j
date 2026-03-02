@@ -189,7 +189,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
 
         // Test 2: Invalid arguments
-        JSValue error = atomics().notify(context, null, new JSValue[]{});
+        JSValue error = atomics().notify(context, null, JSValue.NO_ARGS);
         assertTypeError(error);
 
         // Test 3: Non-TypedArray argument
@@ -333,7 +333,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testPause() {
         // Atomics.pause() should return undefined
-        JSValue result = atomics().pause(context, null, new JSValue[]{});
+        JSValue result = atomics().pause(context, null, JSValue.NO_ARGS);
         assertThat(result.isUndefined()).isTrue();
     }
 

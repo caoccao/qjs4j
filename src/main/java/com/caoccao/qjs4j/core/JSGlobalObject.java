@@ -898,8 +898,8 @@ public final class JSGlobalObject {
 
         JSObject dateTimeFormatPrototype = context.createJSObject();
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("format"),
-            new JSNativeFunction("get format", 0, JSIntlObject::dateTimeFormatFormatGetter),
-            PropertyDescriptor.AccessorState.Configurable);
+                new JSNativeFunction("get format", 0, JSIntlObject::dateTimeFormatFormatGetter),
+                PropertyDescriptor.AccessorState.Configurable);
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"), new JSNativeFunction("resolvedOptions", 0, JSIntlObject::dateTimeFormatResolvedOptions), PropertyDescriptor.DataState.ConfigurableWritable);
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"), new JSNativeFunction("formatToParts", 1, JSIntlObject::dateTimeFormatFormatToParts), PropertyDescriptor.DataState.ConfigurableWritable);
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("formatRange"), new JSNativeFunction("formatRange", 2, JSIntlObject::dateTimeFormatFormatRange), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1026,6 +1026,7 @@ public final class JSGlobalObject {
         listFormatPrototype.defineProperty(PropertyKey.fromString("format"), new JSNativeFunction("format", 1, JSIntlObject::listFormatFormat), PropertyDescriptor.DataState.ConfigurableWritable);
         listFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"), new JSNativeFunction("formatToParts", 1, JSIntlObject::listFormatFormatToParts), PropertyDescriptor.DataState.ConfigurableWritable);
         listFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"), new JSNativeFunction("resolvedOptions", 0, JSIntlObject::listFormatResolvedOptions), PropertyDescriptor.DataState.ConfigurableWritable);
+        listFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.ListFormat"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction listFormatConstructor = new JSNativeFunction(
                 "ListFormat",
                 0,
@@ -1049,6 +1050,9 @@ public final class JSGlobalObject {
         localePrototype.defineProperty(PropertyKey.fromString("numeric"), new JSNativeFunction("get numeric", 0, JSIntlObject::localeGetNumeric), PropertyDescriptor.AccessorState.Configurable);
         localePrototype.defineProperty(PropertyKey.fromString("script"), new JSNativeFunction("get script", 0, JSIntlObject::localeGetScript), PropertyDescriptor.AccessorState.Configurable);
         localePrototype.defineProperty(PropertyKey.fromString("region"), new JSNativeFunction("get region", 0, JSIntlObject::localeGetRegion), PropertyDescriptor.AccessorState.Configurable);
+        localePrototype.defineProperty(PropertyKey.fromString("variants"), new JSNativeFunction("get variants", 0, JSIntlObject::localeGetVariants), PropertyDescriptor.AccessorState.Configurable);
+        localePrototype.defineProperty(PropertyKey.fromString("maximize"), new JSNativeFunction("maximize", 0, JSIntlObject::localeMaximize), PropertyDescriptor.DataState.ConfigurableWritable);
+        localePrototype.defineProperty(PropertyKey.fromString("minimize"), new JSNativeFunction("minimize", 0, JSIntlObject::localeMinimize), PropertyDescriptor.DataState.ConfigurableWritable);
         JSNativeFunction localeConstructor = new JSNativeFunction(
                 "Locale",
                 1,

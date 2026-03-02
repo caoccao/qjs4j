@@ -23,15 +23,15 @@ import java.util.Locale;
  */
 public final class JSIntlLocale extends JSObject {
     public static final String NAME = "Intl.Locale";
-    private final Locale locale;
-    private final String tag;
     private final String calendar;
     private final String caseFirst;
     private final String collation;
     private final String hourCycle;
+    private final Locale locale;
     private final String numberingSystem;
     private final boolean numeric;
     private final boolean numericSet;
+    private final String tag;
 
     public JSIntlLocale(Locale locale, String tag) {
         this(locale, tag, null, null, null, null, null, false, false);
@@ -60,6 +60,11 @@ public final class JSIntlLocale extends JSObject {
         }
         if (!stripped.getCountry().isEmpty()) {
             sb.append("-").append(stripped.getCountry());
+        }
+        String variant = stripped.getVariant();
+        if (variant != null && !variant.isEmpty()) {
+            // Java uses underscore for multiple variants; convert to BCP 47 hyphen
+            sb.append("-").append(variant.replace('_', '-'));
         }
         return sb.toString();
     }
@@ -96,10 +101,6 @@ public final class JSIntlLocale extends JSObject {
         return numeric;
     }
 
-    public boolean isNumericSet() {
-        return numericSet;
-    }
-
     public String getRegion() {
         return locale.getCountry();
     }
@@ -110,5 +111,13 @@ public final class JSIntlLocale extends JSObject {
 
     public String getTag() {
         return tag;
+    }
+
+    public String getVariant() {
+        return locale.getVariant();
+    }
+
+    public boolean isNumericSet() {
+        return numericSet;
     }
 }

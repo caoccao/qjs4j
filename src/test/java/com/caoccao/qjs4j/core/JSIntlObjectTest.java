@@ -101,6 +101,17 @@ public class JSIntlObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testInvalidTagsRejected() {
+        // Empty string, lone singletons, and private-use only tags are invalid
+        assertErrorWithJavet(
+                "Intl.getCanonicalLocales('')",
+                "Intl.getCanonicalLocales('i')",
+                "Intl.getCanonicalLocales('x')",
+                "Intl.getCanonicalLocales('x-foo')");
+
+    }
+
+    @Test
     public void testListFormat() {
         assertBooleanWithJavet(
                 """
@@ -116,9 +127,9 @@ public class JSIntlObjectTest extends BaseJavetTest {
         assertThatThrownBy(() -> context.eval("Intl.ListFormat.prototype.format.call({}, ['a', 'b'])"))
                 .isInstanceOf(JSException.class)
                 .hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Intl.ListFormat('en-US').format('not-an-array')"))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
+        // Strings are iterable and yield single-character strings, so format() accepts them per spec
+        assertBooleanWithJavet(
+                "typeof new Intl.ListFormat('en-US').format('abc') === 'string'");
         assertThatThrownBy(() -> context.eval("new Intl.ListFormat('', { style: 'short' })"))
                 .isInstanceOf(JSException.class)
                 .hasMessageContaining("RangeError");
@@ -221,6 +232,21 @@ public class JSIntlObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testSupportedValuesOfCalendars() {
+        // Required calendars should be present
+        assertBooleanWithJavet(
+                "Intl.supportedValuesOf('calendar').includes('islamic-civil')",
+                "Intl.supportedValuesOf('calendar').includes('islamic-tbla')",
+                "Intl.supportedValuesOf('calendar').includes('islamic-umalqura')",
+                "Intl.supportedValuesOf('calendar').includes('gregory')");
+
+        // The list should be sorted
+        assertBooleanWithJavet("""
+                var calendars = Intl.supportedValuesOf('calendar');
+                JSON.stringify(calendars) === JSON.stringify(calendars.slice().sort())""");
+    }
+
+    @Test
     public void testTransformExtensionCanonicalization() {
         // Script in t-extension should be lowercased (not title-cased like main locale)
         assertStringWithJavet(
@@ -258,31 +284,5 @@ public class JSIntlObjectTest extends BaseJavetTest {
                 "Intl.getCanonicalLocales(' en')",
                 "Intl.getCanonicalLocales('en ')",
                 "Intl.getCanonicalLocales(' en ')");
-    }
-
-    @Test
-    public void testSupportedValuesOfCalendars() {
-        // Required calendars should be present
-        assertBooleanWithJavet(
-                "Intl.supportedValuesOf('calendar').includes('islamic-civil')",
-                "Intl.supportedValuesOf('calendar').includes('islamic-tbla')",
-                "Intl.supportedValuesOf('calendar').includes('islamic-umalqura')",
-                "Intl.supportedValuesOf('calendar').includes('gregory')");
-
-        // The list should be sorted
-        assertBooleanWithJavet("""
-                var calendars = Intl.supportedValuesOf('calendar');
-                JSON.stringify(calendars) === JSON.stringify(calendars.slice().sort())""");
-    }
-
-    @Test
-    public void testInvalidTagsRejected() {
-        // Empty string, lone singletons, and private-use only tags are invalid
-        assertErrorWithJavet(
-                "Intl.getCanonicalLocales('')",
-                "Intl.getCanonicalLocales('i')",
-                "Intl.getCanonicalLocales('x')",
-                "Intl.getCanonicalLocales('x-foo')");
-
     }
 }

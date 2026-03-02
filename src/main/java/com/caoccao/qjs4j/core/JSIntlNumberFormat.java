@@ -36,14 +36,14 @@ public final class JSIntlNumberFormat extends JSObject {
     private final int maximumSignificantDigits;
     private final int minimumFractionDigits;
     private final int minimumIntegerDigits;
+    private final String numberingSystem;
+    private final String roundingMode;
+    private final String signDisplay;
     private final String style;
-    private final boolean useGrouping;
-    private final boolean useSignificantDigits;
     private final String unit;
     private final String unitDisplay;
-    private final String signDisplay;
-    private final String roundingMode;
-    private final String numberingSystem;
+    private final boolean useGrouping;
+    private final boolean useSignificantDigits;
 
     public JSIntlNumberFormat(Locale locale, String style, String currency) {
         this(locale, style, currency, true, 1, -1, -1, false, 0,
@@ -82,6 +82,25 @@ public final class JSIntlNumberFormat extends JSObject {
         this.numberingSystem = numberingSystem;
     }
 
+    private double applySignDisplay(double value) {
+        if ("never".equals(signDisplay)) {
+            return Math.abs(value);
+        }
+        return value;
+    }
+
+    private int computeFractionDigitsForSigDigits(BigDecimal rounded) {
+        if (rounded.compareTo(BigDecimal.ZERO) == 0) {
+            return 0;
+        }
+        BigDecimal stripped = rounded.stripTrailingZeros();
+        int scale = stripped.scale();
+        if (scale > 0) {
+            return scale;
+        }
+        return 0;
+    }
+
     private NumberFormat createBaseFormat() {
         NumberFormat format;
         switch (style) {
@@ -108,18 +127,6 @@ public final class JSIntlNumberFormat extends JSObject {
             }
         }
         return format;
-    }
-
-    private int computeFractionDigitsForSigDigits(BigDecimal rounded) {
-        if (rounded.compareTo(BigDecimal.ZERO) == 0) {
-            return 0;
-        }
-        BigDecimal stripped = rounded.stripTrailingZeros();
-        int scale = stripped.scale();
-        if (scale > 0) {
-            return scale;
-        }
-        return 0;
     }
 
     private String extractPercentSuffix(String percentFormatted) {
@@ -153,6 +160,31 @@ public final class JSIntlNumberFormat extends JSObject {
             baseFormat.setRoundingMode(java.math.RoundingMode.DOWN);
         }
         return baseFormat.format(formatValue);
+    }
+
+    public String format(BigInteger value) {
+        BigDecimal decimalValue = new BigDecimal(value);
+        if (useSignificantDigits) {
+            return formatWithSignificantDigits(decimalValue);
+        }
+        if ("percent".equals(style)) {
+            BigDecimal percentValue = decimalValue.multiply(BigDecimal.valueOf(100));
+            NumberFormat numberFormat = NumberFormat.getNumberInstance(locale);
+            numberFormat.setGroupingUsed(useGrouping);
+            numberFormat.setMinimumIntegerDigits(minimumIntegerDigits);
+            if (minimumFractionDigits >= 0) {
+                numberFormat.setMinimumFractionDigits(minimumFractionDigits);
+            }
+            if (maximumFractionDigits >= 0) {
+                numberFormat.setMaximumFractionDigits(maximumFractionDigits);
+            }
+            String formatted = numberFormat.format(percentValue);
+            NumberFormat percentRef = NumberFormat.getPercentInstance(locale);
+            String refFormatted = percentRef.format(0);
+            String percentSuffix = extractPercentSuffix(refFormatted);
+            return formatted + percentSuffix;
+        }
+        return createBaseFormat().format(value);
     }
 
     /**
@@ -272,54 +304,6 @@ public final class JSIntlNumberFormat extends JSObject {
         }
     }
 
-    private double applySignDisplay(double value) {
-        if ("never".equals(signDisplay)) {
-            return Math.abs(value);
-        }
-        return value;
-    }
-
-    private boolean isOriginalNegativeZero(double value) {
-        return Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
-    }
-
-    private JSArray partsToJSArray(JSContext context, List<JSIntlDurationFormat.FormatPart> parts) {
-        JSArray result = context.createJSArray();
-        for (int i = 0; i < parts.size(); i++) {
-            JSIntlDurationFormat.FormatPart part = parts.get(i);
-            JSObject partObj = context.createJSObject();
-            partObj.set("type", new JSString(part.type()));
-            partObj.set("value", new JSString(part.value()));
-            result.set(context, i, partObj);
-        }
-        return result;
-    }
-
-    public String format(BigInteger value) {
-        BigDecimal decimalValue = new BigDecimal(value);
-        if (useSignificantDigits) {
-            return formatWithSignificantDigits(decimalValue);
-        }
-        if ("percent".equals(style)) {
-            BigDecimal percentValue = decimalValue.multiply(BigDecimal.valueOf(100));
-            NumberFormat numberFormat = NumberFormat.getNumberInstance(locale);
-            numberFormat.setGroupingUsed(useGrouping);
-            numberFormat.setMinimumIntegerDigits(minimumIntegerDigits);
-            if (minimumFractionDigits >= 0) {
-                numberFormat.setMinimumFractionDigits(minimumFractionDigits);
-            }
-            if (maximumFractionDigits >= 0) {
-                numberFormat.setMaximumFractionDigits(maximumFractionDigits);
-            }
-            String formatted = numberFormat.format(percentValue);
-            NumberFormat percentRef = NumberFormat.getPercentInstance(locale);
-            String refFormatted = percentRef.format(0);
-            String percentSuffix = extractPercentSuffix(refFormatted);
-            return formatted + percentSuffix;
-        }
-        return createBaseFormat().format(value);
-    }
-
     private String formatWithSignificantDigits(BigDecimal decimalValue) {
         boolean isPercent = "percent".equals(style);
         BigDecimal valueForSigDigits;
@@ -365,8 +349,16 @@ public final class JSIntlNumberFormat extends JSObject {
         return minimumIntegerDigits;
     }
 
-    public boolean getUseGrouping() {
-        return useGrouping;
+    public String getNumberingSystem() {
+        return numberingSystem;
+    }
+
+    public String getRoundingMode() {
+        return roundingMode;
+    }
+
+    public String getSignDisplay() {
+        return signDisplay;
     }
 
     public String getStyle() {
@@ -381,15 +373,23 @@ public final class JSIntlNumberFormat extends JSObject {
         return unitDisplay;
     }
 
-    public String getSignDisplay() {
-        return signDisplay;
+    public boolean getUseGrouping() {
+        return useGrouping;
     }
 
-    public String getRoundingMode() {
-        return roundingMode;
+    private boolean isOriginalNegativeZero(double value) {
+        return Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
     }
 
-    public String getNumberingSystem() {
-        return numberingSystem;
+    private JSArray partsToJSArray(JSContext context, List<JSIntlDurationFormat.FormatPart> parts) {
+        JSArray result = context.createJSArray();
+        for (int i = 0; i < parts.size(); i++) {
+            JSIntlDurationFormat.FormatPart part = parts.get(i);
+            JSObject partObj = context.createJSObject();
+            partObj.set("type", new JSString(part.type()));
+            partObj.set("value", new JSString(part.value()));
+            result.set(context, i, partObj);
+        }
+        return result;
     }
 }

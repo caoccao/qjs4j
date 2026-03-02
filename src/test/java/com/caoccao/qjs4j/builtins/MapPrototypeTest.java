@@ -124,12 +124,12 @@ public class MapPrototypeTest extends BaseJavetTest {
         map.mapSet(new JSString("key2"), new JSString("value2"));
 
         // Normal case: clear map
-        JSValue result = MapPrototype.clear(context, map, new JSValue[]{});
+        JSValue result = MapPrototype.clear(context, map, JSValue.NO_ARGS);
         assertThat(result.isUndefined()).isTrue();
         assertThat(map.size()).isEqualTo(0);
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.clear(context, new JSString("not map"), new JSValue[]{}));
+        assertTypeError(MapPrototype.clear(context, new JSString("not map"), JSValue.NO_ARGS));
         assertPendingException(context);
     }
 
@@ -190,7 +190,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(map.size()).isEqualTo(1);
 
         // Normal case: no arguments
-        result = MapPrototype.delete(context, map, new JSValue[]{});
+        result = MapPrototype.delete(context, map, JSValue.NO_ARGS);
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: called on non-Map
@@ -434,7 +434,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         map.mapSet(new JSString("key2"), new JSString("value2"));
 
         // Normal case: get entries (returns iterator)
-        JSValue result = MapPrototype.entries(context, map, new JSValue[]{});
+        JSValue result = MapPrototype.entries(context, map, JSValue.NO_ARGS);
         JSIterator iterator = result.asIterator().orElseThrow();
 
         // Check first entry
@@ -459,13 +459,13 @@ public class MapPrototypeTest extends BaseJavetTest {
 
         // Normal case: empty map
         JSMap emptyMap = new JSMap();
-        result = MapPrototype.entries(context, emptyMap, new JSValue[]{});
+        result = MapPrototype.entries(context, emptyMap, JSValue.NO_ARGS);
         iterator = result.asIterator().orElseThrow();
         JSObject emptyResult = iterator.next();
         assertThat((Boolean) emptyResult.get("done").toJavaObject()).isTrue();
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.entries(context, new JSString("not map"), new JSValue[]{}));
+        assertTypeError(MapPrototype.entries(context, new JSString("not map"), JSValue.NO_ARGS));
         assertPendingException(context);
     }
 
@@ -576,7 +576,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(resultStr.contains("key2:value2")).isTrue();
 
         // Edge case: no callback function
-        assertTypeError(MapPrototype.forEach(context, map, new JSValue[]{}));
+        assertTypeError(MapPrototype.forEach(context, map, JSValue.NO_ARGS));
         assertPendingException(context);
 
         // Edge case: non-function callback
@@ -830,7 +830,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(result.isUndefined()).isTrue();
 
         // Normal case: no arguments
-        result = MapPrototype.get(context, map, new JSValue[]{});
+        result = MapPrototype.get(context, map, JSValue.NO_ARGS);
         assertThat(result.isUndefined()).isTrue();
 
         // Edge case: called on non-Map
@@ -887,17 +887,17 @@ public class MapPrototypeTest extends BaseJavetTest {
         JSMap map = new JSMap();
 
         // Normal case: empty map
-        JSValue result = MapPrototype.getSize(context, map, new JSValue[]{});
+        JSValue result = MapPrototype.getSize(context, map, JSValue.NO_ARGS);
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
 
         // Normal case: map with entries
         map.mapSet(new JSString("key1"), new JSString("value1"));
         map.mapSet(new JSString("key2"), new JSString("value2"));
-        result = MapPrototype.getSize(context, map, new JSValue[]{});
+        result = MapPrototype.getSize(context, map, JSValue.NO_ARGS);
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.getSize(context, new JSString("not map"), new JSValue[]{}));
+        assertTypeError(MapPrototype.getSize(context, new JSString("not map"), JSValue.NO_ARGS));
         assertPendingException(context);
 
         assertIntegerWithJavet(
@@ -936,7 +936,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Normal case: no arguments
-        result = MapPrototype.has(context, map, new JSValue[]{});
+        result = MapPrototype.has(context, map, JSValue.NO_ARGS);
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: called on non-Map
@@ -1074,7 +1074,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         map.mapSet(new JSString("key2"), new JSString("value2"));
 
         // Normal case: get keys
-        JSValue result = MapPrototype.keys(context, map, new JSValue[]{});
+        JSValue result = MapPrototype.keys(context, map, JSValue.NO_ARGS);
         JSIterator keys = result.asIterator().orElseThrow();
         JSArray jsArray = JSIteratorHelper.toArray(context, keys);
         assertThat(jsArray.getLength()).isEqualTo(2);
@@ -1083,13 +1083,13 @@ public class MapPrototypeTest extends BaseJavetTest {
 
         // Normal case: empty map
         JSMap emptyMap = new JSMap();
-        result = MapPrototype.keys(context, emptyMap, new JSValue[]{});
+        result = MapPrototype.keys(context, emptyMap, JSValue.NO_ARGS);
         keys = result.asIterator().orElseThrow();
         jsArray = JSIteratorHelper.toArray(context, keys);
         assertThat(jsArray.getLength()).isEqualTo(0);
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.keys(context, new JSString("not map"), new JSValue[]{}));
+        assertTypeError(MapPrototype.keys(context, new JSString("not map"), JSValue.NO_ARGS));
         assertPendingException(context);
     }
 
@@ -1697,7 +1697,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         map.mapSet(new JSString("key2"), new JSString("value2"));
 
         // Normal case: get values
-        JSValue result = MapPrototype.values(context, map, new JSValue[]{});
+        JSValue result = MapPrototype.values(context, map, JSValue.NO_ARGS);
         JSIterator values = result.asIterator().orElseThrow();
         JSArray jsArray = JSIteratorHelper.toArray(context, values);
         assertThat(jsArray.getLength()).isEqualTo(2);
@@ -1706,13 +1706,13 @@ public class MapPrototypeTest extends BaseJavetTest {
 
         // Normal case: empty map
         JSMap emptyMap = new JSMap();
-        result = MapPrototype.values(context, emptyMap, new JSValue[]{});
+        result = MapPrototype.values(context, emptyMap, JSValue.NO_ARGS);
         values = result.asIterator().orElseThrow();
         jsArray = JSIteratorHelper.toArray(context, values);
         assertThat(jsArray.getLength()).isEqualTo(0);
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.values(context, new JSString("not map"), new JSValue[]{}));
+        assertTypeError(MapPrototype.values(context, new JSString("not map"), JSValue.NO_ARGS));
         assertPendingException(context);
     }
 

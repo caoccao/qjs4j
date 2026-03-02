@@ -64,64 +64,6 @@ public final class JSIntlCollator extends JSObject {
         collator.setDecomposition(Collator.CANONICAL_DECOMPOSITION);
     }
 
-    public int compare(String left, String right) {
-        String effectiveLeft = left;
-        String effectiveRight = right;
-        if (ignorePunctuation) {
-            effectiveLeft = stripPunctuation(effectiveLeft);
-            effectiveRight = stripPunctuation(effectiveRight);
-        }
-        if (phonebookMode) {
-            effectiveLeft = expandGermanUmlauts(effectiveLeft);
-            effectiveRight = expandGermanUmlauts(effectiveRight);
-        }
-        if ("case".equals(sensitivity)) {
-            effectiveLeft = stripAccents(effectiveLeft);
-            effectiveRight = stripAccents(effectiveRight);
-        }
-        return Integer.signum(collator.compare(effectiveLeft, effectiveRight));
-    }
-
-    public JSFunction getBoundCompareFunction() {
-        return boundCompareFunction;
-    }
-
-    public String getCaseFirst() {
-        return caseFirst;
-    }
-
-    public String getCollation() {
-        return collation;
-    }
-
-    public boolean getIgnorePunctuation() {
-        return ignorePunctuation;
-    }
-
-    public Locale getLocale() {
-        return locale;
-    }
-
-    public boolean getNumeric() {
-        return numeric;
-    }
-
-    public String getResolvedLocaleTag() {
-        return resolvedLocaleTag;
-    }
-
-    public String getSensitivity() {
-        return sensitivity;
-    }
-
-    public String getUsage() {
-        return usage;
-    }
-
-    public void setBoundCompareFunction(JSFunction boundCompareFunction) {
-        this.boundCompareFunction = boundCompareFunction;
-    }
-
     /**
      * Expand German umlauts for phonebook collation (DIN 5007-2).
      * ä→ae, ö→oe, ü→ue, Ä→Ae, Ö→Oe, Ü→Ue, ß→ss
@@ -198,5 +140,63 @@ public final class JSIntlCollator extends JSObject {
             }
         }
         return result.toString();
+    }
+
+    public int compare(String left, String right) {
+        String effectiveLeft = left;
+        String effectiveRight = right;
+        if (ignorePunctuation) {
+            effectiveLeft = stripPunctuation(effectiveLeft);
+            effectiveRight = stripPunctuation(effectiveRight);
+        }
+        if (phonebookMode) {
+            effectiveLeft = expandGermanUmlauts(effectiveLeft);
+            effectiveRight = expandGermanUmlauts(effectiveRight);
+        }
+        if ("case".equals(sensitivity)) {
+            effectiveLeft = stripAccents(effectiveLeft);
+            effectiveRight = stripAccents(effectiveRight);
+        }
+        return Integer.signum(collator.compare(effectiveLeft, effectiveRight));
+    }
+
+    public JSFunction getBoundCompareFunction() {
+        return boundCompareFunction;
+    }
+
+    public String getCaseFirst() {
+        return caseFirst;
+    }
+
+    public String getCollation() {
+        return collation;
+    }
+
+    public boolean getIgnorePunctuation() {
+        return ignorePunctuation;
+    }
+
+    public Locale getLocale() {
+        return locale;
+    }
+
+    public boolean getNumeric() {
+        return numeric;
+    }
+
+    public String getResolvedLocaleTag() {
+        return resolvedLocaleTag;
+    }
+
+    public String getSensitivity() {
+        return sensitivity;
+    }
+
+    public String getUsage() {
+        return usage;
+    }
+
+    public void setBoundCompareFunction(JSFunction boundCompareFunction) {
+        this.boundCompareFunction = boundCompareFunction;
     }
 }

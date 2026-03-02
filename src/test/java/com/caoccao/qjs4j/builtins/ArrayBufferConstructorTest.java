@@ -33,7 +33,7 @@ public class ArrayBufferConstructorTest extends BaseJavetTest {
         JSObject arrayBufferConstructor = context.getGlobalObject().get("ArrayBuffer").asObject().orElseThrow();
 
         // Call the getter with the constructor as thisArg
-        JSValue result = ArrayBufferConstructor.getSpecies(context, arrayBufferConstructor, new JSValue[]{});
+        JSValue result = ArrayBufferConstructor.getSpecies(context, arrayBufferConstructor, JSValue.NO_ARGS);
 
         // Should return the same ArrayBuffer constructor
         assertThat(result).isSameAs(arrayBufferConstructor);
@@ -93,7 +93,7 @@ public class ArrayBufferConstructorTest extends BaseJavetTest {
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: no arguments
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(result.isBooleanFalse()).isTrue();
     }
 

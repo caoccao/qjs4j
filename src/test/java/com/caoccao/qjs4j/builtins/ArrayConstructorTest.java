@@ -95,7 +95,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(arr.getLength()).isEqualTo(0);
 
         // Edge case: no arguments
-        assertTypeError(ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{}));
+        assertTypeError(ArrayConstructor.from(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
         assertPendingException(context);
 
         // Edge case: non-iterable number → empty array (per spec, ToObject(123) has no length)
@@ -188,7 +188,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(arr.getLength()).isEqualTo(0);
 
         // Edge case: no arguments
-        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
@@ -247,16 +247,16 @@ public class ArrayConstructorTest extends BaseJavetTest {
     public void testGetSpecies() {
         // Normal case: returns thisArg
         JSObject arrayConstructor = new JSObject();
-        JSValue result = ArrayConstructor.getSpecies(context, arrayConstructor, new JSValue[]{});
+        JSValue result = ArrayConstructor.getSpecies(context, arrayConstructor, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(arrayConstructor);
 
         // Normal case: with different thisArg
         JSObject customConstructor = new JSObject();
-        result = ArrayConstructor.getSpecies(context, customConstructor, new JSValue[]{});
+        result = ArrayConstructor.getSpecies(context, customConstructor, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(customConstructor);
 
         // Edge case: undefined thisArg
-        result = ArrayConstructor.getSpecies(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = ArrayConstructor.getSpecies(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(result.isUndefined()).isTrue();
     }
 
@@ -295,7 +295,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: no arguments
-        result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         assertThat(result.isBooleanFalse()).isTrue();
     }
 
@@ -314,7 +314,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(arr.get(2).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(3.0);
 
         // Edge case: no arguments
-        result = ArrayConstructor.of(context, JSUndefined.INSTANCE, new JSValue[]{});
+        result = ArrayConstructor.of(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(0);
 
