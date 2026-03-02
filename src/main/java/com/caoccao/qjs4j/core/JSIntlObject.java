@@ -5368,7 +5368,7 @@ public final class JSIntlObject {
         return defaultPrototype;
     }
 
-    private static Locale resolveLocale(JSContext context, JSValue[] args, int index) {
+    public static Locale resolveLocale(JSContext context, JSValue[] args, int index) {
         if (index >= args.length || args[index].isUndefined()) {
             return Locale.getDefault();
         }

@@ -21,7 +21,6 @@ import com.caoccao.qjs4j.regexp.RegExpEngine;
 import com.caoccao.qjs4j.unicode.UnicodeNormalization;
 import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
 
-import java.text.Collator;
 import java.util.Locale;
 
 /**
@@ -38,6 +37,10 @@ public final class StringPrototype {
      * Cached ranges for the "Cased" Unicode binary property.
      */
     private static int[] casedRanges;
+    /**
+     * Cached ranges for the "Soft_Dotted" Unicode binary property.
+     */
+    private static int[] softDottedRanges;
 
     /**
      * String.prototype.anchor(name)
@@ -752,19 +755,20 @@ public final class StringPrototype {
      * Uses the full Unicode Case_Ignorable property table.
      */
     private static boolean isCaseIgnorableUnicode(int codePoint) {
+        int type = Character.getType(codePoint);
+        boolean fallbackCaseIgnorable = type == Character.NON_SPACING_MARK ||
+                type == Character.ENCLOSING_MARK ||
+                type == Character.FORMAT ||
+                type == Character.MODIFIER_LETTER ||
+                type == Character.MODIFIER_SYMBOL;
         if (caseIgnorableRanges == null) {
             caseIgnorableRanges = UnicodePropertyResolver.resolveBinaryProperty("Case_Ignorable");
             if (caseIgnorableRanges == null) {
                 // Fallback if tables not available
-                int type = Character.getType(codePoint);
-                return type == Character.NON_SPACING_MARK ||
-                        type == Character.ENCLOSING_MARK ||
-                        type == Character.FORMAT ||
-                        type == Character.MODIFIER_LETTER ||
-                        type == Character.MODIFIER_SYMBOL;
+                return fallbackCaseIgnorable;
             }
         }
-        return isInRanges(codePoint, caseIgnorableRanges);
+        return isInRanges(codePoint, caseIgnorableRanges) || fallbackCaseIgnorable;
     }
 
     /**
@@ -782,6 +786,29 @@ public final class StringPrototype {
             }
         }
         return isInRanges(codePoint, casedRanges);
+    }
+
+    /**
+     * Check if a code point has the Unicode Soft_Dotted property.
+     */
+    private static boolean isSoftDottedUnicode(int codePoint) {
+        if (softDottedRanges == null) {
+            softDottedRanges = UnicodePropertyResolver.resolveBinaryProperty("Soft_Dotted");
+            if (softDottedRanges == null) {
+                return false;
+            }
+        }
+        return isInRanges(codePoint, softDottedRanges);
+    }
+
+    /**
+     * Check if a code point is a combining mark.
+     */
+    private static boolean isCombiningMark(int codePoint) {
+        int type = Character.getType(codePoint);
+        return type == Character.NON_SPACING_MARK ||
+                type == Character.COMBINING_SPACING_MARK ||
+                type == Character.ENCLOSING_MARK;
     }
 
     /**
@@ -936,27 +963,19 @@ public final class StringPrototype {
                 context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         String that = thatStr.value();
 
-        Locale locale = Locale.getDefault();
-        if (args.length > 1 && !args[1].isNullOrUndefined()) {
-            String localeTag = null;
-            if (args[1] instanceof JSArray localeArray && localeArray.getLength() > 0) {
-                localeTag = JSTypeConversions.toString(context, localeArray.get(0)).value();
-            } else {
-                localeTag = JSTypeConversions.toString(context, args[1]).value();
-            }
-            if (localeTag != null && !localeTag.isEmpty()) {
-                Locale candidateLocale = Locale.forLanguageTag(localeTag);
-                if (!candidateLocale.getLanguage().isEmpty()) {
-                    locale = candidateLocale;
-                }
-            }
+        JSValue localeValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue optionsValue = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
+        JSValue collatorValue = JSIntlObject.createCollator(
+                context,
+                context.createJSObject(),
+                new JSValue[]{localeValue, optionsValue});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
-
-        // Normalize both strings to NFC for Unicode canonical equivalence
-        String normalizedThis = java.text.Normalizer.normalize(thisStr, java.text.Normalizer.Form.NFC);
-        String normalizedThat = java.text.Normalizer.normalize(that, java.text.Normalizer.Form.NFC);
-        Collator collator = Collator.getInstance(locale);
-        int result = Integer.signum(collator.compare(normalizedThis, normalizedThat));
+        if (!(collatorValue instanceof JSIntlCollator collator)) {
+            return context.throwTypeError("Intl.Collator constructor returned invalid object");
+        }
+        int result = collator.compare(thisStr, that);
         return JSNumber.of(result);
     }
 
@@ -1790,7 +1809,14 @@ public final class StringPrototype {
      */
     public static JSValue toLocaleLowerCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
-        // In QuickJS, this just calls toLowerCase() - locale is ignored
+        Locale locale = JSIntlObject.resolveLocale(context, args, 0);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String language = locale.getLanguage();
+        if ("tr".equals(language) || "az".equals(language) || "lt".equals(language)) {
+            return new JSString(str.value().toLowerCase(locale));
+        }
         return new JSString(toLowerCaseWithSigma(str.value()));
     }
 
@@ -1801,8 +1827,15 @@ public final class StringPrototype {
      */
     public static JSValue toLocaleUpperCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
-        // In QuickJS, this just calls toUpperCase() - locale is ignored
-        return new JSString(str.value().toUpperCase());
+        Locale locale = JSIntlObject.resolveLocale(context, args, 0);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String source = str.value();
+        if ("lt".equals(locale.getLanguage())) {
+            source = removeLithuanianSoftDottedDots(source);
+        }
+        return new JSString(source.toUpperCase(locale));
     }
 
     /**
@@ -1849,6 +1882,37 @@ public final class StringPrototype {
                 result.appendCodePoint(Character.toLowerCase(codePoint));
             }
             i += charCount;
+        }
+        return result.toString();
+    }
+
+    /**
+     * Lithuanian uppercasing removes U+0307 when it follows a Soft_Dotted code point
+     * with only combining marks in between.
+     */
+    private static String removeLithuanianSoftDottedDots(String input) {
+        StringBuilder result = new StringBuilder(input.length());
+        int index = 0;
+        while (index < input.length()) {
+            int codePoint = input.codePointAt(index);
+            int charCount = Character.charCount(codePoint);
+            if (codePoint == 0x0307) {
+                int lookBackIndex = result.length();
+                int previousCodePoint = -1;
+                while (lookBackIndex > 0) {
+                    previousCodePoint = Character.codePointBefore(result, lookBackIndex);
+                    lookBackIndex -= Character.charCount(previousCodePoint);
+                    if (!isCombiningMark(previousCodePoint)) {
+                        break;
+                    }
+                }
+                if (previousCodePoint != -1 && isSoftDottedUnicode(previousCodePoint)) {
+                    index += charCount;
+                    continue;
+                }
+            }
+            result.appendCodePoint(codePoint);
+            index += charCount;
         }
         return result.toString();
     }
