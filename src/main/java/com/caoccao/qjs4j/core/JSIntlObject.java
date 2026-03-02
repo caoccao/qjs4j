@@ -3127,6 +3127,15 @@ public final class JSIntlObject {
             Locale resolvedLocale = strippedLocale;
             if (numberingSystemOption != null && SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystemOption)) {
                 numberingSystem = numberingSystemOption;
+                if (extensionNu != null) {
+                    String extensionNuLower = extensionNu.toLowerCase(Locale.ROOT);
+                    if (numberingSystem.equals(extensionNuLower)) {
+                        resolvedLocale = new Locale.Builder()
+                                .setLocale(strippedLocale)
+                                .setUnicodeLocaleKeyword("nu", numberingSystem)
+                                .build();
+                    }
+                }
             } else if (extensionNu != null) {
                 String extensionNuLower = extensionNu.toLowerCase(Locale.ROOT);
                 if (SUPPORTED_NUMBERING_SYSTEMS.contains(extensionNuLower)) {
@@ -3144,6 +3153,94 @@ public final class JSIntlObject {
                 relativeTimeFormat.setPrototype(resolvedPrototype);
             }
             return relativeTimeFormat;
+        } catch (IllegalArgumentException e) {
+            return context.throwRangeError(e.getMessage());
+        }
+    }
+
+    private static JSObject createRelativeTimeLiteralPart(JSContext context, String value) {
+        JSObject part = context.createJSObject();
+        createDataProperty(part, "type", new JSString("literal"));
+        createDataProperty(part, "value", new JSString(value));
+        return part;
+    }
+
+    private static JSIntlNumberFormat createRelativeTimeNumberFormat(JSIntlRelativeTimeFormat relativeTimeFormat) {
+        String useGroupingMode = "pl".equals(relativeTimeFormat.getLocale().getLanguage()) ? "min2" : "auto";
+        return new JSIntlNumberFormat(
+                relativeTimeFormat.getLocale(),
+                "decimal",
+                null,
+                useGroupingMode,
+                1,
+                0,
+                3,
+                false,
+                0,
+                null,
+                null,
+                "auto",
+                "halfExpand",
+                relativeTimeFormat.getNumberingSystem());
+    }
+
+    public static JSValue createSegmenter(JSContext context, JSObject prototype, JSObject segmentsPrototype, JSValue[] args) {
+        try {
+            JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "Segmenter");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            Locale locale = Locale.getDefault();
+            if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
+                if (args[0] instanceof JSNull) {
+                    return context.throwTypeError("Cannot convert null to object");
+                }
+                List<String> canonicalLocales = canonicalizeLocaleList(context, args[0]);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                for (String localeTag : canonicalLocales) {
+                    Locale candidateLocale = Locale.forLanguageTag(localeTag);
+                    String language = candidateLocale.getLanguage().toLowerCase(Locale.ROOT);
+                    if (!language.isEmpty() && AVAILABLE_LOCALE_LANGUAGES.contains(language)) {
+                        locale = candidateLocale;
+                        break;
+                    }
+                }
+            }
+
+            JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+            JSObject optionsObject;
+            if (optionsValue instanceof JSUndefined) {
+                optionsObject = context.createJSObject();
+                optionsObject.setPrototype(null);
+            } else if (optionsValue instanceof JSNull) {
+                return context.throwTypeError("Cannot convert null to object");
+            } else {
+                JSValue optionsObjectValue = JSTypeConversions.toObject(context, optionsValue);
+                if (context.hasPendingException() || !(optionsObjectValue instanceof JSObject jsObject)) {
+                    return JSUndefined.INSTANCE;
+                }
+                optionsObject = jsObject;
+            }
+
+            String localeMatcher = getOptionStringChecked(context, optionsObject, "localeMatcher");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            localeMatcher = normalizeOption(localeMatcher, "best fit", "lookup", "best fit");
+
+            String granularity = getOptionStringChecked(context, optionsObject, "granularity");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            granularity = normalizeOption(granularity, "grapheme", "grapheme", "word", "sentence");
+
+            JSIntlSegmenter segmenter = new JSIntlSegmenter(locale, granularity, segmentsPrototype);
+            if (resolvedPrototype != null) {
+                segmenter.setPrototype(resolvedPrototype);
+            }
+            return segmenter;
         } catch (IllegalArgumentException e) {
             return context.throwRangeError(e.getMessage());
         }
@@ -3806,6 +3903,50 @@ public final class JSIntlObject {
         return JSUndefined.INSTANCE;
     }
 
+    private static String getPolishOtherUnit(String style, String unit) {
+        if ("long".equals(style)) {
+            return switch (unit) {
+                case "second" -> "sekundy";
+                case "minute" -> "minuty";
+                case "hour" -> "godziny";
+                case "day" -> "dnia";
+                case "week" -> "tygodnia";
+                case "month" -> "miesiąca";
+                case "quarter" -> "kwartału";
+                case "year" -> "roku";
+                default -> unit;
+            };
+        }
+        if ("short".equals(style)) {
+            return switch (unit) {
+                case "day" -> "dnia";
+                case "year" -> "roku";
+                default -> switch (unit) {
+                    case "second" -> "sek.";
+                    case "minute" -> "min";
+                    case "hour" -> "godz.";
+                    case "week" -> "tyg.";
+                    case "month" -> "mies.";
+                    case "quarter" -> "kw.";
+                    default -> unit;
+                };
+            };
+        }
+        return switch (unit) {
+            case "day" -> "dnia";
+            case "year" -> "roku";
+            default -> switch (unit) {
+                case "second" -> "s";
+                case "minute" -> "min";
+                case "hour" -> "g.";
+                case "week" -> "tyg.";
+                case "month" -> "mies.";
+                case "quarter" -> "kw.";
+                default -> unit;
+            };
+        };
+    }
+
     /**
      * Get timezone IDs for a given ISO 3166 region code.
      */
@@ -3956,6 +4097,14 @@ public final class JSIntlObject {
         }
         double numericValue = JSTypeConversions.toNumber(context, value).value();
         return !context.hasPendingException() && Double.isNaN(numericValue);
+    }
+
+    private static boolean isNegativeZero(double value) {
+        return Double.doubleToRawLongBits(value) == Double.doubleToRawLongBits(-0.0d);
+    }
+
+    private static boolean isPolishIntegerPlural(double absoluteValue) {
+        return Double.isFinite(absoluteValue) && Math.floor(absoluteValue) == absoluteValue;
     }
 
     /**
@@ -4560,6 +4709,20 @@ public final class JSIntlObject {
         throw new IllegalArgumentException("Invalid option value: " + rawValue);
     }
 
+    private static String normalizeRelativeTimeUnit(String unit) {
+        return switch (unit) {
+            case "second", "seconds" -> "second";
+            case "minute", "minutes" -> "minute";
+            case "hour", "hours" -> "hour";
+            case "day", "days" -> "day";
+            case "week", "weeks" -> "week";
+            case "month", "months" -> "month";
+            case "quarter", "quarters" -> "quarter";
+            case "year", "years" -> "year";
+            default -> throw new IllegalArgumentException("Invalid unit: " + unit);
+        };
+    }
+
     private static String nullIfEmpty(String value) {
         return (value != null && !value.isEmpty()) ? value : null;
     }
@@ -5028,10 +5191,76 @@ public final class JSIntlObject {
         if (args.length < 2) {
             return context.throwTypeError("Intl.RelativeTimeFormat.prototype.format requires value and unit");
         }
+        double value = JSTypeConversions.toNumber(context, args[0]).value();
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String unit = JSTypeConversions.toString(context, args[1]).value();
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         try {
-            double value = JSTypeConversions.toNumber(context, args[0]).value();
-            String unit = JSTypeConversions.toString(context, args[1]).value();
             return new JSString(relativeTimeFormat.format(value, unit));
+        } catch (IllegalArgumentException e) {
+            return context.throwRangeError(e.getMessage());
+        }
+    }
+
+    public static JSValue relativeTimeFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlRelativeTimeFormat relativeTimeFormat)) {
+            return context.throwTypeError("Intl.RelativeTimeFormat.prototype.formatToParts called on incompatible receiver");
+        }
+        if (args.length < 2) {
+            return context.throwTypeError("Intl.RelativeTimeFormat.prototype.formatToParts requires value and unit");
+        }
+
+        double value = JSTypeConversions.toNumber(context, args[0]).value();
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String unitValue = JSTypeConversions.toString(context, args[1]).value();
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        try {
+            String normalizedUnit = normalizeRelativeTimeUnit(unitValue);
+            String formatted = relativeTimeFormat.format(value, normalizedUnit);
+            double absoluteValue = Math.abs(value);
+            JSIntlNumberFormat numberFormat = createRelativeTimeNumberFormat(relativeTimeFormat);
+            String numberText = numberFormat.format(absoluteValue);
+            int numberStart = formatted.indexOf(numberText);
+
+            JSArray result = context.createJSArray();
+            if (numberStart < 0) {
+                result.push(createRelativeTimeLiteralPart(context, formatted));
+                return result;
+            }
+
+            String prefix = formatted.substring(0, numberStart);
+            if (!prefix.isEmpty()) {
+                result.push(createRelativeTimeLiteralPart(context, prefix));
+            }
+
+            JSArray numberParts = numberFormat.formatToParts(context, absoluteValue);
+            for (int index = 0; index < numberParts.getLength(); index++) {
+                JSValue numberPartValue = numberParts.get(index);
+                if (numberPartValue instanceof JSObject numberPartObject) {
+                    createDataProperty(numberPartObject, "unit", new JSString(normalizedUnit));
+                    result.push(numberPartObject);
+                }
+            }
+
+            String suffix = formatted.substring(numberStart + numberText.length());
+            if ("pl".equals(relativeTimeFormat.getLocale().getLanguage()) && !isPolishIntegerPlural(absoluteValue)) {
+                boolean isPast = value < 0 || isNegativeZero(value);
+                String polishOtherUnit = getPolishOtherUnit(relativeTimeFormat.getStyle(), normalizedUnit);
+                suffix = isPast ? " " + polishOtherUnit + " temu" : " " + polishOtherUnit;
+            }
+            if (!suffix.isEmpty()) {
+                result.push(createRelativeTimeLiteralPart(context, suffix));
+            }
+            return result;
         } catch (IllegalArgumentException e) {
             return context.throwRangeError(e.getMessage());
         }
@@ -5156,6 +5385,43 @@ public final class JSIntlObject {
             return Locale.getDefault();
         }
         return Locale.forLanguageTag(canonicalLocales.get(0));
+    }
+
+    public static JSValue segmenterResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlSegmenter segmenter)) {
+            return context.throwTypeError("Intl.Segmenter.prototype.resolvedOptions called on incompatible receiver");
+        }
+        JSObject resolvedOptions = context.createJSObject();
+        createDataProperty(resolvedOptions, "locale", new JSString(segmenter.getLocale().toLanguageTag()));
+        createDataProperty(resolvedOptions, "granularity", new JSString(segmenter.getGranularity()));
+        return resolvedOptions;
+    }
+
+    public static JSValue segmenterSegment(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlSegmenter segmenter)) {
+            return context.throwTypeError("Intl.Segmenter.prototype.segment called on incompatible receiver");
+        }
+        JSValue stringValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSString text = JSTypeConversions.toString(context, stringValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return segmenter.createSegments(text.value());
+    }
+
+    public static JSValue segmentsContaining(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlSegments segments)) {
+            return context.throwTypeError("%Segments.prototype%.containing called on incompatible receiver");
+        }
+        JSValue indexValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        return segments.containing(context, indexValue);
+    }
+
+    public static JSValue segmentsIterator(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlSegments segments)) {
+            return context.throwTypeError("%Segments.prototype%[@@iterator] called on incompatible receiver");
+        }
+        return segments.createIterator(context);
     }
 
     /**

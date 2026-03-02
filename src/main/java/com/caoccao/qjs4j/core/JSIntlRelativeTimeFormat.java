@@ -250,7 +250,7 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
     }
 
     private String formatNumber(double absoluteValue) {
-        String useGroupingMode = locale.getLanguage().equals("pl") ? "false" : "auto";
+        String useGroupingMode = locale.getLanguage().equals("pl") ? "min2" : "auto";
         JSIntlNumberFormat numberFormat = new JSIntlNumberFormat(
                 locale,
                 "decimal",

@@ -1021,6 +1021,7 @@ public final class JSGlobalObject {
 
         JSObject relativeTimeFormatPrototype = context.createJSObject();
         relativeTimeFormatPrototype.defineProperty(PropertyKey.fromString("format"), new JSNativeFunction("format", 2, JSIntlObject::relativeTimeFormatFormat), PropertyDescriptor.DataState.ConfigurableWritable);
+        relativeTimeFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"), new JSNativeFunction("formatToParts", 2, JSIntlObject::relativeTimeFormatFormatToParts), PropertyDescriptor.DataState.ConfigurableWritable);
         relativeTimeFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"), new JSNativeFunction("resolvedOptions", 0, JSIntlObject::relativeTimeFormatResolvedOptions), PropertyDescriptor.DataState.ConfigurableWritable);
         relativeTimeFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.RelativeTimeFormat"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction relativeTimeFormatConstructor = new JSNativeFunction(
@@ -1033,6 +1034,28 @@ public final class JSGlobalObject {
         relativeTimeFormatConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"), new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf), PropertyDescriptor.DataState.ConfigurableWritable);
         relativeTimeFormatPrototype.defineProperty(PropertyKey.fromString("constructor"), relativeTimeFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("RelativeTimeFormat"), relativeTimeFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+
+        JSObject segmentDataPrototype = context.createJSObject();
+        JSNativeFunction segmentsContainingFunction = new JSNativeFunction("containing", 1, JSIntlObject::segmentsContaining);
+        segmentsContainingFunction.initializePrototypeChain(context);
+        segmentDataPrototype.defineProperty(PropertyKey.fromString("containing"), segmentsContainingFunction, PropertyDescriptor.DataState.ConfigurableWritable);
+        JSNativeFunction segmentsIteratorFunction = new JSNativeFunction("[Symbol.iterator]", 0, JSIntlObject::segmentsIterator);
+        segmentsIteratorFunction.initializePrototypeChain(context);
+        segmentDataPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR), segmentsIteratorFunction, PropertyDescriptor.DataState.ConfigurableWritable);
+        JSObject segmenterPrototype = context.createJSObject();
+        segmenterPrototype.defineProperty(PropertyKey.fromString("segment"), new JSNativeFunction("segment", 1, JSIntlObject::segmenterSegment), PropertyDescriptor.DataState.ConfigurableWritable);
+        segmenterPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"), new JSNativeFunction("resolvedOptions", 0, JSIntlObject::segmenterResolvedOptions), PropertyDescriptor.DataState.ConfigurableWritable);
+        segmenterPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.Segmenter"), PropertyDescriptor.DataState.Configurable);
+        JSNativeFunction segmenterConstructor = new JSNativeFunction(
+                "Segmenter",
+                0,
+                (childContext, thisArg, args) -> JSIntlObject.createSegmenter(childContext, segmenterPrototype, segmentDataPrototype, args),
+                true,
+                true);
+        segmenterConstructor.defineProperty(PropertyKey.fromString("prototype"), segmenterPrototype, PropertyDescriptor.DataState.None);
+        segmenterConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"), new JSNativeFunction("supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf), PropertyDescriptor.DataState.ConfigurableWritable);
+        segmenterPrototype.defineProperty(PropertyKey.fromString("constructor"), segmenterConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        intlObject.defineProperty(PropertyKey.fromString("Segmenter"), segmenterConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject listFormatPrototype = context.createJSObject();
         listFormatPrototype.defineProperty(PropertyKey.fromString("format"), new JSNativeFunction("format", 1, JSIntlObject::listFormatFormat), PropertyDescriptor.DataState.ConfigurableWritable);
