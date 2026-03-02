@@ -1005,7 +1005,9 @@ public final class JSGlobalObject {
 
         JSObject pluralRulesPrototype = context.createJSObject();
         pluralRulesPrototype.defineProperty(PropertyKey.fromString("select"), new JSNativeFunction("select", 1, JSIntlObject::pluralRulesSelect), PropertyDescriptor.DataState.ConfigurableWritable);
+        pluralRulesPrototype.defineProperty(PropertyKey.fromString("selectRange"), new JSNativeFunction("selectRange", 2, JSIntlObject::pluralRulesSelectRange), PropertyDescriptor.DataState.ConfigurableWritable);
         pluralRulesPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"), new JSNativeFunction("resolvedOptions", 0, JSIntlObject::pluralRulesResolvedOptions), PropertyDescriptor.DataState.ConfigurableWritable);
+        pluralRulesPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.PluralRules"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction pluralRulesConstructor = new JSNativeFunction(
                 "PluralRules",
                 0,
@@ -1020,6 +1022,7 @@ public final class JSGlobalObject {
         JSObject relativeTimeFormatPrototype = context.createJSObject();
         relativeTimeFormatPrototype.defineProperty(PropertyKey.fromString("format"), new JSNativeFunction("format", 2, JSIntlObject::relativeTimeFormatFormat), PropertyDescriptor.DataState.ConfigurableWritable);
         relativeTimeFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"), new JSNativeFunction("resolvedOptions", 0, JSIntlObject::relativeTimeFormatResolvedOptions), PropertyDescriptor.DataState.ConfigurableWritable);
+        relativeTimeFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.RelativeTimeFormat"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction relativeTimeFormatConstructor = new JSNativeFunction(
                 "RelativeTimeFormat",
                 0,

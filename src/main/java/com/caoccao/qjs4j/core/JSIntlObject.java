@@ -2938,16 +2938,128 @@ public final class JSIntlObject {
 
     public static JSValue createPluralRules(JSContext context, JSObject prototype, JSValue[] args) {
         try {
+            JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "PluralRules");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
             Locale locale = resolveLocale(context, args, 0);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            String type = normalizeOption(
-                    getOptionString(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE, "type"),
-                    "cardinal",
-                    "cardinal", "ordinal");
-            JSIntlPluralRules pluralRules = new JSIntlPluralRules(locale, type);
-            pluralRules.setPrototype(prototype);
+            JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+            JSObject optionsObject;
+            if (optionsValue instanceof JSUndefined) {
+                optionsObject = context.createJSObject();
+                optionsObject.setPrototype(null);
+            } else if (optionsValue instanceof JSNull) {
+                return context.throwTypeError("Cannot convert null to object");
+            } else {
+                JSValue optionsObjectValue = JSTypeConversions.toObject(context, optionsValue);
+                if (context.hasPendingException() || !(optionsObjectValue instanceof JSObject jsObject)) {
+                    return JSUndefined.INSTANCE;
+                }
+                optionsObject = jsObject;
+            }
+
+            String localeMatcher = getOptionStringChecked(context, optionsObject, "localeMatcher");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            localeMatcher = normalizeOption(localeMatcher, "best fit", "lookup", "best fit");
+
+            String type = getOptionStringChecked(context, optionsObject, "type");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            type = normalizeOption(type, "cardinal", "cardinal", "ordinal");
+
+            String notation = getOptionStringChecked(context, optionsObject, "notation");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            notation = normalizeOption(notation, "standard", "standard", "compact", "scientific", "engineering");
+
+            Integer minimumIntegerDigitsOption = getOptionIntegerOrUndefined(context, optionsObject, "minimumIntegerDigits", 1, 21);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            int minimumIntegerDigits = minimumIntegerDigitsOption != null ? minimumIntegerDigitsOption : 1;
+
+            Integer minimumFractionDigitsOption = getOptionIntegerOrUndefined(context, optionsObject, "minimumFractionDigits", 0, 20);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            Integer maximumFractionDigitsOption = getOptionIntegerOrUndefined(context, optionsObject, "maximumFractionDigits", 0, 20);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+
+            int minimumFractionDigits;
+            int maximumFractionDigits;
+            if (minimumFractionDigitsOption == null && maximumFractionDigitsOption == null) {
+                minimumFractionDigits = 0;
+                maximumFractionDigits = 3;
+            } else {
+                minimumFractionDigits = minimumFractionDigitsOption != null ? minimumFractionDigitsOption : 0;
+                maximumFractionDigits = maximumFractionDigitsOption != null
+                        ? maximumFractionDigitsOption
+                        : Math.max(minimumFractionDigits, 3);
+                if (minimumFractionDigits > maximumFractionDigits) {
+                    return context.throwRangeError("minimumFractionDigits value is out of range");
+                }
+            }
+
+            Integer minimumSignificantDigitsOption = getOptionIntegerOrUndefined(context, optionsObject, "minimumSignificantDigits", 1, 21);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            Integer maximumSignificantDigitsOption = getOptionIntegerOrUndefined(context, optionsObject, "maximumSignificantDigits", 1, 21);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            Integer minimumSignificantDigits = null;
+            Integer maximumSignificantDigits = null;
+            if (minimumSignificantDigitsOption != null || maximumSignificantDigitsOption != null) {
+                minimumSignificantDigits = minimumSignificantDigitsOption != null ? minimumSignificantDigitsOption : 1;
+                maximumSignificantDigits = maximumSignificantDigitsOption != null ? maximumSignificantDigitsOption : 21;
+                if (minimumSignificantDigits > maximumSignificantDigits) {
+                    return context.throwRangeError("minimumSignificantDigits value is out of range");
+                }
+            }
+
+            getOptionIntegerOrUndefined(context, optionsObject, "roundingIncrement", 1, 5000);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            String roundingMode = getOptionStringChecked(context, optionsObject, "roundingMode");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            normalizeOption(roundingMode, "halfExpand", "ceil", "floor", "expand", "trunc",
+                    "halfCeil", "halfFloor", "halfExpand", "halfTrunc", "halfEven");
+            String roundingPriority = getOptionStringChecked(context, optionsObject, "roundingPriority");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            normalizeOption(roundingPriority, "auto", "auto", "morePrecision", "lessPrecision");
+            String trailingZeroDisplay = getOptionStringChecked(context, optionsObject, "trailingZeroDisplay");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            normalizeOption(trailingZeroDisplay, "auto", "auto", "stripIfInteger");
+
+            JSIntlPluralRules pluralRules = new JSIntlPluralRules(
+                    locale,
+                    type,
+                    notation,
+                    minimumIntegerDigits,
+                    minimumFractionDigits,
+                    maximumFractionDigits,
+                    minimumSignificantDigits,
+                    maximumSignificantDigits);
+            if (resolvedPrototype != null) {
+                pluralRules.setPrototype(resolvedPrototype);
+            }
             return pluralRules;
         } catch (IllegalArgumentException e) {
             return context.throwRangeError(e.getMessage());
@@ -2956,26 +3068,81 @@ public final class JSIntlObject {
 
     public static JSValue createRelativeTimeFormat(JSContext context, JSObject prototype, JSValue[] args) {
         try {
+            JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "RelativeTimeFormat");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
             Locale locale = resolveLocale(context, args, 0);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-            String style = normalizeOption(
-                    getOptionString(context, optionsValue, "style"),
-                    "long",
-                    "long", "short", "narrow");
-            String numeric = normalizeOption(
-                    getOptionString(context, optionsValue, "numeric"),
-                    "always",
-                    "always", "auto");
-            String numberingSystem = getOptionString(context, optionsValue, "numberingSystem");
-            if (numberingSystem != null && !SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystem)) {
-                numberingSystem = null;
+            JSObject optionsObject;
+            if (optionsValue instanceof JSUndefined) {
+                optionsObject = context.createJSObject();
+                optionsObject.setPrototype(null);
+            } else if (optionsValue instanceof JSNull) {
+                return context.throwTypeError("Cannot convert null to object");
+            } else {
+                JSValue optionsObjectValue = JSTypeConversions.toObject(context, optionsValue);
+                if (context.hasPendingException() || !(optionsObjectValue instanceof JSObject jsObject)) {
+                    return JSUndefined.INSTANCE;
+                }
+                optionsObject = jsObject;
             }
+
+            String localeMatcher = getOptionStringChecked(context, optionsObject, "localeMatcher");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            localeMatcher = normalizeOption(localeMatcher, "best fit", "lookup", "best fit");
+
+            String numberingSystemOption = getOptionStringChecked(context, optionsObject, "numberingSystem");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (numberingSystemOption != null) {
+                numberingSystemOption = numberingSystemOption.toLowerCase(Locale.ROOT);
+                if (!UNICODE_TYPE_PATTERN.matcher(numberingSystemOption).matches()) {
+                    return context.throwRangeError("Invalid numberingSystem: " + numberingSystemOption);
+                }
+            }
+
+            String style = getOptionStringChecked(context, optionsObject, "style");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            style = normalizeOption(style, "long", "long", "short", "narrow");
+
+            String numeric = getOptionStringChecked(context, optionsObject, "numeric");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            numeric = normalizeOption(numeric, "always", "always", "auto");
+
+            Map<String, String> unicodeExtensions = parseUnicodeExtensions(locale.toLanguageTag());
+            String extensionNu = unicodeExtensions.get("nu");
+            String numberingSystem = "latn";
+            Locale strippedLocale = stripUnicodeExtensions(locale);
+            Locale resolvedLocale = strippedLocale;
+            if (numberingSystemOption != null && SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystemOption)) {
+                numberingSystem = numberingSystemOption;
+            } else if (extensionNu != null) {
+                String extensionNuLower = extensionNu.toLowerCase(Locale.ROOT);
+                if (SUPPORTED_NUMBERING_SYSTEMS.contains(extensionNuLower)) {
+                    numberingSystem = extensionNuLower;
+                    resolvedLocale = new Locale.Builder()
+                            .setLocale(strippedLocale)
+                            .setUnicodeLocaleKeyword("nu", numberingSystem)
+                            .build();
+                }
+            }
+
             JSIntlRelativeTimeFormat relativeTimeFormat = new JSIntlRelativeTimeFormat(
-                    locale, style, numeric, numberingSystem);
-            relativeTimeFormat.setPrototype(prototype);
+                    resolvedLocale, style, numeric, numberingSystem);
+            if (resolvedPrototype != null) {
+                relativeTimeFormat.setPrototype(resolvedPrototype);
+            }
             return relativeTimeFormat;
         } catch (IllegalArgumentException e) {
             return context.throwRangeError(e.getMessage());
@@ -4763,19 +4930,22 @@ public final class JSIntlObject {
             return context.throwTypeError("Intl.PluralRules.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        resolvedOptions.set("locale", new JSString(pluralRules.getLocale().toLanguageTag()));
-        resolvedOptions.set("type", new JSString(pluralRules.getType()));
-        JSArray categories = context.createJSArray();
-        if ("ordinal".equals(pluralRules.getType())) {
-            categories.push(new JSString("one"));
-            categories.push(new JSString("two"));
-            categories.push(new JSString("few"));
-            categories.push(new JSString("other"));
+        createDataProperty(resolvedOptions, "locale", new JSString(pluralRules.getLocale().toLanguageTag()));
+        createDataProperty(resolvedOptions, "type", new JSString(pluralRules.getType()));
+        createDataProperty(resolvedOptions, "notation", new JSString(pluralRules.getNotation()));
+        createDataProperty(resolvedOptions, "minimumIntegerDigits", JSNumber.of(pluralRules.getMinimumIntegerDigits()));
+        if (pluralRules.getMinimumSignificantDigits() != null) {
+            createDataProperty(resolvedOptions, "minimumSignificantDigits", JSNumber.of(pluralRules.getMinimumSignificantDigits()));
+            createDataProperty(resolvedOptions, "maximumSignificantDigits", JSNumber.of(pluralRules.getMaximumSignificantDigits()));
         } else {
-            categories.push(new JSString("one"));
-            categories.push(new JSString("other"));
+            createDataProperty(resolvedOptions, "minimumFractionDigits", JSNumber.of(pluralRules.getMinimumFractionDigits()));
+            createDataProperty(resolvedOptions, "maximumFractionDigits", JSNumber.of(pluralRules.getMaximumFractionDigits()));
         }
-        resolvedOptions.set("pluralCategories", categories);
+        JSArray categories = context.createJSArray();
+        for (String category : pluralRules.getPluralCategories()) {
+            categories.push(new JSString(category));
+        }
+        createDataProperty(resolvedOptions, "pluralCategories", categories);
         return resolvedOptions;
     }
 
@@ -4785,6 +4955,33 @@ public final class JSIntlObject {
         }
         double value = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : Double.NaN;
         return new JSString(pluralRules.select(value));
+    }
+
+    public static JSValue pluralRulesSelectRange(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
+            return context.throwTypeError("Intl.PluralRules.prototype.selectRange called on incompatible receiver");
+        }
+        JSValue startValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue endValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
+            return context.throwTypeError("Intl.PluralRules.prototype.selectRange requires start and end");
+        }
+        double start = JSTypeConversions.toNumber(context, startValue).value();
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        double end = JSTypeConversions.toNumber(context, endValue).value();
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (Double.isNaN(start) || Double.isNaN(end)) {
+            return context.throwRangeError("NaN is not allowed in Intl.PluralRules.prototype.selectRange");
+        }
+        try {
+            return new JSString(pluralRules.selectRange(start, end));
+        } catch (IllegalArgumentException e) {
+            return context.throwRangeError(e.getMessage());
+        }
     }
 
     /**
@@ -4847,10 +5044,10 @@ public final class JSIntlObject {
             return context.throwTypeError("Intl.RelativeTimeFormat.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        resolvedOptions.set("locale", new JSString(relativeTimeFormat.getLocale().toLanguageTag()));
-        resolvedOptions.set("style", new JSString(relativeTimeFormat.getStyle()));
-        resolvedOptions.set("numeric", new JSString(relativeTimeFormat.getNumeric()));
-        resolvedOptions.set("numberingSystem", new JSString(relativeTimeFormat.getNumberingSystem()));
+        createDataProperty(resolvedOptions, "locale", new JSString(relativeTimeFormat.getLocale().toLanguageTag()));
+        createDataProperty(resolvedOptions, "style", new JSString(relativeTimeFormat.getStyle()));
+        createDataProperty(resolvedOptions, "numeric", new JSString(relativeTimeFormat.getNumeric()));
+        createDataProperty(resolvedOptions, "numberingSystem", new JSString(relativeTimeFormat.getNumberingSystem()));
         return resolvedOptions;
     }
 
