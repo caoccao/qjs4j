@@ -21,19 +21,14 @@ import java.math.BigInteger;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.text.NumberFormat;
-import java.util.ArrayList;
-import java.util.Currency;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Intl.NumberFormat instance object.
  */
 public final class JSIntlNumberFormat extends JSObject {
+    public static final String NAME = "Intl.NumberFormat";
     private static final Map<String, Integer> CONTIGUOUS_ZERO_CODE_POINTS = Map.ofEntries(
             Map.entry("adlm", 0x1E950),
             Map.entry("ahom", 0x11730),
@@ -106,8 +101,6 @@ public final class JSIntlNumberFormat extends JSObject {
     );
     private static final BigDecimal DECIMAL_ONE_HALF = new BigDecimal("0.5");
     private static final String[] HANIDEC_DIGITS = {"〇", "一", "二", "三", "四", "五", "六", "七", "八", "九"};
-    public static final String NAME = "Intl.NumberFormat";
-    private JSFunction boundFormatFunction;
     private final String compactDisplay;
     private final String currency;
     private final String currencyDisplay;
@@ -130,6 +123,7 @@ public final class JSIntlNumberFormat extends JSObject {
     private final String unitDisplay;
     private final String useGroupingMode;
     private final boolean useSignificantDigits;
+    private JSFunction boundFormatFunction;
 
     public JSIntlNumberFormat(Locale locale, String style, String currency) {
         this(locale, style, currency, "auto", 1, -1, -1, false, 0,
@@ -203,65 +197,6 @@ public final class JSIntlNumberFormat extends JSObject {
         return roundToIncrement(value, increment, roundingMode);
     }
 
-    private BigDecimal applyRounding(BigDecimal value) {
-        if ("scientific".equals(notation) || "engineering".equals(notation) || "compact".equals(notation)) {
-            return value;
-        }
-        if (useSignificantDigits) {
-            if ("morePrecision".equals(roundingPriority) || "lessPrecision".equals(roundingPriority)) {
-                if (shouldUseFractionRoundingForPriority()) {
-                    return applyFractionRounding(value);
-                }
-                return applySignificantRounding(value);
-            }
-            return applySignificantRounding(value);
-        }
-        return applyFractionRounding(value);
-    }
-
-    private BigDecimal applySignificantRounding(BigDecimal value) {
-        if (value.compareTo(BigDecimal.ZERO) == 0) {
-            return value;
-        }
-        int significantDigits = Math.max(1, maximumSignificantDigits);
-        BigDecimal absoluteValue = value.abs();
-        int exponent = absoluteValue.precision() - absoluteValue.scale() - 1;
-        int incrementExponent = exponent - significantDigits + 1;
-        BigDecimal increment = BigDecimal.ONE.scaleByPowerOfTen(incrementExponent);
-        BigDecimal rounded = roundToIncrement(value, increment, roundingMode);
-        if ("morePrecision".equals(roundingPriority) || "lessPrecision".equals(roundingPriority)) {
-            BigDecimal fractionRounded = applyFractionRounding(value);
-            int roundedScale = Math.max(0, rounded.stripTrailingZeros().scale());
-            int fractionScale = Math.max(0, fractionRounded.stripTrailingZeros().scale());
-            if ("morePrecision".equals(roundingPriority)) {
-                if (fractionScale > roundedScale) {
-                    return fractionRounded;
-                }
-            } else {
-                if (fractionScale < roundedScale) {
-                    return fractionRounded;
-                }
-            }
-        }
-        return rounded;
-    }
-
-    private String applySignDisplayAndDigits(String formatted, boolean isNegativeAfterRounding,
-                                             boolean isRoundedZero, boolean shouldAddPlus) {
-        String result = formatted;
-        if ("never".equals(signDisplay)) {
-            result = removeLeadingSign(result);
-        } else if ("negative".equals(signDisplay) && isRoundedZero && isNegativeAfterRounding) {
-            result = removeLeadingSign(result);
-        } else if ("exceptZero".equals(signDisplay) && isRoundedZero) {
-            result = removeLeadingSign(result);
-        }
-        if (shouldAddPlus) {
-            result = "+" + removeLeadingSign(result);
-        }
-        return applyNumberingSystemDigits(result);
-    }
-
     private String applyNumberingSystemDigits(String text) {
         if (numberingSystem == null || "latn".equals(numberingSystem)) {
             return text;
@@ -292,6 +227,65 @@ public final class JSIntlNumberFormat extends JSObject {
             return sb.toString();
         }
         return text;
+    }
+
+    private BigDecimal applyRounding(BigDecimal value) {
+        if ("scientific".equals(notation) || "engineering".equals(notation) || "compact".equals(notation)) {
+            return value;
+        }
+        if (useSignificantDigits) {
+            if ("morePrecision".equals(roundingPriority) || "lessPrecision".equals(roundingPriority)) {
+                if (shouldUseFractionRoundingForPriority()) {
+                    return applyFractionRounding(value);
+                }
+                return applySignificantRounding(value);
+            }
+            return applySignificantRounding(value);
+        }
+        return applyFractionRounding(value);
+    }
+
+    private String applySignDisplayAndDigits(String formatted, boolean isNegativeAfterRounding,
+                                             boolean isRoundedZero, boolean shouldAddPlus) {
+        String result = formatted;
+        if ("never".equals(signDisplay)) {
+            result = removeLeadingSign(result);
+        } else if ("negative".equals(signDisplay) && isRoundedZero && isNegativeAfterRounding) {
+            result = removeLeadingSign(result);
+        } else if ("exceptZero".equals(signDisplay) && isRoundedZero) {
+            result = removeLeadingSign(result);
+        }
+        if (shouldAddPlus) {
+            result = "+" + removeLeadingSign(result);
+        }
+        return applyNumberingSystemDigits(result);
+    }
+
+    private BigDecimal applySignificantRounding(BigDecimal value) {
+        if (value.compareTo(BigDecimal.ZERO) == 0) {
+            return value;
+        }
+        int significantDigits = Math.max(1, maximumSignificantDigits);
+        BigDecimal absoluteValue = value.abs();
+        int exponent = absoluteValue.precision() - absoluteValue.scale() - 1;
+        int incrementExponent = exponent - significantDigits + 1;
+        BigDecimal increment = BigDecimal.ONE.scaleByPowerOfTen(incrementExponent);
+        BigDecimal rounded = roundToIncrement(value, increment, roundingMode);
+        if ("morePrecision".equals(roundingPriority) || "lessPrecision".equals(roundingPriority)) {
+            BigDecimal fractionRounded = applyFractionRounding(value);
+            int roundedScale = Math.max(0, rounded.stripTrailingZeros().scale());
+            int fractionScale = Math.max(0, fractionRounded.stripTrailingZeros().scale());
+            if ("morePrecision".equals(roundingPriority)) {
+                if (fractionScale > roundedScale) {
+                    return fractionRounded;
+                }
+            } else {
+                if (fractionScale < roundedScale) {
+                    return fractionRounded;
+                }
+            }
+        }
+        return rounded;
     }
 
     private String applyUnitStyle(String numberPortion) {
@@ -337,6 +331,41 @@ public final class JSIntlNumberFormat extends JSObject {
             return numberPortion + "km/h";
         }
         return numberPortion + " km/h";
+    }
+
+    private int computeCompactPlainMaximumFractionDigits(BigDecimal absoluteValue) {
+        if (absoluteValue.compareTo(BigDecimal.ZERO) == 0) {
+            return 0;
+        }
+        double numeric = absoluteValue.doubleValue();
+        if (numeric <= 0) {
+            return 0;
+        }
+        int exponent = (int) Math.floor(Math.log10(numeric));
+        int maxFractionDigits = 1 - exponent;
+        if (maxFractionDigits < 0) {
+            return 0;
+        }
+        if (maxFractionDigits > 20) {
+            return 20;
+        }
+        return maxFractionDigits;
+    }
+
+    private int computeIntegerDigits(BigDecimal value) {
+        BigDecimal normalized = value.stripTrailingZeros();
+        if (normalized.compareTo(BigDecimal.ONE) < 0) {
+            return 1;
+        }
+        return normalized.precision() - normalized.scale();
+    }
+
+    private int computeIntegerDigitsForSignificant(BigDecimal value) {
+        BigDecimal normalized = value.stripTrailingZeros();
+        if (normalized.compareTo(BigDecimal.ZERO) == 0) {
+            return 1;
+        }
+        return normalized.precision() - normalized.scale();
     }
 
     private Locale createCurrencySignLocale() {
@@ -532,6 +561,104 @@ public final class JSIntlNumberFormat extends JSObject {
         }
     }
 
+    private String formatCompactNumber(BigDecimal absoluteValue, boolean displayNegative,
+                                       boolean groupingEnabled, int minimumGroupingDigits) {
+        String localeTag = locale.toLanguageTag();
+        CompactSpec compactSpec = resolveCompactSpec(localeTag, absoluteValue);
+        if (compactSpec == null) {
+            return formatCompactPlain(absoluteValue, groupingEnabled, minimumGroupingDigits, displayNegative);
+        }
+
+        BigDecimal scaled = absoluteValue.divide(compactSpec.divisor(), MathContext.DECIMAL128);
+        int maximumFractionDigits;
+        if (scaled.compareTo(BigDecimal.TEN) < 0) {
+            maximumFractionDigits = 1;
+        } else {
+            maximumFractionDigits = 0;
+        }
+        String scaledText = formatLocalizedNumber(scaled, 0, maximumFractionDigits, false);
+        String compactText = scaledText + compactSpec.suffix();
+        if (displayNegative) {
+            return "-" + compactText;
+        }
+        return compactText;
+    }
+
+    private String formatCompactPlain(BigDecimal absoluteValue, boolean groupingEnabled,
+                                      int minimumGroupingDigits, boolean displayNegative) {
+        int maximumFractionDigits = computeCompactPlainMaximumFractionDigits(absoluteValue);
+        String plainText = formatLocalizedNumber(absoluteValue, 0, maximumFractionDigits, groupingEnabled);
+        if ("en-IN".equals(locale.toLanguageTag()) || locale.toLanguageTag().startsWith("en-IN")) {
+            plainText = ensureIndianGrouping(plainText, groupingEnabled, minimumGroupingDigits);
+        }
+        if (displayNegative) {
+            return "-" + plainText;
+        }
+        return plainText;
+    }
+
+    private String formatLocalizedNumber(BigDecimal value, int minimumFractionDigits,
+                                         int maximumFractionDigits, boolean grouping) {
+        NumberFormat numberFormat = NumberFormat.getNumberInstance(locale);
+        if (numberFormat instanceof DecimalFormat decimalFormat) {
+            decimalFormat.setGroupingUsed(grouping);
+            decimalFormat.setMinimumFractionDigits(Math.max(0, minimumFractionDigits));
+            decimalFormat.setMaximumFractionDigits(Math.max(0, maximumFractionDigits));
+            decimalFormat.setRoundingMode(mapToJavaRoundingMode(roundingMode));
+            return decimalFormat.format(value);
+        }
+        numberFormat.setGroupingUsed(grouping);
+        numberFormat.setMinimumFractionDigits(Math.max(0, minimumFractionDigits));
+        numberFormat.setMaximumFractionDigits(Math.max(0, maximumFractionDigits));
+        return numberFormat.format(value);
+    }
+
+    private String formatRoundedNumber(BigDecimal rounded, boolean displayNegative,
+                                       boolean roundedZero, boolean originalNegative) {
+        BigDecimal absoluteRounded = rounded.abs();
+        int minimumGroupingDigits = "min2".equals(useGroupingMode) ? 5 : 1;
+        int integerDigits = computeIntegerDigits(absoluteRounded);
+        boolean groupingEnabled = isGroupingActiveForMagnitude(integerDigits);
+        if ("min2".equals(useGroupingMode) && absoluteRounded.compareTo(new BigDecimal("1000")) < 0) {
+            groupingEnabled = false;
+        }
+        if ("compact".equals(notation) && "decimal".equals(style)) {
+            return formatCompactNumber(absoluteRounded, displayNegative, groupingEnabled, minimumGroupingDigits);
+        }
+
+        NumberFormat formatter = createFormatterForNotation(groupingEnabled);
+        boolean useFractionMode = useSignificantDigits
+                && ("morePrecision".equals(roundingPriority) || "lessPrecision".equals(roundingPriority))
+                && shouldUseFractionRoundingForPriority();
+        if (formatter instanceof DecimalFormat decimalFormat && useSignificantDigits
+                && !"compact".equals(notation) && !useFractionMode) {
+            int integerDigitsForSignificant = computeIntegerDigitsForSignificant(absoluteRounded);
+            int minimumFractionDigits = Math.max(0, minimumSignificantDigits - integerDigitsForSignificant);
+            int maximumFractionDigits = Math.max(0, maximumSignificantDigits - integerDigitsForSignificant);
+            decimalFormat.setMinimumFractionDigits(Math.min(minimumFractionDigits, 100));
+            decimalFormat.setMaximumFractionDigits(Math.min(Math.max(maximumFractionDigits, minimumFractionDigits), 100));
+        } else if (formatter instanceof DecimalFormat decimalFormat && useFractionMode) {
+            decimalFormat.setMinimumFractionDigits(Math.max(0, minimumFractionDigits));
+            decimalFormat.setMaximumFractionDigits(Math.max(0, maximumFractionDigits));
+        }
+        Object valueToFormat;
+        if (displayNegative) {
+            if (roundedZero && originalNegative) {
+                valueToFormat = -0.0d;
+            } else {
+                valueToFormat = absoluteRounded.negate();
+            }
+        } else {
+            valueToFormat = absoluteRounded;
+        }
+
+        String formatted = formatter.format(valueToFormat);
+        if ("en-IN".equals(locale.toLanguageTag()) || locale.toLanguageTag().startsWith("en-IN")) {
+            formatted = ensureIndianGrouping(formatted, groupingEnabled, minimumGroupingDigits);
+        }
+        return formatted;
+    }
+
     public JSArray formatToParts(JSContext context, double value) {
         return formatToPartsFromFormatted(context, format(value));
     }
@@ -581,137 +708,165 @@ public final class JSIntlNumberFormat extends JSObject {
         return result;
     }
 
-    private int computeIntegerDigits(BigDecimal value) {
-        BigDecimal normalized = value.stripTrailingZeros();
-        if (normalized.compareTo(BigDecimal.ONE) < 0) {
-            return 1;
-        }
-        return normalized.precision() - normalized.scale();
+    public JSFunction getBoundFormatFunction() {
+        return boundFormatFunction;
     }
 
-    private int computeIntegerDigitsForSignificant(BigDecimal value) {
-        BigDecimal normalized = value.stripTrailingZeros();
-        if (normalized.compareTo(BigDecimal.ZERO) == 0) {
-            return 1;
-        }
-        return normalized.precision() - normalized.scale();
+    public String getCompactDisplay() {
+        return compactDisplay;
     }
 
-    private String formatRoundedNumber(BigDecimal rounded, boolean displayNegative,
-                                       boolean roundedZero, boolean originalNegative) {
-        BigDecimal absoluteRounded = rounded.abs();
-        int minimumGroupingDigits = "min2".equals(useGroupingMode) ? 5 : 1;
-        int integerDigits = computeIntegerDigits(absoluteRounded);
-        boolean groupingEnabled = isGroupingActiveForMagnitude(integerDigits);
-        if ("min2".equals(useGroupingMode) && absoluteRounded.compareTo(new BigDecimal("1000")) < 0) {
-            groupingEnabled = false;
-        }
-        if ("compact".equals(notation) && "decimal".equals(style)) {
-            return formatCompactNumber(absoluteRounded, displayNegative, groupingEnabled, minimumGroupingDigits);
-        }
-
-        NumberFormat formatter = createFormatterForNotation(groupingEnabled);
-        boolean useFractionMode = useSignificantDigits
-                && ("morePrecision".equals(roundingPriority) || "lessPrecision".equals(roundingPriority))
-                && shouldUseFractionRoundingForPriority();
-        if (formatter instanceof DecimalFormat decimalFormat && useSignificantDigits
-                && !"compact".equals(notation) && !useFractionMode) {
-            int integerDigitsForSignificant = computeIntegerDigitsForSignificant(absoluteRounded);
-            int minimumFractionDigits = Math.max(0, minimumSignificantDigits - integerDigitsForSignificant);
-            int maximumFractionDigits = Math.max(0, maximumSignificantDigits - integerDigitsForSignificant);
-            decimalFormat.setMinimumFractionDigits(Math.min(minimumFractionDigits, 100));
-            decimalFormat.setMaximumFractionDigits(Math.min(Math.max(maximumFractionDigits, minimumFractionDigits), 100));
-        } else if (formatter instanceof DecimalFormat decimalFormat && useFractionMode) {
-            decimalFormat.setMinimumFractionDigits(Math.max(0, minimumFractionDigits));
-            decimalFormat.setMaximumFractionDigits(Math.max(0, maximumFractionDigits));
-        }
-        Object valueToFormat;
-        if (displayNegative) {
-            if (roundedZero && originalNegative) {
-                valueToFormat = -0.0d;
-            } else {
-                valueToFormat = absoluteRounded.negate();
-            }
-        } else {
-            valueToFormat = absoluteRounded;
-        }
-
-        String formatted = formatter.format(valueToFormat);
-        if ("en-IN".equals(locale.toLanguageTag()) || locale.toLanguageTag().startsWith("en-IN")) {
-            formatted = ensureIndianGrouping(formatted, groupingEnabled, minimumGroupingDigits);
-        }
-        return formatted;
+    public String getCurrency() {
+        return currency;
     }
 
-    private String formatCompactNumber(BigDecimal absoluteValue, boolean displayNegative,
-                                       boolean groupingEnabled, int minimumGroupingDigits) {
-        String localeTag = locale.toLanguageTag();
-        CompactSpec compactSpec = resolveCompactSpec(localeTag, absoluteValue);
-        if (compactSpec == null) {
-            return formatCompactPlain(absoluteValue, groupingEnabled, minimumGroupingDigits, displayNegative);
-        }
-
-        BigDecimal scaled = absoluteValue.divide(compactSpec.divisor(), MathContext.DECIMAL128);
-        int maximumFractionDigits;
-        if (scaled.compareTo(BigDecimal.TEN) < 0) {
-            maximumFractionDigits = 1;
-        } else {
-            maximumFractionDigits = 0;
-        }
-        String scaledText = formatLocalizedNumber(scaled, 0, maximumFractionDigits, false);
-        String compactText = scaledText + compactSpec.suffix();
-        if (displayNegative) {
-            return "-" + compactText;
-        }
-        return compactText;
+    public String getCurrencyDisplay() {
+        return currencyDisplay;
     }
 
-    private String formatCompactPlain(BigDecimal absoluteValue, boolean groupingEnabled,
-                                      int minimumGroupingDigits, boolean displayNegative) {
-        int maximumFractionDigits = computeCompactPlainMaximumFractionDigits(absoluteValue);
-        String plainText = formatLocalizedNumber(absoluteValue, 0, maximumFractionDigits, groupingEnabled);
-        if ("en-IN".equals(locale.toLanguageTag()) || locale.toLanguageTag().startsWith("en-IN")) {
-            plainText = ensureIndianGrouping(plainText, groupingEnabled, minimumGroupingDigits);
-        }
-        if (displayNegative) {
-            return "-" + plainText;
-        }
-        return plainText;
+    public String getCurrencySign() {
+        return currencySign;
     }
 
-    private int computeCompactPlainMaximumFractionDigits(BigDecimal absoluteValue) {
-        if (absoluteValue.compareTo(BigDecimal.ZERO) == 0) {
-            return 0;
-        }
-        double numeric = absoluteValue.doubleValue();
-        if (numeric <= 0) {
-            return 0;
-        }
-        int exponent = (int) Math.floor(Math.log10(numeric));
-        int maxFractionDigits = 1 - exponent;
-        if (maxFractionDigits < 0) {
-            return 0;
-        }
-        if (maxFractionDigits > 20) {
-            return 20;
-        }
-        return maxFractionDigits;
+    public Locale getLocale() {
+        return locale;
     }
 
-    private String formatLocalizedNumber(BigDecimal value, int minimumFractionDigits,
-                                         int maximumFractionDigits, boolean grouping) {
-        NumberFormat numberFormat = NumberFormat.getNumberInstance(locale);
-        if (numberFormat instanceof DecimalFormat decimalFormat) {
-            decimalFormat.setGroupingUsed(grouping);
-            decimalFormat.setMinimumFractionDigits(Math.max(0, minimumFractionDigits));
-            decimalFormat.setMaximumFractionDigits(Math.max(0, maximumFractionDigits));
-            decimalFormat.setRoundingMode(mapToJavaRoundingMode(roundingMode));
-            return decimalFormat.format(value);
+    public int getMaximumFractionDigits() {
+        return maximumFractionDigits;
+    }
+
+    public int getMaximumSignificantDigits() {
+        return maximumSignificantDigits;
+    }
+
+    public int getMinimumFractionDigits() {
+        return minimumFractionDigits;
+    }
+
+    public int getMinimumIntegerDigits() {
+        return minimumIntegerDigits;
+    }
+
+    public int getMinimumSignificantDigits() {
+        return minimumSignificantDigits;
+    }
+
+    public String getNotation() {
+        return notation;
+    }
+
+    public String getNumberingSystem() {
+        return numberingSystem;
+    }
+
+    public int getRoundingIncrement() {
+        return roundingIncrement;
+    }
+
+    public String getRoundingMode() {
+        return roundingMode;
+    }
+
+    public String getRoundingPriority() {
+        return roundingPriority;
+    }
+
+    public String getSignDisplay() {
+        return signDisplay;
+    }
+
+    public String getStyle() {
+        return style;
+    }
+
+    public String getTrailingZeroDisplay() {
+        return trailingZeroDisplay;
+    }
+
+    public String getUnit() {
+        return unit;
+    }
+
+    public String getUnitDisplay() {
+        return unitDisplay;
+    }
+
+    public boolean getUseGrouping() {
+        return !"false".equals(useGroupingMode);
+    }
+
+    public String getUseGroupingMode() {
+        return useGroupingMode;
+    }
+
+    public boolean getUseSignificantDigits() {
+        return useSignificantDigits;
+    }
+
+    private String groupIndian(String digits) {
+        if (digits.length() <= 3) {
+            return digits;
         }
-        numberFormat.setGroupingUsed(grouping);
-        numberFormat.setMinimumFractionDigits(Math.max(0, minimumFractionDigits));
-        numberFormat.setMaximumFractionDigits(Math.max(0, maximumFractionDigits));
-        return numberFormat.format(value);
+        String lastThree = digits.substring(digits.length() - 3);
+        String leading = digits.substring(0, digits.length() - 3);
+        List<String> groups = new ArrayList<>();
+        while (leading.length() > 2) {
+            groups.add(0, leading.substring(leading.length() - 2));
+            leading = leading.substring(0, leading.length() - 2);
+        }
+        if (!leading.isEmpty()) {
+            groups.add(0, leading);
+        }
+        groups.add(lastThree);
+        return String.join(",", groups);
+    }
+
+    private boolean isGroupingActiveForMagnitude(int magnitudeDigits) {
+        if ("false".equals(useGroupingMode)) {
+            return false;
+        }
+        if ("min2".equals(useGroupingMode)) {
+            return magnitudeDigits >= 5;
+        }
+        if ("always".equals(useGroupingMode)) {
+            return true;
+        }
+        if ("compact".equals(notation)) {
+            return "min2".equals(useGroupingMode) ? magnitudeDigits >= 5 : !"false".equals(useGroupingMode);
+        }
+        return true;
+    }
+
+    private boolean isOriginalNegativeZero(double value) {
+        return Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
+    }
+
+    private RoundingMode mapToJavaRoundingMode(String mode) {
+        return switch (mode) {
+            case "ceil" -> RoundingMode.CEILING;
+            case "floor" -> RoundingMode.FLOOR;
+            case "expand" -> RoundingMode.UP;
+            case "trunc" -> RoundingMode.DOWN;
+            case "halfCeil" -> RoundingMode.HALF_UP;
+            case "halfFloor" -> RoundingMode.HALF_DOWN;
+            case "halfTrunc" -> RoundingMode.HALF_DOWN;
+            case "halfEven" -> RoundingMode.HALF_EVEN;
+            default -> RoundingMode.HALF_UP;
+        };
+    }
+
+    private String removeLeadingSign(String text) {
+        if (text.startsWith("-")) {
+            return text.substring(1);
+        }
+        if (text.startsWith("+")) {
+            return text.substring(1);
+        }
+        if (text.startsWith("(") && text.endsWith(")")) {
+            return text.substring(1, text.length() - 1);
+        }
+        return text;
     }
 
     private CompactSpec resolveCompactSpec(String localeTag, BigDecimal absoluteValue) {
@@ -796,165 +951,36 @@ public final class JSIntlNumberFormat extends JSObject {
         return null;
     }
 
-    private String groupIndian(String digits) {
-        if (digits.length() <= 3) {
-            return digits;
+    private BigDecimal roundHalfCeilOrFloor(BigDecimal value, String mode) {
+        BigDecimal sign = BigDecimal.valueOf(value.signum());
+        BigDecimal absolute = value.abs();
+        BigDecimal floor = absolute.setScale(0, RoundingMode.DOWN);
+        BigDecimal fraction = absolute.subtract(floor);
+        int cmp = fraction.compareTo(DECIMAL_ONE_HALF);
+        BigDecimal roundedMagnitude;
+        if (cmp < 0) {
+            roundedMagnitude = floor;
+        } else if (cmp > 0) {
+            roundedMagnitude = floor.add(BigDecimal.ONE);
+        } else {
+            if ("halfCeil".equals(mode)) {
+                if (value.signum() >= 0) {
+                    roundedMagnitude = floor.add(BigDecimal.ONE);
+                } else {
+                    roundedMagnitude = floor;
+                }
+            } else {
+                if (value.signum() >= 0) {
+                    roundedMagnitude = floor;
+                } else {
+                    roundedMagnitude = floor.add(BigDecimal.ONE);
+                }
+            }
         }
-        String lastThree = digits.substring(digits.length() - 3);
-        String leading = digits.substring(0, digits.length() - 3);
-        List<String> groups = new ArrayList<>();
-        while (leading.length() > 2) {
-            groups.add(0, leading.substring(leading.length() - 2));
-            leading = leading.substring(0, leading.length() - 2);
+        if (sign.signum() < 0) {
+            return roundedMagnitude.negate();
         }
-        if (!leading.isEmpty()) {
-            groups.add(0, leading);
-        }
-        groups.add(lastThree);
-        return String.join(",", groups);
-    }
-
-    public String getCurrency() {
-        return currency;
-    }
-
-    public String getCurrencyDisplay() {
-        return currencyDisplay;
-    }
-
-    public String getCurrencySign() {
-        return currencySign;
-    }
-
-    public String getCompactDisplay() {
-        return compactDisplay;
-    }
-
-    public JSFunction getBoundFormatFunction() {
-        return boundFormatFunction;
-    }
-
-    public Locale getLocale() {
-        return locale;
-    }
-
-    public int getMaximumFractionDigits() {
-        return maximumFractionDigits;
-    }
-
-    public int getMaximumSignificantDigits() {
-        return maximumSignificantDigits;
-    }
-
-    public int getMinimumFractionDigits() {
-        return minimumFractionDigits;
-    }
-
-    public int getMinimumIntegerDigits() {
-        return minimumIntegerDigits;
-    }
-
-    public int getMinimumSignificantDigits() {
-        return minimumSignificantDigits;
-    }
-
-    public String getNotation() {
-        return notation;
-    }
-
-    public String getNumberingSystem() {
-        return numberingSystem;
-    }
-
-    public int getRoundingIncrement() {
-        return roundingIncrement;
-    }
-
-    public String getRoundingMode() {
-        return roundingMode;
-    }
-
-    public String getRoundingPriority() {
-        return roundingPriority;
-    }
-
-    public String getSignDisplay() {
-        return signDisplay;
-    }
-
-    public String getStyle() {
-        return style;
-    }
-
-    public String getUnit() {
-        return unit;
-    }
-
-    public String getUnitDisplay() {
-        return unitDisplay;
-    }
-
-    public String getTrailingZeroDisplay() {
-        return trailingZeroDisplay;
-    }
-
-    public boolean getUseGrouping() {
-        return !"false".equals(useGroupingMode);
-    }
-
-    public String getUseGroupingMode() {
-        return useGroupingMode;
-    }
-
-    public boolean getUseSignificantDigits() {
-        return useSignificantDigits;
-    }
-
-    private boolean isGroupingActiveForMagnitude(int magnitudeDigits) {
-        if ("false".equals(useGroupingMode)) {
-            return false;
-        }
-        if ("min2".equals(useGroupingMode)) {
-            return magnitudeDigits >= 5;
-        }
-        if ("always".equals(useGroupingMode)) {
-            return true;
-        }
-        if ("compact".equals(notation)) {
-            return "min2".equals(useGroupingMode) ? magnitudeDigits >= 5 : !"false".equals(useGroupingMode);
-        }
-        return true;
-    }
-
-    private boolean isOriginalNegativeZero(double value) {
-        return Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
-    }
-
-    private RoundingMode mapToJavaRoundingMode(String mode) {
-        return switch (mode) {
-            case "ceil" -> RoundingMode.CEILING;
-            case "floor" -> RoundingMode.FLOOR;
-            case "expand" -> RoundingMode.UP;
-            case "trunc" -> RoundingMode.DOWN;
-            case "halfCeil" -> RoundingMode.HALF_UP;
-            case "halfFloor" -> RoundingMode.HALF_DOWN;
-            case "halfTrunc" -> RoundingMode.HALF_DOWN;
-            case "halfEven" -> RoundingMode.HALF_EVEN;
-            default -> RoundingMode.HALF_UP;
-        };
-    }
-
-    private String removeLeadingSign(String text) {
-        if (text.startsWith("-")) {
-            return text.substring(1);
-        }
-        if (text.startsWith("+")) {
-            return text.substring(1);
-        }
-        if (text.startsWith("(") && text.endsWith(")")) {
-            return text.substring(1, text.length() - 1);
-        }
-        return text;
+        return roundedMagnitude;
     }
 
     private BigDecimal roundToIncrement(BigDecimal value, BigDecimal increment, String mode) {
@@ -988,41 +1014,6 @@ public final class JSIntlNumberFormat extends JSObject {
             default:
                 return value.setScale(0, RoundingMode.HALF_UP);
         }
-    }
-
-    private BigDecimal roundHalfCeilOrFloor(BigDecimal value, String mode) {
-        BigDecimal sign = BigDecimal.valueOf(value.signum());
-        BigDecimal absolute = value.abs();
-        BigDecimal floor = absolute.setScale(0, RoundingMode.DOWN);
-        BigDecimal fraction = absolute.subtract(floor);
-        int cmp = fraction.compareTo(DECIMAL_ONE_HALF);
-        BigDecimal roundedMagnitude;
-        if (cmp < 0) {
-            roundedMagnitude = floor;
-        } else if (cmp > 0) {
-            roundedMagnitude = floor.add(BigDecimal.ONE);
-        } else {
-            if ("halfCeil".equals(mode)) {
-                if (value.signum() >= 0) {
-                    roundedMagnitude = floor.add(BigDecimal.ONE);
-                } else {
-                    roundedMagnitude = floor;
-                }
-            } else {
-                if (value.signum() >= 0) {
-                    roundedMagnitude = floor;
-                } else {
-                    roundedMagnitude = floor.add(BigDecimal.ONE);
-                }
-            }
-        }
-        if (sign.signum() < 0) {
-            return roundedMagnitude.negate();
-        }
-        return roundedMagnitude;
-    }
-
-    private record CompactSpec(BigDecimal divisor, String suffix) {
     }
 
     public void setBoundFormatFunction(JSFunction boundFormatFunction) {
@@ -1076,10 +1067,7 @@ public final class JSIntlNumberFormat extends JSObject {
             return false;
         }
         if (minimumFractionDigits > 0 && minimumSignificantDigits > 0) {
-            if ("lessPrecision".equals(roundingPriority)) {
-                return true;
-            }
-            return false;
+            return "lessPrecision".equals(roundingPriority);
         }
         if (maximumFractionDigits >= 0 && maximumSignificantDigits > 0) {
             if ("lessPrecision".equals(roundingPriority)) {
@@ -1088,6 +1076,9 @@ public final class JSIntlNumberFormat extends JSObject {
             return maximumFractionDigits >= maximumSignificantDigits;
         }
         return false;
+    }
+
+    private record CompactSpec(BigDecimal divisor, String suffix) {
     }
 
 }

@@ -380,8 +380,8 @@ public final class JSIntlDurationFormat extends JSObject {
     }
 
     public static List<FormatPart> formatToPartsWithUnit(BigDecimal value, String singularUnit, String unitDisplay,
-                                                          boolean suppressSign, int minFractionDigits,
-                                                          int maxFractionDigits, Locale locale) {
+                                                         boolean suppressSign, int minFractionDigits,
+                                                         int maxFractionDigits, Locale locale) {
         List<FormatPart> parts = new ArrayList<>();
         BigDecimal formatValue = suppressSign ? value.abs() : value;
         boolean isNegative = formatValue.signum() < 0;

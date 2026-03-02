@@ -50,6 +50,17 @@ public final class JSIntlObject {
     private static final Map<String, Map<String, String>> REGION_ALIASES_BY_LANG = new HashMap<>();
     // Script-based region resolution for SU/810
     private static final Map<String, String> REGION_BY_SCRIPT = new HashMap<>();
+    private static final Set<String> SANCTIONED_SIMPLE_UNITS = Set.of(
+            "acre", "bit", "byte", "celsius", "centimeter", "day",
+            "degree", "fahrenheit", "fluid-ounce", "foot", "gallon",
+            "gigabit", "gigabyte", "gram", "hectare", "hour", "inch",
+            "kilobit", "kilobyte", "kilogram", "kilometer", "liter",
+            "megabit", "megabyte", "meter", "microsecond", "mile",
+            "mile-scandinavian", "milliliter", "millimeter", "millisecond",
+            "minute", "month", "nanosecond", "ounce", "percent", "petabyte",
+            "pound", "second", "stone", "terabit", "terabyte", "week",
+            "yard", "year"
+    );
     // ---- Subdivision Aliases ----
     private static final Map<String, String> SUBDIVISION_ALIASES = new HashMap<>();
     /**
@@ -77,20 +88,6 @@ public final class JSIntlObject {
             "sora", "sund", "takr", "talu", "tamldec", "tnsa", "telu", "thai",
             "tibt", "tirh", "vaii", "wara", "wcho"
     );
-    private static final Set<Integer> VALID_ROUNDING_INCREMENTS = Set.of(
-            1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000
-    );
-    private static final Set<String> SANCTIONED_SIMPLE_UNITS = Set.of(
-            "acre", "bit", "byte", "celsius", "centimeter", "day",
-            "degree", "fahrenheit", "fluid-ounce", "foot", "gallon",
-            "gigabit", "gigabyte", "gram", "hectare", "hour", "inch",
-            "kilobit", "kilobyte", "kilogram", "kilometer", "liter",
-            "megabit", "megabyte", "meter", "microsecond", "mile",
-            "mile-scandinavian", "milliliter", "millimeter", "millisecond",
-            "minute", "month", "nanosecond", "ounce", "percent", "petabyte",
-            "pound", "second", "stone", "terabit", "terabyte", "week",
-            "yard", "year"
-    );
     // ---- Timezone Aliases ----
     private static final Map<String, String> TIMEZONE_ALIASES = new HashMap<>();
     // ---- Transform Extension tvalue Aliases ----
@@ -111,6 +108,9 @@ public final class JSIntlObject {
             "big5han", "compat", "dict", "direct", "ducet", "emoji", "eor",
             "gb2312", "phonebk", "phonetic", "pinyin", "reformed", "searchjl",
             "stroke", "trad", "unihan", "zhuyin"
+    );
+    private static final Set<Integer> VALID_ROUNDING_INCREMENTS = Set.of(
+            1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000
     );
     // ---- Variant Alias Data ----
     private static final Map<String, String> VARIANT_ALIASES = new HashMap<>();
@@ -1402,6 +1402,26 @@ public final class JSIntlObject {
         resolvedOptions.set("numeric", JSBoolean.valueOf(collator.getNumeric()));
         resolvedOptions.set("caseFirst", new JSString(collator.getCaseFirst()));
         return resolvedOptions;
+    }
+
+    private static String commonLeadingNonNumericPrefix(String start, String end) {
+        int limit = Math.min(start.length(), end.length());
+        int i = 0;
+        while (i < limit) {
+            char a = start.charAt(i);
+            char b = end.charAt(i);
+            if (a != b) {
+                break;
+            }
+            if (Character.isDigit(a) || a == '.' || a == ',' || a == '-') {
+                break;
+            }
+            i++;
+        }
+        if (i <= 0) {
+            return "";
+        }
+        return start.substring(0, i);
     }
 
     public static JSValue createCollator(JSContext context, JSObject prototype, JSValue[] args) {
@@ -3377,6 +3397,40 @@ public final class JSIntlObject {
         return result;
     }
 
+    /**
+     * Convert a firstDayOfWeek day name to its numeric value (1=Monday through 7=Sunday).
+     * Returns -1 if not a recognized day name.
+     */
+    private static int firstDayOfWeekToNumber(String dayName) {
+        if (dayName == null) {
+            return -1;
+        }
+        return switch (dayName) {
+            case "mon" -> 1;
+            case "tue" -> 2;
+            case "wed" -> 3;
+            case "thu" -> 4;
+            case "fri" -> 5;
+            case "sat" -> 6;
+            case "sun" -> 7;
+            default -> -1;
+        };
+    }
+
+    private static String formatIntlNumberValue(JSContext context, JSIntlNumberFormat numberFormat, JSValue value) {
+        if (value instanceof JSBigInt bigInt) {
+            return numberFormat.format(bigInt.value());
+        }
+        if (value instanceof JSString jsString) {
+            return numberFormat.format(jsString.value());
+        }
+        double numeric = JSTypeConversions.toNumber(context, value).value();
+        if (context.hasPendingException()) {
+            return "";
+        }
+        return numberFormat.format(numeric);
+    }
+
     public static JSValue getCanonicalLocales(JSContext context, JSValue thisArg, JSValue[] args) {
         try {
             List<String> localeList = canonicalizeLocaleList(
@@ -3389,6 +3443,19 @@ public final class JSIntlObject {
             return localesArray;
         } catch (IllegalArgumentException e) {
             return context.throwRangeError(e.getMessage());
+        }
+    }
+
+    private static int getCurrencyDigits(String currencyCode) {
+        try {
+            Currency currency = Currency.getInstance(currencyCode);
+            int digits = currency.getDefaultFractionDigits();
+            if (digits < 0) {
+                return 2;
+            }
+            return digits;
+        } catch (IllegalArgumentException e) {
+            return 2;
         }
     }
 
@@ -3416,6 +3483,20 @@ public final class JSIntlObject {
     }
 
     /**
+     * Get the default first day of the week for a locale.
+     * Returns 1-7 (1=Monday through 7=Sunday).
+     */
+    private static int getLocaleDefaultFirstDay(Locale locale) {
+        // Java's Calendar.getFirstDayOfWeek() returns Calendar.SUNDAY=1 through Calendar.SATURDAY=7
+        int javaFirstDay = Calendar.getInstance(locale).getFirstDayOfWeek();
+        // Convert Java's numbering (Sun=1..Sat=7) to ISO (Mon=1..Sun=7)
+        if (javaFirstDay == Calendar.SUNDAY) {
+            return 7;
+        }
+        return javaFirstDay - 1;
+    }
+
+    /**
      * Get the default hourCycle for a locale by inspecting the locale's time format pattern.
      */
     private static String getLocaleDefaultHourCycle(Locale locale) {
@@ -3436,6 +3517,35 @@ public final class JSIntlObject {
             }
         }
         return "h23"; // Default fallback
+    }
+
+    private static Integer getOptionIntegerOrUndefined(
+            JSContext context,
+            JSObject optionsObject,
+            String key,
+            int minimum,
+            int maximum) {
+        JSValue rawValue = optionsObject.get(context, PropertyKey.fromString(key));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (rawValue == null || rawValue instanceof JSUndefined) {
+            return null;
+        }
+        double numberValue = JSTypeConversions.toNumber(context, rawValue).value();
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (Double.isNaN(numberValue) || Double.isInfinite(numberValue)) {
+            context.throwRangeError("Value " + numberValue + " out of range for Intl.NumberFormat options property " + key);
+            return null;
+        }
+        int integerValue = (int) Math.floor(numberValue);
+        if (integerValue < minimum || integerValue > maximum || integerValue != numberValue) {
+            context.throwRangeError("Value " + numberValue + " out of range for Intl.NumberFormat options property " + key);
+            return null;
+        }
+        return integerValue;
     }
 
     private static String getOptionString(JSContext context, JSValue optionsValue, String key) {
@@ -3470,75 +3580,6 @@ public final class JSIntlObject {
         return JSTypeConversions.toString(context, rawValue).value();
     }
 
-    private static Integer getOptionIntegerOrUndefined(
-            JSContext context,
-            JSObject optionsObject,
-            String key,
-            int minimum,
-            int maximum) {
-        JSValue rawValue = optionsObject.get(context, PropertyKey.fromString(key));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (rawValue == null || rawValue instanceof JSUndefined) {
-            return null;
-        }
-        double numberValue = JSTypeConversions.toNumber(context, rawValue).value();
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (Double.isNaN(numberValue) || Double.isInfinite(numberValue)) {
-            context.throwRangeError("Value " + numberValue + " out of range for Intl.NumberFormat options property " + key);
-            return null;
-        }
-        int integerValue = (int) Math.floor(numberValue);
-        if (integerValue < minimum || integerValue > maximum || integerValue != numberValue) {
-            context.throwRangeError("Value " + numberValue + " out of range for Intl.NumberFormat options property " + key);
-            return null;
-        }
-        return integerValue;
-    }
-
-    private static int getCurrencyDigits(String currencyCode) {
-        try {
-            Currency currency = Currency.getInstance(currencyCode);
-            int digits = currency.getDefaultFractionDigits();
-            if (digits < 0) {
-                return 2;
-            }
-            return digits;
-        } catch (IllegalArgumentException e) {
-            return 2;
-        }
-    }
-
-    private static boolean isWellFormedCurrencyCode(String currencyCode) {
-        if (currencyCode.length() != 3) {
-            return false;
-        }
-        for (int index = 0; index < currencyCode.length(); index++) {
-            char character = currencyCode.charAt(index);
-            if (!((character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z'))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean isWellFormedUnitIdentifier(String unitIdentifier) {
-        if (!unitIdentifier.equals(unitIdentifier.toLowerCase(Locale.ROOT))) {
-            return false;
-        }
-        if (SANCTIONED_SIMPLE_UNITS.contains(unitIdentifier)) {
-            return true;
-        }
-        String[] parts = unitIdentifier.split("-per-", -1);
-        if (parts.length != 2) {
-            return false;
-        }
-        return SANCTIONED_SIMPLE_UNITS.contains(parts[0]) && SANCTIONED_SIMPLE_UNITS.contains(parts[1]);
-    }
-
     /**
      * GetOptionsObject (ECMA-402 §9.2.11).
      * Converts the options argument to an object per spec:
@@ -3558,6 +3599,113 @@ public final class JSIntlObject {
         }
         context.throwTypeError("Cannot convert " + JSTypeConversions.toString(context, options).value() + " to object");
         return JSUndefined.INSTANCE;
+    }
+
+    /**
+     * Get timezone IDs for a given ISO 3166 region code.
+     */
+    private static List<String> getTimeZonesForRegion(String region) {
+        // Common region-to-timezone mappings from CLDR
+        List<String> zones = switch (region) {
+            case "US" -> List.of("America/Adak", "America/Anchorage", "America/Boise", "America/Chicago",
+                    "America/Denver", "America/Detroit", "America/Indiana/Indianapolis",
+                    "America/Indiana/Knox", "America/Indiana/Marengo", "America/Indiana/Petersburg",
+                    "America/Indiana/Tell_City", "America/Indiana/Vevay", "America/Indiana/Vincennes",
+                    "America/Indiana/Winamac", "America/Juneau", "America/Kentucky/Louisville",
+                    "America/Kentucky/Monticello", "America/Los_Angeles", "America/Menominee",
+                    "America/Metlakatla", "America/New_York", "America/Nome",
+                    "America/North_Dakota/Beulah", "America/North_Dakota/Center",
+                    "America/North_Dakota/New_Salem", "America/Phoenix", "America/Sitka",
+                    "America/Yakutat", "Pacific/Honolulu");
+            case "GB" -> List.of("Europe/London");
+            case "DE" -> List.of("Europe/Berlin", "Europe/Busingen");
+            case "FR" -> List.of("Europe/Paris");
+            case "JP" -> List.of("Asia/Tokyo");
+            case "CN" -> List.of("Asia/Shanghai", "Asia/Urumqi");
+            case "IN" -> List.of("Asia/Kolkata");
+            case "BR" -> List.of("America/Araguaina", "America/Bahia", "America/Belem",
+                    "America/Boa_Vista", "America/Campo_Grande", "America/Cuiaba",
+                    "America/Eirunepe", "America/Fortaleza", "America/Manaus",
+                    "America/Noronha", "America/Porto_Velho", "America/Recife",
+                    "America/Rio_Branco", "America/Santarem", "America/Sao_Paulo");
+            case "AU" -> List.of("Antarctica/Macquarie", "Australia/Adelaide", "Australia/Brisbane",
+                    "Australia/Broken_Hill", "Australia/Darwin", "Australia/Eucla",
+                    "Australia/Hobart", "Australia/Lindeman", "Australia/Lord_Howe",
+                    "Australia/Melbourne", "Australia/Perth", "Australia/Sydney");
+            case "CA" -> List.of("America/Atikokan", "America/Dawson", "America/Dawson_Creek",
+                    "America/Edmonton", "America/Fort_Nelson", "America/Glace_Bay",
+                    "America/Goose_Bay", "America/Halifax", "America/Iqaluit",
+                    "America/Moncton", "America/Rankin_Inlet", "America/Regina",
+                    "America/Resolute", "America/St_Johns", "America/Swift_Current",
+                    "America/Toronto", "America/Vancouver", "America/Whitehorse",
+                    "America/Winnipeg", "America/Yellowknife");
+            case "RU" -> List.of("Asia/Anadyr", "Asia/Barnaul", "Asia/Chita", "Asia/Irkutsk",
+                    "Asia/Kamchatka", "Asia/Khandyga", "Asia/Krasnoyarsk", "Asia/Magadan",
+                    "Asia/Novokuznetsk", "Asia/Novosibirsk", "Asia/Omsk", "Asia/Sakhalin",
+                    "Asia/Srednekolymsk", "Asia/Tomsk", "Asia/Ust-Nera", "Asia/Vladivostok",
+                    "Asia/Yakutsk", "Asia/Yekaterinburg", "Europe/Astrakhan", "Europe/Kaliningrad",
+                    "Europe/Kirov", "Europe/Moscow", "Europe/Samara", "Europe/Saratov",
+                    "Europe/Ulyanovsk", "Europe/Volgograd");
+            case "NZ" -> List.of("Pacific/Auckland", "Pacific/Chatham");
+            case "MX" -> List.of("America/Bahia_Banderas", "America/Cancun", "America/Chihuahua",
+                    "America/Ciudad_Juarez", "America/Hermosillo", "America/Matamoros",
+                    "America/Mazatlan", "America/Merida", "America/Mexico_City",
+                    "America/Monterrey", "America/Ojinaga", "America/Tijuana");
+            case "IT" -> List.of("Europe/Rome");
+            case "ES" -> List.of("Africa/Ceuta", "Atlantic/Canary", "Europe/Madrid");
+            case "KR" -> List.of("Asia/Seoul");
+            case "SE" -> List.of("Europe/Stockholm");
+            case "NO" -> List.of("Europe/Oslo");
+            case "FI" -> List.of("Europe/Helsinki");
+            case "DK" -> List.of("Europe/Copenhagen");
+            case "PL" -> List.of("Europe/Warsaw");
+            case "CZ" -> List.of("Europe/Prague");
+            case "AT" -> List.of("Europe/Vienna");
+            case "CH" -> List.of("Europe/Zurich");
+            case "NL" -> List.of("Europe/Amsterdam");
+            case "BE" -> List.of("Europe/Brussels");
+            case "PT" -> List.of("Atlantic/Azores", "Atlantic/Madeira", "Europe/Lisbon");
+            case "GR" -> List.of("Europe/Athens");
+            case "TR" -> List.of("Europe/Istanbul");
+            case "IE" -> List.of("Europe/Dublin");
+            case "IL" -> List.of("Asia/Jerusalem");
+            case "EG" -> List.of("Africa/Cairo");
+            case "ZA" -> List.of("Africa/Johannesburg");
+            case "NG" -> List.of("Africa/Lagos");
+            case "KE" -> List.of("Africa/Nairobi");
+            case "SG" -> List.of("Asia/Singapore");
+            case "TH" -> List.of("Asia/Bangkok");
+            case "ID" -> List.of("Asia/Jakarta", "Asia/Jayapura", "Asia/Makassar", "Asia/Pontianak");
+            case "PH" -> List.of("Asia/Manila");
+            case "MY" -> List.of("Asia/Kuala_Lumpur", "Asia/Kuching");
+            case "VN" -> List.of("Asia/Ho_Chi_Minh");
+            case "PK" -> List.of("Asia/Karachi");
+            case "BD" -> List.of("Asia/Dhaka");
+            case "AR" -> List.of("America/Argentina/Buenos_Aires", "America/Argentina/Catamarca",
+                    "America/Argentina/Cordoba", "America/Argentina/Jujuy",
+                    "America/Argentina/La_Rioja", "America/Argentina/Mendoza",
+                    "America/Argentina/Rio_Gallegos", "America/Argentina/Salta",
+                    "America/Argentina/San_Juan", "America/Argentina/San_Luis",
+                    "America/Argentina/Tucuman", "America/Argentina/Ushuaia");
+            case "CL" -> List.of("America/Punta_Arenas", "America/Santiago", "Pacific/Easter");
+            case "CO" -> List.of("America/Bogota");
+            case "PE" -> List.of("America/Lima");
+            case "UA" -> List.of("Europe/Kyiv", "Europe/Simferopol");
+            case "RO" -> List.of("Europe/Bucharest");
+            case "HU" -> List.of("Europe/Budapest");
+            case "AQ" -> List.of("Antarctica/Casey", "Antarctica/Davis", "Antarctica/DumontDUrville",
+                    "Antarctica/Mawson", "Antarctica/McMurdo", "Antarctica/Palmer",
+                    "Antarctica/Rothera", "Antarctica/Syowa", "Antarctica/Troll",
+                    "Antarctica/Vostok");
+            default -> {
+                // Fallback: try to find at least one timezone for the region
+                // Use Etc/UTC as last resort
+                yield List.of("Etc/UTC");
+            }
+        };
+        List<String> sorted = new ArrayList<>(zones);
+        Collections.sort(sorted);
+        return sorted;
     }
 
     private static Map<String, String> getTimezoneLookupMap() {
@@ -3647,6 +3795,136 @@ public final class JSIntlObject {
         return VALID_COLLATION_TYPES.contains(collation);
     }
 
+    /**
+     * Validate language subtag: unicode_language_subtag = alpha{2,3} | alpha{5,8}
+     */
+    private static boolean isValidLanguageSubtag(String lang) {
+        if (lang == null || lang.isEmpty()) {
+            return false;
+        }
+        int len = lang.length();
+        if (!((len >= 2 && len <= 3) || (len >= 5 && len <= 8))) {
+            return false;
+        }
+        for (int i = 0; i < len; i++) {
+            char c = lang.charAt(i);
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Validate region subtag: unicode_region_subtag = alpha{2} | digit{3}
+     */
+    private static boolean isValidRegionSubtag(String region) {
+        if (region == null || region.isEmpty()) {
+            return false;
+        }
+        int len = region.length();
+        if (len == 2) {
+            return Character.isLetter(region.charAt(0)) && Character.isLetter(region.charAt(1));
+        }
+        if (len == 3) {
+            return Character.isDigit(region.charAt(0)) && Character.isDigit(region.charAt(1)) && Character.isDigit(region.charAt(2));
+        }
+        return false;
+    }
+
+    /**
+     * Validate script subtag: unicode_script_subtag = alpha{4}
+     */
+    private static boolean isValidScriptSubtag(String script) {
+        if (script == null || script.isEmpty()) {
+            return false;
+        }
+        if (script.length() != 4) {
+            return false;
+        }
+        for (int i = 0; i < 4; i++) {
+            char c = script.charAt(i);
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Validate variants subtag: each variant is (alphanum{5,8} | digit alphanum{3}),
+     * separated by hyphens. No duplicates (case-insensitive).
+     */
+    private static boolean isValidVariantsSubtag(String variants) {
+        if (variants == null || variants.isEmpty()) {
+            return false;
+        }
+        String[] parts = variants.split("-", -1);
+        Set<String> seen = new HashSet<>();
+        for (String part : parts) {
+            if (part.isEmpty()) {
+                return false; // empty segment
+            }
+            int len = part.length();
+            boolean valid;
+            if (len >= 5 && len <= 8) {
+                valid = true;
+                for (int i = 0; i < len; i++) {
+                    char c = part.charAt(i);
+                    if (!Character.isLetterOrDigit(c)) {
+                        valid = false;
+                        break;
+                    }
+                }
+            } else if (len == 4 && Character.isDigit(part.charAt(0))) {
+                valid = true;
+                for (int i = 1; i < 4; i++) {
+                    char c = part.charAt(i);
+                    if (!Character.isLetterOrDigit(c)) {
+                        valid = false;
+                        break;
+                    }
+                }
+            } else {
+                valid = false;
+            }
+            if (!valid) {
+                return false;
+            }
+            if (!seen.add(part.toLowerCase(Locale.ROOT))) {
+                return false; // duplicate
+            }
+        }
+        return true;
+    }
+
+    private static boolean isWellFormedCurrencyCode(String currencyCode) {
+        if (currencyCode.length() != 3) {
+            return false;
+        }
+        for (int index = 0; index < currencyCode.length(); index++) {
+            char character = currencyCode.charAt(index);
+            if (!((character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z'))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isWellFormedUnitIdentifier(String unitIdentifier) {
+        if (!unitIdentifier.equals(unitIdentifier.toLowerCase(Locale.ROOT))) {
+            return false;
+        }
+        if (SANCTIONED_SIMPLE_UNITS.contains(unitIdentifier)) {
+            return true;
+        }
+        String[] parts = unitIdentifier.split("-per-", -1);
+        if (parts.length != 2) {
+            return false;
+        }
+        return SANCTIONED_SIMPLE_UNITS.contains(parts[0]) && SANCTIONED_SIMPLE_UNITS.contains(parts[1]);
+    }
+
     public static JSValue listFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlListFormat listFormat)) {
             return context.throwTypeError("Intl.ListFormat.prototype.format called on incompatible receiver");
@@ -3708,6 +3986,21 @@ public final class JSIntlObject {
         return calendar != null ? new JSString(calendar) : JSUndefined.INSTANCE;
     }
 
+    public static JSValue localeGetCalendars(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.getCalendars called on incompatible receiver");
+        }
+        JSArray result = context.createJSArray();
+        String calendar = intlLocale.getCalendar();
+        if (calendar != null && !calendar.isEmpty()) {
+            result.push(new JSString(calendar));
+        }
+        if (calendar == null || calendar.isEmpty()) {
+            result.push(new JSString("gregory"));
+        }
+        return result;
+    }
+
     public static JSValue localeGetCaseFirst(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlLocale intlLocale)) {
             return context.throwTypeError("Intl.Locale.prototype.caseFirst called on incompatible receiver");
@@ -3724,12 +4017,55 @@ public final class JSIntlObject {
         return collation != null ? new JSString(collation) : JSUndefined.INSTANCE;
     }
 
+    public static JSValue localeGetCollations(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.getCollations called on incompatible receiver");
+        }
+        JSArray result = context.createJSArray();
+        String collation = intlLocale.getCollation();
+        if (collation != null && !collation.isEmpty()
+                && !"standard".equals(collation) && !"search".equals(collation)) {
+            result.push(new JSString(collation));
+        }
+        if (result.getLength() == 0) {
+            result.push(new JSString("emoji"));
+            result.push(new JSString("eor"));
+        }
+        return result;
+    }
+
+    public static JSValue localeGetFirstDayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.firstDayOfWeek called on incompatible receiver");
+        }
+        String firstDayOfWeek = intlLocale.getFirstDayOfWeek();
+        if (firstDayOfWeek == null) {
+            return JSUndefined.INSTANCE;
+        }
+        return new JSString(firstDayOfWeek);
+    }
+
     public static JSValue localeGetHourCycle(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlLocale intlLocale)) {
             return context.throwTypeError("Intl.Locale.prototype.hourCycle called on incompatible receiver");
         }
         String hourCycle = intlLocale.getHourCycle();
         return hourCycle != null ? new JSString(hourCycle) : JSUndefined.INSTANCE;
+    }
+
+    public static JSValue localeGetHourCycles(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.getHourCycles called on incompatible receiver");
+        }
+        JSArray result = context.createJSArray();
+        String hourCycle = intlLocale.getHourCycle();
+        if (hourCycle != null && !hourCycle.isEmpty()) {
+            result.push(new JSString(hourCycle));
+        } else {
+            String defaultHc = getLocaleDefaultHourCycle(intlLocale.getLocale());
+            result.push(new JSString(defaultHc));
+        }
+        return result;
     }
 
     public static JSValue localeGetLanguage(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -3745,6 +4081,20 @@ public final class JSIntlObject {
         }
         String numberingSystem = intlLocale.getNumberingSystem();
         return numberingSystem != null ? new JSString(numberingSystem) : JSUndefined.INSTANCE;
+    }
+
+    public static JSValue localeGetNumberingSystems(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.getNumberingSystems called on incompatible receiver");
+        }
+        JSArray result = context.createJSArray();
+        String numberingSystem = intlLocale.getNumberingSystem();
+        if (numberingSystem != null && !numberingSystem.isEmpty()) {
+            result.push(new JSString(numberingSystem));
+        } else {
+            result.push(new JSString("latn"));
+        }
+        return result;
     }
 
     public static JSValue localeGetNumeric(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -3768,6 +4118,41 @@ public final class JSIntlObject {
         return intlLocale.getScript().isEmpty() ? JSUndefined.INSTANCE : new JSString(intlLocale.getScript());
     }
 
+    public static JSValue localeGetTextInfo(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.getTextInfo called on incompatible receiver");
+        }
+        JSObject result = context.createJSObject();
+        // Determine text direction based on locale's script or language
+        String direction = "ltr";
+        String lang = intlLocale.getLanguage();
+        String script = intlLocale.getScript();
+        if ("Arab".equals(script) || "Hebr".equals(script) || "Thaa".equals(script) || "Syrc".equals(script)) {
+            direction = "rtl";
+        } else if ("ar".equals(lang) || "he".equals(lang) || "fa".equals(lang) || "ur".equals(lang)
+                || "yi".equals(lang) || "ps".equals(lang) || "sd".equals(lang) || "ckb".equals(lang)) {
+            direction = "rtl";
+        }
+        createDataProperty(result, "direction", new JSString(direction));
+        return result;
+    }
+
+    public static JSValue localeGetTimeZones(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.getTimeZones called on incompatible receiver");
+        }
+        String region = intlLocale.getRegion();
+        if (region == null || region.isEmpty()) {
+            return JSUndefined.INSTANCE;
+        }
+        JSArray result = context.createJSArray();
+        List<String> zones = getTimeZonesForRegion(region.toUpperCase(Locale.ROOT));
+        for (String zone : zones) {
+            result.push(new JSString(zone));
+        }
+        return result;
+    }
+
     public static JSValue localeGetVariants(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlLocale intlLocale)) {
             return context.throwTypeError("Intl.Locale.prototype.variants called on incompatible receiver");
@@ -3777,6 +4162,36 @@ public final class JSIntlObject {
             return JSUndefined.INSTANCE;
         }
         return new JSString(variant);
+    }
+
+    public static JSValue localeGetWeekInfo(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError("Intl.Locale.prototype.getWeekInfo called on incompatible receiver");
+        }
+        JSObject result = context.createJSObject();
+
+        // Determine firstDay from fw extension or locale default
+        int firstDay;
+        String fdw = intlLocale.getFirstDayOfWeek();
+        if (fdw != null && !fdw.isEmpty()) {
+            int numericDay = firstDayOfWeekToNumber(fdw);
+            if (numericDay > 0) {
+                firstDay = numericDay;
+            } else {
+                firstDay = getLocaleDefaultFirstDay(intlLocale.getLocale());
+            }
+        } else {
+            firstDay = getLocaleDefaultFirstDay(intlLocale.getLocale());
+        }
+        createDataProperty(result, "firstDay", JSNumber.of(firstDay));
+
+        // Weekend days: default Sat-Sun (6, 7) for most locales
+        JSArray weekend = context.createJSArray();
+        weekend.push(JSNumber.of(6));
+        weekend.push(JSNumber.of(7));
+        createDataProperty(result, "weekend", weekend);
+
+        return result;
     }
 
     public static JSValue localeMaximize(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -3919,84 +4334,6 @@ public final class JSIntlObject {
         return (value != null && !value.isEmpty()) ? value : null;
     }
 
-    private static String parseUseGroupingOption(JSContext context, JSValue useGroupingValue, String notation) {
-        String defaultValue = "compact".equals(notation) ? "min2" : "auto";
-        if (useGroupingValue == null || useGroupingValue instanceof JSUndefined) {
-            return defaultValue;
-        }
-        if (useGroupingValue instanceof JSBoolean jsBoolean) {
-            if (jsBoolean.value()) {
-                return "always";
-            }
-            return "false";
-        }
-        if (useGroupingValue instanceof JSNull) {
-            return "false";
-        }
-        if (useGroupingValue instanceof JSString jsString) {
-            String value = jsString.value();
-            if ("auto".equals(value) || "always".equals(value) || "min2".equals(value)) {
-                return value;
-            }
-            if ("true".equals(value) || "false".equals(value)) {
-                return defaultValue;
-            }
-            if (value.isEmpty()) {
-                return "false";
-            }
-            context.throwRangeError("Invalid option value: " + value);
-            return defaultValue;
-        }
-        if (useGroupingValue instanceof JSNumber jsNumber) {
-            double number = jsNumber.value();
-            if (number == 0) {
-                return "false";
-            }
-            context.throwRangeError("Invalid option value: " + useGroupingValue);
-            return defaultValue;
-        }
-        boolean booleanValue = JSTypeConversions.toBoolean(useGroupingValue).value();
-        if (!booleanValue) {
-            return "false";
-        }
-        context.throwRangeError("Invalid option value: " + JSTypeConversions.toString(context, useGroupingValue).value());
-        return defaultValue;
-    }
-
-    private static String commonLeadingNonNumericPrefix(String start, String end) {
-        int limit = Math.min(start.length(), end.length());
-        int i = 0;
-        while (i < limit) {
-            char a = start.charAt(i);
-            char b = end.charAt(i);
-            if (a != b) {
-                break;
-            }
-            if (Character.isDigit(a) || a == '.' || a == ',' || a == '-') {
-                break;
-            }
-            i++;
-        }
-        if (i <= 0) {
-            return "";
-        }
-        return start.substring(0, i);
-    }
-
-    private static String formatIntlNumberValue(JSContext context, JSIntlNumberFormat numberFormat, JSValue value) {
-        if (value instanceof JSBigInt bigInt) {
-            return numberFormat.format(bigInt.value());
-        }
-        if (value instanceof JSString jsString) {
-            return numberFormat.format(jsString.value());
-        }
-        double numeric = JSTypeConversions.toNumber(context, value).value();
-        if (context.hasPendingException()) {
-            return "";
-        }
-        return numberFormat.format(numeric);
-    }
-
     public static JSValue numberFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
             return context.throwTypeError("Intl.NumberFormat.prototype.format called on incompatible receiver");
@@ -4028,27 +4365,6 @@ public final class JSIntlObject {
         context.transferPrototype(boundFormatFunction, JSFunction.NAME);
         numberFormat.setBoundFormatFunction(boundFormatFunction);
         return boundFormatFunction;
-    }
-
-    public static JSValue numberFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
-            return context.throwTypeError("Intl.NumberFormat.prototype.formatToParts called on incompatible receiver");
-        }
-        if (args.length == 0) {
-            return numberFormat.formatToParts(context, Double.NaN);
-        }
-        JSValue arg = args[0];
-        if (arg instanceof JSBigInt jsBigInt) {
-            return numberFormat.formatToParts(context, jsBigInt.value().toString());
-        }
-        if (arg instanceof JSString str) {
-            return numberFormat.formatToParts(context, str.value());
-        }
-        double numValue = JSTypeConversions.toNumber(context, arg).value();
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return numberFormat.formatToParts(context, numValue);
     }
 
     public static JSValue numberFormatFormatRange(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -4086,6 +4402,27 @@ public final class JSIntlObject {
             return new JSString(startFormatted + " \u2013 " + endFormatted);
         }
         return new JSString(startFormatted + "\u2013" + endFormatted);
+    }
+
+    public static JSValue numberFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
+            return context.throwTypeError("Intl.NumberFormat.prototype.formatToParts called on incompatible receiver");
+        }
+        if (args.length == 0) {
+            return numberFormat.formatToParts(context, Double.NaN);
+        }
+        JSValue arg = args[0];
+        if (arg instanceof JSBigInt jsBigInt) {
+            return numberFormat.formatToParts(context, jsBigInt.value().toString());
+        }
+        if (arg instanceof JSString str) {
+            return numberFormat.formatToParts(context, str.value());
+        }
+        double numValue = JSTypeConversions.toNumber(context, arg).value();
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return numberFormat.formatToParts(context, numValue);
     }
 
     public static JSValue numberFormatResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -4237,6 +4574,50 @@ public final class JSIntlObject {
         return extensions;
     }
 
+    private static String parseUseGroupingOption(JSContext context, JSValue useGroupingValue, String notation) {
+        String defaultValue = "compact".equals(notation) ? "min2" : "auto";
+        if (useGroupingValue == null || useGroupingValue instanceof JSUndefined) {
+            return defaultValue;
+        }
+        if (useGroupingValue instanceof JSBoolean jsBoolean) {
+            if (jsBoolean.value()) {
+                return "always";
+            }
+            return "false";
+        }
+        if (useGroupingValue instanceof JSNull) {
+            return "false";
+        }
+        if (useGroupingValue instanceof JSString jsString) {
+            String value = jsString.value();
+            if ("auto".equals(value) || "always".equals(value) || "min2".equals(value)) {
+                return value;
+            }
+            if ("true".equals(value) || "false".equals(value)) {
+                return defaultValue;
+            }
+            if (value.isEmpty()) {
+                return "false";
+            }
+            context.throwRangeError("Invalid option value: " + value);
+            return defaultValue;
+        }
+        if (useGroupingValue instanceof JSNumber jsNumber) {
+            double number = jsNumber.value();
+            if (number == 0) {
+                return "false";
+            }
+            context.throwRangeError("Invalid option value: " + useGroupingValue);
+            return defaultValue;
+        }
+        boolean booleanValue = JSTypeConversions.toBoolean(useGroupingValue).value();
+        if (!booleanValue) {
+            return "false";
+        }
+        context.throwRangeError("Invalid option value: " + JSTypeConversions.toString(context, useGroupingValue).value());
+        return defaultValue;
+    }
+
     public static JSValue pluralRulesResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
             return context.throwTypeError("Intl.PluralRules.prototype.resolvedOptions called on incompatible receiver");
@@ -4318,6 +4699,8 @@ public final class JSIntlObject {
             return context.throwRangeError(e.getMessage());
         }
     }
+
+    // ---- Locale option validation helpers ----
 
     public static JSValue relativeTimeFormatResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlRelativeTimeFormat relativeTimeFormat)) {
@@ -4602,6 +4985,8 @@ public final class JSIntlObject {
         }
         return locale;
     }
+
+    // ---- New Locale prototype methods ----
 
     /**
      * Strip all extensions (-u-..., -x-..., etc.) from a locale tag,
@@ -5166,111 +5551,6 @@ public final class JSIntlObject {
         }
     }
 
-    // ---- Locale option validation helpers ----
-
-    /**
-     * Validate language subtag: unicode_language_subtag = alpha{2,3} | alpha{5,8}
-     */
-    private static boolean isValidLanguageSubtag(String lang) {
-        if (lang == null || lang.isEmpty()) {
-            return false;
-        }
-        int len = lang.length();
-        if (!((len >= 2 && len <= 3) || (len >= 5 && len <= 8))) {
-            return false;
-        }
-        for (int i = 0; i < len; i++) {
-            char c = lang.charAt(i);
-            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Validate script subtag: unicode_script_subtag = alpha{4}
-     */
-    private static boolean isValidScriptSubtag(String script) {
-        if (script == null || script.isEmpty()) {
-            return false;
-        }
-        if (script.length() != 4) {
-            return false;
-        }
-        for (int i = 0; i < 4; i++) {
-            char c = script.charAt(i);
-            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Validate region subtag: unicode_region_subtag = alpha{2} | digit{3}
-     */
-    private static boolean isValidRegionSubtag(String region) {
-        if (region == null || region.isEmpty()) {
-            return false;
-        }
-        int len = region.length();
-        if (len == 2) {
-            return Character.isLetter(region.charAt(0)) && Character.isLetter(region.charAt(1));
-        }
-        if (len == 3) {
-            return Character.isDigit(region.charAt(0)) && Character.isDigit(region.charAt(1)) && Character.isDigit(region.charAt(2));
-        }
-        return false;
-    }
-
-    /**
-     * Validate variants subtag: each variant is (alphanum{5,8} | digit alphanum{3}),
-     * separated by hyphens. No duplicates (case-insensitive).
-     */
-    private static boolean isValidVariantsSubtag(String variants) {
-        if (variants == null || variants.isEmpty()) {
-            return false;
-        }
-        String[] parts = variants.split("-", -1);
-        Set<String> seen = new HashSet<>();
-        for (String part : parts) {
-            if (part.isEmpty()) {
-                return false; // empty segment
-            }
-            int len = part.length();
-            boolean valid;
-            if (len >= 5 && len <= 8) {
-                valid = true;
-                for (int i = 0; i < len; i++) {
-                    char c = part.charAt(i);
-                    if (!Character.isLetterOrDigit(c)) {
-                        valid = false;
-                        break;
-                    }
-                }
-            } else if (len == 4 && Character.isDigit(part.charAt(0))) {
-                valid = true;
-                for (int i = 1; i < 4; i++) {
-                    char c = part.charAt(i);
-                    if (!Character.isLetterOrDigit(c)) {
-                        valid = false;
-                        break;
-                    }
-                }
-            } else {
-                valid = false;
-            }
-            if (!valid) {
-                return false;
-            }
-            if (!seen.add(part.toLowerCase(Locale.ROOT))) {
-                return false; // duplicate
-            }
-        }
-        return true;
-    }
-
     /**
      * WeekdayToString: convert numeric strings "0"-"7" to day names.
      * 0 and 7 → "sun", 1 → "mon", ..., 6 → "sat".
@@ -5287,285 +5567,5 @@ public final class JSIntlObject {
             case "6" -> "sat";
             default -> value;
         };
-    }
-
-    /**
-     * Convert a firstDayOfWeek day name to its numeric value (1=Monday through 7=Sunday).
-     * Returns -1 if not a recognized day name.
-     */
-    private static int firstDayOfWeekToNumber(String dayName) {
-        if (dayName == null) {
-            return -1;
-        }
-        return switch (dayName) {
-            case "mon" -> 1;
-            case "tue" -> 2;
-            case "wed" -> 3;
-            case "thu" -> 4;
-            case "fri" -> 5;
-            case "sat" -> 6;
-            case "sun" -> 7;
-            default -> -1;
-        };
-    }
-
-    // ---- New Locale prototype methods ----
-
-    public static JSValue localeGetFirstDayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.firstDayOfWeek called on incompatible receiver");
-        }
-        String firstDayOfWeek = intlLocale.getFirstDayOfWeek();
-        if (firstDayOfWeek == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(firstDayOfWeek);
-    }
-
-    public static JSValue localeGetCalendars(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.getCalendars called on incompatible receiver");
-        }
-        JSArray result = context.createJSArray();
-        String calendar = intlLocale.getCalendar();
-        if (calendar != null && !calendar.isEmpty()) {
-            result.push(new JSString(calendar));
-        }
-        if (calendar == null || calendar.isEmpty()) {
-            result.push(new JSString("gregory"));
-        }
-        return result;
-    }
-
-    public static JSValue localeGetCollations(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.getCollations called on incompatible receiver");
-        }
-        JSArray result = context.createJSArray();
-        String collation = intlLocale.getCollation();
-        if (collation != null && !collation.isEmpty()
-                && !"standard".equals(collation) && !"search".equals(collation)) {
-            result.push(new JSString(collation));
-        }
-        if (result.getLength() == 0) {
-            result.push(new JSString("emoji"));
-            result.push(new JSString("eor"));
-        }
-        return result;
-    }
-
-    public static JSValue localeGetHourCycles(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.getHourCycles called on incompatible receiver");
-        }
-        JSArray result = context.createJSArray();
-        String hourCycle = intlLocale.getHourCycle();
-        if (hourCycle != null && !hourCycle.isEmpty()) {
-            result.push(new JSString(hourCycle));
-        } else {
-            String defaultHc = getLocaleDefaultHourCycle(intlLocale.getLocale());
-            result.push(new JSString(defaultHc));
-        }
-        return result;
-    }
-
-    public static JSValue localeGetNumberingSystems(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.getNumberingSystems called on incompatible receiver");
-        }
-        JSArray result = context.createJSArray();
-        String numberingSystem = intlLocale.getNumberingSystem();
-        if (numberingSystem != null && !numberingSystem.isEmpty()) {
-            result.push(new JSString(numberingSystem));
-        } else {
-            result.push(new JSString("latn"));
-        }
-        return result;
-    }
-
-    public static JSValue localeGetTextInfo(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.getTextInfo called on incompatible receiver");
-        }
-        JSObject result = context.createJSObject();
-        // Determine text direction based on locale's script or language
-        String direction = "ltr";
-        String lang = intlLocale.getLanguage();
-        String script = intlLocale.getScript();
-        if ("Arab".equals(script) || "Hebr".equals(script) || "Thaa".equals(script) || "Syrc".equals(script)) {
-            direction = "rtl";
-        } else if ("ar".equals(lang) || "he".equals(lang) || "fa".equals(lang) || "ur".equals(lang)
-                || "yi".equals(lang) || "ps".equals(lang) || "sd".equals(lang) || "ckb".equals(lang)) {
-            direction = "rtl";
-        }
-        createDataProperty(result, "direction", new JSString(direction));
-        return result;
-    }
-
-    public static JSValue localeGetTimeZones(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.getTimeZones called on incompatible receiver");
-        }
-        String region = intlLocale.getRegion();
-        if (region == null || region.isEmpty()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSArray result = context.createJSArray();
-        List<String> zones = getTimeZonesForRegion(region.toUpperCase(Locale.ROOT));
-        for (String zone : zones) {
-            result.push(new JSString(zone));
-        }
-        return result;
-    }
-
-    /**
-     * Get timezone IDs for a given ISO 3166 region code.
-     */
-    private static List<String> getTimeZonesForRegion(String region) {
-        // Common region-to-timezone mappings from CLDR
-        List<String> zones = switch (region) {
-            case "US" -> List.of("America/Adak", "America/Anchorage", "America/Boise", "America/Chicago",
-                    "America/Denver", "America/Detroit", "America/Indiana/Indianapolis",
-                    "America/Indiana/Knox", "America/Indiana/Marengo", "America/Indiana/Petersburg",
-                    "America/Indiana/Tell_City", "America/Indiana/Vevay", "America/Indiana/Vincennes",
-                    "America/Indiana/Winamac", "America/Juneau", "America/Kentucky/Louisville",
-                    "America/Kentucky/Monticello", "America/Los_Angeles", "America/Menominee",
-                    "America/Metlakatla", "America/New_York", "America/Nome",
-                    "America/North_Dakota/Beulah", "America/North_Dakota/Center",
-                    "America/North_Dakota/New_Salem", "America/Phoenix", "America/Sitka",
-                    "America/Yakutat", "Pacific/Honolulu");
-            case "GB" -> List.of("Europe/London");
-            case "DE" -> List.of("Europe/Berlin", "Europe/Busingen");
-            case "FR" -> List.of("Europe/Paris");
-            case "JP" -> List.of("Asia/Tokyo");
-            case "CN" -> List.of("Asia/Shanghai", "Asia/Urumqi");
-            case "IN" -> List.of("Asia/Kolkata");
-            case "BR" -> List.of("America/Araguaina", "America/Bahia", "America/Belem",
-                    "America/Boa_Vista", "America/Campo_Grande", "America/Cuiaba",
-                    "America/Eirunepe", "America/Fortaleza", "America/Manaus",
-                    "America/Noronha", "America/Porto_Velho", "America/Recife",
-                    "America/Rio_Branco", "America/Santarem", "America/Sao_Paulo");
-            case "AU" -> List.of("Antarctica/Macquarie", "Australia/Adelaide", "Australia/Brisbane",
-                    "Australia/Broken_Hill", "Australia/Darwin", "Australia/Eucla",
-                    "Australia/Hobart", "Australia/Lindeman", "Australia/Lord_Howe",
-                    "Australia/Melbourne", "Australia/Perth", "Australia/Sydney");
-            case "CA" -> List.of("America/Atikokan", "America/Dawson", "America/Dawson_Creek",
-                    "America/Edmonton", "America/Fort_Nelson", "America/Glace_Bay",
-                    "America/Goose_Bay", "America/Halifax", "America/Iqaluit",
-                    "America/Moncton", "America/Rankin_Inlet", "America/Regina",
-                    "America/Resolute", "America/St_Johns", "America/Swift_Current",
-                    "America/Toronto", "America/Vancouver", "America/Whitehorse",
-                    "America/Winnipeg", "America/Yellowknife");
-            case "RU" -> List.of("Asia/Anadyr", "Asia/Barnaul", "Asia/Chita", "Asia/Irkutsk",
-                    "Asia/Kamchatka", "Asia/Khandyga", "Asia/Krasnoyarsk", "Asia/Magadan",
-                    "Asia/Novokuznetsk", "Asia/Novosibirsk", "Asia/Omsk", "Asia/Sakhalin",
-                    "Asia/Srednekolymsk", "Asia/Tomsk", "Asia/Ust-Nera", "Asia/Vladivostok",
-                    "Asia/Yakutsk", "Asia/Yekaterinburg", "Europe/Astrakhan", "Europe/Kaliningrad",
-                    "Europe/Kirov", "Europe/Moscow", "Europe/Samara", "Europe/Saratov",
-                    "Europe/Ulyanovsk", "Europe/Volgograd");
-            case "NZ" -> List.of("Pacific/Auckland", "Pacific/Chatham");
-            case "MX" -> List.of("America/Bahia_Banderas", "America/Cancun", "America/Chihuahua",
-                    "America/Ciudad_Juarez", "America/Hermosillo", "America/Matamoros",
-                    "America/Mazatlan", "America/Merida", "America/Mexico_City",
-                    "America/Monterrey", "America/Ojinaga", "America/Tijuana");
-            case "IT" -> List.of("Europe/Rome");
-            case "ES" -> List.of("Africa/Ceuta", "Atlantic/Canary", "Europe/Madrid");
-            case "KR" -> List.of("Asia/Seoul");
-            case "SE" -> List.of("Europe/Stockholm");
-            case "NO" -> List.of("Europe/Oslo");
-            case "FI" -> List.of("Europe/Helsinki");
-            case "DK" -> List.of("Europe/Copenhagen");
-            case "PL" -> List.of("Europe/Warsaw");
-            case "CZ" -> List.of("Europe/Prague");
-            case "AT" -> List.of("Europe/Vienna");
-            case "CH" -> List.of("Europe/Zurich");
-            case "NL" -> List.of("Europe/Amsterdam");
-            case "BE" -> List.of("Europe/Brussels");
-            case "PT" -> List.of("Atlantic/Azores", "Atlantic/Madeira", "Europe/Lisbon");
-            case "GR" -> List.of("Europe/Athens");
-            case "TR" -> List.of("Europe/Istanbul");
-            case "IE" -> List.of("Europe/Dublin");
-            case "IL" -> List.of("Asia/Jerusalem");
-            case "EG" -> List.of("Africa/Cairo");
-            case "ZA" -> List.of("Africa/Johannesburg");
-            case "NG" -> List.of("Africa/Lagos");
-            case "KE" -> List.of("Africa/Nairobi");
-            case "SG" -> List.of("Asia/Singapore");
-            case "TH" -> List.of("Asia/Bangkok");
-            case "ID" -> List.of("Asia/Jakarta", "Asia/Jayapura", "Asia/Makassar", "Asia/Pontianak");
-            case "PH" -> List.of("Asia/Manila");
-            case "MY" -> List.of("Asia/Kuala_Lumpur", "Asia/Kuching");
-            case "VN" -> List.of("Asia/Ho_Chi_Minh");
-            case "PK" -> List.of("Asia/Karachi");
-            case "BD" -> List.of("Asia/Dhaka");
-            case "AR" -> List.of("America/Argentina/Buenos_Aires", "America/Argentina/Catamarca",
-                    "America/Argentina/Cordoba", "America/Argentina/Jujuy",
-                    "America/Argentina/La_Rioja", "America/Argentina/Mendoza",
-                    "America/Argentina/Rio_Gallegos", "America/Argentina/Salta",
-                    "America/Argentina/San_Juan", "America/Argentina/San_Luis",
-                    "America/Argentina/Tucuman", "America/Argentina/Ushuaia");
-            case "CL" -> List.of("America/Punta_Arenas", "America/Santiago", "Pacific/Easter");
-            case "CO" -> List.of("America/Bogota");
-            case "PE" -> List.of("America/Lima");
-            case "UA" -> List.of("Europe/Kyiv", "Europe/Simferopol");
-            case "RO" -> List.of("Europe/Bucharest");
-            case "HU" -> List.of("Europe/Budapest");
-            case "AQ" -> List.of("Antarctica/Casey", "Antarctica/Davis", "Antarctica/DumontDUrville",
-                    "Antarctica/Mawson", "Antarctica/McMurdo", "Antarctica/Palmer",
-                    "Antarctica/Rothera", "Antarctica/Syowa", "Antarctica/Troll",
-                    "Antarctica/Vostok");
-            default -> {
-                // Fallback: try to find at least one timezone for the region
-                // Use Etc/UTC as last resort
-                yield List.of("Etc/UTC");
-            }
-        };
-        List<String> sorted = new ArrayList<>(zones);
-        Collections.sort(sorted);
-        return sorted;
-    }
-
-    public static JSValue localeGetWeekInfo(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.getWeekInfo called on incompatible receiver");
-        }
-        JSObject result = context.createJSObject();
-
-        // Determine firstDay from fw extension or locale default
-        int firstDay;
-        String fdw = intlLocale.getFirstDayOfWeek();
-        if (fdw != null && !fdw.isEmpty()) {
-            int numericDay = firstDayOfWeekToNumber(fdw);
-            if (numericDay > 0) {
-                firstDay = numericDay;
-            } else {
-                firstDay = getLocaleDefaultFirstDay(intlLocale.getLocale());
-            }
-        } else {
-            firstDay = getLocaleDefaultFirstDay(intlLocale.getLocale());
-        }
-        createDataProperty(result, "firstDay", JSNumber.of(firstDay));
-
-        // Weekend days: default Sat-Sun (6, 7) for most locales
-        JSArray weekend = context.createJSArray();
-        weekend.push(JSNumber.of(6));
-        weekend.push(JSNumber.of(7));
-        createDataProperty(result, "weekend", weekend);
-
-        return result;
-    }
-
-    /**
-     * Get the default first day of the week for a locale.
-     * Returns 1-7 (1=Monday through 7=Sunday).
-     */
-    private static int getLocaleDefaultFirstDay(Locale locale) {
-        // Java's Calendar.getFirstDayOfWeek() returns Calendar.SUNDAY=1 through Calendar.SATURDAY=7
-        int javaFirstDay = Calendar.getInstance(locale).getFirstDayOfWeek();
-        // Convert Java's numbering (Sun=1..Sat=7) to ISO (Mon=1..Sun=7)
-        if (javaFirstDay == Calendar.SUNDAY) {
-            return 7;
-        }
-        return javaFirstDay - 1;
     }
 }

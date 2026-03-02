@@ -100,6 +100,7 @@ public final class JSIntlListFormat extends JSObject {
     private final Locale locale;
     private final String style;
     private final String type;
+
     public JSIntlListFormat(Locale locale, String style, String type) {
         super();
         this.locale = locale;
