@@ -673,7 +673,11 @@ final class StatementCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             }
             // Assign to pattern (handles Identifier, ObjectPattern, ArrayPattern)
-            delegates.patterns.compilePatternAssignment(declarator.id());
+            if (varDecl.kind() == VariableKind.VAR) {
+                delegates.patterns.compileVarPatternAssignment(declarator.id());
+            } else {
+                delegates.patterns.compilePatternAssignment(declarator.id());
+            }
         }
         compilerContext.varInGlobalProgram = savedVarInGlobalProgram;
     }

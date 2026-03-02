@@ -1411,13 +1411,13 @@ public final class JSIntlObject {
             return context.throwTypeError("Intl.Collator.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        resolvedOptions.set("locale", new JSString(collator.getResolvedLocaleTag()));
-        resolvedOptions.set("usage", new JSString(collator.getUsage()));
-        resolvedOptions.set("sensitivity", new JSString(collator.getSensitivity()));
-        resolvedOptions.set("ignorePunctuation", JSBoolean.valueOf(collator.getIgnorePunctuation()));
-        resolvedOptions.set("collation", new JSString(collator.getCollation()));
-        resolvedOptions.set("numeric", JSBoolean.valueOf(collator.getNumeric()));
-        resolvedOptions.set("caseFirst", new JSString(collator.getCaseFirst()));
+        createDataProperty(resolvedOptions, "locale", new JSString(collator.getResolvedLocaleTag()));
+        createDataProperty(resolvedOptions, "usage", new JSString(collator.getUsage()));
+        createDataProperty(resolvedOptions, "sensitivity", new JSString(collator.getSensitivity()));
+        createDataProperty(resolvedOptions, "ignorePunctuation", JSBoolean.valueOf(collator.getIgnorePunctuation()));
+        createDataProperty(resolvedOptions, "collation", new JSString(collator.getCollation()));
+        createDataProperty(resolvedOptions, "numeric", JSBoolean.valueOf(collator.getNumeric()));
+        createDataProperty(resolvedOptions, "caseFirst", new JSString(collator.getCaseFirst()));
         return resolvedOptions;
     }
 
@@ -3492,24 +3492,24 @@ public final class JSIntlObject {
         // Property order per ECMA-402: locale, calendar, numberingSystem, timeZone,
         // hourCycle, hour12, weekday, era, year, month, day, dayPeriod,
         // hour, minute, second, fractionalSecondDigits, timeZoneName, dateStyle, timeStyle
-        resolvedOptions.set("locale", new JSString(dateTimeFormat.getLocale().toLanguageTag()));
+        createDataProperty(resolvedOptions, "locale", new JSString(dateTimeFormat.getLocale().toLanguageTag()));
         if (dateTimeFormat.getCalendar() != null) {
-            resolvedOptions.set("calendar", new JSString(dateTimeFormat.getCalendar()));
+            createDataProperty(resolvedOptions, "calendar", new JSString(dateTimeFormat.getCalendar()));
         }
         if (dateTimeFormat.getNumberingSystem() != null) {
-            resolvedOptions.set("numberingSystem", new JSString(dateTimeFormat.getNumberingSystem()));
+            createDataProperty(resolvedOptions, "numberingSystem", new JSString(dateTimeFormat.getNumberingSystem()));
         } else {
-            resolvedOptions.set("numberingSystem", new JSString("latn"));
+            createDataProperty(resolvedOptions, "numberingSystem", new JSString("latn"));
         }
-        resolvedOptions.set("timeZone", new JSString(dateTimeFormat.getTimeZone() != null
+        createDataProperty(resolvedOptions, "timeZone", new JSString(dateTimeFormat.getTimeZone() != null
                 ? dateTimeFormat.getTimeZone() : ZoneId.systemDefault().getId()));
 
         // hourCycle and hour12: only present when hour component is in use
         String hourCycle = dateTimeFormat.getHourCycle();
         if (hourCycle != null) {
-            resolvedOptions.set("hourCycle", new JSString(hourCycle));
+            createDataProperty(resolvedOptions, "hourCycle", new JSString(hourCycle));
             boolean isHour12 = "h11".equals(hourCycle) || "h12".equals(hourCycle);
-            resolvedOptions.set("hour12", isHour12 ? JSBoolean.TRUE : JSBoolean.FALSE);
+            createDataProperty(resolvedOptions, "hour12", isHour12 ? JSBoolean.TRUE : JSBoolean.FALSE);
         }
 
         // When dateStyle or timeStyle is set, individual component options are NOT reported
@@ -3519,45 +3519,45 @@ public final class JSIntlObject {
         if (!hasDateStyle && !hasTimeStyle) {
             // Component options only when not using styles
             if (dateTimeFormat.getWeekdayOption() != null) {
-                resolvedOptions.set("weekday", new JSString(dateTimeFormat.getWeekdayOption()));
+                createDataProperty(resolvedOptions, "weekday", new JSString(dateTimeFormat.getWeekdayOption()));
             }
             if (dateTimeFormat.getEraOption() != null) {
-                resolvedOptions.set("era", new JSString(dateTimeFormat.getEraOption()));
+                createDataProperty(resolvedOptions, "era", new JSString(dateTimeFormat.getEraOption()));
             }
             if (dateTimeFormat.getYearOption() != null) {
-                resolvedOptions.set("year", new JSString(dateTimeFormat.getYearOption()));
+                createDataProperty(resolvedOptions, "year", new JSString(dateTimeFormat.getYearOption()));
             }
             if (dateTimeFormat.getMonthOption() != null) {
-                resolvedOptions.set("month", new JSString(dateTimeFormat.getMonthOption()));
+                createDataProperty(resolvedOptions, "month", new JSString(dateTimeFormat.getMonthOption()));
             }
             if (dateTimeFormat.getDayOption() != null) {
-                resolvedOptions.set("day", new JSString(dateTimeFormat.getDayOption()));
+                createDataProperty(resolvedOptions, "day", new JSString(dateTimeFormat.getDayOption()));
             }
             if (dateTimeFormat.getDayPeriodOption() != null) {
-                resolvedOptions.set("dayPeriod", new JSString(dateTimeFormat.getDayPeriodOption()));
+                createDataProperty(resolvedOptions, "dayPeriod", new JSString(dateTimeFormat.getDayPeriodOption()));
             }
             if (dateTimeFormat.getHourOption() != null) {
-                resolvedOptions.set("hour", new JSString(dateTimeFormat.getHourOption()));
+                createDataProperty(resolvedOptions, "hour", new JSString(dateTimeFormat.getHourOption()));
             }
             if (dateTimeFormat.getMinuteOption() != null) {
-                resolvedOptions.set("minute", new JSString(dateTimeFormat.getMinuteOption()));
+                createDataProperty(resolvedOptions, "minute", new JSString(dateTimeFormat.getMinuteOption()));
             }
             if (dateTimeFormat.getSecondOption() != null) {
-                resolvedOptions.set("second", new JSString(dateTimeFormat.getSecondOption()));
+                createDataProperty(resolvedOptions, "second", new JSString(dateTimeFormat.getSecondOption()));
             }
             if (dateTimeFormat.getFractionalSecondDigits() != null) {
-                resolvedOptions.set("fractionalSecondDigits", JSNumber.of(dateTimeFormat.getFractionalSecondDigits()));
+                createDataProperty(resolvedOptions, "fractionalSecondDigits", JSNumber.of(dateTimeFormat.getFractionalSecondDigits()));
             }
             if (dateTimeFormat.getTimeZoneNameOption() != null) {
-                resolvedOptions.set("timeZoneName", new JSString(dateTimeFormat.getTimeZoneNameOption()));
+                createDataProperty(resolvedOptions, "timeZoneName", new JSString(dateTimeFormat.getTimeZoneNameOption()));
             }
         }
         if (hasDateStyle) {
-            resolvedOptions.set("dateStyle",
+            createDataProperty(resolvedOptions, "dateStyle",
                     new JSString(dateTimeFormat.getDateStyle().name().toLowerCase(Locale.ROOT)));
         }
         if (hasTimeStyle) {
-            resolvedOptions.set("timeStyle",
+            createDataProperty(resolvedOptions, "timeStyle",
                     new JSString(dateTimeFormat.getTimeStyle().name().toLowerCase(Locale.ROOT)));
         }
         return resolvedOptions;
@@ -4900,40 +4900,40 @@ public final class JSIntlObject {
             return context.throwTypeError("Intl.NumberFormat.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        resolvedOptions.set("locale", new JSString(numberFormat.getLocale().toLanguageTag()));
-        resolvedOptions.set("numberingSystem", new JSString(numberFormat.getNumberingSystem()));
-        resolvedOptions.set("style", new JSString(numberFormat.getStyle()));
+        createDataProperty(resolvedOptions, "locale", new JSString(numberFormat.getLocale().toLanguageTag()));
+        createDataProperty(resolvedOptions, "numberingSystem", new JSString(numberFormat.getNumberingSystem()));
+        createDataProperty(resolvedOptions, "style", new JSString(numberFormat.getStyle()));
         if ("currency".equals(numberFormat.getStyle()) && numberFormat.getCurrency() != null) {
-            resolvedOptions.set("currency", new JSString(numberFormat.getCurrency()));
-            resolvedOptions.set("currencyDisplay", new JSString(numberFormat.getCurrencyDisplay()));
-            resolvedOptions.set("currencySign", new JSString(numberFormat.getCurrencySign()));
+            createDataProperty(resolvedOptions, "currency", new JSString(numberFormat.getCurrency()));
+            createDataProperty(resolvedOptions, "currencyDisplay", new JSString(numberFormat.getCurrencyDisplay()));
+            createDataProperty(resolvedOptions, "currencySign", new JSString(numberFormat.getCurrencySign()));
         }
         if ("unit".equals(numberFormat.getStyle()) && numberFormat.getUnit() != null) {
-            resolvedOptions.set("unit", new JSString(numberFormat.getUnit()));
-            resolvedOptions.set("unitDisplay", new JSString(numberFormat.getUnitDisplay()));
+            createDataProperty(resolvedOptions, "unit", new JSString(numberFormat.getUnit()));
+            createDataProperty(resolvedOptions, "unitDisplay", new JSString(numberFormat.getUnitDisplay()));
         }
-        resolvedOptions.set("minimumIntegerDigits", JSNumber.of(numberFormat.getMinimumIntegerDigits()));
+        createDataProperty(resolvedOptions, "minimumIntegerDigits", JSNumber.of(numberFormat.getMinimumIntegerDigits()));
         if (numberFormat.getUseSignificantDigits()) {
-            resolvedOptions.set("minimumSignificantDigits", JSNumber.of(numberFormat.getMinimumSignificantDigits()));
-            resolvedOptions.set("maximumSignificantDigits", JSNumber.of(numberFormat.getMaximumSignificantDigits()));
+            createDataProperty(resolvedOptions, "minimumSignificantDigits", JSNumber.of(numberFormat.getMinimumSignificantDigits()));
+            createDataProperty(resolvedOptions, "maximumSignificantDigits", JSNumber.of(numberFormat.getMaximumSignificantDigits()));
         } else {
-            resolvedOptions.set("minimumFractionDigits", JSNumber.of(numberFormat.getMinimumFractionDigits()));
-            resolvedOptions.set("maximumFractionDigits", JSNumber.of(numberFormat.getMaximumFractionDigits()));
+            createDataProperty(resolvedOptions, "minimumFractionDigits", JSNumber.of(numberFormat.getMinimumFractionDigits()));
+            createDataProperty(resolvedOptions, "maximumFractionDigits", JSNumber.of(numberFormat.getMaximumFractionDigits()));
         }
         if ("false".equals(numberFormat.getUseGroupingMode())) {
-            resolvedOptions.set("useGrouping", JSBoolean.FALSE);
+            createDataProperty(resolvedOptions, "useGrouping", JSBoolean.FALSE);
         } else {
-            resolvedOptions.set("useGrouping", new JSString(numberFormat.getUseGroupingMode()));
+            createDataProperty(resolvedOptions, "useGrouping", new JSString(numberFormat.getUseGroupingMode()));
         }
-        resolvedOptions.set("notation", new JSString(numberFormat.getNotation()));
+        createDataProperty(resolvedOptions, "notation", new JSString(numberFormat.getNotation()));
         if ("compact".equals(numberFormat.getNotation()) && numberFormat.getCompactDisplay() != null) {
-            resolvedOptions.set("compactDisplay", new JSString(numberFormat.getCompactDisplay()));
+            createDataProperty(resolvedOptions, "compactDisplay", new JSString(numberFormat.getCompactDisplay()));
         }
-        resolvedOptions.set("signDisplay", new JSString(numberFormat.getSignDisplay()));
-        resolvedOptions.set("roundingIncrement", JSNumber.of(numberFormat.getRoundingIncrement()));
-        resolvedOptions.set("roundingMode", new JSString(numberFormat.getRoundingMode()));
-        resolvedOptions.set("roundingPriority", new JSString(numberFormat.getRoundingPriority()));
-        resolvedOptions.set("trailingZeroDisplay", new JSString(numberFormat.getTrailingZeroDisplay()));
+        createDataProperty(resolvedOptions, "signDisplay", new JSString(numberFormat.getSignDisplay()));
+        createDataProperty(resolvedOptions, "roundingIncrement", JSNumber.of(numberFormat.getRoundingIncrement()));
+        createDataProperty(resolvedOptions, "roundingMode", new JSString(numberFormat.getRoundingMode()));
+        createDataProperty(resolvedOptions, "roundingPriority", new JSString(numberFormat.getRoundingPriority()));
+        createDataProperty(resolvedOptions, "trailingZeroDisplay", new JSString(numberFormat.getTrailingZeroDisplay()));
         return resolvedOptions;
     }
 

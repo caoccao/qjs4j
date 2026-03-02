@@ -136,7 +136,11 @@ final class PatternCompiler {
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, idx);
             }
         } else {
-            compilePatternAssignment(pattern);
+            if (isVar) {
+                compileVarPatternAssignment(pattern);
+            } else {
+                compilePatternAssignment(pattern);
+            }
         }
     }
 
@@ -238,6 +242,10 @@ final class PatternCompiler {
     }
 
     void compilePatternAssignment(Pattern pattern) {
+        compilePatternAssignment(pattern, false);
+    }
+
+    private void compilePatternAssignment(Pattern pattern, boolean useExistingBindingInParentScopes) {
         if (pattern instanceof Identifier id) {
             // Simple identifier: value is on stack, just assign it
             String varName = id.name();
@@ -262,7 +270,17 @@ final class PatternCompiler {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
                 }
             } else {
-                int localIndex = compilerContext.currentScope().declareLocal(varName);
+                Integer localIndex;
+                if (useExistingBindingInParentScopes) {
+                    localIndex = compilerContext.findLocalInScopes(varName);
+                } else {
+                    // let/const declarations are lexical. They should resolve only against
+                    // the current scope so block bindings shadow outer bindings.
+                    localIndex = compilerContext.currentScope().getLocal(varName);
+                }
+                if (localIndex == null) {
+                    localIndex = compilerContext.currentScope().declareLocal(varName);
+                }
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
             }
         } else if (pattern instanceof ObjectPattern objPattern) {
@@ -277,7 +295,7 @@ final class PatternCompiler {
                 // Get the property value
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propName);
                 // Assign to the pattern (could be nested)
-                compilePatternAssignment(prop.value());
+                compilePatternAssignment(prop.value(), useExistingBindingInParentScopes);
             }
             // Drop the original object
             compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -314,7 +332,7 @@ final class PatternCompiler {
                         compilerContext.emitter.emitOpcode(Opcode.DROP);
                         // Stack: iter next catch_offset value
                         // Assign value to pattern
-                        compilePatternAssignment(element);
+                        compilePatternAssignment(element, useExistingBindingInParentScopes);
                         // Stack: iter next catch_offset (after assignment drops the value)
                     } else {
                         // Skip element
@@ -364,7 +382,7 @@ final class PatternCompiler {
 
                 // Assign array to rest pattern
                 RestElement restElement = (RestElement) arrPattern.elements().get(restIndex);
-                compilePatternAssignment(restElement.argument());
+                compilePatternAssignment(restElement.argument(), useExistingBindingInParentScopes);
 
                 // Clean up iterator state: drop catch_offset, next, iter
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -383,7 +401,7 @@ final class PatternCompiler {
                         // Get array element
                         compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                         // Assign to the pattern
-                        compilePatternAssignment(element);
+                        compilePatternAssignment(element, useExistingBindingInParentScopes);
                     }
                     index++;
                 }
@@ -403,11 +421,15 @@ final class PatternCompiler {
             // Patch jump target
             compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
             // Now the stack has the resolved value; assign to the inner pattern
-            compilePatternAssignment(assignPattern.left());
+            compilePatternAssignment(assignPattern.left(), useExistingBindingInParentScopes);
         } else if (pattern instanceof RestElement) {
             // RestElement should only appear inside ArrayPattern, shouldn't reach here
             throw new RuntimeException("RestElement can only appear inside ArrayPattern");
         }
+    }
+
+    void compileVarPatternAssignment(Pattern pattern) {
+        compilePatternAssignment(pattern, true);
     }
 
     /**

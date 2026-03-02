@@ -789,19 +789,6 @@ public final class StringPrototype {
     }
 
     /**
-     * Check if a code point has the Unicode Soft_Dotted property.
-     */
-    private static boolean isSoftDottedUnicode(int codePoint) {
-        if (softDottedRanges == null) {
-            softDottedRanges = UnicodePropertyResolver.resolveBinaryProperty("Soft_Dotted");
-            if (softDottedRanges == null) {
-                return false;
-            }
-        }
-        return isInRanges(codePoint, softDottedRanges);
-    }
-
-    /**
      * Check if a code point is a combining mark.
      */
     private static boolean isCombiningMark(int codePoint) {
@@ -891,6 +878,19 @@ public final class StringPrototype {
             return JSTypeConversions.toBoolean(matcher).value() ? 1 : 0;
         }
         return value instanceof JSRegExp ? 1 : 0;
+    }
+
+    /**
+     * Check if a code point has the Unicode Soft_Dotted property.
+     */
+    private static boolean isSoftDottedUnicode(int codePoint) {
+        if (softDottedRanges == null) {
+            softDottedRanges = UnicodePropertyResolver.resolveBinaryProperty("Soft_Dotted");
+            if (softDottedRanges == null) {
+                return false;
+            }
+        }
+        return isInRanges(codePoint, softDottedRanges);
     }
 
     /**
@@ -1206,6 +1206,37 @@ public final class StringPrototype {
         }
 
         return new JSString(padding + s);
+    }
+
+    /**
+     * Lithuanian uppercasing removes U+0307 when it follows a Soft_Dotted code point
+     * with only combining marks in between.
+     */
+    private static String removeLithuanianSoftDottedDots(String input) {
+        StringBuilder result = new StringBuilder(input.length());
+        int index = 0;
+        while (index < input.length()) {
+            int codePoint = input.codePointAt(index);
+            int charCount = Character.charCount(codePoint);
+            if (codePoint == 0x0307) {
+                int lookBackIndex = result.length();
+                int previousCodePoint = -1;
+                while (lookBackIndex > 0) {
+                    previousCodePoint = Character.codePointBefore(result, lookBackIndex);
+                    lookBackIndex -= Character.charCount(previousCodePoint);
+                    if (!isCombiningMark(previousCodePoint)) {
+                        break;
+                    }
+                }
+                if (previousCodePoint != -1 && isSoftDottedUnicode(previousCodePoint)) {
+                    index += charCount;
+                    continue;
+                }
+            }
+            result.appendCodePoint(codePoint);
+            index += charCount;
+        }
+        return result.toString();
     }
 
     /**
@@ -1882,37 +1913,6 @@ public final class StringPrototype {
                 result.appendCodePoint(Character.toLowerCase(codePoint));
             }
             i += charCount;
-        }
-        return result.toString();
-    }
-
-    /**
-     * Lithuanian uppercasing removes U+0307 when it follows a Soft_Dotted code point
-     * with only combining marks in between.
-     */
-    private static String removeLithuanianSoftDottedDots(String input) {
-        StringBuilder result = new StringBuilder(input.length());
-        int index = 0;
-        while (index < input.length()) {
-            int codePoint = input.codePointAt(index);
-            int charCount = Character.charCount(codePoint);
-            if (codePoint == 0x0307) {
-                int lookBackIndex = result.length();
-                int previousCodePoint = -1;
-                while (lookBackIndex > 0) {
-                    previousCodePoint = Character.codePointBefore(result, lookBackIndex);
-                    lookBackIndex -= Character.charCount(previousCodePoint);
-                    if (!isCombiningMark(previousCodePoint)) {
-                        break;
-                    }
-                }
-                if (previousCodePoint != -1 && isSoftDottedUnicode(previousCodePoint)) {
-                    index += charCount;
-                    continue;
-                }
-            }
-            result.appendCodePoint(codePoint);
-            index += charCount;
         }
         return result.toString();
     }

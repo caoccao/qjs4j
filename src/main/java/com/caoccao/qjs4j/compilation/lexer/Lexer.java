@@ -944,6 +944,32 @@ public final class Lexer {
         while (!isAtEnd()) {
             char c = peek();
 
+            // Hashbang comment (#!...) is only valid at the very start of source text.
+            if (position == 0 && c == '#' && position + 1 < source.length() && source.charAt(position + 1) == '!') {
+                advance(); // consume '#'
+                advance(); // consume '!'
+                while (!isAtEnd() && !isLineTerminator(peek())) {
+                    advance();
+                }
+                continue;
+            }
+
+            // Annex B SingleLineHTMLCloseComment in first line before any token.
+            if (lastTokenType == null
+                    && line == 1
+                    && c == '-'
+                    && position + 2 < source.length()
+                    && source.charAt(position + 1) == '-'
+                    && source.charAt(position + 2) == '>') {
+                advance(); // consume '-'
+                advance(); // consume '-'
+                advance(); // consume '>'
+                while (!isAtEnd() && !isLineTerminator(peek())) {
+                    advance();
+                }
+                continue;
+            }
+
             // Line terminators (must be checked BEFORE isWhiteSpace)
             if (isLineTerminator(c)) {
                 if (c == '\r' && position + 1 < source.length() && source.charAt(position + 1) == '\n') {

@@ -795,9 +795,8 @@ public non-sealed class JSObject implements JSValue {
         // Look in own properties
         int offset = getOwnPropertyOffset(key);
         if (offset >= 0) {
-            // Check if property has a getter
             PropertyDescriptor desc = shape.getDescriptorAt(offset);
-            if (desc != null && desc.hasGetter()) {
+            if (desc != null && desc.isAccessorDescriptor()) {
                 JSFunction getter = desc.getGetter();
                 if (getter != null && context != null) {
                     // Save and clear the prototype-chain visited set so that
@@ -831,7 +830,7 @@ public non-sealed class JSObject implements JSValue {
                         }
                     }
                 }
-                // Getter is explicitly undefined or no context available
+                // Accessor property without getter (or without context) reads as undefined.
                 return JSUndefined.INSTANCE;
             }
             // Regular property with value

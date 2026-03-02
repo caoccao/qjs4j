@@ -1358,7 +1358,7 @@ public final class TypedArrayPrototype {
                     return context.getPendingException();
                 }
                 if (toLocaleStringFn instanceof JSFunction fn) {
-                    JSValue result = fn.call(context, element, JSValue.NO_ARGS);
+                    JSValue result = fn.call(context, element, args);
                     if (context.hasPendingException()) {
                         return context.getPendingException();
                     }

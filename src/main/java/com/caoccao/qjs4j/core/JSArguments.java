@@ -93,26 +93,11 @@ public final class JSArguments extends JSObject {
         for (int i = 0; i < argumentValues.length; i++) {
             if (mappedVarRefs != null && i < mappedVarRefs.length && mappedVarRefs[i] != null) {
                 mappedIndices.add(i);
-                final VarRef mappedVarRef = mappedVarRefs[i];
-                final int mappedIndex = i;
-                JSNativeFunction getter = new JSNativeFunction(
-                        "get " + mappedIndex,
-                        0,
-                        (ctx, thisArg, argsArray) -> {
-                            JSValue value = mappedVarRef.get();
-                            return value != null ? value : JSUndefined.INSTANCE;
-                        });
-                JSNativeFunction setter = new JSNativeFunction(
-                        "set " + mappedIndex,
-                        1,
-                        (ctx, thisArg, argsArray) -> {
-                            JSValue value = argsArray.length > 0 ? argsArray[0] : JSUndefined.INSTANCE;
-                            mappedVarRef.set(value);
-                            return JSUndefined.INSTANCE;
-                        });
-                defineProperty(
-                        PropertyKey.fromIndex(i),
-                        PropertyDescriptor.accessorDescriptor(getter, setter, PropertyDescriptor.AccessorState.All));
+                PropertyDescriptor argDesc = PropertyDescriptor.dataDescriptor(
+                        argumentValues[i],
+                        PropertyDescriptor.DataState.All
+                );
+                defineProperty(PropertyKey.fromIndex(i), argDesc);
             } else {
                 PropertyDescriptor argDesc = PropertyDescriptor.dataDescriptor(
                         argumentValues[i],
@@ -196,34 +181,26 @@ public final class JSArguments extends JSObject {
     @Override
     public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
         int index = getArgumentIndex(key);
-        boolean isMapped = index >= 0 && mappedIndices.contains(index);
+        boolean isMapped = isMappedIndex(index, key);
 
-        if (isMapped) {
-            // Check if the property still exists as a mapped accessor
-            PropertyDescriptor current = getOwnPropertyDescriptor(key);
-            if (current == null || !current.isAccessorDescriptor()) {
-                // Property was deleted or already converted; clear stale mapping
-                mappedIndices.remove(index);
-                isMapped = false;
-            } else {
-                // Unmap: convert the stored accessor to a data property so that
-                // OrdinaryDefineOwnProperty sees the correct property type.
-                unmapParameter(key, index, context);
-            }
+        PropertyDescriptor descriptorForDefine = descriptor;
+        if (isMapped && !descriptor.isAccessorDescriptor() && !descriptor.hasValue()) {
+            descriptorForDefine = new PropertyDescriptor().copyFrom(descriptor);
+            descriptorForDefine.setValue(getMappedValue(index));
         }
 
-        boolean result = super.defineProperty(context, key, descriptor);
+        boolean result = super.defineProperty(context, key, descriptorForDefine);
 
         // ES2024 10.4.4.2 step 7: post-define mapping updates
         if (result && isMapped) {
             if (descriptor.isAccessorDescriptor()) {
-                // Step 7a: accessor descriptor removes mapping (already unmapped above)
-                // mappedIndices already cleared in unmapParameter
+                mappedIndices.remove(index);
             } else {
-                // Step 7b.i: sync VarRef with new value
+                // Step 7b.i: sync parameter map when value is explicitly provided.
                 if (descriptor.hasValue() && parameterVarRefs != null
                         && index < parameterVarRefs.length && parameterVarRefs[index] != null) {
                     parameterVarRefs[index].set(descriptor.getValue());
+                    argumentValues[index] = descriptor.getValue();
                 }
                 // Step 7b.ii: writable:false removes mapping
                 if (descriptor.hasWritable() && !descriptor.isWritable()) {
@@ -233,6 +210,27 @@ public final class JSArguments extends JSObject {
         }
 
         return result;
+    }
+
+    @Override
+    public boolean delete(JSContext context, PropertyKey key) {
+        boolean deleted = super.delete(context, key);
+        if (deleted) {
+            int index = getArgumentIndex(key);
+            if (index >= 0) {
+                mappedIndices.remove(index);
+            }
+        }
+        return deleted;
+    }
+
+    @Override
+    public JSValue get(JSContext context, PropertyKey key) {
+        int index = getArgumentIndex(key);
+        if (isMappedIndex(index, key)) {
+            return getMappedValue(index);
+        }
+        return super.get(context, key);
     }
 
     private int getArgumentIndex(PropertyKey key) {
@@ -256,6 +254,36 @@ public final class JSArguments extends JSObject {
         return argumentValues;
     }
 
+    private JSValue getMappedValue(int index) {
+        if (parameterVarRefs == null || index < 0 || index >= parameterVarRefs.length) {
+            return JSUndefined.INSTANCE;
+        }
+        VarRef varRef = parameterVarRefs[index];
+        if (varRef == null) {
+            return JSUndefined.INSTANCE;
+        }
+        JSValue value = varRef.get();
+        return value != null ? value : JSUndefined.INSTANCE;
+    }
+
+    @Override
+    public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+        PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+        int index = getArgumentIndex(key);
+        if (descriptor != null && isMappedIndex(index, key)) {
+            descriptor.setValue(getMappedValue(index));
+            descriptor.setWritable(true);
+        }
+        return descriptor;
+    }
+
+    private boolean isMappedIndex(int index, PropertyKey key) {
+        if (index < 0 || !mappedIndices.contains(index)) {
+            return false;
+        }
+        return super.getOwnPropertyDescriptor(key) != null;
+    }
+
     /**
      * Check if this is a strict mode arguments object.
      */
@@ -273,11 +301,14 @@ public final class JSArguments extends JSObject {
         // First, call the parent implementation to handle the property descriptor
         super.set(context, key, value);
 
-        // If this is an indexed property within the arguments range, also update the array
-        if (key.isIndex()) {
-            int index = key.asIndex();
-            if (index >= 0 && index < argumentValues.length) {
-                argumentValues[index] = value;
+        int index = getArgumentIndex(key);
+        if (index >= 0 && index < argumentValues.length) {
+            argumentValues[index] = value;
+        }
+        if (isMappedIndex(index, key) && parameterVarRefs != null && index < parameterVarRefs.length) {
+            VarRef varRef = parameterVarRefs[index];
+            if (varRef != null) {
+                varRef.set(value);
             }
         }
     }
@@ -293,25 +324,5 @@ public final class JSArguments extends JSObject {
     @Override
     public String toString() {
         return "[object Arguments]";
-    }
-
-    private void unmapParameter(PropertyKey key, int index, JSContext context) {
-        // Get the current value from the mapped getter
-        PropertyDescriptor current = getOwnPropertyDescriptor(key);
-        JSValue currentValue = JSUndefined.INSTANCE;
-        if (current != null && current.getGetter() != null) {
-            currentValue = current.getGetter().call(context, this, JSValue.NO_ARGS);
-        }
-
-        // Replace the accessor with a data property, preserving enumerable/configurable
-        boolean enumerable = current != null && current.isEnumerable();
-        boolean configurable = current != null && current.isConfigurable();
-        PropertyDescriptor.DataState state = enumerable
-                ? (configurable ? PropertyDescriptor.DataState.All : PropertyDescriptor.DataState.EnumerableWritable)
-                : (configurable ? PropertyDescriptor.DataState.ConfigurableWritable : PropertyDescriptor.DataState.Writable);
-        defineProperty(key, PropertyDescriptor.dataDescriptor(currentValue, state));
-
-        // Mark as unmapped
-        mappedIndices.remove(index);
     }
 }

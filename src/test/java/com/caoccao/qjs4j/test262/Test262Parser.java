@@ -56,9 +56,10 @@ public class Test262Parser {
             String yaml = matcher.group(1);
             parseYaml(yaml, testCase);
 
-            // Extract JavaScript code after frontmatter
-            int codeStart = matcher.end();
-            testCase.setCode(content.substring(codeStart).trim());
+            // Remove frontmatter block while preserving all source text before and after it.
+            // Hashbang tests intentionally place executable source before frontmatter.
+            String code = content.substring(0, matcher.start()) + content.substring(matcher.end());
+            testCase.setCode(code);
         } else {
             // No frontmatter - entire file is code
             testCase.setCode(content);
