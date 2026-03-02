@@ -30,16 +30,25 @@ import java.util.Locale;
  */
 public final class JSIntlNumberFormat extends JSObject {
     public static final String NAME = "Intl.NumberFormat";
+    private JSFunction boundFormatFunction;
+    private final String compactDisplay;
     private final String currency;
+    private final String currencyDisplay;
+    private final String currencySign;
     private final Locale locale;
     private final int maximumFractionDigits;
     private final int maximumSignificantDigits;
     private final int minimumFractionDigits;
     private final int minimumIntegerDigits;
+    private final int minimumSignificantDigits;
+    private final String notation;
     private final String numberingSystem;
+    private final int roundingIncrement;
     private final String roundingMode;
+    private final String roundingPriority;
     private final String signDisplay;
     private final String style;
+    private final String trailingZeroDisplay;
     private final String unit;
     private final String unitDisplay;
     private final boolean useGrouping;
@@ -65,6 +74,23 @@ public final class JSIntlNumberFormat extends JSObject {
                               boolean useSignificantDigits, int maximumSignificantDigits,
                               String unit, String unitDisplay, String signDisplay,
                               String roundingMode, String numberingSystem) {
+        this(locale, style, currency,
+                useGrouping, minimumIntegerDigits, minimumFractionDigits, maximumFractionDigits,
+                useSignificantDigits, useSignificantDigits ? 1 : 0, maximumSignificantDigits,
+                unit, unitDisplay, signDisplay, roundingMode, numberingSystem,
+                "standard", null, "symbol", "standard", 1, "auto", "auto");
+    }
+
+    public JSIntlNumberFormat(Locale locale, String style, String currency,
+                              boolean useGrouping, int minimumIntegerDigits,
+                              int minimumFractionDigits, int maximumFractionDigits,
+                              boolean useSignificantDigits, int minimumSignificantDigits, int maximumSignificantDigits,
+                              String unit, String unitDisplay, String signDisplay,
+                              String roundingMode, String numberingSystem,
+                              String notation, String compactDisplay,
+                              String currencyDisplay, String currencySign,
+                              int roundingIncrement, String roundingPriority,
+                              String trailingZeroDisplay) {
         super();
         this.locale = locale;
         this.style = style;
@@ -74,12 +100,20 @@ public final class JSIntlNumberFormat extends JSObject {
         this.minimumFractionDigits = minimumFractionDigits;
         this.maximumFractionDigits = maximumFractionDigits;
         this.useSignificantDigits = useSignificantDigits;
+        this.minimumSignificantDigits = minimumSignificantDigits;
         this.maximumSignificantDigits = maximumSignificantDigits;
         this.unit = unit;
         this.unitDisplay = unitDisplay;
         this.signDisplay = signDisplay != null ? signDisplay : "auto";
         this.roundingMode = roundingMode != null ? roundingMode : "halfExpand";
         this.numberingSystem = numberingSystem;
+        this.notation = notation != null ? notation : "standard";
+        this.compactDisplay = compactDisplay;
+        this.currencyDisplay = currencyDisplay != null ? currencyDisplay : "symbol";
+        this.currencySign = currencySign != null ? currencySign : "standard";
+        this.roundingIncrement = roundingIncrement;
+        this.roundingPriority = roundingPriority != null ? roundingPriority : "auto";
+        this.trailingZeroDisplay = trailingZeroDisplay != null ? trailingZeroDisplay : "auto";
     }
 
     private double applySignDisplay(double value) {
@@ -341,20 +375,64 @@ public final class JSIntlNumberFormat extends JSObject {
         return currency;
     }
 
+    public String getCurrencyDisplay() {
+        return currencyDisplay;
+    }
+
+    public String getCurrencySign() {
+        return currencySign;
+    }
+
+    public String getCompactDisplay() {
+        return compactDisplay;
+    }
+
+    public JSFunction getBoundFormatFunction() {
+        return boundFormatFunction;
+    }
+
     public Locale getLocale() {
         return locale;
+    }
+
+    public int getMaximumFractionDigits() {
+        return maximumFractionDigits;
+    }
+
+    public int getMaximumSignificantDigits() {
+        return maximumSignificantDigits;
+    }
+
+    public int getMinimumFractionDigits() {
+        return minimumFractionDigits;
     }
 
     public int getMinimumIntegerDigits() {
         return minimumIntegerDigits;
     }
 
+    public int getMinimumSignificantDigits() {
+        return minimumSignificantDigits;
+    }
+
+    public String getNotation() {
+        return notation;
+    }
+
     public String getNumberingSystem() {
         return numberingSystem;
     }
 
+    public int getRoundingIncrement() {
+        return roundingIncrement;
+    }
+
     public String getRoundingMode() {
         return roundingMode;
+    }
+
+    public String getRoundingPriority() {
+        return roundingPriority;
     }
 
     public String getSignDisplay() {
@@ -373,8 +451,20 @@ public final class JSIntlNumberFormat extends JSObject {
         return unitDisplay;
     }
 
+    public String getTrailingZeroDisplay() {
+        return trailingZeroDisplay;
+    }
+
     public boolean getUseGrouping() {
         return useGrouping;
+    }
+
+    public boolean getUseSignificantDigits() {
+        return useSignificantDigits;
+    }
+
+    public void setBoundFormatFunction(JSFunction boundFormatFunction) {
+        this.boundFormatFunction = boundFormatFunction;
     }
 
     private boolean isOriginalNegativeZero(double value) {

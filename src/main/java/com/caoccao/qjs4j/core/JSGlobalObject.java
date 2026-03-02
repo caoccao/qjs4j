@@ -965,9 +965,12 @@ public final class JSGlobalObject {
         intlObject.defineProperty(PropertyKey.fromString("DurationFormat"), durationFormatConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject numberFormatPrototype = context.createJSObject();
-        numberFormatPrototype.defineProperty(PropertyKey.fromString("format"), new JSNativeFunction("format", 1, JSIntlObject::numberFormatFormat), PropertyDescriptor.DataState.ConfigurableWritable);
+        numberFormatPrototype.defineProperty(PropertyKey.fromString("format"),
+                new JSNativeFunction("get format", 0, JSIntlObject::numberFormatFormatGetter),
+                PropertyDescriptor.AccessorState.Configurable);
         numberFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"), new JSNativeFunction("formatToParts", 1, JSIntlObject::numberFormatFormatToParts), PropertyDescriptor.DataState.ConfigurableWritable);
         numberFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"), new JSNativeFunction("resolvedOptions", 0, JSIntlObject::numberFormatResolvedOptions), PropertyDescriptor.DataState.ConfigurableWritable);
+        numberFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.NumberFormat"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction numberFormatConstructor = new JSNativeFunction(
                 "NumberFormat",
                 0,
@@ -1061,6 +1064,7 @@ public final class JSGlobalObject {
         localePrototype.defineProperty(PropertyKey.fromString("getTextInfo"), new JSNativeFunction("getTextInfo", 0, JSIntlObject::localeGetTextInfo), PropertyDescriptor.DataState.ConfigurableWritable);
         localePrototype.defineProperty(PropertyKey.fromString("getTimeZones"), new JSNativeFunction("getTimeZones", 0, JSIntlObject::localeGetTimeZones), PropertyDescriptor.DataState.ConfigurableWritable);
         localePrototype.defineProperty(PropertyKey.fromString("getWeekInfo"), new JSNativeFunction("getWeekInfo", 0, JSIntlObject::localeGetWeekInfo), PropertyDescriptor.DataState.ConfigurableWritable);
+        localePrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.Locale"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction localeConstructor = new JSNativeFunction(
                 "Locale",
                 1,

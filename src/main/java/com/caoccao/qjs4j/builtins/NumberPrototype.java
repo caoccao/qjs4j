@@ -162,8 +162,17 @@ public final class NumberPrototype {
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
         return thisArg.asNumberWithDownCast()
                 .map(jsNumber -> {
-                    // Simplified: just use default toString
-                    return (JSValue) new JSString(DtoaConverter.convert(jsNumber.value()));
+                    if (args.length == 0) {
+                        return new JSString(DtoaConverter.convert(jsNumber.value()));
+                    }
+                    JSValue numberFormatValue = JSIntlObject.createNumberFormat(context, null, args);
+                    if (context.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    if (!(numberFormatValue instanceof JSIntlNumberFormat numberFormat)) {
+                        return context.throwTypeError("Intl.NumberFormat.prototype.format called on incompatible receiver");
+                    }
+                    return new JSString(numberFormat.format(jsNumber.value()));
                 })
                 .orElseGet(() -> context.throwTypeError("Number.prototype.toLocaleString requires that 'this' be a Number"));
     }
