@@ -20,12 +20,14 @@ import java.util.Locale;
 
 /**
  * Intl.Locale instance object.
+ * Getters derive from the canonical {@code tag} string per ECMA-402 spec.
  */
 public final class JSIntlLocale extends JSObject {
     public static final String NAME = "Intl.Locale";
     private final String calendar;
     private final String caseFirst;
     private final String collation;
+    private final String firstDayOfWeek;
     private final String hourCycle;
     private final Locale locale;
     private final String numberingSystem;
@@ -34,37 +36,46 @@ public final class JSIntlLocale extends JSObject {
     private final String tag;
 
     public JSIntlLocale(Locale locale, String tag) {
-        this(locale, tag, null, null, null, null, null, false, false);
+        this(locale, tag, null, null, null, null, null, null, false, false);
     }
 
     public JSIntlLocale(Locale locale, String tag, String calendar, String caseFirst,
                         String collation, String hourCycle, String numberingSystem,
                         boolean numeric, boolean numericSet) {
+        this(locale, tag, calendar, caseFirst, collation, null, hourCycle, numberingSystem, numeric, numericSet);
+    }
+
+    public JSIntlLocale(Locale locale, String tag, String calendar, String caseFirst,
+                        String collation, String firstDayOfWeek, String hourCycle,
+                        String numberingSystem, boolean numeric, boolean numericSet) {
         super();
         this.locale = locale;
         this.tag = tag;
         this.calendar = calendar;
         this.caseFirst = caseFirst;
         this.collation = collation;
+        this.firstDayOfWeek = firstDayOfWeek;
         this.hourCycle = hourCycle;
         this.numberingSystem = numberingSystem;
         this.numeric = numeric;
         this.numericSet = numericSet;
     }
 
+    /**
+     * Per spec: GetLocaleBaseName returns the longest prefix of the locale tag
+     * matched by unicode_language_id (everything before the first singleton extension).
+     */
     public String getBaseName() {
-        Locale stripped = locale.stripExtensions();
-        StringBuilder sb = new StringBuilder(stripped.getLanguage());
-        if (!stripped.getScript().isEmpty()) {
-            sb.append("-").append(stripped.getScript());
-        }
-        if (!stripped.getCountry().isEmpty()) {
-            sb.append("-").append(stripped.getCountry());
-        }
-        String variant = stripped.getVariant();
-        if (variant != null && !variant.isEmpty()) {
-            // Java uses underscore for multiple variants; convert to BCP 47 hyphen
-            sb.append("-").append(variant.replace('_', '-'));
+        String[] parts = tag.split("-");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (part.length() == 1) {
+                break; // singleton extension
+            }
+            if (!sb.isEmpty()) {
+                sb.append("-");
+            }
+            sb.append(part);
         }
         return sb.toString();
     }
@@ -81,12 +92,20 @@ public final class JSIntlLocale extends JSObject {
         return collation;
     }
 
+    public String getFirstDayOfWeek() {
+        return firstDayOfWeek;
+    }
+
     public String getHourCycle() {
         return hourCycle;
     }
 
+    /**
+     * Per spec: GetLocaleLanguage returns the first subtag of baseName.
+     */
     public String getLanguage() {
-        return locale.getLanguage();
+        String[] parts = tag.split("-", 2);
+        return parts[0];
     }
 
     public Locale getLocale() {
@@ -101,20 +120,69 @@ public final class JSIntlLocale extends JSObject {
         return numeric;
     }
 
+    /**
+     * Per spec: GetLocaleRegion returns the region subtag from baseName, or empty string.
+     * Region is 2 alpha or 3 digit, appearing after language and optional script.
+     */
     public String getRegion() {
-        return locale.getCountry();
+        String baseName = getBaseName();
+        String[] parts = baseName.split("-");
+        for (int i = 1; i < parts.length; i++) {
+            String p = parts[i];
+            if ((p.length() == 2 && p.chars().allMatch(Character::isLetter)) ||
+                    (p.length() == 3 && p.chars().allMatch(Character::isDigit))) {
+                return p;
+            }
+        }
+        return "";
     }
 
+    /**
+     * Per spec: GetLocaleScript returns the script subtag from baseName, or empty string.
+     * Script is exactly 4 alpha letters.
+     */
     public String getScript() {
-        return locale.getScript();
+        String baseName = getBaseName();
+        String[] parts = baseName.split("-");
+        if (parts.length >= 2 && parts[1].length() == 4 && parts[1].chars().allMatch(Character::isLetter)) {
+            return parts[1];
+        }
+        return "";
     }
 
     public String getTag() {
         return tag;
     }
 
+    /**
+     * Per spec: GetLocaleVariants returns the longest suffix of baseName starting
+     * with a variant subtag (5-8 alphanum or digit+3alphanum), or empty string.
+     */
     public String getVariant() {
-        return locale.getVariant();
+        String baseName = getBaseName();
+        String[] parts = baseName.split("-");
+        int variantStart = -1;
+        for (int i = parts.length - 1; i >= 1; i--) {
+            String p = parts[i];
+            boolean isVariant = (p.length() >= 5 && p.length() <= 8) ||
+                    (p.length() == 4 && Character.isDigit(p.charAt(0)));
+            if (isVariant) {
+                variantStart = i;
+            } else {
+                break;
+            }
+        }
+        if (variantStart < 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = variantStart; i < parts.length; i++) {
+            if (!sb.isEmpty()) {
+                sb.append("-");
+            }
+            sb.append(parts[i]);
+        }
+        return sb.toString();
     }
 
     public boolean isNumericSet() {

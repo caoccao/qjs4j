@@ -1051,8 +1051,16 @@ public final class JSGlobalObject {
         localePrototype.defineProperty(PropertyKey.fromString("script"), new JSNativeFunction("get script", 0, JSIntlObject::localeGetScript), PropertyDescriptor.AccessorState.Configurable);
         localePrototype.defineProperty(PropertyKey.fromString("region"), new JSNativeFunction("get region", 0, JSIntlObject::localeGetRegion), PropertyDescriptor.AccessorState.Configurable);
         localePrototype.defineProperty(PropertyKey.fromString("variants"), new JSNativeFunction("get variants", 0, JSIntlObject::localeGetVariants), PropertyDescriptor.AccessorState.Configurable);
+        localePrototype.defineProperty(PropertyKey.fromString("firstDayOfWeek"), new JSNativeFunction("get firstDayOfWeek", 0, JSIntlObject::localeGetFirstDayOfWeek), PropertyDescriptor.AccessorState.Configurable);
         localePrototype.defineProperty(PropertyKey.fromString("maximize"), new JSNativeFunction("maximize", 0, JSIntlObject::localeMaximize), PropertyDescriptor.DataState.ConfigurableWritable);
         localePrototype.defineProperty(PropertyKey.fromString("minimize"), new JSNativeFunction("minimize", 0, JSIntlObject::localeMinimize), PropertyDescriptor.DataState.ConfigurableWritable);
+        localePrototype.defineProperty(PropertyKey.fromString("getCalendars"), new JSNativeFunction("getCalendars", 0, JSIntlObject::localeGetCalendars), PropertyDescriptor.DataState.ConfigurableWritable);
+        localePrototype.defineProperty(PropertyKey.fromString("getCollations"), new JSNativeFunction("getCollations", 0, JSIntlObject::localeGetCollations), PropertyDescriptor.DataState.ConfigurableWritable);
+        localePrototype.defineProperty(PropertyKey.fromString("getHourCycles"), new JSNativeFunction("getHourCycles", 0, JSIntlObject::localeGetHourCycles), PropertyDescriptor.DataState.ConfigurableWritable);
+        localePrototype.defineProperty(PropertyKey.fromString("getNumberingSystems"), new JSNativeFunction("getNumberingSystems", 0, JSIntlObject::localeGetNumberingSystems), PropertyDescriptor.DataState.ConfigurableWritable);
+        localePrototype.defineProperty(PropertyKey.fromString("getTextInfo"), new JSNativeFunction("getTextInfo", 0, JSIntlObject::localeGetTextInfo), PropertyDescriptor.DataState.ConfigurableWritable);
+        localePrototype.defineProperty(PropertyKey.fromString("getTimeZones"), new JSNativeFunction("getTimeZones", 0, JSIntlObject::localeGetTimeZones), PropertyDescriptor.DataState.ConfigurableWritable);
+        localePrototype.defineProperty(PropertyKey.fromString("getWeekInfo"), new JSNativeFunction("getWeekInfo", 0, JSIntlObject::localeGetWeekInfo), PropertyDescriptor.DataState.ConfigurableWritable);
         JSNativeFunction localeConstructor = new JSNativeFunction(
                 "Locale",
                 1,
