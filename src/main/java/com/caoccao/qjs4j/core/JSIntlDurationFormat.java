@@ -373,8 +373,9 @@ public final class JSIntlDurationFormat extends JSObject {
         }
 
         String numberStr = formatPlainNumber(formatValue, 1, -1, -1, true, false, locale);
-        String formatted = numberStr + " " + singularUnit;
-        addNumberPartsToList(parts, formatted);
+        addNumberPartsToList(parts, numberStr);
+        parts.add(new FormatPart("literal", " ", null));
+        parts.add(new FormatPart("unit", singularUnit, null));
 
         return parts;
     }
@@ -393,8 +394,9 @@ public final class JSIntlDurationFormat extends JSObject {
 
         String numberStr = formatBigDecimalNumber(formatValue, 1, minFractionDigits, maxFractionDigits,
                 true, true, locale);
-        String formatted = numberStr + " " + singularUnit;
-        addNumberPartsToList(parts, formatted);
+        addNumberPartsToList(parts, numberStr);
+        parts.add(new FormatPart("literal", " ", null));
+        parts.add(new FormatPart("unit", singularUnit, null));
         return parts;
     }
 

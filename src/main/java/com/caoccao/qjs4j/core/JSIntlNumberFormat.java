@@ -21,6 +21,7 @@ import java.math.BigInteger;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.text.NumberFormat;
 import java.util.*;
 
@@ -187,6 +188,285 @@ public final class JSIntlNumberFormat extends JSObject {
         this.trailingZeroDisplay = trailingZeroDisplay != null ? trailingZeroDisplay : "auto";
     }
 
+    private void appendAffixWithType(List<PartToken> tokens, String affix, String type) {
+        if (affix.isEmpty()) {
+            return;
+        }
+        int index = 0;
+        while (index < affix.length()) {
+            int start = index;
+            boolean whitespace = isWhitespaceLike(affix.charAt(index));
+            index++;
+            while (index < affix.length() && isWhitespaceLike(affix.charAt(index)) == whitespace) {
+                index++;
+            }
+            String segment = affix.substring(start, index);
+            if (whitespace) {
+                tokens.add(new PartToken("literal", segment));
+            } else {
+                tokens.add(new PartToken(type, segment));
+            }
+        }
+    }
+
+    private void appendCompactParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols) {
+        int[] numericRange = findNumericCoreRange(body, symbols);
+        if (numericRange[0] < 0) {
+            tokens.add(new PartToken("literal", body));
+            return;
+        }
+        String prefix = body.substring(0, numericRange[0]);
+        String numberPortion = body.substring(numericRange[0], numericRange[1] + 1);
+        String suffix = body.substring(numericRange[1] + 1);
+        appendLiteral(tokens, prefix);
+        appendNumberParts(tokens, numberPortion, symbols);
+        appendAffixWithType(tokens, suffix, "compact");
+    }
+
+    private void appendCurrencyAffix(List<PartToken> tokens, String affix, DecimalFormatSymbols symbols) {
+        if (affix.isEmpty()) {
+            return;
+        }
+        List<String> currencyCandidates = new ArrayList<>();
+        if (currency != null && !currency.isEmpty()) {
+            currencyCandidates.add(currency);
+        }
+        String currencySymbol = symbols.getCurrencySymbol();
+        if (currencySymbol != null && !currencySymbol.isEmpty()) {
+            currencyCandidates.add(currencySymbol);
+        }
+        String internationalCurrencySymbol = symbols.getInternationalCurrencySymbol();
+        if (internationalCurrencySymbol != null && !internationalCurrencySymbol.isEmpty()) {
+            currencyCandidates.add(internationalCurrencySymbol);
+        }
+        currencyCandidates.sort((left, right) -> Integer.compare(right.length(), left.length()));
+
+        int index = 0;
+        while (index < affix.length()) {
+            char character = affix.charAt(index);
+            if (isWhitespaceLike(character)) {
+                int end = index + 1;
+                while (end < affix.length() && isWhitespaceLike(affix.charAt(end))) {
+                    end++;
+                }
+                tokens.add(new PartToken("literal", affix.substring(index, end)));
+                index = end;
+                continue;
+            }
+
+            String matchedCandidate = null;
+            for (String candidate : currencyCandidates) {
+                if (!candidate.isEmpty() && affix.startsWith(candidate, index)) {
+                    matchedCandidate = candidate;
+                    break;
+                }
+            }
+            if (matchedCandidate != null) {
+                tokens.add(new PartToken("currency", matchedCandidate));
+                index += matchedCandidate.length();
+                continue;
+            }
+
+            if (character == '(' || character == ')' || character == '[' || character == ']') {
+                tokens.add(new PartToken("literal", String.valueOf(character)));
+                index++;
+                continue;
+            }
+
+            if (isCurrencyLikeCharacter(character)) {
+                int end = index + 1;
+                while (end < affix.length()) {
+                    char nextCharacter = affix.charAt(end);
+                    if (isWhitespaceLike(nextCharacter) || nextCharacter == '(' || nextCharacter == ')'
+                            || nextCharacter == '[' || nextCharacter == ']') {
+                        break;
+                    }
+                    if (!isCurrencyLikeCharacter(nextCharacter)) {
+                        break;
+                    }
+                    end++;
+                }
+                tokens.add(new PartToken("currency", affix.substring(index, end)));
+                index = end;
+                continue;
+            }
+
+            int end = index + 1;
+            while (end < affix.length()) {
+                char nextCharacter = affix.charAt(end);
+                if (isWhitespaceLike(nextCharacter) || isCurrencyLikeCharacter(nextCharacter)) {
+                    break;
+                }
+                end++;
+            }
+            tokens.add(new PartToken("literal", affix.substring(index, end)));
+            index = end;
+        }
+    }
+
+    private void appendCurrencyParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols) {
+        int[] numericRange = findNumericCoreRange(body, symbols);
+        if (numericRange[0] < 0) {
+            appendCurrencyAffix(tokens, body, symbols);
+            return;
+        }
+        String prefix = body.substring(0, numericRange[0]);
+        String numberPortion = body.substring(numericRange[0], numericRange[1] + 1);
+        String suffix = body.substring(numericRange[1] + 1);
+        appendCurrencyAffix(tokens, prefix, symbols);
+        appendNumberParts(tokens, numberPortion, symbols);
+        appendCurrencyAffix(tokens, suffix, symbols);
+    }
+
+    private void appendLiteral(List<PartToken> tokens, String text) {
+        if (!text.isEmpty()) {
+            tokens.add(new PartToken("literal", text));
+        }
+    }
+
+    private void appendNumberParts(List<PartToken> tokens, String numberPortion, DecimalFormatSymbols symbols) {
+        if (numberPortion.isEmpty()) {
+            return;
+        }
+        char decimalSeparator = symbols.getDecimalSeparator();
+        char groupingSeparator = symbols.getGroupingSeparator();
+        int decimalIndex = numberPortion.indexOf(decimalSeparator);
+        String integerPart;
+        String fractionPart;
+        if (decimalIndex >= 0) {
+            integerPart = numberPortion.substring(0, decimalIndex);
+            fractionPart = numberPortion.substring(decimalIndex + 1);
+        } else {
+            integerPart = numberPortion;
+            fractionPart = null;
+        }
+
+        int cursor = 0;
+        boolean emittedInteger = false;
+        for (int index = 0; index < integerPart.length(); index++) {
+            if (integerPart.charAt(index) == groupingSeparator) {
+                if (index > cursor) {
+                    tokens.add(new PartToken("integer", integerPart.substring(cursor, index)));
+                    emittedInteger = true;
+                }
+                tokens.add(new PartToken("group", String.valueOf(groupingSeparator)));
+                cursor = index + 1;
+            }
+        }
+        if (cursor < integerPart.length()) {
+            tokens.add(new PartToken("integer", integerPart.substring(cursor)));
+            emittedInteger = true;
+        }
+        if (!emittedInteger && !integerPart.isEmpty()) {
+            tokens.add(new PartToken("integer", integerPart));
+        }
+
+        if (fractionPart != null) {
+            tokens.add(new PartToken("decimal", String.valueOf(decimalSeparator)));
+            if (!fractionPart.isEmpty()) {
+                tokens.add(new PartToken("fraction", fractionPart));
+            }
+        }
+    }
+
+    private void appendPercentParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols) {
+        int[] numericRange = findNumericCoreRange(body, symbols);
+        if (numericRange[0] < 0) {
+            appendAffixWithType(tokens, body, "percentSign");
+            return;
+        }
+        String prefix = body.substring(0, numericRange[0]);
+        String numberPortion = body.substring(numericRange[0], numericRange[1] + 1);
+        String suffix = body.substring(numericRange[1] + 1);
+        appendAffixWithType(tokens, prefix, "percentSign");
+        appendNumberParts(tokens, numberPortion, symbols);
+        appendAffixWithType(tokens, suffix, "percentSign");
+    }
+
+    private void appendScientificParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols) {
+        String exponentSeparator = symbols.getExponentSeparator();
+        int exponentIndex = body.indexOf(exponentSeparator);
+        if (exponentIndex < 0) {
+            appendNumberParts(tokens, body, symbols);
+            return;
+        }
+
+        String mantissa = body.substring(0, exponentIndex);
+        String exponent = body.substring(exponentIndex + exponentSeparator.length());
+        appendNumberParts(tokens, mantissa, symbols);
+        tokens.add(new PartToken("exponentSeparator", exponentSeparator));
+        if (!exponent.isEmpty()) {
+            char first = exponent.charAt(0);
+            if (first == '-' || first == symbols.getMinusSign()) {
+                tokens.add(new PartToken("exponentMinusSign", String.valueOf(first)));
+                exponent = exponent.substring(1);
+            } else if (first == '+') {
+                exponent = exponent.substring(1);
+            }
+        }
+        if (!exponent.isEmpty()) {
+            tokens.add(new PartToken("exponentInteger", exponent));
+        }
+    }
+
+    private void appendUnitAffix(List<PartToken> tokens, String affix, DecimalFormatSymbols symbols) {
+        if (affix.isEmpty()) {
+            return;
+        }
+        int segmentStart = 0;
+        for (int index = 0; index < affix.length(); index++) {
+            char character = affix.charAt(index);
+            if (character == '-' || character == symbols.getMinusSign() || character == '+') {
+                appendUnitText(tokens, affix.substring(segmentStart, index));
+                if (character == '+') {
+                    tokens.add(new PartToken("plusSign", String.valueOf(character)));
+                } else {
+                    tokens.add(new PartToken("minusSign", String.valueOf(character)));
+                }
+                segmentStart = index + 1;
+            }
+        }
+        appendUnitText(tokens, affix.substring(segmentStart));
+    }
+
+    private void appendUnitParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols) {
+        int[] numericRange = findNumericCoreRange(body, symbols);
+        if (numericRange[0] < 0) {
+            appendUnitAffix(tokens, body, symbols);
+            return;
+        }
+        String prefix = body.substring(0, numericRange[0]);
+        String numberPortion = body.substring(numericRange[0], numericRange[1] + 1);
+        String suffix = body.substring(numericRange[1] + 1);
+        appendUnitAffix(tokens, prefix, symbols);
+        appendNumberParts(tokens, numberPortion, symbols);
+        appendUnitAffix(tokens, suffix, symbols);
+    }
+
+    private void appendUnitText(List<PartToken> tokens, String text) {
+        if (text.isEmpty()) {
+            return;
+        }
+        int leadingWhitespaceEnd = 0;
+        while (leadingWhitespaceEnd < text.length() && isWhitespaceLike(text.charAt(leadingWhitespaceEnd))) {
+            leadingWhitespaceEnd++;
+        }
+        int trailingWhitespaceStart = text.length();
+        while (trailingWhitespaceStart > leadingWhitespaceEnd
+                && isWhitespaceLike(text.charAt(trailingWhitespaceStart - 1))) {
+            trailingWhitespaceStart--;
+        }
+        if (leadingWhitespaceEnd > 0) {
+            tokens.add(new PartToken("literal", text.substring(0, leadingWhitespaceEnd)));
+        }
+        if (trailingWhitespaceStart > leadingWhitespaceEnd) {
+            tokens.add(new PartToken("unit", text.substring(leadingWhitespaceEnd, trailingWhitespaceStart)));
+        }
+        if (trailingWhitespaceStart < text.length()) {
+            tokens.add(new PartToken("literal", text.substring(trailingWhitespaceStart)));
+        }
+    }
+
     private BigDecimal applyFractionRounding(BigDecimal value) {
         int fractionDigits = Math.max(0, maximumFractionDigits);
         BigDecimal increment = BigDecimal.ONE.scaleByPowerOfTen(-fractionDigits)
@@ -289,6 +569,9 @@ public final class JSIntlNumberFormat extends JSObject {
     }
 
     private String applyUnitStyle(String numberPortion) {
+        if ("percent".equals(unit)) {
+            return numberPortion + "%";
+        }
         if (!"kilometer-per-hour".equals(unit)) {
             return numberPortion + " " + unit;
         }
@@ -462,6 +745,35 @@ public final class JSIntlNumberFormat extends JSObject {
         }
         String groupedInteger = groupIndian(integerText);
         return text.substring(0, integerStart) + groupedInteger + text.substring(integerEndExclusive);
+    }
+
+    private int[] findNumericCoreRange(String text, DecimalFormatSymbols symbols) {
+        int start = -1;
+        int end = -1;
+        boolean seenDigit = false;
+        char decimalSeparator = symbols.getDecimalSeparator();
+        char groupingSeparator = symbols.getGroupingSeparator();
+        for (int index = 0; index < text.length(); index++) {
+            char character = text.charAt(index);
+            boolean numericCharacter = Character.isDigit(character)
+                    || character == decimalSeparator
+                    || character == groupingSeparator;
+            if (numericCharacter) {
+                if (start < 0) {
+                    start = index;
+                }
+                if (Character.isDigit(character)) {
+                    seenDigit = true;
+                }
+                end = index;
+            } else if (start >= 0 && seenDigit) {
+                break;
+            } else if (start >= 0) {
+                start = -1;
+                end = -1;
+            }
+        }
+        return new int[]{start, end};
     }
 
     public String format(double value) {
@@ -668,42 +980,48 @@ public final class JSIntlNumberFormat extends JSObject {
     }
 
     private JSArray formatToPartsFromFormatted(JSContext context, String formatted) {
-        JSArray result = context.createJSArray();
-        int partIndex = 0;
-        boolean hasSign = formatted.startsWith("-") || formatted.startsWith("+");
-        if (hasSign) {
-            JSObject signPart = context.createJSObject();
-            signPart.set("type", new JSString(formatted.startsWith("-") ? "minusSign" : "plusSign"));
-            signPart.set("value", new JSString(formatted.substring(0, 1)));
-            result.set(context, partIndex++, signPart);
-            formatted = formatted.substring(1);
-        }
-        int decimalIndex = formatted.indexOf('.');
-        if (decimalIndex < 0) {
-            decimalIndex = formatted.indexOf(',');
-        }
-        if (decimalIndex >= 0) {
-            JSObject intPart = context.createJSObject();
-            intPart.set("type", new JSString("integer"));
-            intPart.set("value", new JSString(formatted.substring(0, decimalIndex)));
-            result.set(context, partIndex++, intPart);
+        DecimalFormatSymbols symbols = DecimalFormatSymbols.getInstance(createCurrencySignLocale());
+        List<PartToken> tokens = new ArrayList<>();
+        String body = formatted;
 
-            JSObject decPart = context.createJSObject();
-            decPart.set("type", new JSString("decimal"));
-            decPart.set("value", new JSString(formatted.substring(decimalIndex, decimalIndex + 1)));
-            result.set(context, partIndex++, decPart);
-
-            if (decimalIndex + 1 < formatted.length()) {
-                JSObject fracPart = context.createJSObject();
-                fracPart.set("type", new JSString("fraction"));
-                fracPart.set("value", new JSString(formatted.substring(decimalIndex + 1)));
-                result.set(context, partIndex++, fracPart);
+        if (!body.isEmpty()) {
+            char first = body.charAt(0);
+            if (first == '+') {
+                tokens.add(new PartToken("plusSign", String.valueOf(first)));
+                body = body.substring(1);
+            } else if (first == '-' || first == symbols.getMinusSign()) {
+                tokens.add(new PartToken("minusSign", String.valueOf(first)));
+                body = body.substring(1);
             }
+        }
+
+        String nanText = symbols.getNaN();
+        String infinityText = symbols.getInfinity();
+        if (body.equals(nanText) || body.equals("NaN")) {
+            tokens.add(new PartToken("nan", body));
+        } else if (body.equals(infinityText) || body.equals("∞") || body.equals("Infinity")) {
+            tokens.add(new PartToken("infinity", body));
+        } else if ("scientific".equals(notation) || "engineering".equals(notation)) {
+            appendScientificParts(tokens, body, symbols);
+        } else if ("unit".equals(style)) {
+            appendUnitParts(tokens, body, symbols);
+        } else if ("percent".equals(style)) {
+            appendPercentParts(tokens, body, symbols);
+        } else if ("currency".equals(style)) {
+            appendCurrencyParts(tokens, body, symbols);
+        } else if ("compact".equals(notation)) {
+            appendCompactParts(tokens, body, symbols);
         } else {
-            JSObject intPart = context.createJSObject();
-            intPart.set("type", new JSString("integer"));
-            intPart.set("value", new JSString(formatted));
-            result.set(context, partIndex++, intPart);
+            appendNumberParts(tokens, body, symbols);
+        }
+
+        JSArray result = context.createJSArray();
+        for (int index = 0; index < tokens.size(); index++) {
+            PartToken token = tokens.get(index);
+            JSObject part = context.createJSObject();
+            part.set("type", new JSString(token.type()));
+            part.set("value", new JSString(token.value()));
+            result.set(context, index, part);
         }
         return result;
     }
@@ -822,6 +1140,16 @@ public final class JSIntlNumberFormat extends JSObject {
         return String.join(",", groups);
     }
 
+    private boolean isCurrencyLikeCharacter(char character) {
+        int type = Character.getType(character);
+        if (Character.isLetterOrDigit(character)) {
+            return true;
+        }
+        return type == Character.CURRENCY_SYMBOL
+                || type == Character.OTHER_SYMBOL
+                || type == Character.MATH_SYMBOL;
+    }
+
     private boolean isGroupingActiveForMagnitude(int magnitudeDigits) {
         if ("false".equals(useGroupingMode)) {
             return false;
@@ -840,6 +1168,10 @@ public final class JSIntlNumberFormat extends JSObject {
 
     private boolean isOriginalNegativeZero(double value) {
         return Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
+    }
+
+    private boolean isWhitespaceLike(char character) {
+        return Character.isWhitespace(character) || Character.getType(character) == Character.SPACE_SEPARATOR;
     }
 
     private RoundingMode mapToJavaRoundingMode(String mode) {
@@ -1066,9 +1398,6 @@ public final class JSIntlNumberFormat extends JSObject {
         if ("auto".equals(roundingPriority)) {
             return false;
         }
-        if (minimumFractionDigits > 0 && minimumSignificantDigits > 0) {
-            return "lessPrecision".equals(roundingPriority);
-        }
         if (maximumFractionDigits >= 0 && maximumSignificantDigits > 0) {
             if ("lessPrecision".equals(roundingPriority)) {
                 return maximumFractionDigits < maximumSignificantDigits;
@@ -1079,6 +1408,9 @@ public final class JSIntlNumberFormat extends JSObject {
     }
 
     private record CompactSpec(BigDecimal divisor, String suffix) {
+    }
+
+    private record PartToken(String type, String value) {
     }
 
 }

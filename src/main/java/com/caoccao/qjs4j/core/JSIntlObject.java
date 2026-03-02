@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSException;
 
+import java.math.BigDecimal;
 import java.time.ZoneId;
 import java.time.format.FormatStyle;
 import java.util.*;
@@ -654,6 +655,26 @@ public final class JSIntlObject {
         return locale;
     }
 
+    private static void appendRangePartsWithSource(JSContext context, JSArray target, JSArray sourceParts, String sourceName) {
+        int length = (int) sourceParts.getLength();
+        for (int index = 0; index < length; index++) {
+            JSValue partValue = sourceParts.get(index);
+            if (!(partValue instanceof JSObject partObject)) {
+                continue;
+            }
+            JSValue typeValue = partObject.get(context, PropertyKey.fromString("type"));
+            JSValue valueValue = partObject.get(context, PropertyKey.fromString("value"));
+            if (!(typeValue instanceof JSString typeString) || !(valueValue instanceof JSString valueString)) {
+                continue;
+            }
+            target.push(createPartObject(context, typeString.value(), valueString.value(), sourceName));
+        }
+    }
+
+    // =========================================================================
+    // Intl.NumberFormat.prototype.formatToParts
+    // =========================================================================
+
     /**
      * Apply CLDR canonicalization to a tag that has already been through Java's Locale processing.
      */
@@ -840,7 +861,7 @@ public final class JSIntlObject {
     }
 
     // =========================================================================
-    // Intl.NumberFormat.prototype.formatToParts
+    // Intl.ListFormat.prototype.formatToParts
     // =========================================================================
 
     /**
@@ -926,7 +947,7 @@ public final class JSIntlObject {
     }
 
     // =========================================================================
-    // Intl.ListFormat.prototype.formatToParts
+    // Intl.DurationFormat
     // =========================================================================
 
     /**
@@ -978,10 +999,6 @@ public final class JSIntlObject {
         }
         return builder.toString();
     }
-
-    // =========================================================================
-    // Intl.DurationFormat
-    // =========================================================================
 
     /**
      * Canonicalize a calendar identifier per ECMA-402:
@@ -2855,10 +2872,13 @@ public final class JSIntlObject {
             String extensionNu = unicodeExtensions.get("nu");
             String numberingSystem = "latn";
             boolean includeNumberingExtension = false;
-            if (numberingSystemOption != null) {
-                if (SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystemOption)) {
-                    numberingSystem = numberingSystemOption;
-                    includeNumberingExtension = true;
+            boolean numberingOptionSupported = numberingSystemOption != null
+                    && SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystemOption);
+            if (numberingOptionSupported) {
+                numberingSystem = numberingSystemOption;
+                if (extensionNu != null) {
+                    String extensionNuLower = extensionNu.toLowerCase(Locale.ROOT);
+                    includeNumberingExtension = numberingSystem.equals(extensionNuLower);
                 }
             } else if (extensionNu != null) {
                 String extensionNuLower = extensionNu.toLowerCase(Locale.ROOT);
@@ -3397,6 +3417,24 @@ public final class JSIntlObject {
         return result;
     }
 
+    private static int findFirstDigitIndex(String text) {
+        for (int index = 0; index < text.length(); index++) {
+            if (Character.isDigit(text.charAt(index))) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private static int findLastDigitIndex(String text) {
+        for (int index = text.length() - 1; index >= 0; index--) {
+            if (Character.isDigit(text.charAt(index))) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
     /**
      * Convert a firstDayOfWeek day name to its numeric value (1=Monday through 7=Sunday).
      * Returns -1 if not a recognized day name.
@@ -3726,6 +3764,31 @@ public final class JSIntlObject {
             }
         }
         return TIMEZONE_LOOKUP_MAP;
+    }
+
+    private static boolean isNaNRangeNumberValue(JSContext context, JSValue value) {
+        if (value instanceof JSBigInt) {
+            return false;
+        }
+        if (value instanceof JSString jsString) {
+            String text = jsString.value().trim();
+            if (text.isEmpty()) {
+                return false;
+            }
+            try {
+                new BigDecimal(text);
+                return false;
+            } catch (RuntimeException ignored) {
+                try {
+                    double parsed = Double.parseDouble(text);
+                    return Double.isNaN(parsed);
+                } catch (RuntimeException parseError) {
+                    return true;
+                }
+            }
+        }
+        double numericValue = JSTypeConversions.toNumber(context, value).value();
+        return !context.hasPendingException() && Double.isNaN(numericValue);
     }
 
     /**
@@ -4376,6 +4439,9 @@ public final class JSIntlObject {
         if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
             return context.throwTypeError("start and end must not be undefined");
         }
+        if (isNaNRangeNumberValue(context, startValue) || isNaNRangeNumberValue(context, endValue)) {
+            return context.throwRangeError("start or end is NaN");
+        }
         String startFormatted = formatIntlNumberValue(context, numberFormat, startValue);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -4388,20 +4454,94 @@ public final class JSIntlObject {
             return new JSString("~" + startFormatted);
         }
 
-        if ("currency".equals(numberFormat.getStyle()) && "always".equals(numberFormat.getSignDisplay())
-                && startFormatted.startsWith("+") && endFormatted.startsWith("+")) {
-            String startBody = startFormatted.substring(1);
-            String endBody = endFormatted.substring(1);
-            String commonPrefix = commonLeadingNonNumericPrefix(startBody, endBody);
-            if (!commonPrefix.isEmpty()) {
-                return new JSString("+" + startBody + "\u2013" + endBody.substring(commonPrefix.length()));
+        String localeTag = numberFormat.getLocale().toLanguageTag();
+        String separator = localeTag.startsWith("pt") ? " - " : " \u2013 ";
+        if ("currency".equals(numberFormat.getStyle())) {
+            int startDigitStart = findFirstDigitIndex(startFormatted);
+            int startDigitEnd = findLastDigitIndex(startFormatted);
+            int endDigitStart = findFirstDigitIndex(endFormatted);
+            int endDigitEnd = findLastDigitIndex(endFormatted);
+            if (startDigitStart >= 0 && startDigitEnd >= startDigitStart
+                    && endDigitStart >= 0 && endDigitEnd >= endDigitStart) {
+                String startPrefix = startFormatted.substring(0, startDigitStart);
+                String startCore = startFormatted.substring(startDigitStart, startDigitEnd + 1);
+                String startSuffix = startFormatted.substring(startDigitEnd + 1);
+                String endPrefix = endFormatted.substring(0, endDigitStart);
+                String endCore = endFormatted.substring(endDigitStart, endDigitEnd + 1);
+                String endSuffix = endFormatted.substring(endDigitEnd + 1);
+
+                if (!startSuffix.isEmpty() && startSuffix.equals(endSuffix)) {
+                    if (startCore.startsWith("+") && endCore.startsWith("+")) {
+                        endCore = endCore.substring(1);
+                    }
+                    return new JSString(startPrefix + startCore + separator + endCore + startSuffix);
+                }
+
+                if ("always".equals(numberFormat.getSignDisplay())
+                        && !startPrefix.isEmpty()
+                        && startPrefix.equals(endPrefix)
+                        && startPrefix.startsWith("+")) {
+                    return new JSString(startPrefix + startCore + "\u2013" + endCore + startSuffix);
+                }
             }
         }
 
         if ("currency".equals(numberFormat.getStyle())) {
-            return new JSString(startFormatted + " \u2013 " + endFormatted);
+            return new JSString(startFormatted + separator + endFormatted);
+        }
+        if (localeTag.startsWith("pt")) {
+            return new JSString(startFormatted + " - " + endFormatted);
         }
         return new JSString(startFormatted + "\u2013" + endFormatted);
+    }
+
+    public static JSValue numberFormatFormatRangeToParts(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
+            return context.throwTypeError("Intl.NumberFormat.prototype.formatRangeToParts called on incompatible receiver");
+        }
+        JSValue startValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue endValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
+            return context.throwTypeError("start and end must not be undefined");
+        }
+        if (isNaNRangeNumberValue(context, startValue) || isNaNRangeNumberValue(context, endValue)) {
+            return context.throwRangeError("start or end is NaN");
+        }
+
+        String startFormatted = formatIntlNumberValue(context, numberFormat, startValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String endFormatted = formatIntlNumberValue(context, numberFormat, endValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue startPartsValue = numberFormatFormatToParts(context, numberFormat, new JSValue[]{startValue});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        JSValue endPartsValue = numberFormatFormatToParts(context, numberFormat, new JSValue[]{endValue});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(startPartsValue instanceof JSArray startParts) || !(endPartsValue instanceof JSArray endParts)) {
+            return context.throwTypeError("formatToParts did not return an array");
+        }
+
+        JSArray result = context.createJSArray();
+        if (startFormatted.equals(endFormatted)) {
+            result.push(createPartObject(context, "approximatelySign", "~", "shared"));
+            appendRangePartsWithSource(context, result, startParts, "shared");
+            return result;
+        }
+
+        appendRangePartsWithSource(context, result, startParts, "startRange");
+        String localeTag = numberFormat.getLocale().toLanguageTag();
+        String separator = localeTag.startsWith("pt") ? " - " : " \u2013 ";
+        result.push(createPartObject(context, "literal", separator, "shared"));
+        appendRangePartsWithSource(context, result, endParts, "endRange");
+        return result;
     }
 
     public static JSValue numberFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -4442,7 +4582,6 @@ public final class JSIntlObject {
             resolvedOptions.set("unit", new JSString(numberFormat.getUnit()));
             resolvedOptions.set("unitDisplay", new JSString(numberFormat.getUnitDisplay()));
         }
-        resolvedOptions.set("notation", new JSString(numberFormat.getNotation()));
         resolvedOptions.set("minimumIntegerDigits", JSNumber.of(numberFormat.getMinimumIntegerDigits()));
         if (numberFormat.getUseSignificantDigits()) {
             resolvedOptions.set("minimumSignificantDigits", JSNumber.of(numberFormat.getMinimumSignificantDigits()));
@@ -4451,19 +4590,20 @@ public final class JSIntlObject {
             resolvedOptions.set("minimumFractionDigits", JSNumber.of(numberFormat.getMinimumFractionDigits()));
             resolvedOptions.set("maximumFractionDigits", JSNumber.of(numberFormat.getMaximumFractionDigits()));
         }
-        resolvedOptions.set("roundingIncrement", JSNumber.of(numberFormat.getRoundingIncrement()));
         if ("false".equals(numberFormat.getUseGroupingMode())) {
             resolvedOptions.set("useGrouping", JSBoolean.FALSE);
         } else {
             resolvedOptions.set("useGrouping", new JSString(numberFormat.getUseGroupingMode()));
         }
-        resolvedOptions.set("roundingPriority", new JSString(numberFormat.getRoundingPriority()));
-        resolvedOptions.set("signDisplay", new JSString(numberFormat.getSignDisplay()));
-        resolvedOptions.set("roundingMode", new JSString(numberFormat.getRoundingMode()));
-        resolvedOptions.set("trailingZeroDisplay", new JSString(numberFormat.getTrailingZeroDisplay()));
+        resolvedOptions.set("notation", new JSString(numberFormat.getNotation()));
         if ("compact".equals(numberFormat.getNotation()) && numberFormat.getCompactDisplay() != null) {
             resolvedOptions.set("compactDisplay", new JSString(numberFormat.getCompactDisplay()));
         }
+        resolvedOptions.set("signDisplay", new JSString(numberFormat.getSignDisplay()));
+        resolvedOptions.set("roundingIncrement", JSNumber.of(numberFormat.getRoundingIncrement()));
+        resolvedOptions.set("roundingMode", new JSString(numberFormat.getRoundingMode()));
+        resolvedOptions.set("roundingPriority", new JSString(numberFormat.getRoundingPriority()));
+        resolvedOptions.set("trailingZeroDisplay", new JSString(numberFormat.getTrailingZeroDisplay()));
         return resolvedOptions;
     }
 
