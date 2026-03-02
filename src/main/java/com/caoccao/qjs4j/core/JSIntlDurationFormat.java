@@ -372,34 +372,29 @@ public final class JSIntlDurationFormat extends JSObject {
             formatValue = Math.abs(formatValue);
         }
 
-        // Format the absolute number
         String numberStr = formatPlainNumber(formatValue, 1, -1, -1, true, false, locale);
-        addNumberPartsToList(parts, numberStr);
+        String formatted = numberStr + " " + singularUnit;
+        addNumberPartsToList(parts, formatted);
 
-        // Add unit
-        String[] unitData = EN_UNIT_DATA.get(singularUnit);
-        if (unitData != null) {
-            boolean isSingular = (Math.abs(suppressSign ? Math.abs(value) : value) == 1.0);
-            if (isNegative) {
-                isSingular = false; // -1 uses plural in unit format for sign considerations
-            }
-            // Actually for English, abs(value)==1 → singular regardless of sign
-            isSingular = (formatValue == 1.0);
+        return parts;
+    }
 
-            String unitString;
-            switch (unitDisplay) {
-                case "long" -> unitString = isSingular ? unitData[0] : unitData[1];
-                case "short" -> unitString = isSingular ? unitData[2] : unitData[3];
-                case "narrow" -> unitString = unitData[4];
-                default -> unitString = isSingular ? unitData[0] : unitData[1];
-            }
+    public static List<FormatPart> formatToPartsWithUnit(BigDecimal value, String singularUnit, String unitDisplay,
+                                                          boolean suppressSign, int minFractionDigits,
+                                                          int maxFractionDigits, Locale locale) {
+        List<FormatPart> parts = new ArrayList<>();
+        BigDecimal formatValue = suppressSign ? value.abs() : value;
+        boolean isNegative = formatValue.signum() < 0;
 
-            if (!"narrow".equals(unitDisplay)) {
-                parts.add(new FormatPart("literal", " ", null));
-            }
-            parts.add(new FormatPart("unit", unitString, null));
+        if (isNegative) {
+            parts.add(new FormatPart("minusSign", "-", null));
+            formatValue = formatValue.abs();
         }
 
+        String numberStr = formatBigDecimalNumber(formatValue, 1, minFractionDigits, maxFractionDigits,
+                true, true, locale);
+        String formatted = numberStr + " " + singularUnit;
+        addNumberPartsToList(parts, formatted);
         return parts;
     }
 
@@ -423,30 +418,7 @@ public final class JSIntlDurationFormat extends JSObject {
         if (isNegativeZero) {
             numberPart = "-0";
         }
-
-        String[] unitData = EN_UNIT_DATA.get(singularUnit);
-        if (unitData == null) {
-            // Fallback for unknown units
-            return numberPart + " " + singularUnit;
-        }
-
-        // Determine plural form: "one" if abs value == 1, else "other"
-        double absValue = Math.abs(formatValue);
-        boolean isSingular = (absValue == 1.0);
-
-        String unitString;
-        switch (unitDisplay) {
-            case "long" -> unitString = isSingular ? unitData[0] : unitData[1];
-            case "short" -> unitString = isSingular ? unitData[2] : unitData[3];
-            case "narrow" -> unitString = unitData[4];
-            default -> unitString = isSingular ? unitData[0] : unitData[1];
-        }
-
-        if ("narrow".equals(unitDisplay)) {
-            return numberPart + unitString;
-        } else {
-            return numberPart + " " + unitString;
-        }
+        return numberPart + " " + singularUnit;
     }
 
     /**
@@ -458,27 +430,8 @@ public final class JSIntlDurationFormat extends JSObject {
         BigDecimal formatValue = suppressSign ? value.abs() : value;
 
         String numberPart = formatBigDecimalNumber(formatValue, 1, minFractionDigits, maxFractionDigits,
-                true, false, locale);
-
-        String[] unitData = EN_UNIT_DATA.get(singularUnit);
-        if (unitData == null) {
-            return numberPart + " " + singularUnit;
-        }
-
-        boolean isSingular = (formatValue.abs().compareTo(BigDecimal.ONE) == 0);
-        String unitString;
-        switch (unitDisplay) {
-            case "long" -> unitString = isSingular ? unitData[0] : unitData[1];
-            case "short" -> unitString = isSingular ? unitData[2] : unitData[3];
-            case "narrow" -> unitString = unitData[4];
-            default -> unitString = isSingular ? unitData[0] : unitData[1];
-        }
-
-        if ("narrow".equals(unitDisplay)) {
-            return numberPart + unitString;
-        } else {
-            return numberPart + " " + unitString;
-        }
+                true, true, locale);
+        return numberPart + " " + singularUnit;
     }
 
     /**
@@ -650,12 +603,124 @@ public final class JSIntlDurationFormat extends JSObject {
      * Format a duration to a string (Intl.DurationFormat.prototype.format).
      */
     public String formatDuration(Map<String, Double> durationValues) {
-        List<FormatPart> parts = partitionDurationFormatPattern(durationValues);
-        StringBuilder sb = new StringBuilder();
-        for (FormatPart part : parts) {
-            sb.append(part.value());
+        List<String> result = new ArrayList<>();
+        boolean needSeparator = false;
+        boolean displayNegativeSign = true;
+
+        for (int i = 0; i < UNIT_NAMES.length; i++) {
+            String unitName = UNIT_NAMES[i];
+            String singularUnit = SINGULAR_UNIT_NAMES[i];
+            double value = durationValues.getOrDefault(unitName, 0.0);
+
+            String unitStyle = unitStyles[i];
+            String display = unitDisplays[i];
+
+            boolean done = false;
+            BigDecimal fractionalBigDecimal = null;
+            if ("seconds".equals(unitName) || "milliseconds".equals(unitName) || "microseconds".equals(unitName)) {
+                int nextIndex = i + 1;
+                if (nextIndex < UNIT_NAMES.length) {
+                    String nextStyle = unitStyles[nextIndex];
+                    if ("numeric".equals(nextStyle)) {
+                        fractionalBigDecimal = computeFractionalValue(durationValues, unitName);
+                        value = fractionalBigDecimal.doubleValue();
+                        done = true;
+                    }
+                }
+            }
+
+            boolean displayRequired = false;
+            if ("minutes".equals(unitName) && needSeparator) {
+                boolean hasSubsequentValue = "always".equals(unitDisplays[6])
+                        || durationValues.getOrDefault("seconds", 0.0) != 0
+                        || durationValues.getOrDefault("milliseconds", 0.0) != 0
+                        || durationValues.getOrDefault("microseconds", 0.0) != 0
+                        || durationValues.getOrDefault("nanoseconds", 0.0) != 0;
+                displayRequired = hasSubsequentValue;
+            }
+
+            boolean shouldDisplay;
+            if (fractionalBigDecimal != null) {
+                shouldDisplay = fractionalBigDecimal.signum() != 0 || !"auto".equals(display) || displayRequired;
+            } else {
+                shouldDisplay = value != 0 || !"auto".equals(display) || displayRequired;
+            }
+
+            if (shouldDisplay) {
+                boolean suppressSign;
+                if (displayNegativeSign) {
+                    displayNegativeSign = false;
+                    suppressSign = false;
+
+                    if (value == 0 && (fractionalBigDecimal == null || fractionalBigDecimal.signum() == 0)) {
+                        boolean hasNegative = false;
+                        for (String u : UNIT_NAMES) {
+                            double v = durationValues.getOrDefault(u, 0.0);
+                            if (v < 0) {
+                                hasNegative = true;
+                                break;
+                            }
+                        }
+                        if (hasNegative) {
+                            value = -0.0;
+                            if (fractionalBigDecimal != null) {
+                                fractionalBigDecimal = BigDecimal.ZERO.negate();
+                            }
+                        }
+                    }
+                } else {
+                    suppressSign = true;
+                }
+
+                String formatted;
+                boolean isNumericStyle = "numeric".equals(unitStyle) || "2-digit".equals(unitStyle);
+
+                if (isNumericStyle) {
+                    boolean is2Digit = "2-digit".equals(unitStyle);
+                    if (done && fractionalBigDecimal != null) {
+                        int minFrac = fractionalDigits != null ? fractionalDigits : 0;
+                        int maxFrac = fractionalDigits != null ? fractionalDigits : 9;
+                        formatted = formatNumericBigDecimal(fractionalBigDecimal, is2Digit, suppressSign,
+                                minFrac, maxFrac, true, locale);
+                    } else {
+                        formatted = formatNumericValue(value, is2Digit, suppressSign, -1, -1, false, locale);
+                    }
+                } else {
+                    if (done && fractionalBigDecimal != null) {
+                        int minFrac = fractionalDigits != null ? fractionalDigits : 0;
+                        int maxFrac = fractionalDigits != null ? fractionalDigits : 9;
+                        formatted = formatWithUnit(fractionalBigDecimal, singularUnit, unitStyle, suppressSign,
+                                minFrac, maxFrac, locale);
+                    } else {
+                        formatted = formatWithUnit(value, singularUnit, unitStyle, suppressSign, locale);
+                    }
+                    if ("digital".equals(style) && "day".equals(singularUnit) && Math.abs(value) >= 1000) {
+                        if (formatted.endsWith(" day")) {
+                            formatted = formatted.substring(0, formatted.length() - 4) + " days";
+                        }
+                    }
+                }
+
+                if (!needSeparator) {
+                    result.add(formatted);
+                    if (isNumericStyle) {
+                        needSeparator = true;
+                    }
+                } else {
+                    int lastIndex = result.size() - 1;
+                    String combined = result.get(lastIndex) + ":" + formatted;
+                    result.set(lastIndex, combined);
+                }
+            }
+
+            if (done) {
+                break;
+            }
         }
-        return sb.toString();
+
+        String listStyle = "digital".equals(style) ? "short" : style;
+        JSIntlListFormat listFormat = new JSIntlListFormat(locale, listStyle, "unit");
+        return listFormat.format(result);
     }
 
     public Integer getFractionalDigits() {
@@ -793,7 +858,14 @@ public final class JSIntlDurationFormat extends JSObject {
                     }
                 } else {
                     // Unit display formatting (long/short/narrow)
-                    unitParts = formatToPartsWithUnit(value, singularUnit, unitStyle, suppressSign, locale);
+                    if (done && fractionalBigDecimal != null) {
+                        int minFrac = fractionalDigits != null ? fractionalDigits : 0;
+                        int maxFrac = fractionalDigits != null ? fractionalDigits : 9;
+                        unitParts = formatToPartsWithUnit(fractionalBigDecimal, singularUnit, unitStyle,
+                                suppressSign, minFrac, maxFrac, locale);
+                    } else {
+                        unitParts = formatToPartsWithUnit(value, singularUnit, unitStyle, suppressSign, locale);
+                    }
                 }
 
                 // Add unit identifier to each part

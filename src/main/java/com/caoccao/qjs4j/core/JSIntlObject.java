@@ -2746,9 +2746,9 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            boolean useGrouping = true;
-            if (!(useGroupingValue == null || useGroupingValue instanceof JSUndefined)) {
-                useGrouping = JSTypeConversions.toBoolean(useGroupingValue).value();
+            String useGroupingMode = parseUseGroupingOption(context, useGroupingValue, notation);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
 
             String signDisplay = getOptionStringChecked(context, optionsObject, "signDisplay");
@@ -2794,8 +2794,21 @@ public final class JSIntlObject {
                 if (minimumSignificantDigits > maximumSignificantDigits) {
                     return context.throwRangeError("minimumSignificantDigits value is out of range");
                 }
-                minimumFractionDigits = minimumFractionDefault;
-                maximumFractionDigits = maximumFractionDefault;
+                if ("auto".equals(roundingPriority)) {
+                    minimumFractionDigits = minimumFractionDefault;
+                    maximumFractionDigits = maximumFractionDefault;
+                } else {
+                    minimumFractionDigits = minimumFractionDigitsOption != null ? minimumFractionDigitsOption : minimumFractionDefault;
+                    maximumFractionDigits = maximumFractionDigitsOption != null
+                            ? maximumFractionDigitsOption
+                            : Math.max(minimumFractionDigits, maximumFractionDefault);
+                    if (minimumFractionDigitsOption == null && maximumFractionDigitsOption != null) {
+                        minimumFractionDigits = Math.min(minimumFractionDefault, maximumFractionDigits);
+                    }
+                    if (minimumFractionDigits > maximumFractionDigits) {
+                        return context.throwRangeError("minimumFractionDigits value is out of range");
+                    }
+                }
             } else {
                 minimumFractionDigits = minimumFractionDigitsOption != null ? minimumFractionDigitsOption : minimumFractionDefault;
                 maximumFractionDigits = maximumFractionDigitsOption != null
@@ -2847,7 +2860,7 @@ public final class JSIntlObject {
                     resolvedLocale,
                     style,
                     currency,
-                    useGrouping,
+                    useGroupingMode,
                     minimumIntegerDigits,
                     minimumFractionDigits,
                     maximumFractionDigits,
@@ -3906,18 +3919,100 @@ public final class JSIntlObject {
         return (value != null && !value.isEmpty()) ? value : null;
     }
 
+    private static String parseUseGroupingOption(JSContext context, JSValue useGroupingValue, String notation) {
+        String defaultValue = "compact".equals(notation) ? "min2" : "auto";
+        if (useGroupingValue == null || useGroupingValue instanceof JSUndefined) {
+            return defaultValue;
+        }
+        if (useGroupingValue instanceof JSBoolean jsBoolean) {
+            if (jsBoolean.value()) {
+                return "always";
+            }
+            return "false";
+        }
+        if (useGroupingValue instanceof JSNull) {
+            return "false";
+        }
+        if (useGroupingValue instanceof JSString jsString) {
+            String value = jsString.value();
+            if ("auto".equals(value) || "always".equals(value) || "min2".equals(value)) {
+                return value;
+            }
+            if ("true".equals(value) || "false".equals(value)) {
+                return defaultValue;
+            }
+            if (value.isEmpty()) {
+                return "false";
+            }
+            context.throwRangeError("Invalid option value: " + value);
+            return defaultValue;
+        }
+        if (useGroupingValue instanceof JSNumber jsNumber) {
+            double number = jsNumber.value();
+            if (number == 0) {
+                return "false";
+            }
+            context.throwRangeError("Invalid option value: " + useGroupingValue);
+            return defaultValue;
+        }
+        boolean booleanValue = JSTypeConversions.toBoolean(useGroupingValue).value();
+        if (!booleanValue) {
+            return "false";
+        }
+        context.throwRangeError("Invalid option value: " + JSTypeConversions.toString(context, useGroupingValue).value());
+        return defaultValue;
+    }
+
+    private static String commonLeadingNonNumericPrefix(String start, String end) {
+        int limit = Math.min(start.length(), end.length());
+        int i = 0;
+        while (i < limit) {
+            char a = start.charAt(i);
+            char b = end.charAt(i);
+            if (a != b) {
+                break;
+            }
+            if (Character.isDigit(a) || a == '.' || a == ',' || a == '-') {
+                break;
+            }
+            i++;
+        }
+        if (i <= 0) {
+            return "";
+        }
+        return start.substring(0, i);
+    }
+
+    private static String formatIntlNumberValue(JSContext context, JSIntlNumberFormat numberFormat, JSValue value) {
+        if (value instanceof JSBigInt bigInt) {
+            return numberFormat.format(bigInt.value());
+        }
+        if (value instanceof JSString jsString) {
+            return numberFormat.format(jsString.value());
+        }
+        double numeric = JSTypeConversions.toNumber(context, value).value();
+        if (context.hasPendingException()) {
+            return "";
+        }
+        return numberFormat.format(numeric);
+    }
+
     public static JSValue numberFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
             return context.throwTypeError("Intl.NumberFormat.prototype.format called on incompatible receiver");
         }
-        if (args.length > 0 && args[0] instanceof JSBigInt bigInt) {
+        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (value instanceof JSBigInt bigInt) {
             return new JSString(numberFormat.format(bigInt.value()));
         }
-        double value = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : 0;
+        if (value instanceof JSString jsString) {
+            return new JSString(numberFormat.format(jsString.value()));
+        }
+        double number = JSTypeConversions.toNumber(context, value).value();
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return new JSString(numberFormat.format(value));
+        return new JSString(numberFormat.format(number));
     }
 
     public static JSValue numberFormatFormatGetter(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -3943,6 +4038,9 @@ public final class JSIntlObject {
             return numberFormat.formatToParts(context, Double.NaN);
         }
         JSValue arg = args[0];
+        if (arg instanceof JSBigInt jsBigInt) {
+            return numberFormat.formatToParts(context, jsBigInt.value().toString());
+        }
         if (arg instanceof JSString str) {
             return numberFormat.formatToParts(context, str.value());
         }
@@ -3951,6 +4049,43 @@ public final class JSIntlObject {
             return JSUndefined.INSTANCE;
         }
         return numberFormat.formatToParts(context, numValue);
+    }
+
+    public static JSValue numberFormatFormatRange(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
+            return context.throwTypeError("Intl.NumberFormat.prototype.formatRange called on incompatible receiver");
+        }
+        JSValue startValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue endValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
+            return context.throwTypeError("start and end must not be undefined");
+        }
+        String startFormatted = formatIntlNumberValue(context, numberFormat, startValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String endFormatted = formatIntlNumberValue(context, numberFormat, endValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (startFormatted.equals(endFormatted)) {
+            return new JSString("~" + startFormatted);
+        }
+
+        if ("currency".equals(numberFormat.getStyle()) && "always".equals(numberFormat.getSignDisplay())
+                && startFormatted.startsWith("+") && endFormatted.startsWith("+")) {
+            String startBody = startFormatted.substring(1);
+            String endBody = endFormatted.substring(1);
+            String commonPrefix = commonLeadingNonNumericPrefix(startBody, endBody);
+            if (!commonPrefix.isEmpty()) {
+                return new JSString("+" + startBody + "\u2013" + endBody.substring(commonPrefix.length()));
+            }
+        }
+
+        if ("currency".equals(numberFormat.getStyle())) {
+            return new JSString(startFormatted + " \u2013 " + endFormatted);
+        }
+        return new JSString(startFormatted + "\u2013" + endFormatted);
     }
 
     public static JSValue numberFormatResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -3980,7 +4115,11 @@ public final class JSIntlObject {
             resolvedOptions.set("maximumFractionDigits", JSNumber.of(numberFormat.getMaximumFractionDigits()));
         }
         resolvedOptions.set("roundingIncrement", JSNumber.of(numberFormat.getRoundingIncrement()));
-        resolvedOptions.set("useGrouping", JSBoolean.valueOf(numberFormat.getUseGrouping()));
+        if ("false".equals(numberFormat.getUseGroupingMode())) {
+            resolvedOptions.set("useGrouping", JSBoolean.FALSE);
+        } else {
+            resolvedOptions.set("useGrouping", new JSString(numberFormat.getUseGroupingMode()));
+        }
         resolvedOptions.set("roundingPriority", new JSString(numberFormat.getRoundingPriority()));
         resolvedOptions.set("signDisplay", new JSString(numberFormat.getSignDisplay()));
         resolvedOptions.set("roundingMode", new JSString(numberFormat.getRoundingMode()));
