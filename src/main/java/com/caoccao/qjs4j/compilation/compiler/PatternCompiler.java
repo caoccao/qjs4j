@@ -476,6 +476,10 @@ final class PatternCompiler {
             // Value is undefined: drop it and use default
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             delegates.expressions.compileExpression(assignPattern.right());
+            if (assignPattern.left() instanceof Identifier identifier
+                    && isAnonymousFunctionDefinition(assignPattern.right())) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.name());
+            }
             // Patch jump target
             compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
             // Now the stack has the resolved value; assign to the inner pattern
@@ -534,5 +538,18 @@ final class PatternCompiler {
             return identifier;
         }
         return null;
+    }
+
+    private boolean isAnonymousFunctionDefinition(Expression expression) {
+        if (expression instanceof ArrowFunctionExpression) {
+            return true;
+        }
+        if (expression instanceof FunctionExpression functionExpression) {
+            return functionExpression.id() == null;
+        }
+        if (expression instanceof ClassExpression classExpression) {
+            return classExpression.id() == null;
+        }
+        return false;
     }
 }

@@ -1308,6 +1308,28 @@ public final class VirtualMachine {
         if (!(objectValue instanceof JSObject object)) {
             return;
         }
+        if (objectValue instanceof JSNativeFunction) {
+            object.defineProperty(PropertyKey.fromString("name"), nameValue, PropertyDescriptor.DataState.Configurable);
+            return;
+        }
+        PropertyDescriptor existingNameDescriptor = object.getOwnPropertyDescriptor(PropertyKey.NAME);
+        if (existingNameDescriptor != null) {
+            // Match QuickJS js_object_has_name():
+            // - accessor or non-data descriptors count as already named
+            // - data descriptors with non-string values count as already named
+            // - data descriptors with non-empty string values count as already named
+            // only empty-string data name can be replaced.
+            if (!existingNameDescriptor.isDataDescriptor() || !existingNameDescriptor.hasValue()) {
+                return;
+            }
+            JSValue existingNameValue = existingNameDescriptor.getValue();
+            if (!(existingNameValue instanceof JSString existingNameString)) {
+                return;
+            }
+            if (!existingNameString.value().isEmpty()) {
+                return;
+            }
+        }
         object.defineProperty(PropertyKey.fromString("name"), nameValue, PropertyDescriptor.DataState.Configurable);
     }
 

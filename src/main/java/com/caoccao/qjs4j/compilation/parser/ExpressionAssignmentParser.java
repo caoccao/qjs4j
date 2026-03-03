@@ -40,10 +40,17 @@ final class ExpressionAssignmentParser {
 
     private ArrayPattern convertArrowArrayExpressionToPattern(ArrayExpression arrayExpression) {
         List<Pattern> elements = new ArrayList<>();
-        for (Expression elementExpression : arrayExpression.elements()) {
+        for (int elementIndex = 0; elementIndex < arrayExpression.elements().size(); elementIndex++) {
+            Expression elementExpression = arrayExpression.elements().get(elementIndex);
             if (elementExpression == null) {
                 elements.add(null);
             } else if (elementExpression instanceof SpreadElement spreadElement) {
+                if (elementIndex != arrayExpression.elements().size() - 1) {
+                    throw new JSSyntaxErrorException("Rest element must be last element");
+                }
+                if (spreadElement.argument() instanceof AssignmentExpression) {
+                    throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
+                }
                 Pattern restArgumentPattern = convertArrowExpressionToPattern(spreadElement.argument());
                 elements.add(new RestElement(restArgumentPattern, spreadElement.getLocation()));
             } else {
@@ -68,23 +75,31 @@ final class ExpressionAssignmentParser {
             Pattern leftPattern = convertArrowExpressionToPattern(assignmentExpression.left());
             return new AssignmentPattern(leftPattern, assignmentExpression.right(), assignmentExpression.getLocation());
         }
-        throw new RuntimeException("Invalid arrow function parameter at line " +
+        throw new JSSyntaxErrorException("Invalid arrow function parameter at line " +
                 parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
     }
 
     private ObjectPattern convertArrowObjectExpressionToPattern(ObjectExpression objectExpression) {
         List<ObjectPattern.Property> properties = new ArrayList<>();
         for (ObjectExpression.Property property : objectExpression.properties()) {
-            if (!"init".equals(property.kind()) || property.computed()) {
-                throw new RuntimeException("Invalid arrow function parameter at line " +
+            if (!"init".equals(property.kind())) {
+                throw new JSSyntaxErrorException("Invalid arrow function parameter at line " +
                         parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
-            if (!(property.key() instanceof Identifier)) {
-                throw new RuntimeException("Invalid arrow function parameter at line " +
+            Expression propertyKey = property.key();
+            boolean validNonComputedKey = propertyKey instanceof Identifier
+                    || (propertyKey instanceof Literal literal
+                    && (literal.value() instanceof String
+                    || literal.value() instanceof Integer
+                    || literal.value() instanceof Long
+                    || literal.value() instanceof Double
+                    || literal.value() instanceof Float));
+            if (!property.computed() && !validNonComputedKey) {
+                throw new JSSyntaxErrorException("Invalid arrow function parameter at line " +
                         parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
             Pattern valuePattern = convertArrowExpressionToPattern(property.value());
-            properties.add(new ObjectPattern.Property(property.key(), valuePattern, false, property.shorthand()));
+            properties.add(new ObjectPattern.Property(propertyKey, valuePattern, property.computed(), property.shorthand()));
         }
         return new ObjectPattern(properties, objectExpression.getLocation());
     }
