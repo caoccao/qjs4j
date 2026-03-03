@@ -82,7 +82,7 @@ final class ExpressionAssignmentParser {
                         parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
             Pattern valuePattern = convertArrowExpressionToPattern(property.value());
-            properties.add(new ObjectPattern.Property(property.key(), valuePattern, property.shorthand()));
+            properties.add(new ObjectPattern.Property(property.key(), valuePattern, false, property.shorthand()));
         }
         return new ObjectPattern(properties, objectExpression.getLocation());
     }

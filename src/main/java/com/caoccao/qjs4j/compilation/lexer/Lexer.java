@@ -110,6 +110,10 @@ public final class Lexer {
         return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
     }
 
+    public String getSource() {
+        return source;
+    }
+
     boolean isAtEnd() {
         return position >= source.length();
     }
@@ -123,14 +127,14 @@ public final class Lexer {
                 UnicodeData.isIdentifierPart(c);
     }
 
+    // Core scanning logic
+
     private boolean isIdentifierPartCodePoint(int codePoint) {
         if (codePoint <= Character.MAX_VALUE) {
             return isIdentifierPart((char) codePoint);
         }
         return Character.isUnicodeIdentifierPart(codePoint);
     }
-
-    // Core scanning logic
 
     boolean isIdentifierStart(char c) {
         return Character.isLetter(c) || c == '_' || c == '$' ||

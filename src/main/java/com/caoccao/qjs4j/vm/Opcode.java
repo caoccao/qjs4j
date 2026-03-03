@@ -162,7 +162,7 @@ public enum Opcode {
     // Type operations
     TYPEOF(114, 1, 1, 1, OpcodeHandler::handleTypeof),
     DELETE(115, 1, 2, 1, OpcodeHandler::handleDelete),
-    TO_OBJECT(116, 1, 1, 1, OpcodeHandler::handleInvalid),
+    TO_OBJECT(116, 1, 1, 1, OpcodeHandler::handleToObject),
     TO_PROPKEY(117, 1, 1, 1, OpcodeHandler::handleToPropKey),
     TO_PROPKEY2(118, 1, 2, 2, OpcodeHandler::handleToPropKey2),
 

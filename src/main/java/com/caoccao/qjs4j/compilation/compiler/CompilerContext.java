@@ -49,6 +49,7 @@ final class CompilerContext {
     int scopeDepth;
     String sourceCode;
     boolean strictMode;
+    CompilerScope varDeclarationScopeOverride;
     boolean varInGlobalProgram;
 
     CompilerContext() {
@@ -80,6 +81,7 @@ final class CompilerContext {
         this.predeclareProgramLexicalsAsLocals = false;
         this.strictMode = inheritedStrictMode;
         this.varInGlobalProgram = false;
+        this.varDeclarationScopeOverride = null;
     }
 
 
@@ -175,6 +177,23 @@ final class CompilerContext {
             int index = entry.getValue();
             if (index >= 0 && index < count && !name.startsWith("$")) {
                 names[index] = name;
+            }
+        }
+        return names;
+    }
+
+    static String[] extractLocalVarNames(Deque<CompilerScope> scopes, int localCount) {
+        if (localCount == 0) {
+            return null;
+        }
+        String[] names = new String[localCount];
+        for (CompilerScope scope : scopes) {
+            for (var entry : scope.getLocals().entrySet()) {
+                String name = entry.getKey();
+                int index = entry.getValue();
+                if (index >= 0 && index < localCount && !name.startsWith("$")) {
+                    names[index] = name;
+                }
             }
         }
         return names;
@@ -405,17 +424,117 @@ final class CompilerContext {
             return false;
         }
 
-        Statement firstStmt = block.body().get(0);
-        if (!(firstStmt instanceof ExpressionStatement exprStmt)) {
+        for (int statementIndex = 0; statementIndex < block.body().size(); statementIndex++) {
+            Statement statement = block.body().get(statementIndex);
+            if (!(statement instanceof ExpressionStatement expressionStatement)) {
+                break;
+            }
+            if (!(expressionStatement.expression() instanceof Literal literal)) {
+                break;
+            }
+            if (!(literal.value() instanceof String)) {
+                break;
+            }
+            if (!"use strict".equals(literal.value())) {
+                continue;
+            }
+            if (statementIndex == 0 && !isDirectiveStartAtBlockStart(block, literal)) {
+                return false;
+            }
+            if (sourceCode == null) {
+                return true;
+            }
+            SourceLocation literalLocation = literal.getLocation();
+            if (literalLocation != null && isRawUseStrictDirectiveAt(literalLocation.offset())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isDirectiveStartAtBlockStart(BlockStatement block, Literal literal) {
+        if (sourceCode == null) {
+            return true;
+        }
+        SourceLocation blockLocation = block.getLocation();
+        SourceLocation literalLocation = literal.getLocation();
+        if (blockLocation == null || literalLocation == null) {
+            return true;
+        }
+        int scanStart = Math.max(0, blockLocation.offset() + 1);
+        int scanEnd = literalLocation.offset();
+        if (scanEnd < scanStart || scanEnd > sourceCode.length()) {
+            return true;
+        }
+        int index = scanStart;
+        while (index < scanEnd) {
+            char current = sourceCode.charAt(index);
+            if (Character.isWhitespace(current)) {
+                index++;
+                continue;
+            }
+            if (current == '/' && index + 1 < scanEnd) {
+                char next = sourceCode.charAt(index + 1);
+                if (next == '/') {
+                    index += 2;
+                    while (index < scanEnd) {
+                        char lineChar = sourceCode.charAt(index);
+                        if (lineChar == '\n' || lineChar == '\r') {
+                            break;
+                        }
+                        index++;
+                    }
+                    continue;
+                }
+                if (next == '*') {
+                    index += 2;
+                    while (index + 1 < scanEnd) {
+                        if (sourceCode.charAt(index) == '*' && sourceCode.charAt(index + 1) == '/') {
+                            index += 2;
+                            break;
+                        }
+                        index++;
+                    }
+                    continue;
+                }
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private boolean isRawUseStrictDirectiveAt(int offset) {
+        if (offset < 0 || offset >= sourceCode.length()) {
             return false;
         }
 
-        if (!(exprStmt.expression() instanceof Literal literal)) {
+        char quote = sourceCode.charAt(offset);
+        if (quote != '\'' && quote != '"') {
             return false;
         }
 
-        Object value = literal.value();
-        return "use strict".equals(value);
+        final String strictDirective = "use strict";
+        int sourceIndex = offset + 1;
+        int directiveIndex = 0;
+        while (sourceIndex < sourceCode.length()) {
+            char current = sourceCode.charAt(sourceIndex);
+            if (current == quote) {
+                return directiveIndex == strictDirective.length();
+            }
+            if (current == '\\'
+                    || current == '\n'
+                    || current == '\r'
+                    || current == '\u2028'
+                    || current == '\u2029') {
+                return false;
+            }
+            if (directiveIndex >= strictDirective.length() || current != strictDirective.charAt(directiveIndex)) {
+                return false;
+            }
+            sourceIndex++;
+            directiveIndex++;
+        }
+        return false;
     }
 
     boolean isSuperIdentifier(Expression expression) {

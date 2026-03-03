@@ -76,7 +76,8 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
                     break;
                 }
             }
-            Identifier key = parserContext.parseIdentifier();
+            boolean computed = parserContext.match(TokenType.LBRACKET);
+            Expression key = delegates.expressions.parsePropertyName();
             Pattern value;
             boolean shorthand = false;
             if (parserContext.match(TokenType.COLON)) {
@@ -88,8 +89,8 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
                     Expression defaultValue = delegates.expressions.parseAssignmentExpression();
                     value = new AssignmentPattern(value, defaultValue, assignLoc);
                 }
-            } else {
-                value = key;
+            } else if (!computed && key instanceof Identifier keyIdentifier) {
+                value = keyIdentifier;
                 shorthand = true;
                 if (parserContext.match(TokenType.ASSIGN)) {
                     SourceLocation assignLoc = parserContext.getLocation();
@@ -97,8 +98,11 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
                     Expression defaultValue = delegates.expressions.parseAssignmentExpression();
                     value = new AssignmentPattern(value, defaultValue, assignLoc);
                 }
+            } else {
+                throw new RuntimeException("Expected ':' in object binding pattern at line "
+                        + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
-            properties.add(new ObjectPattern.Property(key, value, shorthand));
+            properties.add(new ObjectPattern.Property(key, value, computed, shorthand));
         }
         parserContext.expect(TokenType.RBRACE);
         return new ObjectPattern(properties, location);

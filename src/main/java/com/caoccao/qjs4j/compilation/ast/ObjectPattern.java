@@ -36,6 +36,7 @@ public record ObjectPattern(
     public record Property(
             Expression key,
             Pattern value,
+            boolean computed,
             boolean shorthand
     ) {
     }

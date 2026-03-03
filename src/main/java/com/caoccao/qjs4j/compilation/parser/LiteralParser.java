@@ -298,7 +298,14 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                     boolean computed = parserContext.match(TokenType.LBRACKET);
                     Expression key = delegates.expressions.parsePropertyName();
 
-                    FunctionExpression value = delegates.functions.parseMethod(kind, methodStartLocation, false, false);
+                    boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
+                    parserContext.superPropertyAllowed = true;
+                    FunctionExpression value;
+                    try {
+                        value = delegates.functions.parseMethod(kind, methodStartLocation, false, false);
+                    } finally {
+                        parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
+                    }
                     properties.add(new ObjectExpression.Property(key, value, kind, computed, false, false));
 
                     if (parserContext.match(TokenType.COMMA)) {
@@ -322,7 +329,14 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
             // Determine if this is a method or regular property
             if (parserContext.match(TokenType.LPAREN)) {
                 // Method shorthand: name() {} or async name() {} or *name() {} or async *name() {}
-                FunctionExpression value = delegates.functions.parseMethod("method", methodStartLocation, isAsync, isGenerator);
+                boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
+                parserContext.superPropertyAllowed = true;
+                FunctionExpression value;
+                try {
+                    value = delegates.functions.parseMethod("method", methodStartLocation, isAsync, isGenerator);
+                } finally {
+                    parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
+                }
                 properties.add(new ObjectExpression.Property(key, value, "init", computed, false, true));
             } else if (parserContext.match(TokenType.COLON)) {
                 // Regular property: key: value

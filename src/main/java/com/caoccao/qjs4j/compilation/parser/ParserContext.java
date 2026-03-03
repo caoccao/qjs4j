@@ -167,11 +167,53 @@ final class ParserContext {
         return Character.isLetter(c) || c == '_' || c == '$';
     }
 
+    private boolean isLineTerminator(char c) {
+        return c == '\n' || c == '\r' || c == '\u2028' || c == '\u2029';
+    }
+
     boolean isPatternStartToken(TokenType tokenType) {
         return tokenType == TokenType.IDENTIFIER
                 || tokenType == TokenType.LBRACE
                 || tokenType == TokenType.LBRACKET
                 || tokenType == TokenType.AWAIT;
+    }
+
+    private boolean isRawUseStrictDirective(Token directiveToken) {
+        if (directiveToken.type() != TokenType.STRING || !"use strict".equals(directiveToken.value())) {
+            return false;
+        }
+
+        int offset = directiveToken.offset();
+        String source = lexer.getSource();
+        if (offset < 0 || offset >= source.length()) {
+            return false;
+        }
+
+        char quote = source.charAt(offset);
+        if (quote != '\'' && quote != '"') {
+            return false;
+        }
+
+        final String strictDirective = "use strict";
+        int sourceIndex = offset + 1;
+        int directiveIndex = 0;
+
+        while (sourceIndex < source.length()) {
+            char current = source.charAt(sourceIndex);
+            if (current == quote) {
+                return directiveIndex == strictDirective.length();
+            }
+            if (current == '\\' || isLineTerminator(current)) {
+                return false;
+            }
+            if (directiveIndex >= strictDirective.length() || current != strictDirective.charAt(directiveIndex)) {
+                return false;
+            }
+            sourceIndex++;
+            directiveIndex++;
+        }
+
+        return false;
     }
 
     private boolean isStrictReservedIdentifierName(String name) {
@@ -203,14 +245,14 @@ final class ParserContext {
                 || nextToken.type() == TokenType.TEMPLATE;
     }
 
+    // ---- Context management ----
+
     boolean isValidForInOfTarget(Expression expr) {
         if (expr instanceof Identifier || expr instanceof MemberExpression) {
             return true;
         }
         return !strictMode && expr instanceof CallExpression;
     }
-
-    // ---- Context management ----
 
     boolean match(TokenType type) {
         return currentToken.type() == type;
@@ -236,6 +278,7 @@ final class ParserContext {
         boolean hasUseStrict = false;
 
         while (match(TokenType.STRING)) {
+            Token directiveToken = currentToken;
             String stringValue = currentToken.value();
             int stringLine = currentToken.line();
             SourceLocation directiveLocation = getLocation();
@@ -279,7 +322,7 @@ final class ParserContext {
                 body.add(new ExpressionStatement(literal, directiveLocation));
             }
 
-            if ("use strict".equals(stringValue)) {
+            if (isRawUseStrictDirective(directiveToken)) {
                 hasUseStrict = true;
             }
         }

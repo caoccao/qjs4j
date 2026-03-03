@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.core.JSNumber;
 import com.caoccao.qjs4j.vm.Opcode;
 
 /**
@@ -271,29 +272,77 @@ final class PatternCompiler {
                 }
             } else {
                 Integer localIndex;
-                if (useExistingBindingInParentScopes) {
+                if (useExistingBindingInParentScopes && compilerContext.varDeclarationScopeOverride != null) {
+                    CompilerScope varDeclarationScope = compilerContext.varDeclarationScopeOverride;
+                    localIndex = varDeclarationScope.getLocal(varName);
+                    if (localIndex == null) {
+                        localIndex = varDeclarationScope.declareLocal(varName);
+                    }
+                } else if (useExistingBindingInParentScopes) {
                     localIndex = compilerContext.findLocalInScopes(varName);
+                    if (localIndex == null) {
+                        localIndex = compilerContext.currentScope().declareLocal(varName);
+                    }
                 } else {
                     // let/const declarations are lexical. They should resolve only against
                     // the current scope so block bindings shadow outer bindings.
                     localIndex = compilerContext.currentScope().getLocal(varName);
-                }
-                if (localIndex == null) {
-                    localIndex = compilerContext.currentScope().declareLocal(varName);
+                    if (localIndex == null) {
+                        localIndex = compilerContext.currentScope().declareLocal(varName);
+                    }
                 }
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
             }
         } else if (pattern instanceof ObjectPattern objPattern) {
             // Object destructuring: { proxy, revoke } = value
             // Stack: [object]
-            for (ObjectPattern.Property prop : objPattern.properties()) {
-                // Get the property name
-                String propName = ((Identifier) prop.key()).name();
+            // RequireObjectCoercible(value) even for empty patterns.
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
 
-                // Duplicate object for each property access
+            for (ObjectPattern.Property prop : objPattern.properties()) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
-                // Get the property value
-                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propName);
+                Expression propertyKey = prop.key();
+                if (!prop.computed() && propertyKey instanceof Identifier identifier) {
+                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.value());
+                    if (useExistingBindingInParentScopes && bindingIdentifier != null) {
+                        delegates.expressions.compileIdentifier(bindingIdentifier);
+                        compilerContext.emitter.emitOpcode(Opcode.DROP);
+                    }
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, identifier.name());
+                } else if (!prop.computed() && propertyKey instanceof Literal literal && literal.value() instanceof String propertyName) {
+                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.value());
+                    if (useExistingBindingInParentScopes && bindingIdentifier != null) {
+                        delegates.expressions.compileIdentifier(bindingIdentifier);
+                        compilerContext.emitter.emitOpcode(Opcode.DROP);
+                    }
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propertyName);
+                } else if (!prop.computed() && propertyKey instanceof Literal literal
+                        && (literal.value() instanceof Integer || literal.value() instanceof Long)) {
+                    long propertyIndex = ((Number) literal.value()).longValue();
+                    if (propertyIndex >= Integer.MIN_VALUE && propertyIndex <= Integer.MAX_VALUE) {
+                        compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
+                        compilerContext.emitter.emitI32((int) propertyIndex);
+                    } else {
+                        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(propertyIndex));
+                    }
+                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.value());
+                    if (useExistingBindingInParentScopes && bindingIdentifier != null) {
+                        delegates.expressions.compileIdentifier(bindingIdentifier);
+                        compilerContext.emitter.emitOpcode(Opcode.DROP);
+                    }
+                    compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                } else {
+                    delegates.expressions.compileExpression(propertyKey);
+                    compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
+                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.value());
+                    if (useExistingBindingInParentScopes && bindingIdentifier != null) {
+                        delegates.expressions.compileIdentifier(bindingIdentifier);
+                        compilerContext.emitter.emitOpcode(Opcode.DROP);
+                    }
+                    compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                }
                 // Assign to the pattern (could be nested)
                 compilePatternAssignment(prop.value(), useExistingBindingInParentScopes);
             }
@@ -389,23 +438,19 @@ final class PatternCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else {
-                // Simple indexed access (no rest element)
-                int index = 0;
+                // Iterator-based array binding semantics.
+                compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
                 for (Pattern element : arrPattern.elements()) {
+                    compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
                     if (element != null) {
-                        // Duplicate array
-                        compilerContext.emitter.emitOpcode(Opcode.DUP);
-                        // Push index
-                        compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
-                        compilerContext.emitter.emitI32(index);
-                        // Get array element
-                        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-                        // Assign to the pattern
                         compilePatternAssignment(element, useExistingBindingInParentScopes);
+                    } else {
+                        compilerContext.emitter.emitOpcode(Opcode.DROP);
                     }
-                    index++;
                 }
-                // Drop the original array
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         } else if (pattern instanceof AssignmentPattern assignPattern) {
@@ -465,5 +510,16 @@ final class PatternCompiler {
             // Rest element at top level (shouldn't normally happen, but handle it)
             declarePatternVariables(restElement.argument());
         }
+    }
+
+    private Identifier getBindingIdentifierForPreResolve(Pattern pattern) {
+        if (pattern instanceof Identifier identifier) {
+            return identifier;
+        }
+        if (pattern instanceof AssignmentPattern assignmentPattern
+                && assignmentPattern.left() instanceof Identifier identifier) {
+            return identifier;
+        }
+        return null;
     }
 }

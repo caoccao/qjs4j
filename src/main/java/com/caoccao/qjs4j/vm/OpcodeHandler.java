@@ -375,7 +375,10 @@ public final class OpcodeHandler {
                 prototypeObject,
                 PropertyDescriptor.DataState.None);
 
-        prototypeObject.set(PropertyKey.CONSTRUCTOR, constructorValue);
+        prototypeObject.defineProperty(
+                PropertyKey.CONSTRUCTOR,
+                constructorValue,
+                PropertyDescriptor.DataState.ConfigurableWritable);
         executionContext.virtualMachine.setObjectName(constructorValue, new JSString(className));
 
         if (constructorFunction instanceof JSBytecodeFunction bytecodeConstructor) {
@@ -421,7 +424,10 @@ public final class OpcodeHandler {
                 PropertyKey.fromString("prototype"),
                 prototypeObject,
                 PropertyDescriptor.DataState.None);
-        prototypeObject.set(PropertyKey.CONSTRUCTOR, constructorValue);
+        prototypeObject.defineProperty(
+                PropertyKey.CONSTRUCTOR,
+                constructorValue,
+                PropertyDescriptor.DataState.ConfigurableWritable);
         JSString computedClassName = executionContext.virtualMachine.getComputedNameString(computedClassNameValue);
         if (computedClassName.value().isEmpty()) {
             computedClassName = new JSString(className);
@@ -486,8 +492,9 @@ public final class OpcodeHandler {
         JSValue objectValue = (JSValue) stack[sp - 1];
 
         if (objectValue instanceof JSObject object) {
-            PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, propertyValue);
-            JSString computedName = executionContext.virtualMachine.getComputedNameString(propertyValue);
+            JSValue propertyKeyValue = executionContext.virtualMachine.toPropertyKeyValue(propertyValue);
+            PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, propertyKeyValue);
+            JSString computedName = executionContext.virtualMachine.getComputedNameString(propertyKeyValue);
             if (methodValue instanceof JSFunction methodFunction) {
                 methodFunction.setHomeObject(object);
                 String namePrefix;
@@ -504,8 +511,10 @@ public final class OpcodeHandler {
                 }
             }
 
+            boolean defineSucceeded;
             if (methodKind == 0) {
-                object.defineProperty(
+                defineSucceeded = object.defineProperty(
+                        executionContext.virtualMachine.context,
                         key,
                         PropertyDescriptor.dataDescriptor(
                                 methodValue,
@@ -519,7 +528,8 @@ public final class OpcodeHandler {
                 if (descriptor != null && descriptor.hasSetter()) {
                     setter = descriptor.getSetter();
                 }
-                object.defineProperty(
+                defineSucceeded = object.defineProperty(
+                        executionContext.virtualMachine.context,
                         key,
                         PropertyDescriptor.accessorDescriptor(
                                 getter,
@@ -534,7 +544,8 @@ public final class OpcodeHandler {
                 if (descriptor != null && descriptor.hasGetter()) {
                     getter = descriptor.getGetter();
                 }
-                object.defineProperty(
+                defineSucceeded = object.defineProperty(
+                        executionContext.virtualMachine.context,
                         key,
                         PropertyDescriptor.accessorDescriptor(
                                 getter,
@@ -544,6 +555,12 @@ public final class OpcodeHandler {
                                         : PropertyDescriptor.AccessorState.Configurable));
             } else {
                 throw new JSVirtualMachineException("DEFINE_METHOD_COMPUTED: unsupported method flags " + methodFlags);
+            }
+
+            if (!defineSucceeded) {
+                String keyName = key != null ? key.toPropertyString() : "property";
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.throwTypeError("Cannot redefine property: " + keyName));
             }
         }
 
@@ -2623,6 +2640,20 @@ public final class OpcodeHandler {
         }
         executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
         // PC intentionally unchanged. Exception unwinding loop handles control transfer.
+    }
+
+    static void handleToObject(Opcode op, ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.stack;
+        JSValue value = (JSValue) stack[sp - 1];
+        JSObject object = executionContext.virtualMachine.toObject(value);
+        if (object == null) {
+            throw new JSVirtualMachineException(
+                    executionContext.virtualMachine.context.throwTypeError("value has no property"));
+        }
+        stack[sp - 1] = object;
+        executionContext.pc = pc + op.getSize();
     }
 
     static void handleToPropKey(Opcode op, ExecutionContext executionContext) {

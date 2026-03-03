@@ -2365,9 +2365,16 @@ public final class JSGlobalObject {
                     && callerFrame.getFunction() instanceof JSBytecodeFunction
                     && callerFrame.getCaller() != null;
             String[] localVarNames = null;
+            Set<String> localVarNameSet = null;
             Map<String, JSValue> savedGlobals = null;
             Set<String> absentKeys = null;
+            Set<String> evalVarDeclarations = null;
+            boolean parsedEvalDeclarations = false;
             JSObject global = realmContext.getGlobalObject();
+            JSBytecodeFunction callerBytecodeFunction =
+                    callerFrame != null && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction
+                            ? bytecodeFunction
+                            : null;
 
             // When eval runs inside a function, snapshot global property names so we can
             // clean up var/function bindings that should be function-scoped (not global).
@@ -2382,9 +2389,10 @@ public final class JSGlobalObject {
             }
 
             if (isEvalInFunction
-                    && callerFrame.getFunction() instanceof JSBytecodeFunction bcFunc
-                    && bcFunc.getBytecode().getLocalVarNames() != null) {
-                localVarNames = bcFunc.getBytecode().getLocalVarNames();
+                    && callerBytecodeFunction != null
+                    && callerBytecodeFunction.getBytecode().getLocalVarNames() != null) {
+                localVarNames = callerBytecodeFunction.getBytecode().getLocalVarNames();
+                localVarNameSet = new HashSet<>();
                 savedGlobals = new HashMap<>();
                 absentKeys = new HashSet<>();
                 JSValue[] locals = callerFrame.getLocals();
@@ -2393,6 +2401,7 @@ public final class JSGlobalObject {
                     if (name == null) {
                         continue;
                     }
+                    localVarNameSet.add(name);
                     PropertyKey key = PropertyKey.fromString(name);
                     if (global.has(key)) {
                         savedGlobals.put(name, global.get(key));
@@ -2404,31 +2413,35 @@ public final class JSGlobalObject {
             }
 
             try {
+                if (isEvalInFunction) {
+                    try {
+                        Compiler evalCompiler = new Compiler(code, "<eval>");
+                        Program evalAst = evalCompiler.parse(false);
+                        evalVarDeclarations = new HashSet<>();
+                        Set<String> evalLexDeclarations = new HashSet<>();
+                        AstUtils.collectGlobalDeclarations(evalAst, evalVarDeclarations, evalLexDeclarations);
+                        parsedEvalDeclarations = true;
+                    } catch (Exception ignored) {
+                        // Parse error in eval code - let the normal eval path report it.
+                    }
+                }
+
                 // EvalDeclarationInstantiation: check if eval code declares "var arguments"
                 // in a function with parameter expressions. Per QuickJS add_arguments_arg(),
                 // a lexical "arguments" binding exists in the argument scope when the function
                 // has parameter expressions (non-strict mode), preventing eval from redeclaring it.
                 if (isEvalInFunction
-                        && callerFrame.getFunction() instanceof JSBytecodeFunction bcFunc
-                        && bcFunc.hasParameterExpressions()
-                        && !bcFunc.isArrow()
-                        && !bcFunc.isStrict()) {
-                    try {
-                        Compiler evalCompiler = new Compiler(code, "<eval>");
-                        Program evalAst = evalCompiler.parse(false);
-                        Set<String> varDecls = new HashSet<>();
-                        Set<String> lexDecls = new HashSet<>();
-                        AstUtils.collectGlobalDeclarations(evalAst, varDecls, lexDecls);
-                        if (varDecls.contains("arguments")) {
-                            throw new JSException(
-                                    realmContext.throwError("SyntaxError",
-                                            "Identifier 'arguments' has already been declared"));
-                        }
-                    } catch (JSException je) {
-                        throw je; // Re-throw our SyntaxError
-                    } catch (Exception ignored) {
-                        // Parse error in eval code - let the normal eval handle it
-                    }
+                        && callerBytecodeFunction != null
+                        && callerBytecodeFunction.hasParameterExpressions()
+                        && !callerBytecodeFunction.isStrict()
+                        && parsedEvalDeclarations
+                        && evalVarDeclarations != null
+                        && evalVarDeclarations.contains("arguments")
+                        && (!callerBytecodeFunction.isArrow()
+                        || callerBytecodeFunction.hasArgumentsParameterBinding())) {
+                    throw new JSException(
+                            realmContext.throwError("SyntaxError",
+                                    "Identifier 'arguments' has already been declared"));
                 }
 
                 boolean inheritedStrictMode = callerFrame != null
@@ -2472,11 +2485,15 @@ public final class JSGlobalObject {
                 // Clean up eval-created bindings that should be function-scoped (not global).
                 // Per ES2024 B.3.3.3, var/function declarations in eval inside a function
                 // go to the function's variable environment, not the global.
-                if (globalKeysBefore != null) {
-                    for (PropertyKey propertyKey : global.ownPropertyKeys()) {
-                        if (propertyKey.isString() && !globalKeysBefore.contains(propertyKey.asString())) {
-                            global.delete(realmContext, propertyKey);
+                if (globalKeysBefore != null && parsedEvalDeclarations && evalVarDeclarations != null) {
+                    for (String declarationName : evalVarDeclarations) {
+                        if (globalKeysBefore.contains(declarationName)) {
+                            continue;
                         }
+                        if (localVarNameSet != null && localVarNameSet.contains(declarationName)) {
+                            continue;
+                        }
+                        global.delete(realmContext, PropertyKey.fromString(declarationName));
                     }
                 }
             }

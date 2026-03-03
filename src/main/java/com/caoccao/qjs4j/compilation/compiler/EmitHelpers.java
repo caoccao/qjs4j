@@ -135,8 +135,8 @@ final class EmitHelpers {
 
     /**
      * Emit the correct opcode sequence for a class method definition.
-     * For getter/setter methods, emits DEFINE_METHOD_COMPUTED with accessor flags.
-     * For regular methods, emits DEFINE_METHOD with the method name atom.
+     * Class methods always use DEFINE_METHOD_COMPUTED so attributes and
+     * DefinePropertyOrThrow semantics match ECMAScript class semantics.
      * Stack before: ... obj
      * Stack after:  ... obj (method added to obj)
      */
@@ -148,31 +148,24 @@ final class EmitHelpers {
         Opcode pushMethodOpcode = methodFunc.getCaptureSourceInfos() != null
                 ? Opcode.FCLOSURE : Opcode.PUSH_CONST;
 
-        if ("get".equals(kind) || "set".equals(kind)) {
-            // Getter/setter: use DEFINE_METHOD_COMPUTED with accessor flags
-            // Stack: ... obj -> ... obj key method -> ... obj
-            if (isComputedKey) {
-                delegates.expressions.compileExpression(method.key());
-            } else {
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
-            }
-            compilerContext.emitter.emitOpcodeConstant(pushMethodOpcode, methodFunc);
-            int methodKind = "get".equals(kind) ? 1 : 2;
-            // Class properties are not enumerable (no enumerable flag)
-            compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind);
-        } else if (isComputedKey) {
-            // Computed key method: evaluate key expression and use DEFINE_METHOD_COMPUTED
-            // Stack: ... obj -> ... obj key method -> ... obj
+        if (isComputedKey) {
             delegates.expressions.compileExpression(method.key());
-            compilerContext.emitter.emitOpcodeConstant(pushMethodOpcode, methodFunc);
-            // flags = 0 for regular method (not getter/setter), not enumerable
-            compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 0);
         } else {
-            // Regular method: use DEFINE_METHOD with atom name
-            // Stack: ... obj -> ... obj method -> ... obj
-            compilerContext.emitter.emitOpcodeConstant(pushMethodOpcode, methodFunc);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_METHOD, methodName);
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
         }
+
+        compilerContext.emitter.emitOpcodeConstant(pushMethodOpcode, methodFunc);
+
+        int methodKind;
+        if ("get".equals(kind)) {
+            methodKind = 1;
+        } else if ("set".equals(kind)) {
+            methodKind = 2;
+        } else {
+            methodKind = 0;
+        }
+        // Class methods are non-enumerable, so enumerable bit is not set.
+        compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind);
     }
 
     /**

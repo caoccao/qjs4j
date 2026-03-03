@@ -473,12 +473,13 @@ final class ExpressionCompiler {
                     if (prop.method() && prop.value() instanceof FunctionExpression methodFunc) {
                         // Concise methods are not constructors per ES spec
                         delegates.functions.compileFunctionExpression(methodFunc, true);
+                        // Object literal methods are enumerable.
+                        conpilerConext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
                     } else {
                         compileExpression(prop.value());
+                        // Define data property.
+                        conpilerConext.emitter.emitOpcode(Opcode.DEFINE_PROP);
                     }
-
-                    // Define property
-                    conpilerConext.emitter.emitOpcode(Opcode.DEFINE_PROP);
                 }
             }
         }

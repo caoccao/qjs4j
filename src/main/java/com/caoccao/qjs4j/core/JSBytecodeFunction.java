@@ -55,6 +55,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private JSValue capturedThisArg;
     private boolean classConstructor;
     private boolean derivedConstructor;
+    private boolean hasArgumentsParameterBinding;
     private boolean hasParameterExpressions;
     private int selfLocalIndex;
     private String sourceCode;
@@ -967,6 +968,7 @@ public final class JSBytecodeFunction extends JSFunction {
                 selfCaptureIndex
         );
         copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
+        copiedFunction.hasArgumentsParameterBinding = this.hasArgumentsParameterBinding;
         copiedFunction.selfLocalIndex = selfLocalIndex;
         copiedFunction.capturedThisArg = this.capturedThisArg;
         copiedFunction.capturedArguments = this.capturedArguments;
@@ -994,6 +996,7 @@ public final class JSBytecodeFunction extends JSFunction {
         );
         copiedFunction.varRefs = capturedVarRefs;
         copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
+        copiedFunction.hasArgumentsParameterBinding = this.hasArgumentsParameterBinding;
         copiedFunction.selfLocalIndex = selfLocalIndex;
         copiedFunction.capturedThisArg = this.capturedThisArg;
         copiedFunction.capturedArguments = this.capturedArguments;
@@ -1085,6 +1088,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public VarRef[] getVarRefs() {
         return varRefs;
+    }
+
+    public boolean hasArgumentsParameterBinding() {
+        return hasArgumentsParameterBinding;
     }
 
     /**
@@ -1185,6 +1192,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public void setDerivedConstructor(boolean derivedConstructor) {
         this.derivedConstructor = derivedConstructor;
+    }
+
+    public void setHasArgumentsParameterBinding(boolean hasArgumentsParameterBinding) {
+        this.hasArgumentsParameterBinding = hasArgumentsParameterBinding;
     }
 
     /**

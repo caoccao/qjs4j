@@ -82,32 +82,6 @@ public final class PropertyDescriptor {
     }
 
     /**
-     * Create a shallow copy from another descriptor, preserving only explicitly
-     * specified attributes.
-     */
-    public PropertyDescriptor copyFrom(PropertyDescriptor source) {
-        if (source.hasValue()) {
-            setValue(source.getValue());
-        }
-        if (source.hasWritable()) {
-            setWritable(source.isWritable());
-        }
-        if (source.hasEnumerable()) {
-            setEnumerable(source.isEnumerable());
-        }
-        if (source.hasConfigurable()) {
-            setConfigurable(source.isConfigurable());
-        }
-        if (source.hasGetter()) {
-            setGetter(source.getGetter());
-        }
-        if (source.hasSetter()) {
-            setSetter(source.getSetter());
-        }
-        return this;
-    }
-
-    /**
      * Create a default data descriptor (writable, enumerable, configurable).
      */
     public static PropertyDescriptor defaultData(JSValue value) {
@@ -149,6 +123,32 @@ public final class PropertyDescriptor {
         if (configurable.isEmpty()) {
             setConfigurable(false);
         }
+    }
+
+    /**
+     * Create a shallow copy from another descriptor, preserving only explicitly
+     * specified attributes.
+     */
+    public PropertyDescriptor copyFrom(PropertyDescriptor source) {
+        if (source.hasValue()) {
+            setValue(source.getValue());
+        }
+        if (source.hasWritable()) {
+            setWritable(source.isWritable());
+        }
+        if (source.hasEnumerable()) {
+            setEnumerable(source.isEnumerable());
+        }
+        if (source.hasConfigurable()) {
+            setConfigurable(source.isConfigurable());
+        }
+        if (source.hasGetter()) {
+            setGetter(source.getGetter());
+        }
+        if (source.hasSetter()) {
+            setSetter(source.getSetter());
+        }
+        return this;
     }
 
     // Getters

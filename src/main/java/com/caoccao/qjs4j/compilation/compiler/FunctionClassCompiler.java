@@ -40,6 +40,63 @@ final class FunctionClassCompiler {
         fieldCompiler = new FunctionClassFieldCompiler(compilerContext, delegates);
     }
 
+    private static boolean containsDirectEvalVarArguments(Expression expression) {
+        if (expression == null) {
+            return false;
+        }
+        if (expression instanceof CallExpression callExpression
+                && callExpression.callee() instanceof Identifier calleeIdentifier
+                && "eval".equals(calleeIdentifier.name())
+                && !callExpression.arguments().isEmpty()
+                && callExpression.arguments().get(0) instanceof Literal firstArgumentLiteral
+                && firstArgumentLiteral.value() instanceof String evalSourceString
+                && evalSourceString.contains("var arguments")) {
+            return true;
+        }
+        if (expression instanceof AssignmentExpression assignmentExpression) {
+            return containsDirectEvalVarArguments(assignmentExpression.right());
+        }
+        if (expression instanceof BinaryExpression binaryExpression) {
+            if (containsDirectEvalVarArguments(binaryExpression.left())) {
+                return true;
+            }
+            return containsDirectEvalVarArguments(binaryExpression.right());
+        }
+        if (expression instanceof ConditionalExpression conditionalExpression) {
+            if (containsDirectEvalVarArguments(conditionalExpression.test())) {
+                return true;
+            }
+            if (containsDirectEvalVarArguments(conditionalExpression.consequent())) {
+                return true;
+            }
+            return containsDirectEvalVarArguments(conditionalExpression.alternate());
+        }
+        if (expression instanceof SequenceExpression sequenceExpression) {
+            for (Expression sequenceItem : sequenceExpression.expressions()) {
+                if (containsDirectEvalVarArguments(sequenceItem)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof UnaryExpression unaryExpression) {
+            return containsDirectEvalVarArguments(unaryExpression.operand());
+        }
+        return false;
+    }
+
+    private static boolean containsDirectEvalVarArguments(List<Expression> expressions) {
+        if (expressions == null || expressions.isEmpty()) {
+            return false;
+        }
+        for (Expression expression : expressions) {
+            if (containsDirectEvalVarArguments(expression)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Convert a pattern to a string representation for source generation.
      * Used when generating synthetic source for Function constructor.
@@ -94,6 +151,7 @@ final class FunctionClassCompiler {
         BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver);
         CompilerContext functionContext = functionCompiler.context();
         CompilerDelegates funcDelegates = functionCompiler.delegates();
+        functionContext.sourceCode = compilerContext.sourceCode;
         functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
@@ -116,18 +174,34 @@ final class FunctionClassCompiler {
             functionContext.strictMode = true;
         }
 
+        boolean hasNonSimpleParameters = CompilerContext.hasNonSimpleParameters(
+                arrowExpr.params(), arrowExpr.defaults(), arrowExpr.restParameter());
+        boolean hasArgumentsParameterBinding = false;
+        for (Pattern parameter : arrowExpr.params()) {
+            if (CompilerContext.extractBoundNames(parameter).contains(JSArguments.NAME)) {
+                hasArgumentsParameterBinding = true;
+                break;
+            }
+        }
+        if (!hasArgumentsParameterBinding && arrowExpr.restParameter() != null) {
+            hasArgumentsParameterBinding = CompilerContext.extractBoundNames(arrowExpr.restParameter().argument())
+                    .contains(JSArguments.NAME);
+        }
+        boolean hasDirectEvalVarArgumentsInDefaults = containsDirectEvalVarArguments(arrowExpr.defaults());
+        boolean needsSyntheticEvalArgumentsBinding = hasDirectEvalVarArgumentsInDefaults
+                && arrowExpr.defaults() != null
+                && !functionContext.hasEnclosingArgumentsBinding
+                && !hasArgumentsParameterBinding;
+
         List<int[]> destructuringParams = declareParameters(arrowExpr.params(), functionContext, funcDelegates);
 
-        // Pre-declare 'arguments' as a local when the arrow function has parameter expressions
-        // and the body contains 'var arguments'. This is needed so that:
-        // 1. eval() in default params can set 'arguments' via the scope overlay
-        // 2. Inner arrows in defaults can capture 'arguments' via closure
-        // Only for arrows without enclosing arguments binding (top-level arrows), since
-        // arrows inside regular functions use SPECIAL_OBJECT for 'arguments' instead.
-        if (arrowExpr.defaults() != null && !functionContext.hasEnclosingArgumentsBinding
-                && arrowExpr.body() instanceof BlockStatement bodyBlock
-                && CompilerContext.containsVarArgumentsDeclaration(bodyBlock.body())) {
-            functionContext.currentScope().declareLocal("arguments");
+        // For top-level arrows with parameter expressions, keep a local slot for dynamically
+        // declared `arguments` from direct eval in parameter initializers.
+        if (needsSyntheticEvalArgumentsBinding
+                && functionContext.findLocalInScopes(JSArguments.NAME) == null) {
+            int argumentsLocalIndex = functionContext.currentScope().declareLocal(JSArguments.NAME);
+            functionContext.tdzLocals.add(JSArguments.NAME);
+            functionContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, argumentsLocalIndex);
         }
 
         // Emit default parameter initialization following QuickJS pattern:
@@ -158,24 +232,39 @@ final class FunctionClassCompiler {
         // Emit destructuring for pattern parameters after defaults and rest
         emitParameterDestructuring(arrowExpr.params(), destructuringParams, functionContext, funcDelegates);
 
+        boolean enteredBodyScope = false;
+        CompilerScope savedVarDeclarationScopeOverride = functionContext.varDeclarationScopeOverride;
+
         // Compile function body
         // Arrow functions can have expression body or block statement body
         if (arrowExpr.body() instanceof BlockStatement block) {
-            // Compile block body statements (don't call compileBlockStatement as it would create a new scope)
-            for (Statement stmt : block.body()) {
-                funcDelegates.statements.compileStatement(stmt);
+            if (needsSyntheticEvalArgumentsBinding) {
+                functionContext.enterScope();
+                enteredBodyScope = true;
+                functionContext.varDeclarationScopeOverride = functionContext.currentScope();
             }
 
-            // If body doesn't end with return, add implicit return undefined
-            List<Statement> bodyStatements = block.body();
-            if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
-                functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
-                functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
-                funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-                functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
-                // Emit RETURN_ASYNC for async functions, RETURN for sync functions
-                functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+            try {
+                // Compile block body statements.
+                for (Statement stmt : block.body()) {
+                    funcDelegates.statements.compileStatement(stmt);
+                }
+
+                // If body doesn't end with return, add implicit return undefined
+                List<Statement> bodyStatements = block.body();
+                if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
+                    functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                    int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
+                    functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+                    funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
+                    functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+                    // Emit RETURN_ASYNC for async functions, RETURN for sync functions
+                    functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+                }
+            } finally {
+                if (enteredBodyScope) {
+                    functionContext.varDeclarationScopeOverride = savedVarDeclarationScopeOverride;
+                }
             }
         } else if (arrowExpr.body() instanceof Expression expr) {
             // Expression body - implicitly returns the expression value
@@ -189,7 +278,10 @@ final class FunctionClassCompiler {
         }
 
         int localCount = functionContext.currentScope().getLocalCount();
-        String[] localVarNames = CompilerContext.extractLocalVarNames(functionContext.currentScope());
+        String[] localVarNames = CompilerContext.extractLocalVarNames(functionContext.scopes, localCount);
+        if (enteredBodyScope) {
+            functionContext.exitScope();
+        }
         functionContext.exitScope();
 
         // Build the function bytecode
@@ -217,7 +309,8 @@ final class FunctionClassCompiler {
                 functionContext.strictMode,  // strict - inherit from enclosing scope
                 functionSource   // source code for toString()
         );
-        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(arrowExpr.params(), arrowExpr.defaults(), arrowExpr.restParameter()));
+        function.setHasParameterExpressions(hasNonSimpleParameters);
+        function.setHasArgumentsParameterBinding(hasArgumentsParameterBinding);
 
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
@@ -724,6 +817,7 @@ final class FunctionClassCompiler {
         BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver);
         CompilerContext functionContext = functionCompiler.context();
         CompilerDelegates funcDelegates = functionCompiler.delegates();
+        functionContext.sourceCode = compilerContext.sourceCode;
         functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
@@ -945,6 +1039,7 @@ final class FunctionClassCompiler {
         BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver);
         CompilerContext functionContext = functionCompiler.context();
         CompilerDelegates funcDelegates = functionCompiler.delegates();
+        functionContext.sourceCode = compilerContext.sourceCode;
         functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
 
         // Enter function scope and add parameters as locals
@@ -1120,6 +1215,7 @@ final class FunctionClassCompiler {
         BytecodeCompiler methodCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
         CompilerContext methodCtx = methodCompiler.context();
         CompilerDelegates methodDelegates = methodCompiler.delegates();
+        methodCtx.sourceCode = compilerContext.sourceCode;
         methodCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         methodCtx.privateSymbols = privateSymbols;  // Make private symbols available in method
 
@@ -1268,6 +1364,7 @@ final class FunctionClassCompiler {
         BytecodeCompiler blockCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
         CompilerContext blockCtx = blockCompiler.context();
         CompilerDelegates blockDelegates = blockCompiler.delegates();
+        blockCtx.sourceCode = compilerContext.sourceCode;
         blockCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         blockCtx.privateSymbols = privateSymbols;
 
@@ -1325,6 +1422,7 @@ final class FunctionClassCompiler {
         BytecodeCompiler initializerCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
         CompilerContext initCtx = initializerCompiler.context();
         CompilerDelegates initDelegates = initializerCompiler.delegates();
+        initCtx.sourceCode = compilerContext.sourceCode;
         initCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         initCtx.privateSymbols = privateSymbols;
 
@@ -1421,6 +1519,7 @@ final class FunctionClassCompiler {
         BytecodeCompiler constructorCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
         CompilerContext ctorCtx = constructorCompiler.context();
         CompilerDelegates ctorDelegates = constructorCompiler.delegates();
+        ctorCtx.sourceCode = compilerContext.sourceCode;
         ctorCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         ctorCtx.privateSymbols = privateSymbols;  // Make private symbols available
 
