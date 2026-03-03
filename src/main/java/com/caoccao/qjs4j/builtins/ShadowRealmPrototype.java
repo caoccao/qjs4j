@@ -286,7 +286,7 @@ public final class ShadowRealmPrototype {
             return specifierPath.normalize();
         }
 
-        JSContext.StackFrame stackFrame = callerContext.getCurrentStackFrame();
+        JSStackFrame stackFrame = callerContext.getCurrentStackFrame();
         if (stackFrame != null) {
             String filename = stackFrame.filename();
             if (filename != null && !filename.isEmpty() && !filename.startsWith("<")) {

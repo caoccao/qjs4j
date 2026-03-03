@@ -136,6 +136,10 @@ final class ExpressionPrimaryParser {
             // Handle new.target meta-property
             if (parserContext.match(TokenType.DOT) && parserContext.nextToken.type() == TokenType.IDENTIFIER
                     && "target".equals(parserContext.nextToken.value())) {
+                if ((parserContext.isEval && !parserContext.allowNewTargetInEval)
+                        || (!parserContext.isEval && parserContext.functionNesting == 0)) {
+                    throw new JSSyntaxErrorException("'new.target' keyword unexpected here");
+                }
                 parserContext.advance(); // consume '.'
                 parserContext.advance(); // consume 'target'
                 return new Identifier("new.target", location);

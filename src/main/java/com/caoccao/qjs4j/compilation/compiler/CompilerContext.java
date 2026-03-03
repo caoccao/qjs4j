@@ -172,10 +172,10 @@ final class CompilerContext {
             return null;
         }
         String[] names = new String[count];
-        for (var entry : scope.getLocals().entrySet()) {
-            String name = entry.getKey();
-            int index = entry.getValue();
-            if (index >= 0 && index < count && !name.startsWith("$")) {
+        for (var entry : scope.getLocalNamesByIndex().entrySet()) {
+            int index = entry.getKey();
+            String name = entry.getValue();
+            if (index >= 0 && index < count) {
                 names[index] = name;
             }
         }
@@ -188,10 +188,10 @@ final class CompilerContext {
         }
         String[] names = new String[localCount];
         for (CompilerScope scope : scopes) {
-            for (var entry : scope.getLocals().entrySet()) {
-                String name = entry.getKey();
-                int index = entry.getValue();
-                if (index >= 0 && index < localCount && !name.startsWith("$")) {
+            for (var entry : scope.getLocalNamesByIndex().entrySet()) {
+                int index = entry.getKey();
+                String name = entry.getValue();
+                if (index >= 0 && index < localCount) {
                     names[index] = name;
                 }
             }
@@ -329,6 +329,12 @@ final class CompilerContext {
             CompilerScope parentScope = currentScope();
             if (localCount > parentScope.getLocalCount()) {
                 parentScope.setLocalCount(localCount);
+            }
+            for (var entry : exitingScope.getLocalNamesByIndex().entrySet()) {
+                String localName = entry.getValue();
+                if (localName != null) {
+                    parentScope.registerLocalName(entry.getKey(), localName);
+                }
             }
         }
         scopeDepth--;

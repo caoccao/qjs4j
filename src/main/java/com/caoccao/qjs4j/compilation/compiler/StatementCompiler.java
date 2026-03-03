@@ -317,7 +317,10 @@ final class StatementCompiler {
         // Return the value on top of stack
         compilerContext.emitter.emitOpcode(Opcode.RETURN);
 
-        compilerContext.exitScope();
+        int localCount = compilerContext.currentScope().getLocalCount();
+        if (localCount > compilerContext.maxLocalCount) {
+            compilerContext.maxLocalCount = localCount;
+        }
         compilerContext.inGlobalScope = false;
     }
 
@@ -702,6 +705,10 @@ final class StatementCompiler {
                 compileStatement(withStmt.body());
             }
         } finally {
+            // Clear active with object marker so direct-eval scope overlay can detect
+            // only currently active with environments from runtime locals.
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, withObjectLocalIndex);
             compilerContext.popWithObjectLocal();
         }
 

@@ -64,7 +64,13 @@ public final class BytecodeCompiler {
         } else {
             throw new JSCompilerException("Expected Program node");
         }
-        return compilerContext.emitter.build(compilerContext.maxLocalCount);
+        int localCount = compilerContext.scopes.isEmpty()
+                ? compilerContext.maxLocalCount
+                : compilerContext.currentScope().getLocalCount();
+        String[] localVarNames = compilerContext.scopes.isEmpty()
+                ? null
+                : CompilerContext.extractLocalVarNames(compilerContext.currentScope());
+        return compilerContext.emitter.build(localCount, localVarNames);
     }
 
     /**

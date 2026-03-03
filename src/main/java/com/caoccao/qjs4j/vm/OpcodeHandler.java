@@ -610,7 +610,14 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
         String variableName = executionContext.bytecode.getAtoms()[atomIndex];
-        boolean deleted = executionContext.virtualMachine.context.getGlobalObject().delete(executionContext.virtualMachine.context, PropertyKey.fromString(variableName));
+        boolean deleted;
+        if (executionContext.frame.hasDynamicVarBinding(variableName)) {
+            // Eval-created function-scope var bindings are not deletable.
+            deleted = false;
+        } else {
+            deleted = executionContext.virtualMachine.context.getGlobalObject()
+                    .delete(executionContext.virtualMachine.context, PropertyKey.fromString(variableName));
+        }
         executionContext.stack[executionContext.sp++] = JSBoolean.valueOf(deleted);
         executionContext.pc = pc + op.getSize();
     }
@@ -1193,6 +1200,13 @@ public final class OpcodeHandler {
         JSStackValue[] stack = executionContext.stack;
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
         String variableName = executionContext.bytecode.getAtoms()[atomIndex];
+        if (executionContext.frame.hasDynamicVarBinding(variableName)) {
+            JSValue variableValue = executionContext.frame.getDynamicVarBinding(variableName);
+            stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
         PropertyKey key = PropertyKey.fromString(variableName);
         JSObject globalObject = executionContext.virtualMachine.context.getGlobalObject();
         if (!globalObject.has(key)) {
@@ -2250,6 +2264,11 @@ public final class OpcodeHandler {
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
         String variableName = executionContext.bytecode.getAtoms()[atomIndex];
         JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
+        if (executionContext.frame.hasDynamicVarBinding(variableName)) {
+            executionContext.frame.setDynamicVarBinding(variableName, value);
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
         JSContext context = executionContext.virtualMachine.context;
         context.getGlobalObject().set(context, PropertyKey.fromString(variableName), value);
         if (context.hasPendingException()) {
@@ -2500,6 +2519,11 @@ public final class OpcodeHandler {
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
         String variableName = executionContext.bytecode.getAtoms()[atomIndex];
         JSValue value = (JSValue) executionContext.stack[executionContext.sp - 1];
+        if (executionContext.frame.hasDynamicVarBinding(variableName)) {
+            executionContext.frame.setDynamicVarBinding(variableName, value);
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
         PropertyKey variableKey = PropertyKey.fromString(variableName);
         JSContext context = executionContext.virtualMachine.context;
         JSObject globalObject = context.getGlobalObject();

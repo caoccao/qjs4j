@@ -121,7 +121,7 @@ public final class JSDate extends JSObject {
     }
 
     public static String formatToString(JSContext context, ZonedDateTime zdt) {
-        JSContext.StackFrame stackFrame = context.getCurrentStackFrame();
+        JSStackFrame stackFrame = context.getCurrentStackFrame();
         DateTimeFormatter formatter = stackFrame != null && !"<eval>".equals(stackFrame.filename())
                 ? TO_STRING_FORMATTER_LONG
                 : TO_STRING_FORMATTER_SHORT;

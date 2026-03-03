@@ -608,7 +608,7 @@ public final class DatePrototype {
         builder.append(String.format(Locale.ENGLISH, "%02d%02d", tz / 60, tz % 60));
         // Append timezone name in parentheses
         // Use long name when called from JS code (matching V8), short when called directly from Java
-        JSContext.StackFrame stackFrame = context.getCurrentStackFrame();
+        JSStackFrame stackFrame = context.getCurrentStackFrame();
         boolean useLongName = stackFrame != null && !"<eval>".equals(stackFrame.filename());
         String tzName = JSDate.getTimezoneName((long) date.getTimeValue(), useLongName);
         builder.append(" (").append(tzName).append(')');

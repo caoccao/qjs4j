@@ -25,6 +25,7 @@ import java.util.Set;
  * Represents a lexical scope for tracking local variables.
  */
 final class CompilerScope {
+    private final Map<Integer, String> localNamesByIndex = new HashMap<>();
     private final Map<String, Integer> locals = new HashMap<>();
     private final int scopeDepth;
     private final Set<String> simpleCatchParams = new HashSet<>();
@@ -49,6 +50,7 @@ final class CompilerScope {
         }
         int index = nextLocalIndex++;
         locals.put(name, index);
+        localNamesByIndex.put(index, name);
         return index;
     }
 
@@ -61,6 +63,7 @@ final class CompilerScope {
     int declareParameter(String name) {
         int index = nextLocalIndex++;
         locals.put(name, index);
+        localNamesByIndex.put(index, name);
         return index;
     }
 
@@ -70,6 +73,10 @@ final class CompilerScope {
 
     int getLocalCount() {
         return nextLocalIndex;
+    }
+
+    Map<Integer, String> getLocalNamesByIndex() {
+        return localNamesByIndex;
     }
 
     Map<String, Integer> getLocals() {
@@ -94,6 +101,12 @@ final class CompilerScope {
 
     void markSimpleCatchParam(String name) {
         simpleCatchParams.add(name);
+    }
+
+    void registerLocalName(int index, String name) {
+        if (!localNamesByIndex.containsKey(index)) {
+            localNamesByIndex.put(index, name);
+        }
     }
 
     void setLocalCount(int count) {

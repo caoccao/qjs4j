@@ -32,6 +32,8 @@ import com.caoccao.qjs4j.vm.Bytecode;
 public final class Compiler {
     private final String fileName;
     private final String source;
+    private boolean evalAllowNewTarget;
+    private boolean evalAllowSuperProperty;
     private boolean inheritedStrictMode;
     private boolean isEval; // true if compiling eval code
     private boolean predeclareProgramLexicalsAsLocals;
@@ -42,6 +44,8 @@ public final class Compiler {
         }
         this.source = source;
         this.fileName = fileName;
+        this.evalAllowNewTarget = false;
+        this.evalAllowSuperProperty = false;
         this.inheritedStrictMode = false;
         this.isEval = false;
         this.predeclareProgramLexicalsAsLocals = false;
@@ -82,7 +86,13 @@ public final class Compiler {
      */
     public Program parse(boolean isModule) {
         Lexer lexer = new Lexer(source);
-        Parser parser = new Parser(lexer, isModule, isEval, inheritedStrictMode);
+        Parser parser = new Parser(
+                lexer,
+                isModule,
+                isEval,
+                inheritedStrictMode,
+                evalAllowSuperProperty,
+                evalAllowNewTarget);
         return parser.parse();
     }
 
@@ -95,6 +105,12 @@ public final class Compiler {
      */
     public Compiler setEval(boolean isEval) {
         this.isEval = isEval;
+        return this;
+    }
+
+    public Compiler setEvalContextFlags(boolean allowSuperProperty, boolean allowNewTarget) {
+        this.evalAllowSuperProperty = allowSuperProperty;
+        this.evalAllowNewTarget = allowNewTarget;
         return this;
     }
 

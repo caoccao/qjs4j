@@ -31,6 +31,7 @@ import java.util.List;
  * that are shared across the delegate parser classes.
  */
 final class ParserContext {
+    final boolean allowNewTargetInEval;
     final boolean inheritedStrictMode;
     final boolean isEval;
     final Lexer lexer;
@@ -49,13 +50,17 @@ final class ParserContext {
     boolean superPropertyAllowed;
 
     ParserContext(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
-                  int functionNesting, int asyncFunctionNesting) {
+                  int functionNesting, int asyncFunctionNesting,
+                  boolean initialSuperPropertyAllowed,
+                  boolean allowNewTargetInEval) {
         this.lexer = lexer;
         this.moduleMode = moduleMode;
         this.isEval = isEval;
+        this.allowNewTargetInEval = allowNewTargetInEval;
         this.inheritedStrictMode = inheritedStrictMode;
         this.functionNesting = functionNesting;
         this.asyncFunctionNesting = asyncFunctionNesting;
+        this.superPropertyAllowed = initialSuperPropertyAllowed;
         this.currentToken = lexer.nextToken();
         this.nextToken = lexer.nextToken();
     }

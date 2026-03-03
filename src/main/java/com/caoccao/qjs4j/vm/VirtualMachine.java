@@ -634,9 +634,18 @@ public final class VirtualMachine {
                 return homeObject != null ? homeObject : JSUndefined.INSTANCE;
 
             case 5: // SPECIAL_OBJECT_VAR_OBJECT
-                // Return the variable object (for with statement)
-                // For now return undefined
-                return JSUndefined.INSTANCE;
+                // Return an object that resolves direct-eval dynamic bindings first,
+                // then falls back to the global object through prototype lookup.
+                Map<String, JSValue> dynamicBindings = currentFrame.getDynamicVarBindings();
+                if (dynamicBindings == null || dynamicBindings.isEmpty()) {
+                    return context.getGlobalObject();
+                }
+                JSObject variableObject = new JSObject();
+                variableObject.setPrototype(context.getGlobalObject());
+                for (Map.Entry<String, JSValue> entry : dynamicBindings.entrySet()) {
+                    variableObject.set(PropertyKey.fromString(entry.getKey()), entry.getValue());
+                }
+                return variableObject;
 
             case 6: // SPECIAL_OBJECT_IMPORT_META
                 // Return import.meta object for ES6 modules

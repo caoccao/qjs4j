@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.compilation.ast.FunctionDeclaration;
 import com.caoccao.qjs4j.compilation.ast.Statement;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.*;
+import com.caoccao.qjs4j.vm.StackFrame;
 import com.caoccao.qjs4j.vm.VirtualMachine;
 
 import java.util.*;
@@ -41,7 +42,7 @@ import java.util.*;
 public final class JSContext implements AutoCloseable {
     private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
     // Call stack management
-    private final Deque<StackFrame> callStack;
+    private final Deque<JSStackFrame> callStack;
     // Stack trace capture
     private final List<StackTraceElement> errorStackTrace;
     // Global declaration tracking for cross-script collision detection
@@ -114,12 +115,12 @@ public final class JSContext implements AutoCloseable {
      */
     private void captureErrorStackTrace() {
         clearErrorStackTrace();
-        for (StackFrame frame : callStack) {
+        for (JSStackFrame frame : callStack) {
             errorStackTrace.add(new StackTraceElement(
                     "JavaScript",
-                    frame.functionName,
-                    frame.filename,
-                    frame.lineNumber
+                    frame.functionName(),
+                    frame.filename(),
+                    frame.lineNumber()
             ));
         }
     }
@@ -130,13 +131,13 @@ public final class JSContext implements AutoCloseable {
     private void captureStackTrace(JSObject error) {
         StringBuilder stackTrace = new StringBuilder();
 
-        for (StackFrame frame : callStack) {
+        for (JSStackFrame frame : callStack) {
             stackTrace.append("    at ")
-                    .append(frame.functionName)
+                    .append(frame.functionName())
                     .append(" (")
-                    .append(frame.filename)
+                    .append(frame.filename())
                     .append(":")
-                    .append(frame.lineNumber)
+                    .append(frame.lineNumber())
                     .append(")\n");
         }
 
@@ -789,14 +790,26 @@ public final class JSContext implements AutoCloseable {
         }
 
         // Check for recursion limit
-        if (!pushStackFrame(new StackFrame("<eval>", filename, 1))) {
+        if (!pushStackFrame(new JSStackFrame("<eval>", filename, 1))) {
             return throwError("RangeError", "Maximum call stack size exceeded");
         }
 
         Compiler compiler = new Compiler(code, filename);
         // Per QuickJS, eval code has is_eval=true which prevents top-level return
+        StackFrame directEvalCallerFrame = isDirectEval ? virtualMachine.getCurrentFrame() : null;
+        boolean allowNewTargetInEval = false;
+        boolean allowSuperPropertyInEval = false;
         if (isDirectEval) {
             compiler.setEval(true);
+            if (directEvalCallerFrame != null
+                    && directEvalCallerFrame.getFunction() instanceof JSBytecodeFunction callerBytecodeFunction) {
+                allowNewTargetInEval = !callerBytecodeFunction.isArrow() && directEvalCallerFrame.getCaller() != null;
+                allowSuperPropertyInEval = !callerBytecodeFunction.isArrow()
+                        && callerBytecodeFunction.getHomeObject() != null;
+            }
+            compiler.setEvalContextFlags(allowSuperPropertyInEval, allowNewTargetInEval);
+            // Direct eval creates a fresh lexical environment whose bindings do not leak.
+            compiler.setPredeclareProgramLexicalsAsLocals(true);
             if (strictMode || inheritedStrictModeForDirectEval) {
                 compiler.setInheritedStrictMode(true);
             }
@@ -878,23 +891,48 @@ public final class JSContext implements AutoCloseable {
             if (!isModule && isDirectEval) {
                 List<Statement> evalBody = compileResult.ast().body();
                 Set<String> checkedFuncNames = new HashSet<>();
+                Set<String> globalEvalFunctionNames = new HashSet<>();
                 for (int i = evalBody.size() - 1; i >= 0; i--) {
                     if (evalBody.get(i) instanceof FunctionDeclaration funcDecl && funcDecl.id() != null) {
                         String funcName = funcDecl.id().name();
                         if (checkedFuncNames.add(funcName)) {
+                            globalEvalFunctionNames.add(funcName);
                             PropertyKey key = PropertyKey.fromString(funcName);
                             PropertyDescriptor desc = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
                             if (desc != null && !desc.isConfigurable()) {
                                 if (desc.isAccessorDescriptor()
                                         || !(desc.isWritable() && desc.isEnumerable())) {
-                                    throw new JSException("TypeError",
-                                            "cannot define variable '" + funcName + "'");
+                                    throw new JSException(throwTypeError("cannot define variable '" + funcName + "'"));
                                 }
                             }
                             if (desc == null && !jsGlobalObject.getGlobalObject().isExtensible()) {
-                                throw new JSException("TypeError",
-                                        "cannot define variable '" + funcName + "'");
+                                throw new JSException(throwTypeError("cannot define variable '" + funcName + "'"));
                             }
+                            if (directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null) {
+                                if (desc == null || desc.isConfigurable()) {
+                                    JSValue initialValue = desc != null && desc.hasValue()
+                                            ? desc.getValue()
+                                            : JSUndefined.INSTANCE;
+                                    jsGlobalObject.getGlobalObject().defineProperty(
+                                            key,
+                                            PropertyDescriptor.dataDescriptor(initialValue, PropertyDescriptor.DataState.All));
+                                }
+                            }
+                        }
+                    }
+                }
+                if (directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null) {
+                    Set<String> evalVarDeclarations = new HashSet<>();
+                    Set<String> evalLexDeclarations = new HashSet<>();
+                    AstUtils.collectGlobalDeclarations(compileResult.ast(), evalVarDeclarations, evalLexDeclarations);
+                    for (String declarationName : evalVarDeclarations) {
+                        if (globalEvalFunctionNames.contains(declarationName)) {
+                            continue;
+                        }
+                        PropertyKey key = PropertyKey.fromString(declarationName);
+                        if (!jsGlobalObject.getGlobalObject().has(key)
+                                && !jsGlobalObject.getGlobalObject().isExtensible()) {
+                            throw new JSException(throwTypeError("cannot define variable '" + declarationName + "'"));
                         }
                     }
                 }
@@ -908,13 +946,50 @@ public final class JSContext implements AutoCloseable {
             // In strict mode functions called without receiver, 'this' is undefined, and
             // eval('this') must see that same undefined value, not the global object.
             JSValue evalThisArg = jsGlobalObject.getGlobalObject();
-            if (isDirectEval) {
-                com.caoccao.qjs4j.vm.StackFrame callerFrame = virtualMachine.getCurrentFrame();
-                if (callerFrame != null) {
-                    evalThisArg = callerFrame.getThisArg();
+            JSValue evalNewTarget = JSUndefined.INSTANCE;
+            if (isDirectEval && directEvalCallerFrame != null) {
+                evalThisArg = directEvalCallerFrame.getThisArg();
+                if (allowNewTargetInEval) {
+                    evalNewTarget = directEvalCallerFrame.getNewTarget();
+                }
+                if (allowSuperPropertyInEval) {
+                    func.setHomeObject(directEvalCallerFrame.getFunction().getHomeObject());
                 }
             }
-            JSValue result = virtualMachine.execute(func, evalThisArg, JSValue.NO_ARGS);
+            JSValue result = virtualMachine.execute(func, evalThisArg, JSValue.NO_ARGS, evalNewTarget);
+
+            if (!isModule
+                    && isDirectEval
+                    && directEvalCallerFrame != null
+                    && directEvalCallerFrame.getCaller() == null) {
+                List<Statement> evalBody = compileResult.ast().body();
+                Set<String> functionNames = new HashSet<>();
+                for (int i = evalBody.size() - 1; i >= 0; i--) {
+                    if (evalBody.get(i) instanceof FunctionDeclaration functionDeclaration && functionDeclaration.id() != null) {
+                        functionNames.add(functionDeclaration.id().name());
+                    }
+                }
+                for (String functionName : functionNames) {
+                    PropertyKey key = PropertyKey.fromString(functionName);
+                    if (!jsGlobalObject.getGlobalObject().has(key)) {
+                        continue;
+                    }
+                    JSValue functionValue = jsGlobalObject.getGlobalObject().get(key);
+                    PropertyDescriptor existingDescriptor = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
+                    PropertyDescriptor descriptor = new PropertyDescriptor();
+                    descriptor.setValue(functionValue);
+                    if (existingDescriptor == null || existingDescriptor.isConfigurable()) {
+                        descriptor.setWritable(true);
+                        descriptor.setEnumerable(true);
+                        descriptor.setConfigurable(true);
+                    } else {
+                        descriptor.setWritable(existingDescriptor.isWritable());
+                        descriptor.setEnumerable(existingDescriptor.isEnumerable());
+                        descriptor.setConfigurable(false);
+                    }
+                    jsGlobalObject.getGlobalObject().defineProperty(key, descriptor);
+                }
+            }
 
             // Check if there's a pending exception
             if (hasPendingException()) {
@@ -993,7 +1068,7 @@ public final class JSContext implements AutoCloseable {
     /**
      * Get the full call stack.
      */
-    public List<StackFrame> getCallStack() {
+    public List<JSStackFrame> getCallStack() {
         return new ArrayList<>(callStack);
     }
 
@@ -1007,7 +1082,7 @@ public final class JSContext implements AutoCloseable {
     /**
      * Get the current stack frame.
      */
-    public StackFrame getCurrentStackFrame() {
+    public JSStackFrame getCurrentStackFrame() {
         return callStack.peek();
     }
 
@@ -1266,6 +1341,10 @@ public final class JSContext implements AutoCloseable {
         return virtualMachine;
     }
 
+    public boolean hasGlobalLexDeclaration(String name) {
+        return globalLexDeclarations.contains(name);
+    }
+
     /**
      * Check if there's a pending exception.
      */
@@ -1337,7 +1416,7 @@ public final class JSContext implements AutoCloseable {
     /**
      * Pop the current stack frame.
      */
-    public StackFrame popStackFrame() {
+    public JSStackFrame popStackFrame() {
         if (callStack.isEmpty()) {
             return null;
         }
@@ -1357,7 +1436,7 @@ public final class JSContext implements AutoCloseable {
      * Push a new stack frame.
      * Returns false if stack limit exceeded.
      */
-    public boolean pushStackFrame(StackFrame frame) {
+    public boolean pushStackFrame(JSStackFrame frame) {
         if (stackDepth >= maxStackDepth) {
             return false;
         }
@@ -1597,24 +1676,4 @@ public final class JSContext implements AutoCloseable {
         return true;
     }
 
-    /**
-     * Represents a stack frame in the call stack.
-     */
-    public record StackFrame(String functionName, String filename, int lineNumber, int columnNumber) {
-        public StackFrame(String functionName, String filename, int lineNumber) {
-            this(functionName, filename, lineNumber, 0);
-        }
-
-        public StackFrame(String functionName, String filename, int lineNumber, int columnNumber) {
-            this.functionName = functionName != null ? functionName : "<anonymous>";
-            this.filename = filename != null ? filename : "<unknown>";
-            this.lineNumber = lineNumber;
-            this.columnNumber = columnNumber;
-        }
-
-        @Override
-        public String toString() {
-            return functionName + " (" + filename + ":" + lineNumber + ":" + columnNumber + ")";
-        }
-    }
 }

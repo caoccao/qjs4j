@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.vm.VirtualMachine;
+
 import java.util.*;
 
 /**
@@ -136,7 +138,7 @@ public final class JSModule {
             }
 
             // Execute the module code
-            com.caoccao.qjs4j.vm.VirtualMachine vm = new com.caoccao.qjs4j.vm.VirtualMachine(context);
+            VirtualMachine vm = new VirtualMachine(context);
             JSValue result = vm.execute(moduleFunction, namespace, JSValue.NO_ARGS);
 
             // Check for exceptions

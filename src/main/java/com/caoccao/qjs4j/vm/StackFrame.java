@@ -18,6 +18,9 @@ package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.core.*;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Represents a call frame (activation record) on the call stack.
  */
@@ -33,6 +36,7 @@ public final class StackFrame {
     private final int stackBase;
     private final VarRef[] varRefs;
     private VarRef[] closedVarRefs;
+    private Map<String, JSValue> dynamicVarBindings;
     private VarRef[] localVarRefs;
     private JSArguments mappedArgumentsObject;
     private int programCounter;
@@ -93,6 +97,7 @@ public final class StackFrame {
         }
         this.programCounter = 0;
         this.caller = caller;
+        this.dynamicVarBindings = null;
     }
 
     /**
@@ -138,6 +143,17 @@ public final class StackFrame {
 
     public StackFrame getCaller() {
         return caller;
+    }
+
+    public JSValue getDynamicVarBinding(String name) {
+        if (dynamicVarBindings == null) {
+            return null;
+        }
+        return dynamicVarBindings.get(name);
+    }
+
+    public Map<String, JSValue> getDynamicVarBindings() {
+        return dynamicVarBindings;
     }
 
     public JSFunction getFunction() {
@@ -217,12 +233,30 @@ public final class StackFrame {
         return null;
     }
 
+    public boolean hasDynamicVarBinding(String name) {
+        return dynamicVarBindings != null && dynamicVarBindings.containsKey(name);
+    }
+
+    public boolean removeDynamicVarBinding(String name) {
+        if (dynamicVarBindings == null) {
+            return false;
+        }
+        return dynamicVarBindings.remove(name) != null;
+    }
+
     public void setArgumentsObject(boolean mapped, JSArguments argumentsObject) {
         if (mapped) {
             mappedArgumentsObject = argumentsObject;
         } else {
             unmappedArgumentsObject = argumentsObject;
         }
+    }
+
+    public void setDynamicVarBinding(String name, JSValue value) {
+        if (dynamicVarBindings == null) {
+            dynamicVarBindings = new HashMap<>();
+        }
+        dynamicVarBindings.put(name, value);
     }
 
     public void setProgramCounter(int pc) {

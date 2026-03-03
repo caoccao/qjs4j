@@ -66,6 +66,10 @@ public final class AstUtils {
                 if (funcDecl.id() != null) {
                     varDecls.add(funcDecl.id().name());
                 }
+            } else if (stmt instanceof ClassDeclaration classDecl) {
+                if (classDecl.id() != null) {
+                    lexDecls.add(classDecl.id().name());
+                }
             }
         }
 

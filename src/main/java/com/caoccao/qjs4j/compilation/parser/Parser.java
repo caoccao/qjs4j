@@ -49,18 +49,39 @@ public final class Parser {
     }
 
     public Parser(Lexer lexer, boolean moduleMode, boolean isEval) {
-        this(lexer, moduleMode, isEval, false, 0, 0);
+        this(lexer, moduleMode, isEval, false, 0, 0, false, false);
     }
 
     public Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode) {
-        this(lexer, moduleMode, isEval, inheritedStrictMode, 0, 0);
+        this(lexer, moduleMode, isEval, inheritedStrictMode, 0, 0, false, false);
+    }
+
+    public Parser(
+            Lexer lexer,
+            boolean moduleMode,
+            boolean isEval,
+            boolean inheritedStrictMode,
+            boolean initialSuperPropertyAllowed,
+            boolean allowNewTargetInEval) {
+        this(
+                lexer,
+                moduleMode,
+                isEval,
+                inheritedStrictMode,
+                0,
+                0,
+                initialSuperPropertyAllowed,
+                allowNewTargetInEval);
     }
 
     // Package-private: used by LiteralParser for nested template expression parsing
     Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
-           int functionNesting, int asyncFunctionNesting) {
+           int functionNesting, int asyncFunctionNesting,
+           boolean initialSuperPropertyAllowed,
+           boolean allowNewTargetInEval) {
         this.parserContext = new ParserContext(lexer, moduleMode, isEval, inheritedStrictMode,
-                functionNesting, asyncFunctionNesting);
+                functionNesting, asyncFunctionNesting,
+                initialSuperPropertyAllowed, allowNewTargetInEval);
         this.delegates = new ParserDelegates(parserContext);
     }
 

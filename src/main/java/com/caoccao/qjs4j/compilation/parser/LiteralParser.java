@@ -388,7 +388,9 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 parserContext.isEval,
                 parserContext.inheritedStrictMode,
                 parserContext.functionNesting,
-                parserContext.asyncFunctionNesting);
+                parserContext.asyncFunctionNesting,
+                parserContext.superPropertyAllowed,
+                parserContext.allowNewTargetInEval);
         Expression expression = expressionParser.parseExpression();
         if (expressionParser.currentToken().type() != TokenType.EOF) {
             throw new JSSyntaxErrorException("Invalid template expression");

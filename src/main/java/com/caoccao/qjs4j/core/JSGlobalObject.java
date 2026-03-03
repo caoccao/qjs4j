@@ -17,8 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.builtins.*;
-import com.caoccao.qjs4j.compilation.ast.AstUtils;
-import com.caoccao.qjs4j.compilation.ast.Program;
+import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.JSErrorType;
 import com.caoccao.qjs4j.exceptions.JSException;
@@ -2099,6 +2098,159 @@ public final class JSGlobalObject {
             return -1;
         }
 
+        private static Set<String> collectFunctionVarEnvironmentNames(JSBytecodeFunction callerBytecodeFunction) {
+            String source = callerBytecodeFunction.getSourceCode();
+            if (source == null || source.isBlank()) {
+                return null;
+            }
+            String wrappedSource = "(" + source + ")";
+            try {
+                Program parsedProgram = new Compiler(wrappedSource, "<eval-caller>").parse(false);
+                if (parsedProgram.body().isEmpty()
+                        || !(parsedProgram.body().get(0) instanceof ExpressionStatement expressionStatement)) {
+                    return null;
+                }
+                Expression expression = expressionStatement.expression();
+                Set<String> functionVarEnvironmentNames = new HashSet<>();
+                if (expression instanceof FunctionExpression functionExpression) {
+                    for (Pattern parameter : functionExpression.params()) {
+                        collectPatternNames(parameter, functionVarEnvironmentNames);
+                    }
+                    if (functionExpression.restParameter() != null) {
+                        collectPatternNames(functionExpression.restParameter().argument(), functionVarEnvironmentNames);
+                    }
+                    collectVarEnvironmentNamesFromStatements(functionExpression.body().body(), functionVarEnvironmentNames);
+                    return functionVarEnvironmentNames;
+                }
+                if (expression instanceof ArrowFunctionExpression arrowFunctionExpression) {
+                    for (Pattern parameter : arrowFunctionExpression.params()) {
+                        collectPatternNames(parameter, functionVarEnvironmentNames);
+                    }
+                    if (arrowFunctionExpression.restParameter() != null) {
+                        collectPatternNames(arrowFunctionExpression.restParameter().argument(), functionVarEnvironmentNames);
+                    }
+                    if (arrowFunctionExpression.body() instanceof BlockStatement blockStatement) {
+                        collectVarEnvironmentNamesFromStatements(blockStatement.body(), functionVarEnvironmentNames);
+                    }
+                    return functionVarEnvironmentNames;
+                }
+                return null;
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        private static void collectPatternNames(Pattern pattern, Set<String> names) {
+            if (pattern instanceof Identifier identifier) {
+                names.add(identifier.name());
+            } else if (pattern instanceof ArrayPattern arrayPattern) {
+                for (Pattern element : arrayPattern.elements()) {
+                    if (element != null) {
+                        collectPatternNames(element, names);
+                    }
+                }
+            } else if (pattern instanceof ObjectPattern objectPattern) {
+                for (ObjectPattern.Property property : objectPattern.properties()) {
+                    collectPatternNames(property.value(), names);
+                }
+            } else if (pattern instanceof RestElement restElement) {
+                collectPatternNames(restElement.argument(), names);
+            } else if (pattern instanceof AssignmentPattern assignmentPattern) {
+                collectPatternNames(assignmentPattern.left(), names);
+            }
+        }
+
+        private static void collectVarEnvironmentNamesFromStatement(Statement statement, Set<String> names) {
+            if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.id() != null) {
+                names.add(functionDeclaration.id().name());
+                return;
+            }
+            if (statement instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.kind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.declarations()) {
+                    collectPatternNames(declaration.id(), names);
+                }
+                return;
+            }
+            if (statement instanceof BlockStatement blockStatement) {
+                collectVarEnvironmentNamesFromStatements(blockStatement.body(), names);
+                return;
+            }
+            if (statement instanceof IfStatement ifStatement) {
+                collectVarEnvironmentNamesFromStatement(ifStatement.consequent(), names);
+                if (ifStatement.alternate() != null) {
+                    collectVarEnvironmentNamesFromStatement(ifStatement.alternate(), names);
+                }
+                return;
+            }
+            if (statement instanceof ForStatement forStatement) {
+                if (forStatement.init() instanceof VariableDeclaration variableDeclaration
+                        && variableDeclaration.kind() == VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.declarations()) {
+                        collectPatternNames(declaration.id(), names);
+                    }
+                }
+                collectVarEnvironmentNamesFromStatement(forStatement.body(), names);
+                return;
+            }
+            if (statement instanceof ForInStatement forInStatement) {
+                if (forInStatement.left() instanceof VariableDeclaration variableDeclaration
+                        && variableDeclaration.kind() == VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.declarations()) {
+                        collectPatternNames(declaration.id(), names);
+                    }
+                }
+                collectVarEnvironmentNamesFromStatement(forInStatement.body(), names);
+                return;
+            }
+            if (statement instanceof ForOfStatement forOfStatement) {
+                if (forOfStatement.left() instanceof VariableDeclaration variableDeclaration
+                        && variableDeclaration.kind() == VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.declarations()) {
+                        collectPatternNames(declaration.id(), names);
+                    }
+                }
+                collectVarEnvironmentNamesFromStatement(forOfStatement.body(), names);
+                return;
+            }
+            if (statement instanceof WhileStatement whileStatement) {
+                collectVarEnvironmentNamesFromStatement(whileStatement.body(), names);
+                return;
+            }
+            if (statement instanceof DoWhileStatement doWhileStatement) {
+                collectVarEnvironmentNamesFromStatement(doWhileStatement.body(), names);
+                return;
+            }
+            if (statement instanceof SwitchStatement switchStatement) {
+                for (SwitchStatement.SwitchCase switchCase : switchStatement.cases()) {
+                    collectVarEnvironmentNamesFromStatements(switchCase.consequent(), names);
+                }
+                return;
+            }
+            if (statement instanceof TryStatement tryStatement) {
+                collectVarEnvironmentNamesFromStatements(tryStatement.block().body(), names);
+                if (tryStatement.handler() != null) {
+                    if (tryStatement.handler().param() != null) {
+                        collectPatternNames(tryStatement.handler().param(), names);
+                    }
+                    collectVarEnvironmentNamesFromStatements(tryStatement.handler().body().body(), names);
+                }
+                if (tryStatement.finalizer() != null) {
+                    collectVarEnvironmentNamesFromStatements(tryStatement.finalizer().body(), names);
+                }
+                return;
+            }
+            if (statement instanceof LabeledStatement labeledStatement) {
+                collectVarEnvironmentNamesFromStatement(labeledStatement.body(), names);
+            }
+        }
+
+        private static void collectVarEnvironmentNamesFromStatements(List<Statement> statements, Set<String> names) {
+            for (Statement statement : statements) {
+                collectVarEnvironmentNamesFromStatement(statement, names);
+            }
+        }
+
         /**
          * decodeURI(encodedURI)
          * Decode a URI that was encoded by encodeURI.
@@ -2353,23 +2505,32 @@ public final class JSGlobalObject {
                 code = "'use strict';\n" + code;
             }
 
-            // Scope overlay is only valid for same-realm direct eval within a function.
             // Cross-realm eval (other.eval('code')) should not overlay the caller's scope.
             boolean isSameRealm = (realmContext == callerContext);
 
             // Scope overlay: capture enclosing function's local variables onto the global
             // object so that eval code's GET_VAR/PUT_VAR can access them.
             StackFrame callerFrame = callerContext.getVirtualMachine().getCurrentFrame();
+            boolean hasSameRealmCallerFrame = isSameRealm && callerFrame != null;
             // Eval is "inside a function" only if same-realm and the callerFrame is NOT the top-level program.
-            boolean isEvalInFunction = isSameRealm && callerFrame != null
+            boolean isEvalInFunction = hasSameRealmCallerFrame
                     && callerFrame.getFunction() instanceof JSBytecodeFunction
                     && callerFrame.getCaller() != null;
+            boolean shouldOverlayLocals = hasSameRealmCallerFrame
+                    && callerFrame.getFunction() instanceof JSBytecodeFunction;
+            boolean inheritedStrictMode = callerFrame != null
+                    && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction
+                    ? bytecodeFunction.isStrict()
+                    : callerContext.isStrictMode();
             String[] localVarNames = null;
             Set<String> localVarNameSet = null;
             Map<String, JSValue> savedGlobals = null;
             Set<String> absentKeys = null;
+            Set<String> touchedOverlayKeys = null;
             Set<String> evalVarDeclarations = null;
+            Set<String> evalLexDeclarations = null;
             boolean parsedEvalDeclarations = false;
+            boolean evalCodeStrict = inheritedStrictMode;
             JSObject global = realmContext.getGlobalObject();
             JSBytecodeFunction callerBytecodeFunction =
                     callerFrame != null && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction
@@ -2379,7 +2540,7 @@ public final class JSGlobalObject {
             // When eval runs inside a function, snapshot global property names so we can
             // clean up var/function bindings that should be function-scoped (not global).
             Set<String> globalKeysBefore = null;
-            if (isEvalInFunction) {
+            if (hasSameRealmCallerFrame) {
                 globalKeysBefore = new HashSet<>();
                 for (PropertyKey propertyKey : global.ownPropertyKeys()) {
                     if (propertyKey.isString()) {
@@ -2388,39 +2549,67 @@ public final class JSGlobalObject {
                 }
             }
 
-            if (isEvalInFunction
+            if (shouldOverlayLocals
                     && callerBytecodeFunction != null
                     && callerBytecodeFunction.getBytecode().getLocalVarNames() != null) {
                 localVarNames = callerBytecodeFunction.getBytecode().getLocalVarNames();
                 localVarNameSet = new HashSet<>();
                 savedGlobals = new HashMap<>();
                 absentKeys = new HashSet<>();
+                touchedOverlayKeys = new HashSet<>();
                 JSValue[] locals = callerFrame.getLocals();
                 for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
                     String name = localVarNames[i];
                     if (name == null) {
                         continue;
                     }
-                    localVarNameSet.add(name);
-                    PropertyKey key = PropertyKey.fromString(name);
-                    if (global.has(key)) {
-                        savedGlobals.put(name, global.get(key));
-                    } else {
-                        absentKeys.add(name);
+                    if (name.startsWith("$")) {
+                        continue;
                     }
-                    global.set(key, locals[i]);
+                    localVarNameSet.add(name);
+                    overlayBinding(global, name, locals[i], savedGlobals, absentKeys, touchedOverlayKeys);
+                }
+                Map<String, JSValue> dynamicVarBindings = callerFrame.getDynamicVarBindings();
+                if (dynamicVarBindings != null) {
+                    for (Map.Entry<String, JSValue> entry : dynamicVarBindings.entrySet()) {
+                        overlayBinding(global, entry.getKey(), entry.getValue(), savedGlobals, absentKeys, touchedOverlayKeys);
+                    }
+                }
+                List<WithObjectCandidate> withObjectCandidates = new ArrayList<>();
+                for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
+                    String name = localVarNames[i];
+                    JSValue localValue = locals[i];
+                    if (name == null || localValue == null || localValue == JSUndefined.INSTANCE) {
+                        continue;
+                    }
+                    if (!(localValue instanceof JSObject withObject) || !name.startsWith("$withObject")) {
+                        continue;
+                    }
+                    withObjectCandidates.add(new WithObjectCandidate(parseWithDepth(name), withObject));
+                }
+                withObjectCandidates.sort(Comparator.comparingInt(WithObjectCandidate::depth));
+                for (WithObjectCandidate withObjectCandidate : withObjectCandidates) {
+                    JSObject withObject = withObjectCandidate.object();
+                    for (PropertyKey propertyKey : withObject.ownPropertyKeys()) {
+                        if (!propertyKey.isString()) {
+                            continue;
+                        }
+                        String keyName = propertyKey.asString();
+                        overlayBinding(global, keyName, withObject.get(propertyKey), savedGlobals, absentKeys, touchedOverlayKeys);
+                    }
                 }
             }
 
             try {
-                if (isEvalInFunction) {
+                if (hasSameRealmCallerFrame) {
                     try {
                         Compiler evalCompiler = new Compiler(code, "<eval>");
                         Program evalAst = evalCompiler.parse(false);
                         evalVarDeclarations = new HashSet<>();
-                        Set<String> evalLexDeclarations = new HashSet<>();
+                        evalLexDeclarations = new HashSet<>();
                         AstUtils.collectGlobalDeclarations(evalAst, evalVarDeclarations, evalLexDeclarations);
                         parsedEvalDeclarations = true;
+                        evalCodeStrict = evalCodeStrict || evalAst.strict();
                     } catch (Exception ignored) {
                         // Parse error in eval code - let the normal eval path report it.
                     }
@@ -2434,20 +2623,58 @@ public final class JSGlobalObject {
                         && callerBytecodeFunction != null
                         && callerBytecodeFunction.hasParameterExpressions()
                         && !callerBytecodeFunction.isStrict()
+                        && !evalCodeStrict
                         && parsedEvalDeclarations
                         && evalVarDeclarations != null
-                        && evalVarDeclarations.contains("arguments")
-                        && (!callerBytecodeFunction.isArrow()
-                        || callerBytecodeFunction.hasArgumentsParameterBinding())) {
-                    throw new JSException(
-                            realmContext.throwError("SyntaxError",
-                                    "Identifier 'arguments' has already been declared"));
+                        && evalVarDeclarations.contains("arguments")) {
+                    if (!callerBytecodeFunction.isArrow()
+                            || callerBytecodeFunction.hasArgumentsParameterBinding()) {
+                        throw new JSException(
+                                realmContext.throwError("SyntaxError",
+                                        "Identifier 'arguments' has already been declared"));
+                    }
+                }
+                if (hasSameRealmCallerFrame
+                        && !evalCodeStrict
+                        && parsedEvalDeclarations
+                        && evalVarDeclarations != null
+                        && (callerBytecodeFunction == null || !callerBytecodeFunction.isStrict())) {
+                    Set<String> functionVarEnvironmentNames = null;
+                    if (callerBytecodeFunction != null
+                            && callerFrame != null
+                            && callerFrame.getCaller() != null) {
+                        functionVarEnvironmentNames = collectFunctionVarEnvironmentNames(callerBytecodeFunction);
+                    }
+                    for (String declarationName : evalVarDeclarations) {
+                        if (isEvalInFunction
+                                && "arguments".equals(declarationName)
+                                && callerBytecodeFunction != null) {
+                            continue;
+                        }
+                        if (callerBytecodeFunction != null
+                                && callerBytecodeFunction.isArrow()
+                                && "arguments".equals(declarationName)
+                                && !callerBytecodeFunction.hasArgumentsParameterBinding()) {
+                            continue;
+                        }
+                        if (callerFrame != null
+                                && callerFrame.getCaller() == null
+                                && callerContext.hasGlobalLexDeclaration(declarationName)) {
+                            throw new JSException(
+                                    realmContext.throwError("SyntaxError",
+                                            "Identifier '" + declarationName + "' has already been declared"));
+                        }
+                        if (localVarNameSet != null
+                                && localVarNameSet.contains(declarationName)
+                                && functionVarEnvironmentNames != null
+                                && !functionVarEnvironmentNames.contains(declarationName)) {
+                            throw new JSException(
+                                    realmContext.throwError("SyntaxError",
+                                            "Identifier '" + declarationName + "' has already been declared"));
+                        }
+                    }
                 }
 
-                boolean inheritedStrictMode = callerFrame != null
-                        && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction
-                        ? bytecodeFunction.isStrict()
-                        : callerContext.isStrictMode();
                 JSValue result = realmContext.evalDirect(code, "<eval>", inheritedStrictMode);
 
                 // Copy modified values back to caller's locals
@@ -2458,9 +2685,27 @@ public final class JSGlobalObject {
                         if (name == null) {
                             continue;
                         }
+                        if (name.startsWith("$")) {
+                            continue;
+                        }
                         PropertyKey key = PropertyKey.fromString(name);
                         if (global.has(key)) {
                             locals[i] = global.get(key);
+                        }
+                    }
+                }
+                if (isEvalInFunction
+                        && !evalCodeStrict
+                        && parsedEvalDeclarations
+                        && evalVarDeclarations != null
+                        && callerFrame != null) {
+                    for (String declarationName : evalVarDeclarations) {
+                        if (localVarNameSet != null && localVarNameSet.contains(declarationName)) {
+                            continue;
+                        }
+                        PropertyKey key = PropertyKey.fromString(declarationName);
+                        if (global.has(key)) {
+                            callerFrame.setDynamicVarBinding(declarationName, global.get(key));
                         }
                     }
                 }
@@ -2473,7 +2718,16 @@ public final class JSGlobalObject {
             } finally {
                 // Restore global object state for scope overlay
                 if (savedGlobals != null) {
+                    boolean isTopLevelCallerFrame = callerFrame != null && callerFrame.getCaller() == null;
                     for (var entry : savedGlobals.entrySet()) {
+                        if (isTopLevelCallerFrame
+                                && !evalCodeStrict
+                                && parsedEvalDeclarations
+                                && evalVarDeclarations != null
+                                && evalVarDeclarations.contains(entry.getKey())
+                                && !callerContext.hasGlobalLexDeclaration(entry.getKey())) {
+                            continue;
+                        }
                         global.set(PropertyKey.fromString(entry.getKey()), entry.getValue());
                     }
                 }
@@ -2485,12 +2739,24 @@ public final class JSGlobalObject {
                 // Clean up eval-created bindings that should be function-scoped (not global).
                 // Per ES2024 B.3.3.3, var/function declarations in eval inside a function
                 // go to the function's variable environment, not the global.
-                if (globalKeysBefore != null && parsedEvalDeclarations && evalVarDeclarations != null) {
+                if (hasSameRealmCallerFrame
+                        && globalKeysBefore != null
+                        && parsedEvalDeclarations
+                        && evalVarDeclarations != null
+                        && (isEvalInFunction || evalCodeStrict)) {
                     for (String declarationName : evalVarDeclarations) {
                         if (globalKeysBefore.contains(declarationName)) {
                             continue;
                         }
                         if (localVarNameSet != null && localVarNameSet.contains(declarationName)) {
+                            continue;
+                        }
+                        global.delete(realmContext, PropertyKey.fromString(declarationName));
+                    }
+                }
+                if (globalKeysBefore != null && parsedEvalDeclarations && evalLexDeclarations != null) {
+                    for (String declarationName : evalLexDeclarations) {
+                        if (globalKeysBefore.contains(declarationName)) {
                             continue;
                         }
                         global.delete(realmContext, PropertyKey.fromString(declarationName));
@@ -2585,6 +2851,27 @@ public final class JSGlobalObject {
                     (c >= '0' && c <= '9') ||
                     c == '@' || c == '*' || c == '_' ||
                     c == '+' || c == '-' || c == '.' || c == '/';
+        }
+
+        private static void overlayBinding(
+                JSObject global,
+                String name,
+                JSValue value,
+                Map<String, JSValue> savedGlobals,
+                Set<String> absentKeys,
+                Set<String> touchedOverlayKeys) {
+            if (name == null || touchedOverlayKeys == null || savedGlobals == null || absentKeys == null) {
+                return;
+            }
+            if (touchedOverlayKeys.add(name)) {
+                PropertyKey key = PropertyKey.fromString(name);
+                if (global.has(key)) {
+                    savedGlobals.put(name, global.get(key));
+                } else {
+                    absentKeys.add(name);
+                }
+            }
+            global.set(PropertyKey.fromString(name), value != null ? value : JSUndefined.INSTANCE);
         }
 
         /**
@@ -2722,6 +3009,20 @@ public final class JSGlobalObject {
             return JSNumber.of(sign * result);
         }
 
+        private static int parseWithDepth(String localName) {
+            int depth = 0;
+            int index = "$withObject".length();
+            while (index < localName.length()) {
+                char current = localName.charAt(index);
+                if (current < '0' || current > '9') {
+                    return depth;
+                }
+                depth = depth * 10 + (current - '0');
+                index++;
+            }
+            return depth;
+        }
+
         private static int skipLeadingWhitespace(String str) {
             int index = 0;
             while (index < str.length() && isEcmaWhitespace(str.charAt(index))) {
@@ -2776,6 +3077,9 @@ public final class JSGlobalObject {
             }
 
             return new JSString(result.toString());
+        }
+
+        private record WithObjectCandidate(int depth, JSObject object) {
         }
     }
 }

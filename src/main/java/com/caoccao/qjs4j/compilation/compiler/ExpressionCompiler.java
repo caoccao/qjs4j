@@ -826,7 +826,8 @@ final class ExpressionCompiler {
                     if (capturedIndex != null) {
                         conpilerConext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
                     } else {
-                        conpilerConext.emitter.emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
+                        conpilerConext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                        conpilerConext.emitter.emitU8(5);
                         conpilerConext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
                     }
                 }
