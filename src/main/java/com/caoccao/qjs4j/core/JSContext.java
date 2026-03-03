@@ -45,6 +45,7 @@ public final class JSContext implements AutoCloseable {
     private final Deque<JSStackFrame> callStack;
     // Stack trace capture
     private final List<StackTraceElement> errorStackTrace;
+    private final Deque<EvalOverlayFrame> evalOverlayFrames;
     // Global declaration tracking for cross-script collision detection
     // Following QuickJS global_var_obj pattern (GlobalDeclarationInstantiation)
     private final Set<String> globalLexDeclarations;
@@ -73,6 +74,7 @@ public final class JSContext implements AutoCloseable {
     private boolean inCatchHandler;
     private int maxStackDepth;
     private JSValue nativeConstructorNewTarget;
+    private int pendingDirectEvalCalls;
     // Exception state
     private JSValue pendingException;
     // Promise rejection callback
@@ -94,6 +96,7 @@ public final class JSContext implements AutoCloseable {
         this.globalVarDeclarations = new HashSet<>();
         this.waitable = true;
         this.inCatchHandler = false;
+        this.evalOverlayFrames = new ArrayDeque<>();
         this.iteratorPrototypes = new HashMap<>();
         this.jsGlobalObject = new JSGlobalObject(this);
         this.maxStackDepth = DEFAULT_MAX_STACK_DEPTH;
@@ -101,6 +104,7 @@ public final class JSContext implements AutoCloseable {
         this.moduleCache = new HashMap<>();
         this.pendingException = null;
         this.runtime = runtime;
+        this.pendingDirectEvalCalls = 0;
         this.stackDepth = 0;
         this.strictMode = false;
         this.virtualMachine = new VirtualMachine(this);
@@ -189,6 +193,14 @@ public final class JSContext implements AutoCloseable {
         clearErrorStackTrace();
         // Remove from runtime
         runtime.destroyContext(this);
+    }
+
+    public boolean consumeScheduledDirectEvalCall() {
+        if (pendingDirectEvalCalls > 0) {
+            pendingDirectEvalCalls--;
+            return true;
+        }
+        return false;
     }
 
     public JSAggregateError createJSAggregateError(String message) {
@@ -778,13 +790,14 @@ public final class JSContext implements AutoCloseable {
      * @return the js value
      */
     public JSValue eval(String code, String filename, boolean isModule, boolean isDirectEval) {
-        return eval(code, filename, isModule, isDirectEval, false, false, false);
+        return eval(code, filename, isModule, isDirectEval, false, false, false, false);
     }
 
     private JSValue eval(String code, String filename, boolean isModule, boolean isDirectEval,
                          boolean predeclareProgramLexicalsAsLocals,
                          boolean skipGlobalDeclarationTracking,
-                         boolean inheritedStrictModeForDirectEval) {
+                         boolean inheritedStrictModeForDirectEval,
+                         boolean useDirectEvalCallerFrame) {
         if (code == null || code.isEmpty()) {
             return JSUndefined.INSTANCE;
         }
@@ -795,8 +808,11 @@ public final class JSContext implements AutoCloseable {
         }
 
         Compiler compiler = new Compiler(code, filename);
-        // Per QuickJS, eval code has is_eval=true which prevents top-level return
-        StackFrame directEvalCallerFrame = isDirectEval ? virtualMachine.getCurrentFrame() : null;
+        // Per QuickJS, eval code has is_eval=true which prevents top-level return.
+        // Only syntactic direct eval should inherit caller frame semantics.
+        StackFrame directEvalCallerFrame = isDirectEval && useDirectEvalCallerFrame
+                ? virtualMachine.getCurrentFrame()
+                : null;
         boolean allowNewTargetInEval = false;
         boolean allowSuperPropertyInEval = false;
         if (isDirectEval) {
@@ -810,7 +826,7 @@ public final class JSContext implements AutoCloseable {
             compiler.setEvalContextFlags(allowSuperPropertyInEval, allowNewTargetInEval);
             // Direct eval creates a fresh lexical environment whose bindings do not leak.
             compiler.setPredeclareProgramLexicalsAsLocals(true);
-            if (strictMode || inheritedStrictModeForDirectEval) {
+            if (directEvalCallerFrame != null && (strictMode || inheritedStrictModeForDirectEval)) {
                 compiler.setInheritedStrictMode(true);
             }
         }
@@ -1035,11 +1051,15 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSValue evalDirect(String code, String filename, boolean inheritedStrictMode) {
-        return eval(code, filename, false, true, false, false, inheritedStrictMode);
+        return eval(code, filename, false, true, false, false, inheritedStrictMode, true);
+    }
+
+    public JSValue evalIndirect(String code, String filename) {
+        return eval(code, filename, false, true, false, false, false, false);
     }
 
     public JSValue evalWithProgramLexicalsAsLocals(String code, String filename, boolean isModule) {
-        return eval(code, filename, isModule, false, true, true, false);
+        return eval(code, filename, isModule, false, true, true, false, false);
     }
 
     /**
@@ -1413,6 +1433,12 @@ public final class JSContext implements AutoCloseable {
         // A full implementation would load from filesystem or URL
     }
 
+    public void popEvalOverlay() {
+        if (!evalOverlayFrames.isEmpty()) {
+            evalOverlayFrames.pop();
+        }
+    }
+
     /**
      * Pop the current stack frame.
      */
@@ -1430,6 +1456,10 @@ public final class JSContext implements AutoCloseable {
      */
     public void processMicrotasks() {
         microtaskQueue.processMicrotasks();
+    }
+
+    public void pushEvalOverlay(Map<String, JSValue> savedGlobals, Set<String> absentKeys) {
+        evalOverlayFrames.push(new EvalOverlayFrame(savedGlobals, absentKeys));
     }
 
     /**
@@ -1454,6 +1484,23 @@ public final class JSContext implements AutoCloseable {
 
     public void registerModule(String specifier, JSModule module) {
         moduleCache.put(specifier, module);
+    }
+
+    public void resumeEvalOverlays(EvalOverlaySnapshot evalOverlaySnapshot) {
+        if (evalOverlaySnapshot == null) {
+            return;
+        }
+        JSObject globalObject = getGlobalObject();
+        for (var entry : evalOverlaySnapshot.values().entrySet()) {
+            globalObject.set(this, PropertyKey.fromString(entry.getKey()), entry.getValue());
+        }
+        for (String absentKey : evalOverlaySnapshot.absentKeys()) {
+            globalObject.delete(this, PropertyKey.fromString(absentKey));
+        }
+    }
+
+    public void scheduleDirectEvalCall() {
+        pendingDirectEvalCalls++;
     }
 
     /**
@@ -1532,6 +1579,41 @@ public final class JSContext implements AutoCloseable {
 
     public void setWaitable(boolean waitable) {
         this.waitable = waitable;
+    }
+
+    public EvalOverlaySnapshot suspendEvalOverlays() {
+        if (evalOverlayFrames.isEmpty()) {
+            return null;
+        }
+        JSObject globalObject = getGlobalObject();
+        Set<String> overlaidKeys = new HashSet<>();
+        for (EvalOverlayFrame evalOverlayFrame : evalOverlayFrames) {
+            overlaidKeys.addAll(evalOverlayFrame.savedGlobals().keySet());
+            overlaidKeys.addAll(evalOverlayFrame.absentKeys());
+        }
+
+        Map<String, JSValue> suspendedValues = new HashMap<>();
+        Set<String> suspendedAbsentKeys = new HashSet<>();
+        for (String key : overlaidKeys) {
+            PropertyKey propertyKey = PropertyKey.fromString(key);
+            if (globalObject.has(propertyKey)) {
+                suspendedValues.put(key, globalObject.get(propertyKey));
+            } else {
+                suspendedAbsentKeys.add(key);
+            }
+        }
+
+        Iterator<EvalOverlayFrame> descendingIterator = evalOverlayFrames.descendingIterator();
+        while (descendingIterator.hasNext()) {
+            EvalOverlayFrame evalOverlayFrame = descendingIterator.next();
+            for (var entry : evalOverlayFrame.savedGlobals().entrySet()) {
+                globalObject.set(this, PropertyKey.fromString(entry.getKey()), entry.getValue());
+            }
+            for (String absentKey : evalOverlayFrame.absentKeys()) {
+                globalObject.delete(this, PropertyKey.fromString(absentKey));
+            }
+        }
+        return new EvalOverlaySnapshot(suspendedValues, suspendedAbsentKeys);
     }
 
     /**
@@ -1674,6 +1756,12 @@ public final class JSContext implements AutoCloseable {
         }
         receiver.setPrototype(prototype);
         return true;
+    }
+
+    private record EvalOverlayFrame(Map<String, JSValue> savedGlobals, Set<String> absentKeys) {
+    }
+
+    public record EvalOverlaySnapshot(Map<String, JSValue> values, Set<String> absentKeys) {
     }
 
 }

@@ -53,7 +53,28 @@ public final class OpcodeHandler {
         if (leftValue == null) {
             leftValue = JSUndefined.INSTANCE;
         }
-        executionContext.locals[localIndex] = executionContext.virtualMachine.addValues(leftValue, rightValue);
+        try {
+            executionContext.locals[localIndex] = executionContext.virtualMachine.addValues(leftValue, rightValue);
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.context.clearPendingException();
+            }
+        } catch (JSVirtualMachineException e) {
+            executionContext.virtualMachine.captureVMException(e);
+        } catch (JSException e) {
+            if (e.getErrorValue() != null) {
+                executionContext.virtualMachine.pendingException = e.getErrorValue();
+            } else {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
+                        "Error",
+                        e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+            }
+            executionContext.virtualMachine.context.clearPendingException();
+        } catch (JSErrorException e) {
+            executionContext.virtualMachine.pendingException =
+                    executionContext.virtualMachine.context.throwError(e.getErrorType().name(), e.getMessage());
+            executionContext.virtualMachine.context.clearPendingException();
+        }
         executionContext.pc = pc + op.getSize();
     }
 
@@ -168,6 +189,14 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
+    static void handleApplyEval(Opcode op, ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        internalHandleApplyEval(executionContext);
+        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        executionContext.pc = pc + op.getSize();
+    }
+
     static void handleArrayFrom(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int count = executionContext.bytecode.readU16(pc + 1);
@@ -226,35 +255,35 @@ public final class OpcodeHandler {
         byte[] instructions = executionContext.instructions;
         int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleCall(executionContext, argumentCount);
+        internalHandleCall(executionContext, argumentCount, false);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleCall0(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleCall(executionContext, 0);
+        internalHandleCall(executionContext, 0, false);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleCall1(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleCall(executionContext, 1);
+        internalHandleCall(executionContext, 1, false);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleCall2(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleCall(executionContext, 2);
+        internalHandleCall(executionContext, 2, false);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleCall3(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleCall(executionContext, 3);
+        internalHandleCall(executionContext, 3, false);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -664,6 +693,15 @@ public final class OpcodeHandler {
         internalHandleEq(executionContext);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
+    }
+
+    static void handleEval(Opcode op, ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int argumentCount = executionContext.bytecode.readU16(pc + 1);
+        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        internalHandleCall(executionContext, argumentCount, true);
+        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        executionContext.pc = pc + op.getSize();
     }
 
     static void handleExp(Opcode op, ExecutionContext executionContext) {
@@ -1227,14 +1265,14 @@ public final class OpcodeHandler {
     static void handleGetVarRef(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        executionContext.stack[executionContext.sp++] = executionContext.frame.getVarRef(varRefIndex);
+        executionContext.stack[executionContext.sp++] = readVarRefValue(executionContext, varRefIndex);
         executionContext.pc = pc + op.getSize();
     }
 
     static void handleGetVarRefCheck(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        JSValue value = executionContext.frame.getVarRef(varRefIndex);
+        JSValue value = readVarRefValue(executionContext, varRefIndex);
         if (executionContext.virtualMachine.isUninitialized(value)) {
             executionContext.virtualMachine.throwVariableUninitializedReferenceError();
         }
@@ -1250,14 +1288,14 @@ public final class OpcodeHandler {
             case GET_VAR_REF3 -> 3;
             default -> throw new IllegalStateException("Unexpected short get var ref opcode: " + op);
         };
-        executionContext.stack[executionContext.sp++] = executionContext.frame.getVarRef(varRefIndex);
+        executionContext.stack[executionContext.sp++] = readVarRefValue(executionContext, varRefIndex);
         executionContext.pc += op.getSize();
     }
 
     static void handleGetVarUndef(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        executionContext.stack[executionContext.sp++] = executionContext.frame.getVarRef(varRefIndex);
+        executionContext.stack[executionContext.sp++] = readVarRefValue(executionContext, varRefIndex);
         executionContext.pc = pc + op.getSize();
     }
 
@@ -2290,27 +2328,29 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         int varRefIndex = executionContext.bytecode.readU16(pc + 1);
         JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
-        executionContext.frame.setVarRef(varRefIndex, value);
+        writeVarRefValue(executionContext, varRefIndex, value);
         executionContext.pc = pc + op.getSize();
     }
 
     static void handlePutVarRefCheck(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        if (executionContext.virtualMachine.isUninitialized(executionContext.frame.getVarRef(varRefIndex))) {
+        JSValue currentValue = readVarRefValue(executionContext, varRefIndex);
+        if (executionContext.virtualMachine.isUninitialized(currentValue)) {
             executionContext.virtualMachine.throwVariableUninitializedReferenceError();
         }
-        executionContext.frame.setVarRef(varRefIndex, (JSValue) executionContext.stack[--executionContext.sp]);
+        writeVarRefValue(executionContext, varRefIndex, (JSValue) executionContext.stack[--executionContext.sp]);
         executionContext.pc = pc + op.getSize();
     }
 
     static void handlePutVarRefCheckInit(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        if (!executionContext.virtualMachine.isUninitialized(executionContext.frame.getVarRef(varRefIndex))) {
+        JSValue currentValue = readVarRefValue(executionContext, varRefIndex);
+        if (!executionContext.virtualMachine.isUninitialized(currentValue)) {
             throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwReferenceError("variable is already initialized"));
         }
-        executionContext.frame.setVarRef(varRefIndex, (JSValue) executionContext.stack[--executionContext.sp]);
+        writeVarRefValue(executionContext, varRefIndex, (JSValue) executionContext.stack[--executionContext.sp]);
         executionContext.pc = pc + op.getSize();
     }
 
@@ -2323,7 +2363,7 @@ public final class OpcodeHandler {
             default -> throw new IllegalStateException("Unexpected short put var ref opcode: " + op);
         };
         JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
-        executionContext.frame.setVarRef(varRefIndex, value);
+        writeVarRefValue(executionContext, varRefIndex, value);
         executionContext.pc += op.getSize();
     }
 
@@ -2821,7 +2861,33 @@ public final class OpcodeHandler {
     private static void internalHandleAdd(ExecutionContext executionContext) {
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
-        executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.addValues(left, right));
+        try {
+            executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.addValues(left, right));
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.virtualMachine.valueStack.pop();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            }
+        } catch (JSVirtualMachineException e) {
+            executionContext.virtualMachine.captureVMException(e);
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        } catch (JSException e) {
+            if (e.getErrorValue() != null) {
+                executionContext.virtualMachine.pendingException = e.getErrorValue();
+            } else {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
+                        "Error",
+                        e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+            }
+            executionContext.virtualMachine.context.clearPendingException();
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        } catch (JSErrorException e) {
+            executionContext.virtualMachine.pendingException =
+                    executionContext.virtualMachine.context.throwError(e.getErrorType().name(), e.getMessage());
+            executionContext.virtualMachine.context.clearPendingException();
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        }
     }
 
     private static void internalHandleAnd(ExecutionContext executionContext) {
@@ -2845,6 +2911,24 @@ public final class OpcodeHandler {
         }
         int result = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.left()) & JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.right());
         executionContext.virtualMachine.valueStack.push(JSNumber.of(result));
+    }
+
+    private static void internalHandleApplyEval(ExecutionContext executionContext) {
+        JSValue argsArrayValue = executionContext.virtualMachine.valueStack.pop();
+        JSValue callee = executionContext.virtualMachine.valueStack.pop();
+
+        JSValue[] applyArgs = executionContext.virtualMachine.buildApplyArguments(argsArrayValue, true);
+        if (applyArgs == null) {
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+
+        executionContext.virtualMachine.valueStack.push(callee);
+        for (JSValue applyArg : applyArgs) {
+            executionContext.virtualMachine.valueStack.push(applyArg);
+        }
+        internalHandleCall(executionContext, applyArgs.length, true);
     }
 
     private static void internalHandleAsyncYieldStar(ExecutionContext executionContext) {
@@ -2899,7 +2983,7 @@ public final class OpcodeHandler {
         }
     }
 
-    private static void internalHandleCall(ExecutionContext executionContext, int argCount) {
+    private static void internalHandleCall(ExecutionContext executionContext, int argCount, boolean directEvalSyntax) {
         // Stack layout (bottom to top): method, receiver, arg1, arg2, ...
         // Pop arguments from stack
         JSValue[] args = argCount == 0 ? JSValue.NO_ARGS : new JSValue[argCount];
@@ -2907,8 +2991,10 @@ public final class OpcodeHandler {
             args[i] = executionContext.virtualMachine.valueStack.pop();
         }
 
-        // Pop receiver (thisArg)
-        JSValue receiver = executionContext.virtualMachine.valueStack.pop();
+        JSValue receiver = JSUndefined.INSTANCE;
+        if (!directEvalSyntax) {
+            receiver = executionContext.virtualMachine.valueStack.pop();
+        }
 
         // Pop callee (method)
         JSValue callee = executionContext.virtualMachine.valueStack.pop();
@@ -2980,6 +3066,9 @@ public final class OpcodeHandler {
                 }
                 // Call native function with receiver as thisArg
                 try {
+                    if (directEvalSyntax && "eval".equals(nativeFunc.getName())) {
+                        executionContext.virtualMachine.context.scheduleDirectEvalCall();
+                    }
                     JSValue result = nativeFunc.call(executionContext.virtualMachine.context, receiver, args);
                     // Check for pending exception after native function call
                     if (executionContext.virtualMachine.context.hasPendingException()) {
@@ -4338,5 +4427,29 @@ public final class OpcodeHandler {
 
         // Push the result back on the stack
         executionContext.virtualMachine.valueStack.push(result);
+    }
+
+    private static JSValue readVarRefValue(ExecutionContext executionContext, int varRefIndex) {
+        String capturedVarName = null;
+        if (executionContext.frame.getFunction() instanceof JSBytecodeFunction bytecodeFunction) {
+            capturedVarName = bytecodeFunction.getCapturedVarName(varRefIndex);
+        }
+        if (capturedVarName != null && executionContext.frame.hasDynamicVarBinding(capturedVarName)) {
+            JSValue dynamicValue = executionContext.frame.getDynamicVarBinding(capturedVarName);
+            return dynamicValue != null ? dynamicValue : JSUndefined.INSTANCE;
+        }
+        return executionContext.frame.getVarRef(varRefIndex);
+    }
+
+    private static void writeVarRefValue(ExecutionContext executionContext, int varRefIndex, JSValue value) {
+        String capturedVarName = null;
+        if (executionContext.frame.getFunction() instanceof JSBytecodeFunction bytecodeFunction) {
+            capturedVarName = bytecodeFunction.getCapturedVarName(varRefIndex);
+        }
+        if (capturedVarName != null && executionContext.frame.hasDynamicVarBinding(capturedVarName)) {
+            executionContext.frame.setDynamicVarBinding(capturedVarName, value);
+            return;
+        }
+        executionContext.frame.setVarRef(varRefIndex, value);
     }
 }

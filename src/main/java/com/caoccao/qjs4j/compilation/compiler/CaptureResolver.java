@@ -42,6 +42,17 @@ final class CaptureResolver {
         return capturedBindings.size();
     }
 
+    String[] getCapturedBindingNamesBySlot() {
+        if (capturedBindings.isEmpty()) {
+            return null;
+        }
+        String[] capturedBindingNames = new String[capturedBindings.size()];
+        for (var entry : capturedBindings.entrySet()) {
+            capturedBindingNames[entry.getValue().slot()] = entry.getKey();
+        }
+        return capturedBindingNames;
+    }
+
     Collection<CaptureBinding> getCapturedBindings() {
         return capturedBindings.values();
     }

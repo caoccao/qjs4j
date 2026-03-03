@@ -2098,6 +2098,20 @@ public final class JSGlobalObject {
             return -1;
         }
 
+        private static Set<String> collectFunctionDeclarationNames(List<Statement> body) {
+            Set<String> functionDeclarationNames = new LinkedHashSet<>();
+            if (body == null) {
+                return functionDeclarationNames;
+            }
+            for (int statementIndex = body.size() - 1; statementIndex >= 0; statementIndex--) {
+                Statement statement = body.get(statementIndex);
+                if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.id() != null) {
+                    functionDeclarationNames.add(functionDeclaration.id().name());
+                }
+            }
+            return functionDeclarationNames;
+        }
+
         private static Set<String> collectFunctionVarEnvironmentNames(JSBytecodeFunction callerBytecodeFunction) {
             String source = callerBytecodeFunction.getSourceCode();
             if (source == null || source.isBlank()) {
@@ -2500,28 +2514,25 @@ public final class JSGlobalObject {
             }
 
             String code = ((JSString) x).value();
-            // Per ES2024 19.2.1.1 PerformEval: eval inherits strict mode from caller
-            if (realmContext.isStrictMode()) {
-                code = "'use strict';\n" + code;
-            }
-
-            // Cross-realm eval (other.eval('code')) should not overlay the caller's scope.
+            boolean isDirectEvalCall = callerContext.consumeScheduledDirectEvalCall();
             boolean isSameRealm = (realmContext == callerContext);
+            boolean shouldUseCallerFrameSemantics = isDirectEvalCall && isSameRealm;
 
             // Scope overlay: capture enclosing function's local variables onto the global
             // object so that eval code's GET_VAR/PUT_VAR can access them.
             StackFrame callerFrame = callerContext.getVirtualMachine().getCurrentFrame();
             boolean hasSameRealmCallerFrame = isSameRealm && callerFrame != null;
             // Eval is "inside a function" only if same-realm and the callerFrame is NOT the top-level program.
-            boolean isEvalInFunction = hasSameRealmCallerFrame
+            boolean isEvalInFunction = shouldUseCallerFrameSemantics
+                    && hasSameRealmCallerFrame
                     && callerFrame.getFunction() instanceof JSBytecodeFunction
                     && callerFrame.getCaller() != null;
-            boolean shouldOverlayLocals = hasSameRealmCallerFrame
+            boolean shouldOverlayLocals = shouldUseCallerFrameSemantics
+                    && hasSameRealmCallerFrame
                     && callerFrame.getFunction() instanceof JSBytecodeFunction;
-            boolean inheritedStrictMode = callerFrame != null
-                    && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction
-                    ? bytecodeFunction.isStrict()
-                    : callerContext.isStrictMode();
+            boolean inheritedStrictMode = shouldUseCallerFrameSemantics
+                    && callerFrame != null
+                    && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction && bytecodeFunction.isStrict();
             String[] localVarNames = null;
             Set<String> localVarNameSet = null;
             Map<String, JSValue> savedGlobals = null;
@@ -2529,8 +2540,10 @@ public final class JSGlobalObject {
             Set<String> touchedOverlayKeys = null;
             Set<String> evalVarDeclarations = null;
             Set<String> evalLexDeclarations = null;
+            Set<String> evalFunctionDeclarations = null;
             boolean parsedEvalDeclarations = false;
             boolean evalCodeStrict = inheritedStrictMode;
+            boolean overlayStatePushed = false;
             JSObject global = realmContext.getGlobalObject();
             JSBytecodeFunction callerBytecodeFunction =
                     callerFrame != null && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction
@@ -2600,6 +2613,11 @@ public final class JSGlobalObject {
                 }
             }
 
+            if (shouldOverlayLocals && savedGlobals != null && absentKeys != null) {
+                realmContext.pushEvalOverlay(savedGlobals, absentKeys);
+                overlayStatePushed = true;
+            }
+
             try {
                 if (hasSameRealmCallerFrame) {
                     try {
@@ -2608,6 +2626,7 @@ public final class JSGlobalObject {
                         evalVarDeclarations = new HashSet<>();
                         evalLexDeclarations = new HashSet<>();
                         AstUtils.collectGlobalDeclarations(evalAst, evalVarDeclarations, evalLexDeclarations);
+                        evalFunctionDeclarations = collectFunctionDeclarationNames(evalAst.body());
                         parsedEvalDeclarations = true;
                         evalCodeStrict = evalCodeStrict || evalAst.strict();
                     } catch (Exception ignored) {
@@ -2675,7 +2694,82 @@ public final class JSGlobalObject {
                     }
                 }
 
-                JSValue result = realmContext.evalDirect(code, "<eval>", inheritedStrictMode);
+                if (isEvalInFunction
+                        && parsedEvalDeclarations
+                        && evalVarDeclarations != null
+                        && savedGlobals != null
+                        && absentKeys != null
+                        && touchedOverlayKeys != null) {
+                    for (String declarationName : evalVarDeclarations) {
+                        if (localVarNameSet != null && localVarNameSet.contains(declarationName)) {
+                            continue;
+                        }
+                        PropertyKey declarationKey = PropertyKey.fromString(declarationName);
+                        JSValue initialValue = global.has(declarationKey)
+                                ? global.get(declarationKey)
+                                : JSUndefined.INSTANCE;
+                        overlayBinding(global, declarationName, initialValue, savedGlobals, absentKeys, touchedOverlayKeys);
+                    }
+                }
+
+                if (!isDirectEvalCall
+                        && !evalCodeStrict
+                        && parsedEvalDeclarations) {
+                    if (evalFunctionDeclarations != null) {
+                        Map<String, PropertyDescriptor> existingFunctionDescriptors = new HashMap<>();
+                        for (String functionDeclarationName : evalFunctionDeclarations) {
+                            PropertyKey functionKey = PropertyKey.fromString(functionDeclarationName);
+                            PropertyDescriptor existingDescriptor = global.getOwnPropertyDescriptor(functionKey);
+                            existingFunctionDescriptors.put(functionDeclarationName, existingDescriptor);
+                            if (existingDescriptor != null && !existingDescriptor.isConfigurable()) {
+                                if (existingDescriptor.isAccessorDescriptor()
+                                        || !(existingDescriptor.isWritable() && existingDescriptor.isEnumerable())) {
+                                    throw new JSException(realmContext.throwTypeError("cannot define variable '" + functionDeclarationName + "'"));
+                                }
+                            }
+                            if (existingDescriptor == null && !global.isExtensible()) {
+                                throw new JSException(realmContext.throwTypeError("cannot define variable '" + functionDeclarationName + "'"));
+                            }
+                        }
+                        for (String functionDeclarationName : evalFunctionDeclarations) {
+                            PropertyDescriptor existingDescriptor = existingFunctionDescriptors.get(functionDeclarationName);
+                            if (existingDescriptor == null || existingDescriptor.isConfigurable()) {
+                                JSValue initialValue = existingDescriptor != null && existingDescriptor.hasValue()
+                                        ? existingDescriptor.getValue()
+                                        : JSUndefined.INSTANCE;
+                                global.defineProperty(
+                                        PropertyKey.fromString(functionDeclarationName),
+                                        PropertyDescriptor.dataDescriptor(initialValue, PropertyDescriptor.DataState.All));
+                            }
+                        }
+                    }
+                    if (evalVarDeclarations != null) {
+                        for (String declarationName : evalVarDeclarations) {
+                            if (evalFunctionDeclarations != null && evalFunctionDeclarations.contains(declarationName)) {
+                                continue;
+                            }
+                            PropertyKey declarationKey = PropertyKey.fromString(declarationName);
+                            if (!global.has(declarationKey) && !global.isExtensible()) {
+                                throw new JSException(realmContext.throwTypeError("cannot define variable '" + declarationName + "'"));
+                            }
+                        }
+                    }
+                }
+
+                JSContext.EvalOverlaySnapshot suspendedOverlaySnapshot = null;
+                if (!isDirectEvalCall) {
+                    suspendedOverlaySnapshot = realmContext.suspendEvalOverlays();
+                }
+                JSValue result;
+                try {
+                    result = isDirectEvalCall
+                            ? realmContext.evalDirect(code, "<eval>", inheritedStrictMode)
+                            : realmContext.evalIndirect(code, "<eval>");
+                } finally {
+                    if (suspendedOverlaySnapshot != null) {
+                        realmContext.resumeEvalOverlays(suspendedOverlaySnapshot);
+                    }
+                }
 
                 // Copy modified values back to caller's locals
                 if (localVarNames != null) {
@@ -2707,6 +2801,31 @@ public final class JSGlobalObject {
                         if (global.has(key)) {
                             callerFrame.setDynamicVarBinding(declarationName, global.get(key));
                         }
+                    }
+                }
+
+                if (!isDirectEvalCall
+                        && !evalCodeStrict
+                        && evalFunctionDeclarations != null) {
+                    for (String functionDeclarationName : evalFunctionDeclarations) {
+                        PropertyKey functionKey = PropertyKey.fromString(functionDeclarationName);
+                        if (!global.has(functionKey)) {
+                            continue;
+                        }
+                        JSValue functionValue = global.get(functionKey);
+                        PropertyDescriptor existingDescriptor = global.getOwnPropertyDescriptor(functionKey);
+                        PropertyDescriptor descriptor = new PropertyDescriptor();
+                        descriptor.setValue(functionValue);
+                        if (existingDescriptor == null || existingDescriptor.isConfigurable()) {
+                            descriptor.setWritable(true);
+                            descriptor.setEnumerable(true);
+                            descriptor.setConfigurable(true);
+                        } else {
+                            descriptor.setWritable(existingDescriptor.isWritable());
+                            descriptor.setEnumerable(existingDescriptor.isEnumerable());
+                            descriptor.setConfigurable(false);
+                        }
+                        global.defineProperty(functionKey, descriptor);
                     }
                 }
 
@@ -2761,6 +2880,9 @@ public final class JSGlobalObject {
                         }
                         global.delete(realmContext, PropertyKey.fromString(declarationName));
                     }
+                }
+                if (overlayStatePushed) {
+                    realmContext.popEvalOverlay();
                 }
             }
         }

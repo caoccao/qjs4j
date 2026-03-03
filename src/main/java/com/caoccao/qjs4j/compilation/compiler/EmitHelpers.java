@@ -131,6 +131,7 @@ final class EmitHelpers {
             i++;
         }
         templateFunction.setCaptureSourceInfos(captureSourceInfos);
+        templateFunction.setCapturedVarNames(nestedCompiler.context().captureResolver.getCapturedBindingNamesBySlot());
     }
 
     /**

@@ -53,6 +53,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private int[] captureSourceInfos;
     private JSValue capturedArguments;
     private JSValue capturedThisArg;
+    private String[] capturedVarNames;
     private boolean classConstructor;
     private boolean derivedConstructor;
     private boolean hasArgumentsParameterBinding;
@@ -972,6 +973,7 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.selfLocalIndex = selfLocalIndex;
         copiedFunction.capturedThisArg = this.capturedThisArg;
         copiedFunction.capturedArguments = this.capturedArguments;
+        copiedFunction.capturedVarNames = this.capturedVarNames;
         return copiedFunction;
     }
 
@@ -1000,6 +1002,7 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.selfLocalIndex = selfLocalIndex;
         copiedFunction.capturedThisArg = this.capturedThisArg;
         copiedFunction.capturedArguments = this.capturedArguments;
+        copiedFunction.capturedVarNames = this.capturedVarNames;
         return copiedFunction;
     }
 
@@ -1034,6 +1037,13 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public JSValue getCapturedThisArg() {
         return capturedThisArg;
+    }
+
+    public String getCapturedVarName(int captureSlot) {
+        if (capturedVarNames == null || captureSlot < 0 || captureSlot >= capturedVarNames.length) {
+            return null;
+        }
+        return capturedVarNames[captureSlot];
     }
 
     /**
@@ -1176,6 +1186,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public void setCapturedThisArg(JSValue thisArg) {
         this.capturedThisArg = thisArg;
+    }
+
+    public void setCapturedVarNames(String[] capturedVarNames) {
+        this.capturedVarNames = capturedVarNames;
     }
 
     /**

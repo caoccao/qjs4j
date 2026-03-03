@@ -53,6 +53,16 @@ final class ExpressionCallMemberCompiler {
             compilerContext.emitter.emitOpcode(Opcode.INIT_CTOR);
             return;
         }
+        if (callExpr.callee() instanceof Identifier calleeId && "eval".equals(calleeId.name())) {
+            owner.compileExpression(callExpr.callee());
+            for (Expression arg : callExpr.arguments()) {
+                owner.compileExpression(arg);
+            }
+            compilerContext.emitter.emitOpcode(Opcode.EVAL);
+            compilerContext.emitter.emitU16(callExpr.arguments().size());
+            compilerContext.emitter.emitU16(0);
+            return;
+        }
         if (callExpr.callee() instanceof MemberExpression memberExpr) {
             if (compilerContext.isSuperMemberExpression(memberExpr)) {
                 delegates.emitHelpers.emitGetSuperValue(memberExpr, true);
@@ -110,6 +120,12 @@ final class ExpressionCallMemberCompiler {
             delegates.emitHelpers.emitArgumentsArrayWithSpread(callExpr.arguments());
             compilerContext.emitter.emitOpcodeU16(Opcode.APPLY, 1);
             compilerContext.emitter.emitOpcode(Opcode.INIT_CTOR);
+            return;
+        }
+        if (callExpr.callee() instanceof Identifier calleeId && "eval".equals(calleeId.name())) {
+            owner.compileExpression(callExpr.callee());
+            delegates.emitHelpers.emitArgumentsArrayWithSpread(callExpr.arguments());
+            compilerContext.emitter.emitOpcodeU16(Opcode.APPLY_EVAL, 0);
             return;
         }
         if (callExpr.callee() instanceof MemberExpression memberExpr) {
