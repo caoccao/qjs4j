@@ -28,6 +28,17 @@ import java.util.List;
 import java.util.Set;
 
 final class ExpressionAssignmentParser {
+    private static final Set<String> RESERVED_WORDS = Set.of(
+            "break", "case", "catch", "class", "const", "continue", "debugger",
+            "default", "delete", "do", "else", "enum", "export", "extends",
+            "false", "finally", "for", "function", "if", "import", "in",
+            "instanceof", "new", "null", "return", "super", "switch", "this",
+            "throw", "true", "try", "typeof", "var", "void", "while", "with");
+
+    private static final Set<String> STRICT_RESERVED_WORDS = Set.of(
+            "implements", "interface", "let", "package", "private", "protected",
+            "public", "static", "yield");
+
     private final ParserDelegates delegates;
     private final ExpressionParser expressions;
     private final ParserContext parserContext;
@@ -62,6 +73,7 @@ final class ExpressionAssignmentParser {
 
     private Pattern convertArrowExpressionToPattern(Expression expression) {
         if (expression instanceof Identifier identifier) {
+            validateBindingIdentifier(identifier.name());
             return identifier;
         }
         if (expression instanceof ObjectExpression objectExpression) {
@@ -81,7 +93,21 @@ final class ExpressionAssignmentParser {
 
     private ObjectPattern convertArrowObjectExpressionToPattern(ObjectExpression objectExpression) {
         List<ObjectPattern.Property> properties = new ArrayList<>();
-        for (ObjectExpression.Property property : objectExpression.properties()) {
+        RestElement restElement = null;
+        List<ObjectExpression.Property> objProperties = objectExpression.properties();
+        for (int i = 0; i < objProperties.size(); i++) {
+            ObjectExpression.Property property = objProperties.get(i);
+            if ("spread".equals(property.kind())) {
+                if (i != objProperties.size() - 1) {
+                    throw new JSSyntaxErrorException("Rest element must be last element");
+                }
+                if (property.value() instanceof AssignmentExpression) {
+                    throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
+                }
+                Pattern restArgumentPattern = convertArrowExpressionToPattern(property.value());
+                restElement = new RestElement(restArgumentPattern, property.value().getLocation());
+                continue;
+            }
             if (!"init".equals(property.kind())) {
                 throw new JSSyntaxErrorException("Invalid arrow function parameter at line " +
                         parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
@@ -101,7 +127,7 @@ final class ExpressionAssignmentParser {
             Pattern valuePattern = convertArrowExpressionToPattern(property.value());
             properties.add(new ObjectPattern.Property(propertyKey, valuePattern, property.computed(), property.shorthand()));
         }
-        return new ObjectPattern(properties, objectExpression.getLocation());
+        return new ObjectPattern(properties, restElement, objectExpression.getLocation());
     }
 
     private List<String> extractBoundNames(Pattern pattern) {
@@ -112,6 +138,9 @@ final class ExpressionAssignmentParser {
             List<String> names = new ArrayList<>();
             for (ObjectPattern.Property property : objectPattern.properties()) {
                 names.addAll(extractBoundNames(property.value()));
+            }
+            if (objectPattern.restElement() != null) {
+                names.addAll(extractBoundNames(objectPattern.restElement().argument()));
             }
             return names;
         }
@@ -469,6 +498,15 @@ final class ExpressionAssignmentParser {
         }
         if (hasUseStrictDirective(body) && !isSimpleParameterList(params, defaults, restParameter)) {
             throw new JSSyntaxErrorException("Illegal 'use strict' directive in function with non-simple parameter list");
+        }
+    }
+
+    private void validateBindingIdentifier(String name) {
+        if (RESERVED_WORDS.contains(name)) {
+            throw new JSSyntaxErrorException("Unexpected reserved word");
+        }
+        if (parserContext.strictMode && STRICT_RESERVED_WORDS.contains(name)) {
+            throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
         }
     }
 }

@@ -49,6 +49,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             for (ObjectPattern.Property property : objectPattern.properties()) {
                 collectPatternBoundNames(property.value(), names);
             }
+            if (objectPattern.restElement() != null) {
+                collectPatternBoundNames(objectPattern.restElement().argument(), names);
+            }
             return;
         }
         if (pattern instanceof RestElement restElement) {

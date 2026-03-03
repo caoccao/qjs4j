@@ -60,6 +60,9 @@ final class CompilerAnalysis {
             for (ObjectPattern.Property prop : objPattern.properties()) {
                 collectPatternBindingNames(prop.value(), names);
             }
+            if (objPattern.restElement() != null) {
+                collectPatternBindingNames(objPattern.restElement().argument(), names);
+            }
         } else if (pattern instanceof AssignmentPattern assignPattern) {
             collectPatternBindingNames(assignPattern.left(), names);
         } else if (pattern instanceof RestElement restElement) {

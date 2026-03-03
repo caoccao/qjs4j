@@ -44,6 +44,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             for (ObjectPattern.Property prop : objPattern.properties()) {
                 names.addAll(extractBoundNames(prop.value()));
             }
+            if (objPattern.restElement() != null) {
+                names.addAll(extractBoundNames(objPattern.restElement().argument()));
+            }
             return names;
         } else if (pattern instanceof ArrayPattern arrPattern) {
             List<String> names = new ArrayList<>();

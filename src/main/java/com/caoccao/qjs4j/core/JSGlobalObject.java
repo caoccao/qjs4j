@@ -2167,6 +2167,9 @@ public final class JSGlobalObject {
                 for (ObjectPattern.Property property : objectPattern.properties()) {
                     collectPatternNames(property.value(), names);
                 }
+                if (objectPattern.restElement() != null) {
+                    collectPatternNames(objectPattern.restElement().argument(), names);
+                }
             } else if (pattern instanceof RestElement restElement) {
                 collectPatternNames(restElement.argument(), names);
             } else if (pattern instanceof AssignmentPattern assignmentPattern) {

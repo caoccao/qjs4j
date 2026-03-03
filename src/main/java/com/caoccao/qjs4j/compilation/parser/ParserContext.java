@@ -368,8 +368,8 @@ final class ParserContext {
             advance();
             return new Identifier(name, location);
         }
-        throw new RuntimeException("Expected identifier but got " + currentToken.type() +
-                " at line " + currentToken.line() + ", column " + currentToken.column());
+        throw new JSSyntaxErrorException("Unexpected token '" + currentToken.value() +
+                "' at line " + currentToken.line() + ", column " + currentToken.column());
     }
 
     // ---- Shared parsing utilities ----

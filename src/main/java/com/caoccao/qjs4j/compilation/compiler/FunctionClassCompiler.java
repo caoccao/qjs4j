@@ -122,6 +122,12 @@ final class FunctionClassCompiler {
                     sb.append(": ").append(patternToString(prop.value()));
                 }
             }
+            if (objPattern.restElement() != null) {
+                if (!objPattern.properties().isEmpty()) {
+                    sb.append(", ");
+                }
+                sb.append("...").append(patternToString(objPattern.restElement().argument()));
+            }
             sb.append("}");
             return sb.toString();
         } else if (pattern instanceof ArrayPattern arrPattern) {

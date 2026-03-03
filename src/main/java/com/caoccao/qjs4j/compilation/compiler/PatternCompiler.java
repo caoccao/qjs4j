@@ -296,10 +296,19 @@ final class PatternCompiler {
         } else if (pattern instanceof ObjectPattern objPattern) {
             // Object destructuring: { proxy, revoke } = value
             // Stack: [object]
+            boolean hasRest = objPattern.restElement() != null;
+
             // RequireObjectCoercible(value) even for empty patterns.
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
+
+            if (hasRest && !objPattern.properties().isEmpty()) {
+                // Create exclude list object and put it under source on stack
+                // Stack: [source] -> [excludeList, source]
+                compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            }
 
             for (ObjectPattern.Property prop : objPattern.properties()) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
@@ -345,9 +354,75 @@ final class PatternCompiler {
                 }
                 // Assign to the pattern (could be nested)
                 compilePatternAssignment(prop.value(), useExistingBindingInParentScopes);
+
+                if (hasRest) {
+                    // Add the property key to the exclude list
+                    // Stack: [excludeList, source]
+                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                    // Stack: [source, excludeList]
+                    compilerContext.emitter.emitOpcode(Opcode.NULL);
+                    // Stack: [source, excludeList, null]
+                    if (!prop.computed() && propertyKey instanceof Identifier identifier) {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, identifier.name());
+                    } else if (!prop.computed() && propertyKey instanceof Literal literal && literal.value() instanceof String propertyName) {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, propertyName);
+                    } else if (!prop.computed() && propertyKey instanceof Literal literal
+                            && (literal.value() instanceof Integer || literal.value() instanceof Long)) {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, String.valueOf(((Number) literal.value()).longValue()));
+                    } else {
+                        // Computed property key: re-evaluate expression to get the key name
+                        compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null
+                        delegates.expressions.compileExpression(propertyKey);
+                        compilerContext.emitter.emitOpcode(Opcode.NULL);
+                        compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
+                        compilerContext.emitter.emitOpcode(Opcode.DROP); // drop index
+                    }
+                    // Stack: [source, excludeList]
+                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                    // Stack: [excludeList, source]
+                }
             }
-            // Drop the original object
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+
+            if (hasRest) {
+                // Compile rest element: {...rest} = source
+                if (objPattern.properties().isEmpty()) {
+                    // No properties to exclude, just copy all
+                    // Stack: [source]
+                    compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+                    // Stack: [source, target]
+                    compilerContext.emitter.emitOpcode(Opcode.DUP);
+                    // Stack: [source, target, target]
+                    compilerContext.emitter.emitOpcode(Opcode.ROT3L);
+                    // Stack: [target, target, source]
+                    compilerContext.emitter.emitOpcode(Opcode.NULL);
+                    // Stack: [target, target, source, null(excludeList)]
+                    // COPY_DATA_PROPERTIES: target=sp[-1-(mask&3)], source=sp[-1-((mask>>2)&7)], exclude=sp[-1-((mask>>5)&7)]
+                    // target at sp-4 (offset 3), source at sp-2 (offset 1), exclude at sp-1 (offset 0)
+                    // mask = 3 | (1 << 2) | (0 << 5) = 3 + 4 + 0 = 7
+                    compilerContext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 7);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null
+                    compilerContext.emitter.emitOpcode(Opcode.DROP); // drop source
+                    // Stack: [target]
+                } else {
+                    // Stack: [excludeList, source]
+                    compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+                    // Stack: [excludeList, source, target]
+                    // COPY_DATA_PROPERTIES: target=sp-1(offset 0), source=sp-2(offset 1), exclude=sp-3(offset 2)
+                    // mask = 0 | (1 << 2) | (2 << 5) = 0 + 4 + 64 = 68
+                    compilerContext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 68);
+                    // Stack: [excludeList, source, target]
+                }
+                // Assign target (TOS) to the rest pattern
+                compilePatternAssignment(objPattern.restElement().argument(), useExistingBindingInParentScopes);
+                if (!objPattern.properties().isEmpty()) {
+                    // Stack: [excludeList, source]
+                    compilerContext.emitter.emitOpcode(Opcode.DROP); // drop source
+                    compilerContext.emitter.emitOpcode(Opcode.DROP); // drop excludeList
+                }
+            } else {
+                // Drop the original object
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+            }
         } else if (pattern instanceof ArrayPattern arrPattern) {
             // Array destructuring: [a, b] = value
             // Stack: [array]
@@ -485,8 +560,8 @@ final class PatternCompiler {
             // Now the stack has the resolved value; assign to the inner pattern
             compilePatternAssignment(assignPattern.left(), useExistingBindingInParentScopes);
         } else if (pattern instanceof RestElement) {
-            // RestElement should only appear inside ArrayPattern, shouldn't reach here
-            throw new RuntimeException("RestElement can only appear inside ArrayPattern");
+            // RestElement should only appear inside ArrayPattern or ObjectPattern, shouldn't reach here
+            throw new RuntimeException("RestElement can only appear inside ArrayPattern or ObjectPattern");
         }
     }
 
@@ -519,6 +594,9 @@ final class PatternCompiler {
             // Object destructuring: declare all property variables
             for (ObjectPattern.Property prop : objPattern.properties()) {
                 declarePatternVariables(prop.value());
+            }
+            if (objPattern.restElement() != null) {
+                declarePatternVariables(objPattern.restElement().argument());
             }
         } else if (pattern instanceof AssignmentPattern assignPattern) {
             // Default value pattern: declare the left-hand side

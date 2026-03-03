@@ -24,6 +24,7 @@ import java.util.List;
  */
 public record ObjectPattern(
         List<Property> properties,
+        RestElement restElement,
         SourceLocation location
 ) implements Pattern {
 

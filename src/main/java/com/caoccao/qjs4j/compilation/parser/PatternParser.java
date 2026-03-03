@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.compilation.parser;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -69,12 +70,23 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.LBRACE);
         List<ObjectPattern.Property> properties = new ArrayList<>();
+        RestElement restElement = null;
         while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-            if (!properties.isEmpty()) {
+            if (!properties.isEmpty() || restElement != null) {
                 parserContext.expect(TokenType.COMMA);
                 if (parserContext.match(TokenType.RBRACE)) {
                     break;
                 }
+            }
+            if (parserContext.match(TokenType.ELLIPSIS)) {
+                SourceLocation restLoc = parserContext.getLocation();
+                parserContext.advance();
+                Pattern restArgument = parsePattern();
+                restElement = new RestElement(restArgument, restLoc);
+                if (!parserContext.match(TokenType.RBRACE)) {
+                    throw new JSSyntaxErrorException("Rest element must be last element");
+                }
+                break;
             }
             boolean computed = parserContext.match(TokenType.LBRACKET);
             Expression key = delegates.expressions.parsePropertyName();
@@ -99,13 +111,13 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
                     value = new AssignmentPattern(value, defaultValue, assignLoc);
                 }
             } else {
-                throw new RuntimeException("Expected ':' in object binding pattern at line "
+                throw new JSSyntaxErrorException("Expected ':' in object binding pattern at line "
                         + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
             properties.add(new ObjectPattern.Property(key, value, computed, shorthand));
         }
         parserContext.expect(TokenType.RBRACE);
-        return new ObjectPattern(properties, location);
+        return new ObjectPattern(properties, restElement, location);
     }
 
     Pattern parsePattern() {

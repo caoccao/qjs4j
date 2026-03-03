@@ -478,10 +478,7 @@ public final class VirtualMachine {
             }
         } else if (excludeListValue instanceof JSObject excludeObject) {
             excludedKeys = new HashSet<>();
-            for (PropertyKey key : excludeObject.ownPropertyKeys()) {
-                JSValue excludedValue = excludeObject.get(context, key);
-                excludedKeys.add(PropertyKey.fromValue(context, excludedValue));
-            }
+            Collections.addAll(excludedKeys, excludeObject.ownPropertyKeys());
         } else if (excludeListValue != null && !excludeListValue.isNullOrUndefined()) {
             excludedKeys = new HashSet<>();
             excludedKeys.add(PropertyKey.fromValue(context, excludeListValue));
