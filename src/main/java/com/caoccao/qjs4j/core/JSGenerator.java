@@ -435,7 +435,18 @@ public final class JSGenerator extends JSObject {
                 done = true;
                 generatorState.setCompleted(true);
                 if (!context.hasPendingException()) {
-                    context.setPendingException(exception);
+                    if (e instanceof JSVirtualMachineException virtualMachineException) {
+                        if (virtualMachineException.getJsValue() != null) {
+                            context.setPendingException(virtualMachineException.getJsValue());
+                        } else if (virtualMachineException.getJsError() != null) {
+                            context.setPendingException(virtualMachineException.getJsError());
+                        } else {
+                            context.throwError(
+                                    e.getMessage() == null ? "Generator execution failed" : e.getMessage());
+                        }
+                    } else {
+                        context.setPendingException(exception);
+                    }
                 }
                 return createIteratorResult(JSUndefined.INSTANCE, true);
             }

@@ -18,7 +18,10 @@ package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.core.JSNumber;
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
+
+import java.util.List;
 
 /**
  * Delegate compiler for pattern matching and destructuring assignment compilation.
@@ -34,42 +37,104 @@ final class PatternCompiler {
     }
 
     void compileArrayDestructuringAssignment(ArrayExpression arrayExpr) {
-        // Stack: [array]
-        int index = 0;
-        for (Expression element : arrayExpr.elements()) {
-            if (element != null) {
-                // Duplicate array for property access
-                compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
-                compilerContext.emitter.emitI32(index);
-                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-                // Stack: [array, value]
+        // Stack: [iterable]
+        // Use iterator protocol (FOR_OF_START/FOR_OF_NEXT/ITERATOR_CLOSE) per ES spec.
+        // Following QuickJS: pre-evaluate LHS references before calling next(),
+        // and the VM auto-closes iterators on exception via the JSCatchOffset(0) marker.
 
-                if (element instanceof AssignmentExpression assignExpr
-                        && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
-                    // Default value: check if value is undefined
-                    compilerContext.emitter.emitOpcode(Opcode.DUP);
-                    compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
-                    int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
-                    delegates.expressions.compileExpression(assignExpr.right());
-                    compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
-                    // Assign to target
-                    compileAssignmentTarget(assignExpr.left());
-                } else if (element instanceof SpreadElement spreadElem) {
-                    // Rest element in assignment: [...rest] = value
-                    // Drop the single-element value we just got
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
-                    // Re-get remaining elements as array using Array.from + slice
-                    compileAssignmentTarget(spreadElem.argument());
+        List<Expression> elements = arrayExpr.elements();
+        boolean hasRest = false;
+        int restIndex = -1;
+        for (int i = 0; i < elements.size(); i++) {
+            if (elements.get(i) instanceof SpreadElement) {
+                hasRest = true;
+                restIndex = i;
+                break;
+            }
+        }
+
+        // Start iteration: iterable -> iter next catch_offset
+        compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
+
+        if (hasRest) {
+            // Process elements before rest
+            for (int i = 0; i < restIndex; i++) {
+                Expression element = elements.get(i);
+                // Pre-evaluate LHS, then call FOR_OF_NEXT with the appropriate depth
+                int depth = preEvaluateAssignmentTarget(element);
+                compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, depth);
+                // Stack: iter next catch_offset [pre-eval...] value done
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // drop done
+                // Stack: iter next catch_offset [pre-eval...] value
+                if (element != null) {
+                    emitAssignmentFromPreEvaluated(element, depth);
                 } else {
-                    compileAssignmentTarget(element);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP); // skip hole
                 }
             }
-            index++;
+
+            // Collect remaining elements into array for rest
+            compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
+            compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
+            compilerContext.emitter.emitI32(0);
+
+            int labelRestNext = compilerContext.emitter.currentOffset();
+            compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 2);
+            int jumpRestDone = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+            compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
+            compilerContext.emitter.emitOpcode(Opcode.INC);
+            compilerContext.emitter.emitOpcode(Opcode.GOTO);
+            int backJumpPos = compilerContext.emitter.currentOffset();
+            compilerContext.emitter.emitU32(labelRestNext - (backJumpPos + 4));
+
+            compilerContext.emitter.patchJump(jumpRestDone, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.emitOpcode(Opcode.DROP); // drop undefined
+            compilerContext.emitter.emitOpcode(Opcode.DROP); // drop index
+
+            // Assign array to rest target
+            SpreadElement spreadElem = (SpreadElement) elements.get(restIndex);
+            compileAssignmentTarget(spreadElem.argument());
+
+            // Clean up iterator state: drop catch_offset, next, iter
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+        } else {
+            // No rest element - use iterator with done tracking and IteratorClose
+            int iteratorDoneLocalIndex = compilerContext.currentScope().declareLocal(
+                    "$arrayAssignIterDone" + compilerContext.emitter.currentOffset());
+            compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, iteratorDoneLocalIndex);
+
+            for (Expression element : elements) {
+                // Pre-evaluate LHS, then call FOR_OF_NEXT with the appropriate depth
+                int depth = preEvaluateAssignmentTarget(element);
+                compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, depth);
+                // Stack: iter next catch_offset [pre-eval...] value done
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, iteratorDoneLocalIndex);
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // drop done
+                // Stack: iter next catch_offset [pre-eval...] value
+                if (element != null) {
+                    emitAssignmentFromPreEvaluated(element, depth);
+                } else {
+                    compilerContext.emitter.emitOpcode(Opcode.DROP); // skip hole
+                }
+            }
+
+            // Check if iterator was exhausted
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, iteratorDoneLocalIndex);
+            int skipIteratorCloseJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+            // Not exhausted - call IteratorClose
+            compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
+            int iteratorCloseDoneJump = compilerContext.emitter.emitJump(Opcode.GOTO);
+            // Exhausted - just drop iter state
+            compilerContext.emitter.patchJump(skipIteratorCloseJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.emitOpcode(Opcode.DROP); // catch_offset
+            compilerContext.emitter.emitOpcode(Opcode.DROP); // next
+            compilerContext.emitter.emitOpcode(Opcode.DROP); // iter
+            compilerContext.emitter.patchJump(iteratorCloseDoneJump, compilerContext.emitter.currentOffset());
         }
-        // Drop the array
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
     }
 
     void compileAssignmentTarget(Expression target) {
@@ -89,6 +154,9 @@ final class PatternCompiler {
                 }
             }
         } else if (target instanceof MemberExpression memberExpr) {
+            if (memberExpr.optional()) {
+                throw new JSSyntaxErrorException("Invalid destructuring assignment target");
+            }
             if (compilerContext.isSuperMemberExpression(memberExpr)) {
                 // Stack starts with [value]
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
@@ -116,6 +184,30 @@ final class PatternCompiler {
             compileArrayDestructuringAssignment(nestedArray);
         } else if (target instanceof ObjectExpression nestedObj) {
             compileObjectDestructuringAssignment(nestedObj);
+        } else {
+            throw new JSSyntaxErrorException("Invalid destructuring assignment target");
+        }
+    }
+
+    private void compileDestructuringAssignmentElement(Expression element) {
+        // Stack: [value]
+        if (element instanceof AssignmentExpression assignExpr
+                && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+            // Default value: check if value is undefined
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
+            int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            delegates.expressions.compileExpression(assignExpr.right());
+            // Set function name for anonymous function definitions
+            if (assignExpr.left() instanceof Identifier targetId
+                    && isAnonymousFunctionDefinition(assignExpr.right())) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.name());
+            }
+            compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
+            compileAssignmentTarget(assignExpr.left());
+        } else {
+            compileAssignmentTarget(element);
         }
     }
 
@@ -207,39 +299,49 @@ final class PatternCompiler {
     }
 
     void compileObjectDestructuringAssignment(ObjectExpression objExpr) {
-        // Stack: [object]
-        for (ObjectExpression.Property prop : objExpr.properties()) {
-            String propName;
-            if (prop.key() instanceof Identifier keyId) {
-                propName = keyId.name();
-            } else if (prop.key() instanceof Literal lit && lit.value() instanceof String s) {
-                propName = s;
-            } else {
-                continue;
+        // Stack: [source]
+        int sourceLocalIndex = compilerContext.currentScope().declareLocal(
+                "$objectAssignSource" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, sourceLocalIndex);
+
+        for (ObjectExpression.Property property : objExpr.properties()) {
+            int propertyKeyLocalIndex = -1;
+            if (property.computed()) {
+                delegates.expressions.compileExpression(property.key());
+                compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
+                propertyKeyLocalIndex = compilerContext.currentScope().declareLocal(
+                        "$objectAssignKey" + compilerContext.emitter.currentOffset());
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, propertyKeyLocalIndex);
             }
 
-            // Duplicate object for property access
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propName);
-            // Stack: [object, value]
+            int targetDepth = preEvaluateAssignmentTarget(property.value());
 
-            Expression value = prop.value();
-            if (value instanceof AssignmentExpression assignExpr
-                    && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
-                // Default value
-                compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
-                int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-                delegates.expressions.compileExpression(assignExpr.right());
-                compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
-                compileAssignmentTarget(assignExpr.left());
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, sourceLocalIndex);
+            if (property.computed()) {
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, propertyKeyLocalIndex);
+                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+            } else if (property.key() instanceof Identifier identifier) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, identifier.name());
+            } else if (property.key() instanceof Literal literal && literal.value() instanceof String propertyName) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propertyName);
+            } else if (property.key() instanceof Literal literal
+                    && (literal.value() instanceof Integer || literal.value() instanceof Long)) {
+                long propertyIndex = ((Number) literal.value()).longValue();
+                if (propertyIndex >= Integer.MIN_VALUE && propertyIndex <= Integer.MAX_VALUE) {
+                    compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
+                    compilerContext.emitter.emitI32((int) propertyIndex);
+                } else {
+                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(propertyIndex));
+                }
+                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else {
-                compileAssignmentTarget(value);
+                delegates.expressions.compileExpression(property.key());
+                compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
+                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             }
+
+            emitAssignmentFromPreEvaluated(property.value(), targetDepth);
         }
-        // Drop the object
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
     }
 
     void compilePatternAssignment(Pattern pattern) {
@@ -607,6 +709,66 @@ final class PatternCompiler {
         }
     }
 
+    /**
+     * Emit assignment using pre-evaluated LHS references.
+     * Stack: [pre-eval-values...] value
+     * After: all consumed (value assigned, pre-eval values consumed)
+     */
+    private void emitAssignmentFromPreEvaluated(Expression element, int depth) {
+        if (depth == 0) {
+            // No pre-evaluation was done; use normal path
+            compileDestructuringAssignmentElement(element);
+            return;
+        }
+        // Handle default values first
+        Expression target;
+        if (element instanceof AssignmentExpression assignExpr
+                && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+            // Default value: check if value is undefined
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
+            int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            delegates.expressions.compileExpression(assignExpr.right());
+            if (assignExpr.left() instanceof Identifier targetId
+                    && isAnonymousFunctionDefinition(assignExpr.right())) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.name());
+            }
+            compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
+            target = assignExpr.left();
+        } else {
+            target = element;
+        }
+        // Now assign using the pre-evaluated references
+        // Stack: [pre-eval-values...] value
+        if (target instanceof MemberExpression memberExpr) {
+            if (memberExpr.computed()) {
+                // Stack: [obj, key, value] — already correct for PUT_ARRAY_EL
+                compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // PUT_ARRAY_EL leaves value
+            } else if (memberExpr.property() instanceof Identifier propId) {
+                // Stack: [obj, value] → PUT_FIELD expects [value, obj]
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // PUT_FIELD leaves value
+            }
+        }
+    }
+
+    /**
+     * Extract the actual assignment target from an element, unwrapping default values.
+     */
+    private Expression getAssignmentTarget(Expression element) {
+        if (element == null) {
+            return null;
+        }
+        if (element instanceof AssignmentExpression assignExpr
+                && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+            return assignExpr.left();
+        }
+        return element;
+    }
+
     private Identifier getBindingIdentifierForPreResolve(Pattern pattern) {
         if (pattern instanceof Identifier identifier) {
             return identifier;
@@ -629,5 +791,33 @@ final class PatternCompiler {
             return classExpression.id() == null;
         }
         return false;
+    }
+
+    /**
+     * Pre-evaluate the LHS of a destructuring assignment element before calling FOR_OF_NEXT.
+     * Per spec (IteratorDestructuringAssignmentEvaluation step 1a): if the target is not
+     * a pattern, evaluate it first to get the reference.
+     * Returns the number of values pushed on the stack (the depth for FOR_OF_NEXT).
+     */
+    private int preEvaluateAssignmentTarget(Expression element) {
+        Expression target = getAssignmentTarget(element);
+        if (target == null) {
+            return 0; // hole
+        }
+        if (target instanceof MemberExpression memberExpr && !memberExpr.optional()) {
+            if (compilerContext.isSuperMemberExpression(memberExpr)) {
+                return 0; // super member handled differently
+            }
+            // Pre-evaluate the object
+            delegates.expressions.compileExpression(memberExpr.object());
+            if (memberExpr.computed()) {
+                // Pre-evaluate the computed key
+                delegates.expressions.compileExpression(memberExpr.property());
+                return 2; // obj + key on stack
+            }
+            return 1; // obj on stack
+        }
+        // Identifiers and nested patterns: no pre-evaluation needed
+        return 0;
     }
 }

@@ -273,6 +273,18 @@ public final class PromiseConstructor {
                 }
                 iteratorDone[0] = true;
                 return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone[0]);
+            } catch (JSVirtualMachineException e) {
+                if (!context.hasPendingException()) {
+                    if (e.getJsValue() != null) {
+                        context.setPendingException(e.getJsValue());
+                    } else if (e.getJsError() != null) {
+                        context.setPendingException(e.getJsError());
+                    } else {
+                        context.throwError("Error", e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                    }
+                }
+                iteratorDone[0] = true;
+                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone[0]);
             } catch (Exception e) {
                 if (!context.hasPendingException()) {
                     context.throwError("Error", e.getMessage() != null ? e.getMessage() : "Unhandled exception");

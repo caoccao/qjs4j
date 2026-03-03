@@ -258,8 +258,30 @@ final class FunctionClassCompiler {
                 }
 
                 try {
+                    // Phase 0: Pre-declare var and top-level function names as locals so nested
+                    // closures resolve captures to VarRef slots consistently with function bodies.
+                    funcDelegates.analysis.hoistVarDeclarationsAsLocals(block.body());
+                    funcDelegates.analysis.hoistTopLevelFunctionDeclarationNamesAsLocals(block.body());
+
+                    // Phase 1: Hoist top-level function declarations before executing body statements.
+                    for (Statement statement : block.body()) {
+                        if (statement instanceof FunctionDeclaration functionDeclaration) {
+                            funcDelegates.functions.compileFunctionDeclaration(functionDeclaration);
+                        }
+                    }
+
+                    // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
+                    // into function var bindings when allowed.
+                    Set<String> declarationParameterNames =
+                            CompilerContext.buildParameterNames(arrowExpr.params(), block.body());
+                    funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(
+                            block.body(), declarationParameterNames);
+
                     // Compile block body statements.
                     for (Statement stmt : block.body()) {
+                        if (stmt instanceof FunctionDeclaration) {
+                            continue;
+                        }
                         funcDelegates.statements.compileStatement(stmt);
                     }
 

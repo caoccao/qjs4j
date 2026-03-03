@@ -17,6 +17,8 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 /**
  * %AsyncIteratorPrototype% built-in methods.
@@ -68,13 +70,33 @@ public final class AsyncIteratorPrototype {
         JSValue returnResult;
         try {
             returnResult = returnFunction.call(context, iteratorObject, new JSValue[]{JSUndefined.INSTANCE});
+        } catch (JSException e) {
+            resultPromise.reject(e.getErrorValue());
+            return resultPromise;
+        } catch (JSVirtualMachineException e) {
+            if (context.hasPendingException()) {
+                JSValue exception = context.getPendingException();
+                context.clearAllPendingExceptions();
+                resultPromise.reject(exception);
+            } else if (e.getJsValue() != null) {
+                resultPromise.reject(e.getJsValue());
+            } else if (e.getJsError() != null) {
+                resultPromise.reject(e.getJsError());
+            } else {
+                JSValue error = context.throwError("Error", e.getMessage() != null ? e.getMessage() : e.toString());
+                context.clearAllPendingExceptions();
+                resultPromise.reject(error);
+            }
+            return resultPromise;
         } catch (Exception e) {
             if (context.hasPendingException()) {
                 JSValue exception = context.getPendingException();
                 context.clearAllPendingExceptions();
                 resultPromise.reject(exception);
             } else {
-                resultPromise.reject(new JSString(e.getMessage() != null ? e.getMessage() : e.toString()));
+                JSValue error = context.throwError("Error", e.getMessage() != null ? e.getMessage() : e.toString());
+                context.clearAllPendingExceptions();
+                resultPromise.reject(error);
             }
             return resultPromise;
         }

@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.VarRef;
@@ -868,16 +869,31 @@ public final class JSBytecodeFunction extends JSFunction {
                         fulfillAsyncYield(context, promise, returnSignalValue, true);
                         return promise;
                     }
-                    // Preserve the actual JS error object from pending exception
+                    // Preserve the actual JS error object from pending exception or VM exception payload.
                     if (context.hasPendingException()) {
                         JSValue exception = context.getPendingException();
                         context.clearAllPendingExceptions();
                         promise.reject(exception);
+                    } else if (e instanceof JSException jsException) {
+                        promise.reject(jsException.getErrorValue());
+                    } else if (e instanceof JSVirtualMachineException virtualMachineException) {
+                        if (virtualMachineException.getJsValue() != null) {
+                            promise.reject(virtualMachineException.getJsValue());
+                        } else if (virtualMachineException.getJsError() != null) {
+                            promise.reject(virtualMachineException.getJsError());
+                        } else {
+                            String errorMessage = virtualMachineException.getMessage() != null
+                                    ? virtualMachineException.getMessage()
+                                    : virtualMachineException.toString();
+                            JSValue error = context.throwError("Error", errorMessage);
+                            context.clearPendingException();
+                            promise.reject(error);
+                        }
                     } else {
                         String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
-                        JSObject errorObj = context.createJSObject();
-                        errorObj.set(PropertyKey.MESSAGE, new JSString(errorMessage));
-                        promise.reject(errorObj);
+                        JSValue error = context.throwError("Error", errorMessage);
+                        context.clearPendingException();
+                        promise.reject(error);
                     }
                 }
 

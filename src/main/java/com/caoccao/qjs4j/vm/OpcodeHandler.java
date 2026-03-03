@@ -3675,8 +3675,8 @@ public final class OpcodeHandler {
         for (int i = 0; i < depth; i++) {
             executionContext.virtualMachine.forOfTempValues[i] = executionContext.virtualMachine.valueStack.pop();
         }
-        // Now top of stack is catch_offset
-        JSValue catchOffset = executionContext.virtualMachine.valueStack.pop();
+        // Now top of stack is the iterator catch marker (JSCatchOffset(0))
+        JSStackValue catchOffset = executionContext.virtualMachine.valueStack.popStackValue();
 
         // Now peek next method and iterator (don't pop - they stay for next iteration)
         // Stack is now: ... iter next (top)
@@ -3697,7 +3697,7 @@ public final class OpcodeHandler {
         // Check for pending exception (e.g., TypedArray detachment during iteration)
         if (executionContext.virtualMachine.context.hasPendingException()) {
             // Restore stack before throwing
-            executionContext.virtualMachine.valueStack.push(catchOffset);
+            executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
             for (int i = depth - 1; i >= 0; i--) {
                 executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
                 executionContext.virtualMachine.forOfTempValues[i] = null;
@@ -3718,28 +3718,10 @@ public final class OpcodeHandler {
                     executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
         }
 
-        // Get the value property
-        JSValue value = resultObj.get(executionContext.virtualMachine.context, PropertyKey.VALUE);
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            executionContext.virtualMachine.valueStack.push(catchOffset);
-            for (int i = depth - 1; i >= 0; i--) {
-                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
-                executionContext.virtualMachine.forOfTempValues[i] = null;
-            }
-            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-            if (pendingException instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException("Iterator value lookup threw", pendingException);
-        }
-        if (value == null) {
-            value = JSUndefined.INSTANCE;
-        }
-
         // Get the done property
         JSValue doneValue = resultObj.get(executionContext.virtualMachine.context, PropertyKey.DONE);
         if (executionContext.virtualMachine.context.hasPendingException()) {
-            executionContext.virtualMachine.valueStack.push(catchOffset);
+            executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
             for (int i = depth - 1; i >= 0; i--) {
                 executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
                 executionContext.virtualMachine.forOfTempValues[i] = null;
@@ -3752,8 +3734,28 @@ public final class OpcodeHandler {
         }
         boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
 
+        JSValue value = JSUndefined.INSTANCE;
+        if (!done) {
+            value = resultObj.get(executionContext.virtualMachine.context, PropertyKey.VALUE);
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
+                for (int i = depth - 1; i >= 0; i--) {
+                    executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
+                    executionContext.virtualMachine.forOfTempValues[i] = null;
+                }
+                JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+                if (pendingException instanceof JSError jsError) {
+                    throw new JSVirtualMachineException(jsError);
+                }
+                throw new JSVirtualMachineException("Iterator value lookup threw", pendingException);
+            }
+            if (value == null) {
+                value = JSUndefined.INSTANCE;
+            }
+        }
+
         // Push catch_offset back, then restore temp values, then push value and done
-        executionContext.virtualMachine.valueStack.push(catchOffset);
+        executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
         for (int i = depth - 1; i >= 0; i--) {
             executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
             executionContext.virtualMachine.forOfTempValues[i] = null;
@@ -3820,17 +3822,19 @@ public final class OpcodeHandler {
             throw new JSVirtualMachineException("Iterator next lookup threw", pendingException);
         }
 
-        if (!(nextMethod instanceof JSFunction)) {
-            String actualType = nextMethod == null ? "null" : nextMethod.getClass().getSimpleName();
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
-                    "Iterator must have a next method (got "
-                            + actualType + ", iterator=" + iteratorObj.getClass().getSimpleName() + ")"));
+        // Per spec (GetIterator step 5): store the next value as-is.
+        // The check for callable happens later in IteratorNext (FOR_OF_NEXT).
+        if (nextMethod == null) {
+            nextMethod = JSUndefined.INSTANCE;
         }
 
-        // Push iterator, next method, and catch offset (0) onto the stack
+        // Push iterator, next method, and catch offset onto the stack.
+        // The catch offset is a dedicated iterator-close marker.
+        // The VM exception handler recognizes it and auto-closes the iterator
+        // when unwinding past it.
         executionContext.virtualMachine.valueStack.push(iterator);         // Iterator object
         executionContext.virtualMachine.valueStack.push(nextMethod);       // next() method
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(0));  // Catch offset (placeholder)
+        executionContext.virtualMachine.valueStack.pushStackValue(JSCatchOffset.ITERATOR_CLOSE_MARKER);
     }
 
     private static void internalHandleGt(ExecutionContext executionContext) {

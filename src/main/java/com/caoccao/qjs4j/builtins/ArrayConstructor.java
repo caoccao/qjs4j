@@ -17,6 +17,8 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 /**
  * Implementation of Array constructor static methods.
@@ -50,8 +52,21 @@ public final class ArrayConstructor {
         if (context.hasPendingException()) {
             return consumePendingException(context);
         }
-        String message = e.getMessage();
-        return new JSString(message != null ? message : e.toString());
+        if (e instanceof JSException jsException) {
+            return jsException.getErrorValue();
+        }
+        if (e instanceof JSVirtualMachineException virtualMachineException) {
+            if (virtualMachineException.getJsValue() != null) {
+                return virtualMachineException.getJsValue();
+            }
+            if (virtualMachineException.getJsError() != null) {
+                return virtualMachineException.getJsError();
+            }
+        }
+        String message = e.getMessage() != null ? e.getMessage() : e.toString();
+        JSValue error = context.throwError("Error", message);
+        context.clearPendingException();
+        return error;
     }
 
     /**

@@ -79,6 +79,81 @@ public final class VirtualMachine {
         this.forOfTempValues = JSValue.NO_ARGS;
     }
 
+    /**
+     * Auto-close an iterator during exception unwinding.
+     * Following QuickJS JS_IteratorClose semantics:
+     * - If isThrowCompletion is true, close errors are suppressed (original error preserved).
+     * - If isThrowCompletion is false (return completion), close errors propagate and
+     * cancel any active generator force return.
+     */
+    private static void autoCloseIterator(ExecutionContext executionContext, JSObject iterator,
+                                          boolean isThrowCompletion) {
+        JSContext ctx = executionContext.virtualMachine.context;
+        boolean savedGeneratorForceReturn = executionContext.virtualMachine.generatorForceReturn;
+        JSValue savedGeneratorReturnValue = executionContext.virtualMachine.generatorReturnValue;
+        boolean shouldRestoreGeneratorForceReturn = true;
+        if (savedGeneratorForceReturn) {
+            executionContext.virtualMachine.generatorForceReturn = false;
+        }
+        JSValue returnMethodValue;
+        try {
+            returnMethodValue = iterator.get(ctx, PropertyKey.RETURN);
+        } catch (JSVirtualMachineException e) {
+            if (!isThrowCompletion) {
+                executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
+                executionContext.virtualMachine.generatorForceReturn = false;
+                shouldRestoreGeneratorForceReturn = false;
+            } else {
+                ctx.clearPendingException();
+            }
+            return;
+        }
+        if (ctx.hasPendingException()) {
+            if (!isThrowCompletion) {
+                executionContext.virtualMachine.pendingException = ctx.getPendingException();
+                executionContext.virtualMachine.generatorForceReturn = false;
+                shouldRestoreGeneratorForceReturn = false;
+            }
+            ctx.clearPendingException();
+            return;
+        }
+        if (returnMethodValue instanceof JSFunction returnMethod) {
+            JSValue closeResult;
+            try {
+                closeResult = returnMethod.call(ctx, iterator, JSValue.NO_ARGS);
+            } catch (JSVirtualMachineException e) {
+                if (!isThrowCompletion) {
+                    executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
+                    executionContext.virtualMachine.generatorForceReturn = false;
+                    shouldRestoreGeneratorForceReturn = false;
+                } else {
+                    ctx.clearPendingException();
+                }
+                return;
+            }
+            if (ctx.hasPendingException()) {
+                if (!isThrowCompletion) {
+                    executionContext.virtualMachine.pendingException = ctx.getPendingException();
+                    executionContext.virtualMachine.generatorForceReturn = false;
+                    shouldRestoreGeneratorForceReturn = false;
+                }
+                ctx.clearPendingException();
+            } else if (!(closeResult instanceof JSObject)) {
+                if (!isThrowCompletion) {
+                    executionContext.virtualMachine.pendingException =
+                            ctx.throwTypeError("iterator result is not an object");
+                    executionContext.virtualMachine.generatorForceReturn = false;
+                    shouldRestoreGeneratorForceReturn = false;
+                }
+            }
+        }
+
+        if (savedGeneratorForceReturn && shouldRestoreGeneratorForceReturn) {
+            executionContext.virtualMachine.generatorForceReturn = true;
+            executionContext.virtualMachine.generatorReturnValue = savedGeneratorReturnValue;
+        }
+    }
+
     static PendingExceptionAction handlePendingExceptionForExecute(ExecutionContext executionContext) {
         if (executionContext.virtualMachine.pendingException == null) {
             return PendingExceptionAction.NONE;
@@ -86,11 +161,30 @@ public final class VirtualMachine {
 
         JSValue exception = executionContext.virtualMachine.pendingException;
         executionContext.virtualMachine.pendingException = null;
+        executionContext.virtualMachine.context.clearPendingException();
 
         boolean foundHandler = false;
         while (executionContext.virtualMachine.valueStack.stackTop > executionContext.frameStackBase) {
             JSStackValue stackValue = executionContext.stack[--executionContext.virtualMachine.valueStack.stackTop];
             if (stackValue instanceof JSCatchOffset catchOffset) {
+                if (catchOffset.isIteratorCloseMarker()) {
+                    // Iterator enumerator marker (from FOR_OF_START). Following QuickJS:
+                    // auto-close the iterator. Stack below is: [iter, next].
+                    // Pop next method, then close iterator.
+                    executionContext.virtualMachine.valueStack.stackTop--; // pop next
+                    int iterIdx = executionContext.virtualMachine.valueStack.stackTop - 1;
+                    if (iterIdx >= executionContext.frameStackBase) {
+                        JSValue iteratorValue = (JSValue) executionContext.stack[iterIdx];
+                        executionContext.virtualMachine.valueStack.stackTop--; // pop iter
+                        if (iteratorValue instanceof JSObject iteratorObj && !iteratorValue.isUndefined()) {
+                            // For throw completions, suppress close errors.
+                            // For return completions (generatorForceReturn), propagate close errors.
+                            boolean isThrowCompletion = !executionContext.virtualMachine.generatorForceReturn;
+                            autoCloseIterator(executionContext, iteratorObj, isThrowCompletion);
+                        }
+                    }
+                    continue;
+                }
                 if (executionContext.virtualMachine.generatorForceReturn && !catchOffset.isFinally()) {
                     continue;
                 }
@@ -116,6 +210,11 @@ public final class VirtualMachine {
             executionContext.virtualMachine.context.clearPendingException();
             executionContext.returnValue = executionContext.virtualMachine.generatorReturnValue;
             return PendingExceptionAction.RETURN;
+        }
+
+        if (executionContext.virtualMachine.pendingException != null) {
+            exception = executionContext.virtualMachine.pendingException;
+            executionContext.virtualMachine.pendingException = null;
         }
 
         executionContext.virtualMachine.restoreExecuteCallerState(

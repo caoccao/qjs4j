@@ -317,7 +317,7 @@ final class ExpressionAssignmentParser {
 
         Expression left = expressions.parseConditionalExpression();
 
-        if (parserContext.match(TokenType.ARROW)) {
+        if (parserContext.match(TokenType.ARROW) && !parserContext.hasNewlineBefore()) {
             List<Pattern> params = new ArrayList<>();
             List<Expression> defaults = new ArrayList<>();
             RestParameter restParameter = null;

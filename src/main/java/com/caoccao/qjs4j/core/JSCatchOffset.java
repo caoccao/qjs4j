@@ -28,10 +28,18 @@ package com.caoccao.qjs4j.core;
  * <p>
  * This is an internal VM type, not a JavaScript value.
  */
-public record JSCatchOffset(int offset, boolean isFinally) implements JSStackValue {
+public record JSCatchOffset(int offset, boolean isFinally, boolean isIteratorCloseMarker) implements JSStackValue {
+    public static final JSCatchOffset ITERATOR_CLOSE_MARKER = new JSCatchOffset(0, false, true);
+
+    public JSCatchOffset(int offset, boolean isFinally) {
+        this(offset, isFinally, false);
+    }
 
     @Override
     public String toString() {
-        return "[CatchOffset:" + offset + (isFinally ? ",finally" : "") + "]";
+        return "[CatchOffset:" + offset
+                + (isFinally ? ",finally" : "")
+                + (isIteratorCloseMarker ? ",iteratorClose" : "")
+                + "]";
     }
 }

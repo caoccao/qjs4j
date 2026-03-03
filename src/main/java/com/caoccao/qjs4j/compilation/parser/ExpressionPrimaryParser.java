@@ -538,8 +538,13 @@ final class ExpressionPrimaryParser {
 
                     if (potentialParams.size() == 1 && !(potentialParams.get(0) instanceof SpreadElement)) {
                         yield potentialParams.get(0);
-                    } else {
+                    } else if (parserContext.match(TokenType.ARROW)
+                            || potentialParams.stream().anyMatch(e -> e instanceof SpreadElement)) {
+                        // Arrow function params or contains spread element
                         yield new ArrayExpression(potentialParams, location);
+                    } else {
+                        // Not arrow params - treat as comma expression (grouping)
+                        yield new SequenceExpression(potentialParams, location);
                     }
                 } else {
                     boolean savedIn = parserContext.inOperatorAllowed;
@@ -638,6 +643,10 @@ final class ExpressionPrimaryParser {
             if (parserContext.isYieldIdentifierAllowed()) {
                 return parsePostfixExpression();
             }
+            // In strict mode outside a generator, yield is a reserved word
+            if (parserContext.generatorFunctionNesting == 0) {
+                throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
+            }
             if (!parserContext.inFunctionBody) {
                 throw new JSSyntaxErrorException("'yield' expression not allowed in formal parameters of a generator function");
             }
@@ -651,7 +660,14 @@ final class ExpressionPrimaryParser {
             }
 
             Expression argument = null;
-            if (!parserContext.match(TokenType.SEMICOLON) && !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+            // Per spec: yield without argument when followed by line terminator or
+            // tokens that can't start an AssignmentExpression (following QuickJS).
+            if (!parserContext.hasNewlineBefore()
+                    && !parserContext.match(TokenType.SEMICOLON)
+                    && !parserContext.match(TokenType.RBRACE)
+                    && !parserContext.match(TokenType.RBRACKET)
+                    && !parserContext.match(TokenType.COMMA)
+                    && !parserContext.match(TokenType.EOF)) {
                 argument = expressions.parseAssignmentExpression();
             }
 

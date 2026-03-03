@@ -17,9 +17,13 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
+
+import java.util.ArrayList;
+import java.util.List;
 
 final class ExpressionAssignmentCompiler {
     private final CompilerContext compilerContext;
@@ -51,21 +55,13 @@ final class ExpressionAssignmentCompiler {
             return;
         }
 
+        if (left instanceof Identifier identifier) {
+            compileIdentifierAssignmentExpression(assignExpr, identifier);
+            return;
+        }
+
         if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
-            if (left instanceof Identifier id) {
-                String name = id.name();
-                Integer localIndex = compilerContext.findLocalInScopes(name);
-                if (localIndex != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
-                } else {
-                    Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
-                    if (capturedIndex != null) {
-                        compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
-                    } else {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
-                    }
-                }
-            } else if (left instanceof MemberExpression memberExpr) {
+            if (left instanceof MemberExpression memberExpr) {
                 if (compilerContext.isSuperMemberExpression(memberExpr)) {
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                     compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
@@ -118,21 +114,7 @@ final class ExpressionAssignmentCompiler {
             owner.compileExpression(assignExpr.right());
         }
 
-        if (left instanceof Identifier id) {
-            String name = id.name();
-            Integer localIndex = compilerContext.findLocalInScopes(name);
-
-            if (localIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOCAL, localIndex);
-            } else {
-                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
-                if (capturedIndex != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_VAR_REF, capturedIndex);
-                } else {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.SET_VAR, name);
-                }
-            }
-        } else if (left instanceof MemberExpression memberExpr) {
+        if (left instanceof MemberExpression memberExpr) {
             if (operator == AssignmentExpression.AssignmentOperator.ASSIGN) {
                 if (compilerContext.isSuperMemberExpression(memberExpr)) {
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
@@ -192,6 +174,39 @@ final class ExpressionAssignmentCompiler {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             delegates.patterns.compileObjectDestructuringAssignment(objExpr);
         }
+    }
+
+    private void compileIdentifierAssignmentExpression(AssignmentExpression assignExpr, Identifier identifier) {
+        String name = identifier.name();
+        AssignmentExpression.AssignmentOperator operator = assignExpr.operator();
+
+        emitIdentifierReference(name);
+        if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+            compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
+        }
+
+        owner.compileExpression(assignExpr.right());
+
+        if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+            switch (operator) {
+                case PLUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.ADD);
+                case MINUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SUB);
+                case MUL_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MUL);
+                case DIV_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.DIV);
+                case MOD_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MOD);
+                case EXP_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.EXP);
+                case LSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHL);
+                case RSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SAR);
+                case URSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHR);
+                case AND_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.AND);
+                case OR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.OR);
+                case XOR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.XOR);
+                default -> throw new JSCompilerException("Unknown assignment operator: " + operator);
+            }
+        }
+
+        compilerContext.emitter.emitOpcode(Opcode.INSERT3);
+        compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
     }
 
     void compileLogicalAssignment(AssignmentExpression assignExpr) {
@@ -302,5 +317,97 @@ final class ExpressionAssignmentCompiler {
         }
 
         compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+    }
+
+    private void emitDirectIdentifierReference(String name) {
+        Integer localIndex = compilerContext.findLocalInScopes(name);
+        if (localIndex != null) {
+            emitScopedReference(Opcode.MAKE_LOC_REF, name, localIndex);
+            return;
+        }
+
+        Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
+        if (capturedIndex != null) {
+            emitScopedReference(Opcode.MAKE_VAR_REF_REF, name, capturedIndex);
+            return;
+        }
+
+        compilerContext.emitter.emitOpcodeAtom(Opcode.MAKE_VAR_REF, name);
+    }
+
+    private void emitIdentifierReference(String name) {
+        if (compilerContext.hasActiveWithObject() || !compilerContext.inheritedWithObjectBindingNames.isEmpty()) {
+            emitWithAwareIdentifierReference(name);
+        } else {
+            emitDirectIdentifierReference(name);
+        }
+    }
+
+    private void emitScopedReference(Opcode makeReferenceOpcode, String name, int referenceIndex) {
+        compilerContext.emitter.emitOpcode(makeReferenceOpcode);
+        compilerContext.emitter.emitAtom(name);
+        compilerContext.emitter.emitU16(referenceIndex);
+    }
+
+    private void emitWithAwareIdentifierReference(String name) {
+        List<Integer> jumpToResolvedOffsets = new ArrayList<>();
+
+        List<Integer> withObjectLocals = compilerContext.getActiveWithObjectLocals();
+        for (int withObjectLocalIndex : withObjectLocals) {
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, withObjectLocalIndex);
+            emitWithCandidateReference(name, jumpToResolvedOffsets);
+        }
+
+        for (String withBindingName : compilerContext.inheritedWithObjectBindingNames) {
+            Integer withLocalIndex = compilerContext.findLocalInScopes(withBindingName);
+            if (withLocalIndex != null) {
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, withLocalIndex);
+                emitWithCandidateReference(name, jumpToResolvedOffsets);
+                continue;
+            }
+            Integer withCapturedIndex = compilerContext.resolveCapturedBindingIndex(withBindingName);
+            if (withCapturedIndex != null) {
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, withCapturedIndex);
+                emitWithCandidateReference(name, jumpToResolvedOffsets);
+            }
+        }
+
+        emitDirectIdentifierReference(name);
+        int resolveEndOffset = compilerContext.emitter.currentOffset();
+        for (int jumpOffset : jumpToResolvedOffsets) {
+            compilerContext.emitter.patchJump(jumpOffset, resolveEndOffset);
+        }
+    }
+
+    private void emitWithCandidateReference(String name, List<Integer> jumpToResolvedOffsets) {
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        compilerContext.emitter.emitOpcode(Opcode.ROT3L);
+        compilerContext.emitter.emitOpcode(Opcode.IN);
+        int jumpToCandidateFallback = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSSymbol.UNSCOPABLES);
+        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+        int jumpToResolveWithoutUnscopables = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+        int jumpToCandidateFallbackWhenBlocked = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        jumpToResolvedOffsets.add(compilerContext.emitter.emitJump(Opcode.GOTO));
+
+        compilerContext.emitter.patchJump(jumpToResolveWithoutUnscopables, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        jumpToResolvedOffsets.add(compilerContext.emitter.emitJump(Opcode.GOTO));
+
+        int candidateFallbackOffset = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.patchJump(jumpToCandidateFallback, candidateFallbackOffset);
+        compilerContext.emitter.patchJump(jumpToCandidateFallbackWhenBlocked, candidateFallbackOffset);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
     }
 }

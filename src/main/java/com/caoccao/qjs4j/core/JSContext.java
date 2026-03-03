@@ -1027,6 +1027,9 @@ public final class JSContext implements AutoCloseable {
             if (e.getJsError() != null) {
                 throw new JSException(e.getJsError());
             }
+            if (e.getJsValue() != null) {
+                throw new JSException(e.getJsValue());
+            }
             if (hasPendingException()) {
                 JSValue exception = getPendingException();
                 throw new JSException(exception);
