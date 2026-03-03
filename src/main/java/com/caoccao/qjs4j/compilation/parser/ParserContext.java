@@ -39,6 +39,8 @@ final class ParserContext {
     int asyncFunctionNesting;
     Token currentToken;
     int functionNesting;
+    int generatorFunctionNesting;
+    boolean inClassStaticInit;
     boolean inDerivedConstructor;
     boolean inFunctionBody = true;
     boolean inOperatorAllowed = true;
@@ -86,15 +88,29 @@ final class ParserContext {
     }
 
     void enterFunctionContext(boolean asyncFunction) {
+        enterFunctionContext(asyncFunction, false);
+    }
+
+    void enterFunctionContext(boolean asyncFunction, boolean generatorFunction) {
         functionNesting++;
         if (asyncFunction) {
             asyncFunctionNesting++;
         }
+        if (generatorFunction) {
+            generatorFunctionNesting++;
+        }
     }
 
     void exitFunctionContext(boolean asyncFunction) {
+        exitFunctionContext(asyncFunction, false);
+    }
+
+    void exitFunctionContext(boolean asyncFunction, boolean generatorFunction) {
         if (asyncFunction) {
             asyncFunctionNesting--;
+        }
+        if (generatorFunction) {
+            generatorFunctionNesting--;
         }
         functionNesting--;
     }
@@ -147,7 +163,7 @@ final class ParserContext {
     }
 
     boolean isAwaitIdentifierAllowed() {
-        return !moduleMode && asyncFunctionNesting == 0;
+        return !moduleMode && asyncFunctionNesting == 0 && !inClassStaticInit;
     }
 
     boolean isAwaitUsingDeclarationStart() {
@@ -259,6 +275,10 @@ final class ParserContext {
         return !strictMode && expr instanceof CallExpression;
     }
 
+    boolean isYieldIdentifierAllowed() {
+        return !strictMode && generatorFunctionNesting == 0;
+    }
+
     boolean match(TokenType type) {
         return currentToken.type() == type;
     }
@@ -357,6 +377,14 @@ final class ParserContext {
                 return new Identifier(name, location);
             }
             throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+        }
+        if (match(TokenType.YIELD)) {
+            if (isYieldIdentifierAllowed()) {
+                String name = currentToken.value();
+                advance();
+                return new Identifier(name, location);
+            }
+            throw new JSSyntaxErrorException("Unexpected token 'yield'");
         }
         if (match(TokenType.FROM)) {
             String name = currentToken.value();

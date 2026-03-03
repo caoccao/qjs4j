@@ -322,8 +322,9 @@ final class ExpressionAssignmentParser {
             List<Expression> defaults = new ArrayList<>();
             RestParameter restParameter = null;
 
-            if (left instanceof Identifier) {
-                params.add((Identifier) left);
+            if (left instanceof Identifier identifier) {
+                validateBindingIdentifier(identifier.name());
+                params.add(identifier);
                 defaults.add(null);
             } else if (left instanceof AssignmentExpression assignExpr
                     && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN
@@ -349,15 +350,11 @@ final class ExpressionAssignmentParser {
                         Expression expr = arrayExpr.elements().get(i);
 
                         if (expr instanceof SpreadElement spreadElem) {
-                            if (spreadElem.argument() instanceof Identifier restId) {
-                                restParameter = new RestParameter(restId, spreadElem.getLocation());
-                                if (i != arrayExpr.elements().size() - 1) {
-                                    throw new JSSyntaxErrorException("Rest parameter must be last formal parameter");
-                                }
-                            } else {
-                                throw new JSSyntaxErrorException("Invalid rest parameter at line " +
-                                        parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
+                            if (i != arrayExpr.elements().size() - 1) {
+                                throw new JSSyntaxErrorException("Rest parameter must be last formal parameter");
                             }
+                            Pattern restArgPattern = convertArrowExpressionToPattern(spreadElem.argument());
+                            restParameter = new RestParameter(restArgPattern, spreadElem.getLocation());
                         } else {
                             parseArrowParameterExpression(expr, params, defaults);
                         }
@@ -488,12 +485,13 @@ final class ExpressionAssignmentParser {
             }
         }
         if (restParameter != null) {
-            String restName = restParameter.argument().name();
-            if (!seen.add(restName)) {
-                throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
-            }
-            if (strictParameters && ("eval".equals(restName) || "arguments".equals(restName))) {
-                throw new JSSyntaxErrorException("invalid argument name in strict code");
+            for (String restName : extractBoundNames(restParameter.argument())) {
+                if (!seen.add(restName)) {
+                    throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
+                }
+                if (strictParameters && ("eval".equals(restName) || "arguments".equals(restName))) {
+                    throw new JSSyntaxErrorException("invalid argument name in strict code");
+                }
             }
         }
         if (hasUseStrictDirective(body) && !isSimpleParameterList(params, defaults, restParameter)) {

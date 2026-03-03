@@ -465,6 +465,9 @@ public final class OpcodeHandler {
                 PropertyDescriptor.DataState.ConfigurableWritable);
         executionContext.virtualMachine.setObjectName(constructorValue, new JSString(className));
 
+        // Set home object on constructor for super property access in constructors
+        constructorFunction.setHomeObject(prototypeObject);
+
         if (constructorFunction instanceof JSBytecodeFunction bytecodeConstructor) {
             bytecodeConstructor.setClassConstructor(true);
             if (superClassValue != JSUndefined.INSTANCE) {
@@ -517,6 +520,16 @@ public final class OpcodeHandler {
             computedClassName = new JSString(className);
         }
         executionContext.virtualMachine.setObjectName(constructorValue, computedClassName);
+
+        // Set home object on constructor for super property access in constructors
+        constructorFunction.setHomeObject(prototypeObject);
+
+        if (constructorFunction instanceof JSBytecodeFunction bytecodeConstructor) {
+            bytecodeConstructor.setClassConstructor(true);
+            if (hasHeritage) {
+                bytecodeConstructor.setDerivedConstructor(true);
+            }
+        }
 
         stack[sp++] = prototypeObject;
         stack[sp++] = constructorValue;
@@ -794,20 +807,34 @@ public final class OpcodeHandler {
                     capturedClosureVars[selfIndex] = closureFunction;
                 }
             }
-            // Arrow functions capture this and arguments from the enclosing scope
+            // Arrow functions capture this, arguments, new.target, active function, and home object from the enclosing scope
             if (closureFunction.isArrow()) {
                 closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
-                // Capture arguments lexically: from the enclosing non-arrow function
+                // Capture new.target and active function lexically from enclosing function
                 JSFunction enclosingFunc = executionContext.frame.getFunction();
                 if (enclosingFunc instanceof JSBytecodeFunction enclosingBf && enclosingBf.isArrow()) {
-                    // Nested arrow: propagate captured arguments from parent arrow
+                    // Nested arrow: propagate captured values from parent arrow
                     closureFunction.setCapturedArguments(enclosingBf.getCapturedArguments());
+                    closureFunction.setCapturedNewTarget(enclosingBf.getCapturedNewTarget());
+                    closureFunction.setCapturedActiveFunction(enclosingBf.getCapturedActiveFunction());
+                    // Propagate home object for super access
+                    if (enclosingBf.getHomeObject() != null) {
+                        closureFunction.setHomeObject(enclosingBf.getHomeObject());
+                    }
                 } else if (enclosingFunc != null) {
-                    // Direct arrow inside a regular function: capture arguments from current frame
+                    // Direct arrow inside a regular function: capture from current frame
                     boolean mapped = executionContext.virtualMachine.shouldUseMappedArguments(enclosingFunc);
                     closureFunction.setCapturedArguments(
                             executionContext.virtualMachine.createArgumentsObject(
                                     executionContext.frame, enclosingFunc, mapped));
+                    closureFunction.setCapturedNewTarget(executionContext.frame.getNewTarget());
+                    closureFunction.setCapturedActiveFunction(enclosingFunc);
+                    // Capture home object for super property access
+                    if (enclosingFunc.getHomeObject() != null) {
+                        closureFunction.setHomeObject(enclosingFunc.getHomeObject());
+                    }
+                } else {
+                    closureFunction.setCapturedNewTarget(executionContext.frame.getNewTarget());
                 }
             }
             closureFunction.initializePrototypeChain(executionContext.virtualMachine.context);
@@ -842,20 +869,29 @@ public final class OpcodeHandler {
                 }
                 closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
             }
-            // Arrow functions capture this and arguments from the enclosing scope
+            // Arrow functions capture this, arguments, new.target, active function, and home object from the enclosing scope
             if (closureFunction.isArrow()) {
                 closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
-                // Capture arguments lexically: from the enclosing non-arrow function
                 JSFunction enclosingFunc = executionContext.frame.getFunction();
                 if (enclosingFunc instanceof JSBytecodeFunction enclosingBf && enclosingBf.isArrow()) {
-                    // Nested arrow: propagate captured arguments from parent arrow
                     closureFunction.setCapturedArguments(enclosingBf.getCapturedArguments());
+                    closureFunction.setCapturedNewTarget(enclosingBf.getCapturedNewTarget());
+                    closureFunction.setCapturedActiveFunction(enclosingBf.getCapturedActiveFunction());
+                    if (enclosingBf.getHomeObject() != null) {
+                        closureFunction.setHomeObject(enclosingBf.getHomeObject());
+                    }
                 } else if (enclosingFunc != null) {
-                    // Direct arrow inside a regular function: capture arguments from current frame
                     boolean mapped = executionContext.virtualMachine.shouldUseMappedArguments(enclosingFunc);
                     closureFunction.setCapturedArguments(
                             executionContext.virtualMachine.createArgumentsObject(
                                     executionContext.frame, enclosingFunc, mapped));
+                    closureFunction.setCapturedNewTarget(executionContext.frame.getNewTarget());
+                    closureFunction.setCapturedActiveFunction(enclosingFunc);
+                    if (enclosingFunc.getHomeObject() != null) {
+                        closureFunction.setHomeObject(enclosingFunc.getHomeObject());
+                    }
+                } else {
+                    closureFunction.setCapturedNewTarget(executionContext.frame.getNewTarget());
                 }
             }
             closureFunction.initializePrototypeChain(executionContext.virtualMachine.context);
@@ -3853,6 +3889,19 @@ public final class OpcodeHandler {
             throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("class constructors must be invoked with 'new'"));
         }
 
+        // Per ES spec BindThisValue: if thisBindingStatus is "initialized", throw ReferenceError.
+        // Arrow functions share the this-binding with the enclosing derived constructor.
+        // Check if this was already initialized by a previous super() call.
+        JSFunction currentFunction = executionContext.virtualMachine.currentFrame.getFunction();
+        if (currentFunction instanceof JSBytecodeFunction arrowBf && arrowBf.isArrow()) {
+            JSValue capturedThis = arrowBf.getCapturedThisArg();
+            if (capturedThis instanceof JSObject) {
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.throwReferenceError(
+                                "Must call super constructor in derived class before accessing 'this' or returning from derived constructor"));
+            }
+        }
+
         // Explicit super(...): APPLY constructor mode left the initialized this value on stack.
         if (executionContext.virtualMachine.valueStack.getStackTop() > executionContext.virtualMachine.currentFrame.getStackBase()) {
             JSValue thisValue = executionContext.virtualMachine.valueStack.pop();
@@ -3860,13 +3909,32 @@ public final class OpcodeHandler {
                 throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("super() returned non-object"));
             }
             executionContext.virtualMachine.currentFrame.setThisArg(jsObject);
+            // For arrow functions inside derived constructors, propagate the initialized this
+            // back to the enclosing constructor frame if it's still on the call stack.
+            if (currentFunction instanceof JSBytecodeFunction arrowBf && arrowBf.isArrow()) {
+                StackFrame callerFrame = executionContext.virtualMachine.currentFrame.getCaller();
+                while (callerFrame != null) {
+                    JSFunction callerFunc = callerFrame.getFunction();
+                    if (callerFunc instanceof JSBytecodeFunction callerBf) {
+                        if (callerBf.isDerivedConstructor()) {
+                            callerFrame.setThisArg(jsObject);
+                            break;
+                        }
+                        if (!callerBf.isArrow()) {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                    callerFrame = callerFrame.getCaller();
+                }
+            }
             executionContext.virtualMachine.valueStack.push(jsObject);
             return;
         }
 
         // Default derived constructor path:
         // constructor(...args) { super(...args); }
-        JSFunction currentFunction = executionContext.virtualMachine.currentFrame.getFunction();
         JSObject superConstructorObject = currentFunction.getPrototype();
         if (!(superConstructorObject instanceof JSFunction superConstructor)) {
             throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("parent class must be constructor"));

@@ -51,7 +51,9 @@ public final class JSBytecodeFunction extends JSFunction {
     private final int selfCaptureIndex;
     private final boolean strict;
     private int[] captureSourceInfos;
+    private JSFunction capturedActiveFunction;
     private JSValue capturedArguments;
+    private JSValue capturedNewTarget;
     private JSValue capturedThisArg;
     private String[] capturedVarNames;
     private boolean classConstructor;
@@ -950,6 +952,10 @@ public final class JSBytecodeFunction extends JSFunction {
         }
 
         // For non-async functions, execute normally and let exceptions propagate
+        // Arrow functions pass their captured new.target to the frame
+        if (isArrow && capturedNewTarget != null) {
+            return executionContext.getVirtualMachine().execute(this, thisArg, args, capturedNewTarget);
+        }
         return executionContext.getVirtualMachine().execute(this, thisArg, args);
     }
 
@@ -971,8 +977,10 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
         copiedFunction.hasArgumentsParameterBinding = this.hasArgumentsParameterBinding;
         copiedFunction.selfLocalIndex = selfLocalIndex;
+        copiedFunction.capturedActiveFunction = this.capturedActiveFunction;
         copiedFunction.capturedThisArg = this.capturedThisArg;
         copiedFunction.capturedArguments = this.capturedArguments;
+        copiedFunction.capturedNewTarget = this.capturedNewTarget;
         copiedFunction.capturedVarNames = this.capturedVarNames;
         return copiedFunction;
     }
@@ -1000,8 +1008,10 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
         copiedFunction.hasArgumentsParameterBinding = this.hasArgumentsParameterBinding;
         copiedFunction.selfLocalIndex = selfLocalIndex;
+        copiedFunction.capturedActiveFunction = this.capturedActiveFunction;
         copiedFunction.capturedThisArg = this.capturedThisArg;
         copiedFunction.capturedArguments = this.capturedArguments;
+        copiedFunction.capturedNewTarget = this.capturedNewTarget;
         copiedFunction.capturedVarNames = this.capturedVarNames;
         return copiedFunction;
     }
@@ -1025,11 +1035,28 @@ public final class JSBytecodeFunction extends JSFunction {
     }
 
     /**
+     * Get the captured active function for arrow functions.
+     * Used by SPECIAL_OBJECT 2 (THIS_FUNC) to resolve the enclosing constructor
+     * for super() calls inside arrow functions.
+     */
+    public JSFunction getCapturedActiveFunction() {
+        return capturedActiveFunction;
+    }
+
+    /**
      * Get the captured arguments object for arrow functions.
      * Arrow functions lexically inherit arguments from the enclosing non-arrow function.
      */
     public JSValue getCapturedArguments() {
         return capturedArguments;
+    }
+
+    /**
+     * Get the captured new.target value for arrow functions.
+     * Arrow functions lexically inherit new.target from the enclosing function.
+     */
+    public JSValue getCapturedNewTarget() {
+        return capturedNewTarget;
     }
 
     /**
@@ -1173,11 +1200,28 @@ public final class JSBytecodeFunction extends JSFunction {
     }
 
     /**
+     * Set the captured active function for arrow functions.
+     * Called during FCLOSURE to capture the enclosing non-arrow function reference
+     * for super() resolution.
+     */
+    public void setCapturedActiveFunction(JSFunction capturedActiveFunction) {
+        this.capturedActiveFunction = capturedActiveFunction;
+    }
+
+    /**
      * Set the captured arguments object for arrow functions.
      * Called during FCLOSURE to capture the enclosing non-arrow function's arguments.
      */
     public void setCapturedArguments(JSValue capturedArguments) {
         this.capturedArguments = capturedArguments;
+    }
+
+    /**
+     * Set the captured new.target value for arrow functions.
+     * Called during FCLOSURE to capture the enclosing function's new.target.
+     */
+    public void setCapturedNewTarget(JSValue capturedNewTarget) {
+        this.capturedNewTarget = capturedNewTarget;
     }
 
     /**

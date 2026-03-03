@@ -237,13 +237,7 @@ final class FunctionClassCompiler {
             functionContext.emitter.emitOpcode(Opcode.REST);
             functionContext.emitter.emitU16(firstRestIndex);
 
-            // Declare the rest parameter as a local and store the rest array
-            String restParamName = arrowExpr.restParameter().argument().name();
-            int restLocalIndex = functionContext.currentScope().declareLocal(restParamName);
-
-            // Store the rest array (from stack top) to the rest parameter local
-            functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
-            functionContext.emitter.emitU16(restLocalIndex);
+            emitRestParameterBinding(arrowExpr.restParameter(), functionContext, funcDelegates);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
@@ -880,13 +874,7 @@ final class FunctionClassCompiler {
             functionContext.emitter.emitOpcode(Opcode.REST);
             functionContext.emitter.emitU16(firstRestIndex);
 
-            // Declare the rest parameter as a local and store the rest array
-            String restParamName = funcDecl.restParameter().argument().name();
-            int restLocalIndex = functionContext.currentScope().declareLocal(restParamName);
-
-            // Store the rest array (from stack top) to the rest parameter local
-            functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
-            functionContext.emitter.emitU16(restLocalIndex);
+            emitRestParameterBinding(funcDecl.restParameter(), functionContext, delegates);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
@@ -981,7 +969,7 @@ final class FunctionClassCompiler {
                 if (!funcDecl.params().isEmpty()) {
                     funcSource.append(", ");
                 }
-                funcSource.append("...").append(funcDecl.restParameter().argument().name());
+                funcSource.append("...").append(patternToString(funcDecl.restParameter().argument()));
             }
             funcSource.append(") { [function body] }");
             functionSource = funcSource.toString();
@@ -1100,8 +1088,11 @@ final class FunctionClassCompiler {
                 allParamNames.addAll(CompilerContext.extractBoundNames(param));
             }
             conflictsWithParameter = allParamNames.contains(functionExpression.id().name());
-            if (!conflictsWithParameter && (functionExpression.restParameter() == null
-                    || !functionExpression.id().name().equals(functionExpression.restParameter().argument().name()))) {
+            if (!conflictsWithParameter && functionExpression.restParameter() != null) {
+                List<String> restBoundNames = CompilerContext.extractBoundNames(functionExpression.restParameter().argument());
+                conflictsWithParameter = restBoundNames.contains(functionExpression.id().name());
+            }
+            if (!conflictsWithParameter) {
                 functionContext.currentScope().declareLocal(functionExpression.id().name());
             }
         }
@@ -1126,13 +1117,7 @@ final class FunctionClassCompiler {
             functionContext.emitter.emitOpcode(Opcode.REST);
             functionContext.emitter.emitU16(firstRestIndex);
 
-            // Declare the rest parameter as a local and store the rest array
-            String restParamName = functionExpression.restParameter().argument().name();
-            int restLocalIndex = functionContext.currentScope().declareLocal(restParamName);
-
-            // Store the rest array (from stack top) to the rest parameter local
-            functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
-            functionContext.emitter.emitU16(restLocalIndex);
+            emitRestParameterBinding(functionExpression.restParameter(), functionContext, funcDelegates);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
@@ -1292,10 +1277,7 @@ final class FunctionClassCompiler {
             int firstRestIndex = functionExpression.params().size();
             methodCtx.emitter.emitOpcode(Opcode.REST);
             methodCtx.emitter.emitU16(firstRestIndex);
-            String restParamName = functionExpression.restParameter().argument().name();
-            int restLocalIndex = methodCtx.currentScope().declareLocal(restParamName);
-            methodCtx.emitter.emitOpcode(Opcode.PUT_LOCAL);
-            methodCtx.emitter.emitU16(restLocalIndex);
+            emitRestParameterBinding(functionExpression.restParameter(), methodCtx, methodDelegates);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
@@ -1724,10 +1706,6 @@ final class FunctionClassCompiler {
         return destructuringParams;
     }
 
-    /**
-     * Emit destructuring code for pattern parameters after defaults and rest handling.
-     * Reads the argument value from the synthetic parameter slot and destructures it.
-     */
     private void emitParameterDestructuring(List<Pattern> params, List<int[]> destructuringParams,
                                             CompilerContext functionContext,
                                             CompilerDelegates funcDelegates) {
@@ -1739,6 +1717,25 @@ final class FunctionClassCompiler {
             functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, slotIndex);
             // Destructure and assign to local variables
             funcDelegates.patterns.compilePatternAssignment(pattern);
+        }
+    }
+
+    /**
+     * Emit destructuring code for pattern parameters after defaults and rest handling.
+     * Reads the argument value from the synthetic parameter slot and destructures it.
+     */
+    private void emitRestParameterBinding(RestParameter restParameter,
+                                          CompilerContext functionContext,
+                                          CompilerDelegates funcDelegates) {
+        if (restParameter.argument() instanceof Identifier restId) {
+            // Simple rest: ...args → declare local and store
+            String restParamName = restId.name();
+            int restLocalIndex = functionContext.currentScope().declareLocal(restParamName);
+            functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
+            functionContext.emitter.emitU16(restLocalIndex);
+        } else {
+            // Destructured rest: ...[a, b] or ...{a, b} → compile pattern assignment
+            funcDelegates.patterns.compilePatternAssignment(restParameter.argument());
         }
     }
 

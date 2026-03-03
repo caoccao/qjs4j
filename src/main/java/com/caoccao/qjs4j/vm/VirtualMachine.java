@@ -635,8 +635,16 @@ public final class VirtualMachine {
                 return createArgumentsObject(currentFrame, mappedFunc, canMap);
 
             case 2: // SPECIAL_OBJECT_THIS_FUNC
-                // Return the currently executing function
-                return currentFrame.getFunction();
+                // Return the currently executing function.
+                // For arrow functions, return the captured enclosing function (e.g., constructor for super() calls).
+                JSFunction thisFunc = currentFrame.getFunction();
+                if (thisFunc instanceof JSBytecodeFunction thisBf && thisBf.isArrow()) {
+                    JSFunction activeFunc = thisBf.getCapturedActiveFunction();
+                    if (activeFunc != null) {
+                        return activeFunc;
+                    }
+                }
+                return thisFunc;
 
             case 3: // SPECIAL_OBJECT_NEW_TARGET
                 // Return new.target.

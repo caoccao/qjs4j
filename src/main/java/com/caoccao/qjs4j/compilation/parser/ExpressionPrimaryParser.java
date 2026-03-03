@@ -381,6 +381,7 @@ final class ExpressionPrimaryParser {
             case IDENTIFIER -> parserContext.parseIdentifier();
             case ASYNC -> parserContext.parseIdentifier();
             case AWAIT -> parserContext.parseIdentifier();
+            case YIELD -> parserContext.parseIdentifier();
             case FROM -> parserContext.parseIdentifier();
             case OF -> parserContext.parseIdentifier();
             case PRIVATE_NAME -> {
@@ -405,21 +406,77 @@ final class ExpressionPrimaryParser {
                     if (parserContext.match(TokenType.ELLIPSIS)) {
                         SourceLocation restLocation = parserContext.getLocation();
                         parserContext.advance();
-                        Identifier restArg = parserContext.parseIdentifier();
-                        RestParameter restParam = new RestParameter(restArg, restLocation);
+                        Expression restArg;
+                        if (parserContext.match(TokenType.LBRACKET)) {
+                            restArg = delegates.literals.parseArrayExpression();
+                        } else if (parserContext.match(TokenType.LBRACE)) {
+                            restArg = delegates.literals.parseObjectExpression();
+                        } else {
+                            restArg = parserContext.parseIdentifier();
+                        }
                         parserContext.expect(TokenType.RPAREN);
-                        yield new ArrayExpression(List.of(new SpreadElement(restArg, restParam.getLocation())), location);
+                        yield new ArrayExpression(List.of(new SpreadElement(restArg, restLocation)), location);
                     }
 
                     if (parserContext.nextToken.type() != TokenType.COMMA &&
-                            parserContext.nextToken.type() != TokenType.RPAREN &&
-                            parserContext.nextToken.type() != TokenType.ARROW) {
+                            parserContext.nextToken.type() != TokenType.RPAREN) {
                         boolean savedIn = parserContext.inOperatorAllowed;
                         parserContext.inOperatorAllowed = true;
-                        Expression expr = expressions.parseExpression();
+                        Expression firstExpr = expressions.parseAssignmentExpression();
+
+                        if (!parserContext.match(TokenType.COMMA)) {
+                            // Single expression in parens
+                            parserContext.inOperatorAllowed = savedIn;
+                            parserContext.expect(TokenType.RPAREN);
+                            yield firstExpr;
+                        }
+
+                        // Multiple expressions - may contain rest element for arrow params
+                        List<Expression> elements = new ArrayList<>();
+                        elements.add(firstExpr);
+
+                        while (parserContext.match(TokenType.COMMA)) {
+                            parserContext.advance();
+
+                            if (parserContext.match(TokenType.RPAREN)) {
+                                // Trailing comma
+                                break;
+                            }
+
+                            if (parserContext.match(TokenType.ELLIPSIS)) {
+                                // Rest/spread: (expr, ...rest) for arrow params
+                                SourceLocation restLoc = parserContext.getLocation();
+                                parserContext.advance();
+                                Expression restArg;
+                                if (parserContext.match(TokenType.LBRACKET)) {
+                                    restArg = delegates.literals.parseArrayExpression();
+                                } else if (parserContext.match(TokenType.LBRACE)) {
+                                    restArg = delegates.literals.parseObjectExpression();
+                                } else {
+                                    restArg = parserContext.parseIdentifier();
+                                }
+                                elements.add(new SpreadElement(restArg, restLoc));
+                                break;
+                            }
+
+                            elements.add(expressions.parseAssignmentExpression());
+                        }
+
                         parserContext.inOperatorAllowed = savedIn;
                         parserContext.expect(TokenType.RPAREN);
-                        yield expr;
+
+                        if (elements.size() == 1) {
+                            yield elements.get(0);
+                        }
+
+                        // If there's a SpreadElement, this is arrow params → use ArrayExpression
+                        boolean hasSpread = elements.get(elements.size() - 1) instanceof SpreadElement;
+                        if (hasSpread) {
+                            yield new ArrayExpression(elements, location);
+                        }
+
+                        // Otherwise, regular sequence expression
+                        yield new SequenceExpression(elements, location);
                     }
 
                     List<Expression> potentialParams = new ArrayList<>();
@@ -440,7 +497,14 @@ final class ExpressionPrimaryParser {
                         if (parserContext.match(TokenType.ELLIPSIS)) {
                             SourceLocation restLocation = parserContext.getLocation();
                             parserContext.advance();
-                            Identifier restArg = parserContext.parseIdentifier();
+                            Expression restArg;
+                            if (parserContext.match(TokenType.LBRACKET)) {
+                                restArg = delegates.literals.parseArrayExpression();
+                            } else if (parserContext.match(TokenType.LBRACE)) {
+                                restArg = delegates.literals.parseObjectExpression();
+                            } else {
+                                restArg = parserContext.parseIdentifier();
+                            }
                             potentialParams.add(new SpreadElement(restArg, restLocation));
                             break;
                         }
@@ -570,6 +634,10 @@ final class ExpressionPrimaryParser {
         }
 
         if (parserContext.match(TokenType.YIELD)) {
+            // In non-strict, non-generator contexts, yield is a valid identifier
+            if (parserContext.isYieldIdentifierAllowed()) {
+                return parsePostfixExpression();
+            }
             if (!parserContext.inFunctionBody) {
                 throw new JSSyntaxErrorException("'yield' expression not allowed in formal parameters of a generator function");
             }

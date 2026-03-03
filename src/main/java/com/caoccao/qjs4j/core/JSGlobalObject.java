@@ -2098,6 +2098,41 @@ public final class JSGlobalObject {
             return -1;
         }
 
+        /**
+         * Collect only body-level var declaration names from a function (excludes parameter names).
+         * Used to distinguish parameter bindings from body var bindings in functions with
+         * parameter expressions, for eval var conflict detection.
+         */
+        private static Set<String> collectBodyVarNames(JSBytecodeFunction callerBytecodeFunction) {
+            String source = callerBytecodeFunction.getSourceCode();
+            if (source == null || source.isBlank()) {
+                return null;
+            }
+            String wrappedSource = "(" + source + ")";
+            try {
+                Program parsedProgram = new Compiler(wrappedSource, "<eval-caller>").parse(false);
+                if (parsedProgram.body().isEmpty()
+                        || !(parsedProgram.body().get(0) instanceof ExpressionStatement expressionStatement)) {
+                    return null;
+                }
+                Expression expression = expressionStatement.expression();
+                Set<String> bodyVarNames = new HashSet<>();
+                if (expression instanceof FunctionExpression functionExpression) {
+                    collectVarEnvironmentNamesFromStatements(functionExpression.body().body(), bodyVarNames);
+                    return bodyVarNames;
+                }
+                if (expression instanceof ArrowFunctionExpression arrowFunctionExpression) {
+                    if (arrowFunctionExpression.body() instanceof BlockStatement blockStatement) {
+                        collectVarEnvironmentNamesFromStatements(blockStatement.body(), bodyVarNames);
+                    }
+                    return bodyVarNames;
+                }
+                return null;
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
         private static Set<String> collectFunctionDeclarationNames(List<Statement> body) {
             Set<String> functionDeclarationNames = new LinkedHashSet<>();
             if (body == null) {
@@ -2656,6 +2691,32 @@ public final class JSGlobalObject {
                                         "Identifier 'arguments' has already been declared"));
                     }
                 }
+                // EvalDeclarationInstantiation: in functions with parameter expressions,
+                // eval cannot create a var with the same name as a parameter.
+                // Per spec, the parameter scope is separate from the var scope,
+                // so "var x" in eval conflicts with parameter "x".
+                if (isEvalInFunction
+                        && callerBytecodeFunction != null
+                        && callerBytecodeFunction.hasParameterExpressions()
+                        && !callerBytecodeFunction.isStrict()
+                        && !evalCodeStrict
+                        && parsedEvalDeclarations
+                        && evalVarDeclarations != null
+                        && localVarNameSet != null) {
+                    Set<String> bodyVarNames = collectBodyVarNames(callerBytecodeFunction);
+                    if (bodyVarNames != null) {
+                        for (String evalVar : evalVarDeclarations) {
+                            if ("arguments".equals(evalVar)) {
+                                continue;
+                            }
+                            if (localVarNameSet.contains(evalVar) && !bodyVarNames.contains(evalVar)) {
+                                throw new JSException(
+                                        realmContext.throwError("SyntaxError",
+                                                "Identifier '" + evalVar + "' has already been declared"));
+                            }
+                        }
+                    }
+                }
                 if (hasSameRealmCallerFrame
                         && !evalCodeStrict
                         && parsedEvalDeclarations
@@ -2886,6 +2947,27 @@ public final class JSGlobalObject {
                 }
                 if (overlayStatePushed) {
                     realmContext.popEvalOverlay();
+                }
+                // For functions with parameter expressions, eval-created vars need to
+                // persist on the global object so closures created in parameter defaults
+                // can see them. Per spec, these vars go into the parameter scope's var
+                // environment, which closures in defaults close over.
+                if (isEvalInFunction
+                        && callerBytecodeFunction != null
+                        && callerBytecodeFunction.hasParameterExpressions()
+                        && !evalCodeStrict
+                        && parsedEvalDeclarations
+                        && evalVarDeclarations != null
+                        && callerFrame != null) {
+                    for (String declarationName : evalVarDeclarations) {
+                        if (localVarNameSet != null && localVarNameSet.contains(declarationName)) {
+                            continue;
+                        }
+                        JSValue dynValue = callerFrame.getDynamicVarBinding(declarationName);
+                        if (dynValue != null) {
+                            global.set(PropertyKey.fromString(declarationName), dynValue);
+                        }
+                    }
                 }
             }
         }

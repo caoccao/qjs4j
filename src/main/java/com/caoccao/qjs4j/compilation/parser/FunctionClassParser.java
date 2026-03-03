@@ -99,12 +99,14 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         }
         // Check rest parameter
         if (funcParams.restParameter() != null) {
-            String restName = funcParams.restParameter().argument().name();
-            if ("eval".equals(restName) || "arguments".equals(restName)) {
-                throw new JSSyntaxErrorException("invalid argument name in strict code");
-            }
-            if (!seen.add(restName)) {
-                throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
+            List<String> restBoundNames = extractBoundNames(funcParams.restParameter().argument());
+            for (String restName : restBoundNames) {
+                if ("eval".equals(restName) || "arguments".equals(restName)) {
+                    throw new JSSyntaxErrorException("invalid argument name in strict code");
+                }
+                if (!seen.add(restName)) {
+                    throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
+                }
             }
         }
     }
@@ -444,7 +446,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             isGenerator = true;
         }
 
-        parserContext.enterFunctionContext(isAsync);
+        parserContext.enterFunctionContext(isAsync, isGenerator);
+        boolean savedInClassStaticInit = parserContext.inClassStaticInit;
+        parserContext.inClassStaticInit = false;
         try {
             Identifier id = parserContext.parseIdentifier();
 
@@ -474,7 +478,8 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
             return new FunctionDeclaration(id, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
         } finally {
-            parserContext.exitFunctionContext(isAsync);
+            parserContext.inClassStaticInit = savedInClassStaticInit;
+            parserContext.exitFunctionContext(isAsync, isGenerator);
         }
     }
 
@@ -494,10 +499,13 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             isGenerator = true;
         }
 
-        parserContext.enterFunctionContext(isAsync);
+        parserContext.enterFunctionContext(isAsync, isGenerator);
+        boolean savedInClassStaticInit = parserContext.inClassStaticInit;
+        parserContext.inClassStaticInit = false;
         try {
             Identifier id = null;
-            if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)) {
+            if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
+                    || parserContext.match(TokenType.YIELD)) {
                 id = parserContext.parseIdentifier();
             }
 
@@ -527,7 +535,8 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
             return new FunctionExpression(id, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
         } finally {
-            parserContext.exitFunctionContext(isAsync);
+            parserContext.inClassStaticInit = savedInClassStaticInit;
+            parserContext.exitFunctionContext(isAsync, isGenerator);
         }
     }
 
@@ -549,7 +558,12 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 if (parserContext.match(TokenType.ELLIPSIS)) {
                     SourceLocation location = parserContext.getLocation();
                     parserContext.advance(); // consume '...'
-                    Identifier restArg = parserContext.parseIdentifier();
+                    Pattern restArg;
+                    if (parserContext.match(TokenType.LBRACE) || parserContext.match(TokenType.LBRACKET)) {
+                        restArg = delegates.patterns.parsePattern();
+                    } else {
+                        restArg = parserContext.parseIdentifier();
+                    }
                     restParameter = new RestParameter(restArg, location);
 
                     // Rest parameter must be last
@@ -627,12 +641,15 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.inFunctionBody = savedInFunctionBody;
 
         // Parse method body
-        parserContext.enterFunctionContext(isAsync);
+        parserContext.enterFunctionContext(isAsync, isGenerator);
+        boolean savedInClassStaticInit = parserContext.inClassStaticInit;
+        parserContext.inClassStaticInit = false;
         BlockStatement body;
         try {
             body = delegates.statements.parseBlockStatement();
         } finally {
-            parserContext.exitFunctionContext(isAsync);
+            parserContext.inClassStaticInit = savedInClassStaticInit;
+            parserContext.exitFunctionContext(isAsync, isGenerator);
         }
 
         SourceLocation fullLocation = new SourceLocation(
@@ -691,6 +708,8 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         List<Statement> statements = new ArrayList<>();
 
         parserContext.enterFunctionContext(false);
+        boolean savedInClassStaticInit = parserContext.inClassStaticInit;
+        parserContext.inClassStaticInit = true;
         try {
             while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                 Statement stmt = delegates.statements.parseStatement();
@@ -699,6 +718,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 }
             }
         } finally {
+            parserContext.inClassStaticInit = savedInClassStaticInit;
             parserContext.exitFunctionContext(false);
         }
 
