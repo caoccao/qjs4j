@@ -873,6 +873,16 @@ final class ExpressionCompiler {
         }
     }
 
+    private void emitCapturedOrGlobalIdentifierLookup(String name) {
+        Integer capturedIndex = conpilerConext.resolveCapturedBindingIndex(name);
+        if (capturedIndex != null) {
+            conpilerConext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
+        } else {
+            // Not found in local scopes, use global variable
+            conpilerConext.emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
+        }
+    }
+
     private void emitIdentifierLookupWithoutWith(String name) {
 
         // Always check local scopes first, even in global scope (for nested blocks/loops)
@@ -907,13 +917,54 @@ final class ExpressionCompiler {
             return;
         }
 
-        Integer capturedIndex = conpilerConext.resolveCapturedBindingIndex(name);
-        if (capturedIndex != null) {
-            conpilerConext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
-        } else {
-            // Not found in local scopes, use global variable
-            conpilerConext.emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
+        if (emitInheritedWithAwareIdentifierLookup(name)) {
+            return;
         }
+
+        emitCapturedOrGlobalIdentifierLookup(name);
+    }
+
+    private boolean emitInheritedWithAwareIdentifierLookup(String name) {
+        if (conpilerConext.inheritedWithObjectBindingNames.isEmpty()) {
+            return false;
+        }
+        emitInheritedWithAwareIdentifierLookup(name, conpilerConext.inheritedWithObjectBindingNames, 0);
+        return true;
+    }
+
+    private void emitInheritedWithAwareIdentifierLookup(String name, List<String> withBindingNames, int withDepth) {
+        if (withDepth >= withBindingNames.size()) {
+            emitCapturedOrGlobalIdentifierLookup(name);
+            return;
+        }
+
+        String withBindingName = withBindingNames.get(withDepth);
+        Integer withLocalIndex = conpilerConext.findLocalInScopes(withBindingName);
+        if (withLocalIndex != null) {
+            conpilerConext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, withLocalIndex);
+        } else {
+            Integer withCapturedIndex = conpilerConext.resolveCapturedBindingIndex(withBindingName);
+            if (withCapturedIndex != null) {
+                conpilerConext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, withCapturedIndex);
+            } else {
+                emitInheritedWithAwareIdentifierLookup(name, withBindingNames, withDepth + 1);
+                return;
+            }
+        }
+
+        conpilerConext.emitter.emitOpcode(Opcode.DUP);
+        conpilerConext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        conpilerConext.emitter.emitOpcode(Opcode.ROT3L);
+        conpilerConext.emitter.emitOpcode(Opcode.IN);
+
+        int jumpToFallback = conpilerConext.emitter.emitJump(Opcode.IF_FALSE);
+        conpilerConext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
+        int jumpToEnd = conpilerConext.emitter.emitJump(Opcode.GOTO);
+
+        conpilerConext.emitter.patchJump(jumpToFallback, conpilerConext.emitter.currentOffset());
+        conpilerConext.emitter.emitOpcode(Opcode.DROP);
+        emitInheritedWithAwareIdentifierLookup(name, withBindingNames, withDepth + 1);
+        conpilerConext.emitter.patchJump(jumpToEnd, conpilerConext.emitter.currentOffset());
     }
 
     private void emitWithAwareIdentifierLookup(String name) {

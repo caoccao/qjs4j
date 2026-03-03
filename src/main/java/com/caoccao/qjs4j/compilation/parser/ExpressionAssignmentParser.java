@@ -23,7 +23,9 @@ import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 final class ExpressionAssignmentParser {
     private final ParserDelegates delegates;
@@ -87,18 +89,51 @@ final class ExpressionAssignmentParser {
         return new ObjectPattern(properties, objectExpression.getLocation());
     }
 
-    private Identifier createSyntheticArrowParameterIdentifier(SourceLocation location, int syntheticParameterCount) {
-        String name = "$qjs4j$arrowParam$" + syntheticParameterCount + "$" + location.offset();
-        return new Identifier(name, location);
+    private List<String> extractBoundNames(Pattern pattern) {
+        if (pattern instanceof Identifier identifier) {
+            return List.of(identifier.name());
+        }
+        if (pattern instanceof ObjectPattern objectPattern) {
+            List<String> names = new ArrayList<>();
+            for (ObjectPattern.Property property : objectPattern.properties()) {
+                names.addAll(extractBoundNames(property.value()));
+            }
+            return names;
+        }
+        if (pattern instanceof ArrayPattern arrayPattern) {
+            List<String> names = new ArrayList<>();
+            for (Pattern element : arrayPattern.elements()) {
+                if (element != null) {
+                    names.addAll(extractBoundNames(element));
+                }
+            }
+            return names;
+        }
+        if (pattern instanceof AssignmentPattern assignmentPattern) {
+            return extractBoundNames(assignmentPattern.left());
+        }
+        if (pattern instanceof RestElement restElement) {
+            return extractBoundNames(restElement.argument());
+        }
+        return List.of();
     }
 
-    private VariableDeclaration createSyntheticArrowParameterPreludeStatement(
-            Pattern pattern,
-            Identifier sourceIdentifier,
-            SourceLocation location) {
-        VariableDeclaration.VariableDeclarator variableDeclarator =
-                new VariableDeclaration.VariableDeclarator(pattern, sourceIdentifier);
-        return new VariableDeclaration(List.of(variableDeclarator), VariableKind.LET, location);
+    private boolean hasUseStrictDirective(ASTNode body) {
+        if (!(body instanceof BlockStatement blockStatement)) {
+            return false;
+        }
+        for (Statement statement : blockStatement.body()) {
+            if (statement instanceof ExpressionStatement expressionStatement
+                    && expressionStatement.expression() instanceof Literal literal
+                    && literal.value() instanceof String literalString) {
+                if ("use strict".equals(literalString)) {
+                    return true;
+                }
+                continue;
+            }
+            break;
+        }
+        return false;
     }
 
     private boolean isArrowDestructuringParameterExpression(Expression expression) {
@@ -113,33 +148,44 @@ final class ExpressionAssignmentParser {
         return false;
     }
 
-    private int parseArrowParameterExpression(
+    private boolean isSimpleParameterList(List<Pattern> params, List<Expression> defaults, RestParameter restParameter) {
+        if (restParameter != null) {
+            return false;
+        }
+        for (Pattern pattern : params) {
+            if (!(pattern instanceof Identifier)) {
+                return false;
+            }
+        }
+        for (Expression defaultExpression : defaults) {
+            if (defaultExpression != null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void parseArrowParameterExpression(
             Expression expression,
             List<Pattern> params,
-            List<Expression> defaults,
-            List<Statement> parameterPreludeStatements,
-            int syntheticParameterCount) {
+            List<Expression> defaults) {
         if (expression instanceof Identifier identifier) {
             params.add(identifier);
             defaults.add(null);
-            return syntheticParameterCount;
+            return;
         }
         if (expression instanceof AssignmentExpression assignmentExpression
                 && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN
                 && assignmentExpression.left() instanceof Identifier parameterIdentifier) {
             params.add(parameterIdentifier);
             defaults.add(assignmentExpression.right());
-            return syntheticParameterCount;
+            return;
         }
         if (isArrowDestructuringParameterExpression(expression)) {
-            return parseDestructuringArrowParameter(
-                    expression,
-                    params,
-                    defaults,
-                    parameterPreludeStatements,
-                    syntheticParameterCount);
+            parseDestructuringArrowParameter(expression, params, defaults);
+            return;
         }
-        throw new RuntimeException("Invalid arrow function parameter at line " +
+        throw new JSSyntaxErrorException("Invalid arrow function parameter at line " +
                 parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
     }
 
@@ -231,8 +277,6 @@ final class ExpressionAssignmentParser {
             List<Pattern> params = new ArrayList<>();
             List<Expression> defaults = new ArrayList<>();
             RestParameter restParameter = null;
-            List<Statement> parameterPreludeStatements = new ArrayList<>();
-            int syntheticParameterCount = 0;
 
             if (left instanceof Identifier) {
                 params.add((Identifier) left);
@@ -247,30 +291,15 @@ final class ExpressionAssignmentParser {
                     && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN
                     && (assignmentExpression.left() instanceof ObjectExpression
                     || assignmentExpression.left() instanceof ArrayExpression))) {
-                syntheticParameterCount = parseDestructuringArrowParameter(
-                        left,
-                        params,
-                        defaults,
-                        parameterPreludeStatements,
-                        syntheticParameterCount);
+                parseDestructuringArrowParameter(left, params, defaults);
             } else if (left instanceof SequenceExpression seqExpr) {
                 for (Expression expr : seqExpr.expressions()) {
-                    syntheticParameterCount = parseArrowParameterExpression(
-                            expr,
-                            params,
-                            defaults,
-                            parameterPreludeStatements,
-                            syntheticParameterCount);
+                    parseArrowParameterExpression(expr, params, defaults);
                 }
             } else if (left instanceof ArrayExpression arrayExpr) {
                 boolean isParenthesizedParameterList = arrayExpr.getLocation().offset() == location.offset();
                 if (!isParenthesizedParameterList) {
-                    syntheticParameterCount = parseDestructuringArrowParameter(
-                            left,
-                            params,
-                            defaults,
-                            parameterPreludeStatements,
-                            syntheticParameterCount);
+                    parseDestructuringArrowParameter(left, params, defaults);
                 } else if (!arrayExpr.elements().isEmpty()) {
                     for (int i = 0; i < arrayExpr.elements().size(); i++) {
                         Expression expr = arrayExpr.elements().get(i);
@@ -282,21 +311,16 @@ final class ExpressionAssignmentParser {
                                     throw new JSSyntaxErrorException("Rest parameter must be last formal parameter");
                                 }
                             } else {
-                                throw new RuntimeException("Invalid rest parameter at line " +
+                                throw new JSSyntaxErrorException("Invalid rest parameter at line " +
                                         parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
                             }
                         } else {
-                            syntheticParameterCount = parseArrowParameterExpression(
-                                    expr,
-                                    params,
-                                    defaults,
-                                    parameterPreludeStatements,
-                                    syntheticParameterCount);
+                            parseArrowParameterExpression(expr, params, defaults);
                         }
                     }
                 }
             } else {
-                throw new RuntimeException("Unsupported arrow function parameters at line " +
+                throw new JSSyntaxErrorException("Unsupported arrow function parameters at line " +
                         parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
 
@@ -313,7 +337,7 @@ final class ExpressionAssignmentParser {
             } finally {
                 parserContext.exitFunctionContext(false);
             }
-            body = wrapArrowBodyWithParameterPrelude(body, parameterPreludeStatements);
+            validateArrowParameters(params, defaults, restParameter, body);
 
             SourceLocation fullLocation = new SourceLocation(
                     location.line(),
@@ -371,34 +395,21 @@ final class ExpressionAssignmentParser {
         return left;
     }
 
-    private int parseDestructuringArrowParameter(
+    private void parseDestructuringArrowParameter(
             Expression expression,
             List<Pattern> params,
-            List<Expression> defaults,
-            List<Statement> parameterPreludeStatements,
-            int syntheticParameterCount) {
+            List<Expression> defaults) {
         Pattern parameterPattern;
         Expression defaultExpression = null;
-        SourceLocation parameterLocation;
         if (expression instanceof AssignmentExpression assignmentExpression
                 && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
-            parameterLocation = assignmentExpression.left().getLocation();
             parameterPattern = convertArrowExpressionToPattern(assignmentExpression.left());
             defaultExpression = assignmentExpression.right();
         } else {
-            parameterLocation = expression.getLocation();
             parameterPattern = convertArrowExpressionToPattern(expression);
         }
-        Identifier syntheticParameter = createSyntheticArrowParameterIdentifier(
-                parameterLocation,
-                syntheticParameterCount);
-        params.add(syntheticParameter);
+        params.add(parameterPattern);
         defaults.add(defaultExpression);
-        parameterPreludeStatements.add(createSyntheticArrowParameterPreludeStatement(
-                parameterPattern,
-                syntheticParameter,
-                parameterLocation));
-        return syntheticParameterCount + 1;
     }
 
     Expression parseExpression() {
@@ -419,22 +430,30 @@ final class ExpressionAssignmentParser {
         return new SequenceExpression(expressionsList, location);
     }
 
-    private ASTNode wrapArrowBodyWithParameterPrelude(ASTNode body, List<Statement> parameterPreludeStatements) {
-        if (parameterPreludeStatements.isEmpty()) {
-            return body;
+    private void validateArrowParameters(List<Pattern> params, List<Expression> defaults, RestParameter restParameter, ASTNode body) {
+        boolean strictParameters = parserContext.strictMode || hasUseStrictDirective(body);
+        Set<String> seen = new HashSet<>();
+        for (Pattern pattern : params) {
+            for (String parameterName : extractBoundNames(pattern)) {
+                if (!seen.add(parameterName)) {
+                    throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
+                }
+                if (strictParameters && ("eval".equals(parameterName) || "arguments".equals(parameterName))) {
+                    throw new JSSyntaxErrorException("invalid argument name in strict code");
+                }
+            }
         }
-        if (body instanceof BlockStatement blockStatement) {
-            List<Statement> statements = new ArrayList<>(parameterPreludeStatements.size() + blockStatement.body().size());
-            statements.addAll(parameterPreludeStatements);
-            statements.addAll(blockStatement.body());
-            return new BlockStatement(statements, blockStatement.getLocation());
+        if (restParameter != null) {
+            String restName = restParameter.argument().name();
+            if (!seen.add(restName)) {
+                throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
+            }
+            if (strictParameters && ("eval".equals(restName) || "arguments".equals(restName))) {
+                throw new JSSyntaxErrorException("invalid argument name in strict code");
+            }
         }
-        if (body instanceof Expression expression) {
-            List<Statement> statements = new ArrayList<>(parameterPreludeStatements.size() + 1);
-            statements.addAll(parameterPreludeStatements);
-            statements.add(new ReturnStatement(expression, expression.getLocation()));
-            return new BlockStatement(statements, expression.getLocation());
+        if (hasUseStrictDirective(body) && !isSimpleParameterList(params, defaults, restParameter)) {
+            throw new JSSyntaxErrorException("Illegal 'use strict' directive in function with non-simple parameter list");
         }
-        return body;
     }
 }

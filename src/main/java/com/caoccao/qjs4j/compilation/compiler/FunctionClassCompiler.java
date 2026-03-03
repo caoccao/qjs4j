@@ -153,6 +153,7 @@ final class FunctionClassCompiler {
         CompilerDelegates funcDelegates = functionCompiler.delegates();
         functionContext.sourceCode = compilerContext.sourceCode;
         functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
+        inheritVisibleWithObjectBindings(functionContext);
 
         // Enter function scope and add parameters as locals
         functionContext.enterScope();
@@ -193,7 +194,12 @@ final class FunctionClassCompiler {
                 && !functionContext.hasEnclosingArgumentsBinding
                 && !hasArgumentsParameterBinding;
 
-        List<int[]> destructuringParams = declareParameters(arrowExpr.params(), functionContext, funcDelegates);
+        List<Integer> parameterSlotIndexes = new ArrayList<>();
+        List<int[]> destructuringParams = declareParameters(
+                arrowExpr.params(),
+                functionContext,
+                funcDelegates,
+                parameterSlotIndexes);
 
         // For top-level arrows with parameter expressions, keep a local slot for dynamically
         // declared `arguments` from direct eval in parameter initializers.
@@ -207,7 +213,12 @@ final class FunctionClassCompiler {
         // Emit default parameter initialization following QuickJS pattern:
         // GET_ARG idx, DUP, UNDEFINED, STRICT_EQ, IF_FALSE label, DROP, <default>, DUP, PUT_ARG idx, label:
         if (arrowExpr.defaults() != null) {
-            delegates.emitHelpers.emitDefaultParameterInit(functionCompiler, arrowExpr.defaults());
+            delegates.emitHelpers.emitDefaultParameterInit(
+                    functionCompiler,
+                    arrowExpr.params(),
+                    arrowExpr.defaults(),
+                    arrowExpr.restParameter(),
+                    parameterSlotIndexes);
         }
 
         // Handle rest parameter if present
@@ -234,51 +245,54 @@ final class FunctionClassCompiler {
 
         boolean enteredBodyScope = false;
         CompilerScope savedVarDeclarationScopeOverride = functionContext.varDeclarationScopeOverride;
+        int localCount;
+        String[] localVarNames;
+        {
+            // Compile function body
+            // Arrow functions can have expression body or block statement body
+            if (arrowExpr.body() instanceof BlockStatement block) {
+                if (needsSyntheticEvalArgumentsBinding) {
+                    functionContext.enterScope();
+                    enteredBodyScope = true;
+                    functionContext.varDeclarationScopeOverride = functionContext.currentScope();
+                }
 
-        // Compile function body
-        // Arrow functions can have expression body or block statement body
-        if (arrowExpr.body() instanceof BlockStatement block) {
-            if (needsSyntheticEvalArgumentsBinding) {
-                functionContext.enterScope();
-                enteredBodyScope = true;
-                functionContext.varDeclarationScopeOverride = functionContext.currentScope();
+                try {
+                    // Compile block body statements.
+                    for (Statement stmt : block.body()) {
+                        funcDelegates.statements.compileStatement(stmt);
+                    }
+
+                    // If body doesn't end with return, add implicit return undefined
+                    List<Statement> bodyStatements = block.body();
+                    if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
+                        functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                        int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
+                        functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+                        funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
+                        functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+                        // Emit RETURN_ASYNC for async functions, RETURN for sync functions
+                        functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+                    }
+                } finally {
+                    if (enteredBodyScope) {
+                        functionContext.varDeclarationScopeOverride = savedVarDeclarationScopeOverride;
+                    }
+                }
+            } else if (arrowExpr.body() instanceof Expression expr) {
+                // Expression body - implicitly returns the expression value
+                funcDelegates.expressions.compileExpression(expr);
+                int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
+                functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+                funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
+                functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+                // Emit RETURN_ASYNC for async functions, RETURN for sync functions
+                functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
             }
 
-            try {
-                // Compile block body statements.
-                for (Statement stmt : block.body()) {
-                    funcDelegates.statements.compileStatement(stmt);
-                }
-
-                // If body doesn't end with return, add implicit return undefined
-                List<Statement> bodyStatements = block.body();
-                if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
-                    functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                    int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
-                    functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
-                    funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-                    functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
-                    // Emit RETURN_ASYNC for async functions, RETURN for sync functions
-                    functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
-                }
-            } finally {
-                if (enteredBodyScope) {
-                    functionContext.varDeclarationScopeOverride = savedVarDeclarationScopeOverride;
-                }
-            }
-        } else if (arrowExpr.body() instanceof Expression expr) {
-            // Expression body - implicitly returns the expression value
-            funcDelegates.expressions.compileExpression(expr);
-            int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
-            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
-            funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
-            // Emit RETURN_ASYNC for async functions, RETURN for sync functions
-            functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+            localCount = functionContext.currentScope().getLocalCount();
+            localVarNames = CompilerContext.extractLocalVarNames(functionContext.scopes, localCount);
         }
-
-        int localCount = functionContext.currentScope().getLocalCount();
-        String[] localVarNames = CompilerContext.extractLocalVarNames(functionContext.scopes, localCount);
         if (enteredBodyScope) {
             functionContext.exitScope();
         }
@@ -819,6 +833,7 @@ final class FunctionClassCompiler {
         CompilerDelegates funcDelegates = functionCompiler.delegates();
         functionContext.sourceCode = compilerContext.sourceCode;
         functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
+        inheritVisibleWithObjectBindings(functionContext);
 
         // Enter function scope and add parameters as locals
         functionContext.enterScope();
@@ -831,12 +846,22 @@ final class FunctionClassCompiler {
             functionContext.strictMode = true;
         }
 
-        List<int[]> destructuringParams = declareParameters(funcDecl.params(), functionContext, funcDelegates);
+        List<Integer> parameterSlotIndexes = new ArrayList<>();
+        List<int[]> destructuringParams = declareParameters(
+                funcDecl.params(),
+                functionContext,
+                funcDelegates,
+                parameterSlotIndexes);
         declareAndInitializeImplicitArgumentsBinding(functionContext);
 
         // Emit default parameter initialization following QuickJS pattern
         if (funcDecl.defaults() != null) {
-            delegates.emitHelpers.emitDefaultParameterInit(functionCompiler, funcDecl.defaults());
+            delegates.emitHelpers.emitDefaultParameterInit(
+                    functionCompiler,
+                    funcDecl.params(),
+                    funcDecl.defaults(),
+                    funcDecl.restParameter(),
+                    parameterSlotIndexes);
         }
 
         // Handle rest parameter if present
@@ -1041,6 +1066,7 @@ final class FunctionClassCompiler {
         CompilerDelegates funcDelegates = functionCompiler.delegates();
         functionContext.sourceCode = compilerContext.sourceCode;
         functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
+        inheritVisibleWithObjectBindings(functionContext);
 
         // Enter function scope and add parameters as locals
         functionContext.enterScope();
@@ -1053,7 +1079,12 @@ final class FunctionClassCompiler {
             functionContext.strictMode = true;
         }
 
-        List<int[]> destructuringParams = declareParameters(functionExpression.params(), functionContext, funcDelegates);
+        List<Integer> parameterSlotIndexes = new ArrayList<>();
+        List<int[]> destructuringParams = declareParameters(
+                functionExpression.params(),
+                functionContext,
+                funcDelegates,
+                parameterSlotIndexes);
         declareAndInitializeImplicitArgumentsBinding(functionContext);
 
         if (functionExpression.id() != null) {
@@ -1071,7 +1102,12 @@ final class FunctionClassCompiler {
 
         // Emit default parameter initialization following QuickJS pattern
         if (functionExpression.defaults() != null) {
-            delegates.emitHelpers.emitDefaultParameterInit(functionCompiler, functionExpression.defaults());
+            delegates.emitHelpers.emitDefaultParameterInit(
+                    functionCompiler,
+                    functionExpression.params(),
+                    functionExpression.defaults(),
+                    functionExpression.restParameter(),
+                    parameterSlotIndexes);
         }
 
         // Handle rest parameter if present
@@ -1218,6 +1254,7 @@ final class FunctionClassCompiler {
         methodCtx.sourceCode = compilerContext.sourceCode;
         methodCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         methodCtx.privateSymbols = privateSymbols;  // Make private symbols available in method
+        inheritVisibleWithObjectBindings(methodCtx);
 
         FunctionExpression functionExpression = method.value();
 
@@ -1226,12 +1263,22 @@ final class FunctionClassCompiler {
         methodCtx.inGlobalScope = false;
         methodCtx.isInAsyncFunction = functionExpression.isAsync();
 
-        List<int[]> methodDestructuringParams = declareParameters(functionExpression.params(), methodCtx, methodDelegates);
+        List<Integer> parameterSlotIndexes = new ArrayList<>();
+        List<int[]> methodDestructuringParams = declareParameters(
+                functionExpression.params(),
+                methodCtx,
+                methodDelegates,
+                parameterSlotIndexes);
         declareAndInitializeImplicitArgumentsBinding(methodCtx);
 
         // Emit default parameter initialization following QuickJS pattern
         if (functionExpression.defaults() != null) {
-            delegates.emitHelpers.emitDefaultParameterInit(methodCompiler, functionExpression.defaults());
+            delegates.emitHelpers.emitDefaultParameterInit(
+                    methodCompiler,
+                    functionExpression.params(),
+                    functionExpression.defaults(),
+                    functionExpression.restParameter(),
+                    parameterSlotIndexes);
         }
 
         // Handle rest parameter if present
@@ -1648,16 +1695,21 @@ final class FunctionClassCompiler {
      * @return list of (index, pattern) pairs for destructuring params that need
      * post-processing after default/rest initialization
      */
-    private List<int[]> declareParameters(List<Pattern> params, CompilerContext functionContext,
-                                          CompilerDelegates funcDelegates) {
+    private List<int[]> declareParameters(
+            List<Pattern> params,
+            CompilerContext functionContext,
+            CompilerDelegates funcDelegates,
+            List<Integer> parameterSlotIndexes) {
         List<int[]> destructuringParams = new ArrayList<>();
         for (int i = 0; i < params.size(); i++) {
             Pattern param = params.get(i);
             if (param instanceof Identifier id) {
-                functionContext.currentScope().declareParameter(id.name());
+                int slotIndex = functionContext.currentScope().declareParameter(id.name());
+                parameterSlotIndexes.add(slotIndex);
             } else {
                 // Destructuring parameter: declare a synthetic slot for the argument
                 int slotIndex = functionContext.currentScope().declareParameter("$param_" + i);
+                parameterSlotIndexes.add(slotIndex);
                 // Declare local variables for all bound names in the pattern
                 funcDelegates.patterns.declarePatternVariables(param);
                 destructuringParams.add(new int[]{slotIndex, i});
@@ -1682,6 +1734,11 @@ final class FunctionClassCompiler {
             // Destructure and assign to local variables
             funcDelegates.patterns.compilePatternAssignment(pattern);
         }
+    }
+
+    private void inheritVisibleWithObjectBindings(CompilerContext functionContext) {
+        functionContext.inheritedWithObjectBindingNames.addAll(
+                compilerContext.getVisibleWithObjectBindingNamesForNestedFunction());
     }
 
     void installPrivateStaticMethods(

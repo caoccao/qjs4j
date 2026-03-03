@@ -131,19 +131,37 @@ public final class VirtualMachine {
 
     JSValue addValues(JSValue left, JSValue right) {
         JSValue leftPrimitive = JSTypeConversions.toPrimitive(context, left, JSTypeConversions.PreferredType.DEFAULT);
+        if (context.hasPendingException()) {
+            capturePendingException();
+            return JSUndefined.INSTANCE;
+        }
         JSValue rightPrimitive = JSTypeConversions.toPrimitive(context, right, JSTypeConversions.PreferredType.DEFAULT);
-        capturePendingException();
+        if (context.hasPendingException()) {
+            capturePendingException();
+            return JSUndefined.INSTANCE;
+        }
 
         if (leftPrimitive instanceof JSString || rightPrimitive instanceof JSString) {
             JSValue result = new JSString(
                     JSTypeConversions.toString(context, leftPrimitive).value()
                             + JSTypeConversions.toString(context, rightPrimitive).value());
-            capturePendingException();
+            if (context.hasPendingException()) {
+                capturePendingException();
+                return JSUndefined.INSTANCE;
+            }
             return result;
         }
 
         JSValue leftNumeric = toNumericValue(leftPrimitive);
+        if (context.hasPendingException()) {
+            capturePendingException();
+            return JSUndefined.INSTANCE;
+        }
         JSValue rightNumeric = toNumericValue(rightPrimitive);
+        if (context.hasPendingException()) {
+            capturePendingException();
+            return JSUndefined.INSTANCE;
+        }
         if (leftNumeric instanceof JSBigInt leftBigInt && rightNumeric instanceof JSBigInt rightBigInt) {
             return new JSBigInt(leftBigInt.value().add(rightBigInt.value()));
         }

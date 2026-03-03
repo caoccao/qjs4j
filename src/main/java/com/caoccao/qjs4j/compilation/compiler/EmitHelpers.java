@@ -22,7 +22,10 @@ import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Delegate compiler for bytecode emission helper methods.
@@ -207,12 +210,49 @@ final class EmitHelpers {
         emitScopeUsingDisposal(compilerContext.currentScope());
     }
 
-    void emitDefaultParameterInit(BytecodeCompiler functionCompiler, List<Expression> defaults) {
+    void emitDefaultParameterInit(
+            BytecodeCompiler functionCompiler,
+            List<Pattern> params,
+            List<Expression> defaults,
+            RestParameter restParameter,
+            List<Integer> parameterSlotIndexes) {
+        if (defaults == null || defaults.isEmpty()) {
+            return;
+        }
+        if (parameterSlotIndexes == null || parameterSlotIndexes.size() < defaults.size()) {
+            throw new JSCompilerException("Parameter slot indexes are not aligned with default parameters");
+        }
+
+        boolean hasNonSimpleParameters = CompilerContext.hasNonSimpleParameters(params, defaults, restParameter);
+        Set<String> originalTdzLocals = new HashSet<>(functionCompiler.context().tdzLocals);
+        List<Set<String>> parameterBoundNames = new ArrayList<>(params.size());
+        Set<String> pendingParameterTdzNames = new HashSet<>();
+        for (Pattern pattern : params) {
+            Set<String> parameterNames = new HashSet<>(CompilerContext.extractBoundNames(pattern));
+            parameterBoundNames.add(parameterNames);
+            pendingParameterTdzNames.addAll(parameterNames);
+        }
+
+        if (hasNonSimpleParameters) {
+            for (int i = 0; i < defaults.size(); i++) {
+                int parameterSlotIndex = parameterSlotIndexes.get(i);
+                functionCompiler.context().emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, parameterSlotIndex);
+            }
+        }
+
         for (int i = 0; i < defaults.size(); i++) {
             Expression defaultExpr = defaults.get(i);
+            if (hasNonSimpleParameters) {
+                functionCompiler.context().tdzLocals.clear();
+                functionCompiler.context().tdzLocals.addAll(originalTdzLocals);
+                functionCompiler.context().tdzLocals.addAll(pendingParameterTdzNames);
+            }
+            if (!hasNonSimpleParameters && defaultExpr == null) {
+                continue;
+            }
+            // GET_ARG idx - push the argument value onto the stack
+            functionCompiler.context().emitter.emitOpcodeU16(Opcode.GET_ARG, i);
             if (defaultExpr != null) {
-                // GET_ARG idx - push the argument value onto the stack
-                functionCompiler.context().emitter.emitOpcodeU16(Opcode.GET_ARG, i);
                 // DUP - duplicate for the comparison
                 functionCompiler.context().emitter.emitOpcode(Opcode.DUP);
                 // UNDEFINED - push undefined for comparison
@@ -231,9 +271,17 @@ final class EmitHelpers {
                 functionCompiler.context().emitter.emitOpcodeU16(Opcode.PUT_ARG, i);
                 // label: - skip target (value is on stack, either original arg or default)
                 functionCompiler.context().emitter.patchJump(skipLabel, functionCompiler.context().emitter.currentOffset());
-                // PUT_LOCAL idx - store into the local variable slot
-                functionCompiler.context().emitter.emitOpcodeU16(Opcode.PUT_LOCAL, i);
             }
+            // PUT_LOCAL idx - store into the local variable slot
+            int parameterSlotIndex = parameterSlotIndexes.get(i);
+            functionCompiler.context().emitter.emitOpcodeU16(Opcode.PUT_LOCAL, parameterSlotIndex);
+            if (hasNonSimpleParameters) {
+                pendingParameterTdzNames.removeAll(parameterBoundNames.get(i));
+            }
+        }
+        if (hasNonSimpleParameters) {
+            functionCompiler.context().tdzLocals.clear();
+            functionCompiler.context().tdzLocals.addAll(originalTdzLocals);
         }
     }
 

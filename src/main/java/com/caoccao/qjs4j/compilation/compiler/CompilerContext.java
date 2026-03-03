@@ -32,6 +32,7 @@ final class CompilerContext {
     final Map<String, Integer> annexBFunctionScopeLocals;
     final CaptureResolver captureResolver;
     final BytecodeEmitter emitter;
+    final List<String> inheritedWithObjectBindingNames;
     final Deque<LoopContext> loopStack;
     final Set<String> nonDeletableGlobalBindings;
     final Deque<CompilerScope> scopes;
@@ -67,6 +68,7 @@ final class CompilerContext {
         this.scopes = new ArrayDeque<>();
         this.loopStack = new ArrayDeque<>();
         this.withObjectLocalStack = new ArrayDeque<>();
+        this.inheritedWithObjectBindingNames = new ArrayList<>();
         this.captureResolver = new CaptureResolver(parentCaptureResolver, this::findLocalInScopes);
         this.inGlobalScope = false;
         this.isGlobalProgram = false;
@@ -369,6 +371,16 @@ final class CompilerContext {
         return null;
     }
 
+    private String findLocalNameByIndex(int index) {
+        for (CompilerScope scope : scopes) {
+            String localName = scope.getLocalNamesByIndex().get(index);
+            if (localName != null) {
+                return localName;
+            }
+        }
+        return null;
+    }
+
     List<Integer> getActiveWithObjectLocals() {
         if (withObjectLocalStack.isEmpty()) {
             return List.of();
@@ -387,6 +399,18 @@ final class CompilerContext {
         } else {
             return "[computed]";
         }
+    }
+
+    List<String> getVisibleWithObjectBindingNamesForNestedFunction() {
+        List<String> names = new ArrayList<>();
+        for (Integer localIndex : withObjectLocalStack) {
+            String localName = findLocalNameByIndex(localIndex);
+            if (localName != null) {
+                names.add(localName);
+            }
+        }
+        names.addAll(inheritedWithObjectBindingNames);
+        return names;
     }
 
     boolean hasActiveIteratorLoops() {

@@ -440,8 +440,14 @@ final class PatternCompiler {
             } else {
                 // Iterator-based array binding semantics.
                 compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
+                int iteratorDoneLocalIndex = compilerContext.currentScope().declareLocal(
+                        "$arrayPatternIteratorDone" + compilerContext.emitter.currentOffset());
+                compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, iteratorDoneLocalIndex);
                 for (Pattern element : arrPattern.elements()) {
                     compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
+                    compilerContext.emitter.emitOpcode(Opcode.DUP);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, iteratorDoneLocalIndex);
                     compilerContext.emitter.emitOpcode(Opcode.DROP);
                     if (element != null) {
                         compilePatternAssignment(element, useExistingBindingInParentScopes);
@@ -449,9 +455,16 @@ final class PatternCompiler {
                         compilerContext.emitter.emitOpcode(Opcode.DROP);
                     }
                 }
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, iteratorDoneLocalIndex);
+                int skipIteratorCloseJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+                // Iterator not exhausted by this pattern; call return() for IteratorClose.
+                compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
+                int iteratorCloseDoneJump = compilerContext.emitter.emitJump(Opcode.GOTO);
+                compilerContext.emitter.patchJump(skipIteratorCloseJump, compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
+                compilerContext.emitter.patchJump(iteratorCloseDoneJump, compilerContext.emitter.currentOffset());
             }
         } else if (pattern instanceof AssignmentPattern assignPattern) {
             // Destructuring with default value: [x = defaultVal] or { y = defaultVal }

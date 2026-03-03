@@ -452,8 +452,11 @@ final class ExpressionPrimaryParser {
                             paramExpr = delegates.literals.parseObjectExpression();
                         } else if (parserContext.match(TokenType.LBRACKET)) {
                             paramExpr = delegates.literals.parseArrayExpression();
+                        } else if (parserContext.match(TokenType.RPAREN)) {
+                            // Trailing comma in arrow parameters: (a, b,) => {}
+                            break;
                         } else {
-                            throw new RuntimeException("Unexpected token in arrow function parameters at line " +
+                            throw new JSSyntaxErrorException("Unexpected token in arrow function parameters at line " +
                                     parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
                         }
                         if (parserContext.match(TokenType.ASSIGN)) {

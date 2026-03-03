@@ -113,31 +113,86 @@ public final class OpcodeHandler {
         int position = (int) positionNumber.value();
 
         try {
-            JSValue iterator = JSIteratorHelper.getIterator(executionContext.virtualMachine.context, enumerableObject);
+            JSContext context = executionContext.virtualMachine.context;
+            JSValue iterator = JSIteratorHelper.getIterator(context, enumerableObject);
+            if (context.hasPendingException()) {
+                executionContext.virtualMachine.pendingException = context.getPendingException();
+                context.clearPendingException();
+                stack[sp++] = JSUndefined.INSTANCE;
+                stack[sp++] = JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
             if (iterator == null) {
-                executionContext.virtualMachine.context.throwError("TypeError", "Value is not iterable");
-                throw new JSVirtualMachineException("APPEND: value is not iterable");
+                executionContext.virtualMachine.pendingException = context.throwTypeError("Value is not iterable");
+                context.clearPendingException();
+                stack[sp++] = JSUndefined.INSTANCE;
+                stack[sp++] = JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
 
             while (true) {
-                JSObject resultObject = JSIteratorHelper.iteratorNext(iterator, executionContext.virtualMachine.context);
+                JSObject resultObject = JSIteratorHelper.iteratorNext(iterator, context);
+                if (context.hasPendingException()) {
+                    executionContext.virtualMachine.pendingException = context.getPendingException();
+                    context.clearPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
                 if (resultObject == null) {
                     break;
                 }
-                JSValue doneValue = resultObject.get("done");
+                JSValue doneValue = resultObject.get(context, PropertyKey.DONE);
+                if (context.hasPendingException()) {
+                    executionContext.virtualMachine.pendingException = context.getPendingException();
+                    context.clearPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
                 if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
                     break;
                 }
-                JSValue value = resultObject.get(PropertyKey.VALUE);
-                array.set(executionContext.virtualMachine.context, position++, value);
+                JSValue value = resultObject.get(context, PropertyKey.VALUE);
+                if (context.hasPendingException()) {
+                    executionContext.virtualMachine.pendingException = context.getPendingException();
+                    context.clearPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
+                array.set(context, position++, value);
+                if (context.hasPendingException()) {
+                    executionContext.virtualMachine.pendingException = context.getPendingException();
+                    context.clearPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
             }
-
-            stack[sp++] = array;
-            stack[sp++] = JSNumber.of(position);
-        } catch (Exception e) {
-            throw new JSVirtualMachineException("APPEND: error iterating: " + e.getMessage(), e);
+        } catch (JSVirtualMachineException e) {
+            executionContext.virtualMachine.captureVMException(e);
+            stack[sp++] = JSUndefined.INSTANCE;
+            stack[sp++] = JSUndefined.INSTANCE;
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
         }
 
+        stack[sp++] = array;
+        stack[sp++] = JSNumber.of(position);
         executionContext.sp = sp;
         executionContext.pc = pc + op.getSize();
     }
@@ -3596,9 +3651,9 @@ public final class OpcodeHandler {
         if (!(nextMethod instanceof JSFunction nextFunc)) {
             String actualType = nextMethod == null ? "null" : nextMethod.getClass().getSimpleName();
             String iterType = iterator == null ? "null" : iterator.getClass().getSimpleName();
-            throw new JSVirtualMachineException(
-                    "Next method must be a function in FOR_OF_NEXT (nextMethod=" + actualType + ", iterator=" + iterType + ")"
-            );
+            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
+                    "Next method must be a function in FOR_OF_NEXT (nextMethod="
+                            + actualType + ", iterator=" + iterType + ")"));
         }
 
         JSValue result = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
@@ -3623,17 +3678,42 @@ public final class OpcodeHandler {
         // So we need to extract {value, done} from result
 
         if (!(result instanceof JSObject resultObj)) {
-            throw new JSVirtualMachineException("Iterator result must be an object");
+            throw new JSVirtualMachineException(
+                    executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
         }
 
         // Get the value property
-        JSValue value = resultObj.get(PropertyKey.VALUE);
+        JSValue value = resultObj.get(executionContext.virtualMachine.context, PropertyKey.VALUE);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            executionContext.virtualMachine.valueStack.push(catchOffset);
+            for (int i = depth - 1; i >= 0; i--) {
+                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
+                executionContext.virtualMachine.forOfTempValues[i] = null;
+            }
+            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+            if (pendingException instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("Iterator value lookup threw", pendingException);
+        }
         if (value == null) {
             value = JSUndefined.INSTANCE;
         }
 
         // Get the done property
-        JSValue doneValue = resultObj.get(PropertyKey.DONE);
+        JSValue doneValue = resultObj.get(executionContext.virtualMachine.context, PropertyKey.DONE);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            executionContext.virtualMachine.valueStack.push(catchOffset);
+            for (int i = depth - 1; i >= 0; i--) {
+                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
+                executionContext.virtualMachine.forOfTempValues[i] = null;
+            }
+            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+            if (pendingException instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("Iterator done lookup threw", pendingException);
+        }
         boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
 
         // Push catch_offset back, then restore temp values, then push value and done
@@ -3658,33 +3738,57 @@ public final class OpcodeHandler {
             // Try to auto-box the primitive
             iterableObj = executionContext.virtualMachine.toObject(iterable);
             if (iterableObj == null) {
-                throw new JSVirtualMachineException("Object is not iterable");
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.throwTypeError("Object is not iterable"));
             }
         }
 
         // Get Symbol.iterator method
-        JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
+        JSValue iteratorMethod = iterableObj.get(executionContext.virtualMachine.context, PropertyKey.SYMBOL_ITERATOR);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+            if (pendingException instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("Object is not iterable", pendingException);
+        }
 
         if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
-            throw new JSVirtualMachineException("Object is not iterable");
+            throw new JSVirtualMachineException(
+                    executionContext.virtualMachine.context.throwTypeError("Object is not iterable"));
         }
 
         // Call the Symbol.iterator method to get an iterator
         // Use the original iterable value for the 'this' binding, not the boxed version
         JSValue iterator = iteratorFunc.call(executionContext.virtualMachine.context, iterable, JSValue.NO_ARGS);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+            if (pendingException instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("Iterator method threw", pendingException);
+        }
 
         if (!(iterator instanceof JSObject iteratorObj)) {
-            throw new JSVirtualMachineException("Iterator method must return an object");
+            throw new JSVirtualMachineException(
+                    executionContext.virtualMachine.context.throwTypeError("Iterator method must return an object"));
         }
 
         // Get the next() method from the iterator
-        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.NEXT);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+            if (pendingException instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("Iterator next lookup threw", pendingException);
+        }
 
         if (!(nextMethod instanceof JSFunction)) {
             String actualType = nextMethod == null ? "null" : nextMethod.getClass().getSimpleName();
-            throw new JSVirtualMachineException(
-                    "Iterator must have a next method (got " + actualType + ", iterator=" + iteratorObj.getClass().getSimpleName() + ")"
-            );
+            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
+                    "Iterator must have a next method (got "
+                            + actualType + ", iterator=" + iteratorObj.getClass().getSimpleName() + ")"));
         }
 
         // Push iterator, next method, and catch offset (0) onto the stack
