@@ -107,7 +107,7 @@ final class PatternCompiler {
             int iteratorDoneLocalIndex = compilerContext.currentScope().declareLocal(
                     "$arrayAssignIterDone" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, iteratorDoneLocalIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
 
             for (Expression element : elements) {
                 // Pre-evaluate LHS, then call FOR_OF_NEXT with the appropriate depth
@@ -115,7 +115,7 @@ final class PatternCompiler {
                 compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, depth);
                 // Stack: iter next catch_offset [pre-eval...] value done
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, iteratorDoneLocalIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // drop done
                 // Stack: iter next catch_offset [pre-eval...] value
                 if (element != null) {
@@ -126,7 +126,7 @@ final class PatternCompiler {
             }
 
             // Check if iterator was exhausted
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, iteratorDoneLocalIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, iteratorDoneLocalIndex);
             int skipIteratorCloseJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
             // Not exhausted - call IteratorClose
             compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
@@ -154,7 +154,7 @@ final class PatternCompiler {
                 if (compilerContext.tdzLocals.contains(name)) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC_CHECK, localIndex);
                 } else {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                 }
             } else {
                 Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
@@ -238,12 +238,12 @@ final class PatternCompiler {
         if (isVar && pattern instanceof Identifier id) {
             Integer localIndex = compilerContext.findLocalInScopes(id.name());
             if (localIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
             } else if (compilerContext.inGlobalScope) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
             } else {
                 int idx = compilerContext.currentScope().declareLocal(id.name());
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, idx);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, idx);
             }
         } else {
             if (isVar) {
@@ -347,15 +347,15 @@ final class PatternCompiler {
 
         int sourceLocalIndex = compilerContext.currentScope().declareLocal(
                 "$objectAssignSource" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, sourceLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, sourceLocalIndex);
 
         // If there's a rest element with regular properties, create an exclude list
         int excludeListLocalIndex = -1;
         if (restTarget != null && !regularProperties.isEmpty()) {
-            compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+            compilerContext.emitter.emitOpcode(Opcode.OBJECT);
             excludeListLocalIndex = compilerContext.currentScope().declareLocal(
                     "$excludeList" + compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, excludeListLocalIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, excludeListLocalIndex);
         }
 
         for (ObjectExpression.Property property : regularProperties) {
@@ -365,14 +365,14 @@ final class PatternCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 propertyKeyLocalIndex = compilerContext.currentScope().declareLocal(
                         "$objectAssignKey" + compilerContext.emitter.currentOffset());
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, propertyKeyLocalIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, propertyKeyLocalIndex);
             }
 
             int targetDepth = preEvaluateAssignmentTarget(property.value());
 
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, sourceLocalIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, sourceLocalIndex);
             if (property.computed()) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, propertyKeyLocalIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, propertyKeyLocalIndex);
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else if (property.key() instanceof Identifier identifier) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, identifier.name());
@@ -401,15 +401,15 @@ final class PatternCompiler {
                 if (property.computed()) {
                     // Computed property: use PUT_ARRAY_EL which works with objects.
                     // Stack: [] → [excludeList, key, null] → PUT_ARRAY_EL → [null] → DROP → []
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, excludeListLocalIndex);
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, propertyKeyLocalIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, excludeListLocalIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, propertyKeyLocalIndex);
                     compilerContext.emitter.emitOpcode(Opcode.NULL);
                     compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null value
                 } else {
                     // Non-computed: use DEFINE_FIELD with atom name.
                     // Stack: [] → [excludeList, null] → DEFINE_FIELD → [excludeList] → DROP → []
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, excludeListLocalIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, excludeListLocalIndex);
                     compilerContext.emitter.emitOpcode(Opcode.NULL);
                     if (property.key() instanceof Identifier identifier) {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, identifier.name());
@@ -429,8 +429,8 @@ final class PatternCompiler {
             if (regularProperties.isEmpty()) {
                 // No exclude list — copy all properties from source to a new object.
                 // Stack: []
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, sourceLocalIndex);
-                compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, sourceLocalIndex);
+                compilerContext.emitter.emitOpcode(Opcode.OBJECT);
                 // Stack: [source, target]
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 // Stack: [source, target, target]
@@ -447,9 +447,9 @@ final class PatternCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // drop extra target
             } else {
                 // Stack: []
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, excludeListLocalIndex);
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, sourceLocalIndex);
-                compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, excludeListLocalIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, sourceLocalIndex);
+                compilerContext.emitter.emitOpcode(Opcode.OBJECT);
                 // Stack: [excludeList, source, target]
                 // COPY_DATA_PROPERTIES mask=68: target@sp-1(0), source@sp-2(1), exclude@sp-3(2)
                 compilerContext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 68);
@@ -474,7 +474,7 @@ final class PatternCompiler {
                 // TDZ local: let/const was pre-declared as a local for TDZ enforcement
                 Integer tdzLocal = compilerContext.findLocalInScopes(varName);
                 if (tdzLocal != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, tdzLocal);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, tdzLocal);
                 } else {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
                 }
@@ -486,7 +486,7 @@ final class PatternCompiler {
                 // a local (e.g., catch parameter per ES B.3.5), in which case use PUT_LOCAL.
                 Integer existingLocal = compilerContext.findLocalInScopes(varName);
                 if (existingLocal != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, existingLocal);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, existingLocal);
                 } else {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
                 }
@@ -511,7 +511,7 @@ final class PatternCompiler {
                         localIndex = compilerContext.currentScope().declareLocal(varName);
                     }
                 }
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
             }
         } else if (pattern instanceof ObjectPattern objPattern) {
             // Object destructuring: { proxy, revoke } = value
@@ -526,7 +526,7 @@ final class PatternCompiler {
             if (hasRest && !objPattern.properties().isEmpty()) {
                 // Create exclude list object and put it under source on stack
                 // Stack: [source] -> [excludeList, source]
-                compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+                compilerContext.emitter.emitOpcode(Opcode.OBJECT);
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
             }
 
@@ -608,7 +608,7 @@ final class PatternCompiler {
                 if (objPattern.properties().isEmpty()) {
                     // No properties to exclude, just copy all
                     // Stack: [source]
-                    compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+                    compilerContext.emitter.emitOpcode(Opcode.OBJECT);
                     // Stack: [source, target]
                     compilerContext.emitter.emitOpcode(Opcode.DUP);
                     // Stack: [source, target, target]
@@ -625,7 +625,7 @@ final class PatternCompiler {
                     // Stack: [target]
                 } else {
                     // Stack: [excludeList, source]
-                    compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+                    compilerContext.emitter.emitOpcode(Opcode.OBJECT);
                     // Stack: [excludeList, source, target]
                     // COPY_DATA_PROPERTIES: target=sp-1(offset 0), source=sp-2(offset 1), exclude=sp-3(offset 2)
                     // mask = 0 | (1 << 2) | (2 << 5) = 0 + 4 + 64 = 68
@@ -738,11 +738,11 @@ final class PatternCompiler {
                 int iteratorDoneLocalIndex = compilerContext.currentScope().declareLocal(
                         "$arrayPatternIteratorDone" + compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, iteratorDoneLocalIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
                 for (Pattern element : arrPattern.elements()) {
                     compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
                     compilerContext.emitter.emitOpcode(Opcode.DUP);
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, iteratorDoneLocalIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
                     compilerContext.emitter.emitOpcode(Opcode.DROP);
                     if (element != null) {
                         compilePatternAssignment(element, useExistingBindingInParentScopes);
@@ -750,7 +750,7 @@ final class PatternCompiler {
                         compilerContext.emitter.emitOpcode(Opcode.DROP);
                     }
                 }
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, iteratorDoneLocalIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, iteratorDoneLocalIndex);
                 int skipIteratorCloseJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
                 // Iterator not exhausted by this pattern; call return() for IteratorClose.
                 compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
@@ -906,7 +906,7 @@ final class PatternCompiler {
         for (int valueIndex = preservedValueCount - 1; valueIndex >= 0; valueIndex--) {
             int localIndex = compilerContext.currentScope().declareLocal(
                     "$iter_preserve_" + valueIndex + "_" + compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
             preservedLocalIndexes[valueIndex] = localIndex;
         }
 
@@ -915,7 +915,7 @@ final class PatternCompiler {
         compilerContext.emitter.emitOpcode(Opcode.DROP);
 
         for (int valueIndex = 0; valueIndex < preservedValueCount; valueIndex++) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, preservedLocalIndexes[valueIndex]);
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, preservedLocalIndexes[valueIndex]);
         }
     }
 

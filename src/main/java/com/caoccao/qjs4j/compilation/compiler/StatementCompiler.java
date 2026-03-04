@@ -332,9 +332,9 @@ final class StatementCompiler {
         }
 
         int programResultLocalIndex = compilerContext.currentScope().declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, programResultLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, programResultLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
 
         // Return the value on top of stack
         compilerContext.emitter.emitOpcode(Opcode.RETURN);
@@ -371,7 +371,7 @@ final class StatementCompiler {
         }
 
         int returnValueIndex = compilerContext.currentScope().declareLocal("$return_value_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
 
         delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
 
@@ -393,7 +393,7 @@ final class StatementCompiler {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
         // Emit RETURN_ASYNC for async functions, RETURN for sync functions
         compilerContext.emitter.emitOpcode(compilerContext.isInAsyncFunction ? Opcode.RETURN_ASYNC : Opcode.RETURN);
     }
@@ -543,14 +543,14 @@ final class StatementCompiler {
     void compileThrowStatement(ThrowStatement throwStmt) {
         delegates.expressions.compileExpression(throwStmt.argument());
         int throwValueIndex = compilerContext.currentScope().declareLocal("$throw_value_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, throwValueIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, throwValueIndex);
 
         delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
 
         if (compilerContext.hasActiveIteratorLoops()) {
             delegates.emitHelpers.emitAbruptCompletionIteratorClose();
         }
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, throwValueIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, throwValueIndex);
         compilerContext.emitter.emitOpcode(Opcode.THROW);
     }
 
@@ -595,7 +595,7 @@ final class StatementCompiler {
                     // Per B.3.5, simple catch parameters do not block Annex B var hoisting
                     int localIndex = compilerContext.currentScope().declareLocal(id.name());
                     compilerContext.currentScope().markSimpleCatchParam(id.name());
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                 } else {
                     // Destructuring catch parameter: catch ({ f }) or catch ([a, b])
                     delegates.patterns.declarePatternVariables(catchParam);
@@ -701,10 +701,10 @@ final class StatementCompiler {
         compilerContext.emitter.markCatchAsFinally(finallyCatchJump);
         int exceptionLocalIndex = compilerContext.currentScope().declareLocal(
                 "$finally_exception_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, exceptionLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, exceptionLocalIndex);
         compileTryFinallyBlock(tryStmt.finalizer());
         compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, exceptionLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, exceptionLocalIndex);
         compilerContext.emitter.emitOpcode(Opcode.THROW);
 
         // GOSUB finally block (only used by return statements inside try/catch bodies)
@@ -787,7 +787,7 @@ final class StatementCompiler {
         compilerContext.enterScope();
         int withObjectLocalIndex = compilerContext.currentScope().declareLocal("$withObject" + compilerContext.scopeDepth);
         delegates.expressions.compileExpression(withStmt.object());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, withObjectLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, withObjectLocalIndex);
 
         compilerContext.pushWithObjectLocal(withObjectLocalIndex);
         try {

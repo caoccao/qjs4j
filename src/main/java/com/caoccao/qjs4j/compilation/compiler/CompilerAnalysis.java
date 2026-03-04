@@ -202,7 +202,7 @@ final class CompilerAnalysis {
                 int localIndex = compilerContext.currentScope().declareLocal(name);
                 compilerContext.annexBFunctionScopeLocals.put(name, localIndex);
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
             }
         }
     }

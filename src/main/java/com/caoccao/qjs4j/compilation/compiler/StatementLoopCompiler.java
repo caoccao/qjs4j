@@ -164,7 +164,7 @@ final class StatementLoopCompiler {
         if (!isExpressionBased && varDecl != null && varDecl.declarations().get(0).init() != null) {
             delegates.expressions.compileExpression(varDecl.declarations().get(0).init());
             if (varIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, varIndex);
             } else {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
             }
@@ -187,7 +187,7 @@ final class StatementLoopCompiler {
             if (leftExpr instanceof Identifier id) {
                 Integer localIdx = compilerContext.findLocalInScopes(id.name());
                 if (localIdx != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIdx);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIdx);
                 } else {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
                 }
@@ -212,7 +212,7 @@ final class StatementLoopCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         } else if (varIndex != null) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, varIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, varIndex);
         } else {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
@@ -248,7 +248,7 @@ final class StatementLoopCompiler {
         if (leftExpression instanceof Identifier id) {
             Integer localIndex = compilerContext.findLocalInScopes(id.name());
             if (localIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
             } else {
                 Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(id.name());
                 if (capturedIndex != null) {

@@ -61,7 +61,7 @@ final class EmitHelpers {
         } else {
             Integer funcScopeLocal = compilerContext.annexBFunctionScopeLocals.get(functionName);
             if (funcScopeLocal != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, funcScopeLocal);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, funcScopeLocal);
             } else {
                 // Fallback: store as global var (shouldn't normally happen)
                 compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
@@ -278,7 +278,7 @@ final class EmitHelpers {
             }
             // PUT_LOCAL idx - store into the local variable slot
             int parameterSlotIndex = parameterSlotIndexes.get(i);
-            functionCompiler.context().emitter.emitOpcodeU16(Opcode.PUT_LOCAL, parameterSlotIndex);
+            functionCompiler.context().emitter.emitOpcodeU16(Opcode.PUT_LOC, parameterSlotIndex);
             if (hasNonSimpleParameters) {
                 pendingParameterTdzNames.removeAll(parameterBoundNames.get(i));
             }
@@ -323,7 +323,7 @@ final class EmitHelpers {
     }
 
     void emitMethodCallOnLocalObject(int localIndex, String methodName, int argCount) {
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, methodName);
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
@@ -332,13 +332,13 @@ final class EmitHelpers {
 
     void emitMethodCallWithSingleArgOnLocalObject(int localIndex, String methodName) {
         int argLocalIndex = compilerContext.currentScope().declareLocal("$using_arg_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, argLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, argLocalIndex);
 
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, methodName);
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, argLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, argLocalIndex);
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 1);
     }
 
@@ -419,7 +419,7 @@ final class EmitHelpers {
 
         compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, constructorName);
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 0);
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, stackLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, stackLocalIndex);
 
         scope.setUsingStackLocal(stackLocalIndex, useAsyncStack);
         return stackLocalIndex;

@@ -101,7 +101,7 @@ final class ExpressionAssignmentCompiler {
                 case MUL_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MUL);
                 case DIV_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.DIV);
                 case MOD_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MOD);
-                case EXP_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.EXP);
+                case EXP_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.POW);
                 case LSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHL);
                 case RSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SAR);
                 case URSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHR);
@@ -206,7 +206,7 @@ final class ExpressionAssignmentCompiler {
         if (isFunctionNameLocal || isFunctionNameCaptured) {
             if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
                 if (isFunctionNameLocal) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
                 } else {
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
                 }
@@ -219,7 +219,7 @@ final class ExpressionAssignmentCompiler {
                     case MUL_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MUL);
                     case DIV_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.DIV);
                     case MOD_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MOD);
-                    case EXP_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.EXP);
+                    case EXP_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.POW);
                     case LSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHL);
                     case RSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SAR);
                     case URSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHR);
@@ -251,7 +251,7 @@ final class ExpressionAssignmentCompiler {
                     case MUL_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MUL);
                     case DIV_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.DIV);
                     case MOD_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MOD);
-                    case EXP_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.EXP);
+                    case EXP_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.POW);
                     case LSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHL);
                     case RSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SAR);
                     case URSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHR);
@@ -290,7 +290,7 @@ final class ExpressionAssignmentCompiler {
                 case MUL_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MUL);
                 case DIV_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.DIV);
                 case MOD_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MOD);
-                case EXP_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.EXP);
+                case EXP_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.POW);
                 case LSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHL);
                 case RSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SAR);
                 case URSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHR);
@@ -325,7 +325,7 @@ final class ExpressionAssignmentCompiler {
                 if (compilerContext.tdzLocals.contains(name)) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
                 } else {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
                 }
             } else {
                 Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
@@ -395,7 +395,7 @@ final class ExpressionAssignmentCompiler {
                 } else if (compilerContext.tdzLocals.contains(name)) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_CHECK, localIndex);
                 } else {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC, localIndex);
                 }
             } else {
                 Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
@@ -482,14 +482,14 @@ final class ExpressionAssignmentCompiler {
 
         List<Integer> withObjectLocals = compilerContext.getActiveWithObjectLocals();
         for (int withObjectLocalIndex : withObjectLocals) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, withObjectLocalIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
             emitWithCandidateReference(name, jumpToResolvedOffsets);
         }
 
         for (String withBindingName : compilerContext.inheritedWithObjectBindingNames) {
             Integer withLocalIndex = compilerContext.findLocalInScopes(withBindingName);
             if (withLocalIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, withLocalIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withLocalIndex);
                 emitWithCandidateReference(name, jumpToResolvedOffsets);
                 continue;
             }

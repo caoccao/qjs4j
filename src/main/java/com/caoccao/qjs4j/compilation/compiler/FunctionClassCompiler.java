@@ -290,9 +290,9 @@ final class FunctionClassCompiler {
                     if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
                         functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
                         int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
-                        functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+                        functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
                         funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-                        functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+                        functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
                         // Emit RETURN_ASYNC for async functions, RETURN for sync functions
                         functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
                     }
@@ -305,9 +305,9 @@ final class FunctionClassCompiler {
                 // Expression body - implicitly returns the expression value
                 funcDelegates.expressions.compileExpression(expr);
                 int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
-                functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+                functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
                 funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-                functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+                functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
                 // Emit RETURN_ASYNC for async functions, RETURN for sync functions
                 functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
             }
@@ -582,16 +582,16 @@ final class FunctionClassCompiler {
                 compilerContext.currentScope().declareLocal(varName);
                 Integer localIndex = compilerContext.currentScope().getLocal(varName);
                 if (localIndex != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                 }
             } else if (compilerContext.tdzLocals.contains(varName)) {
                 // TDZ local: class was pre-declared as a local for TDZ enforcement
                 Integer localIndex = compilerContext.findLocalInScopes(varName);
                 if (localIndex != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                     // Also store as global variable so class methods (compiled with separate
                     // BytecodeCompiler contexts) can access this class via GET_VAR
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
                     compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
                 }
             } else {
@@ -941,9 +941,9 @@ final class FunctionClassCompiler {
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
             int returnValueIndex = functionContext.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
-            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
             funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
             // Emit RETURN_ASYNC for async functions, RETURN for sync functions
             functionContext.emitter.emitOpcode(funcDecl.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
@@ -1041,10 +1041,10 @@ final class FunctionClassCompiler {
             if (isAnnexB) {
                 // Annex B.3.3 runtime hook: store in both block scope and var scope
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                 delegates.emitHelpers.emitAnnexBVarStore(functionName);
             } else {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
             }
         } else {
             // Declare the function as a global variable or in the current scope
@@ -1057,10 +1057,10 @@ final class FunctionClassCompiler {
                 if (isAnnexB) {
                     // Annex B.3.3 runtime hook: store in both block scope and var scope
                     compilerContext.emitter.emitOpcode(Opcode.DUP);
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                     delegates.emitHelpers.emitAnnexBVarStore(functionName);
                 } else {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                 }
             }
         }
@@ -1195,9 +1195,9 @@ final class FunctionClassCompiler {
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
             int returnValueIndex = functionContext.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
-            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
             funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
             functionContext.emitter.emitOpcode(functionExpression.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
@@ -1351,9 +1351,9 @@ final class FunctionClassCompiler {
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             methodCtx.emitter.emitOpcode(Opcode.UNDEFINED);
             int returnValueIndex = methodCtx.currentScope().declareLocal("$method_return_" + methodCtx.emitter.currentOffset());
-            methodCtx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+            methodCtx.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
             methodDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-            methodCtx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+            methodCtx.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
             methodCtx.emitter.emitOpcode(functionExpression.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
@@ -1457,9 +1457,9 @@ final class FunctionClassCompiler {
         // Static blocks always return undefined
         blockCtx.emitter.emitOpcode(Opcode.UNDEFINED);
         int returnValueIndex = blockCtx.currentScope().declareLocal("$static_block_return_" + blockCtx.emitter.currentOffset());
-        blockCtx.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, returnValueIndex);
+        blockCtx.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
         blockDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        blockCtx.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
+        blockCtx.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
         blockCtx.emitter.emitOpcode(Opcode.RETURN);
 
         int localCount = blockCtx.currentScope().getLocalCount();
@@ -1713,7 +1713,7 @@ final class FunctionClassCompiler {
         int argumentsLocalIndex = functionContext.currentScope().declareLocal(JSArguments.NAME);
         functionContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
         functionContext.emitter.emitU8(0);
-        functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
+        functionContext.emitter.emitOpcode(Opcode.PUT_LOC);
         functionContext.emitter.emitU16(argumentsLocalIndex);
     }
 
@@ -1757,7 +1757,7 @@ final class FunctionClassCompiler {
             int paramIndex = entry[1];
             Pattern pattern = params.get(paramIndex);
             // Push the argument value onto the stack
-            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, slotIndex);
+            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, slotIndex);
             // Destructure and assign to local variables
             funcDelegates.patterns.compilePatternAssignment(pattern);
         }
@@ -1774,7 +1774,7 @@ final class FunctionClassCompiler {
             // Simple rest: ...args → declare local and store
             String restParamName = restId.name();
             int restLocalIndex = functionContext.currentScope().declareLocal(restParamName);
-            functionContext.emitter.emitOpcode(Opcode.PUT_LOCAL);
+            functionContext.emitter.emitOpcode(Opcode.PUT_LOC);
             functionContext.emitter.emitU16(restLocalIndex);
         } else {
             // Destructured rest: ...[a, b] or ...{a, b} → compile pattern assignment

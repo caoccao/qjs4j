@@ -207,7 +207,7 @@ final class ExpressionCompiler {
             case BIT_XOR -> Opcode.XOR;
             case DIV -> Opcode.DIV;
             case EQ -> Opcode.EQ;
-            case EXP -> Opcode.EXP;
+            case EXP -> Opcode.POW;
             case GE -> Opcode.GTE;
             case GT -> Opcode.GT;
             case IN -> Opcode.IN;
@@ -416,7 +416,7 @@ final class ExpressionCompiler {
     }
 
     void compileObjectExpression(ObjectExpression objExpr) {
-        compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+        compilerContext.emitter.emitOpcode(Opcode.OBJECT);
 
         for (ObjectExpression.Property prop : objExpr.properties()) {
             String kind = prop.kind();
@@ -675,7 +675,7 @@ final class ExpressionCompiler {
                         : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
                 Integer localIndex = compilerContext.findLocalInScopes(id.name());
                 if (localIndex != null) {
-                    compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOCAL : Opcode.PUT_LOCAL, localIndex);
+                    compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOC : Opcode.PUT_LOC, localIndex);
                 } else {
                     Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(id.name());
                     if (capturedIndex != null) {
@@ -819,7 +819,7 @@ final class ExpressionCompiler {
                     if (compilerContext.tdzLocals.contains(name)) {
                         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
                     } else {
-                        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
                     }
                 } else {
                     Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
@@ -841,7 +841,7 @@ final class ExpressionCompiler {
         Opcode op = switch (unaryExpr.operator()) {
             case BIT_NOT -> Opcode.NOT;
             case MINUS -> Opcode.NEG;
-            case NOT -> Opcode.LOGICAL_NOT;
+            case NOT -> Opcode.LNOT;
             case PLUS -> Opcode.PLUS;
             case TYPEOF -> Opcode.TYPEOF;
             case VOID -> {
@@ -897,7 +897,7 @@ final class ExpressionCompiler {
             if (compilerContext.tdzLocals.contains(name)) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
             } else {
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
             }
             return;
         }
@@ -941,7 +941,7 @@ final class ExpressionCompiler {
         String withBindingName = withBindingNames.get(withDepth);
         Integer withLocalIndex = compilerContext.findLocalInScopes(withBindingName);
         if (withLocalIndex != null) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, withLocalIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withLocalIndex);
         } else {
             Integer withCapturedIndex = compilerContext.resolveCapturedBindingIndex(withBindingName);
             if (withCapturedIndex != null) {
@@ -1008,7 +1008,7 @@ final class ExpressionCompiler {
         }
 
         int withObjectLocalIndex = withObjectLocals.get(withDepth);
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, withObjectLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
         compilerContext.emitter.emitOpcode(Opcode.ROT3L);
@@ -1058,7 +1058,7 @@ final class ExpressionCompiler {
         }
 
         int withObjectLocalIndex = withObjectLocals.get(withDepth);
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, withObjectLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
         compilerContext.emitter.emitOpcode(Opcode.ROT3L);
