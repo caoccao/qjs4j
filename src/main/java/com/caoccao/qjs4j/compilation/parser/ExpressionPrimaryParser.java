@@ -658,31 +658,9 @@ final class ExpressionPrimaryParser {
             if (parserContext.generatorFunctionNesting == 0) {
                 throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
             }
-            if (!parserContext.inFunctionBody) {
-                throw new JSSyntaxErrorException("'yield' expression not allowed in formal parameters of a generator function");
-            }
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
-
-            boolean delegate = false;
-            if (parserContext.match(TokenType.MUL)) {
-                delegate = true;
-                parserContext.advance();
-            }
-
-            Expression argument = null;
-            // Per spec: yield without argument when followed by line terminator or
-            // tokens that can't start an AssignmentExpression (following QuickJS).
-            if (!parserContext.hasNewlineBefore()
-                    && !parserContext.match(TokenType.SEMICOLON)
-                    && !parserContext.match(TokenType.RBRACE)
-                    && !parserContext.match(TokenType.RBRACKET)
-                    && !parserContext.match(TokenType.COMMA)
-                    && !parserContext.match(TokenType.EOF)) {
-                argument = expressions.parseAssignmentExpression();
-            }
-
-            return new YieldExpression(argument, delegate, location);
+            // YieldExpression is only valid at AssignmentExpression level (spec 14.4),
+            // not at UnaryExpression level. E.g. "void yield" must be SyntaxError.
+            throw new JSSyntaxErrorException("Unexpected token 'yield'");
         }
 
         if (parserContext.match(TokenType.INC) || parserContext.match(TokenType.DEC)) {

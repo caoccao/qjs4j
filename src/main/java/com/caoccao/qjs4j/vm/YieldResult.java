@@ -29,10 +29,15 @@ import com.caoccao.qjs4j.core.JSValue;
  *
  * @param value            The yielded value
  * @param delegateIterator The delegated iterator for yield* (optional)
+ * @param cachedNextMethod The cached next method from GetIterator for yield* (optional)
  */
-public record YieldResult(Type type, JSValue value, JSObject delegateIterator) {
+public record YieldResult(Type type, JSValue value, JSObject delegateIterator, JSValue cachedNextMethod) {
     public YieldResult(Type type, JSValue value) {
-        this(type, value, null);
+        this(type, value, null, null);
+    }
+
+    public YieldResult(Type type, JSValue value, JSObject delegateIterator) {
+        this(type, value, delegateIterator, null);
     }
 
     public boolean isInitialYield() {

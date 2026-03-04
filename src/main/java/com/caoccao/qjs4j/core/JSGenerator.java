@@ -147,7 +147,7 @@ public final class JSGenerator extends JSObject {
         }
 
         if (previousState == State.SUSPENDED_YIELD) {
-            if (generatorState.hasSuspendedExecutionState()) {
+            if (generatorState.hasSuspendedExecutionState() && !generatorState.hasPendingResumeRecord()) {
                 generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.NEXT, value);
             }
             generatorState.recordResume(JSGeneratorState.ResumeKind.NEXT, value);
@@ -155,7 +155,9 @@ public final class JSGenerator extends JSObject {
             // Resume after INITIAL_YIELD: the generator saved execution state at
             // INITIAL_YIELD, so set a pending resume record to trigger the
             // suspended-state resume path instead of re-executing from the start.
-            generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.NEXT, value);
+            if (!generatorState.hasPendingResumeRecord()) {
+                generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.NEXT, value);
+            }
         }
 
         try {
@@ -359,7 +361,7 @@ public final class JSGenerator extends JSObject {
             // The VM will trigger force return, skipping code after yield,
             // skipping catch handlers, but executing finally handlers.
             state = State.EXECUTING;
-            if (generatorState.hasSuspendedExecutionState()) {
+            if (generatorState.hasSuspendedExecutionState() && !generatorState.hasPendingResumeRecord()) {
                 generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.RETURN, returnVal);
             }
             generatorState.recordResume(JSGeneratorState.ResumeKind.RETURN, returnVal);
@@ -421,9 +423,9 @@ public final class JSGenerator extends JSObject {
 
         if (generatorState != null) {
             state = State.EXECUTING;
-            if (generatorState.hasSuspendedExecutionState()) {
+            if (generatorState.hasSuspendedExecutionState() && !generatorState.hasPendingResumeRecord()) {
                 generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.THROW, exception);
-            } else {
+            } else if (!generatorState.hasSuspendedExecutionState()) {
                 generatorState.recordResume(JSGeneratorState.ResumeKind.THROW, exception);
             }
             try {

@@ -146,7 +146,7 @@ public class JSAsyncIterator extends JSObject {
                 JSPromise resultPromise = context.createJSPromise();
                 try {
                     thenFunc.call(context, value, new JSValue[]{
-                            new JSNativeFunction("resolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            new JSNativeFunction("", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                                 JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
                                 JSObject result = context.createJSObject();
                                 result.set(PropertyKey.VALUE, resolved);
@@ -154,7 +154,7 @@ public class JSAsyncIterator extends JSObject {
                                 resultPromise.fulfill(result);
                                 return JSUndefined.INSTANCE;
                             }),
-                            new JSNativeFunction("reject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            new JSNativeFunction("", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                                 resultPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                                 return JSUndefined.INSTANCE;
                             })

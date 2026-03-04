@@ -24,6 +24,8 @@ import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 
 /**
@@ -37,6 +39,7 @@ final class ParserContext {
     final boolean isEval;
     final Lexer lexer;
     final boolean moduleMode;
+    private final Deque<int[]> savedFunctionNestingStack = new ArrayDeque<>();
     int asyncFunctionNesting;
     Token currentToken;
     int functionNesting;
@@ -88,31 +91,42 @@ final class ParserContext {
         throw new JSSyntaxErrorException("Unexpected token '" + currentToken.value() + "'");
     }
 
+    /**
+     * Enter an arrow function or class field/static block context.
+     * Arrow functions inherit generator/async nesting from their enclosing context.
+     */
     void enterFunctionContext(boolean asyncFunction) {
-        enterFunctionContext(asyncFunction, false);
-    }
-
-    void enterFunctionContext(boolean asyncFunction, boolean generatorFunction) {
         functionNesting++;
         if (asyncFunction) {
             asyncFunctionNesting++;
         }
-        if (generatorFunction) {
-            generatorFunctionNesting++;
-        }
+    }
+
+    /**
+     * Enter a regular (non-arrow) function, method, or generator context.
+     * Per ES2024, yield/await are only keywords in the immediately enclosing
+     * generator/async function, NOT in nested non-generator/non-async functions.
+     * Save and reset the nesting counters so that yield/await can be used as
+     * identifiers in nested non-generator/non-async functions.
+     */
+    void enterFunctionContext(boolean asyncFunction, boolean generatorFunction) {
+        savedFunctionNestingStack.push(new int[]{generatorFunctionNesting, asyncFunctionNesting});
+        functionNesting++;
+        generatorFunctionNesting = generatorFunction ? 1 : 0;
+        asyncFunctionNesting = asyncFunction ? 1 : 0;
     }
 
     void exitFunctionContext(boolean asyncFunction) {
-        exitFunctionContext(asyncFunction, false);
-    }
-
-    void exitFunctionContext(boolean asyncFunction, boolean generatorFunction) {
         if (asyncFunction) {
             asyncFunctionNesting--;
         }
-        if (generatorFunction) {
-            generatorFunctionNesting--;
-        }
+        functionNesting--;
+    }
+
+    void exitFunctionContext(boolean asyncFunction, boolean generatorFunction) {
+        int[] saved = savedFunctionNestingStack.pop();
+        generatorFunctionNesting = saved[0];
+        asyncFunctionNesting = saved[1];
         functionNesting--;
     }
 

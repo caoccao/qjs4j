@@ -29,6 +29,13 @@ public final class OpcodeHandler {
     private OpcodeHandler() {
     }
 
+    private static void checkPendingException(JSContext context) {
+        if (context.hasPendingException()) {
+            JSValue exception = context.getPendingException();
+            throw new JSVirtualMachineException(exception.toString(), exception);
+        }
+    }
+
     static void handleAdd(Opcode op, ExecutionContext executionContext) {
         JSStackValue[] stack = executionContext.stack;
         int sp = executionContext.sp;
@@ -284,7 +291,14 @@ public final class OpcodeHandler {
         executionContext.pc += op.getSize();
         if (executionContext.virtualMachine.yieldResult != null) {
             JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
-            executionContext.virtualMachine.clearActiveGeneratorSuspendedExecutionState();
+            // Save execution state so the generator can resume from after ASYNC_YIELD_STAR
+            // when the delegate iterator completes (done=true), avoiding side-effect replay
+            executionContext.virtualMachine.saveActiveGeneratorSuspendedExecutionState(
+                    executionContext.frame,
+                    executionContext.pc,
+                    executionContext.stack,
+                    executionContext.sp,
+                    executionContext.frameStackBase);
             executionContext.virtualMachine.requestOpcodeReturnFromExecute(executionContext, returnValue);
         }
     }
@@ -3075,9 +3089,201 @@ public final class OpcodeHandler {
     }
 
     private static void internalHandleAsyncYieldStar(ExecutionContext executionContext) {
-        // Keep the same suspension model as sync yield* in the current generator runtime.
-        // Full async delegation semantics can be layered on top of this baseline.
-        internalHandleYieldStar(executionContext);
+        JSContext context = executionContext.virtualMachine.context;
+
+        // yield* in async generators uses GetIterator(obj, async) per ES2024 7.4.3
+        JSValue iterable = executionContext.virtualMachine.valueStack.pop();
+
+        // Convert to object if needed
+        JSObject iterableObj;
+        if (iterable instanceof JSObject obj) {
+            iterableObj = obj;
+        } else {
+            iterableObj = executionContext.virtualMachine.toObject(iterable);
+            if (iterableObj == null) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError(iterable + " is not iterable"));
+            }
+        }
+
+        // GetIterator(obj, async):
+        // Step 1: Try Symbol.asyncIterator (using context-aware get to trigger getters)
+        JSValue asyncIteratorMethod = iterableObj.get(context, PropertyKey.SYMBOL_ASYNC_ITERATOR);
+        checkPendingException(context);
+
+        JSObject iteratorObj;
+
+        if (!asyncIteratorMethod.isNullOrUndefined()) {
+            // Symbol.asyncIterator exists — must be callable (GetMethod step 3)
+            if (!(asyncIteratorMethod instanceof JSFunction asyncIterFunc)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("is not a function"));
+            }
+            JSValue iterator = asyncIterFunc.call(context, iterable, JSValue.NO_ARGS);
+            checkPendingException(context);
+            if (!(iterator instanceof JSObject)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("Result of the Symbol.asyncIterator method is not an object"));
+            }
+            iteratorObj = (JSObject) iterator;
+        } else {
+            // Step 2: Fall back to Symbol.iterator
+            JSValue iteratorMethod = iterableObj.get(context, PropertyKey.SYMBOL_ITERATOR);
+            checkPendingException(context);
+            if (iteratorMethod.isNullOrUndefined()) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("is not a function"));
+            }
+            if (!(iteratorMethod instanceof JSFunction iterFunc)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("is not a function"));
+            }
+            JSValue iterator = iterFunc.call(context, iterable, JSValue.NO_ARGS);
+            checkPendingException(context);
+            if (!(iterator instanceof JSObject)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("Result of the Symbol.iterator method is not an object"));
+            }
+            iteratorObj = (JSObject) iterator;
+        }
+
+        // Check for RETURN/THROW resume records (yield* delegation protocol per ES2024 27.5.3.3)
+        JSGeneratorState.ResumeRecord resumeRecord =
+                executionContext.virtualMachine.generatorResumeIndex < executionContext.virtualMachine.generatorResumeRecords.size()
+                        ? executionContext.virtualMachine.generatorResumeRecords.get(executionContext.virtualMachine.generatorResumeIndex)
+                        : null;
+
+        if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
+            executionContext.virtualMachine.generatorResumeIndex++;
+            JSValue returnValue = resumeRecord.value();
+
+            JSValue returnMethodValue = iteratorObj.get(context, PropertyKey.RETURN);
+            checkPendingException(context);
+            boolean noReturnMethod = returnMethodValue.isNullOrUndefined();
+
+            if (noReturnMethod) {
+                executionContext.virtualMachine.valueStack.push(returnValue);
+                return;
+            }
+
+            if (!(returnMethodValue instanceof JSFunction returnFunc)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("iterator return is not a function"));
+            }
+
+            JSValue result = returnFunc.call(context, iteratorObj, new JSValue[]{returnValue});
+            checkPendingException(context);
+            if (!(result instanceof JSObject)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("iterator must return an object"));
+            }
+
+            JSValue doneValue = ((JSObject) result).get(context, PropertyKey.DONE);
+            checkPendingException(context);
+            if (JSTypeConversions.toBoolean(doneValue).value()) {
+                JSValue value = ((JSObject) result).get(context, PropertyKey.VALUE);
+                checkPendingException(context);
+                executionContext.virtualMachine.valueStack.push(value);
+                return;
+            } else {
+                executionContext.virtualMachine.yieldResult =
+                        new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
+                executionContext.virtualMachine.valueStack.push(result);
+                return;
+            }
+        }
+
+        if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
+            executionContext.virtualMachine.generatorResumeIndex++;
+            JSValue throwValue = resumeRecord.value();
+
+            JSValue throwMethodValue = iteratorObj.get(context, PropertyKey.THROW);
+            checkPendingException(context);
+            boolean noThrowMethod = throwMethodValue.isNullOrUndefined();
+
+            if (noThrowMethod) {
+                JSValue closeMethod = iteratorObj.get(context, PropertyKey.RETURN);
+                if (closeMethod instanceof JSFunction closeFunc) {
+                    closeFunc.call(context, iteratorObj, JSValue.NO_ARGS);
+                }
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("iterator does not have a throw method"));
+            }
+
+            if (!(throwMethodValue instanceof JSFunction throwFunc)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("iterator throw is not a function"));
+            }
+
+            JSValue result = throwFunc.call(context, iteratorObj, new JSValue[]{throwValue});
+            checkPendingException(context);
+            if (!(result instanceof JSObject)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("iterator must return an object"));
+            }
+
+            JSValue doneValue = ((JSObject) result).get(context, PropertyKey.DONE);
+            checkPendingException(context);
+            if (JSTypeConversions.toBoolean(doneValue).value()) {
+                JSValue value = ((JSObject) result).get(context, PropertyKey.VALUE);
+                checkPendingException(context);
+                executionContext.virtualMachine.valueStack.push(value);
+                return;
+            } else {
+                executionContext.virtualMachine.yieldResult =
+                        new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
+                executionContext.virtualMachine.valueStack.push(result);
+                return;
+            }
+        }
+
+        // Default: NEXT protocol — call iterator.next()
+        JSValue nextMethod = iteratorObj.get(context, PropertyKey.NEXT);
+        checkPendingException(context);
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            throw new JSVirtualMachineException(
+                    context.throwTypeError("is not a function"));
+        }
+
+        // Per ES2024 spec: Invoke(iterator, "next", « received.[[Value]] »)
+        // First call uses undefined; subsequent calls pass the received value.
+        JSValue[] nextArgs = new JSValue[]{JSUndefined.INSTANCE};
+
+        // Skip past previously-yielded values during generator replay
+        while (executionContext.virtualMachine.yieldSkipCount > 0) {
+            JSValue skipResult = nextFunc.call(context, iteratorObj, nextArgs);
+            checkPendingException(context);
+            if (!(skipResult instanceof JSObject)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("Iterator result must be an object"));
+            }
+            JSValue skipDone = ((JSObject) skipResult).get(context, PropertyKey.DONE);
+            checkPendingException(context);
+            if (JSTypeConversions.toBoolean(skipDone).value()) {
+                JSValue value = ((JSObject) skipResult).get(context, PropertyKey.VALUE);
+                checkPendingException(context);
+                executionContext.virtualMachine.valueStack.push(value);
+                return;
+            }
+            executionContext.virtualMachine.yieldSkipCount--;
+        }
+
+        JSValue result = nextFunc.call(context, iteratorObj, nextArgs);
+        checkPendingException(context);
+
+        // The result should be an object (for sync iterators) or could be
+        // a Promise/thenable (for async iterators). Pass it through as-is;
+        // fulfillAsyncYieldStarResult will handle the Await step and done/value reading.
+        // Per ES2024 spec: "If generatorKind is async, then set innerResult to ? Await(innerResult)"
+        // The done/value check must happen AFTER the Await, not here.
+        if (!(result instanceof JSObject)) {
+            throw new JSVirtualMachineException(
+                    context.throwTypeError("Iterator result must be an object"));
+        }
+
+        executionContext.virtualMachine.yieldResult =
+                new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj, nextMethod);
+        executionContext.virtualMachine.valueStack.push(result);
     }
 
     private static void internalHandleAwait(ExecutionContext executionContext) {
@@ -3097,13 +3303,17 @@ public final class OpcodeHandler {
         // For proper async/await support, we need to wait for the promise to settle
         // and push the resolved value (not the promise itself)
 
-        // If the promise is pending, we need to process microtasks until it settles
+        // Per ES2024 spec (25.5.5.3 Await), await always takes exactly 1 microtask tick,
+        // even when the awaited value is already a fulfilled/rejected promise or a non-promise.
+        // When running in suspension mode (inside an async function), always suspend and let
+        // the reaction callbacks in resumeAsyncFunctionExecution handle resumption via microtask.
+        if (executionContext.virtualMachine.awaitSuspensionEnabled && executionContext.virtualMachine.activeGeneratorState != null) {
+            executionContext.virtualMachine.awaitSuspensionPromise = promise;
+            return;
+        }
+
+        // Fallback for non-suspension mode: if the promise is pending, process microtasks
         if (promise.getState() == JSPromise.PromiseState.PENDING) {
-            if (executionContext.virtualMachine.awaitSuspensionEnabled && executionContext.virtualMachine.activeGeneratorState != null) {
-                executionContext.virtualMachine.awaitSuspensionPromise = promise;
-                return;
-            }
-            // Process microtasks until the promise settles
             executionContext.virtualMachine.context.processMicrotasks();
         }
 

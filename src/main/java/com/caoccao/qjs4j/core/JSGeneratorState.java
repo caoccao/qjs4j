@@ -51,6 +51,10 @@ public final class JSGeneratorState {
     private int suspendedProgramCounter;
     private JSStackValue[] suspendedStackValues;
     private int yieldCount;  // Track how many times we've yielded (workaround for no PC saving)
+    // yield* delegation completion: set when a delegated next/throw/return completes with done=true
+    // The generator should resume past yield* with this value
+    private JSValue yieldStarCompletionValue;
+    private boolean yieldStarReturnCompletion;
 
     public JSGeneratorState(JSBytecodeFunction function, JSValue thisArg, JSValue[] args) {
         this.function = function;
@@ -72,6 +76,11 @@ public final class JSGeneratorState {
         this.suspendedFrame = null;
         this.suspendedProgramCounter = 0;
         this.suspendedStackValues = null;
+    }
+
+    public void clearYieldStarCompletion() {
+        this.yieldStarCompletionValue = null;
+        this.yieldStarReturnCompletion = false;
     }
 
     public ResumeRecord consumePendingResumeRecord() {
@@ -124,6 +133,10 @@ public final class JSGeneratorState {
         return yieldCount;
     }
 
+    public JSValue getYieldStarCompletionValue() {
+        return yieldStarCompletionValue;
+    }
+
     public boolean hasPendingResumeRecord() {
         return pendingResumeKind != null;
     }
@@ -142,6 +155,10 @@ public final class JSGeneratorState {
 
     public boolean isCompleted() {
         return isCompleted;
+    }
+
+    public boolean isYieldStarReturnCompletion() {
+        return yieldStarReturnCompletion;
     }
 
     public void recordResume(ResumeKind kind, JSValue value) {
@@ -181,6 +198,11 @@ public final class JSGeneratorState {
 
     public void setState(State state) {
         this.state = state;
+    }
+
+    public void setYieldStarCompletion(JSValue value, boolean isReturn) {
+        this.yieldStarCompletionValue = value;
+        this.yieldStarReturnCompletion = isReturn;
     }
 
     public enum ResumeKind {

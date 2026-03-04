@@ -171,56 +171,104 @@ public final class JSBytecodeFunction extends JSFunction {
         }
     }
 
-    private static void attachDelegatedIteratorStateHandlers(
+    /**
+     * Await an iterator result (handle thenable/promise), then read done/value.
+     * Per ES2024 spec: done is read before value (AsyncFromSyncIteratorContinuation order).
+     */
+    private static JSPromise awaitAndProcessIteratorResult(
             JSContext context,
-            JSPromise promise,
-            JSGeneratorState generatorState,
-            JSObject[] delegatedYieldStarIteratorHolder,
+            JSObject rawResult,
             JSObject delegateIterator) {
-        promise.addReactions(
-                new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onDelegatedResolve", 1, (childContext, callbackThisArg, callbackArgs) -> {
-                            JSValue resultValue = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                            if (resultValue instanceof JSObject resultObject) {
-                                JSValue doneValue = resultObject.get(childContext, PropertyKey.DONE);
-                                if (childContext.hasPendingException()) {
-                                    delegatedYieldStarIteratorHolder[0] = null;
-                                    generatorState.setCompleted(true);
-                                    childContext.clearAllPendingExceptions();
+        // Check if result is a Promise
+        if (rawResult instanceof JSPromise promiseResult) {
+            JSPromise resultPromise = context.createJSPromise();
+            promiseResult.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onAwaitResult", 1, (childCtx, thisArg, args) -> {
+                                JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                if (!(resolved instanceof JSObject resolvedObj)) {
+                                    JSValue typeError = childCtx.throwTypeError("Iterator result is not an object");
+                                    childCtx.clearPendingException();
+                                    resultPromise.reject(typeError);
                                     return JSUndefined.INSTANCE;
                                 }
-                                boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
-                                if (childContext.hasPendingException()) {
-                                    delegatedYieldStarIteratorHolder[0] = null;
-                                    generatorState.setCompleted(true);
-                                    childContext.clearAllPendingExceptions();
-                                    return JSUndefined.INSTANCE;
-                                }
-                                if (done) {
-                                    delegatedYieldStarIteratorHolder[0] = null;
-                                    generatorState.setCompleted(true);
-                                } else {
-                                    delegatedYieldStarIteratorHolder[0] = delegateIterator;
-                                }
-                            } else {
-                                delegatedYieldStarIteratorHolder[0] = null;
-                                generatorState.setCompleted(true);
+                                JSPromise innerResult = readDoneValueAndCreatePromise(childCtx, resolvedObj, delegateIterator);
+                                innerResult.addReactions(
+                                        new JSPromise.ReactionRecord(
+                                                new JSNativeFunction("onInner", 1, (c, t, a) -> {
+                                                    resultPromise.fulfill(a.length > 0 ? a[0] : JSUndefined.INSTANCE);
+                                                    return JSUndefined.INSTANCE;
+                                                }), null, childCtx),
+                                        new JSPromise.ReactionRecord(
+                                                new JSNativeFunction("onInnerErr", 1, (c, t, a) -> {
+                                                    resultPromise.reject(a.length > 0 ? a[0] : JSUndefined.INSTANCE);
+                                                    return JSUndefined.INSTANCE;
+                                                }), null, childCtx)
+                                );
+                                return JSUndefined.INSTANCE;
+                            }), null, context),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onAwaitReject", 1, (childCtx, thisArg, args) -> {
+                                resultPromise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                                return JSUndefined.INSTANCE;
+                            }), null, context)
+            );
+            return resultPromise;
+        }
+
+        // Check for thenable
+        JSValue thenMethod = rawResult.get(context, PropertyKey.THEN);
+        if (context.hasPendingException()) {
+            JSValue exception = context.getPendingException();
+            context.clearAllPendingExceptions();
+            return JSAsyncIterator.createRejectedPromise(context, exception);
+        }
+        if (thenMethod instanceof JSFunction thenFunc) {
+            JSPromise resultPromise = context.createJSPromise();
+            try {
+                thenFunc.call(context, rawResult, new JSValue[]{
+                        new JSNativeFunction("", 1, (childCtx, thisArg, args) -> {
+                            JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            if (!(resolved instanceof JSObject resolvedObj)) {
+                                JSValue typeError = childCtx.throwTypeError("Iterator result is not an object");
+                                childCtx.clearPendingException();
+                                resultPromise.reject(typeError);
+                                return JSUndefined.INSTANCE;
                             }
+                            JSPromise innerResult = readDoneValueAndCreatePromise(childCtx, resolvedObj, delegateIterator);
+                            innerResult.addReactions(
+                                    new JSPromise.ReactionRecord(
+                                            new JSNativeFunction("onInner", 1, (c, t, a) -> {
+                                                resultPromise.fulfill(a.length > 0 ? a[0] : JSUndefined.INSTANCE);
+                                                return JSUndefined.INSTANCE;
+                                            }), null, childCtx),
+                                    new JSPromise.ReactionRecord(
+                                            new JSNativeFunction("onInnerErr", 1, (c, t, a) -> {
+                                                resultPromise.reject(a.length > 0 ? a[0] : JSUndefined.INSTANCE);
+                                                return JSUndefined.INSTANCE;
+                                            }), null, childCtx)
+                            );
                             return JSUndefined.INSTANCE;
                         }),
-                        null,
-                        context
-                ),
-                new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onDelegatedReject", 1, (childContext, callbackThisArg, callbackArgs) -> {
-                            delegatedYieldStarIteratorHolder[0] = null;
-                            generatorState.setCompleted(true);
+                        new JSNativeFunction("", 1, (childCtx, thisArg, args) -> {
+                            resultPromise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
-                        }),
-                        null,
-                        context
-                )
-        );
+                        })
+                });
+            } catch (Exception e) {
+                JSValue error = JSAsyncIterator.consumePendingExceptionOrCreateStringError(context, e);
+                return JSAsyncIterator.createRejectedPromise(context, error);
+            }
+            if (context.hasPendingException()) {
+                JSValue exception = context.getPendingException();
+                context.clearAllPendingExceptions();
+                return JSAsyncIterator.createRejectedPromise(context, exception);
+            }
+            return resultPromise;
+        }
+
+        // Non-thenable, non-promise: read done/value directly
+        return readDoneValueAndCreatePromise(context, rawResult, delegateIterator);
     }
 
     private static JSValue consumeAsyncGeneratorReturnSignal(JSContext context) {
@@ -233,6 +281,51 @@ public final class JSBytecodeFunction extends JSFunction {
             return returnSignal.getReturnValue();
         }
         return null;
+    }
+
+    private static JSPromise createAsyncDelegatedNextPromise(
+            JSContext context,
+            JSObject delegateIterator,
+            JSValue inputValue,
+            JSFunction cachedNextMethod) {
+        // Per ES spec, the next method is cached during GetIterator and reused
+        JSFunction nextFunction;
+        if (cachedNextMethod != null) {
+            nextFunction = cachedNextMethod;
+        } else {
+            JSValue nextMethodValue = delegateIterator.get(context, PropertyKey.NEXT);
+            if (context.hasPendingException()) {
+                JSValue exception = context.getPendingException();
+                context.clearAllPendingExceptions();
+                return JSAsyncIterator.createRejectedPromise(context, exception);
+            }
+            if (!(nextMethodValue instanceof JSFunction nextFunc)) {
+                JSValue typeError = context.throwTypeError("iterator next is not a function");
+                context.clearAllPendingExceptions();
+                return JSAsyncIterator.createRejectedPromise(context, typeError);
+            }
+            nextFunction = nextFunc;
+        }
+        JSValue nextResult;
+        try {
+            nextResult = nextFunction.call(context, delegateIterator, new JSValue[]{inputValue});
+        } catch (Exception e) {
+            JSValue error = JSAsyncIterator.consumePendingExceptionOrCreateStringError(context, e);
+            return JSAsyncIterator.createRejectedPromise(context, error);
+        }
+        if (context.hasPendingException()) {
+            JSValue exception = context.getPendingException();
+            context.clearAllPendingExceptions();
+            return JSAsyncIterator.createRejectedPromise(context, exception);
+        }
+        if (!(nextResult instanceof JSObject nextResultObject)) {
+            JSValue typeError = context.throwTypeError("iterator must return an object");
+            context.clearAllPendingExceptions();
+            return JSAsyncIterator.createRejectedPromise(context, typeError);
+        }
+        // Per ES2024: "If generatorKind is async, then set innerResult to ? Await(innerResult)"
+        // Handle thenable/promise results before reading done/value
+        return awaitAndProcessIteratorResult(context, nextResultObject, delegateIterator);
     }
 
     private static JSPromise createAsyncFromSyncDelegatedReturnPromise(
@@ -264,25 +357,9 @@ public final class JSBytecodeFunction extends JSFunction {
             context.clearAllPendingExceptions();
             return JSAsyncIterator.createRejectedPromise(context, typeError);
         }
-        JSValue doneValue = returnResultObject.get(context, PropertyKey.DONE);
-        if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearAllPendingExceptions();
-            return JSAsyncIterator.createRejectedPromise(context, exception);
-        }
-        boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
-        if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearAllPendingExceptions();
-            return JSAsyncIterator.createRejectedPromise(context, exception);
-        }
-        JSValue value = returnResultObject.get(context, PropertyKey.VALUE);
-        if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearAllPendingExceptions();
-            return JSAsyncIterator.createRejectedPromise(context, exception);
-        }
-        return JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
+        // Per ES2024: "If generatorKind is async, set innerReturnResult to ? Await(innerReturnResult)"
+        // Handle thenable/promise results before reading done/value
+        return awaitAndProcessIteratorResult(context, returnResultObject, delegateIterator);
     }
 
     private static JSPromise createAsyncFromSyncDelegatedThrowPromise(
@@ -340,65 +417,9 @@ public final class JSBytecodeFunction extends JSFunction {
             context.clearAllPendingExceptions();
             return JSAsyncIterator.createRejectedPromise(context, typeError);
         }
-        JSValue doneValue = throwResultObject.get(context, PropertyKey.DONE);
-        if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearAllPendingExceptions();
-            return JSAsyncIterator.createRejectedPromise(context, exception);
-        }
-        boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
-        if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearAllPendingExceptions();
-            return JSAsyncIterator.createRejectedPromise(context, exception);
-        }
-        JSValue value = throwResultObject.get(context, PropertyKey.VALUE);
-        if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearAllPendingExceptions();
-            return JSAsyncIterator.createRejectedPromise(context, exception);
-        }
-        JSPromise asyncFromSyncResultPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
-        if (done) {
-            return asyncFromSyncResultPromise;
-        }
-        JSPromise closeOnRejectionPromise = context.createJSPromise();
-        asyncFromSyncResultPromise.addReactions(
-                new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onResolve", 1, (childContext, callbackThisArg, callbackArgs) -> {
-                            JSValue resolvedResult = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                            closeOnRejectionPromise.fulfill(resolvedResult);
-                            return JSUndefined.INSTANCE;
-                        }),
-                        null,
-                        context
-                ),
-                new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onReject", 1, (childContext, callbackThisArg, callbackArgs) -> {
-                            JSValue originalError = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                            JSValue returnMethodValue = delegateIterator.get(childContext, PropertyKey.RETURN);
-                            if (childContext.hasPendingException()) {
-                                childContext.clearAllPendingExceptions();
-                            } else if (returnMethodValue instanceof JSFunction returnFunction) {
-                                JSValue closeResult = returnFunction.call(childContext, delegateIterator, JSValue.NO_ARGS);
-                                if (childContext.hasPendingException()) {
-                                    childContext.clearAllPendingExceptions();
-                                } else if (!(closeResult instanceof JSObject)) {
-                                    // Preserve the original rejection reason during close-on-rejection.
-                                }
-                            } else if (returnMethodValue.isNullOrUndefined()) {
-                                // No return method to call.
-                            } else {
-                                // Non-callable return during close-on-rejection is ignored to preserve original reason.
-                            }
-                            closeOnRejectionPromise.reject(originalError);
-                            return JSUndefined.INSTANCE;
-                        }),
-                        null,
-                        context
-                )
-        );
-        return closeOnRejectionPromise;
+        // Per ES2024: "If generatorKind is async, set innerResult to ? Await(innerResult)"
+        // Handle thenable/promise results before reading done/value
+        return awaitAndProcessIteratorResult(context, throwResultObject, delegateIterator);
     }
 
     /**
@@ -435,6 +456,103 @@ public final class JSBytecodeFunction extends JSFunction {
             JSPromise promise,
             JSObject iteratorResultObject,
             JSObject delegateIterator) {
+        // Per ES2024 spec: "If generatorKind is async, then set innerResult to ? Await(innerResult)"
+        // If the iterator result is a Promise, await it first before reading .done/.value
+        if (iteratorResultObject instanceof JSPromise promiseResult) {
+            promiseResult.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onAwaitInnerResult", 1, (childContext, thisArg, args) -> {
+                                JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                if (!(resolved instanceof JSObject resolvedObj)) {
+                                    JSError typeError = context.throwTypeError("Iterator result is not an object");
+                                    context.clearPendingException();
+                                    promise.reject(typeError);
+                                    return JSUndefined.INSTANCE;
+                                }
+                                fulfillAsyncYieldStarResult(context, promise, resolvedObj, delegateIterator);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context
+                    ),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onAwaitInnerReject", 1, (childContext, thisArg, args) -> {
+                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                promise.reject(error);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context
+                    )
+            );
+            return;
+        }
+
+        // Check for callable `then` (thenable iterator result) — per Await spec PromiseResolve
+        JSValue thenMethod = iteratorResultObject.get(context, PropertyKey.THEN);
+        if (context.hasPendingException()) {
+            JSValue error = context.getPendingException();
+            context.clearAllPendingExceptions();
+            promise.reject(error);
+            return;
+        }
+        if (thenMethod instanceof JSFunction thenFunc) {
+            // Thenable: call then() and wait for resolution, per Await spec step 2
+            JSPromise thenablePromise = context.createJSPromise();
+            try {
+                thenFunc.call(context, iteratorResultObject, new JSValue[]{
+                        new JSNativeFunction("", 1, (childContext, thisArg, args) -> {
+                            JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            thenablePromise.fulfill(resolved);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        new JSNativeFunction("", 1, (childContext, thisArg, args) -> {
+                            JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            thenablePromise.reject(error);
+                            return JSUndefined.INSTANCE;
+                        })
+                });
+            } catch (Exception e) {
+                JSValue error = JSAsyncIterator.consumePendingExceptionOrCreateStringError(context, e);
+                promise.reject(error);
+                return;
+            }
+            if (context.hasPendingException()) {
+                JSValue error = context.getPendingException();
+                context.clearAllPendingExceptions();
+                promise.reject(error);
+                return;
+            }
+            thenablePromise.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onThenableResolve", 1, (childContext, thisArg, args) -> {
+                                JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                if (!(resolved instanceof JSObject resolvedObj)) {
+                                    JSError typeError = context.throwTypeError("Iterator result is not an object");
+                                    context.clearPendingException();
+                                    promise.reject(typeError);
+                                    return JSUndefined.INSTANCE;
+                                }
+                                fulfillAsyncYieldStarResult(context, promise, resolvedObj, delegateIterator);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context
+                    ),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onThenableReject", 1, (childContext, thisArg, args) -> {
+                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                promise.reject(error);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context
+                    )
+            );
+            return;
+        }
+
+        // Non-thenable, non-Promise: proceed with direct property access
         JSValue doneValue = iteratorResultObject.get(context, PropertyKey.DONE);
         if (context.hasPendingException()) {
             JSValue error = context.getPendingException();
@@ -519,6 +637,162 @@ public final class JSBytecodeFunction extends JSFunction {
         );
     }
 
+    /**
+     * Handle the result of a delegated iterator operation (next/throw/return).
+     * When done=false: resolve outerPromise with the result, keep the delegate.
+     * When done=true: set yieldStarCompletionValue, resume the generator, chain result.
+     */
+    private static JSPromise handleDelegatedIteratorResult(
+            JSContext context,
+            JSPromise delegatedPromise,
+            JSGeneratorState generatorState,
+            JSObject[] delegatedYieldStarIteratorHolder,
+            JSObject delegateIterator,
+            JSAsyncGenerator.AsyncGeneratorFunction[] asyncGeneratorRequestExecutorHolder,
+            boolean isReturnCompletion) {
+        JSPromise outerPromise = context.createJSPromise();
+        delegatedPromise.addReactions(
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onDelegatedResolve", 1, (childContext, callbackThisArg, callbackArgs) -> {
+                            JSValue resultValue = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                            if (!(resultValue instanceof JSObject resultObject)) {
+                                delegatedYieldStarIteratorHolder[0] = null;
+                                generatorState.setCompleted(true);
+                                outerPromise.reject(childContext.throwTypeError("Iterator result is not an object"));
+                                childContext.clearAllPendingExceptions();
+                                return JSUndefined.INSTANCE;
+                            }
+                            JSValue doneValue = resultObject.get(childContext, PropertyKey.DONE);
+                            if (childContext.hasPendingException()) {
+                                delegatedYieldStarIteratorHolder[0] = null;
+                                generatorState.setCompleted(true);
+                                JSValue error = childContext.getPendingException();
+                                childContext.clearAllPendingExceptions();
+                                outerPromise.reject(error);
+                                return JSUndefined.INSTANCE;
+                            }
+                            boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
+                            if (done) {
+                                // Delegation completed — resume the generator past yield*
+                                delegatedYieldStarIteratorHolder[0] = null;
+                                JSValue value = resultObject.get(childContext, PropertyKey.VALUE);
+                                if (childContext.hasPendingException()) {
+                                    generatorState.setCompleted(true);
+                                    JSValue error = childContext.getPendingException();
+                                    childContext.clearAllPendingExceptions();
+                                    outerPromise.reject(error);
+                                    return JSUndefined.INSTANCE;
+                                }
+                                // Set pending resume record so the generator resumes
+                                // from saved execution state (after yield*) with the completion value.
+                                // RETURN: generator force-returns with value (enters finally blocks only)
+                                // NEXT: completion value becomes the yield* expression result
+                                if (isReturnCompletion) {
+                                    generatorState.setPendingResumeRecord(
+                                            JSGeneratorState.ResumeKind.RETURN, value);
+                                } else {
+                                    generatorState.setPendingResumeRecord(
+                                            JSGeneratorState.ResumeKind.NEXT, value);
+                                }
+                                JSPromise resumedPromise = asyncGeneratorRequestExecutorHolder[0]
+                                        .executeNext(JSUndefined.INSTANCE,
+                                                JSAsyncGenerator.AsyncGeneratorRequestKind.NEXT);
+                                resumedPromise.addReactions(
+                                        new JSPromise.ReactionRecord(
+                                                new JSNativeFunction("onResumeResolve", 1, (resumeCtx, resumeThis, resumeArgs) -> {
+                                                    JSValue resumed = resumeArgs.length > 0 ? resumeArgs[0] : JSUndefined.INSTANCE;
+                                                    outerPromise.fulfill(resumed);
+                                                    return JSUndefined.INSTANCE;
+                                                }),
+                                                null,
+                                                childContext
+                                        ),
+                                        new JSPromise.ReactionRecord(
+                                                new JSNativeFunction("onResumeReject", 1, (resumeCtx, resumeThis, resumeArgs) -> {
+                                                    JSValue error = resumeArgs.length > 0 ? resumeArgs[0] : JSUndefined.INSTANCE;
+                                                    outerPromise.reject(error);
+                                                    return JSUndefined.INSTANCE;
+                                                }),
+                                                null,
+                                                childContext
+                                        )
+                                );
+                            } else {
+                                // Not done — yield the value to the caller
+                                delegatedYieldStarIteratorHolder[0] = delegateIterator;
+                                outerPromise.fulfill(resultValue);
+                            }
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                ),
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onDelegatedReject", 1, (childContext, callbackThisArg, callbackArgs) -> {
+                            delegatedYieldStarIteratorHolder[0] = null;
+                            JSValue error = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                            outerPromise.reject(error);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                )
+        );
+        return outerPromise;
+    }
+
+    /**
+     * Read done and value from an iterator result object (done before value per spec),
+     * and create a promise resolving to {value, done}.
+     */
+    private static JSPromise readDoneValueAndCreatePromise(
+            JSContext context,
+            JSObject result,
+            JSObject delegateIterator) {
+        JSValue doneValue = result.get(context, PropertyKey.DONE);
+        if (context.hasPendingException()) {
+            JSValue exception = context.getPendingException();
+            context.clearAllPendingExceptions();
+            return JSAsyncIterator.createRejectedPromise(context, exception);
+        }
+        boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
+        JSValue value = result.get(context, PropertyKey.VALUE);
+        if (context.hasPendingException()) {
+            JSValue exception = context.getPendingException();
+            context.clearAllPendingExceptions();
+            return JSAsyncIterator.createRejectedPromise(context, exception);
+        }
+        JSPromise asyncFromSyncResultPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
+        if (done || delegateIterator == null) {
+            return asyncFromSyncResultPromise;
+        }
+        // Add close-on-rejection handling for non-done results
+        JSPromise closeOnRejectionPromise = context.createJSPromise();
+        asyncFromSyncResultPromise.addReactions(
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onResolve", 1, (childCtx, thisArg, args) -> {
+                            closeOnRejectionPromise.fulfill(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                            return JSUndefined.INSTANCE;
+                        }), null, context),
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction("onReject", 1, (childCtx, thisArg, args) -> {
+                            JSValue originalError = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            JSValue returnMethodValue = delegateIterator.get(childCtx, PropertyKey.RETURN);
+                            if (childCtx.hasPendingException()) {
+                                childCtx.clearAllPendingExceptions();
+                            } else if (returnMethodValue instanceof JSFunction returnFunction) {
+                                returnFunction.call(childCtx, delegateIterator, JSValue.NO_ARGS);
+                                if (childCtx.hasPendingException()) {
+                                    childCtx.clearAllPendingExceptions();
+                                }
+                            }
+                            closeOnRejectionPromise.reject(originalError);
+                            return JSUndefined.INSTANCE;
+                        }), null, context)
+        );
+        return closeOnRejectionPromise;
+    }
+
     private static void resumeAsyncFunctionExecution(
             JSContext context,
             JSGeneratorState asyncFunctionState,
@@ -541,6 +815,13 @@ public final class JSBytecodeFunction extends JSFunction {
                         new JSPromise.ReactionRecord(
                                 new JSNativeFunction("onAwaitReject", 1, (childContext, callbackThisArg, callbackArgs) -> {
                                     JSValue rejectionValue = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                                    // Fire the promise rejection callback (for unhandled rejection tracking)
+                                    IJSPromiseRejectCallback rejectCallback = context.getPromiseRejectCallback();
+                                    if (rejectCallback != null) {
+                                        rejectCallback.callback(
+                                                PromiseRejectEvent.PromiseRejectWithNoHandler,
+                                                awaitedPromise, rejectionValue);
+                                    }
                                     asyncFunctionState.setPendingResumeRecord(JSGeneratorState.ResumeKind.THROW, rejectionValue);
                                     resumeAsyncFunctionExecution(context, asyncFunctionState, outerPromise);
                                     return JSUndefined.INSTANCE;
@@ -614,6 +895,7 @@ public final class JSBytecodeFunction extends JSFunction {
             executionContext.getVirtualMachine().executeGenerator(generatorState, executionContext);
             JSGenerator generatorDriver = new JSGenerator(executionContext, generatorState);
             final JSObject[] delegatedYieldStarIteratorHolder = new JSObject[]{null};
+            final JSFunction[] delegatedNextMethodHolder = new JSFunction[]{null};
             final boolean functionSourceHasFinally = sourceCode != null && sourceCode.contains("finally");
             final JSAsyncGenerator.AsyncGeneratorFunction[] asyncGeneratorRequestExecutorHolder =
                     new JSAsyncGenerator.AsyncGeneratorFunction[1];
@@ -632,19 +914,36 @@ public final class JSBytecodeFunction extends JSFunction {
 
                 try {
                     JSObject delegateIterator = delegatedYieldStarIteratorHolder[0];
+                    if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.NEXT
+                            && delegateIterator != null) {
+                        JSPromise delegatedNextPromise = createAsyncDelegatedNextPromise(
+                                context,
+                                delegateIterator,
+                                inputValue,
+                                delegatedNextMethodHolder[0]);
+                        return handleDelegatedIteratorResult(
+                                context,
+                                delegatedNextPromise,
+                                generatorState,
+                                delegatedYieldStarIteratorHolder,
+                                delegateIterator,
+                                asyncGeneratorRequestExecutorHolder,
+                                false);
+                    }
                     if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.RETURN
                             && delegateIterator != null) {
                         JSPromise delegatedReturnPromise = createAsyncFromSyncDelegatedReturnPromise(
                                 context,
                                 delegateIterator,
                                 inputValue);
-                        attachDelegatedIteratorStateHandlers(
+                        return handleDelegatedIteratorResult(
                                 context,
                                 delegatedReturnPromise,
                                 generatorState,
                                 delegatedYieldStarIteratorHolder,
-                                delegateIterator);
-                        return delegatedReturnPromise;
+                                delegateIterator,
+                                asyncGeneratorRequestExecutorHolder,
+                                true);
                     }
                     if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.THROW
                             && delegateIterator != null) {
@@ -652,13 +951,14 @@ public final class JSBytecodeFunction extends JSFunction {
                                 context,
                                 delegateIterator,
                                 inputValue);
-                        attachDelegatedIteratorStateHandlers(
+                        return handleDelegatedIteratorResult(
                                 context,
                                 delegatedThrowPromise,
                                 generatorState,
                                 delegatedYieldStarIteratorHolder,
-                                delegateIterator);
-                        return delegatedThrowPromise;
+                                delegateIterator,
+                                asyncGeneratorRequestExecutorHolder,
+                                false);
                     }
 
                     if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.RETURN
@@ -852,11 +1152,14 @@ public final class JSBytecodeFunction extends JSFunction {
                         YieldResult lastYield = generatorState.getLastYieldResult();
                         if (lastYield != null && lastYield.isYieldStar()) {
                             delegatedYieldStarIteratorHolder[0] = lastYield.delegateIterator();
+                            delegatedNextMethodHolder[0] = lastYield.cachedNextMethod() instanceof JSFunction cachedNext
+                                    ? cachedNext : null;
                             // ASYNC_YIELD_STAR currently returns a raw sync iterator result object.
                             // Apply async-from-sync iterator-result processing here.
                             fulfillAsyncYieldStarResult(context, promise, iteratorResult, lastYield.delegateIterator());
                         } else {
                             delegatedYieldStarIteratorHolder[0] = null;
+                            delegatedNextMethodHolder[0] = null;
                             // Per ES spec AsyncGeneratorYield step 8: Await the yielded value
                             JSValue yieldedValue = iteratorResult.get(PropertyKey.VALUE);
                             fulfillAsyncYield(context, promise, yieldedValue, false);

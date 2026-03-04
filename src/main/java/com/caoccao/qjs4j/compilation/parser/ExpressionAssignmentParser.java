@@ -50,6 +50,113 @@ final class ExpressionAssignmentParser {
         this.expressions = expressions;
     }
 
+    /**
+     * Checks whether an expression tree contains a YieldExpression.
+     * Does not descend into nested function/arrow/class bodies (they create new scope boundaries).
+     * Used for ES2024 14.2.1: "ArrowParameters Contains YieldExpression is true" early error.
+     */
+    private boolean containsYieldExpression(Expression expression) {
+        if (expression == null) {
+            return false;
+        }
+        if (expression instanceof YieldExpression) {
+            return true;
+        }
+        // Do not descend into nested function/arrow/class bodies - they have their own scope
+        if (expression instanceof FunctionExpression
+                || expression instanceof ArrowFunctionExpression
+                || expression instanceof ClassExpression) {
+            return false;
+        }
+        if (expression instanceof BinaryExpression binaryExpression) {
+            return containsYieldExpression(binaryExpression.left())
+                    || containsYieldExpression(binaryExpression.right());
+        }
+        if (expression instanceof UnaryExpression unaryExpression) {
+            return containsYieldExpression(unaryExpression.operand());
+        }
+        if (expression instanceof AssignmentExpression assignmentExpression) {
+            return containsYieldExpression(assignmentExpression.left())
+                    || containsYieldExpression(assignmentExpression.right());
+        }
+        if (expression instanceof ConditionalExpression conditionalExpression) {
+            return containsYieldExpression(conditionalExpression.test())
+                    || containsYieldExpression(conditionalExpression.consequent())
+                    || containsYieldExpression(conditionalExpression.alternate());
+        }
+        if (expression instanceof CallExpression callExpression) {
+            if (containsYieldExpression(callExpression.callee())) {
+                return true;
+            }
+            for (Expression arg : callExpression.arguments()) {
+                if (containsYieldExpression(arg)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof MemberExpression memberExpression) {
+            return containsYieldExpression(memberExpression.object())
+                    || containsYieldExpression(memberExpression.property());
+        }
+        if (expression instanceof NewExpression newExpression) {
+            if (containsYieldExpression(newExpression.callee())) {
+                return true;
+            }
+            for (Expression arg : newExpression.arguments()) {
+                if (containsYieldExpression(arg)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof ArrayExpression arrayExpression) {
+            for (Expression element : arrayExpression.elements()) {
+                if (containsYieldExpression(element)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof ObjectExpression objectExpression) {
+            for (ObjectExpression.Property property : objectExpression.properties()) {
+                if (containsYieldExpression(property.key())
+                        || containsYieldExpression(property.value())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof SpreadElement spreadElement) {
+            return containsYieldExpression(spreadElement.argument());
+        }
+        if (expression instanceof SequenceExpression sequenceExpression) {
+            for (Expression expr : sequenceExpression.expressions()) {
+                if (containsYieldExpression(expr)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof TemplateLiteral templateLiteral) {
+            for (Expression expr : templateLiteral.expressions()) {
+                if (containsYieldExpression(expr)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof TaggedTemplateExpression taggedTemplateExpression) {
+            return containsYieldExpression(taggedTemplateExpression.tag())
+                    || containsYieldExpression(taggedTemplateExpression.quasi());
+        }
+        if (expression instanceof AwaitExpression awaitExpression) {
+            return containsYieldExpression(awaitExpression.argument());
+        }
+        // Identifier, Literal, PrivateIdentifier - no children, no yield
+        return false;
+    }
+
     private ArrayPattern convertArrowArrayExpressionToPattern(ArrayExpression arrayExpression) {
         List<Pattern> elements = new ArrayList<>();
         for (int elementIndex = 0; elementIndex < arrayExpression.elements().size(); elementIndex++) {
@@ -409,6 +516,45 @@ final class ExpressionAssignmentParser {
             parserContext.lexer.restoreState(savedLexer);
         }
 
+        // YieldExpression is at AssignmentExpression level per ES2024 spec (14.4)
+        // It must NOT be parsed at UnaryExpression level (e.g. "void yield" must be SyntaxError in generators)
+        if (parserContext.match(TokenType.YIELD) && !parserContext.isYieldIdentifierAllowed()) {
+            if (parserContext.generatorFunctionNesting > 0) {
+                if (!parserContext.inFunctionBody) {
+                    throw new JSSyntaxErrorException(
+                            "'yield' expression not allowed in formal parameters of a generator function");
+                }
+                SourceLocation yieldLocation = parserContext.getLocation();
+                parserContext.advance();
+
+                boolean delegate = false;
+                // Per ES2024 14.4: yield [no LineTerminator here] * AssignmentExpression
+                if (!parserContext.hasNewlineBefore() && parserContext.match(TokenType.MUL)) {
+                    delegate = true;
+                    parserContext.advance();
+                }
+
+                Expression argument = null;
+                if (delegate) {
+                    // yield* requires an AssignmentExpression (no line terminator restriction)
+                    argument = parseAssignmentExpression();
+                } else if (!parserContext.hasNewlineBefore()
+                        && !parserContext.match(TokenType.SEMICOLON)
+                        && !parserContext.match(TokenType.RBRACE)
+                        && !parserContext.match(TokenType.RBRACKET)
+                        && !parserContext.match(TokenType.RPAREN)
+                        && !parserContext.match(TokenType.COLON)
+                        && !parserContext.match(TokenType.COMMA)
+                        && !parserContext.match(TokenType.EOF)) {
+                    argument = parseAssignmentExpression();
+                }
+
+                return new YieldExpression(argument, delegate, yieldLocation);
+            }
+            // In strict mode outside a generator, yield is a reserved word — fall through
+            // to parseConditionalExpression which will error when it hits yield
+        }
+
         Expression left = expressions.parseConditionalExpression();
 
         if (parserContext.match(TokenType.ARROW) && !parserContext.hasNewlineBefore()) {
@@ -630,6 +776,16 @@ final class ExpressionAssignmentParser {
     }
 
     private void validateArrowParameters(List<Pattern> params, List<Expression> defaults, RestParameter restParameter, ASTNode body) {
+        // ES2024 14.2.1 Static Semantics: Early Errors
+        // ArrowFunction : ArrowParameters => ConciseBody
+        // It is a Syntax Error if ArrowParameters Contains YieldExpression is true.
+        if (defaults != null) {
+            for (Expression defaultExpression : defaults) {
+                if (containsYieldExpression(defaultExpression)) {
+                    throw new JSSyntaxErrorException("Yield expression not allowed in arrow function parameters");
+                }
+            }
+        }
         boolean strictParameters = parserContext.strictMode || hasUseStrictDirective(body);
         Set<String> seen = new HashSet<>();
         for (Pattern pattern : params) {
