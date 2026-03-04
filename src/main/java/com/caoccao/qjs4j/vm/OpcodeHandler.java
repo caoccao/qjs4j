@@ -1390,6 +1390,20 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
+    static void handleGosub(Opcode op, ExecutionContext executionContext) {
+        byte[] instructions = executionContext.instructions;
+        int pc = executionContext.pc;
+        int offset = ((instructions[pc + 1] & 0xFF) << 24)
+                | ((instructions[pc + 2] & 0xFF) << 16)
+                | ((instructions[pc + 3] & 0xFF) << 8)
+                | (instructions[pc + 4] & 0xFF);
+        // Push return address (instruction after this GOSUB) onto the stack
+        int returnAddress = pc + op.getSize();
+        executionContext.stack[executionContext.sp++] = new JSInternalValue(returnAddress);
+        // Jump to the finally block
+        executionContext.pc = pc + op.getSize() + offset;
+    }
+
     static void handleGoto(Opcode op, ExecutionContext executionContext) {
         byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
@@ -2489,6 +2503,16 @@ public final class OpcodeHandler {
         JSArray restArray = executionContext.virtualMachine.context.createJSArray(restArguments);
         executionContext.stack[executionContext.sp++] = restArray;
         executionContext.pc = pc + op.getSize();
+    }
+
+    static void handleRet(Opcode op, ExecutionContext executionContext) {
+        // Pop the GOSUB return address from the stack and jump to it
+        JSStackValue stackValue = executionContext.stack[--executionContext.sp];
+        if (stackValue instanceof JSInternalValue internalValue && internalValue.value() instanceof Integer returnAddress) {
+            executionContext.pc = returnAddress;
+        } else {
+            throw new JSVirtualMachineException("Invalid ret value");
+        }
     }
 
     static void handleReturn(Opcode op, ExecutionContext executionContext) {

@@ -258,6 +258,12 @@ final class ExpressionPrimaryParser {
         }
 
         if (parserContext.isAssignmentOperator(parserContext.currentToken.type())) {
+            // Validate that expr is a valid assignment target
+            if (!(expr instanceof Identifier)
+                    && !(expr instanceof MemberExpression)
+                    && !(expr instanceof CallExpression)) {
+                throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
+            }
             TokenType op = parserContext.currentToken.type();
             SourceLocation loc = parserContext.getLocation();
             if (parserContext.strictMode && expr instanceof Identifier identifier) {

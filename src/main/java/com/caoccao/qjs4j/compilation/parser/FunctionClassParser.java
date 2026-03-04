@@ -112,6 +112,26 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     }
 
     /**
+     * Check if a parameter list is simple (no defaults, no destructuring, no rest).
+     */
+    private boolean isSimpleParameterList(FunctionParams funcParams) {
+        if (funcParams.restParameter() != null) {
+            return false;
+        }
+        for (Pattern param : funcParams.params()) {
+            if (!(param instanceof Identifier)) {
+                return false;
+            }
+        }
+        for (Expression defaultExpression : funcParams.defaults()) {
+            if (defaultExpression != null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Parse a class declaration or expression.
      * Syntax: class Name extends Super { body }
      */
@@ -411,7 +431,17 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         if (hasUseStrict) {
             parserContext.strictMode = true;
             parserContext.lexer.setStrictMode(true);
+        }
+
+        // Validate parameters when in strict mode (either from outer context or "use strict" directive)
+        if (hasUseStrict || savedStrictMode) {
             checkStrictModeParameters(funcParams, funcName);
+        }
+
+        // Non-simple parameter list with "use strict" directive is always an error (spec 15.2.1)
+        if (hasUseStrict && !isSimpleParameterList(funcParams)) {
+            throw new JSSyntaxErrorException(
+                    "Illegal 'use strict' directive in function with non-simple parameter list");
         }
 
         // Parse remaining body statements
@@ -421,6 +451,11 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 body.add(stmt);
             }
         }
+
+        // Check that parameter names don't conflict with lexical declarations in body
+        // Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs
+        // in the LexicallyDeclaredNames of FunctionBody"
+        validateFormalsBodyDuplicate(funcParams, body);
 
         // Restore outer strict mode
         parserContext.strictMode = savedStrictMode;
@@ -724,5 +759,36 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         parserContext.expect(TokenType.RBRACE);
         return new ClassDeclaration.StaticBlock(statements);
+    }
+
+    /**
+     * Check that parameter BoundNames do not also appear in the LexicallyDeclaredNames of the body.
+     * Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs in the
+     * LexicallyDeclaredNames of FunctionBody."
+     */
+    private void validateFormalsBodyDuplicate(FunctionParams funcParams, List<Statement> body) {
+        Set<String> paramNames = new HashSet<>();
+        for (Pattern param : funcParams.params()) {
+            paramNames.addAll(extractBoundNames(param));
+        }
+        if (funcParams.restParameter() != null) {
+            paramNames.addAll(extractBoundNames(funcParams.restParameter().argument()));
+        }
+        if (paramNames.isEmpty()) {
+            return;
+        }
+        for (Statement statement : body) {
+            if (statement instanceof VariableDeclaration variableDeclaration
+                    && (variableDeclaration.kind() == VariableKind.LET
+                    || variableDeclaration.kind() == VariableKind.CONST)) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                    for (String declaredName : extractBoundNames(declarator.id())) {
+                        if (paramNames.contains(declaredName)) {
+                            throw new JSSyntaxErrorException("invalid redefinition of parameter name");
+                        }
+                    }
+                }
+            }
+        }
     }
 }

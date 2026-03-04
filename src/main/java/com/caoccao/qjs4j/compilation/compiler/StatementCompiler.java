@@ -78,6 +78,24 @@ final class StatementCompiler {
         loopCompiler.compileDoWhileStatement(doWhileStmt);
     }
 
+    /**
+     * Compile the body of a finally block as statements with net-zero stack effect.
+     * Used for the GOSUB/RET path where the return address must remain on top of the stack.
+     */
+    private void compileFinallyBlockBody(BlockStatement block) {
+        compilerContext.enterScope();
+        for (Statement stmt : block.body()) {
+            if (stmt instanceof ExpressionStatement exprStmt) {
+                delegates.expressions.compileExpression(exprStmt.expression());
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+            } else {
+                compileStatement(stmt, false);
+            }
+        }
+        delegates.emitHelpers.emitCurrentScopeUsingDisposal();
+        compilerContext.exitScope();
+    }
+
     void compileForInStatement(ForInStatement forInStmt) {
         loopCompiler.compileForInStatement(forInStmt);
     }
@@ -341,6 +359,20 @@ final class StatementCompiler {
 
         if (compilerContext.hasActiveIteratorLoops()) {
             delegates.emitHelpers.emitAbruptCompletionIteratorClose();
+        }
+
+        // Execute active finally blocks via GOSUB before returning.
+        // Walk from innermost to outermost finally context.
+        for (List<Integer> gosubPatches : compilerContext.activeFinallyGosubPatches) {
+            // Push dummy value (NIP_CATCH expects a value on top of the CatchOffset)
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            // NIP_CATCH removes the CatchOffset for this try-finally, keeps dummy on top
+            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+            // GOSUB pushes return address and jumps to finally block (patched later)
+            int gosubPos = compilerContext.emitter.emitJump(Opcode.GOSUB);
+            gosubPatches.add(gosubPos);
+            // After RET returns here, drop the dummy value
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, returnValueIndex);
@@ -628,23 +660,49 @@ final class StatementCompiler {
             return;
         }
 
+        // Collect GOSUB positions for return statements that need to execute the finally block
+        List<Integer> gosubPatches = new ArrayList<>();
+        compilerContext.activeFinallyGosubPatches.push(gosubPatches);
+
+        // Outer CATCH for exception path to finally
         int finallyCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
+
+        // Compile try body (with optional inner catch block)
         compileTryCatchPart(tryStmt);
+
+        compilerContext.activeFinallyGosubPatches.pop();
+
+        // Normal path: inline finally (preserves existing stack value behavior)
         compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         compileTryFinallyBlock(tryStmt.finalizer());
-        int jumpAfterFinallyExceptionPath = compilerContext.emitter.emitJump(Opcode.GOTO);
+        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
 
+        // Exception path: inline finally, then rethrow
         compilerContext.emitter.patchJump(finallyCatchJump, compilerContext.emitter.currentOffset());
         compilerContext.emitter.markCatchAsFinally(finallyCatchJump);
-        int finallyExceptionLocalIndex = compilerContext.currentScope().declareLocal("$finally_exception_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, finallyExceptionLocalIndex);
+        int exceptionLocalIndex = compilerContext.currentScope().declareLocal(
+                "$finally_exception_" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, exceptionLocalIndex);
         compileTryFinallyBlock(tryStmt.finalizer());
         compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, finallyExceptionLocalIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, exceptionLocalIndex);
         compilerContext.emitter.emitOpcode(Opcode.THROW);
 
-        compilerContext.emitter.patchJump(jumpAfterFinallyExceptionPath, compilerContext.emitter.currentOffset());
+        // GOSUB finally block (only used by return statements inside try/catch bodies)
+        if (!gosubPatches.isEmpty()) {
+            int finallyOffset = compilerContext.emitter.currentOffset();
+            compileFinallyBlockBody(tryStmt.finalizer());
+            compilerContext.emitter.emitOpcode(Opcode.RET);
+
+            // Patch all GOSUBs to point to this finally block
+            for (int pos : gosubPatches) {
+                compilerContext.emitter.patchJump(pos, finallyOffset);
+            }
+        }
+
+        // End label
+        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
     }
 
     void compileVariableDeclaration(VariableDeclaration varDecl) {

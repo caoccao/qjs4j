@@ -145,8 +145,8 @@ public enum Opcode {
     IF_TRUE(102, 5, 1, 0, OpcodeHandler::handleIfTrue),
     GOTO(103, 5, 0, 0, OpcodeHandler::handleGoto),
     CATCH(104, 5, 0, 1, OpcodeHandler::handleCatch),
-    GOSUB(105, 5, 0, 0, OpcodeHandler::handleInvalid),
-    RET(106, 1, 1, 0, OpcodeHandler::handleInvalid),
+    GOSUB(105, 5, 0, 0, OpcodeHandler::handleGosub),
+    RET(106, 1, 1, 0, OpcodeHandler::handleRet),
 
     // Function operations
     DEFINE_FUNC(107, 5, 0, 1, OpcodeHandler::handleInvalid),

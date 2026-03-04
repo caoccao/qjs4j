@@ -28,6 +28,7 @@ import java.util.*;
  * that are shared across the delegate compiler classes.
  */
 final class CompilerContext {
+    final Deque<List<Integer>> activeFinallyGosubPatches;
     final Set<String> annexBFunctionNames;
     final Map<String, Integer> annexBFunctionScopeLocals;
     final CaptureResolver captureResolver;
@@ -62,6 +63,7 @@ final class CompilerContext {
     }
 
     CompilerContext(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver) {
+        this.activeFinallyGosubPatches = new ArrayDeque<>();
         this.annexBFunctionNames = new HashSet<>();
         this.annexBFunctionScopeLocals = new HashMap<>();
         this.emitter = new BytecodeEmitter();

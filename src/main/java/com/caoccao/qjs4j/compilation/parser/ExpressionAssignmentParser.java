@@ -257,6 +257,16 @@ final class ExpressionAssignmentParser {
         return false;
     }
 
+    private boolean isOptionalChainExpression(Expression expression) {
+        if (expression instanceof MemberExpression memberExpression) {
+            return memberExpression.optional() || isOptionalChainExpression(memberExpression.object());
+        }
+        if (expression instanceof CallExpression callExpression) {
+            return callExpression.optional() || isOptionalChainExpression(callExpression.callee());
+        }
+        return false;
+    }
+
     private boolean isSimpleParameterList(List<Pattern> params, List<Expression> defaults, RestParameter restParameter) {
         if (restParameter != null) {
             return false;
@@ -324,6 +334,7 @@ final class ExpressionAssignmentParser {
 
                 if (parserContext.match(TokenType.IDENTIFIER) && parserContext.nextToken.type() == TokenType.ARROW) {
                     Identifier param = parserContext.parseIdentifier();
+                    validateBindingIdentifier(param.name());
                     parserContext.expect(TokenType.ARROW);
 
                     ASTNode body;
@@ -337,6 +348,12 @@ final class ExpressionAssignmentParser {
                     } finally {
                         parserContext.exitFunctionContext(true);
                     }
+
+                    // Async arrows have the same early errors as regular arrows (spec 15.8.1)
+                    List<Expression> singleDefault = new ArrayList<>();
+                    singleDefault.add(null);
+                    validateArrowParameters(List.of(param), singleDefault, null, body);
+                    validateFormalsBodyDuplicate(List.of(param), null, body);
 
                     SourceLocation fullLocation = new SourceLocation(
                             asyncLocation.line(),
@@ -360,6 +377,11 @@ final class ExpressionAssignmentParser {
                         } else {
                             body = parseAssignmentExpression();
                         }
+
+                        // Async arrows have the same early errors as regular arrows (spec 15.8.1)
+                        validateArrowParameters(funcParams.params(), funcParams.defaults(),
+                                funcParams.restParameter(), body);
+                        validateFormalsBodyDuplicate(funcParams.params(), funcParams.restParameter(), body);
 
                         SourceLocation fullLocation = new SourceLocation(
                                 location.line(),
@@ -662,22 +684,46 @@ final class ExpressionAssignmentParser {
         throw new JSSyntaxErrorException("Invalid destructuring assignment target");
     }
 
-    private boolean isOptionalChainExpression(Expression expression) {
-        if (expression instanceof MemberExpression memberExpression) {
-            return memberExpression.optional() || isOptionalChainExpression(memberExpression.object());
-        }
-        if (expression instanceof CallExpression callExpression) {
-            return callExpression.optional() || isOptionalChainExpression(callExpression.callee());
-        }
-        return false;
-    }
-
     private void validateBindingIdentifier(String name) {
         if (RESERVED_WORDS.contains(name)) {
             throw new JSSyntaxErrorException("Unexpected reserved word");
         }
         if (parserContext.strictMode && STRICT_RESERVED_WORDS.contains(name)) {
             throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
+        }
+    }
+
+    /**
+     * Check that parameter BoundNames do not also appear in the LexicallyDeclaredNames of the body.
+     * Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs in the
+     * LexicallyDeclaredNames of AsyncFunctionBody / ConciseBody."
+     */
+    private void validateFormalsBodyDuplicate(List<Pattern> params, RestParameter restParameter, ASTNode body) {
+        if (!(body instanceof BlockStatement blockStatement)) {
+            return;
+        }
+        Set<String> paramNames = new HashSet<>();
+        for (Pattern pattern : params) {
+            paramNames.addAll(extractBoundNames(pattern));
+        }
+        if (restParameter != null) {
+            paramNames.addAll(extractBoundNames(restParameter.argument()));
+        }
+        if (paramNames.isEmpty()) {
+            return;
+        }
+        for (Statement statement : blockStatement.body()) {
+            if (statement instanceof VariableDeclaration variableDeclaration
+                    && (variableDeclaration.kind() == VariableKind.LET
+                    || variableDeclaration.kind() == VariableKind.CONST)) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                    for (String declaredName : extractBoundNames(declarator.id())) {
+                        if (paramNames.contains(declaredName)) {
+                            throw new JSSyntaxErrorException("invalid redefinition of parameter name");
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -362,6 +362,13 @@ final class ParserContext {
             if (strictMode && isStrictReservedIdentifierName(name)) {
                 throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
             }
+            // Contextual keywords via unicode escapes still have their StringValue checked
+            if ("await".equals(name) && !isAwaitIdentifierAllowed()) {
+                throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+            }
+            if ("yield".equals(name) && !isYieldIdentifierAllowed()) {
+                throw new JSSyntaxErrorException("Unexpected token 'yield'");
+            }
             advance();
             return new Identifier(name, location);
         }

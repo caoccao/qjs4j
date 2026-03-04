@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.unicode.UnicodeData;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Lexical analyzer for JavaScript source code.
@@ -34,6 +35,14 @@ import java.util.Map;
  * - Template literals (basic support)
  */
 public final class Lexer {
+    /**
+     * Contextual keywords that are NOT true reserved words per ES2024 12.7.2.
+     * When these appear with unicode escapes, they must be treated as identifiers.
+     */
+    private static final Set<TokenType> CONTEXTUAL_KEYWORD_TYPES = Set.of(
+            TokenType.ASYNC, TokenType.AWAIT, TokenType.YIELD,
+            TokenType.AS, TokenType.FROM, TokenType.OF, TokenType.LET
+    );
     private static final Map<String, TokenType> KEYWORDS = LexerKeywords.KEYWORDS;
 
     final String source;
@@ -325,12 +334,15 @@ public final class Lexer {
         return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
     }
 
-    private Token scanIdentifier(int startPos, int startLine, int startColumn, int firstCodePoint) {
+    private Token scanIdentifier(int startPos, int startLine, int startColumn, int firstCodePoint,
+                                 boolean startsWithEscape) {
+        boolean hasEscape = startsWithEscape;
         StringBuilder valueBuilder = new StringBuilder();
         valueBuilder.appendCodePoint(firstCodePoint);
 
         while (!isAtEnd()) {
             if (peek() == '\\') {
+                hasEscape = true;
                 int currentPos = position;
                 int currentColumn = column;
                 advance(); // consume '\'
@@ -369,8 +381,14 @@ public final class Lexer {
 
         String value = valueBuilder.toString();
 
-        // Check if it's a keyword
+        // Resolve keyword type from the KEYWORDS map
         TokenType type = KEYWORDS.getOrDefault(value, TokenType.IDENTIFIER);
+        // Contextual keywords (async, await, yield, etc.) with unicode escapes must be
+        // treated as identifiers, not keywords. True reserved words (return, if, for, etc.)
+        // are still recognized even with escapes per ES2024 12.6.
+        if (hasEscape && CONTEXTUAL_KEYWORD_TYPES.contains(type)) {
+            type = TokenType.IDENTIFIER;
+        }
 
         return new Token(type, value, startLine, startColumn, startPos);
     }
@@ -828,7 +846,7 @@ public final class Lexer {
 
         // Identifiers and keywords
         if (isIdentifierStart(c)) {
-            Token token = scanIdentifier(startPos, startLine, startColumn, c);
+            Token token = scanIdentifier(startPos, startLine, startColumn, c, false);
             lastTokenType = token.type();
             return token;
         }
@@ -838,7 +856,7 @@ public final class Lexer {
             char trailingSurrogate = advance();
             int codePoint = Character.toCodePoint(c, trailingSurrogate);
             if (isIdentifierStartCodePoint(codePoint)) {
-                Token token = scanIdentifier(startPos, startLine, startColumn, codePoint);
+                Token token = scanIdentifier(startPos, startLine, startColumn, codePoint, false);
                 lastTokenType = token.type();
                 return token;
             }
@@ -852,7 +870,7 @@ public final class Lexer {
             if (codePoint < 0 || !isIdentifierStartCodePoint(codePoint)) {
                 throw new JSSyntaxErrorException("Invalid or unexpected token");
             }
-            Token token = scanIdentifier(startPos, startLine, startColumn, codePoint);
+            Token token = scanIdentifier(startPos, startLine, startColumn, codePoint, true);
             lastTokenType = token.type();
             return token;
         }
