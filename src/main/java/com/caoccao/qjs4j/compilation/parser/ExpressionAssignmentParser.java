@@ -477,6 +477,10 @@ final class ExpressionAssignmentParser {
             if (left instanceof Identifier newTargetId && "new.target".equals(newTargetId.name())) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
+            // PrimaryExpression: this — AssignmentTargetType is "invalid" (spec 13.2.1)
+            if (left instanceof Identifier thisId && "this".equals(thisId.name())) {
+                throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
+            }
             // In strict mode, CallExpression as assignment LHS is an early SyntaxError
             // (follows QuickJS; V8 uses web-compat runtime error instead)
             if (parserContext.strictMode && left instanceof CallExpression) {
