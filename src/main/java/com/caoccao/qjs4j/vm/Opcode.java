@@ -60,7 +60,7 @@ public enum Opcode {
     ROT5L(31, 1, 5, 5, OpcodeHandler::handleInvalid),
     CALL_CONSTRUCTOR(32, 3, -1, 1, OpcodeHandler::handleCallConstructor),
     CALL(33, 3, -1, 1, OpcodeHandler::handleCall),
-    TAIL_CALL(34, 3, -1, 0, OpcodeHandler::handleInvalid),
+    TAIL_CALL(34, 3, -1, 0, OpcodeHandler::handleTailCall),
     CALL_METHOD(35, 3, -1, 1, OpcodeHandler::handleInvalid),
     TAIL_CALL_METHOD(36, 3, -1, 0, OpcodeHandler::handleInvalid),
     ARRAY_FROM(37, 3, -1, 1, OpcodeHandler::handleArrayFrom),

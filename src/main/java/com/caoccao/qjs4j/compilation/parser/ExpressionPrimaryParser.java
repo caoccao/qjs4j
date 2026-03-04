@@ -570,6 +570,50 @@ final class ExpressionPrimaryParser {
             case LBRACE -> delegates.literals.parseObjectExpression();
             case FUNCTION -> delegates.functions.parseFunctionExpression();
             case CLASS -> delegates.functions.parseClassExpression();
+            case AT -> {
+                // Parse decorator list before class expression
+                // Decorator: @ DecoratorMemberExpression | @ DecoratorCallExpression | @ DecoratorParenthesizedExpression
+                while (parserContext.match(TokenType.AT)) {
+                    parserContext.advance(); // consume @
+                    if (parserContext.match(TokenType.LPAREN)) {
+                        // DecoratorParenthesizedExpression: @(expression)
+                        parserContext.advance(); // consume (
+                        boolean savedIn = parserContext.inOperatorAllowed;
+                        parserContext.inOperatorAllowed = true;
+                        expressions.parseExpression();
+                        parserContext.inOperatorAllowed = savedIn;
+                        parserContext.expect(TokenType.RPAREN);
+                    } else {
+                        // DecoratorMemberExpression: identifier (.propertyName)*
+                        parserContext.parseIdentifier();
+                        while (parserContext.match(TokenType.DOT)) {
+                            parserContext.advance(); // consume .
+                            if (parserContext.match(TokenType.PRIVATE_NAME)) {
+                                parserContext.advance();
+                            } else {
+                                expressions.parsePropertyName();
+                            }
+                        }
+                        // Optional DecoratorCallExpression: DecoratorMemberExpression Arguments
+                        if (parserContext.match(TokenType.LPAREN)) {
+                            parserContext.advance(); // consume (
+                            if (!parserContext.match(TokenType.RPAREN)) {
+                                expressions.parseAssignmentExpression();
+                                while (parserContext.match(TokenType.COMMA)) {
+                                    parserContext.advance();
+                                    expressions.parseAssignmentExpression();
+                                }
+                            }
+                            parserContext.expect(TokenType.RPAREN);
+                        }
+                    }
+                }
+                // After decorators, must be a class expression
+                if (!parserContext.match(TokenType.CLASS)) {
+                    throw new JSSyntaxErrorException("Decorators are not valid here");
+                }
+                yield delegates.functions.parseClassExpression();
+            }
             case SUPER -> {
                 parserContext.advance();
                 if (parserContext.match(TokenType.LPAREN)) {
@@ -611,18 +655,50 @@ final class ExpressionPrimaryParser {
             case NUMBER -> {
                 String value = parserContext.currentToken.value();
                 parserContext.advance();
-                yield new Literal(value, location);
+                // Parse numeric property names to canonical form (e.g., 0b10 -> 2)
+                String normalizedValue = value.replace("_", "");
+                Object numValue;
+                if (normalizedValue.startsWith("0x") || normalizedValue.startsWith("0X")) {
+                    long longVal = Long.parseLong(normalizedValue.substring(2), 16);
+                    numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
+                            ? (int) longVal : (double) longVal;
+                } else if (normalizedValue.startsWith("0b") || normalizedValue.startsWith("0B")) {
+                    long longVal = Long.parseLong(normalizedValue.substring(2), 2);
+                    numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
+                            ? (int) longVal : (double) longVal;
+                } else if (normalizedValue.startsWith("0o") || normalizedValue.startsWith("0O")) {
+                    long longVal = Long.parseLong(normalizedValue.substring(2), 8);
+                    numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
+                            ? (int) longVal : (double) longVal;
+                } else {
+                    double doubleVal = Double.parseDouble(normalizedValue);
+                    if (doubleVal == Math.floor(doubleVal) && !Double.isInfinite(doubleVal)
+                            && doubleVal >= Integer.MIN_VALUE && doubleVal <= Integer.MAX_VALUE) {
+                        numValue = (int) doubleVal;
+                    } else {
+                        numValue = doubleVal;
+                    }
+                }
+                yield new Literal(numValue, location);
             }
             case LBRACKET -> {
                 parserContext.advance();
+                // Allow 'in' operator inside computed property names
+                boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
+                parserContext.inOperatorAllowed = true;
                 Expression expr = expressions.parseAssignmentExpression();
+                parserContext.inOperatorAllowed = savedInOperatorAllowed;
                 parserContext.expect(TokenType.RBRACKET);
                 yield expr;
+            }
+            case NULL -> {
+                parserContext.advance();
+                yield new Literal(null, location);
             }
             case AS, ASYNC, AWAIT, BREAK, CASE, CATCH, CLASS, CONST, CONTINUE,
                  DEFAULT, DELETE, DO, ELSE, EXPORT, EXTENDS, FALSE, FINALLY,
                  FOR, FROM, FUNCTION, IF, IMPORT, IN, INSTANCEOF, LET, NEW,
-                 NULL, OF, RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY,
+                 OF, RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY,
                  TYPEOF, VAR, VOID, WHILE, YIELD -> {
                 String name = parserContext.currentToken.value();
                 parserContext.advance();

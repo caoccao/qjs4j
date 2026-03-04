@@ -154,8 +154,12 @@ final class EmitHelpers {
 
         if (isComputedKey) {
             delegates.expressions.compileExpression(method.key());
-        } else {
+        } else if (method.key() instanceof Identifier) {
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
+        } else {
+            // For Literal keys (numeric, null, string), compile the expression directly
+            // to preserve the correct type (e.g., JSNumber for numeric property names)
+            delegates.expressions.compileExpression(method.key());
         }
 
         compilerContext.emitter.emitOpcodeConstant(pushMethodOpcode, methodFunc);

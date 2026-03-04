@@ -254,8 +254,8 @@ final class ParserContext {
 
     private boolean isStrictReservedIdentifierName(String name) {
         return switch (name) {
-            case JSKeyword.IMPLEMENTS, JSKeyword.INTERFACE, JSKeyword.PACKAGE, JSKeyword.PRIVATE, JSKeyword.PROTECTED,
-                 JSKeyword.PUBLIC, JSKeyword.STATIC -> true;
+            case JSKeyword.IMPLEMENTS, JSKeyword.INTERFACE, JSKeyword.LET, JSKeyword.PACKAGE, JSKeyword.PRIVATE,
+                 JSKeyword.PROTECTED, JSKeyword.PUBLIC, JSKeyword.STATIC, JSKeyword.YIELD -> true;
             default -> false;
         };
     }

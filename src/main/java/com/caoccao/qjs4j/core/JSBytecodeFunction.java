@@ -54,6 +54,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private int[] captureSourceInfos;
     private JSFunction capturedActiveFunction;
     private JSValue capturedArguments;
+    private VarRef capturedDerivedThisRef;
     private JSValue capturedNewTarget;
     private JSValue capturedThisArg;
     private String[] capturedVarNames;
@@ -1371,6 +1372,7 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.hasArgumentsParameterBinding = this.hasArgumentsParameterBinding;
         copiedFunction.selfLocalIndex = selfLocalIndex;
         copiedFunction.capturedActiveFunction = this.capturedActiveFunction;
+        copiedFunction.capturedDerivedThisRef = this.capturedDerivedThisRef;
         copiedFunction.capturedThisArg = this.capturedThisArg;
         copiedFunction.capturedArguments = this.capturedArguments;
         copiedFunction.capturedNewTarget = this.capturedNewTarget;
@@ -1402,6 +1404,7 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.hasArgumentsParameterBinding = this.hasArgumentsParameterBinding;
         copiedFunction.selfLocalIndex = selfLocalIndex;
         copiedFunction.capturedActiveFunction = this.capturedActiveFunction;
+        copiedFunction.capturedDerivedThisRef = this.capturedDerivedThisRef;
         copiedFunction.capturedThisArg = this.capturedThisArg;
         copiedFunction.capturedArguments = this.capturedArguments;
         copiedFunction.capturedNewTarget = this.capturedNewTarget;
@@ -1450,6 +1453,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public JSValue getCapturedNewTarget() {
         return capturedNewTarget;
+    }
+
+    public VarRef getCapturedDerivedThisRef() {
+        return capturedDerivedThisRef;
     }
 
     /**
@@ -1615,6 +1622,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public void setCapturedNewTarget(JSValue capturedNewTarget) {
         this.capturedNewTarget = capturedNewTarget;
+    }
+
+    public void setCapturedDerivedThisRef(VarRef ref) {
+        this.capturedDerivedThisRef = ref;
     }
 
     /**

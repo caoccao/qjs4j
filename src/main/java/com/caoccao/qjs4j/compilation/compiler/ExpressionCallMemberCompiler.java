@@ -33,6 +33,12 @@ final class ExpressionCallMemberCompiler {
         this.delegates = delegates;
     }
 
+    private void emitPendingPostSuperInitialization() {
+        if (compilerContext.pendingPostSuperInitialization != null) {
+            compilerContext.pendingPostSuperInitialization.run();
+        }
+    }
+
     void compileCallExpression(CallExpression callExpr) {
         boolean hasSpread = callExpr.arguments().stream().anyMatch(arg -> arg instanceof SpreadElement);
         if (hasSpread) {
@@ -52,18 +58,27 @@ final class ExpressionCallMemberCompiler {
             delegates.emitHelpers.emitArgumentsArrayWithSpread(callExpr.arguments());
             compilerContext.emitter.emitOpcodeU16(Opcode.APPLY, 1);
             compilerContext.emitter.emitOpcode(Opcode.INIT_CTOR);
+            emitPendingPostSuperInitialization();
             return;
         }
         if (callExpr.callee() instanceof Identifier calleeId && JSKeyword.EVAL.equals(calleeId.name())) {
+            boolean isTailCallForEval = compilerContext.emitTailCalls;
+            compilerContext.emitTailCalls = false;
             owner.compileExpression(callExpr.callee());
             for (Expression arg : callExpr.arguments()) {
                 owner.compileExpression(arg);
             }
             compilerContext.emitter.emitOpcode(Opcode.EVAL);
             compilerContext.emitter.emitU16(callExpr.arguments().size());
-            compilerContext.emitter.emitU16(0);
+            compilerContext.emitter.emitU16(isTailCallForEval ? 1 : 0);
             return;
         }
+        // Determine which CALL opcode to use (TAIL_CALL when in tail position)
+        // Reset flag immediately so nested calls (in callee/arguments) are not treated as tail calls
+        boolean isTailCall = compilerContext.emitTailCalls;
+        compilerContext.emitTailCalls = false;
+        Opcode callOpcode = isTailCall ? Opcode.TAIL_CALL : Opcode.CALL;
+
         if (callExpr.callee() instanceof MemberExpression memberExpr) {
             if (compilerContext.isSuperMemberExpression(memberExpr)) {
                 delegates.emitHelpers.emitGetSuperValue(memberExpr, true);
@@ -71,7 +86,7 @@ final class ExpressionCallMemberCompiler {
                 for (Expression arg : callExpr.arguments()) {
                     owner.compileExpression(arg);
                 }
-                compilerContext.emitter.emitOpcodeU16(Opcode.CALL, callExpr.arguments().size());
+                compilerContext.emitter.emitOpcodeU16(callOpcode, callExpr.arguments().size());
                 return;
             }
 
@@ -100,18 +115,26 @@ final class ExpressionCallMemberCompiler {
                 owner.compileExpression(arg);
             }
 
-            compilerContext.emitter.emitOpcodeU16(Opcode.CALL, callExpr.arguments().size());
+            compilerContext.emitter.emitOpcodeU16(callOpcode, callExpr.arguments().size());
         } else {
-            owner.compileExpression(callExpr.callee());
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            if (callExpr.callee() instanceof Identifier calleeId && compilerContext.hasActiveWithObject()) {
+                // Inside a with scope, lookup returns [value, receiver] where receiver
+                // is the with object if the name was found there (ES spec 12.3.4.1 step 4.b.ii)
+                owner.emitWithAwareIdentifierLookupForCall(calleeId.name());
+            } else {
+                owner.compileExpression(callExpr.callee());
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            }
             for (Expression arg : callExpr.arguments()) {
                 owner.compileExpression(arg);
             }
-            compilerContext.emitter.emitOpcodeU16(Opcode.CALL, callExpr.arguments().size());
+            compilerContext.emitter.emitOpcodeU16(callOpcode, callExpr.arguments().size());
         }
     }
 
     void compileCallExpressionWithSpread(CallExpression callExpr) {
+        // TCO not supported for spread calls (they use APPLY, not CALL)
+        compilerContext.emitTailCalls = false;
         if (callExpr.callee() instanceof Identifier calleeId && JSKeyword.SUPER.equals(calleeId.name())) {
             compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
             compilerContext.emitter.emitU8(3);
@@ -121,6 +144,7 @@ final class ExpressionCallMemberCompiler {
             delegates.emitHelpers.emitArgumentsArrayWithSpread(callExpr.arguments());
             compilerContext.emitter.emitOpcodeU16(Opcode.APPLY, 1);
             compilerContext.emitter.emitOpcode(Opcode.INIT_CTOR);
+            emitPendingPostSuperInitialization();
             return;
         }
         if (callExpr.callee() instanceof Identifier calleeId && JSKeyword.EVAL.equals(calleeId.name())) {
@@ -156,8 +180,14 @@ final class ExpressionCallMemberCompiler {
                 }
             }
         } else {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            owner.compileExpression(callExpr.callee());
+            if (callExpr.callee() instanceof Identifier calleeId && compilerContext.hasActiveWithObject()) {
+                // Lookup returns [value, receiver]; APPLY expects [receiver, function, ...]
+                owner.emitWithAwareIdentifierLookupForCall(calleeId.name());
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            } else {
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                owner.compileExpression(callExpr.callee());
+            }
         }
 
         delegates.emitHelpers.emitArgumentsArrayWithSpread(callExpr.arguments());

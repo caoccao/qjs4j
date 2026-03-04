@@ -346,6 +346,53 @@ public final class OpcodeHandler {
         executionContext.pc += op.getSize();
     }
 
+    static void handleTailCall(Opcode op, ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        byte[] instructions = executionContext.instructions;
+        int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+
+        // Peek at the callee to check if we can use the trampoline
+        int calleeIndex = executionContext.sp - argumentCount - 2;
+        JSValue callee = (JSValue) executionContext.stack[calleeIndex];
+
+        // Check if callee is a non-constructor bytecode function eligible for TCO
+        boolean canTrampoline = false;
+        if (callee instanceof JSBytecodeFunction bytecodeFunc && !(callee instanceof JSClass)) {
+            canTrampoline = !bytecodeFunc.isClassConstructor();
+        }
+
+        if (canTrampoline) {
+            // Pop arguments, receiver, callee for trampoline
+            JSValue[] args = argumentCount == 0 ? JSValue.NO_ARGS : new JSValue[argumentCount];
+            for (int i = argumentCount - 1; i >= 0; i--) {
+                args[i] = executionContext.virtualMachine.valueStack.pop();
+            }
+            JSValue receiver = executionContext.virtualMachine.valueStack.pop();
+            callee = executionContext.virtualMachine.valueStack.pop();
+            executionContext.virtualMachine.propertyAccessLock = false;
+            executionContext.virtualMachine.resetPropertyAccessTracking();
+
+            // Store the tail call request for the trampoline loop in execute()
+            executionContext.virtualMachine.tailCallPending =
+                    new VirtualMachine.TailCallRequest((JSBytecodeFunction) callee, receiver, args);
+            // Clean up the current frame (same as RETURN)
+            executionContext.virtualMachine.lastConstructorThisArg = executionContext.frame.getThisArg();
+            executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
+            executionContext.opcodeRequestedReturn = true;
+            return;
+        }
+
+        // Fallback: call normally and return the result (like CALL + RETURN)
+        internalHandleCall(executionContext, argumentCount, false);
+        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        JSValue result = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.virtualMachine.lastConstructorThisArg = executionContext.frame.getThisArg();
+        executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
+        executionContext.returnValue = result;
+        executionContext.opcodeRequestedReturn = true;
+    }
+
     static void handleCall0(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         internalHandleCall(executionContext, 0, false);
@@ -797,6 +844,52 @@ public final class OpcodeHandler {
     static void handleEval(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int argumentCount = executionContext.bytecode.readU16(pc + 1);
+        int tailFlag = executionContext.bytecode.readU16(pc + 3);
+
+        if (tailFlag != 0) {
+            // Tail position eval call: handle TCO when callee is not the real eval
+            executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+
+            // Pop arguments
+            JSValue[] args = argumentCount == 0 ? JSValue.NO_ARGS : new JSValue[argumentCount];
+            for (int i = argumentCount - 1; i >= 0; i--) {
+                args[i] = executionContext.virtualMachine.valueStack.pop();
+            }
+            // Eval syntax: no receiver pop (directEvalSyntax)
+            JSValue callee = executionContext.virtualMachine.valueStack.pop();
+            executionContext.virtualMachine.propertyAccessLock = false;
+
+            // Check if callee is a non-constructor bytecode function eligible for TCO
+            boolean canTrampoline = false;
+            if (callee instanceof JSBytecodeFunction bytecodeFunc && !(callee instanceof JSClass)) {
+                canTrampoline = !bytecodeFunc.isClassConstructor();
+            }
+
+            if (canTrampoline) {
+                executionContext.virtualMachine.resetPropertyAccessTracking();
+                executionContext.virtualMachine.tailCallPending =
+                        new VirtualMachine.TailCallRequest((JSBytecodeFunction) callee, JSUndefined.INSTANCE, args);
+                executionContext.virtualMachine.lastConstructorThisArg = executionContext.frame.getThisArg();
+                executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
+                executionContext.opcodeRequestedReturn = true;
+                return;
+            }
+
+            // Not eligible for trampoline: push values back and call normally, then return
+            executionContext.virtualMachine.valueStack.push(callee);
+            for (JSValue arg : args) {
+                executionContext.virtualMachine.valueStack.push(arg);
+            }
+            internalHandleCall(executionContext, argumentCount, true);
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            JSValue result = (JSValue) executionContext.stack[--executionContext.sp];
+            executionContext.virtualMachine.lastConstructorThisArg = executionContext.frame.getThisArg();
+            executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
+            executionContext.returnValue = result;
+            executionContext.opcodeRequestedReturn = true;
+            return;
+        }
+
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         internalHandleCall(executionContext, argumentCount, true);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
@@ -840,6 +933,10 @@ public final class OpcodeHandler {
             }
             // Arrow functions capture this, arguments, new.target, active function, and home object from the enclosing scope
             if (closureFunction.isArrow()) {
+                VarRef derivedThisRef = executionContext.frame.getDerivedThisRef();
+                if (derivedThisRef != null) {
+                    closureFunction.setCapturedDerivedThisRef(derivedThisRef);
+                }
                 closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
                 // Capture new.target and active function lexically from enclosing function
                 JSFunction enclosingFunc = executionContext.frame.getFunction();
@@ -902,6 +999,10 @@ public final class OpcodeHandler {
             }
             // Arrow functions capture this, arguments, new.target, active function, and home object from the enclosing scope
             if (closureFunction.isArrow()) {
+                VarRef derivedThisRef = executionContext.frame.getDerivedThisRef();
+                if (derivedThisRef != null) {
+                    closureFunction.setCapturedDerivedThisRef(derivedThisRef);
+                }
                 closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
                 JSFunction enclosingFunc = executionContext.frame.getFunction();
                 if (enclosingFunc instanceof JSBytecodeFunction enclosingBf && enclosingBf.isArrow()) {
@@ -1360,12 +1461,19 @@ public final class OpcodeHandler {
         JSStackValue[] stack = executionContext.stack;
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
         String variableName = executionContext.bytecode.getAtoms()[atomIndex];
-        if (executionContext.frame.hasDynamicVarBinding(variableName)) {
-            JSValue variableValue = executionContext.frame.getDynamicVarBinding(variableName);
-            stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
-            executionContext.sp = sp;
-            executionContext.pc = pc + op.getSize();
-            return;
+        // Check dynamic var bindings in current frame and caller frames.
+        // Variables introduced by eval("var x = ...") are stored in the caller frame's
+        // dynamicVarBindings. Inner functions must be able to see these via the scope chain.
+        StackFrame checkFrame = executionContext.frame;
+        while (checkFrame != null) {
+            if (checkFrame.hasDynamicVarBinding(variableName)) {
+                JSValue variableValue = checkFrame.getDynamicVarBinding(variableName);
+                stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
+            checkFrame = checkFrame.getCaller();
         }
         PropertyKey key = PropertyKey.fromString(variableName);
         JSObject globalObject = executionContext.virtualMachine.context.getGlobalObject();
@@ -2156,7 +2264,18 @@ public final class OpcodeHandler {
     }
 
     static void handlePushThis(Opcode op, ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = executionContext.frame.getThisArg();
+        VarRef derivedThisRef = executionContext.frame.getDerivedThisRef();
+        if (derivedThisRef != null) {
+            JSValue thisValue = derivedThisRef.get();
+            if (executionContext.virtualMachine.isUninitialized(thisValue)) {
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.throwReferenceError(
+                                "Must call super constructor in derived class before accessing 'this' or returning from derived constructor"));
+            }
+            executionContext.stack[executionContext.sp++] = thisValue;
+        } else {
+            executionContext.stack[executionContext.sp++] = executionContext.frame.getThisArg();
+        }
         executionContext.pc += 1;
     }
 
@@ -2466,10 +2585,15 @@ public final class OpcodeHandler {
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
         String variableName = executionContext.bytecode.getAtoms()[atomIndex];
         JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
-        if (executionContext.frame.hasDynamicVarBinding(variableName)) {
-            executionContext.frame.setDynamicVarBinding(variableName, value);
-            executionContext.pc = pc + op.getSize();
-            return;
+        // Check dynamic var bindings in current frame and caller frames
+        StackFrame checkFrame = executionContext.frame;
+        while (checkFrame != null) {
+            if (checkFrame.hasDynamicVarBinding(variableName)) {
+                checkFrame.setDynamicVarBinding(variableName, value);
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
+            checkFrame = checkFrame.getCaller();
         }
         JSContext context = executionContext.virtualMachine.context;
         context.getGlobalObject().set(context, PropertyKey.fromString(variableName), value);
@@ -4204,6 +4328,11 @@ public final class OpcodeHandler {
                 throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("super() returned non-object"));
             }
             executionContext.virtualMachine.currentFrame.setThisArg(jsObject);
+            // Update shared derivedThisRef so arrow functions see the initialized this
+            VarRef derivedThisRef = executionContext.virtualMachine.currentFrame.getDerivedThisRef();
+            if (derivedThisRef != null) {
+                derivedThisRef.set(jsObject);
+            }
             // For arrow functions inside derived constructors, propagate the initialized this
             // back to the enclosing constructor frame if it's still on the call stack.
             if (currentFunction instanceof JSBytecodeFunction arrowBf && arrowBf.isArrow()) {
@@ -4213,6 +4342,10 @@ public final class OpcodeHandler {
                     if (callerFunc instanceof JSBytecodeFunction callerBf) {
                         if (callerBf.isDerivedConstructor()) {
                             callerFrame.setThisArg(jsObject);
+                            VarRef callerThisRef = callerFrame.getDerivedThisRef();
+                            if (callerThisRef != null) {
+                                callerThisRef.set(jsObject);
+                            }
                             break;
                         }
                         if (!callerBf.isArrow()) {
@@ -4245,6 +4378,10 @@ public final class OpcodeHandler {
             throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("super() returned non-object"));
         }
         executionContext.virtualMachine.currentFrame.setThisArg(superObject);
+        VarRef defaultDerivedThisRef = executionContext.virtualMachine.currentFrame.getDerivedThisRef();
+        if (defaultDerivedThisRef != null) {
+            defaultDerivedThisRef.set(superObject);
+        }
         executionContext.virtualMachine.valueStack.push(superObject);
     }
 

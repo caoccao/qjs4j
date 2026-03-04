@@ -36,6 +36,7 @@ public final class StackFrame {
     private final int stackBase;
     private final VarRef[] varRefs;
     private VarRef[] closedVarRefs;
+    private VarRef derivedThisRef;
     private Map<String, JSValue> dynamicVarBindings;
     private VarRef[] localVarRefs;
     private JSArguments mappedArgumentsObject;
@@ -193,6 +194,14 @@ public final class StackFrame {
 
     public JSValue getThisArg() {
         return thisArg;
+    }
+
+    public VarRef getDerivedThisRef() {
+        return derivedThisRef;
+    }
+
+    public void setDerivedThisRef(VarRef derivedThisRef) {
+        this.derivedThisRef = derivedThisRef;
     }
 
     /**

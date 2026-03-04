@@ -896,6 +896,13 @@ public final class Lexer {
             return token;
         }
 
+        // Decorator (@)
+        if (c == '@') {
+            Token token = new Token(TokenType.AT, "@", startLine, startColumn, startPos);
+            lastTokenType = token.type();
+            return token;
+        }
+
         // Private identifiers (#name)
         if (c == '#') {
             // Check if next character is an identifier start

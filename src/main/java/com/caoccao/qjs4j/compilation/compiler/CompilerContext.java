@@ -47,11 +47,13 @@ final class CompilerContext {
     boolean isInAsyncFunction;
     int maxLocalCount;
     String pendingLoopLabel;
+    Runnable pendingPostSuperInitialization;
     boolean predeclareProgramLexicalsAsLocals;
     Map<String, JSSymbol> privateSymbols;
     int scopeDepth;
     String sourceCode;
     boolean strictMode;
+    boolean emitTailCalls;
     CompilerScope varDeclarationScopeOverride;
     boolean varInGlobalProgram;
 
@@ -410,7 +412,7 @@ final class CompilerContext {
         if (key instanceof Identifier id) {
             return id.name();
         } else if (key instanceof Literal literal) {
-            return literal.value().toString();
+            return literal.value() != null ? literal.value().toString() : "null";
         } else if (key instanceof PrivateIdentifier privateId) {
             return privateId.name();
         } else {

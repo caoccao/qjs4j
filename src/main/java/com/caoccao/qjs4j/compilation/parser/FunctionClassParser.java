@@ -136,6 +136,21 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     /**
      * Check if a parameter list is simple (no defaults, no destructuring, no rest).
      */
+    private boolean hasUseStrictDirective(BlockStatement blockStatement) {
+        for (Statement statement : blockStatement.body()) {
+            if (statement instanceof ExpressionStatement expressionStatement
+                    && expressionStatement.expression() instanceof Literal literal
+                    && literal.value() instanceof String literalString) {
+                if (JSKeyword.USE_STRICT.equals(literalString)) {
+                    return true;
+                }
+                continue;
+            }
+            break;
+        }
+        return false;
+    }
+
     private boolean isSimpleParameterList(FunctionParams funcParams) {
         if (funcParams.restParameter() != null) {
             return false;
@@ -163,11 +178,18 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.expect(TokenType.CLASS);
 
         // Parse optional class name
+        // Per ES spec 14.6: class bodies are strict mode code, so the class name
+        // binding identifier is validated with strict mode rules.
         Identifier id = null;
-        if (parserContext.match(TokenType.IDENTIFIER)) {
-            String name = parserContext.currentToken.value();
-            parserContext.advance();
-            id = new Identifier(name, startLocation);
+        if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
+                || parserContext.match(TokenType.YIELD)) {
+            boolean savedStrict = parserContext.strictMode;
+            parserContext.strictMode = true;
+            try {
+                id = parserContext.parseIdentifier();
+            } finally {
+                parserContext.strictMode = savedStrict;
+            }
         }
 
         // Parse optional extends clause
@@ -321,7 +343,11 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         // Check for computed property name [expr]
         if (parserContext.match(TokenType.LBRACKET)) {
             parserContext.advance();
+            // Allow 'in' operator inside computed property names
+            boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
+            parserContext.inOperatorAllowed = true;
             Expression key = delegates.expressions.parseAssignmentExpression();
+            parserContext.inOperatorAllowed = savedInOperatorAllowed;
             parserContext.expect(TokenType.RBRACKET);
             return parseMethodOrField(key, isStatic, isPrivate, true, methodStartLocation);
         }
@@ -349,7 +375,11 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     parserContext.advance();
                 } else if (parserContext.match(TokenType.LBRACKET)) {
                     parserContext.advance();
+                    // Allow 'in' operator inside computed property names
+                    boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
+                    parserContext.inOperatorAllowed = true;
                     key = delegates.expressions.parseAssignmentExpression();
+                    parserContext.inOperatorAllowed = savedInOperatorAllowed;
                     parserContext.expect(TokenType.RBRACKET);
                     computed = true;
                 } else {
@@ -378,11 +408,18 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.expect(TokenType.CLASS);
 
         // Parse optional class name (class expressions can be anonymous)
+        // Per ES spec 14.6: class bodies are strict mode code, so the class name
+        // binding identifier is validated with strict mode rules.
         Identifier id = null;
-        if (parserContext.match(TokenType.IDENTIFIER)) {
-            String name = parserContext.currentToken.value();
-            parserContext.advance();
-            id = new Identifier(name, startLocation);
+        if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
+                || parserContext.match(TokenType.YIELD)) {
+            boolean savedStrict = parserContext.strictMode;
+            parserContext.strictMode = true;
+            try {
+                id = parserContext.parseIdentifier();
+            } finally {
+                parserContext.strictMode = savedStrict;
+            }
         }
 
         // Parse optional extends clause
@@ -721,6 +758,14 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         } finally {
             parserContext.inClassStaticInit = savedInClassStaticInit;
             parserContext.exitFunctionContext(isAsync, isGenerator);
+        }
+
+        // Per ES2024 15.2.1: "use strict" in method body with non-simple parameters
+        // is a SyntaxError. Methods are already strict (class bodies are strict mode),
+        // but we must still check for the explicit directive + non-simple params combo.
+        if (!isSimpleParameterList(funcParams) && hasUseStrictDirective(body)) {
+            throw new JSSyntaxErrorException(
+                    "Illegal 'use strict' directive in function with non-simple parameter list");
         }
 
         SourceLocation fullLocation = new SourceLocation(

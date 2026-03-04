@@ -1319,13 +1319,25 @@ final class FunctionClassCompiler {
             methodCtx.emitter.emitOpcode(Opcode.INITIAL_YIELD);
         }
 
-        // For constructors, initialize private methods then fields before user code runs.
+        // For constructors, initialize private methods then fields.
+        // For derived constructors, defer until after super() (INIT_CTOR) per ES spec 14.6.13 step 11.
         if (isConstructor) {
-            if (!privateInstanceMethodFunctions.isEmpty()) {
-                methodDelegates.functions.compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
-            }
-            if (!instanceFields.isEmpty()) {
-                methodDelegates.functions.compileFieldInitialization(instanceFields, privateSymbols, computedFieldSymbols);
+            if (isDerivedConstructor) {
+                methodCtx.pendingPostSuperInitialization = () -> {
+                    if (!privateInstanceMethodFunctions.isEmpty()) {
+                        methodDelegates.functions.compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
+                    }
+                    if (!instanceFields.isEmpty()) {
+                        methodDelegates.functions.compileFieldInitialization(instanceFields, privateSymbols, computedFieldSymbols);
+                    }
+                };
+            } else {
+                if (!privateInstanceMethodFunctions.isEmpty()) {
+                    methodDelegates.functions.compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
+                }
+                if (!instanceFields.isEmpty()) {
+                    methodDelegates.functions.compileFieldInitialization(instanceFields, privateSymbols, computedFieldSymbols);
+                }
             }
         }
 

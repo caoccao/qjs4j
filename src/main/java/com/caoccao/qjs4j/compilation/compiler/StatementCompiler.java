@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
@@ -346,6 +347,23 @@ final class StatementCompiler {
     }
 
     void compileReturnStatement(ReturnStatement retStmt) {
+        // Tail call optimization: when the return argument is a simple call expression
+        // in strict mode, with no active finally blocks, iterators, or async context,
+        // emit TAIL_CALL instead of CALL + RETURN (ES2015 14.6.1 HasCallInTailPosition).
+        // Exclude spread calls (which use APPLY, not CALL) and super calls from TCO.
+        if (retStmt.argument() instanceof CallExpression callExpr
+                && compilerContext.strictMode
+                && !compilerContext.isInAsyncFunction
+                && compilerContext.activeFinallyGosubPatches.isEmpty()
+                && !compilerContext.hasActiveIteratorLoops()
+                && callExpr.arguments().stream().noneMatch(arg -> arg instanceof SpreadElement)
+                && !(callExpr.callee() instanceof Identifier id && JSKeyword.SUPER.equals(id.name()))) {
+            compilerContext.emitTailCalls = true;
+            delegates.expressions.compileExpression(retStmt.argument());
+            compilerContext.emitTailCalls = false;
+            return;
+        }
+
         if (retStmt.argument() != null) {
             delegates.expressions.compileExpression(retStmt.argument());
         } else {
@@ -777,10 +795,9 @@ final class StatementCompiler {
                 compileStatement(withStmt.body());
             }
         } finally {
-            // Clear active with object marker so direct-eval scope overlay can detect
-            // only currently active with environments from runtime locals.
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, withObjectLocalIndex);
+            // Do NOT clear the with-object local to undefined here.
+            // Closures defined inside the with block capture a VarRef to this local
+            // and need the with-object to remain accessible after the block exits.
             compilerContext.popWithObjectLocal();
         }
 

@@ -54,8 +54,12 @@ public final class VirtualMachine {
     JSValue lastConstructorThisArg;  // Saved from frame before return for derived constructor check
     JSValue pendingException;
     boolean propertyAccessLock;  // When true, don't update lastPropertyAccess (during argument evaluation)
+    TailCallRequest tailCallPending;  // Set by TAIL_CALL handler for trampoline in execute()
     YieldResult yieldResult;  // Set when generator yields
     int yieldSkipCount;  // How many yields to skip (for resuming generators)
+
+    /** Tail call request used for trampoline-based tail call optimization. */
+    record TailCallRequest(JSBytecodeFunction function, JSValue receiver, JSValue[] args) {}
 
     public VirtualMachine(JSContext context) {
         this.valueStack = new CallStack();
@@ -833,99 +837,124 @@ public final class VirtualMachine {
     }
 
     public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, JSValue newTarget) {
-        JSGeneratorState generatorStateForExecution = activeGeneratorState;
-        boolean resumeGeneratorExecution =
-                generatorStateForExecution != null
-                        && generatorStateForExecution.getFunction() == function
-                        && generatorStateForExecution.hasSuspendedExecutionState()
-                        && generatorStateForExecution.hasPendingResumeRecord();
-        // Save the current caller stack position so function exit can restore it.
-        int callerStackTop = valueStack.getStackTop();
-        // Always use callerStackTop as the frame's operand stack base.
-        // For resumed generators, the suspended stack values are relative and
-        // will be correctly placed at the current caller position.  Using the
-        // original suspended stackBase would write into the caller's stack
-        // region when the generator is resumed at a different call depth.
-        int frameStackBase = callerStackTop;
-        int restoreStackTop = callerStackTop;
+        // Outer loop for tail call optimization trampoline.
+        // When TAIL_CALL fires, it sets tailCallPending and returns from the inner loop.
+        // This outer loop then restarts execution with the new function/args without
+        // consuming an additional Java stack frame.
+        tailCallLoop:
+        while (true) {
+            JSGeneratorState generatorStateForExecution = activeGeneratorState;
+            boolean resumeGeneratorExecution =
+                    generatorStateForExecution != null
+                            && generatorStateForExecution.getFunction() == function
+                            && generatorStateForExecution.hasSuspendedExecutionState()
+                            && generatorStateForExecution.hasPendingResumeRecord();
+            // Save the current caller stack position so function exit can restore it.
+            int callerStackTop = valueStack.getStackTop();
+            // Always use callerStackTop as the frame's operand stack base.
+            // For resumed generators, the suspended stack values are relative and
+            // will be correctly placed at the current caller position.  Using the
+            // original suspended stackBase would write into the caller's stack
+            // region when the generator is resumed at a different call depth.
+            int frameStackBase = callerStackTop;
+            int restoreStackTop = callerStackTop;
 
-        // Save and set strict mode based on function
-        // Following QuickJS: each function has its own strict mode flag
-        boolean savedStrictMode = context.isStrictMode();
-        if (function.isStrict()) {
-            context.enterStrictMode();
-        } else {
-            context.exitStrictMode();
-        }
+            // Save and set strict mode based on function
+            // Following QuickJS: each function has its own strict mode flag
+            boolean savedStrictMode = context.isStrictMode();
+            if (function.isStrict()) {
+                context.enterStrictMode();
+            } else {
+                context.exitStrictMode();
+            }
 
-        // Create or restore stack frame
-        StackFrame frame = resumeGeneratorExecution
-                ? generatorStateForExecution.getSuspendedFrame()
-                : new StackFrame(function, thisArg, args, currentFrame, newTarget, callerStackTop);
-        StackFrame previousFrame = currentFrame;
-        currentFrame = frame;
-
-        try {
-            ExecutionContext executionContext = createExecutionContext(
-                    function,
-                    frame,
-                    previousFrame,
-                    frameStackBase,
-                    restoreStackTop,
-                    savedStrictMode,
-                    generatorStateForExecution,
-                    resumeGeneratorExecution);
-            int sp = executionContext.sp;
-            int pc = executionContext.pc;
-
-            // Main execution loop
-            while (true) {
-                // Sync local sp to valueStack at top of each iteration.
-                // This ensures cold opcodes (which use valueStack directly) see the correct stackTop.
-                valueStack.stackTop = sp;
-
-                executionContext.sp = sp;
-                executionContext.pc = pc;
-                PendingExceptionAction pendingExceptionAction = handlePendingExceptionForExecute(executionContext);
-                if (pendingExceptionAction == PendingExceptionAction.RETURN) {
-                    return executionContext.returnValue;
+            // Create or restore stack frame
+            StackFrame frame = resumeGeneratorExecution
+                    ? generatorStateForExecution.getSuspendedFrame()
+                    : new StackFrame(function, thisArg, args, currentFrame, newTarget, callerStackTop);
+            // For derived constructors, set up this TDZ tracking via shared VarRef
+            if (!resumeGeneratorExecution) {
+                if (function.isDerivedConstructor()) {
+                    frame.setDerivedThisRef(new VarRef(UNINITIALIZED_MARKER));
+                } else if (function.isArrow() && function.getCapturedDerivedThisRef() != null) {
+                    frame.setDerivedThisRef(function.getCapturedDerivedThisRef());
                 }
-                if (pendingExceptionAction == PendingExceptionAction.CONTINUE) {
+            }
+            StackFrame previousFrame = currentFrame;
+            currentFrame = frame;
+
+            try {
+                ExecutionContext executionContext = createExecutionContext(
+                        function,
+                        frame,
+                        previousFrame,
+                        frameStackBase,
+                        restoreStackTop,
+                        savedStrictMode,
+                        generatorStateForExecution,
+                        resumeGeneratorExecution);
+                int sp = executionContext.sp;
+                int pc = executionContext.pc;
+
+                // Main execution loop
+                while (true) {
+                    // Sync local sp to valueStack at top of each iteration.
+                    // This ensures cold opcodes (which use valueStack directly) see the correct stackTop.
+                    valueStack.stackTop = sp;
+
+                    executionContext.sp = sp;
+                    executionContext.pc = pc;
+                    PendingExceptionAction pendingExceptionAction = handlePendingExceptionForExecute(executionContext);
+                    if (pendingExceptionAction == PendingExceptionAction.RETURN) {
+                        return executionContext.returnValue;
+                    }
+                    if (pendingExceptionAction == PendingExceptionAction.CONTINUE) {
+                        sp = executionContext.sp;
+                        pc = executionContext.pc;
+                        continue;
+                    }
+
                     sp = executionContext.sp;
                     pc = executionContext.pc;
-                    continue;
-                }
+                    checkExecutionInterruptForExecute();
+                    executionContext.pc = pc;
+                    executionContext.opcodeRequestedReturn = false;
 
-                sp = executionContext.sp;
-                pc = executionContext.pc;
-                checkExecutionInterruptForExecute();
-                executionContext.pc = pc;
-                executionContext.opcodeRequestedReturn = false;
-
-                Opcode op = decodeOpcodeForExecute(executionContext);
-                op.getHandler().call(op, executionContext);
-                if (executionContext.opcodeRequestedReturn) {
-                    return executionContext.returnValue;
+                    Opcode op = decodeOpcodeForExecute(executionContext);
+                    op.getHandler().call(op, executionContext);
+                    if (executionContext.opcodeRequestedReturn) {
+                        // Check for tail call optimization trampoline
+                        if (tailCallPending != null) {
+                            TailCallRequest req = tailCallPending;
+                            tailCallPending = null;
+                            function = req.function();
+                            thisArg = req.receiver();
+                            args = req.args();
+                            newTarget = JSUndefined.INSTANCE;
+                            continue tailCallLoop;
+                        }
+                        return executionContext.returnValue;
+                    }
+                    sp = executionContext.sp;
+                    pc = executionContext.pc;
                 }
-                sp = executionContext.sp;
-                pc = executionContext.pc;
+            } catch (JSVirtualMachineException e) {
+                // Restore stack and strict mode on exception
+                restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
+                throw e;
+            } catch (JSException e) {
+                // Preserve thrown JS values so callers can keep the original error type and realm.
+                restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
+                JSValue errorValue = e.getErrorValue();
+                if (errorValue instanceof JSError jsError) {
+                    throw new JSVirtualMachineException(jsError);
+                }
+                throw new JSVirtualMachineException(e.getMessage(), errorValue);
+            } catch (Exception e) {
+                // Restore stack and strict mode on exception
+                restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
+                throw new JSVirtualMachineException("VM error: " + e.getMessage(), e);
             }
-        } catch (JSVirtualMachineException e) {
-            // Restore stack and strict mode on exception
-            restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
-            throw e;
-        } catch (JSException e) {
-            // Preserve thrown JS values so callers can keep the original error type and realm.
-            restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
-            JSValue errorValue = e.getErrorValue();
-            if (errorValue instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException(e.getMessage(), errorValue);
-        } catch (Exception e) {
-            // Restore stack and strict mode on exception
-            restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
-            throw new JSVirtualMachineException("VM error: " + e.getMessage(), e);
         }
     }
 

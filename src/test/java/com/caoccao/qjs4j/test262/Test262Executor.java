@@ -158,8 +158,8 @@ public class Test262Executor {
 
             globalObject.set("$DONE", doneFunction);
 
-            // Execute test code
-            context.eval(code, test.getPath().toString(), false);
+            // Execute test code (pass isModule=true if test has module flag for top-level await)
+            context.eval(code, test.getPath().toString(), test.hasFlag("module"));
 
             long deadline = System.currentTimeMillis() + Math.max(asyncTimeoutMs, 1);
             while (!doneCalled[0] && System.currentTimeMillis() <= deadline) {

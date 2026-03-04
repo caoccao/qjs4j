@@ -116,6 +116,7 @@ public enum TokenType {
     XOR_ASSIGN,
 
     // Punctuation
+    AT,
     ARROW,
     COLON,
     COMMA,
