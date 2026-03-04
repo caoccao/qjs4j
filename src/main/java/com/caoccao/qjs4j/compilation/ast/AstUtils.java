@@ -39,6 +39,23 @@ public final class AstUtils {
     }
 
     /**
+     * Collect top-level const declaration names from a parsed program.
+     *
+     * @param program    The parsed program AST
+     * @param constDecls Output: const names declared by this program
+     */
+    public static void collectGlobalConstDeclarations(Program program, Set<String> constDecls) {
+        for (Statement stmt : program.body()) {
+            if (stmt instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.kind() == VariableKind.CONST) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                    collectPatternNames(declarator.id(), constDecls);
+                }
+            }
+        }
+    }
+
+    /**
      * Collect global declarations from a parsed program following ES2024 GlobalDeclarationInstantiation.
      * Collects var and lex (let/const) names declared at the top level.
      *

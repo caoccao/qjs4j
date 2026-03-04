@@ -69,7 +69,7 @@ final class CompilerContext {
         this.loopStack = new ArrayDeque<>();
         this.withObjectLocalStack = new ArrayDeque<>();
         this.inheritedWithObjectBindingNames = new ArrayList<>();
-        this.captureResolver = new CaptureResolver(parentCaptureResolver, this::findLocalInScopes);
+        this.captureResolver = new CaptureResolver(parentCaptureResolver, this::findBindingInScopes);
         this.inGlobalScope = false;
         this.isGlobalProgram = false;
         this.isInAsyncFunction = false;
@@ -360,6 +360,16 @@ final class CompilerContext {
         return sourceCode.substring(startOffset, endOffset);
     }
 
+    private CaptureResolver.BindingInfo findBindingInScopes(String name) {
+        for (CompilerScope scope : scopes) {
+            Integer localIndex = scope.getLocal(name);
+            if (localIndex != null) {
+                return new CaptureResolver.BindingInfo(localIndex, scope.isConstLocal(name));
+            }
+        }
+        return null;
+    }
+
     Integer findCapturedBindingIndex(String name) {
         return captureResolver.findCapturedBindingIndex(name);
     }
@@ -485,6 +495,10 @@ final class CompilerContext {
         return false;
     }
 
+    boolean isCapturedBindingConst(String name) {
+        return captureResolver.isCapturedBindingImmutable(name);
+    }
+
     private boolean isDirectiveStartAtBlockStart(BlockStatement block, Literal literal) {
         if (sourceCode == null) {
             return true;
@@ -534,6 +548,16 @@ final class CompilerContext {
             return false;
         }
         return true;
+    }
+
+    boolean isLocalBindingConst(String name) {
+        for (CompilerScope scope : scopes) {
+            Integer localIndex = scope.getLocal(name);
+            if (localIndex != null) {
+                return scope.isConstLocal(name);
+            }
+        }
+        return false;
     }
 
     private boolean isRawUseStrictDirectiveAt(int offset) {

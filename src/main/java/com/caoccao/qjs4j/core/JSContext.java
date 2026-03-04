@@ -48,6 +48,7 @@ public final class JSContext implements AutoCloseable {
     private final Deque<EvalOverlayFrame> evalOverlayFrames;
     // Global declaration tracking for cross-script collision detection
     // Following QuickJS global_var_obj pattern (GlobalDeclarationInstantiation)
+    private final Set<String> globalConstDeclarations;
     private final Set<String> globalLexDeclarations;
     private final Set<String> globalVarDeclarations;
     // Shared iterator prototypes by toStringTag (e.g., "Array Iterator" → %ArrayIteratorPrototype%)
@@ -92,6 +93,7 @@ public final class JSContext implements AutoCloseable {
     public JSContext(JSRuntime runtime) {
         this.callStack = new ArrayDeque<>();
         this.errorStackTrace = new ArrayList<>();
+        this.globalConstDeclarations = new HashSet<>();
         this.globalLexDeclarations = new HashSet<>();
         this.globalVarDeclarations = new HashSet<>();
         this.waitable = true;
@@ -843,8 +845,10 @@ public final class JSContext implements AutoCloseable {
                 func = compileResult.function();
 
                 // Collect new declarations from this script
+                Set<String> newConstDecls = new HashSet<>();
                 Set<String> newVarDecls = new HashSet<>();
                 Set<String> newLexDecls = new HashSet<>();
+                AstUtils.collectGlobalConstDeclarations(compileResult.ast(), newConstDecls);
                 AstUtils.collectGlobalDeclarations(compileResult.ast(), newVarDecls, newLexDecls);
 
                 // Check: let/const names must not collide with existing lex declarations
@@ -878,6 +882,7 @@ public final class JSContext implements AutoCloseable {
                 }
 
                 // Register new declarations for future collision checks
+                globalConstDeclarations.addAll(newConstDecls);
                 globalLexDeclarations.addAll(newLexDecls);
                 globalVarDeclarations.addAll(newVarDecls);
 
@@ -1362,6 +1367,10 @@ public final class JSContext implements AutoCloseable {
      */
     public VirtualMachine getVirtualMachine() {
         return virtualMachine;
+    }
+
+    public boolean hasGlobalConstDeclaration(String name) {
+        return globalConstDeclarations.contains(name);
     }
 
     public boolean hasGlobalLexDeclaration(String name) {

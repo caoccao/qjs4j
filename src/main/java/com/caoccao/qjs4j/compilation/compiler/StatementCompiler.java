@@ -228,6 +228,9 @@ final class StatementCompiler {
                 }
                 for (String lexicalName : lexicalNames) {
                     int localIndex = compilerContext.currentScope().declareLocal(lexicalName);
+                    if (variableDeclaration.kind() == VariableKind.CONST) {
+                        compilerContext.currentScope().markConstLocal(lexicalName);
+                    }
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                     compilerContext.tdzLocals.add(lexicalName);
                 }
@@ -647,6 +650,17 @@ final class StatementCompiler {
     void compileVariableDeclaration(VariableDeclaration varDecl) {
         boolean isUsingDeclaration = varDecl.kind() == VariableKind.USING || varDecl.kind() == VariableKind.AWAIT_USING;
         boolean isAwaitUsingDeclaration = varDecl.kind() == VariableKind.AWAIT_USING;
+        if (varDecl.kind() == VariableKind.CONST
+                && !compilerContext.inGlobalScope
+                && !compilerContext.varInGlobalProgram) {
+            for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
+                Set<String> constNames = new HashSet<>();
+                delegates.analysis.collectPatternBindingNames(declarator.id(), constNames);
+                for (String constName : constNames) {
+                    compilerContext.currentScope().declareConstLocal(constName);
+                }
+            }
+        }
         // Track whether this is a var declaration in global program scope
         // so compilePatternAssignment can use PUT_VAR for global-scoped vars.
         boolean savedVarInGlobalProgram = compilerContext.varInGlobalProgram;
@@ -730,6 +744,9 @@ final class StatementCompiler {
                     delegates.analysis.collectPatternBindingNames(d.id(), names);
                     for (String name : names) {
                         compilerContext.currentScope().declareLocal(name);
+                        if (vd.kind() == VariableKind.CONST) {
+                            compilerContext.currentScope().markConstLocal(name);
+                        }
                     }
                 }
             }

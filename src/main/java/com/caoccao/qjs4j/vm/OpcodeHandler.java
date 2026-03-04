@@ -2337,6 +2337,25 @@ public final class OpcodeHandler {
             return;
         }
 
+        JSContext context = executionContext.virtualMachine.context;
+        if (targetObject == context.getGlobalObject() && key != null && key.isString()) {
+            String variableName = key.asString();
+            if (variableName != null && context.hasGlobalLexDeclaration(variableName)) {
+                if (!targetObject.has(key)) {
+                    executionContext.virtualMachine.pendingException = context.throwReferenceError(variableName + " is not defined");
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
+                if (context.hasGlobalConstDeclaration(variableName)) {
+                    executionContext.virtualMachine.pendingException = context.throwTypeError("Assignment to constant variable.");
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
+            }
+        }
+
         if (!targetObject.has(key) && executionContext.virtualMachine.context.isStrictMode()) {
             String name = key != null ? key.toPropertyString() : "variable";
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwReferenceError(name + " is not defined");

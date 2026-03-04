@@ -179,6 +179,47 @@ final class ExpressionAssignmentCompiler {
     private void compileIdentifierAssignmentExpression(AssignmentExpression assignExpr, Identifier identifier) {
         String name = identifier.name();
         AssignmentExpression.AssignmentOperator operator = assignExpr.operator();
+        Integer localIndex = compilerContext.findLocalInScopes(name);
+        Integer capturedIndex = localIndex == null ? compilerContext.resolveCapturedBindingIndex(name) : null;
+        boolean isConstLocalBinding = localIndex != null && compilerContext.isLocalBindingConst(name);
+        boolean isConstCapturedBinding = capturedIndex != null && compilerContext.isCapturedBindingConst(name);
+
+        if (isConstLocalBinding || isConstCapturedBinding) {
+            if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+                if (localIndex != null) {
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
+                } else {
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
+                }
+            }
+
+            owner.compileExpression(assignExpr.right());
+
+            if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+                switch (operator) {
+                    case PLUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.ADD);
+                    case MINUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SUB);
+                    case MUL_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MUL);
+                    case DIV_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.DIV);
+                    case MOD_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MOD);
+                    case EXP_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.EXP);
+                    case LSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHL);
+                    case RSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SAR);
+                    case URSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHR);
+                    case AND_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.AND);
+                    case OR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.OR);
+                    case XOR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.XOR);
+                    default -> throw new JSCompilerException("Unknown assignment operator: " + operator);
+                }
+            }
+
+            if (localIndex != null) {
+                emitConstAssignmentErrorForLocal(name, localIndex);
+            } else {
+                emitConstAssignmentErrorForCaptured(name, capturedIndex);
+            }
+            return;
+        }
 
         emitIdentifierReference(name);
         if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
@@ -226,11 +267,15 @@ final class ExpressionAssignmentCompiler {
             String name = id.name();
             Integer localIndex = compilerContext.findLocalInScopes(name);
             if (localIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                if (compilerContext.tdzLocals.contains(name)) {
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
+                } else {
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                }
             } else {
                 Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
                 if (capturedIndex != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
                 } else {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
                 }
@@ -290,11 +335,21 @@ final class ExpressionAssignmentCompiler {
             String name = id.name();
             Integer localIndex = compilerContext.findLocalInScopes(name);
             if (localIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOCAL, localIndex);
+                if (compilerContext.isLocalBindingConst(name)) {
+                    emitConstAssignmentErrorForLocal(name, localIndex);
+                } else if (compilerContext.tdzLocals.contains(name)) {
+                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_CHECK, localIndex);
+                } else {
+                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOCAL, localIndex);
+                }
             } else {
                 Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
                 if (capturedIndex != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_VAR_REF, capturedIndex);
+                    if (compilerContext.isCapturedBindingConst(name)) {
+                        emitConstAssignmentErrorForCaptured(name, capturedIndex);
+                    } else {
+                        compilerContext.emitter.emitOpcodeU16(Opcode.SET_VAR_REF, capturedIndex);
+                    }
                 } else {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.SET_VAR, name);
                 }
@@ -317,6 +372,24 @@ final class ExpressionAssignmentCompiler {
         }
 
         compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+    }
+
+    private void emitConstAssignmentError(String name) {
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, name);
+        compilerContext.emitter.emitU8(0);
+    }
+
+    private void emitConstAssignmentErrorForCaptured(String name, int capturedIndex) {
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitConstAssignmentError(name);
+    }
+
+    private void emitConstAssignmentErrorForLocal(String name, int localIndex) {
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitConstAssignmentError(name);
     }
 
     private void emitDirectIdentifierReference(String name) {

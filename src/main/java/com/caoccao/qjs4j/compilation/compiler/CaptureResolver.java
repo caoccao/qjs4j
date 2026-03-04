@@ -23,13 +23,13 @@ import java.util.LinkedHashMap;
  * Manages closure variable captures across nested functions.
  */
 final class CaptureResolver {
+    private final BindingLookup bindingLookup;
     private final LinkedHashMap<String, CaptureBinding> capturedBindings;
-    private final LocalLookup localLookup;
     private final CaptureResolver parentResolver;
 
-    CaptureResolver(CaptureResolver parentResolver, LocalLookup localLookup) {
+    CaptureResolver(CaptureResolver parentResolver, BindingLookup bindingLookup) {
         this.parentResolver = parentResolver;
-        this.localLookup = localLookup;
+        this.bindingLookup = bindingLookup;
         this.capturedBindings = new LinkedHashMap<>();
     }
 
@@ -57,6 +57,22 @@ final class CaptureResolver {
         return capturedBindings.values();
     }
 
+    boolean isCapturedBindingImmutable(String name) {
+        CaptureBinding captureBinding = capturedBindings.get(name);
+        if (captureBinding != null) {
+            return captureBinding.source().immutable();
+        }
+        if (parentResolver == null) {
+            return false;
+        }
+        Integer capturedIndex = resolveCapturedBindingIndex(name);
+        if (capturedIndex == null) {
+            return false;
+        }
+        CaptureBinding resolvedBinding = capturedBindings.get(name);
+        return resolvedBinding != null && resolvedBinding.source().immutable();
+    }
+
     int registerCapturedBinding(String name, CaptureSource source) {
         CaptureBinding existing = capturedBindings.get(name);
         if (existing != null) {
@@ -68,14 +84,18 @@ final class CaptureResolver {
     }
 
     CaptureSource resolveCaptureSourceForChild(String name) {
-        Integer localIndex = localLookup.findLocal(name);
-        if (localIndex != null) {
-            return new CaptureSource(CaptureSourceType.LOCAL, localIndex);
+        BindingInfo bindingInfo = bindingLookup.findBinding(name);
+        if (bindingInfo != null) {
+            return new CaptureSource(CaptureSourceType.LOCAL, bindingInfo.index(), bindingInfo.immutable());
         }
 
         Integer capturedIndex = findCapturedBindingIndex(name);
         if (capturedIndex != null) {
-            return new CaptureSource(CaptureSourceType.VAR_REF, capturedIndex);
+            CaptureBinding captureBinding = capturedBindings.get(name);
+            return new CaptureSource(
+                    CaptureSourceType.VAR_REF,
+                    capturedIndex,
+                    captureBinding != null && captureBinding.source().immutable());
         }
 
         if (parentResolver == null) {
@@ -88,7 +108,7 @@ final class CaptureResolver {
         }
 
         int capturedSlot = registerCapturedBinding(name, parentSource);
-        return new CaptureSource(CaptureSourceType.VAR_REF, capturedSlot);
+        return new CaptureSource(CaptureSourceType.VAR_REF, capturedSlot, parentSource.immutable());
     }
 
     Integer resolveCapturedBindingIndex(String name) {
@@ -109,13 +129,16 @@ final class CaptureResolver {
     }
 
     @FunctionalInterface
-    interface LocalLookup {
-        Integer findLocal(String name);
+    interface BindingLookup {
+        BindingInfo findBinding(String name);
+    }
+
+    record BindingInfo(int index, boolean immutable) {
     }
 
     record CaptureBinding(int slot, CaptureSource source) {
     }
 
-    record CaptureSource(CaptureSourceType type, int index) {
+    record CaptureSource(CaptureSourceType type, int index, boolean immutable) {
     }
 }
