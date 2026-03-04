@@ -298,6 +298,10 @@ final class ExpressionPrimaryParser {
         Expression expr = expressions.parseCallExpression();
 
         if (!parserContext.hasNewlineBefore() && (parserContext.match(TokenType.INC) || parserContext.match(TokenType.DEC))) {
+            // In strict mode, CallExpression as update operand is an early SyntaxError (spec 13.4.1)
+            if (parserContext.strictMode && expr instanceof CallExpression) {
+                throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
+            }
             UnaryOperator op = parserContext.match(TokenType.INC) ? UnaryOperator.INC : UnaryOperator.DEC;
             SourceLocation location = parserContext.getLocation();
             parserContext.advance();
@@ -679,6 +683,10 @@ final class ExpressionPrimaryParser {
             SourceLocation location = parserContext.getLocation();
             parserContext.advance();
             Expression operand = parseUnaryExpression();
+            // In strict mode, CallExpression as update operand is an early SyntaxError (spec 13.4.1)
+            if (parserContext.strictMode && operand instanceof CallExpression) {
+                throw new JSSyntaxErrorException("Invalid left-hand side expression in prefix operation");
+            }
             return new UnaryExpression(op, operand, true, location);
         }
 

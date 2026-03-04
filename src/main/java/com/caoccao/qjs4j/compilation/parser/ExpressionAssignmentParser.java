@@ -469,7 +469,16 @@ final class ExpressionAssignmentParser {
                     && !(left instanceof CallExpression)) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
+            // Parenthesized ObjectExpression/ArrayExpression are not valid destructuring targets (spec 13.15.1)
+            if (startTokenType == TokenType.LPAREN
+                    && (left instanceof ObjectExpression || left instanceof ArrayExpression)) {
+                throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
+            }
             if (left instanceof Identifier newTargetId && "new.target".equals(newTargetId.name())) {
+                throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
+            }
+            // OptionalExpression is never a valid assignment target (spec 13.15.1)
+            if (isOptionalChainExpression(left)) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
             if (parserContext.strictMode && left instanceof Identifier identifier) {
@@ -642,6 +651,16 @@ final class ExpressionAssignmentParser {
             return;
         }
         throw new JSSyntaxErrorException("Invalid destructuring assignment target");
+    }
+
+    private boolean isOptionalChainExpression(Expression expression) {
+        if (expression instanceof MemberExpression memberExpression) {
+            return memberExpression.optional() || isOptionalChainExpression(memberExpression.object());
+        }
+        if (expression instanceof CallExpression callExpression) {
+            return callExpression.optional() || isOptionalChainExpression(callExpression.callee());
+        }
+        return false;
     }
 
     private void validateBindingIdentifier(String name) {
