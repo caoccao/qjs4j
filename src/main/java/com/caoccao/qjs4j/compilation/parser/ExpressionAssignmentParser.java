@@ -300,6 +300,12 @@ final class ExpressionAssignmentParser {
 
     Expression parseAssignmentExpression() {
         SourceLocation location = parserContext.getLocation();
+        // Save whether the current token is a direct identifier for fn-name inference (spec 13.15.2 step 1.c)
+        TokenType startTokenType = parserContext.currentToken.type();
+        boolean lhsStartsWithIdentifier = startTokenType == TokenType.IDENTIFIER
+                || startTokenType == TokenType.ASYNC || startTokenType == TokenType.AWAIT
+                || startTokenType == TokenType.YIELD || startTokenType == TokenType.FROM
+                || startTokenType == TokenType.OF;
 
         if (parserContext.match(TokenType.ASYNC)) {
             SourceLocation asyncLocation = location;
@@ -463,6 +469,9 @@ final class ExpressionAssignmentParser {
                     && !(left instanceof CallExpression)) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
+            if (left instanceof Identifier newTargetId && "new.target".equals(newTargetId.name())) {
+                throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
+            }
             if (parserContext.strictMode && left instanceof Identifier identifier) {
                 String identifierName = identifier.name();
                 if ("eval".equals(identifierName) || "arguments".equals(identifierName)) {
@@ -501,7 +510,8 @@ final class ExpressionAssignmentParser {
                 default -> AssignmentExpression.AssignmentOperator.ASSIGN;
             };
 
-            return new AssignmentExpression(left, operator, right, location);
+            boolean isIdentifierRef = lhsStartsWithIdentifier && left instanceof Identifier;
+            return new AssignmentExpression(left, operator, right, isIdentifierRef, location);
         }
 
         return left;

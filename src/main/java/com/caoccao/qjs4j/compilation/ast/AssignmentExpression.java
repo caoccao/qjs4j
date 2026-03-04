@@ -18,13 +18,21 @@ package com.caoccao.qjs4j.compilation.ast;
 
 /**
  * Represents an assignment expression.
+ *
+ * @param lhsIsIdentifierRef true when the left-hand side is a direct IdentifierReference (not parenthesized).
+ *                           Used for function name inference per spec 13.15.2 step 1.c.
  */
 public record AssignmentExpression(
         Expression left,
         AssignmentOperator operator,
         Expression right,
+        boolean lhsIsIdentifierRef,
         SourceLocation location
 ) implements Expression {
+    public AssignmentExpression(Expression left, AssignmentOperator operator, Expression right, SourceLocation location) {
+        this(left, operator, right, false, location);
+    }
+
     @Override
     public SourceLocation getLocation() {
         return location;

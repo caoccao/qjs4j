@@ -111,38 +111,52 @@ final class ExpressionAssignmentCompiler {
                 default -> throw new JSCompilerException("Unknown assignment operator: " + operator);
             }
         } else {
-            owner.compileExpression(assignExpr.right());
-        }
-
-        if (left instanceof MemberExpression memberExpr) {
-            if (operator == AssignmentExpression.AssignmentOperator.ASSIGN) {
+            // ASSIGN operator — ensure correct LHS-before-RHS evaluation order
+            // for computed member expressions and super member expressions (spec 13.15.2)
+            if (left instanceof MemberExpression memberExpr) {
                 if (compilerContext.isSuperMemberExpression(memberExpr)) {
+                    // Evaluate super reference and property key before RHS
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                     compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                     compilerContext.emitter.emitU8(4);
                     compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
                     delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
+                    owner.compileExpression(assignExpr.right());
+                    // Stack: [this, superObj, key, value] → rotate value to bottom
+                    compilerContext.emitter.emitOpcode(Opcode.INSERT4);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
                     compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
-                } else {
+                    return;
+                }
+                if (memberExpr.computed()) {
+                    // Evaluate object and computed property key before RHS
                     owner.compileExpression(memberExpr.object());
-                    if (memberExpr.computed()) {
-                        owner.compileExpression(memberExpr.property());
-                        // Stack: [value, obj, prop] → ROT3L → [obj, prop, value]
-                        compilerContext.emitter.emitOpcode(Opcode.ROT3L);
-                        compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
-                    } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
-                        String fieldName = privateId.name();
-                        JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
-                        if (symbol != null) {
-                            compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                            compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
-                        } else {
-                            compilerContext.emitter.emitOpcode(Opcode.DROP);
-                        }
-                    } else if (memberExpr.property() instanceof Identifier propId) {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+                    owner.compileExpression(memberExpr.property());
+                    owner.compileExpression(assignExpr.right());
+                    // Stack: [obj, prop, value] → PUT_ARRAY_EL → [value]
+                    compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                    return;
+                }
+            }
+            owner.compileExpression(assignExpr.right());
+        }
+
+        if (left instanceof MemberExpression memberExpr) {
+            if (operator == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                // Non-computed regular member expression (computed and super handled above)
+                owner.compileExpression(memberExpr.object());
+                if (memberExpr.property() instanceof PrivateIdentifier privateId) {
+                    String fieldName = privateId.name();
+                    JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
+                    if (symbol != null) {
+                        compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                        compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
+                    } else {
+                        compilerContext.emitter.emitOpcode(Opcode.DROP);
                     }
+                } else if (memberExpr.property() instanceof Identifier propId) {
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
                 }
             } else {
                 if (compilerContext.isSuperMemberExpression(memberExpr)) {
@@ -227,6 +241,12 @@ final class ExpressionAssignmentCompiler {
         }
 
         owner.compileExpression(assignExpr.right());
+
+        if (operator == AssignmentExpression.AssignmentOperator.ASSIGN
+                && assignExpr.lhsIsIdentifierRef()
+                && isAnonymousFunctionDefinition(assignExpr.right())) {
+            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
+        }
 
         if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
             switch (operator) {
@@ -482,5 +502,18 @@ final class ExpressionAssignmentCompiler {
         compilerContext.emitter.patchJump(jumpToCandidateFallback, candidateFallbackOffset);
         compilerContext.emitter.patchJump(jumpToCandidateFallbackWhenBlocked, candidateFallbackOffset);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
+    }
+
+    private boolean isAnonymousFunctionDefinition(Expression expression) {
+        if (expression instanceof ArrowFunctionExpression) {
+            return true;
+        }
+        if (expression instanceof FunctionExpression functionExpression) {
+            return functionExpression.id() == null;
+        }
+        if (expression instanceof ClassExpression classExpression) {
+            return classExpression.id() == null;
+        }
+        return false;
     }
 }
