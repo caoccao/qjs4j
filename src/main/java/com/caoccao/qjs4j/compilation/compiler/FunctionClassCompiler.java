@@ -1116,6 +1116,15 @@ final class FunctionClassCompiler {
             }
             if (!conflictsWithParameter) {
                 functionContext.currentScope().declareLocal(functionExpression.id().name());
+                // Per ES2024 15.2.5: The BindingIdentifier in a named function expression
+                // is an immutable binding. Following QuickJS add_func_var:
+                // - In strict mode: mark as const so assignment throws TypeError
+                // - In non-strict mode: mark as function name so assignment is silently ignored
+                if (functionContext.strictMode) {
+                    functionContext.currentScope().markConstLocal(functionExpression.id().name());
+                } else {
+                    functionContext.currentScope().markFunctionNameLocal(functionExpression.id().name());
+                }
             }
         }
 

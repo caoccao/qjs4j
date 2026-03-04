@@ -57,6 +57,22 @@ final class CaptureResolver {
         return capturedBindings.values();
     }
 
+    boolean isCapturedBindingFunctionName(String name) {
+        CaptureBinding captureBinding = capturedBindings.get(name);
+        if (captureBinding != null) {
+            return captureBinding.source().functionName();
+        }
+        if (parentResolver == null) {
+            return false;
+        }
+        Integer capturedIndex = resolveCapturedBindingIndex(name);
+        if (capturedIndex == null) {
+            return false;
+        }
+        CaptureBinding resolvedBinding = capturedBindings.get(name);
+        return resolvedBinding != null && resolvedBinding.source().functionName();
+    }
+
     boolean isCapturedBindingImmutable(String name) {
         CaptureBinding captureBinding = capturedBindings.get(name);
         if (captureBinding != null) {
@@ -86,7 +102,8 @@ final class CaptureResolver {
     CaptureSource resolveCaptureSourceForChild(String name) {
         BindingInfo bindingInfo = bindingLookup.findBinding(name);
         if (bindingInfo != null) {
-            return new CaptureSource(CaptureSourceType.LOCAL, bindingInfo.index(), bindingInfo.immutable());
+            return new CaptureSource(CaptureSourceType.LOCAL, bindingInfo.index(),
+                    bindingInfo.immutable(), bindingInfo.functionName());
         }
 
         Integer capturedIndex = findCapturedBindingIndex(name);
@@ -95,7 +112,8 @@ final class CaptureResolver {
             return new CaptureSource(
                     CaptureSourceType.VAR_REF,
                     capturedIndex,
-                    captureBinding != null && captureBinding.source().immutable());
+                    captureBinding != null && captureBinding.source().immutable(),
+                    captureBinding != null && captureBinding.source().functionName());
         }
 
         if (parentResolver == null) {
@@ -108,7 +126,8 @@ final class CaptureResolver {
         }
 
         int capturedSlot = registerCapturedBinding(name, parentSource);
-        return new CaptureSource(CaptureSourceType.VAR_REF, capturedSlot, parentSource.immutable());
+        return new CaptureSource(CaptureSourceType.VAR_REF, capturedSlot,
+                parentSource.immutable(), parentSource.functionName());
     }
 
     Integer resolveCapturedBindingIndex(String name) {
@@ -133,12 +152,12 @@ final class CaptureResolver {
         BindingInfo findBinding(String name);
     }
 
-    record BindingInfo(int index, boolean immutable) {
+    record BindingInfo(int index, boolean immutable, boolean functionName) {
     }
 
     record CaptureBinding(int slot, CaptureSource source) {
     }
 
-    record CaptureSource(CaptureSourceType type, int index, boolean immutable) {
+    record CaptureSource(CaptureSourceType type, int index, boolean immutable, boolean functionName) {
     }
 }

@@ -198,6 +198,41 @@ final class ExpressionAssignmentCompiler {
         boolean isConstLocalBinding = localIndex != null && compilerContext.isLocalBindingConst(name);
         boolean isConstCapturedBinding = capturedIndex != null && compilerContext.isCapturedBindingConst(name);
 
+        // Per QuickJS: in non-strict mode, assignment to a named function expression's
+        // BindingIdentifier is silently ignored. Evaluate the RHS for side effects
+        // but do not store. The assignment expression result is the RHS value.
+        boolean isFunctionNameLocal = localIndex != null && compilerContext.isLocalBindingFunctionName(name);
+        boolean isFunctionNameCaptured = capturedIndex != null && compilerContext.isCapturedBindingFunctionName(name);
+        if (isFunctionNameLocal || isFunctionNameCaptured) {
+            if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+                if (isFunctionNameLocal) {
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, localIndex);
+                } else {
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
+                }
+            }
+            owner.compileExpression(assignExpr.right());
+            if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+                switch (operator) {
+                    case PLUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.ADD);
+                    case MINUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SUB);
+                    case MUL_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MUL);
+                    case DIV_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.DIV);
+                    case MOD_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.MOD);
+                    case EXP_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.EXP);
+                    case LSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHL);
+                    case RSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SAR);
+                    case URSHIFT_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SHR);
+                    case AND_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.AND);
+                    case OR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.OR);
+                    case XOR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.XOR);
+                    default -> throw new JSCompilerException("Unknown assignment operator: " + operator);
+                }
+            }
+            // Result is on stack but we don't store it — silently ignored
+            return;
+        }
+
         if (isConstLocalBinding || isConstCapturedBinding) {
             if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
                 if (localIndex != null) {

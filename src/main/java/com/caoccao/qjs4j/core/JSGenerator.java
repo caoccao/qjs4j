@@ -151,6 +151,11 @@ public final class JSGenerator extends JSObject {
                 generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.NEXT, value);
             }
             generatorState.recordResume(JSGeneratorState.ResumeKind.NEXT, value);
+        } else if (previousState == State.SUSPENDED_START && generatorState.hasSuspendedExecutionState()) {
+            // Resume after INITIAL_YIELD: the generator saved execution state at
+            // INITIAL_YIELD, so set a pending resume record to trigger the
+            // suspended-state resume path instead of re-executing from the start.
+            generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.NEXT, value);
         }
 
         try {

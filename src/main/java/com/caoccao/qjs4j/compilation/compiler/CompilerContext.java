@@ -367,7 +367,8 @@ final class CompilerContext {
         for (CompilerScope scope : scopes) {
             Integer localIndex = scope.getLocal(name);
             if (localIndex != null) {
-                return new CaptureResolver.BindingInfo(localIndex, scope.isConstLocal(name));
+                return new CaptureResolver.BindingInfo(localIndex,
+                        scope.isConstLocal(name), scope.isFunctionNameLocal(name));
             }
         }
         return null;
@@ -502,6 +503,10 @@ final class CompilerContext {
         return captureResolver.isCapturedBindingImmutable(name);
     }
 
+    boolean isCapturedBindingFunctionName(String name) {
+        return captureResolver.isCapturedBindingFunctionName(name);
+    }
+
     private boolean isDirectiveStartAtBlockStart(BlockStatement block, Literal literal) {
         if (sourceCode == null) {
             return true;
@@ -558,6 +563,16 @@ final class CompilerContext {
             Integer localIndex = scope.getLocal(name);
             if (localIndex != null) {
                 return scope.isConstLocal(name);
+            }
+        }
+        return false;
+    }
+
+    boolean isLocalBindingFunctionName(String name) {
+        for (CompilerScope scope : scopes) {
+            Integer localIndex = scope.getLocal(name);
+            if (localIndex != null) {
+                return scope.isFunctionNameLocal(name);
             }
         }
         return false;

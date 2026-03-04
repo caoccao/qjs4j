@@ -26,6 +26,7 @@ import java.util.Set;
  */
 final class CompilerScope {
     private final Set<String> constLocals = new HashSet<>();
+    private final Set<String> functionNameLocals = new HashSet<>();
     private final Map<Integer, String> localNamesByIndex = new HashMap<>();
     private final Map<String, Integer> locals = new HashMap<>();
     private final int scopeDepth;
@@ -106,6 +107,10 @@ final class CompilerScope {
         return constLocals.contains(name);
     }
 
+    boolean isFunctionNameLocal(String name) {
+        return functionNameLocals.contains(name);
+    }
+
     boolean isUsingStackAsync() {
         return usingStackAsync;
     }
@@ -113,6 +118,12 @@ final class CompilerScope {
     void markConstLocal(String name) {
         if (locals.containsKey(name)) {
             constLocals.add(name);
+        }
+    }
+
+    void markFunctionNameLocal(String name) {
+        if (locals.containsKey(name)) {
+            functionNameLocals.add(name);
         }
     }
 

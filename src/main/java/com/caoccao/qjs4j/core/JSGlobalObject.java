@@ -2587,6 +2587,11 @@ public final class JSGlobalObject {
                     callerFrame != null && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction
                             ? bytecodeFunction
                             : null;
+            // Track function expression name binding index so eval cannot overwrite it.
+            // Per ES2024 14.1.2 step 27, the binding is immutable (TypeError in strict,
+            // silently ignored in sloppy mode).
+            int functionNameLocalIndex = callerBytecodeFunction != null
+                    ? callerBytecodeFunction.getSelfLocalIndex() : -1;
 
             // When eval runs inside a function, snapshot global property names so we can
             // clean up var/function bindings that should be function-scoped (not global).
@@ -2619,6 +2624,17 @@ public final class JSGlobalObject {
                     }
                     localVarNameSet.add(name);
                     overlayBinding(global, name, locals[i], savedGlobals, absentKeys, touchedOverlayKeys);
+                    // Function name bindings are immutable: make the overlay property
+                    // non-writable so SET_VAR throws TypeError in strict mode and
+                    // silently fails in sloppy mode.
+                    if (functionNameLocalIndex >= 0 && i == functionNameLocalIndex) {
+                        PropertyDescriptor fnDesc = new PropertyDescriptor();
+                        fnDesc.setValue(locals[i] != null ? locals[i] : JSUndefined.INSTANCE);
+                        fnDesc.setWritable(false);
+                        fnDesc.setEnumerable(true);
+                        fnDesc.setConfigurable(true);
+                        global.defineProperty(PropertyKey.fromString(name), fnDesc);
+                    }
                 }
                 Map<String, JSValue> dynamicVarBindings = callerFrame.getDynamicVarBindings();
                 if (dynamicVarBindings != null) {
@@ -2846,6 +2862,11 @@ public final class JSGlobalObject {
                         if (name.startsWith("$")) {
                             continue;
                         }
+                        // Skip function name bindings — they are immutable and
+                        // the non-writable overlay property prevented modification.
+                        if (functionNameLocalIndex >= 0 && i == functionNameLocalIndex) {
+                            continue;
+                        }
                         PropertyKey key = PropertyKey.fromString(name);
                         if (global.has(key)) {
                             locals[i] = global.get(key);
@@ -2899,6 +2920,14 @@ public final class JSGlobalObject {
                 callerContext.setPendingException(e.getErrorValue());
                 return JSUndefined.INSTANCE;
             } finally {
+                // Delete non-writable function name binding before restoring globals,
+                // since global.set() cannot overwrite a non-writable property.
+                if (functionNameLocalIndex >= 0 && savedGlobals != null
+                        && localVarNames != null && functionNameLocalIndex < localVarNames.length
+                        && localVarNames[functionNameLocalIndex] != null
+                        && savedGlobals.containsKey(localVarNames[functionNameLocalIndex])) {
+                    global.delete(realmContext, PropertyKey.fromString(localVarNames[functionNameLocalIndex]));
+                }
                 // Restore global object state for scope overlay
                 if (savedGlobals != null) {
                     boolean isTopLevelCallerFrame = callerFrame != null && callerFrame.getCaller() == null;

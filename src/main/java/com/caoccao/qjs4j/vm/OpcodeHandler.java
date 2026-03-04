@@ -1546,6 +1546,15 @@ public final class OpcodeHandler {
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
         if (executionContext.virtualMachine.yieldResult != null) {
+            // Save suspended execution state so the generator resumes after INITIAL_YIELD
+            // instead of re-executing from the start (which would re-run parameter
+            // destructuring, causing side effects like double iterator close).
+            executionContext.virtualMachine.saveActiveGeneratorSuspendedExecutionState(
+                    executionContext.frame,
+                    executionContext.pc,
+                    executionContext.stack,
+                    executionContext.sp,
+                    executionContext.frameStackBase);
             executionContext.virtualMachine.requestOpcodeReturnFromExecute(executionContext, JSUndefined.INSTANCE);
         }
     }

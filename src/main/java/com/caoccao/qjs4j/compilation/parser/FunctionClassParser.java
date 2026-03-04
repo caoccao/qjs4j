@@ -66,6 +66,34 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     }
 
     /**
+     * Check for duplicate parameter names.
+     * Following QuickJS js_parse_function_check_names:
+     * duplicates are rejected when strict mode, non-simple parameter list,
+     * arrow function, or method.
+     *
+     * @param funcParams The function parameters to validate
+     */
+    private void checkDuplicateParameters(FunctionParams funcParams) {
+        Set<String> seen = new HashSet<>();
+        for (Pattern param : funcParams.params()) {
+            List<String> boundNames = extractBoundNames(param);
+            for (String paramName : boundNames) {
+                if (!seen.add(paramName)) {
+                    throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
+                }
+            }
+        }
+        if (funcParams.restParameter() != null) {
+            List<String> restBoundNames = extractBoundNames(funcParams.restParameter().argument());
+            for (String restName : restBoundNames) {
+                if (!seen.add(restName)) {
+                    throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
+                }
+            }
+        }
+    }
+
+    /**
      * Validate function parameters for strict mode rules.
      * Following QuickJS js_parse_function_check_names:
      * - No parameter named 'eval' or 'arguments'
@@ -83,33 +111,26 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             }
         }
 
-        // Check parameter names
-        Set<String> seen = new HashSet<>();
+        // Check parameter names for reserved names
         for (Pattern param : funcParams.params()) {
             List<String> boundNames = extractBoundNames(param);
             for (String paramName : boundNames) {
-                // Check for reserved names
                 if (JSKeyword.EVAL.equals(paramName) || JSKeyword.ARGUMENTS.equals(paramName)) {
                     throw new JSSyntaxErrorException("invalid argument name in strict code");
                 }
-                // Check for duplicates
-                if (!seen.add(paramName)) {
-                    throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
-                }
             }
         }
-        // Check rest parameter
         if (funcParams.restParameter() != null) {
             List<String> restBoundNames = extractBoundNames(funcParams.restParameter().argument());
             for (String restName : restBoundNames) {
                 if (JSKeyword.EVAL.equals(restName) || JSKeyword.ARGUMENTS.equals(restName)) {
                     throw new JSSyntaxErrorException("invalid argument name in strict code");
                 }
-                if (!seen.add(restName)) {
-                    throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
-                }
             }
         }
+
+        // Check for duplicates (strict mode always rejects duplicates)
+        checkDuplicateParameters(funcParams);
     }
 
     /**
@@ -437,6 +458,12 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         // Validate parameters when in strict mode (either from outer context or "use strict" directive)
         if (hasUseStrict || savedStrictMode) {
             checkStrictModeParameters(funcParams, funcName);
+        } else if (!isSimpleParameterList(funcParams)) {
+            // Per ES2024 15.2.1: It is a Syntax Error if IsSimpleParameterList is false
+            // and BoundNames contains any duplicate elements.
+            // Following QuickJS js_parse_function_check_names: duplicates are always
+            // rejected for non-simple parameter lists regardless of strict mode.
+            checkDuplicateParameters(funcParams);
         }
 
         // Non-simple parameter list with "use strict" directive is always an error (spec 15.2.1)
@@ -675,6 +702,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         FunctionParams funcParams = parseFunctionParameters();
 
         parserContext.inFunctionBody = savedInFunctionBody;
+
+        // Per QuickJS js_parse_function_check_names: methods always reject duplicate parameters
+        checkDuplicateParameters(funcParams);
 
         // Parse method body
         parserContext.enterFunctionContext(isAsync, isGenerator);
