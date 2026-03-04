@@ -608,6 +608,9 @@ final class ExpressionAssignmentParser {
 
     private void validateAssignmentPatternTarget(Expression expression, int assignmentOperatorOffset) {
         if (expression instanceof Identifier identifier) {
+            // Per spec: IdentifierReference cannot be a ReservedWord.
+            // This catches shorthand properties like { break } or { def\u0061ult } in destructuring.
+            validateBindingIdentifier(identifier.name());
             if (parserContext.strictMode
                     && ("eval".equals(identifier.name()) || "arguments".equals(identifier.name()))) {
                 throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");

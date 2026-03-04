@@ -317,20 +317,48 @@ final class PatternCompiler {
 
     void compileObjectDestructuringAssignment(ObjectExpression objExpr) {
         // Stack: [source]
-        // Per spec: RequireObjectCoercible(value) - throws TypeError for null/undefined.
-        // When there are properties, the first property access will throw anyway.
-        // But for empty patterns like `{} = null`, we must explicitly check.
-        if (objExpr.properties().isEmpty()) {
+        // Separate regular properties from spread (rest) property.
+        // In ObjectExpression, spread is represented as kind="spread".
+        java.util.List<ObjectExpression.Property> regularProperties = new java.util.ArrayList<>();
+        Expression restTarget = null;
+        for (ObjectExpression.Property prop : objExpr.properties()) {
+            if ("spread".equals(prop.kind())) {
+                restTarget = prop.value();
+            } else {
+                regularProperties.add(prop);
+            }
+        }
+
+        // Per spec: RequireObjectCoercible(value) for all ObjectAssignmentPattern forms.
+        // When there are regular properties, the first GET_FIELD throws for null/undefined.
+        // For empty patterns or rest-only patterns, we need an explicit check.
+        if (regularProperties.isEmpty()) {
+            if (restTarget == null) {
+                // {} = val → just check and return
+                compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                return;
+            }
+            // {...rest} = val → explicit coercibility check
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
             compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            return;
         }
 
         int sourceLocalIndex = compilerContext.currentScope().declareLocal(
                 "$objectAssignSource" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, sourceLocalIndex);
 
-        for (ObjectExpression.Property property : objExpr.properties()) {
+        // If there's a rest element with regular properties, create an exclude list
+        int excludeListLocalIndex = -1;
+        if (restTarget != null && !regularProperties.isEmpty()) {
+            compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+            excludeListLocalIndex = compilerContext.currentScope().declareLocal(
+                    "$excludeList" + compilerContext.emitter.currentOffset());
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, excludeListLocalIndex);
+        }
+
+        for (ObjectExpression.Property property : regularProperties) {
             int propertyKeyLocalIndex = -1;
             if (property.computed()) {
                 delegates.expressions.compileExpression(property.key());
@@ -367,6 +395,70 @@ final class PatternCompiler {
             }
 
             emitAssignmentFromPreEvaluated(property.value(), targetDepth);
+
+            // If rest, add property key to exclude list
+            if (restTarget != null) {
+                if (property.computed()) {
+                    // Computed property: use PUT_ARRAY_EL which works with objects.
+                    // Stack: [] → [excludeList, key, null] → PUT_ARRAY_EL → [null] → DROP → []
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, excludeListLocalIndex);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, propertyKeyLocalIndex);
+                    compilerContext.emitter.emitOpcode(Opcode.NULL);
+                    compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null value
+                } else {
+                    // Non-computed: use DEFINE_FIELD with atom name.
+                    // Stack: [] → [excludeList, null] → DEFINE_FIELD → [excludeList] → DROP → []
+                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, excludeListLocalIndex);
+                    compilerContext.emitter.emitOpcode(Opcode.NULL);
+                    if (property.key() instanceof Identifier identifier) {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, identifier.name());
+                    } else if (property.key() instanceof Literal literal && literal.value() instanceof String propertyName) {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, propertyName);
+                    } else if (property.key() instanceof Literal literal
+                            && (literal.value() instanceof Integer || literal.value() instanceof Long)) {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD,
+                                String.valueOf(((Number) literal.value()).longValue()));
+                    }
+                    compilerContext.emitter.emitOpcode(Opcode.DROP); // drop excludeList
+                }
+            }
+        }
+
+        if (restTarget != null) {
+            if (regularProperties.isEmpty()) {
+                // No exclude list — copy all properties from source to a new object.
+                // Stack: []
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, sourceLocalIndex);
+                compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+                // Stack: [source, target]
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
+                // Stack: [source, target, target]
+                compilerContext.emitter.emitOpcode(Opcode.ROT3L);
+                // Stack: [target, target, source]
+                compilerContext.emitter.emitOpcode(Opcode.NULL);
+                // Stack: [target, target, source, null]
+                // COPY_DATA_PROPERTIES mask=7: target@sp-4, source@sp-2, exclude@sp-1
+                compilerContext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 7);
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // null
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // source
+                // Stack: [target, target] — assign TOS (target) to rest, drop extra
+                compileAssignmentTarget(restTarget);
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // drop extra target
+            } else {
+                // Stack: []
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, excludeListLocalIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOCAL, sourceLocalIndex);
+                compilerContext.emitter.emitOpcode(Opcode.OBJECT_NEW);
+                // Stack: [excludeList, source, target]
+                // COPY_DATA_PROPERTIES mask=68: target@sp-1(0), source@sp-2(1), exclude@sp-3(2)
+                compilerContext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 68);
+                // Stack: [excludeList, source, target]
+                compileAssignmentTarget(restTarget);
+                // Stack: [excludeList, source]
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // source
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // excludeList
+            }
         }
     }
 

@@ -1507,14 +1507,21 @@ public final class VirtualMachine {
             if (stringCtor instanceof JSObject ctorObj) {
                 JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
                 if (prototype instanceof JSObject protoObj) {
-                    // Create a temporary wrapper object with String.prototype
+                    // Create a String exotic object wrapper with String.prototype.
+                    // Per spec: indexed character properties are own, enumerable, not writable, not configurable.
                     JSObject wrapper = new JSObject();
                     wrapper.setPrototype(protoObj);
                     // Store the primitive value
                     wrapper.setPrimitiveValue(str);
-                    // Add length property as own property (shadows prototype's length)
-                    // This is a data property with the actual string length
-                    wrapper.defineProperty(PropertyKey.fromString("length"), JSNumber.of(str.value().length()), PropertyDescriptor.DataState.None);
+                    // Add indexed character properties (enumerable, not writable, not configurable)
+                    String stringValue = str.value();
+                    for (int i = 0; i < stringValue.length(); i++) {
+                        wrapper.defineProperty(PropertyKey.fromIndex(i),
+                                new JSString(String.valueOf(stringValue.charAt(i))),
+                                PropertyDescriptor.DataState.Enumerable);
+                    }
+                    // Add length property as own property (not enumerable, not writable, not configurable)
+                    wrapper.defineProperty(PropertyKey.fromString("length"), JSNumber.of(stringValue.length()), PropertyDescriptor.DataState.None);
                     return wrapper;
                 }
             }
