@@ -346,6 +346,14 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
             } else if (!computed && key instanceof Identifier keyId
                     && (parserContext.match(TokenType.COMMA) || parserContext.match(TokenType.RBRACE) || parserContext.match(TokenType.ASSIGN))) {
                 // Shorthand property: {x} or CoverInitializedName: {x = defaultExpr}
+                // Following QuickJS: the shorthand value is an IdentifierReference,
+                // so yield/await must be valid identifiers in the current context.
+                if (keyId.name().equals("yield") && !parserContext.isYieldIdentifierAllowed()) {
+                    throw new JSSyntaxErrorException("Unexpected reserved word");
+                }
+                if (keyId.name().equals("await") && parserContext.isAwaitExpressionAllowed()) {
+                    throw new JSSyntaxErrorException("Unexpected reserved word");
+                }
                 Expression value;
                 if (parserContext.match(TokenType.ASSIGN)) {
                     parserContext.advance();

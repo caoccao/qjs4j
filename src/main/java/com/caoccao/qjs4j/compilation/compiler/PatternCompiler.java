@@ -317,6 +317,15 @@ final class PatternCompiler {
 
     void compileObjectDestructuringAssignment(ObjectExpression objExpr) {
         // Stack: [source]
+        // Per spec: RequireObjectCoercible(value) - throws TypeError for null/undefined.
+        // When there are properties, the first property access will throw anyway.
+        // But for empty patterns like `{} = null`, we must explicitly check.
+        if (objExpr.properties().isEmpty()) {
+            compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            return;
+        }
+
         int sourceLocalIndex = compilerContext.currentScope().declareLocal(
                 "$objectAssignSource" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOCAL, sourceLocalIndex);
